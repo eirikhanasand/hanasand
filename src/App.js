@@ -1,8 +1,9 @@
-import Nav from './nav/nav';
-import './App.css';
 import Featured from './featured/featured';
 import Content from './main/content';
 import Contact from './main/contact';
+import Apps from './apps/apps';
+import Nav from './nav/nav';
+import React from 'react';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
       </header>
       <div>
         <Content />
+        <Apps />
         <Featured />
       </div>
       <footer>

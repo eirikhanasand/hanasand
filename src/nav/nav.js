@@ -1,4 +1,10 @@
 import './nav.css';
+import github from "../assets/social/github.png"
+import linkedin from "../assets/social/linkedin.png"
+import facebook from "../assets/social/facebook.png"
+import instagram from "../assets/social/instagram.png"
+import mail from "../assets/social/mail.png"
+import discord from "../assets/social/discord.png"
 
 export default function Nav() {
     return (
@@ -17,32 +23,32 @@ function Social() {
         {
             name: "github",
             url: "https://github.com/eirikhanasand",
-            icon: require("../assets/social/github.png")
+            icon: github
         },
         {
             name: "linkedin",
             url: "https://linkedin.com/in/eirikhanasand",
-            icon: require("../assets/social/linkedin.png")
+            icon: linkedin
         },
         {
             name: "facebook",
             url: "https://facebook.com/eirikhanasand",
-            icon: require("../assets/social/facebook.png")
+            icon: facebook
         },
         {
             name: "instagram",
             url: "https://instagram.com/eirikhanasand",
-            icon: require("../assets/social/instagram.png")
+            icon: instagram
         },
         {
             name: "mail",
             url: "mailto:eirik.hanasand@gmail.com",
-            icon: require("../assets/social/mail.png")
+            icon: mail
         },
         {
             name: "discord",
             url: "https://discordapp.com/users/376827396764073997",
-            icon: require("../assets/social/discord.png")
+            icon: discord
         },
     ]
     return (

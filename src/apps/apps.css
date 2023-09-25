@@ -1,19 +1,15 @@
-.selfie {
-    height: 25vmin;
-    border-radius: 100%;
+.outline {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    height: 50rem;
+    background: #555e6f;
 }
 
-.content {
-    background-color: #282c34;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 1vmin);
-}
-
-.content h1 {
+.left_div {
+    display: grid;
+    place-items: center;
+    margin-right: 1.25rem;
     background: conic-gradient(
         crimson,
         coral,
@@ -51,4 +47,16 @@
     100%{
         background-position: 0 0;
     }
+}
+
+.browse {
+    margin-left: 5rem;
+    font-size: 100px;
+    text-align: center;
+}
+
+.right_div {
+    display: grid;
+    margin-left: 1.25rem; /* You can adjust the value as needed */
+    place-items: center;
 }
