@@ -3,7 +3,7 @@ import './featured.css';
 export default function Featured() {
     const images = [
         {
-            title: "Abstract",
+            title: "Discord",
             image: require("../assets/abstract.jpg"),
             description: "Laboris et do proident ad cupidatat duis. Anim adipisicing velit laborum velit non pariatur laborum ullamco velit ullamco est adipisicing. Velit do non duis exercitation ea nisi ipsum incididunt ipsum laboris amet elit in. Est exercitation voluptate labore quis et. "
         },
