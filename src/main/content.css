@@ -11,5 +11,48 @@
     align-items: center;
     justify-content: center;
     font-size: calc(10px + 1vmin);
-    color: white;
+}
+
+.name {
+    font-size: x-large;
+}
+
+.content h1 {
+    background: conic-gradient(
+        crimson,
+        coral,
+        gold,
+        yellow,
+        limegreen,
+        cyan,
+        purple,
+        coral,
+        crimson
+    );
+    background-clip: text;
+    color: transparent;
+    background-size: 200vw 200vh;
+    animation: rgb 20s infinite linear;
+    text-align: center;
+}
+
+@keyframes rgb {
+    0%{
+        background-position: 0 0;
+    }
+
+    25%{
+        background-position: 0 100%;
+    }
+
+    50%{
+        background-position: 100% 100%;
+    }
+
+    75%{
+        background-position: 100% 0;
+    }
+    100%{
+        background-position: 0 0;
+    }
 }

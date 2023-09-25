@@ -12,17 +12,19 @@ export default function Contact() {
     });
 
   const formik = useFormik({
-    initialValues: {
-      name: '',
-      email: '',
-      type: '',
-      message: '',
-    },
-    validationSchema,
-    onSubmit: (values) => {
-      // Handle form submission here
-      console.log(values);
-    },
+        initialValues: {
+            name: '',
+            email: '',
+            type: '',
+            message: '',
+        },
+        validationSchema,
+        onSubmit: (values) => {
+            const subject = values.type;
+            const body = `${values.message}\n\n${values.name}\n${values.email}`;
+            const mailtoLink = `mailto:eirik.hanasand@gmail.com?cc=eirik.m.hanasand@ntnu.no&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailtoLink;
+        }
   });
 
   return (
