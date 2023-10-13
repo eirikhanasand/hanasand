@@ -22,7 +22,7 @@ export default function Apps() {
                     <AppView 
                         text={app.text}
                         image={app.image}
-                        reverse={index % 2 == 0 ? true : false}
+                        reverse={index % 2 === 0 ? true : false}
                     />
                 )
             })}

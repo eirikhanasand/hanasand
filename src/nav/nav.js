@@ -55,7 +55,7 @@ function Social() {
         <div className="socialDiv">
             {social.map((social) => {
                 return (
-                    <a href={social.url} target='_blank' key={social.name}>
+                    <a href={social.url} key={social.name}>
                         <img 
                             className='socialImage' 
                             alt={social.name} 
