@@ -1,7 +1,5 @@
 'use client'
 
-import { sendLogout } from "@utils/user"
-import isLoggedIn from "@utils/user"
 import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -10,17 +8,6 @@ import { useEffect, useState } from "react"
 export function RightIcon() {
     const [href, setHref] = useState('/login')
     const [icon, setIcon] = useState("/images/login.svg")
-    const loggedIn = isLoggedIn()
-
-    useEffect(() => {
-        if (loggedIn) {
-            setHref(`/profile/${loggedIn}`)
-            setIcon("/images/profile.svg")
-        } else {
-            setHref('/login')
-            setIcon("/images/login.svg")
-        }
-    }, [loggedIn])
 
     return (
         <Link href={href} className='grid place-self-center w-[4vh] h-[4vh] relative'>
@@ -33,26 +20,9 @@ export function RightIcon() {
 export function MiddleIcon() {
     const [href, setHref] = useState('/register')
     const [icon, setIcon] = useState("/images/join.svg")
-    const loggedIn = isLoggedIn()
-
-    useEffect(() => {
-        if (loggedIn) {
-            setHref('/')
-            setIcon("/images/logout.svg")
-        } else {
-            setHref('/register')
-            setIcon("/images/join.svg")
-        }
-    }, [loggedIn])
-
-    function handleClick() {
-        if (loggedIn) {
-            sendLogout()
-        }
-    }
 
     return (
-        <Link href={href} className='grid place-self-center w-[4vh] h-[4vh] relative' onClick={handleClick}>
+        <Link href={href} className='grid place-self-center w-[4vh] h-[4vh] relative' onClick={() => {}}>
             <Image src={icon} alt="logo" fill={true} />
         </Link>
     )

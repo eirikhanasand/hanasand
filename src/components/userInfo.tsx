@@ -1,7 +1,5 @@
 'use client'
 
-import { getCourse } from "@/utils/fetch"
-import getItem from "@utils/localStorage"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 
@@ -14,37 +12,6 @@ export default function UserInfo() {
     const [left, setLeft] = useState('')
     const [middle, setMiddle] = useState('')
     const [right, setRight] = useState('')
-
-    useEffect(() => {
-        const newUser: User | undefined = getItem('user') as User | undefined
-        const pathnames = path.split('/')
-        let course = pathnames[1] === 'course' || 'edit' ? pathnames[2] : path.split('/')[-1]
-        
-        if (newUser && newUser != user) {
-            setUser(newUser)
-            setLeft(newUser.username)
-        }
-
-        if (path.includes('edit') && (middle !== edit || !middle.length)) {
-            setEdit(`Editing ${path.split('/')[2]}`)
-            setMiddle(`Editing ${path.split('/')[2]}`);
-
-            (async() => {
-                const courseByID = await getCourse(course, 'client')
-                if (typeof courseByID === 'object') {
-                    setRight(`${courseByID.cards.length} cards`)
-                }
-            })()
-        } else if (!path.includes('edit') && ((left != user.username || user.username === 'Loading...') || middle != course || right != timeAsHumanReadable)) {            
-            if (course) {
-                setMiddle(course.toUpperCase())
-            } else {
-                setMiddle('exam.login.no')
-            }
-            
-            setRight(timeAsHumanReadable)
-        }
-    }, [edit, left, middle, right, timeAsHumanReadable])
 
     return (
         <div className='hidden xs:grid grid-cols-1 sm:grid-cols-3 w-full sm:bg-dark rounded-xl items-center'>
