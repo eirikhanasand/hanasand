@@ -1,43 +1,37 @@
 {
-  "name": "portfolio",
-  "version": "0.1.0",
+  "name": "dizambee",
+  "version": "1.0.5",
   "private": true,
   "scripts": {
-    "start": "react-scripts start",
-    "build": "npm i && react-scripts build && serve -s build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.0.1",
-    "@testing-library/user-event": "^14.5.2",
-    "autoprefixer": "^10.4.20",
+    "dotenv": "^16.4.5",
     "formik": "^2.4.6",
+    "highlight.js": "^11.9.0",
+    "marked-highlight": "^2.1.1",
+    "next": "^14.2.3",
+    "pdfjs-dist": "^4.2.67",
+    "postcss": "^8.4.24",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-scripts": "^5.0.1",
-    "serve": "^14.2.4",
-    "tailwindcss": "^3.4.15",
-    "web-vitals": "^4.2.4",
+    "remark-gfm": "^3.0.1",
     "yup": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/fast-levenshtein": "^0.0.4",
+    "@types/jsdom": "^21.1.6",
+    "@types/marked": "^6.0.0",
+    "@types/node": "^20.14.2",
+    "@types/react": "^18.2.12",
+    "@types/react-dom": "^18.2.5",
+    "autoprefixer": "^10.4.14",
+    "eslint": "^8.42.0",
+    "eslint-config-next": "^14.2.3",
+    "tailwindcss": "^3.3.2",
+    "typescript": "^5.1.3"
   }
 }

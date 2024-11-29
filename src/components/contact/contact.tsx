@@ -1,7 +1,7 @@
-import React from 'react';
-import { useFormik } from 'formik';
-import * as Yup from 'yup';
-import './contact.css';
+import React from 'react'
+import { useFormik } from 'formik'
+import * as Yup from 'yup'
+import './contact.css'
 
 export default function Contact() {
     const validationSchema = Yup.object().shape({

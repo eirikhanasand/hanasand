@@ -3,6 +3,12 @@ import Login from "../assets/iphone-events.png"
 import Pecubit from "../assets/pecubit.png"
 import './apps.css';
 
+type AppViewProps = {
+    text: string
+    image: string
+    reverse: boolean
+}
+
 export default function Apps() {
     const apps = [
         {
@@ -21,7 +27,7 @@ export default function Apps() {
                 return (
                     <AppView 
                         text={app.text}
-                        image={app.image}
+                        image={app.image as unknown as string}
                         reverse={index % 2 === 0 ? true : false}
                     />
                 )
@@ -30,7 +36,7 @@ export default function Apps() {
     )
 }
 
-function AppView({text, image, reverse}) {
+function AppView({text, image, reverse}: AppViewProps) {
     if (reverse) {
         return (
             <>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+    <defs>
+        <style>.a{fill:#f08640;}.b{fill:#fff;}</style>
+    </defs>
+    <title>base-white</title>
+    <rect class="a" width="40" height="170"/>
+    <rect class="a" x="65" y="-65" width="40" height="170" transform="translate(105 -65) rotate(90)"/>
+    <rect class="a" x="495" y="-65" width="40" height="170" transform="translate(535 -495) rotate(90)"/>
+    <rect class="a" x="560" width="40" height="170" transform="translate(1160 170) rotate(180)"/>
+    <rect class="a" x="65" y="495" width="40" height="170" transform="translate(-495 665) rotate(-90)"/>
+    <rect class="a" y="430" width="40" height="170"/>
+    <rect class="a" x="560" y="430" width="40" height="170" transform="translate(1160 1030) rotate(180)"/>
+    <rect class="a" x="495" y="495" width="40" height="170" transform="translate(-65 1095) rotate(-90)"/>
+    <rect class="b" x="190" y="110" width="70" height="380"/>
+    <rect class="b" x="190" y="420" width="220" height="70"/>
+</svg>
