@@ -3,8 +3,8 @@ import './globals.css'
 import Navbar from '@components/nav'
 
 export const metadata = {
-    title: 'Zammad',
-    description: 'Zammad UI fr.',
+    title: 'Eirik Hanasand',
+    description: 'Portfolio',
 }
 
 export default function RootLayout({children}: {children: ReactNode}): JSX.Element {
