@@ -5,6 +5,7 @@ import facebook from "../assets/social/facebook.png"
 import instagram from "../assets/social/instagram.png"
 import mail from "../assets/social/mail.png"
 import discord from "../assets/social/discord.png"
+import Image from 'next/image';
 
 export default function Nav() {
     return (
@@ -56,7 +57,7 @@ function Social() {
             {social.map((social) => {
                 return (
                     <a href={social.url} key={social.name}>
-                        <img 
+                        <Image 
                             className='socialImage' 
                             alt={social.name} 
                             src={social.icon} 

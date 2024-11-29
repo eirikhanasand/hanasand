@@ -2,6 +2,7 @@ import React from "react"
 import Login from "../assets/iphone-events.png"
 import Pecubit from "../assets/pecubit.png"
 import './apps.css';
+import Image from "next/image";
 
 type AppViewProps = {
     text: string
@@ -25,7 +26,8 @@ export default function Apps() {
         <div className="outline">
             {apps.map((app, index) => {
                 return (
-                    <AppView 
+                    <AppView
+                        key={index}
                         text={app.text}
                         image={app.image as unknown as string}
                         reverse={index % 2 === 0 ? true : false}
@@ -44,7 +46,7 @@ function AppView({text, image, reverse}: AppViewProps) {
                     <p className="browse">{text}</p>
                 </div>
                 <div className="right_div">
-                    <img
+                    <Image
                         width={450} 
                         src={image}
                         alt="Logo" 
@@ -56,7 +58,7 @@ function AppView({text, image, reverse}: AppViewProps) {
         return (
             <>
                 <div className="right_div">
-                    <img
+                    <Image
                         width={450} 
                         src={image}
                         alt="Logo" 

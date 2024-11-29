@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import './featured.css';
 
 export default function Featured() {
@@ -46,7 +47,7 @@ export default function Featured() {
 function Article({title, description, image}) {
     return (
         <article>
-            <img className="article_image" src={image} alt={title} />
+            <Image className="article_image" src={image} alt={title} />
             <h1 className="article_title">{title}</h1>
             <p className="article_description">{description}</p>
             <h1 className="article_more">See more -&gt;</h1>
