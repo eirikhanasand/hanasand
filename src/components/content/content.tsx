@@ -11,7 +11,7 @@ export default function Content() {
                 className="w-[25vmin] h-[25vmin] rounded-full" 
                 alt="logo"
             />
-            <h1 className="mt-2">oh?</h1>
+            <h1 className="mt-2">eh?</h1>
             {/* <h1 className="mt-2">Hello, I am Eirik Hanasand!</h1>
             <h1>I bought this domain 2 hours ago.. please have some patience : )</h1> */}
             {/* <h1>A frontend developer specialised in React Native</h1> */}
