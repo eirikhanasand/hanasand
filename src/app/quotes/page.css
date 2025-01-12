@@ -1,0 +1,20 @@
+@keyframes scroll {
+    0% {
+        transform: translateY(0%);
+    }
+    100% {
+        transform: translateY(-100%);
+    }
+}
+
+.scrolling-quotes {
+    display: grid;
+    gap: 4rem;
+    animation: scroll 360s linear infinite;
+}
+
+.relative {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}

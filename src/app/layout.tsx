@@ -10,8 +10,8 @@ export const metadata = {
 export default function RootLayout({children}: {children: ReactNode}): JSX.Element {
 
     return (
-        <html lang="en" className='h-[100vh] w-[100vw]'>
-            <body>
+        <html lang="en" className='h-full w-full'>
+            <body className='h-full'>
                 {children}
             </body>
         </html>
