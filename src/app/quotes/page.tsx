@@ -1,10 +1,6 @@
 import quotes from "./quotes.json"
 import "./page.css"
 
-function shuffleArray(array: string[]) {
-    return [...array].sort(() => Math.random() - 0.5)
-}
-
 export default () => {
     const shuffledQuotes = shuffleArray(quotes)
     return (
@@ -21,4 +17,8 @@ export default () => {
             </div>
         </div>
     )
+}
+
+function shuffleArray(array: string[]) {
+    return [...array].sort(() => Math.random() - 0.5)
 }

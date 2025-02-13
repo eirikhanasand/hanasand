@@ -10,7 +10,7 @@
 .scrolling-quotes {
     display: grid;
     gap: 4rem;
-    animation: scroll 360s linear infinite;
+    animation: scroll 500s linear infinite;
 }
 
 .relative {

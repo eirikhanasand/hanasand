@@ -130,3 +130,10 @@ type ClientVote = {
     vote: boolean
     isReply?: true
 }
+
+type Theme = 'light' | 'dark' | undefined
+
+type Cookie = {
+    name: string
+    value: string
+}

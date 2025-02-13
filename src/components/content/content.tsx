@@ -3,10 +3,12 @@ import React from 'react'
 import './content.css'
 import Image from "next/image"
 import QuoteButton from "../quoteButton"
+import ThemeSwitch from "../theme/themeSwitch"
 
 export default function Content() {
     return (
-        <div className="content h-full bg-black">
+        <div className="content h-full">
+            <ThemeSwitch />
             <Image 
                 src={selfie as unknown as string} 
                 className="w-[25vmin] h-[25vmin] rounded-full" 
