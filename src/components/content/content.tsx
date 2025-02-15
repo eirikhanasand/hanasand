@@ -2,7 +2,7 @@ import selfie from "../assets/selfie.jpeg"
 import React from 'react'
 import './content.css'
 import Image from "next/image"
-import QuoteButton from "../quoteButton"
+// import QuoteButton from "../quoteButton"
 
 export default function Content() {
     return (
