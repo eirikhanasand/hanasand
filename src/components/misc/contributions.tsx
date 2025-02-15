@@ -5,7 +5,7 @@ export default function Contributions() {
         <table>
             <thead className="text-2xs">
                 <tr className="flex gap-[22px] pl-8">
-                    {months.map((month) => <th>{month}</th>)}
+                    {months.map((month) => <th key={month}>{month}</th>)}
                 </tr>
             </thead>
             <tbody className="flex text-2xs gap-[1px]">
