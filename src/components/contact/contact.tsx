@@ -11,7 +11,7 @@ export default function Contact() {
         message: Yup.string().min(20, 'Message must be at least 20 characters').required('Message is required'),
     });
 
-  const formik = useFormik({
+    const formik = useFormik({
         initialValues: {
             name: '',
             email: '',
@@ -25,72 +25,72 @@ export default function Contact() {
             const mailtoLink = `mailto:eirik.hanasand@gmail.com?cc=eirik.m.hanasand@ntnu.no&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
             window.location.href = mailtoLink;
         }
-  });
+    });
 
-  return (
-    <div className="main">
-      <form onSubmit={formik.handleSubmit} title="Contact me">
-        <h1 className="title" title="Contact me">
-          Contact me
-        </h1>
-        <div>
-          <h1 className="inputTitle">Name</h1>
-          <input
-            type="text"
-            className="inputfield"
-            {...formik.getFieldProps('name')}
-            placeholder="Name"
-          />
-          {formik.touched.name && formik.errors.name && (
-            <p className="error">{formik.errors.name}</p>
-          )}
+    return (
+        <div className="main">
+            <form onSubmit={formik.handleSubmit} title="Contact me">
+                <h1 className="title" title="Contact me">
+                    Contact me
+                </h1>
+                <div>
+                    <h1 className="inputTitle">Name</h1>
+                    <input
+                        type="text"
+                        className="inputfield"
+                        {...formik.getFieldProps('name')}
+                        placeholder="Name"
+                    />
+                    {formik.touched.name && formik.errors.name && (
+                        <p className="error">{formik.errors.name}</p>
+                    )}
+                </div>
+                <div>
+                    <h1 className="inputTitle">Email Address</h1>
+                    <input
+                        type="email"
+                        className="inputfield"
+                        {...formik.getFieldProps('email')}
+                        placeholder="example@gmail.com"
+                    />
+                    {formik.touched.email && formik.errors.email && (
+                        <p className="error">{formik.errors.email}</p>
+                    )}
+                </div>
+                <div>
+                    <h1 className="inputTitle">Type of inquiry</h1>
+                    <input
+                        type="text"
+                        className="inputfield"
+                        {...formik.getFieldProps('type')}
+                        placeholder="What are you writing about?"
+                    />
+                    {formik.touched.type && formik.errors.type && (
+                        <p className="error">{formik.errors.type}</p>
+                    )}
+                </div>
+                <div>
+                    <h1 className="inputTitle">Message</h1>
+                    <textarea
+                        {...formik.getFieldProps('message')}
+                        placeholder="Tell me about something interesting..."
+                    />
+                    {formik.touched.message && formik.errors.message && (
+                        <p className="error">{formik.errors.message}</p>
+                    )}
+                </div>
+                <button
+                    type="submit"
+                    className="submit"
+                    style={{
+                        cursor: formik.isValid ? 'pointer' : 'not-allowed',
+                        background: formik.isValid ? 'green' : 'red',
+                        marginBottom: formik.isValid ? "" : "2em"
+                    }}
+                >
+                    Submit
+                </button>
+            </form>
         </div>
-        <div>
-          <h1 className="inputTitle">Email Address</h1>
-          <input
-            type="email"
-            className="inputfield"
-            {...formik.getFieldProps('email')}
-            placeholder="example@gmail.com"
-          />
-          {formik.touched.email && formik.errors.email && (
-            <p className="error">{formik.errors.email}</p>
-          )}
-        </div>
-        <div>
-          <h1 className="inputTitle">Type of inquiry</h1>
-          <input
-            type="text"
-            className="inputfield"
-            {...formik.getFieldProps('type')}
-            placeholder="What are you writing about?"
-          />
-          {formik.touched.type && formik.errors.type && (
-            <p className="error">{formik.errors.type}</p>
-          )}
-        </div>
-        <div>
-          <h1 className="inputTitle">Message</h1>
-          <textarea
-            {...formik.getFieldProps('message')}
-            placeholder="Tell me about something interesting..."
-          />
-          {formik.touched.message && formik.errors.message && (
-            <p className="error">{formik.errors.message}</p>
-          )}
-        </div>
-        <button
-          type="submit"
-          className="submit"
-          style={{
-            cursor: formik.isValid ? 'pointer' : 'not-allowed',
-            background: formik.isValid ? 'green' : 'red',
-            marginBottom: formik.isValid ? "" : "2em"
-          }}
-        >
-          Submit
-        </button>
-      </form>
-    </div>
-  );
+    );
 };

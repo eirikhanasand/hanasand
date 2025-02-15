@@ -1,7 +1,7 @@
 import quotes from "./quotes.json"
 import "./page.css"
 
-export default () => {
+export default function page() {
     const shuffledQuotes = shuffleArray(quotes)
     return (
         <div className="relative h-full w-full overflow-hidden bg-black">

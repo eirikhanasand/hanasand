@@ -1,6 +1,6 @@
 import React, { ReactNode } from 'react'
 import './globals.css'
-import Navbar from '@components/nav'
+// import Navbar from '@components/nav'
 import { cookies } from 'next/headers'
 import ThemeSwitch from '@/components/theme/themeSwitch'
 
@@ -9,7 +9,7 @@ export const metadata = {
     description: 'Welcome to my world',
 }
 
-export default async ({children}: {children: ReactNode}) => {
+export default async function layout({children}: {children: ReactNode}) {
     const theme = (await cookies()).get('theme')?.value || 'dark'
 
     return (
