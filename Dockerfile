@@ -22,9 +22,6 @@ RUN npm install
 # Copies the rest of the UI source code
 COPY ./ .
 
-# Copies env variables
-COPY .env ../.env
-
 RUN npm run build
 
 # Exposes port 3000
