@@ -1,27 +1,59 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 24, 24, 24;
-  --background-end-rgb: 24, 24, 24;
+@config '../../tailwind.config.ts';
+
+@theme {
+  --color-dark: #f8f8f8;
+  --color-normal: #e0e0e0;
+  --color-light: #d6d6d6;
+  --color-extralight: #c4c4c4;
+  --color-superlight: #b0b0b0;
+  --color-bright: black;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 0, 0, 0;
-    --background-start-rgb: 24, 24, 24;
-    --background-end-rgb: 24, 24, 24;
+@utility noscroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+      display: none;
   }
 }
 
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --color-dark: #1a1a1a;
+  --color-normal: #181818;
+  --color-light: #212121;
+  --color-extralight: #323232;
+  --color-superlight: #424242;
+  --color-bright: white;
+}
+
+.light {
+  --background: #ffffff;
+  --foreground: #171717;
+  --color-dark: #e7e5dd;
+  --color-normal: #e0e0e0;
+  --color-light: #d6d6d6;
+  --color-extralight: #c4c4c4;
+  --color-superlight: #b0b0b0;
+  --color-bright: black;
+}
+
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background 0.4s, color 0.4s;
 }
