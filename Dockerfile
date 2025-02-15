@@ -1,24 +1,34 @@
-# Latest node base image
+# Node image with Alpine Linux
 FROM node:20-alpine
 
-# Installs Python
-RUN apk add --no-cache python3 make g++
-
-# Container working directory
+# Sets the working directory
 WORKDIR /app
 
-# Copies package versions
-COPY package*.json ./
+# Installs services
+RUN apk add --no-cache python3 make g++ varnish
+
+# Starts varnish
+COPY ./default.vcl /etc/varnish/default.vcl
+
+# Copies entrypoint
+COPY ./entrypoint.sh /app/entrypoint.sh
+
+# Copies package.json and package-lock.json
+COPY ./package*.json ./
 
 # Installs dependencies
 RUN npm install
-RUN npm install express @types/express dotenv firebase-admin cors @types/cors redis
 
-# Copies source code
-COPY . .
+# Copies the rest of the UI source code
+COPY ./ .
 
-# Builds the application
+# Copies env variables
+COPY .env ../.env
+
 RUN npm run build
 
 # Exposes port 3000
 EXPOSE 3000
+
+# Starts the application
+CMD chmod +x /app/entrypoint.sh; /app/entrypoint.sh
