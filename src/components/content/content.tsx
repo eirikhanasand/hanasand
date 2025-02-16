@@ -1,18 +1,23 @@
-import selfie from "../assets/selfie.jpeg"
 import React from 'react'
-import './content.css'
 import Image from "next/image"
 // import QuoteButton from "../quoteButton"
+import './content.css'
 
 export default function Content() {
     return (
-        <div className="content h-full">
-            <Image 
-                src={selfie as unknown as string} 
-                className="w-[25vmin] h-[25vmin] rounded-full" 
-                alt="logo"
-            />
-            <h1 className="mt-2">eh?</h1>
+        <div className="relative grid grid-cols place-items-center h-full">
+            <div className="relative w-48 h-48">
+                <Image 
+                    className="rounded-full object-cover"
+                    src="/images/assets/selfie.jpeg" 
+                    alt="logo"
+                    fill
+                    quality={100}
+                />
+            </div>
+            <div className='absolute animate-bounce top-[90vh]'>
+                <h1 className="eh animate-ping">eh?</h1>
+            </div>
             {/* <h1 className="mt-2">Hello, I am Eirik Hanasand!</h1>
             <h1>I bought this domain 2 hours ago.. please have some patience : )</h1> */}
             {/* <h1>A frontend developer specialised in React Native</h1> */}

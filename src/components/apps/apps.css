@@ -1,14 +1,5 @@
-.outline {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-    background: #555e6f;
-}
 
-.left_div {
-    display: grid;
-    place-items: center;
-    margin-right: 1.25rem;
+.dark .left_div {
     background: conic-gradient(
         crimson,
         coral,
@@ -24,7 +15,25 @@
     color: transparent;
     background-size: 200vw 200vh;
     animation: rgb 20s infinite linear;
-    text-align: center;
+}
+
+.light .left_div {
+    background: conic-gradient(
+        crimson,
+        coral,
+        rgb(221, 221, 0),
+        limegreen,
+        rgb(0, 212, 212),
+        rgb(0, 212, 212),
+        blue,
+        purple,
+        coral,
+        crimson
+    );
+    background-clip: text;
+    color: transparent;
+    background-size: 200vw 200vh;
+    animation: rgb 20s infinite linear;
 }
 
 @keyframes rgb {
@@ -46,16 +55,4 @@
     100%{
         background-position: 0 0;
     }
-}
-
-.browse {
-    margin-left: 5rem;
-    font-size: 100px;
-    text-align: center;
-}
-
-.right_div {
-    display: grid;
-    margin-left: 1.25rem; /* You can adjust the value as needed */
-    place-items: center;
 }

@@ -1,29 +1,7 @@
-.main {
-    display: flex;
-    justify-content: center;
-    min-height: 95vh;
-    background: #282c34;
-}
-
 form {
     width: 50%;
     align-content: flex-start;
     align-items: flex-start;
-}
-
-.title {
-    color: white;
-    margin-top: 2em;
-}
-
-.inputfield {
-    width: 98%;
-    border-radius: 0.5em;
-    height: 3em;
-    background-color: #282c34;
-    padding-left: 5px;
-    font-size: medium;
-    color: white;
 }
 
 textarea {
@@ -34,24 +12,8 @@ textarea {
     max-height: 80vh;
     border-radius: 0.5em;
     height: 12em;
-    background-color: #282c34;
     padding-left: 5px;
     font-size: medium;
-    color: white;
-}
-
-.submit {
-    background-color: #404653;
-    display: grid;
-    border-radius: 10px;
-    place-items: center;
-    color: white;
-    font-weight: 500;
-    height: 3em;
-    width: 99.5%;
-    font-size: larger;
-    margin-top: 1em;
-    border-width: 0;
 }
 
 h1 {
@@ -67,10 +29,4 @@ h1.form {
 
 .error {
     color: red;
-}
-
-.inputTitle {
-    color: white;
-    font-weight: 600;
-    font-size: large;
 }

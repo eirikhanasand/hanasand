@@ -1,6 +1,4 @@
 import React from "react"
-import Login from "../assets/iphone-events.png"
-import Pecubit from "../assets/pecubit.png"
 import './apps.css';
 import Image from "next/image";
 
@@ -14,16 +12,16 @@ export default function Apps() {
     const apps = [
         {
             text: "Follow up on activities, even when offline",
-            image: Login
+            image: "/images/assets/iphone-events.png"
         },
         {
             text: "Or explore potential designs for other apps",
-            image: Pecubit
+            image: "/images/assets/pecubit.png"
         },
     ]
-
+    
     return (
-        <div className="outline">
+        <div className="grid grid-cols-2 bg-normal">
             {apps.map((app, index) => {
                 return (
                     <AppView
@@ -42,14 +40,16 @@ function AppView({text, image, reverse}: AppViewProps) {
     if (reverse) {
         return (
             <>
-                <div className="left_div">
-                    <p className="browse">{text}</p>
+                <div className="left_div grid place-items-center px-20">
+                    <p className="text-center text-7xl text-balance">{text}</p>
                 </div>
-                <div className="right_div">
+                <div className="grid place-items-center">
                     <Image
+                        height={900}
                         width={450} 
                         src={image}
-                        alt="Logo" 
+                        alt="React Native Event Management App" 
+                        quality={100}
                     />
                 </div>
             </>
@@ -57,15 +57,17 @@ function AppView({text, image, reverse}: AppViewProps) {
     } else {
         return (
             <>
-                <div className="right_div">
+                <div className="grid place-items-center">
                     <Image
+                        height={900}
                         width={450} 
                         src={image}
-                        alt="Logo" 
+                        alt="React Native Gambling App" 
+                        quality={100}
                     />
                 </div>
-                <div className="left_div">
-                    <p className="browse">{text}</p>
+                <div className="left_div grid place-items-center px-20">
+                    <p className="text-center text-7xl text-balance">{text}</p>
                 </div>
             </>
         )

@@ -61,6 +61,8 @@ function Social() {
                             className='socialImage' 
                             alt={social.name} 
                             src={social.icon} 
+                            width={450}
+                            height={900}
                         />
                     </a>
                 )

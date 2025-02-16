@@ -1,14 +1,12 @@
 @import 'tailwindcss';
 
-@config '../../tailwind.config.ts';
-
 @theme {
-  --color-dark: #f8f8f8;
-  --color-normal: #e0e0e0;
-  --color-light: #d6d6d6;
-  --color-extralight: #c4c4c4;
-  --color-superlight: #b0b0b0;
-  --color-bright: black;
+  --color-dark: red;
+  --color-normal: red;
+  --color-light: red;
+  --color-extralight: red;
+  --color-superlight: red;
+  --color-bright: red;
 }
 
 @utility noscroll {
@@ -19,21 +17,11 @@
   }
 }
 
-@layer base {
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
-  }
-}
-
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
   --color-dark: #1a1a1a;
-  --color-normal: #181818;
+  --color-normal: #171717;
   --color-light: #212121;
   --color-extralight: #323232;
   --color-superlight: #424242;

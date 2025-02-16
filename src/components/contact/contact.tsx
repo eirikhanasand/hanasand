@@ -1,3 +1,4 @@
+'use client'
 import React from 'react'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
@@ -28,16 +29,16 @@ export default function Contact() {
     });
 
     return (
-        <div className="main">
+        <div className="grid place-items-center min-h-[95vh]">
             <form onSubmit={formik.handleSubmit} title="Contact me">
-                <h1 className="title" title="Contact me">
+                <h1 className="text-foreground text-2xl mb-5" title="Contact me">
                     Contact me
                 </h1>
-                <div>
-                    <h1 className="inputTitle">Name</h1>
+                <div className='mb-5'>
+                    <h1 className="text-md text-foreground">Name</h1>
                     <input
                         type="text"
-                        className="inputfield"
+                        className="w-[98%] rounded-lg h-10 bg-light pl-2 text-foreground"
                         {...formik.getFieldProps('name')}
                         placeholder="Name"
                     />
@@ -45,23 +46,23 @@ export default function Contact() {
                         <p className="error">{formik.errors.name}</p>
                     )}
                 </div>
-                <div>
-                    <h1 className="inputTitle">Email Address</h1>
+                <div className='mb-5'>
+                    <h1 className="text-md text-foreground">Email Address</h1>
                     <input
                         type="email"
-                        className="inputfield"
+                        className="w-[98%] rounded-lg h-10 bg-light pl-2 text-foreground"
                         {...formik.getFieldProps('email')}
-                        placeholder="example@gmail.com"
+                        placeholder="example@mail.com"
                     />
                     {formik.touched.email && formik.errors.email && (
                         <p className="error">{formik.errors.email}</p>
                     )}
                 </div>
-                <div>
-                    <h1 className="inputTitle">Type of inquiry</h1>
+                <div className='mb-5'>
+                    <h1 className="text-md text-foreground">Subject</h1>
                     <input
                         type="text"
-                        className="inputfield"
+                        className="w-[98%] rounded-lg h-10 bg-light pl-2 text-foreground"
                         {...formik.getFieldProps('type')}
                         placeholder="What are you writing about?"
                     />
@@ -69,11 +70,12 @@ export default function Contact() {
                         <p className="error">{formik.errors.type}</p>
                     )}
                 </div>
-                <div>
-                    <h1 className="inputTitle">Message</h1>
+                <div className='mb-5'>
+                    <h1 className="text-md text-foreground">Message</h1>
                     <textarea
                         {...formik.getFieldProps('message')}
                         placeholder="Tell me about something interesting..."
+                        className="w-[98%] rounded-lg h-10 bg-light pl-2 text-foreground"
                     />
                     {formik.touched.message && formik.errors.message && (
                         <p className="error">{formik.errors.message}</p>
@@ -81,7 +83,7 @@ export default function Contact() {
                 </div>
                 <button
                     type="submit"
-                    className="submit"
+                    className="grid w-[98%] mt-5 rounded-xl h-12 place-items-center text-xl text-white"
                     style={{
                         cursor: formik.isValid ? 'pointer' : 'not-allowed',
                         background: formik.isValid ? 'green' : 'red',
@@ -91,6 +93,10 @@ export default function Contact() {
                     Submit
                 </button>
             </form>
+            <div className='text-gray-500 grid place-items-center'>
+                <h1>more stuff coming soon btw! Ive got it all planned in my head &lt;3</h1>
+                <h1>...if only there were 48 hours in a day...</h1>
+            </div>
         </div>
     );
 };
