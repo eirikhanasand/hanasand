@@ -1,4 +1,4 @@
-import Image from 'next/image'
+// import Image from 'next/image'
 
 type ArticleProps = {
     title: string
@@ -50,11 +50,10 @@ function Article({title, description, image}: ArticleProps) {
     console.log(image)
     return (
         <article className='bg-dark w-full h-[22vh] overflow-hidden rounded-3xl'>
-        {/* <article className='bg-dark w-full h-[55vh] overflow-hidden rounded-3xl'> */}
+            {/* <article className='bg-dark w-full h-[55vh] overflow-hidden rounded-3xl'> */}
             {/* <Image className="w-full h-[62%] object-cover" src={image} alt={title} width={800} height={450} /> */}
             <div className='mx-5 mt-5 text-foreground'>
                 <h1>{title}</h1>
-                {/* @ts-ignore */}
                 <p dangerouslySetInnerHTML={{__html: description}} />
                 <h1 className='text-red-400'>This section is coming soon! &lt;3</h1>
                 {/* <h1 className="text-foreground text-lg">See more &#x2192;</h1> */}
