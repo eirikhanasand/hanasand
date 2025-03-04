@@ -1,6 +1,7 @@
 services:
   frontend:
     container_name: hanasand
+    restart: always
     build:
       context: .
       dockerfile: ./Dockerfile
