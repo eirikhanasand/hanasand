@@ -1,8 +1,8 @@
 import React, { ReactNode } from 'react'
 import './globals.css'
-// import Navbar from '@components/nav'
 import { cookies } from 'next/headers'
 import ThemeSwitch from '@/components/theme/themeSwitch'
+import Link from 'next/link'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -15,7 +15,10 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang="en" className={theme}>
             <body className='h-[100vh] w-[100vw]'>
-                <header className="h-[6.5vh] max-h-[6.5vh] text-white bg-dark grid items-align">
+                <header className="h-[6.5vh] max-h-[6.5vh] text-white bg-dark flex items-center justify-end px-4">
+                    <div className="absolute left-1/2 transform -translate-x-1/2">
+                        <Link className="font-semibold text-bright" href="/">hanasand</Link>
+                    </div>
                     <ThemeSwitch />
                 </header>
                 <main className='h-[93.5vh] max-h-[93.5vh] overflow-auto w-full'>
