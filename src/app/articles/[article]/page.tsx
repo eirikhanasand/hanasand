@@ -24,8 +24,8 @@ export default async function page({ params }: PageProps) {
     const content = contentMatch ? contentMatch[1].trim() : ""
 
     return (
-        <div className='grid px-[20vw] h-full -mt-2'>
-            <div className='absolute text-superlight text-right top-[12vh] right-[20vw] w-fit'>
+        <div className='px-[20vw] max-h-full -mt-2'>
+            <div className='float-right text-superlight text-right w-fit'>
                 <h1>Last edited {edited}</h1>
                 <h1>Published {created}</h1>
             </div>
