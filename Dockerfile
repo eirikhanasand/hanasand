@@ -18,6 +18,8 @@ COPY ./package*.json ./
 
 # Installs dependencies
 RUN npm install
+RUN npm install pg fastify @fastify/cors ae-cvss-calculator
+RUN npm install @types/pg --save-dev
 
 # Copies the rest of the UI source code
 COPY ./ .
