@@ -24,10 +24,9 @@ export default function Featured() {
             description: "Kinda crazy project atp ngl but the structure is perfect for scaling so I just keep adding"
         },
         {
-            title: "well this is awkward, im not sure what project would fit here... hmm",
+            title: "Library Safety Manager",
             image: "/images/assets/project.jpg",
-            description: ""
-            // description: "Laboris et do proident ad cupidatat duis. Anim adipisicing velit laborum velit non pariatur laborum ullamco velit ullamco est adipisicing. Velit do non duis exercitation ea nisi ipsum incididunt ipsum laboris amet elit in. Est exercitation voluptate labore quis et. "
+            description: "Will be published in a few weeks."
         }
     ]
 
@@ -35,7 +34,7 @@ export default function Featured() {
         <div className="bg-normal p-16">
             <h1 className="text-foreground text-2xl">Featured Projects</h1>
             <div className="grid grid-rows-2 grid-cols-2 gap-8 place-items-center mt-4">
-                {images.map((image) => <Article
+                {images.map((image) => <Project
                     key={image.title}
                     image={image.image} 
                     title={image.title} 
@@ -46,15 +45,15 @@ export default function Featured() {
     )
 }
 
-function Article({title, description, image}: ArticleProps) {
+function Project({title, description, image}: ArticleProps) {
     console.log(image)
     return (
-        <article className='bg-dark w-full h-[22vh] overflow-hidden rounded-3xl'>
+        <article className='bg-dark w-full h-[25vh] overflow-hidden rounded-3xl'>
             {/* <article className='bg-dark w-full h-[55vh] overflow-hidden rounded-3xl'> */}
             {/* <Image className="w-full h-[62%] object-cover" src={image} alt={title} width={800} height={450} /> */}
-            <div className='mx-5 mt-5 text-foreground'>
+            <div className='mx-5 mt-5 text-foreground grid gap-2'>
                 <h1>{title}</h1>
-                <p dangerouslySetInnerHTML={{__html: description}} />
+                <p className="text-gray-500" dangerouslySetInnerHTML={{__html: description}} />
                 <h1 className='text-red-400'>This section is coming soon! &lt;3</h1>
                 {/* <h1 className="text-foreground text-lg">See more &#x2192;</h1> */}
             </div>
