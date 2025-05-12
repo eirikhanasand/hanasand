@@ -10,7 +10,7 @@ export default async function page() {
         <div className="h-full">
             <Content />
             <Featured />
-            <Articles />
+            <Articles includeAll={false} max={4} />
             <Apps />
             <Contact />
         </div>
