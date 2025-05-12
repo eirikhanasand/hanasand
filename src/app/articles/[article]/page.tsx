@@ -35,7 +35,7 @@ export default async function page({ params }: PageProps) {
                     <Link 
                         href='/articles'
                         className='text-gray-500'
-                        >
+                    >
                         ← Browse other articles
                     </Link>
                 </div>
