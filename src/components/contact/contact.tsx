@@ -94,8 +94,7 @@ export default function Contact() {
                 </button>
             </form>
             <div className='text-gray-500 grid place-items-center'>
-                <h1>more stuff coming soon btw! Ive got it all planned in my head &lt;3</h1>
-                <h1>...if only there were 48 hours in a day...</h1>
+                <h1>more stuff coming soon &lt;3 ... if only there were 48 hours in a day...</h1>
             </div>
         </div>
     );
