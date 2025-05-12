@@ -1,0 +1,132 @@
+.markdown-render_h1,
+.markdown-render_h2,
+.markdown-render_h3,
+.markdown-render_h4,
+.markdown-render_h5,
+.markdown-render_h6 {
+    color: var(--color-text-main);
+    margin: 1.5em 0 .5em 0;
+    line-height: 1.2em;
+}
+
+.markdown-render_h2 {
+    font-weight: 400;
+    font-size: 1.6rem;
+}
+
+.markdown-render_h3 {
+    font-weight: 400;
+    font-size: 1.3rem;
+}
+
+.markdown-render_h4 {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.markdown-render_section {
+    margin: 1rem 0;
+    max-width: 40rem;
+    color: var(--color-text-regular);
+}
+
+.markdown-render_strong {
+    color: var(--color-text-main);
+    font-weight: 600;
+}
+
+.markdown-render_ol {
+    margin: 1rem 1rem 1rem 1.5rem;
+    list-style: decimal;
+}
+
+.markdown-render_ul{
+    margin: 1rem 0 1rem 1.5rem;
+    list-style: none;
+}
+
+.markdown-render_li {
+    color: var(--color-text-regular);
+}
+
+.markdown-render_ul .markdown-render_li:before {
+    content: '\2022';
+    color: var(--color-text-primary);
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+}
+
+
+.markdown-render_a {
+    color: var(--color-link-primary);
+}
+
+.markdown-render_a:hover {
+    text-decoration: underline;
+}
+
+
+/* table */
+.markdown-render_table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.markdown-render_th, .markdown-render_td {
+    border: .1rem solid var(--color-border-default);
+    padding: .5rem 1rem;
+}
+
+
+/* code block */
+.markdown-render_main pre code {
+    font-family: monospace;
+    background-color: var(--color-bg-surface);
+    padding: 1rem;
+    border-radius: var(--border-radius);
+}
+
+
+/* embeded link components */
+.markdown-render_card {
+    width: 100%;
+    max-width: 25rem;
+    border: .15rem solid var(--color-border-default);
+    border-radius: var(--border-radius-large);
+    margin: 1rem 0;
+}
+
+
+@media only screen and (min-width: 400px) {
+
+    .markdown-render_h2 {
+        font-size: 1.7rem;
+    }  
+
+    .markdown-render_h3 {
+        font-size: 1.4rem;
+    }
+
+    .markdown-render_h4 {
+        font-size: 1.1rem;
+    }
+}
+
+
+@media only screen and (min-width: 800px) {
+
+    .markdown-render_h2 {
+        font-size: 2rem;
+    }
+  
+    .markdown-render_h3 {
+        font-size: 1.7rem;
+    }
+    
+    .markdown-render_h4 {
+        font-size: 1.4rem;
+    }
+}
