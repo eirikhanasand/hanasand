@@ -11,7 +11,7 @@ type CustomLinkProps = {
 
 const components = {
     // The md string should not contain a main header (#), the h1 header is  
-    // rendered by the parent component. If by mistake it cointains 
+    // rendered by the parent component. If it by mistake cointains 
     // a '# main header' this returns h2 instead.
     h1: ({children}: {children:ReactNode}) => <h2 className='markdown-render_h2'>{children}</h2>,
     h2: ({children}: {children:ReactNode}) => <h2 className='markdown-render_h2'>{children}</h2>,
