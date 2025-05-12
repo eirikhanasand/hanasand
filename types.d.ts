@@ -1,41 +1,3 @@
-type CourseProps = {
-    course: CourseAsList
-}
-
-type Editing = {
-    cards: Card[]
-    texts: string[]
-}
-
-type Course = {
-    id: string
-    cards: Card[]
-    unreviewed: Card[]
-    textUnreviewed: string[]
-    mark?: boolean
-}
-
-type CourseAsList = {
-    id: string
-    cards: Card[]
-    count: number
-}
-
-type Card = {
-    question: string
-    alternatives: string[]
-    source: string
-    correct: number[]
-    help?: string
-    theme?: string
-    rating: number
-    votes: Vote[]
-}
-
-type CardAsText = {
-    input: string
-}
-
 type User = {
     name: string
     username: string
@@ -50,90 +12,105 @@ type LoggedInUser = {
     time: number
 }
 
-type UserPage = {
-    id: number
-    username: string
-    password: string
-    position: number
-    name: string
-    score: number
-    time: number
-    solved: UserSolved[]
-}
-
-type UserSolved = {
-    id: string
-    cards: number[]
-}
-
-type RegisterUser = {
-    username: string
-    password: string
-    firstName: string
-    lastName: string
-}
-
-type LoginUser = {
-    username: string
-    password: string
-}
-
-type LoginResponse = {
-    name: string
-    username: string
-    token: string
-    time: number
-    score: number
-    solved: UserSolved[]
-}
-
-type ScoreBoardUser = {
-    id: number
-    score: number
-    solved: number
-    username: string
-    time: number
-}
-
-type CardComment = {
-    id: number
-    courseID: string
-    cardID: number
-    username: string
-    content: string
-    time: string
-    rating: number
-    replies?: CardComment[]
-    votes: Vote[]
-}
-
-type Vote = {
-    username: string
-    vote: boolean
-}
-
-type Files = {
-    name: string
-    content: string
-    files: Files[]
-    parent?: string
-}
-
-type FileListProps = {
-    files: Files[]
-    path: string
-    inputRef: MutableRefObject<HTMLInputElement | null>
-}
-
-type ClientVote = {
-    commentID: number
-    vote: boolean
-    isReply?: true
-}
-
 type Theme = 'light' | 'dark' | undefined
 
 type Cookie = {
     name: string
     value: string
+}
+
+type Commit = {
+    sha: string
+    node_id: string
+    commit: InnerCommit
+}
+
+type InnerCommit = {
+    author: Author
+    committer: Committer
+    message: string
+    tree: Tree
+    url: string
+    comment_count: number
+    verification: Verification
+}
+
+type Author = {
+    name: string
+    email: string
+    date: string
+}
+
+type Committer = {
+    name: string
+    email: string
+    date: string
+}
+
+type Tree = {
+    sha: string
+    url: string
+}
+
+type Verification = {
+    verified: boolean
+    reason: string
+    signature: null
+    payload: null
+    verified_at: null
+}
+
+type Article = {
+    title: string
+    image: string
+    href: string
+    description: string
+    length: ArticleLength
+    created: string
+    updated: string
+}
+
+type ArticleLength = {
+    wordCount: number
+    estimatedMinutes: number
+}
+
+type GithubContent = {
+    name: string
+    path: string
+    sha: string
+    size: number
+    url: string
+    html_url: string
+    git_url: string
+    download_url: string
+    type: string
+    _links: ContentLinks
+}
+
+type ContentLinks = {
+    self: string
+    git: string
+    html: string
+}
+
+type GitHubContentFile = {
+    name: string
+    path: string
+    sha: string
+    size: number
+    url: string
+    html_url: string
+    git_url: string
+    download_url: string
+    type: string
+    content: string
+    encoding: string
+    _links: ContentLinks
+}
+
+type GitHubFile = {
+    name: string
+    text: string
+    commits: Commit[]
 }
