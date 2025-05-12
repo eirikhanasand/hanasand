@@ -15,7 +15,7 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang="en" className={theme}>
             <body className='h-[100vh] w-[100vw]'>
-                <header className="h-[6.5vh] max-h-[6.5vh] text-white bg-dark flex items-center justify-end px-4">
+                <header className="h-[6.5vh] max-h-[6.5vh] text-white bg-dark flex items-center justify-end px-4 select-none">
                     <div className="absolute left-1/2 transform -translate-x-1/2">
                         <Link className="font-semibold text-bright" href="/">hanasand</Link>
                     </div>
