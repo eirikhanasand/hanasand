@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { getShare } from '@/utils/share/get'
-import { updateShare } from '@/utils/share/put'
+import config from '@/config'
 
 type Share = {
     id: string
@@ -15,62 +15,109 @@ type Share = {
 
 export default function SharePageClient({ id }: { id: string }) {
     const [share, setShare] = useState<Share | null>(null)
-    const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [editingContent, setEditingContent] = useState<string>('')
+    const [isConnected, setIsConnected] = useState(false)
+    const [lastSaved, setLastSaved] = useState<number>(0)
     const codeRef = useRef<HTMLPreElement>(null)
+    const wsRef = useRef<WebSocket | null>(null)
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-    async function fetchShare() {
-        try {
-            setLoading(true)
-            const data = await getShare(id)
-            if (!data) {
-                setError('Share not found')
-                setShare(null)
-                return
-            }
-            setShare(data)
-            setEditingContent(data.content)
-            setError(null)
-        } catch (err) {
-            console.error('Error fetching share:', err)
-            setError('Failed to load share')
-        } finally {
-            setLoading(false)
-        }
-    }
-
     useEffect(() => {
+        async function fetchShare() {
+            try {
+                const data = await getShare(id)
+                if (!data) {
+                    setError('Share not found')
+                    return
+                }
+                setShare(data)
+                setEditingContent(data.content)
+            } catch (err) {
+                console.error('Error fetching share:', err)
+                setError('Failed to load share')
+            }
+        }
         fetchShare()
-        const interval = setInterval(fetchShare, 1000)
-        return () => clearInterval(interval)
-    })
+    }, [id])
 
+    // Syntax highlighting
     useEffect(() => {
         if (codeRef.current) {
             hljs.highlightElement(codeRef.current)
         }
     }, [editingContent])
 
-    async function saveContent(content: string) {
+    // WebSocket setup
+    useEffect(() => {
         if (!share) return
-        try {
-            await updateShare(share.id, { content })
-        } catch (err) {
-            console.error('Failed to save share:', err)
-        }
-    }
 
+        const ws = new WebSocket(`${config.url.api_ws}/share/${share.id}`)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+            console.log('✅ Connected to WebSocket')
+            setIsConnected(true)
+        }
+
+        ws.onclose = () => {
+            console.log('❌ Disconnected from WebSocket')
+            setIsConnected(false)
+        }
+
+        ws.onerror = (err) => {
+            console.error('WebSocket error:', err)
+            setIsConnected(false)
+        }
+
+        ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data)
+                if (msg.type === 'update' && msg.content !== editingContent) {
+                    setEditingContent(msg.content)
+                    setShare((prev) => prev ? { ...prev, timestamp: msg.timestamp } : prev)
+                }
+            } catch (err) {
+                console.error('Invalid message from server:', err)
+            }
+        }
+
+        return () => {
+            ws.close()
+        }
+    }, [share?.id])
+
+    // Handle local edits
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
         const value = e.target.value
         setEditingContent(value)
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-        saveTimeoutRef.current = setTimeout(() => saveContent(value), 1000)
-    }
 
-    if (loading) {
-        return <div className='p-6 text-gray-400'>Loading...</div>
+        // Local highlighting refresh
+        if (codeRef.current) hljs.highlightElement(codeRef.current)
+
+        // Throttle sends to 5s intervals
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+
+        const now = Date.now()
+        const timeSinceLastSave = now - lastSaved
+
+        const sendUpdate = () => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: 'edit',
+                    id: share?.id,
+                    content: value,
+                }))
+                setLastSaved(Date.now())
+            }
+        }
+
+        if (timeSinceLastSave >= 5000) {
+            sendUpdate()
+        } else {
+            const delay = 5000 - timeSinceLastSave
+            saveTimeoutRef.current = setTimeout(sendUpdate, delay)
+        }
     }
 
     if (error) {
@@ -85,9 +132,14 @@ export default function SharePageClient({ id }: { id: string }) {
         <div className='flex flex-col h-screen w-screen bg-[#1e1e1e] text-white'>
             <header className='bg-[#2d2d2d] p-4 flex justify-between items-center shadow-md'>
                 <h1 className='font-semibold text-lg'>{share.path}</h1>
-                <span className='text-sm text-gray-400'>
-                    Last updated: {new Date(share.timestamp).toLocaleString()}
-                </span>
+                <div className='flex items-center gap-4'>
+                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-gray-500'}`}>
+                        {isConnected ? 'Connected' : 'Offline'}
+                    </span>
+                    <span className='text-sm text-gray-400'>
+                        Last updated: {new Date(share.timestamp).toLocaleString()}
+                    </span>
+                </div>
             </header>
 
             <main className='flex-1 overflow-auto p-6 relative'>
