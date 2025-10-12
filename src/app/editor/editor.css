@@ -1,0 +1,33 @@
+.markdown-preview h1 {
+    font-size: 2em;
+    font-weight: bold;
+}
+
+.markdown-preview h2 {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.markdown-preview h3 {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.markdown-preview h4 {
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.markdown-preview h4, .markdown-preview h5, .markdown-preview h6 {
+    font-size: 1em;
+    font-weight: bold;
+}
+
+.light .hljs {
+    background-color: #f0efe0;
+    color: black;
+}
+
+.dark .hljs {
+    background-color: #0d1117;
+}

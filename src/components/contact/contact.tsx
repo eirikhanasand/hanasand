@@ -10,7 +10,7 @@ export default function Contact() {
         email: Yup.string().email('Invalid email').required('Email is required'),
         type: Yup.string().min(5, 'Type must be at least 5 characters').required('Type is required'),
         message: Yup.string().min(20, 'Message must be at least 20 characters').required('Message is required'),
-    });
+    })
 
     const formik = useFormik({
         initialValues: {
@@ -21,12 +21,12 @@ export default function Contact() {
         },
         validationSchema,
         onSubmit: (values) => {
-            const subject = values.type;
-            const body = `${values.message}\n\n${values.name}\n${values.email}`;
-            const mailtoLink = `mailto:eirik.hanasand@gmail.com?cc=eirik.m.hanasand@ntnu.no&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            window.location.href = mailtoLink;
+            const subject = values.type
+            const body = `${values.message}\n\n${values.name}\n${values.email}`
+            const mailtoLink = `mailto:eirik.hanasand@gmail.com?cc=eirik.m.hanasand@ntnu.no&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+            window.location.href = mailtoLink
         }
-    });
+    })
 
     return (
         <div className="grid place-items-center min-h-[95vh]">
@@ -97,5 +97,5 @@ export default function Contact() {
                 <h1>more stuff coming soon &lt;3 if only there were 48 hours in a day...</h1>
             </div>
         </div>
-    );
-};
+    )
+}

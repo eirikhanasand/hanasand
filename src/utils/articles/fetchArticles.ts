@@ -61,7 +61,7 @@ function parse(file: GitHubFile): Article {
     const image = imageMatch ? imageMatch[1] : ""
     const description = descriptionMatch ? descriptionMatch[1] : ""
     const content = contentMatch ? contentMatch[1].trim() : ""
-    const titleMatch = content.match(/^#\s+(.*)/m);
+    const titleMatch = content.match(/^#\s+(.*)/m)
     const title = titleMatch ? titleMatch[1].trim() : ""
     const commits = file.commits
     const href = name.endsWith('.md') ? name.slice(0, name.length - 3) : name

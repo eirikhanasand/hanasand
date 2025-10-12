@@ -15,6 +15,7 @@
     background-size: 200vw 200vh;
     animation: rgb 20s infinite linear;
     text-align: center;
+    font-weight: bold;
 }
 
 @keyframes rgb {

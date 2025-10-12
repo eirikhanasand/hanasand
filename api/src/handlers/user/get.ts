@@ -1,5 +1,5 @@
-import { FastifyReply, FastifyRequest } from 'fastify'
-import run from '../../db.js'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import run from '#db'
 
 /**
  * Fetches the `name` and `avatar` for a user based on `id`.
@@ -25,7 +25,6 @@ export default async function userHandler(req: FastifyRequest, res: FastifyReply
         }
 
         const user: User = userResult.rows[0]
-
         return res.send(user)
     } catch (error) {
         console.error(`Database error: ${JSON.stringify(error)}`)

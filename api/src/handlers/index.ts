@@ -1,4 +1,4 @@
-import { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 
 /**
  * API index/root (`/`) handler. Prints the available routes. 
@@ -10,5 +10,5 @@ import { FastifyReply, FastifyRequest } from 'fastify'
  */
 export default async function IndexHandler(req: FastifyRequest, res: FastifyReply) {
     const routes = req.server.printRoutes({ commonPrefix: false })
-    return res.send(`Welcome to the Library Safety Manager!\n\nValid routes are:\n${routes}`)
+    return res.send(`Welcome to the Hanasand API!\n\nValid routes are:\n${routes}`)
 }

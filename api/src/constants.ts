@@ -26,8 +26,6 @@ type ENV = {
 dotenv.config({ path: '../.env' })
 
 const {
-    CLIENT_ID,
-    CLIENT_SECRET,
     FRONTEND_URL,
     DB,
     DB_USER,
@@ -39,23 +37,14 @@ const {
     DB_TIMEOUT_MS,
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE,
     NEXT_PUBLIC_SELF_URL,
-    OAUTH_TOKEN_URL,
-    OAUTH_BASE_URL,
-    OAUTH_AUTH_URL,
     NEXT_PUBLIC_API,
 } = process.env as unknown as ENV
 if (!NEXT_PUBLIC_API || !FRONTEND_URL || !DB_PASSWORD) {
     throw new Error('Missing NEXT_PUBLIC_API, FRONTEND_URL or DB_PASSWORD.')
 }
 
-if (!CLIENT_ID || !CLIENT_SECRET || !OAUTH_BASE_URL || !OAUTH_TOKEN_URL) {
-    throw new Error('OAuth URLs must be set.')
-}
-
 const config = {
     API: NEXT_PUBLIC_API,
-    CLIENT_ID,
-    CLIENT_SECRET,
     FRONTEND_URL,
     DB,
     DB_HOST,
@@ -67,9 +56,7 @@ const config = {
     DB_TIMEOUT_MS,
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE || 50,
     SELF_URL: NEXT_PUBLIC_SELF_URL,
-    OAUTH_TOKEN_URL,
-    OAUTH_BASE_URL,
-    OAUTH_AUTH_URL,
+    CACHE_TTL: 30000
 }
 
 export default config

@@ -2,11 +2,12 @@ import React from 'react'
 import Image from "next/image"
 // import QuoteButton from "../quoteButton"
 import './content.css'
+import Link from 'next/link'
 
 export default function Content() {
     return (
-        <div className="relative grid grid-cols place-items-center h-full">
-            <div className="relative w-48 h-48">
+        <div className="h-[100vh] relative grid grid-cols place-items-center">
+            <Link href='/about' className="relative w-48 h-48 hover:scale-[1.03]">
                 <Image 
                     className="rounded-full object-cover"
                     src="/images/assets/selfie.jpeg" 
@@ -14,8 +15,8 @@ export default function Content() {
                     fill
                     quality={100}
                 />
-            </div>
-            <div className='absolute animate-bounce top-[90vh]'>
+            </Link>
+            <div className='absolute animate-bounce top-[96vh]'>
                 <h1 className="eh animate-ping">eh?</h1>
             </div>
             {/* <h1 className="mt-2">Hello, I am Eirik Hanasand!</h1>

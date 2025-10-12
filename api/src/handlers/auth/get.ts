@@ -1,116 +1,59 @@
-import { FastifyReply, FastifyRequest } from 'fastify'
-import config from '../../constants.js'
-const {
-    CLIENT_ID,
-    CLIENT_SECRET,
-    FRONTEND_URL,
-    OAUTH_TOKEN_URL,
-    SELF_URL,
-    OAUTH_BASE_URL,
-    OAUTH_AUTH_URL,
-    API
-} = config
-import run from '../../db.js'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import bcrypt from 'bcrypt'
+import run from '#db'
 
-/**
- * Creates the callback url in the login sequence. Step 1 in the OAuth sequence.
- * 
- * @param _ Incoming Fastify Request (unused)
- * @param res Outgoing Fastify Response
- * 
- * @returns Fastify Response.
- */
-export function loginHandler(_: FastifyRequest, res: FastifyReply) {
-    const redirectUri = encodeURIComponent(`${API}/oauth2/callback`)
-    const scope = encodeURIComponent('identify email guilds openid')
-
-    // Replaces placeholders in the URL before redirecting the user.
-    const authUrl = `${OAUTH_BASE_URL}${OAUTH_AUTH_URL || `?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}`}`
-        .replace('{CLIENT_ID}', CLIENT_ID)
-        .replace('{redirectUri}', redirectUri)
-        .replace('{scope}', scope)
-
-    // Redirects the user to the OAuth provider.
-    res.redirect(authUrl)
+type LoginBody = {
+    id: string
+    password: string
 }
 
-/**
- * Handles the callback response from the OAuth provider. Takes the 
- * authorization code and fetches the token, which is then returned to the user.
- * 
- * @param req Incoming Fastify Request
- * @param res Outgoing Fastify Response
- * 
- * @returns Fastify Response.
- */
-export async function loginCallbackHandler(req: FastifyRequest, res: FastifyReply) {
-    const { code } = req.query as { code?: string }
-    if (!code) {
-        return res.status(400).send({ error: 'Authorization code missing' })
+export default async function loginHandler(req: FastifyRequest, res: FastifyReply) {
+    const { id, password } = req.body as LoginBody
+
+    if (!id || !password) {
+        return res.status(400).send({ error: "Missing fields" })
     }
 
     try {
-        // Fetches the token using the authorization code
-        const response = await fetch(OAUTH_TOKEN_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-                client_id: CLIENT_ID,
-                client_secret: CLIENT_SECRET,
-                grant_type: 'authorization_code',
-                code,
-                redirect_uri: `${API}/oauth2/callback`,
-            })
-        })
+        const ip = req.ip
+        console.log(ip)
+        const query = 'SELECT id, name, password, avatar FROM users WHERE id = $1'
+        const result = await run(query, [id])
 
-        if (!response.ok) {
-            throw new Error(await response.text())
+        if (result.rows.length === 0) {
+            return res.status(404).send({ error: "User not found" })
         }
 
-        // Fetches user info
-        const data = await response.json()
-        const { access_token } = data as any
-        const userResponse = await fetch(SELF_URL, {
-            headers: { Authorization: `Bearer ${access_token}` }
-        })
-        const userData = await userResponse.json()
-        const {
-            id,
-            username,
-            avatar,
-            mfa_enabled,
-            locale,
-            email,
-            verified
-        } = userData as { [key: string]: string }
+        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1', [id]);
+        if (attemptCheck.rows.length > 0 && attemptCheck.rows[0].attempts >= 3) {
+            console.log("Too many failed attempts. Please try again later.")
+            return res.status(429).send({ error: "Please try again later." })
+        }
 
-        // Creates a JWT which is returned to the user and decoded in the user
-        // interface to display to the user.
-        const token = btoa(JSON.stringify({
-            token: access_token,
-            id,
-            username,
-            avatar,
-            mfa_enabled,
-            locale,
-            email,
-            verified
-        }))
+        const user = result.rows[0]
+        const isValid = await bcrypt.compare(password, user.password)
+        if (!isValid) {
+            const attemptQuery = `
+            INSERT INTO attempts (id, attempts, ip)
+            VALUES ($1, 1, $2)
+            ON CONFLICT (id)
+            DO UPDATE SET
+                attempts = attempts + 1,
+                ip = EXCLUDED.ip,
+                timestamp = NOW();
+            `
+            await run(attemptQuery, [id, ip])
+            console.log(`Invalid password for ${id}.`)
+            return res.status(401).send({ error: "Please try again later." })
+        }
 
-        // Adds the user to the database if they dont exist
-        await run(
-            `INSERT INTO users (id, name, avatar)
-             SELECT $1, $2, $3
-             WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1);`,
-            [id, username, avatar]
-        )
+        await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
 
-        // Redirects the user back to the user interface with the token
-        res.redirect(`${FRONTEND_URL}/login?token=${token}`)
-    } catch (error) {
-        console.error(`Error during OAuth2 process: ${error}`)
-        res.status(500).send({ error: 'OAuth2 login failed' })
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password: _, ...userWithoutPassword } = user
+        return res.send(userWithoutPassword)
+    } catch (err: unknown) {
+        const error = err as Error
+        return res.status(500).send({ error: error.message })
     }
 }

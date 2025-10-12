@@ -1,17 +1,3 @@
-type User = {
-    name: string
-    username: string
-    time: number
-    score: number
-    solved: UserSolved[]
-}
-
-type LoggedInUser = {
-    name: string
-    username: string
-    time: number
-}
-
 type Theme = 'light' | 'dark' | undefined
 
 type Cookie = {

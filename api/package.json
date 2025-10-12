@@ -1,13 +1,12 @@
 {
-  "name": "lsm",
+  "name": "hanasand-api",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "rm -rf dist; npm run build; npm run start",
-    "build": "tsc",
-    "start": "node --max-old-space-size=24576 dist/src/index.js",
-    "debug": "node --inspect --trace-deprecation dist/src/index.js"
+    "dev": "rm -rf dist; tsc; npm run start",
+    "start": "node src/index.ts",
+    "debug": "node --inspect --trace-deprecation src/index.ts"
   },
   "author": "",
   "license": "ISC",
@@ -15,13 +14,22 @@
   "dependencies": {
     "@fastify/cors": "^11.0.1",
     "ae-cvss-calculator": "^1.0.6",
+    "bcrypt": "^6.0.0",
     "dotenv": "^16.5.0",
     "fastify": "^5.3.2",
     "pg": "^8.15.1"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/pg": "^8.11.13",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
+  },
+  "imports": {
+    "#utils/*": "./src/utils/*",
+    "#constants": "./src/constants.ts",
+    "#components/*": "./src/components/*",
+    "#db": "./src/db.ts",
+    "#/*": "./src/*"
   }
 }

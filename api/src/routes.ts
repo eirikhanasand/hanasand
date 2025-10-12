@@ -1,6 +1,9 @@
-import indexHandler from './handlers/index.js'
-import { loginHandler, loginCallbackHandler } from './handlers/auth/get.js'
-import { FastifyInstance, FastifyPluginOptions } from 'fastify'
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
+import indexHandler from './handlers/index.ts'
+import loginHandler from './handlers/auth/get.ts'
+import getUser from './handlers/user/get.ts'
+import postUser from './handlers/user/post.ts'
+import logoutHandler from './handlers/auth/logout.ts'
 
 /**
  * Defines the routes available in the API.
@@ -12,7 +15,11 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // Index handler
     fastify.get('/', indexHandler)
 
-    // Login handlers
-    fastify.get('/oauth2/login', loginHandler)
-    fastify.get('/oauth2/callback', loginCallbackHandler)
+    // Auth handlers
+    fastify.get('/auth/login/:id', loginHandler)
+    fastify.get('/auth/logout/:id', logoutHandler)
+
+    // User handler
+    fastify.post('/user', postUser)
+    fastify.get('/user/:id', getUser)
 }

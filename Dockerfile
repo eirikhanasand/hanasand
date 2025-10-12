@@ -1,11 +1,14 @@
-# Node image with Alpine Linux
-FROM node:20-alpine
+# Latest node alpine image
+FROM node:alpine
 
 # Sets the working directory
 WORKDIR /app
 
 # Installs services
-RUN apk add --no-cache python3 make g++ varnish
+RUN apk add varnish
+
+# Disables telemetry
+ENV NEXT_TELEMETRY_DISABLED 1
 
 # Starts varnish
 COPY ./default.vcl /etc/varnish/default.vcl
@@ -18,8 +21,6 @@ COPY ./package*.json ./
 
 # Installs dependencies
 RUN npm install
-RUN npm install pg fastify @fastify/cors ae-cvss-calculator
-RUN npm install @types/pg --save-dev
 
 # Copies the rest of the UI source code
 COPY ./ .

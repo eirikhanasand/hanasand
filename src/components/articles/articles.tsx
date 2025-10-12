@@ -28,7 +28,7 @@ export default async function Articles({ includeAll = true, max, includeRecentTi
         <div className="p-16">
             <h1 className="text-foreground text-2xl font-semibold">Articles</h1>
             {!recent.length && !articles.length && <h1 className='bg-red-500/50 p-2 px-3 rounded-xl w-fit mt-2'>
-                Oh! API limit reached. This is’nt supposed to happen. Let me know if you see this, and I’ll add caching.
+                Oh! API limit reached. This is not supposed to happen. Let me know if you see this, and I will add caching.
             </h1>}
             <Recent recent={recent} max={max} includeTitle={includeRecentTitle} />
             {includeAll && recent.length > 0 && oldArticles > 0 &&

@@ -22,11 +22,6 @@ export default function Featured() {
             title: "Discord Bot for organization and IaC management",
             image: "/images/assets/city.jpg",
             description: "Kinda crazy project atp ngl but the structure is perfect for scaling so I just keep adding"
-        },
-        {
-            title: "Library Safety Manager",
-            image: "/images/assets/project.jpg",
-            description: "Will be published in a few weeks."
         }
     ]
 

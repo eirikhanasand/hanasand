@@ -1,7 +1,8 @@
 import Fastify from 'fastify'
-import apiRoutes from './routes.js'
+import apiRoutes from './routes.ts'
 import cors from '@fastify/cors'
-import IndexHandler from './handlers/index.js'
+import IndexHandler from './handlers/index.ts'
+import cron from './utils/cron.ts'
 
 // Creates the Fastify instance with logging enabled.
 const fastify = Fastify({
@@ -34,4 +35,9 @@ async function start() {
 }
 
 // Starts the API
-start()
+function main() {
+    start()
+    cron()
+}
+
+main()

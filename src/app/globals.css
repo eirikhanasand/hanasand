@@ -45,3 +45,41 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   transition: background 0.4s, color 0.4s;
 }
+
+/* Profile Icon */
+/* Head */
+.user-icon {
+  position: relative;
+  width: 30px;
+  height: 20px;
+}
+
+/* Head (circle outline) */
+.user-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--foreground);
+  border-radius: 50%;
+  background: transparent;
+}
+
+/* Shoulders (arc outline) */
+.user-icon::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 8px;
+  border: 2px solid var(--foreground);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border-bottom: none;
+  background: transparent;
+}

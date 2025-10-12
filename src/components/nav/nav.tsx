@@ -1,11 +1,11 @@
-import './nav.css';
+import './nav.css'
 import github from "../assets/social/github.png"
 import linkedin from "../assets/social/linkedin.png"
 import facebook from "../assets/social/facebook.png"
 import instagram from "../assets/social/instagram.png"
 import mail from "../assets/social/mail.png"
 import discord from "../assets/social/discord.png"
-import Image from 'next/image';
+import Image from 'next/image'
 
 export default function Nav() {
     return (
