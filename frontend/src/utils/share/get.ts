@@ -5,7 +5,7 @@ export async function getShare(id: string): Promise<Share | null> {
         const res = await fetch(`${config.url.cdn}/share/${id}`)
         if (!res.ok) throw new Error('Failed to fetch share')
         const data = await res.json()
-        return data.data
+        return data
     } catch (err) {
         console.error('Error fetching share:', err)
         return null

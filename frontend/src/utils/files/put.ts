@@ -10,7 +10,7 @@ export async function updateFile(id: string, updates: { path?: string; content?:
 
         if (!res.ok) throw new Error('Failed to update share')
         const data = await res.json()
-        return data.data
+        return data
     } catch (err) {
         console.error('Error updating share:', err)
         return null
