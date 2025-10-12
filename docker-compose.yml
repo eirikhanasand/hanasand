@@ -3,8 +3,10 @@ services:
     container_name: hanasand
     restart: always
     build:
-      context: .
+      context: ./frontend
       dockerfile: ./Dockerfile
+    env_file:
+      .env
     ports:
       - "3000:3000"
     healthcheck:
@@ -15,8 +17,8 @@ services:
   api:
     container_name: hanasand_api
     build:
-      context: .
-      dockerfile: ./api/Dockerfile
+      context: ./api
+      dockerfile: ./Dockerfile
     depends_on:
       postgres:
         condition: service_healthy

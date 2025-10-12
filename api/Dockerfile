@@ -4,23 +4,22 @@ FROM node:alpine
 # Sets the working directory
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 # Installs apk dependencies
 RUN apk add varnish
 
 # Starts varnish
-COPY ./api/default.vcl /etc/varnish/default.vcl
+COPY ./default.vcl /etc/varnish/default.vcl
 
 # Copy package.json first for caching
-COPY ./api/package*.json ./
+COPY ./package*.json ./
 
 # Installs node dependencies
-RUN npm install
+RUN npm ci --omit=dev
 
 # Copies the rest of the API source code
-COPY ./api .
-
-# Copies the env variables
-COPY ../.env ../.env
+COPY . .
 
 # Adds script execution permissions
 RUN chmod +x /app/entrypoint.sh
@@ -29,4 +28,4 @@ RUN chmod +x /app/entrypoint.sh
 EXPOSE 8080
 
 # Starts the application by executing the entrypoint script
-CMD ["stdbuf", "-oL", "-eL", "/bin/bash", "-c", "[/app/entrypoint.sh"]
+CMD chmod +x /app/entrypoint.sh; /app/entrypoint.sh

@@ -1,4 +1,4 @@
-import { articles, articles_commits } from "@constants"
+import { articles, articles_commits } from "@parent/constants"
 
 export default async function fetchArticle(page: string, suffix: boolean = true) {
     try {

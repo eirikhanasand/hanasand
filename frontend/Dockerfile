@@ -4,11 +4,12 @@ FROM node:alpine
 # Sets the working directory
 WORKDIR /app
 
+# Production env vars
+ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
+
 # Installs services
 RUN apk add varnish
-
-# Disables telemetry
-ENV NEXT_TELEMETRY_DISABLED 1
 
 # Starts varnish
 COPY ./default.vcl /etc/varnish/default.vcl
@@ -20,10 +21,10 @@ COPY ./entrypoint.sh /app/entrypoint.sh
 COPY ./package*.json ./
 
 # Installs dependencies
-RUN npm install
+RUN npm ci --omit=dev
 
 # Copies the rest of the UI source code
-COPY ./ .
+COPY . .
 
 RUN npm run build
 

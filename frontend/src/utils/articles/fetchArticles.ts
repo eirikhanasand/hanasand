@@ -1,4 +1,4 @@
-import { articles_content, two_weeks_in_ms } from "@constants"
+import { articles_content, two_weeks_in_ms } from "@parent/constants"
 import fetchArticle from "./fetchArticle"
 import { prettyDate } from "../prettyDate"
 

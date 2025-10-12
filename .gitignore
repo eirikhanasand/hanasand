@@ -29,3 +29,6 @@ secret.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# next
+.next
