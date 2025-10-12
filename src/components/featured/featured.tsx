@@ -26,9 +26,9 @@ export default function Featured() {
     ]
 
     return (
-        <div className="bg-normal p-16">
+        <div className="bg-normal p-8 md:p-16">
             <h1 className="text-foreground text-2xl">Featured Projects</h1>
-            <div className="grid grid-rows-2 grid-cols-2 gap-8 place-items-center mt-4">
+            <div className="grid md:grid-rows-2 md:grid-cols-2 gap-8 place-items-center mt-4">
                 {images.map((image) => <Project
                     key={image.title}
                     image={image.image} 
@@ -43,7 +43,7 @@ export default function Featured() {
 function Project({title, description, image}: ArticleProps) {
     console.log(image)
     return (
-        <article className='bg-dark w-full h-[25vh] overflow-hidden rounded-3xl'>
+        <article className='bg-dark w-full h-fit pb-2 md:pb-0 md:h-[25vh] overflow-hidden rounded-3xl'>
             {/* <article className='bg-dark w-full h-[55vh] overflow-hidden rounded-3xl'> */}
             {/* <Image className="w-full h-[62%] object-cover" src={image} alt={title} width={800} height={450} /> */}
             <div className='mx-5 mt-5 text-foreground grid gap-2'>

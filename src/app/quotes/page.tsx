@@ -4,8 +4,8 @@ import "./page.css"
 export default function page() {
     const shuffledQuotes = shuffleArray(quotes)
     return (
-        <div className="relative h-full w-full overflow-hidden bg-black">
-            <div className="scrolling-quotes grid grid-cols-4">
+        <div className="relative max-h-[93.5vh] w-full overflow-hidden bg-black">
+            <div className="scrolling-quotes grid md:grid-cols-4">
                 {shuffledQuotes.concat(shuffledQuotes).concat(shuffledQuotes).map((quote, index) => (
                     <div
                         key={index}

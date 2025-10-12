@@ -1,12 +1,14 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-dark: red;
-  --color-normal: red;
-  --color-light: red;
-  --color-extralight: red;
-  --color-superlight: red;
-  --color-bright: red;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --color-dark: #1a1a1a;
+  --color-normal: #171717;
+  --color-light: #212121;
+  --color-extralight: #323232;
+  --color-superlight: #424242;
+  --color-bright: white;
 }
 
 @utility noscroll {
@@ -82,4 +84,19 @@ body {
   border-top-right-radius: 20px;
   border-bottom: none;
   background: transparent;
+}
+
+/* Warning */
+@keyframes slide {
+	0% {
+		width: 0%;
+	}
+
+	100% {
+		width: 100%;
+	}
+}
+
+.animate-slide-line {
+	animation: slide 5s linear forwards;
 }

@@ -29,10 +29,10 @@ export default function Contact() {
     })
 
     return (
-        <div className="grid place-items-center min-h-[95vh]">
-            <form onSubmit={formik.handleSubmit} title="Contact me">
+        <div className="grid place-items-center min-h-[93.5vh]">
+            <form className='w-[80vw] md:w-1/2' onSubmit={formik.handleSubmit} title="Contact me">
                 <h1 className="text-foreground text-2xl mb-5" title="Contact me">
-                    Contact me
+                    Contact
                 </h1>
                 <div className='mb-5'>
                     <h1 className="text-md text-foreground">Name</h1>
@@ -75,7 +75,7 @@ export default function Contact() {
                     <textarea
                         {...formik.getFieldProps('message')}
                         placeholder="Tell me about something interesting..."
-                        className="w-[98%] rounded-lg h-10 bg-light pl-2 text-foreground"
+                        className="w-[98%] rounded-lg h-10 bg-light p-2 text-foreground"
                     />
                     {formik.touched.message && formik.errors.message && (
                         <p className="error">{formik.errors.message}</p>
@@ -93,9 +93,6 @@ export default function Contact() {
                     Submit
                 </button>
             </form>
-            <div className='text-gray-500 grid place-items-center'>
-                <h1>more stuff coming soon &lt;3 if only there were 48 hours in a day...</h1>
-            </div>
         </div>
     )
 }

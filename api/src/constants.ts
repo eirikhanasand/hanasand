@@ -4,9 +4,6 @@
 import dotenv from 'dotenv'
 
 type ENV = {
-    CLIENT_ID: string
-    CLIENT_SECRET: string
-    FRONTEND_URL: string
     DB: string
     DB_PASSWORD: string
     DB_USER: string
@@ -16,17 +13,13 @@ type ENV = {
     DB_IDLE_TIMEOUT_MS: string
     DB_TIMEOUT_MS: string
     DEFAULT_RESULTS_PER_PAGE: string
-    OAUTH_TOKEN_URL: string
     NEXT_PUBLIC_SELF_URL: string
-    OAUTH_BASE_URL: string
-    OAUTH_AUTH_URL: string
     NEXT_PUBLIC_API: string
 }
 
 dotenv.config({ path: '../.env' })
 
 const {
-    FRONTEND_URL,
     DB,
     DB_USER,
     DB_HOST,
@@ -39,13 +32,12 @@ const {
     NEXT_PUBLIC_SELF_URL,
     NEXT_PUBLIC_API,
 } = process.env as unknown as ENV
-if (!NEXT_PUBLIC_API || !FRONTEND_URL || !DB_PASSWORD) {
-    throw new Error('Missing NEXT_PUBLIC_API, FRONTEND_URL or DB_PASSWORD.')
+if (!NEXT_PUBLIC_API || !DB_PASSWORD) {
+    throw new Error('Missing NEXT_PUBLIC_API or DB_PASSWORD.')
 }
 
 const config = {
     API: NEXT_PUBLIC_API,
-    FRONTEND_URL,
     DB,
     DB_HOST,
     DB_USER,
