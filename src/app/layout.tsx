@@ -5,6 +5,7 @@ import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
 import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
+import { FileCode, UploadIcon } from 'lucide-react'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -17,12 +18,22 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang="en" className={theme}>
             <body className='h-full w-full'>
-                <header className="fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-white bg-dark flex items-center justify-end px-4 select-none">
-                    <div className="absolute left-1/2 transform -translate-x-1/2">
+                <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-white bg-dark grid grid-cols-3 px-4 select-none'>
+                    <div className='flex items-center'>
+                        <Link href='/upload' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                            <UploadIcon />
+                        </Link> 
+                        <Link href='/s' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                            <FileCode />
+                        </Link> 
+                    </div>
+                    <div className='grid place-items-center'>
                         <Link className="font-semibold text-bright cursor-pointer" href="/">hanasand</Link>
                     </div>
-                    <ThemeSwitch />
-                    <Login />
+                    <div className='flex justify-end items-center'>
+                        <ThemeSwitch />
+                        <Login />
+                    </div>
                 </header>
                 <div className='mt-[6.5vh] h-[93.5vh] w-full overflow-auto'>
                     <main className='w-full min-h-[93.5vh]'>

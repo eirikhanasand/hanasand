@@ -24,16 +24,18 @@ export default function ThemeSwitch() {
     }
 
     return (
-        <div className='grid place-items-center justify-end cursor-pointer'>
-            <label>
-                <input
-                    type="checkbox"
-                    checked={theme === 'light'}
-                    onChange={toggleTheme}
-                    className="sr-only"
-                />
-                <ThemeIcon />
-            </label>
+        <div className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+            <div className='grid place-items-center justify-end cursor-pointer'>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={theme === 'light'}
+                        onChange={toggleTheme}
+                        className="sr-only"
+                    />
+                    <ThemeIcon />
+                </label>
+            </div>
         </div>
     )
 }

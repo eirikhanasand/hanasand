@@ -100,3 +100,17 @@ type GitHubFile = {
     text: string
     commits: Commit[]
 }
+
+type Share = {
+    id: string
+    path: string
+    content: string
+    timestamp: string
+}
+
+type File = {
+    id: string
+    path: string
+    content: string
+    timestamp: string
+}
