@@ -4,7 +4,6 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "rm -rf dist; tsc; npm run start",
     "start": "node src/index.ts",
     "debug": "node --inspect --trace-deprecation src/index.ts"
   },
