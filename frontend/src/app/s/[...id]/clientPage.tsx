@@ -81,8 +81,8 @@ function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
     }
     
     return (
-        <div className='bg-light w-[15vw] h-full p-2'>
-            <div className='bg-dark rounded-lg hover:bg-dark/70 h-12 w-12 grid place-items-center cursor-pointer'>
+        <div className='bg-normal w-[15vw] h-full p-2'>
+            <div className='bg-light rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
                 <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />
             </div>
         </div>
@@ -118,8 +118,8 @@ function Metadata({ share, isConnected, showMetadata, setShowMetadata, participa
     }
 
     return (
-        <div className='bg-light w-[15vw] h-full p-2 space-y-2'>
-            <div className='bg-dark rounded-lg hover:bg-dark/70 h-12 w-12 grid place-items-center cursor-pointer'>
+        <div className='bg-normal w-[15vw] h-full p-2 space-y-2'>
+            <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
                 <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
             </div>
             <Header share={share} isConnected={isConnected} participants={participants} />
