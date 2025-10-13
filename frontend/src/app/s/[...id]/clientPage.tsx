@@ -3,7 +3,8 @@
 import Code from '@/components/s/code'
 import Header from '@/components/s/header'
 import useMovable from '@/hooks/movable'
-import { Eye, Files, FileText, Folder, Info, X } from 'lucide-react'
+import { Eye, Folder, Info, RefreshCw, X } from 'lucide-react'
+import Link from 'next/link'
 import { Dispatch, SetStateAction, useState } from 'react'
 
 type ExplorerProps = {
@@ -119,8 +120,13 @@ function Metadata({ share, isConnected, showMetadata, setShowMetadata, participa
 
     return (
         <div className='bg-normal w-[15vw] h-full p-2 space-y-2'>
-            <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+            <div className='flex gap-2'>
+                <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+                    <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+                </div>
+                <Link href='/s' className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+                    <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+                </Link>
             </div>
             <Header share={share} isConnected={isConnected} participants={participants} />
         </div>

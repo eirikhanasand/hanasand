@@ -35,6 +35,9 @@ export default function Editor({ codeRef, editingContent, handleChange, setClick
 
     return (
         <main className="flex-1 relative overflow-hidden">
+            <h1 className='absolute top-2 left-2 z-50 pointer-events-none select-none text-gray-500'>
+                {editingContent.trim().length <= 0 && 'Hello world...'}
+            </h1>
             <div className="relative w-full h-full">
                 <pre
                     ref={codeRef}
