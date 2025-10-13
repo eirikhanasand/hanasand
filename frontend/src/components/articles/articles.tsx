@@ -69,7 +69,7 @@ function Article({ article }: ArticleProps) {
             href={`/articles/${href}`}
         >
             <article className='bg-dark w-full h-[58vh] overflow-hidden rounded-2xl'>
-                <Image className="w-full h-[55%] object-cover" src={image} alt={title} width={800} height={450} />
+                {image && <Image className="w-full h-[55%] object-cover" src={image} alt={title} width={800} height={450} />}
                 <div className='mx-5 mt-5 text-foreground grid gap-2'>
                     <div className='flex justify-between w-full'>
                         <h1 className='text-lg font-semibold'>{title}</h1>
