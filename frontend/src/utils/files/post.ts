@@ -14,7 +14,7 @@ type PostFileResponse = {
 
 export async function postFile({ name, data, description, path, type }: PostFileProps): Promise<PostFileResponse | null> {
     try {
-        const res = await fetch(`${config.url.cdn}/file`, {
+        const res = await fetch(`${config.url.cdn}/files`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, description: description || null, data, path, type }),

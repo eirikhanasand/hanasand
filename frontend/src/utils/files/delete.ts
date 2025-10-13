@@ -9,7 +9,7 @@ export async function deleteFile(id: string): Promise<boolean> {
     if (!id) return false
 
     try {
-        const res = await fetch(`${config.url.cdn}/file/${id}`, {
+        const res = await fetch(`${config.url.cdn}/files/${id}`, {
             method: 'DELETE',
         })
 
