@@ -78,7 +78,7 @@ export default function Preview({ url, file, onUpload, setFile, setPreview, setU
                 }
 
                 if (status.id) {
-                    setUrl(`${config.url.cdn}/files/${path ? `/path/${path}` : status.id}`)
+                    setUrl(`${config.url.cdn}/files/${path ? `path/${path}` : status.id}`)
                 }
             } catch (err) {
                 console.error(err)
