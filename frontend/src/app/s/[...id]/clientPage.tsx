@@ -1,130 +1,128 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
-import { getShare } from '@/utils/share/get'
-import config from '@/config'
+import Code from '@/components/s/code'
 import Header from '@/components/s/header'
-import Editor from '@/components/s/editor'
+import useMovable from '@/hooks/movable'
+import { Eye, Files, FileText, Folder, Info, X } from 'lucide-react'
+import { Dispatch, SetStateAction, useState } from 'react'
 
-type Share = {
-    id: string
-    path: string
-    content: string
-    timestamp: string
+type ExplorerProps = {
+    showExplorer: boolean
+    setShowExplorer: Dispatch<SetStateAction<boolean>>
 }
 
-export default function SharePageClient({ id }: { id: string }) {
-    const [share, setShare] = useState<Share | null>(null)
-    const [error, setError] = useState<string | null>(null)
-    const [editingContent, setEditingContent] = useState<string>('')
-    const [isConnected, setIsConnected] = useState(false)
+type MetadataProps = {
+    share: Share | null
+    setShare: Dispatch<SetStateAction<Share | null>>
+    isConnected: boolean
+    showMetadata: boolean
+    setShowMetadata: Dispatch<SetStateAction<boolean>>
+    participants: number
+    clickedWord: string | null
+    setClickedWord: Dispatch<SetStateAction<string | null>>
+}
+
+const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
+
+export default function ClientPage({ id }: { id: string }) {
+    const [showExplorer, setShowExplorer] = useState(true)
+    const [showMetadata, setShowMetaData] = useState(true)
     const [participants, setParticipants] = useState(1)
-    const codeRef = useRef<HTMLPreElement>(null)
-    const wsRef = useRef<WebSocket | null>(null)
+    const [isConnected, setIsConnected] = useState(false)
+    const [clickedWord, setClickedWord] = useState<string | null>(null)
+    const [share, setShare] = useState<Share | null>(null)
 
-    useEffect(() => {
-        async function fetchShare() {
-            try {
-                const data = await getShare(id)
-                if (!data) {
-                    setError('Share not found')
-                    return
-                }
-                setShare(data)
-                setEditingContent(data.content)
-            } catch (err) {
-                console.error('Error fetching share:', err)
-                setError('Failed to load share')
-            }
-        }
-        fetchShare()
-    }, [id])
+    return (
+        <div className="flex w-full h-full bg-gray-100">
+            <Explorer showExplorer={showExplorer} setShowExplorer={setShowExplorer} />
+            <div className='flex-1 flex flex-col h-full w-full bg-light text-white'>
+                <Code
+                    id={id}
+                    setParticipants={setParticipants}
+                    isConnected={isConnected}
+                    setIsConnected={setIsConnected}
+                    share={share}
+                    setShare={setShare}
+                    setClickedWord={setClickedWord}
+                />
+            </div>
+            <Metadata
+                share={share}
+                setShare={setShare}
+                isConnected={isConnected}
+                showMetadata={showMetadata}
+                setShowMetadata={setShowMetaData}
+                participants={participants}
+                clickedWord={clickedWord}
+                setClickedWord={setClickedWord}
+            />
+        </div>
+    )
+}
 
-    useEffect(() => {
-        if (codeRef.current) {
-            codeRef.current.removeAttribute('data-highlighted')
-            codeRef.current.textContent = editingContent
-            hljs.highlightElement(codeRef.current)
-        }
-    }, [editingContent])
 
-    // WebSocket setup
-    useEffect(() => {
-        if (!share) return
-
-        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.id}`)
-        wsRef.current = ws
-
-        ws.onopen = () => {
-            setIsConnected(true)
-        }
-
-        ws.onclose = () => {
-            setIsConnected(false)
-        }
-
-        ws.onerror = (err) => {
-            console.error('WebSocket error:', err)
-            setIsConnected(false)
-        }
-
-        ws.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data)
-                if (msg.type === 'update' && msg.content !== editingContent) {
-                    setParticipants(msg.participants)
-                    setEditingContent(msg.content)
-                    setShare((prev) => prev ? { ...prev, timestamp: msg.timestamp } : prev)
-                }
-
-                if (msg.type === 'join') {
-                    setParticipants(msg.participants)
-                }
-            } catch (err) {
-                console.error('Invalid message from server:', err)
-            }
-        }
-        return () => {
-            ws.close()
-        }
-    }, [id, share])
-
-    function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-        const value = e.target.value
-        setEditingContent(value)
-
-        if (codeRef.current) {
-            hljs.highlightElement(codeRef.current)
-        }
-
-        function sendUpdate() {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                    type: 'edit',
-                    id: share?.id,
-                    content: value,
-                }))
-            }
-        }
-
-        setEditingContent(value)
-        sendUpdate()
+function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
+    const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
+    
+    if (!showExplorer) {
+        return (
+            <div 
+                onMouseDown={handleMouseDown}
+                onClick={handleOpen}
+                className={`group ${sharedStyles}`}
+                style={{
+                    top: position.y,
+                    left: position.x,
+                }}
+            >
+                <h1><Folder className='stroke-light/50 group-hover:stroke-bright' /></h1>
+            </div>
+        )
     }
+    
+    return (
+        <div className='bg-light w-[15vw] h-full p-2'>
+            <div className='bg-dark rounded-lg hover:bg-dark/70 h-12 w-12 grid place-items-center cursor-pointer'>
+                <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />
+            </div>
+        </div>
+    )
+}
 
-    if (error) {
-        return <div className='p-6 text-red-500'>{error}</div>
-    }
+function Metadata({ share, isConnected, showMetadata, setShowMetadata, participants, clickedWord }: MetadataProps) {
+    const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
 
-    if (!share) {
-        return null
+    if (!showMetadata) {
+        const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
+        return (
+            <div
+                onMouseDown={handleMouseDown}
+                onClick={handleOpen}
+                className={`group ${sharedStyles}`}
+                style={{
+                    top: position.y,
+                    left: position.x,
+                }}
+            >
+                <h1>
+                    <Info className={!isConnected ? color : 'stroke-light/50 group-hover:stroke-bright'} />
+                </h1>
+                {isConnected && (
+                    <h1 className="flex gap-2 text-light/50 group-hover:text-bright">
+                        {participants}
+                        <Eye className={color} />
+                    </h1>
+                )}
+            </div>
+        )
     }
 
     return (
-        <div className='flex flex-col h-screen w-screen bg-[#1e1e1e] text-white'>
+        <div className='bg-light w-[15vw] h-full p-2 space-y-2'>
+            <div className='bg-dark rounded-lg hover:bg-dark/70 h-12 w-12 grid place-items-center cursor-pointer'>
+                <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+            </div>
             <Header share={share} isConnected={isConnected} participants={participants} />
-            <Editor codeRef={codeRef} editingContent={editingContent} handleChange={handleChange} />
         </div>
     )
 }
