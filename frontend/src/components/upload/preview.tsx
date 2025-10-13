@@ -1,28 +1,30 @@
 'use client'
 
-import { Dispatch, SetStateAction, useState } from 'react'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import ImagePreview from './imagePreview'
+import config from '@/config'
 
 type PreviewProps = {
     url: string
     file: File
-    onUpload?: (data: UploadData) => Promise<void>
+    onUpload?: (data: UploadData) => Promise<PostFileResponse | 409 | null>
     setPreview: Dispatch<SetStateAction<string | null>>
     setFile: Dispatch<SetStateAction<File | null>>
+    setUrl: Dispatch<SetStateAction<string>>
 }
 
 type UploadData = {
     file: File
     name: string
     description?: string
-    path: string
+    path: string | null
     type: string
 }
 
-export default function Preview({ url, file, onUpload, setFile, setPreview }: PreviewProps) {
+export default function Preview({ url, file, onUpload, setFile, setPreview, setUrl }: PreviewProps) {
     const [name, setName] = useState(file.name)
     const [description, setDescription] = useState('')
-    const [path, setPath] = useState(file.name)
+    const [path, setPath] = useState<string | null>(null)
     const [type] = useState(file.type)
     const [checkingPath, setCheckingPath] = useState(false)
     const [pathAvailable, setPathAvailable] = useState(true)
@@ -32,9 +34,9 @@ export default function Preview({ url, file, onUpload, setFile, setPreview }: Pr
     async function checkPath(p: string) {
         setCheckingPath(true)
         try {
-            const res = await fetch(`/api/share/check-path?path=${encodeURIComponent(p)}`)
+            const res = await fetch(`${config.url.cdn}/files/check?path=${encodeURIComponent(p)}`)
             const data = await res.json()
-            setPathAvailable(data.available)
+            setPathAvailable(!data.exists)
         } catch (err) {
             console.error(err)
             setPathAvailable(false)
@@ -50,8 +52,11 @@ export default function Preview({ url, file, onUpload, setFile, setPreview }: Pr
 
     function handlePathChange(e: React.ChangeEvent<HTMLInputElement>) {
         const value = e.target.value
-        setPath(value)
-        checkPath(value)
+        const safeName = value.trim().replace(/[^a-zA-Z0-9-_]/g, '_')
+        const extension = file?.name?.split('.').pop()?.toLowerCase() || ''
+        const pathToCheck = extension ? `${safeName}.${extension}` : safeName
+        setPath(safeName)
+        checkPath(pathToCheck)
     }
 
     async function handleUpload() {
@@ -62,7 +67,19 @@ export default function Preview({ url, file, onUpload, setFile, setPreview }: Pr
         if (onUpload) {
             setUploading(true)
             try {
-                await onUpload({ file, name, description, path, type })
+                const status = await onUpload({ file, name, description, path, type })
+
+                if (status === 409) {
+                    setError('Path is already taken. Choose another.')
+                }
+
+                if (!status || typeof status === 'number' || typeof status !== 'number' && !('id' in status)) {
+                    return setError('Upload failed. Try again later.')
+                }
+
+                if (status.id) {
+                    setUrl(`${config.url.cdn}/files/${path ? `/path/${path}` : status.id}`)
+                }
             } catch (err) {
                 console.error(err)
                 setError('Upload failed.')
@@ -104,7 +121,7 @@ export default function Preview({ url, file, onUpload, setFile, setPreview }: Pr
                     <span className="text-sm font-semibold">Path</span>
                     <input
                         type="text"
-                        value={path}
+                        value={path || ''}
                         onChange={handlePathChange}
                         className="w-full p-2 rounded bg-light text-white"
                     />

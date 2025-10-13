@@ -114,3 +114,7 @@ type File = {
     content: string
     timestamp: string
 }
+
+type PostFileResponse = {
+    id: string
+}

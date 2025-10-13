@@ -8,20 +8,23 @@ type PostFileProps = {
     type: string
 }
 
-type PostFileResponse = {
-    id: string
-}
-
-export async function postFile({ name, data, description, path, type }: PostFileProps): Promise<PostFileResponse | null> {
+export async function postFile({ name, data, description, path, type }: PostFileProps): Promise<PostFileResponse | 409 | null> {
     try {
-        const res = await fetch(`${config.url.cdn}/files`, {
+        const response = await fetch(`${config.url.cdn}/files`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, description: description || null, data, path, type }),
         })
 
-        if (!res.ok) throw new Error('Failed to upload file')
-        const json = await res.json()
+        if (response.status === 409) {
+            return 409
+        }
+
+        if (!response.ok) {
+            throw new Error('Failed to upload file')
+        }
+
+        const json = await response.json()
         return json
     } catch (err) {
         console.error('Error uploading file:', err)
