@@ -15,7 +15,8 @@ export default function Header({ share, isConnected, participants }: HeaderProps
             .then(() => {
                 setCopy(true)
             })
-            .catch((err) => {
+            .catch((error) => {
+                console.log(error)
                 setCopy('error')
             })
     }
