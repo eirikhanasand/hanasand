@@ -1,27 +1,19 @@
 'use client'
 
-import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 import ImagePreview from './imagePreview'
 import config from '@/config'
+import { postFile } from '@/utils/files/post'
 
 type PreviewProps = {
     url: string
     file: File
-    onUpload?: (data: UploadData) => Promise<PostFileResponse | 409 | null>
     setPreview: Dispatch<SetStateAction<string | null>>
     setFile: Dispatch<SetStateAction<File | null>>
     setUrl: Dispatch<SetStateAction<string>>
 }
 
-type UploadData = {
-    file: File
-    name: string
-    description?: string
-    path: string | null
-    type: string
-}
-
-export default function Preview({ url, file, onUpload, setFile, setPreview, setUrl }: PreviewProps) {
+export default function Preview({ url, file, setFile, setPreview, setUrl }: PreviewProps) {
     const [name, setName] = useState(file.name)
     const [description, setDescription] = useState('')
     const [path, setPath] = useState<string | null>(null)
@@ -64,28 +56,26 @@ export default function Preview({ url, file, onUpload, setFile, setPreview, setU
             setError('Path is already taken. Choose another.')
             return
         }
-        if (onUpload) {
-            setUploading(true)
-            try {
-                const status = await onUpload({ file, name, description, path, type })
-
-                if (status === 409) {
-                    setError('Path is already taken. Choose another.')
-                }
-
-                if (!status || typeof status === 'number' || typeof status !== 'number' && !('id' in status)) {
-                    return setError('Upload failed. Try again later.')
-                }
-
-                if (status.id) {
-                    setUrl(`${config.url.cdn}/files/${path ? `path/${path}` : status.id}`)
-                }
-            } catch (err) {
-                console.error(err)
-                setError('Upload failed.')
-            } finally {
-                setUploading(false)
+        
+        setUploading(true)
+        try {
+            const status = await postFile({ name, file, description, path: path || undefined, type })
+            if (status === 409) {
+                setError('Path is already taken. Choose another.')
             }
+            
+            if (!status || typeof status === 'number' || typeof status !== 'number' && !('id' in status)) {
+                return setError('Upload failed. Try again later.')
+            }
+            
+            if (status.id) {
+                setUrl(`${config.url.cdn}/files/${path ? `path/${path}` : status.id}`)
+            }
+        } catch (err) {
+            console.error(err)
+            setError('Upload failed.')
+        } finally {
+            setUploading(false)
         }
     }
 

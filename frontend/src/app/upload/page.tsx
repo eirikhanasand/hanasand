@@ -2,7 +2,7 @@
 
 import Preview from '@/components/upload/preview'
 import Upload from '@/components/upload/upload'
-import handleUpload from '@/utils/files/handleUpload'
+import config from '@/config'
 import { DoorOpen, UploadIcon, Link as LinkIcon } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -15,7 +15,7 @@ export default function Page() {
     const [copy, setCopy] = useState<'error' | boolean>(false)
     const uploadClasses = (!file || !preview) && 'py-40 px-15 h-[30vh md:p-60'
     const previewClasses = preview && 'p-5 md:p-10 md:px-[33.333vw]'
-    const isUploaded = url.includes('cdn')
+    const isUploaded = url.includes(config.url.cdn)
     function handleCopyLink() {
         navigator.clipboard.writeText(url)
             .then(() => {
@@ -81,7 +81,6 @@ export default function Page() {
                 file={file}
                 setFile={setFile}
                 setPreview={setPreview}
-                onUpload={handleUpload}
                 setUrl={setUrl}
             />}
         </div>

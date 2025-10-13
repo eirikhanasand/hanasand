@@ -9,9 +9,16 @@ const nextConfig = {
                 pathname: '/**',
                 search: '',
             },
+            {
+                protocol: 'http',
+                hostname: 'localhost',
+                port: '8501',
+                pathname: '/**',
+                search: '',
+            },
         ]
     },
     /* config options here */
 }
-   
+
 module.exports = nextConfig

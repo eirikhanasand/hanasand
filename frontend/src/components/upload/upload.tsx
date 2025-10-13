@@ -1,6 +1,7 @@
 import { Camera, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useCallback } from 'react'
+import getFetchableUrl from './getFetchAbleUrl'
 
 type UploadProps = {
     url: string
@@ -30,6 +31,27 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
 
     function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
         e.preventDefault()
+    }
+
+    async function handlePasteOrChange(value: string) {
+        setUrl(value)
+
+        try {
+            const urlObj = new URL(value)
+            const fileName = urlObj.pathname.split('/').pop() || 'image.png'
+            const file = await fetchImageAsFile(value, fileName)
+            handleFile(file)
+        } catch (err) {
+            console.log('Not a valid URL or failed to fetch image', err)
+        }
+    }
+
+    async function fetchImageAsFile(url: string, fileName: string) {
+        const fetchableUrl = getFetchableUrl(url)
+        const response = await fetch(`/api/image?url=${encodeURIComponent(fetchableUrl)}`)
+        const blob = await response.blob()
+        const type = blob.type || 'image/png'
+        return new File([blob], fileName, { type })
     }
 
     if (preview) {
@@ -82,7 +104,11 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                     <input
                         placeholder='Paste image or url'
                         value={url}
-                        onChange={(e) => setUrl((e.target.value).toUpperCase())}
+                        onChange={(e) => handlePasteOrChange(e.target.value)}
+                        onPaste={(e) => {
+                            const pastedText = e.clipboardData.getData('text')
+                            handlePasteOrChange(pastedText)
+                        }}
                         className='bg-darker w-full rounded-md border-[1px] border-[rgb(44,44,44)] px-2 py-1 focus:outline-hidden'
                     />
                 </div>
@@ -92,7 +118,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
     )
 }
 
-function Or({className}: {className?: string}) {
+function Or({ className }: { className?: string }) {
     return (
         <div className={`flex gap-2 ${className}`}>
             <h1 className='text-extralight'>────</h1>

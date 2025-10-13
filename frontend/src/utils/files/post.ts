@@ -2,18 +2,30 @@ import config from '@/config'
 
 type PostFileProps = {
     name: string
-    data: string
+    file: File
     description?: string
     path?: string
     type: string
 }
 
-export async function postFile({ name, data, description, path, type }: PostFileProps): Promise<PostFileResponse | 409 | null> {
+export async function postFile({ name, file, description, path, type }: PostFileProps) {
     try {
+        const formData = new FormData()
+        formData.append('name', name)
+        formData.append('file', file)
+
+        if (description) {
+            formData.append('description', description)
+        }
+
+        if (path) {
+            formData.append('path', path)
+        }
+
+        formData.append('type', type)
         const response = await fetch(`${config.url.cdn}/files`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description: description || null, data, path, type }),
+            body: formData,
         })
 
         if (response.status === 409) {
