@@ -4,7 +4,7 @@ import Code from '@/components/s/code'
 import Header from '@/components/s/header'
 import useMovable from '@/hooks/movable'
 import { Eye, Folder, Info, RefreshCw, X } from 'lucide-react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Dispatch, SetStateAction, useState } from 'react'
 
 type ExplorerProps = {
@@ -92,6 +92,7 @@ function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
 
 function Metadata({ share, isConnected, showMetadata, setShowMetadata, participants, clickedWord }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
+    const router = useRouter()
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
@@ -124,9 +125,9 @@ function Metadata({ share, isConnected, showMetadata, setShowMetadata, participa
                 <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
                 </div>
-                <Link href='/s' className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+                <button onClick={() => router.push('/s')} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
-                </Link>
+                </button>
             </div>
             <Header share={share} isConnected={isConnected} participants={participants} />
         </div>
