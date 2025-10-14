@@ -6,7 +6,7 @@ import useMovable from '@/hooks/movable'
 import randomId from '@/utils/random/randomId'
 import { Eye, Folder, Info, RefreshCw, X } from 'lucide-react'
 import Link from 'next/link'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
 type ExplorerProps = {
     showExplorer: boolean
@@ -22,11 +22,12 @@ type MetadataProps = {
     participants: number
     clickedWord: string | null
     setClickedWord: Dispatch<SetStateAction<string | null>>
+    randomServerId: string
 }
 
 const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
 
-export default function ClientPage({ id }: { id: string }) {
+export default function ClientPage({ id, randomId }: { id: string, randomId: string }) {
     const [showExplorer, setShowExplorer] = useState(true)
     const [showMetadata, setShowMetaData] = useState(true)
     const [participants, setParticipants] = useState(1)
@@ -57,6 +58,7 @@ export default function ClientPage({ id }: { id: string }) {
                 participants={participants}
                 clickedWord={clickedWord}
                 setClickedWord={setClickedWord}
+                randomServerId={randomId}
             />
         </div>
     )
@@ -91,9 +93,14 @@ function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
     )
 }
 
-function Metadata({ share, isConnected, showMetadata, setShowMetadata, participants, clickedWord }: MetadataProps) {
+function Metadata({ share, isConnected, showMetadata, setShowMetadata, participants, clickedWord, randomServerId }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
-    const id = randomId()
+    const [id, setId] = useState(randomServerId)
+
+    useEffect(() => {
+        const random = randomId()
+        setId(random)
+    }, [])
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
