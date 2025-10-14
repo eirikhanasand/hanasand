@@ -1,6 +1,7 @@
 import { Eye, Link, Pencil } from 'lucide-react'
 import Marquee from '../marquee/marquee'
 import { useEffect, useState } from 'react'
+import copy from '@/utils/copy'
 
 type HeaderProps = {
     share: Share | null
@@ -9,23 +10,13 @@ type HeaderProps = {
 }
 
 export default function Header({ share, isConnected, participants }: HeaderProps) {
-    const [copy, setCopy] = useState<'error' | boolean>(false)
-    function handleCopyLink() {
-        navigator.clipboard.writeText(window.location.href)
-            .then(() => {
-                setCopy(true)
-            })
-            .catch((error) => {
-                console.log(error)
-                setCopy('error')
-            })
-    }
+    const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
 
     useEffect(() => {
         setTimeout(() => {
-            setCopy(false)
+            setDidCopy(false)
         }, 1000)
-    }, [copy])
+    }, [didCopy])
 
     if (!share) {
         return <></>
@@ -48,8 +39,8 @@ export default function Header({ share, isConnected, participants }: HeaderProps
                     <Pencil height={18} width={18} />
                     <h1>{new Date(share.timestamp).toLocaleString()}</h1>
                 </span>
-                <span onClick={handleCopyLink} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
-                    <Link className={copy === true ? 'stroke-green-600' : copy === false ? '' : 'stroke-red-500'} height={18} width={18} />
+                <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
+                    <Link className={didCopy === true ? 'stroke-green-600' : didCopy === false ? '' : 'stroke-red-500'} height={18} width={18} />
                     <div className='flex flex-col flex-1 overflow-hidden'>
                         <Marquee className='truncate' text={window.location.href.split('/').reverse()[0]} />
                     </div>

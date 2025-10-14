@@ -3,29 +3,20 @@
 import Preview from '@/components/upload/preview'
 import Upload from '@/components/upload/upload'
 import config from '@/config'
-import { DoorOpen, UploadIcon, Link as LinkIcon } from 'lucide-react'
+import { DoorOpen, UploadIcon, LinkIcon } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import copy from '@/utils/copy'
 
 export default function Page() {
     const [url, setUrl] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [preview, setPreview] = useState<string | null>(null)
-    const [copy, setCopy] = useState<'error' | boolean>(false)
+    const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
     const uploadClasses = (!file || !preview) && 'py-40 px-15 h-[30vh md:p-60'
     const previewClasses = preview && 'p-5 md:p-10 md:px-[33.333vw]'
     const isUploaded = url.includes(config.url.cdn)
-    function handleCopyLink() {
-        navigator.clipboard.writeText(url)
-            .then(() => {
-                setCopy(true)
-            })
-            .catch((error) => {
-                console.log(error)
-                setCopy('error')
-            })
-    }
 
     function handleReset() {
         setUrl('')
@@ -35,10 +26,10 @@ export default function Page() {
 
     useEffect(() => {
         setTimeout(() => {
-            setCopy(false)
+            setDidCopy(false)
         }, 1000)
-    }, [copy])
-    
+    }, [didCopy])
+
     if (isUploaded) {
         return (
             <div className={`min-h-[93.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses}`}>
@@ -47,8 +38,8 @@ export default function Page() {
                         <div className='grid place-items-center'>
                             <Image alt="Uploaded image" src={url} height={300} width={348} className='rounded-lg' />
                         </div>
-                        <div onClick={handleCopyLink} className="bg-light flex rounded-lg gap-2 p-2 px-4 cursor-pointer">
-                            <LinkIcon className={copy === true ? 'stroke-green-600' : copy === false ? 'stroke-gray-200' : 'stroke-red-500'} height={18} width={18} />
+                        <div onClick={() => copy({ text: url, setDidCopy })} className="bg-light flex rounded-lg gap-2 p-2 px-4 cursor-pointer">
+                            <LinkIcon className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'} height={18} width={18} />
                             <h1 className='text-gray-200'>{url}</h1>
                         </div>
                     </div>
@@ -56,11 +47,11 @@ export default function Page() {
                         <Link href='/' className='rounded-lg hover:bg-[#6464641a] cursor-pointer flex justify-center items-center bg-dark gap-2 p-2'>
                             <DoorOpen className='stroke-gray-200' />
                             <h1 className='text-gray-200'>Leave</h1>
-                        </Link> 
+                        </Link>
                         <div onClick={handleReset} className='rounded-lg hover:bg-[#6464641a] cursor-pointer flex justify-center items-center bg-dark gap-2 p-2'>
                             <UploadIcon className='stroke-gray-200' />
                             <h1 className='text-gray-200'>Upload Another</h1>
-                        </div> 
+                        </div>
                     </div>
                 </div>
             </div>

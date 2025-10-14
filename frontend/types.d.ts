@@ -108,6 +108,18 @@ type Share = {
     timestamp: string
 }
 
+type Link = {
+    id: string
+    path: string
+}
+
+type FullLink = {
+    id: string
+    path: string
+    visits: number
+    timestamp: string
+}
+
 type File = {
     id: string
     path: string

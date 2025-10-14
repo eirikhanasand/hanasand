@@ -5,7 +5,7 @@ import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
 import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
-import { FileCode, UploadIcon } from 'lucide-react'
+import { FileCode, LinkIcon, UploadIcon } from 'lucide-react'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -25,6 +25,9 @@ export default async function layout({children}: {children: ReactNode}) {
                         </Link> 
                         <Link href='/s' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                             <FileCode />
+                        </Link> 
+                        <Link href='/g' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                            <LinkIcon />
                         </Link> 
                     </div>
                     <div className='grid place-items-center'>
