@@ -23,7 +23,7 @@ export default function Header({ share, isConnected, participants }: HeaderProps
     }
 
     return (
-        <header className='bg-light p-4 flex justify-between items-center shadow-md rounded-lg'>
+        <div className='bg-light p-4 flex justify-between items-center shadow-md rounded-lg'>
             <h1 className='font-semibold text-lg'>{share.path}</h1>
             <div className='grid w-full gap-4'>
                 <div className='flex gap-2'>
@@ -46,6 +46,6 @@ export default function Header({ share, isConnected, participants }: HeaderProps
                     </div>
                 </span>
             </div>
-        </header>
+        </div>
     )
 }

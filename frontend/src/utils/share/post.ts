@@ -8,7 +8,10 @@ export async function postShare(path: string, content: string): Promise<Share | 
             body: JSON.stringify({ path, content }),
         })
 
-        if (!res.ok) throw new Error('Failed to create share')
+        if (!res.ok) {
+            throw new Error('Failed to create share')
+        }
+
         const data = await res.json()
         return data
     } catch (err) {

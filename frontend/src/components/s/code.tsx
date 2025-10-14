@@ -7,13 +7,6 @@ import { getShare } from '@/utils/share/get'
 import config from '@/config'
 import Editor from '@/components/s/editor'
 
-type Share = {
-    id: string
-    path: string
-    content: string
-    timestamp: string
-}
-
 type CodeProps = {
     id: string
     setParticipants: Dispatch<SetStateAction<number>>
@@ -22,11 +15,22 @@ type CodeProps = {
     share: Share | null
     setShare: Dispatch<SetStateAction<Share | null>>
     setClickedWord: Dispatch<SetStateAction<string | null>>
+    editingContent: string
+    setEditingContent: Dispatch<SetStateAction<string>>
 }
 
-export default function Code({ id, setParticipants, isConnected, setIsConnected, share, setShare, setClickedWord }: CodeProps) {
+export default function Code({
+    id,
+    setParticipants,
+    isConnected,
+    setIsConnected,
+    share,
+    setShare,
+    setClickedWord,
+    editingContent,
+    setEditingContent
+}: CodeProps) {
     const [error, setError] = useState<string | null>(null)
-    const [editingContent, setEditingContent] = useState<string>('')
     const [reconnect, setReconnect] = useState(false)
     const [lastEdit, setLastEdit] = useState(new Date().getTime())
     const codeRef = useRef<HTMLPreElement>(null)

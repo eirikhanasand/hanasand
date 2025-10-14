@@ -106,6 +106,10 @@ type Share = {
     path: string
     content: string
     timestamp: string
+    git: string
+    locked: boolean
+    owner: string
+    parent: string
 }
 
 type Link = {

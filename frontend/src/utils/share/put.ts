@@ -8,7 +8,10 @@ export async function updateShare(id: string, updates: { path?: string; content?
             body: JSON.stringify(updates),
         })
 
-        if (!res.ok) throw new Error('Failed to update share')
+        if (!res.ok) {
+            throw new Error('Failed to update share')
+        }
+
         const data = await res.json()
         return data
     } catch (err) {

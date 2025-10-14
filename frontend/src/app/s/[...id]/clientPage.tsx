@@ -3,8 +3,11 @@
 import Code from '@/components/s/code'
 import Header from '@/components/s/header'
 import useMovable from '@/hooks/movable'
+import { getCookie } from '@/utils/cookies'
+import copy from '@/utils/copy'
 import randomId from '@/utils/random/randomId'
-import { Eye, Folder, Info, RefreshCw, X } from 'lucide-react'
+import { lockShare } from '@/utils/share/lockShare'
+import { Copy, Eye, Folder, Info, LockKeyhole, LockKeyholeOpen, RefreshCw, X } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
@@ -23,6 +26,7 @@ type MetadataProps = {
     clickedWord: string | null
     setClickedWord: Dispatch<SetStateAction<string | null>>
     randomServerId: string
+    editingContent: string
 }
 
 const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
@@ -33,6 +37,7 @@ export default function ClientPage({ id, randomId }: { id: string, randomId: str
     const [participants, setParticipants] = useState(1)
     const [isConnected, setIsConnected] = useState(false)
     const [clickedWord, setClickedWord] = useState<string | null>(null)
+    const [editingContent, setEditingContent] = useState<string>('')
     const [share, setShare] = useState<Share | null>(null)
 
     return (
@@ -44,6 +49,8 @@ export default function ClientPage({ id, randomId }: { id: string, randomId: str
                     setParticipants={setParticipants}
                     isConnected={isConnected}
                     setIsConnected={setIsConnected}
+                    editingContent={editingContent}
+                    setEditingContent={setEditingContent}
                     share={share}
                     setShare={setShare}
                     setClickedWord={setClickedWord}
@@ -59,6 +66,7 @@ export default function ClientPage({ id, randomId }: { id: string, randomId: str
                 clickedWord={clickedWord}
                 setClickedWord={setClickedWord}
                 randomServerId={randomId}
+                editingContent={editingContent}
             />
         </div>
     )
@@ -67,10 +75,10 @@ export default function ClientPage({ id, randomId }: { id: string, randomId: str
 
 function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
-    
+
     if (!showExplorer) {
         return (
-            <div 
+            <div
                 onMouseDown={handleMouseDown}
                 onClick={handleOpen}
                 className={`group ${sharedStyles}`}
@@ -83,7 +91,7 @@ function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
             </div>
         )
     }
-    
+
     return (
         <div className='bg-normal w-[15vw] h-full p-2'>
             <div className='bg-light rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
@@ -93,14 +101,37 @@ function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
     )
 }
 
-function Metadata({ share, isConnected, showMetadata, setShowMetadata, participants, clickedWord, randomServerId }: MetadataProps) {
+function Metadata({
+    share,
+    isConnected,
+    showMetadata,
+    setShowMetadata,
+    participants,
+    clickedWord,
+    randomServerId,
+    editingContent,
+}: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const [id, setId] = useState(randomServerId)
+    const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         const random = randomId()
         setId(random)
     }, [])
+
+    useEffect(() => {
+        setTimeout(() => {
+            setDidCopy(false)
+        }, 350)
+    }, [didCopy])
+
+    useEffect(() => {
+        setTimeout(() => {
+            setError(null)
+        }, 5000)
+    }, [error])
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
@@ -136,8 +167,48 @@ function Metadata({ share, isConnected, showMetadata, setShowMetadata, participa
                 <Link href={`/s/${id}`} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
                 </Link>
+                <div onClick={() => copy({ text: editingContent, setDidCopy })} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+                    <Copy height={22} width={22} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'} />
+                </div>
+                <Lock share={share} setError={setError} />
             </div>
+            {error && <div className='bg-light px-4 py-2 shadow-md rounded-lg'>
+                <h1>{error}</h1>
+                <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
+            </div>}
             <Header share={share} isConnected={isConnected} participants={participants} />
+        </div>
+    )
+}
+
+function Lock({ share, setError }: { share: Share | null, setError: Dispatch<SetStateAction<string | null>> }) {
+    const [locked, setLocked] = useState(share?.locked)
+
+    async function handleLock() {
+        const name = getCookie('name')
+        if (!name) {
+            return setError(`Login required.`)
+        }
+
+        const response = await lockShare(share!, name)
+        if (response) {
+            setLocked(response.locked)
+        } else {
+            setError(`Failed to ${locked ? 'unlock' : 'lock'} share.`)
+        }
+    }
+
+    useEffect(() => {
+        setLocked(share?.locked || false)
+    }, [share])
+
+    if (!share) {
+        return
+    }
+
+    return (
+        <div onClick={handleLock} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+            {locked ? <LockKeyhole height={22} width={22} /> : <LockKeyholeOpen height={22} width={22} />}
         </div>
     )
 }
