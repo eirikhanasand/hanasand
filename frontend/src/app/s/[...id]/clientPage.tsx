@@ -3,8 +3,9 @@
 import Code from '@/components/s/code'
 import Header from '@/components/s/header'
 import useMovable from '@/hooks/movable'
+import randomId from '@/utils/random/randomId'
 import { Eye, Folder, Info, RefreshCw, X } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Dispatch, SetStateAction, useState } from 'react'
 
 type ExplorerProps = {
@@ -92,7 +93,7 @@ function Explorer({ showExplorer, setShowExplorer }: ExplorerProps) {
 
 function Metadata({ share, isConnected, showMetadata, setShowMetadata, participants, clickedWord }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
-    const router = useRouter()
+    const id = randomId()
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
@@ -125,9 +126,9 @@ function Metadata({ share, isConnected, showMetadata, setShowMetadata, participa
                 <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
                 </div>
-                <button onClick={() => router.push('/s')} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+                <Link href={`/s/${id}`} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
-                </button>
+                </Link>
             </div>
             <Header share={share} isConnected={isConnected} participants={participants} />
         </div>
