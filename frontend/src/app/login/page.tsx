@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 
 export default function LoginPage() {
     const [error, setError] = useState('')
+
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
         const formData = new FormData(e.currentTarget)
@@ -70,7 +71,7 @@ export default function LoginPage() {
                                 <input
                                     type='text'
                                     name='name'
-                                    placeholder='Name'
+                                    placeholder='Username'
                                     className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
                                     required
                                 />

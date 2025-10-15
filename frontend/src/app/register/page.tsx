@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 export default function RegisterPage() {
     const [error, setError] = useState('')
     const [name, setName] = useState('')
+    const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [numbersInPasswordCount, setNumbersInPasswordCount] = useState(0)
     const [lowerCaseInPasswordCount, setLowercaseInPasswordCount] = useState(0)
@@ -36,7 +37,7 @@ export default function RegisterPage() {
         const password = formData.get('password') as string
 
         try {
-            const response = await fetch(`${config.url.api}/login`, {
+            const response = await fetch(`${config.url.api}/register`, {
                 method: 'POST',
                 body: JSON.stringify({ name, password })
             })
@@ -46,6 +47,10 @@ export default function RegisterPage() {
             }
 
             const data = await response.json()
+            if ('error' in data) {
+                return setError(data.error)
+            }
+
             setCookie('name', data.name, 1)
             setCookie('access_token', data.token, 1)
             document.location.href = `/profile`
@@ -121,6 +126,8 @@ export default function RegisterPage() {
                                 <input
                                     type='text'
                                     name='username'
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
                                     placeholder='Username'
                                     className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
                                     required

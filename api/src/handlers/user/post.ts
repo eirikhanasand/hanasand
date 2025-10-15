@@ -44,7 +44,17 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10)
-        await run("INSERT INTO users (id, name, password, avatar) VALUES ($1, $2, $3, $4)", [id, name, hashedPassword, avatar])
+        const response = await run(
+            `INSERT INTO users (id, name, password, avatar) 
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO NOTHING`, 
+            [id, name, hashedPassword, avatar]
+        )
+
+        if (!response.rowCount) {
+            return res.status(400).send({ error: "The username is taken." })
+        }
+
         return res.status(201).send({ message: "User created" })
     } catch (err) {
         const error = err as unknown as Error & { code: string }
