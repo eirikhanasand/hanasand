@@ -2,21 +2,17 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
 
-type LoginBody = {
-    id: string
-    password: string
-}
-
 export default async function loginHandler(req: FastifyRequest, res: FastifyReply) {
-    const { id, password } = req.body as LoginBody
+    const { id } = req.params as { id: string } ?? {}
+    const { password } = req.body as { password: string } ?? {}
 
     if (!id || !password) {
-        return res.status(400).send({ error: "Missing fields" })
+        console.log(id, password)
+        return res.status(400).send({ error: "Missing username or password." })
     }
 
     try {
         const ip = req.ip
-        console.log(ip)
         const query = 'SELECT id, name, password, avatar FROM users WHERE id = $1'
         const result = await run(query, [id])
 
@@ -24,7 +20,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             return res.status(404).send({ error: "User not found" })
         }
 
-        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1', [id]);
+        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1 AND ip = $2', [id, ip]);
         if (attemptCheck.rows.length > 0 && attemptCheck.rows[0].attempts >= 3) {
             console.log("Too many failed attempts. Please try again later.")
             return res.status(429).send({ error: "Please try again later." })
@@ -38,7 +34,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             VALUES ($1, 1, $2)
             ON CONFLICT (id)
             DO UPDATE SET
-                attempts = attempts + 1,
+                attempts = attempts.attempts + 1,
                 ip = EXCLUDED.ip,
                 timestamp = NOW();
             `
