@@ -103,7 +103,7 @@ export default function BloomPageClient() {
 
 function BloomSearch({ passwordFile }: { passwordFile: string | null }) {
     return (
-        <div className='flex gap-2 cursor-pointer items-center bg-dark px-4 py-1 rounded-xl'>
+        <div className='flex gap-2 cursor-pointer items-center bg-dark px-6 py-2 rounded-xl'>
             {passwordFile ? (
                 <div>
                     <Eye height={15} width={15} className='stroke-gray-200' />
