@@ -9,7 +9,7 @@ type HeaderProps = {
     participants: number
 }
 
-export default function Header({ share, isConnected, participants }: HeaderProps) {
+export default function Info({ share, isConnected, participants }: HeaderProps) {
     const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
 
     useEffect(() => {

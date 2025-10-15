@@ -17,6 +17,7 @@ type CodeProps = {
     setClickedWord: Dispatch<SetStateAction<string | null>>
     editingContent: string
     setEditingContent: Dispatch<SetStateAction<string>>
+    displayLineNumbers: boolean
 }
 
 export default function Code({
@@ -28,7 +29,8 @@ export default function Code({
     setShare,
     setClickedWord,
     editingContent,
-    setEditingContent
+    setEditingContent,
+    displayLineNumbers
 }: CodeProps) {
     const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
@@ -161,5 +163,6 @@ export default function Code({
         editingContent={editingContent}
         handleChange={handleChange}
         setClickedWord={setClickedWord}
+        displayLineNumbers={displayLineNumbers}
     />
 }

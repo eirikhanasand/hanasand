@@ -1,10 +1,11 @@
-import { ChangeEvent, Dispatch, RefObject, SetStateAction, useState } from 'react'
+import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
 
 type EditorProps = {
     codeRef: RefObject<HTMLPreElement | null>
     editingContent: string
     handleChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
     setClickedWord: (word: string) => void
+    displayLineNumbers: boolean
 }
 
 type HandleKeyDownProps = {
@@ -17,9 +18,11 @@ type HandleKeyDownProps = {
     setHistoryIndex: Dispatch<SetStateAction<number>>
 }
 
-export default function Editor({ codeRef, editingContent, handleChange, setClickedWord }: EditorProps) {
+export default function Editor({ codeRef, editingContent, handleChange, setClickedWord, displayLineNumbers }: EditorProps) {
     const [history, setHistory] = useState<string[]>([])
     const [historyIndex, setHistoryIndex] = useState(-1)
+    const lineNumberRef = useRef<HTMLDivElement | null>(null)
+    const [lineNumberWidth, setLineNumberWidth] = useState(0)
 
     function handleWordClick(e: React.MouseEvent<HTMLTextAreaElement>) {
         const textarea = e.currentTarget
@@ -33,15 +36,20 @@ export default function Editor({ codeRef, editingContent, handleChange, setClick
         setClickedWord(word)
     }
 
+    useEffect(() => {
+        if (lineNumberRef.current) {
+            setLineNumberWidth(lineNumberRef.current.offsetWidth);
+        }
+    }, [editingContent])
+
     return (
         <main className="flex-1 relative overflow-hidden">
-            <h1 className='absolute top-2 left-2 z-50 pointer-events-none select-none text-gray-500'>
+            <h1 className='absolute top-[6.7px] left-2 z-50 pl-4 pointer-events-none select-none text-gray-500'>
                 {editingContent.trim().length <= 0 && 'Hello world...'}
             </h1>
             <div className="relative w-full h-full">
                 <pre
-                    ref={codeRef}
-                    className="hljs w-full h-full overflow-auto p-2 text-sm font-mono absolute top-0 left-0 m-0"
+                    className="hljs w-full h-full overflow-auto text-sm font-mono absolute top-0 left-0 m-0 flex p-2"
                     style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}
                     onScroll={(e) => {
                         const textarea = e.currentTarget.nextSibling as HTMLTextAreaElement | null
@@ -49,23 +57,29 @@ export default function Editor({ codeRef, editingContent, handleChange, setClick
                         if (textarea) textarea.scrollLeft = e.currentTarget.scrollLeft
                     }}
                 >
-                    <code>{editingContent}</code>
+                    {displayLineNumbers && <code ref={lineNumberRef} className="select-none text-gray-500">
+                        {editingContent.split(/\r?\n/).map((_, i) => (
+                            <div key={i}>{i + 1}</div>
+                        ))}
+                    </code>}
+                    <code style={{ padding: 0, paddingLeft: 6 }} ref={codeRef}>{editingContent}</code>
                 </pre>
 
                 <textarea
                     value={editingContent}
                     onChange={handleChange}
                     onClick={handleWordClick}
-                    className="w-full h-full bg-transparent text-transparent resize-none rounded-lg p-2 text-sm font-mono outline-none caret-white relative z-10"
+                    className="w-full h-full bg-transparent text-transparent resize-none rounded-lg p-2 text-sm font-mono outline-none caret-gray-200 absolute z-10"
                     style={{
                         whiteSpace: 'pre-wrap',
                         wordWrap: 'break-word',
                         overflow: 'auto',
+                        paddingLeft: displayLineNumbers ? `${lineNumberWidth + 14}px` : '14px'
                     }}
                     onKeyDown={(e) => HandleKeyDown({
                         e,
                         handleChange,
-                        editingContent, 
+                        editingContent,
                         history,
                         setHistory,
                         historyIndex,
