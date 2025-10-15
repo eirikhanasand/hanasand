@@ -38,7 +38,6 @@ async function start() {
 function main() {
     start()
     cron()
-    bloom()
 }
 
 main()
