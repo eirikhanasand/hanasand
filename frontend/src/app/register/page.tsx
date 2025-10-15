@@ -43,7 +43,7 @@ export default function LoginPage() {
     }, [error])
 
     return (
-        <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-100 grid gap-2 place-items-center'>
+        <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-100 grid gap-2 place-items-center'>
             <div className='grid w-full spawn rounded-lg overflow-hidden'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
@@ -61,6 +61,13 @@ export default function LoginPage() {
                                 className='w-full flex flex-col gap-3 max-w-xs self-center'
                                 onSubmit={handleSubmit}
                             >
+                                <input
+                                    type='text'
+                                    name='username'
+                                    placeholder='Username'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
+                                    required
+                                />
                                 <input
                                     type='text'
                                     name='name'
@@ -82,12 +89,12 @@ export default function LoginPage() {
                                         'text-lg hover:bg-extralight/80 cursor-pointer'
                                     }
                                 >
-                                    Login
+                                    Create account
                                 </button>
                             </form>
                         </div>
                         <Or />
-                        <Link href='/register' className='w-full flex flex-col gap-3 max-w-xs self-center'>
+                        <Link href='/login' className='w-full flex flex-col gap-3 max-w-xs self-center'>
                             <button
                                 type='submit'
                                 className={
@@ -95,7 +102,7 @@ export default function LoginPage() {
                                     'text-lg hover:bg-extralight/80 cursor-pointer'
                                 }
                             >
-                                Create account
+                                Login
                             </button>
                         </Link>
                     </div>

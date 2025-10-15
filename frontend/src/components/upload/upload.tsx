@@ -2,6 +2,7 @@ import { Camera, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useCallback } from 'react'
 import getFetchableUrl from './getFetchAbleUrl'
+import Or from '@/utils/or'
 
 type UploadProps = {
     url: string
@@ -114,16 +115,6 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                 </div>
                 <Link href='/gallery' className='bg-extralight p-2 px-10 rounded-lg'><h1>My uploads</h1></Link>
             </div>
-        </div>
-    )
-}
-
-function Or({ className }: { className?: string }) {
-    return (
-        <div className={`flex gap-2 ${className}`}>
-            <h1 className='text-extralight'>────</h1>
-            <h1>or</h1>
-            <h1 className='text-extralight'>────</h1>
         </div>
     )
 }
