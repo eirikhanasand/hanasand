@@ -21,6 +21,12 @@ export default function BloomPageClient() {
         if (!result) {
             return setError('Please try again later.')
         }
+
+        if ('file' in result) {
+            setPasswordFile(result.file)
+        }
+
+        setDidSearch(true)
     }
 
     function clear() {
@@ -101,7 +107,7 @@ function BloomSearch({ passwordFile }: { passwordFile: string | null }) {
             {passwordFile ? (
                 <div>
                     <Eye height={15} width={15} className='stroke-gray-200' />
-                    <h1>{passwordFile}</h1>
+                    <h1>The password exists in file &apos;{passwordFile}&apos;.</h1>
                 </div>
             ) : (
                 <h1>No hits found!</h1>

@@ -48,7 +48,8 @@ const config = {
     DB_TIMEOUT_MS,
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE || 50,
     SELF_URL: NEXT_PUBLIC_SELF_URL,
-    CACHE_TTL: 30000
+    CACHE_TTL: 30000,
+    bloom: 'http://localhost:8502/api/bloom'
 }
 
 export default config

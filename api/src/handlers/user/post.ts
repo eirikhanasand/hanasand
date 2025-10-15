@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
+import checkBloom from '#utils/checkBloom.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -40,6 +41,11 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
 
     if (password.length < 16 || numbers < 2 || specialCharacters < 2 || lowerCaseCharacters < 2 || upperCaseCharacters < 2) {
         return res.status(400).send({ error: "The password does not meet the requirements." })
+    }
+
+    const bloom = await checkBloom(password)
+    if (bloom) {
+        return res.status(400).send({ error: `This password is weak, and exists in the public breach file '${bloom.file}'.` })
     }
 
     try {

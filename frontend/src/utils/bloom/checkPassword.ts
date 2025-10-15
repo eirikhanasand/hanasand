@@ -1,6 +1,6 @@
 import config from '@/config'
 
-export async function postBloom(password: string): Promise<Share | null> {
+export async function postBloom(password: string): Promise<{ file: string } | null> {
     try {
         const res = await fetch(`${config.url.api}/bloom`, {
             method: 'POST',
