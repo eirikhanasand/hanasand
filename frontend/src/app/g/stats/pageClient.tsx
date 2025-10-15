@@ -34,9 +34,15 @@ export default function LinkStatsPageClient() {
     }
 
     useEffect(() => {
-        setTimeout(() => {
+        if (!error) {
+            return
+        }
+
+        const timeout = setTimeout(() => {
             setError('')
         }, 5000)
+
+        return () => clearTimeout(timeout)
     }, [error])
 
     return (

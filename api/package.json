@@ -11,19 +11,18 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@fastify/cors": "^11.0.1",
-    "ae-cvss-calculator": "^1.0.6",
+    "@fastify/cors": "^11.1.0",
     "bcrypt": "^6.0.0",
-    "dotenv": "^16.5.0",
-    "fastify": "^5.3.2",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.1",
     "node-cron": "^4.2.1",
-    "pg": "^8.15.1"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "@types/pg": "^8.11.13",
+    "@types/pg": "^8.15.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   },
   "imports": {
     "#utils/*": "./src/utils/*",

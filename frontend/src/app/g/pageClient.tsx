@@ -36,9 +36,15 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
     }
 
     useEffect(() => {
-        setTimeout(() => {
+        if (!error) {
+            return
+        }
+
+        const timeout = setTimeout(() => {
             setError('')
         }, 5000)
+
+        return () => clearTimeout(timeout)
     }, [error])
 
     useEffect(() => {

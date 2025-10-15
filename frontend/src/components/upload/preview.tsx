@@ -1,6 +1,6 @@
 'use client'
 
-import { Dispatch, SetStateAction, useState } from 'react'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import ImagePreview from './imagePreview'
 import config from '@/config'
 import { postFile } from '@/utils/files/post'
@@ -78,6 +78,18 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
             setUploading(false)
         }
     }
+
+    useEffect(() => {
+        if (!error) {
+            return
+        }
+
+        const timeout = setTimeout(() => {
+            setError('')
+        }, 5000)
+
+        return () => clearTimeout(timeout)
+    }, [error])
 
     if (!url || !file) return null
 

@@ -57,6 +57,18 @@ export default function Code({
     }, [id])
 
     useEffect(() => {
+        if (!error) {
+            return
+        }
+
+        const timeout = setTimeout(() => {
+            setError('')
+        }, 5000)
+
+        return () => clearTimeout(timeout)
+    }, [error])
+
+    useEffect(() => {
         if (codeRef.current) {
             codeRef.current.removeAttribute('data-highlighted')
             codeRef.current.textContent = editingContent

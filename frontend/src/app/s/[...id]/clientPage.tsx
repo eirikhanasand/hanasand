@@ -133,9 +133,15 @@ function Metadata({
     }, [didCopy])
 
     useEffect(() => {
-        setTimeout(() => {
+        if (!error) {
+            return
+        }
+
+        const timeout = setTimeout(() => {
             setError(null)
         }, 5000)
+
+        return () => clearTimeout(timeout)
     }, [error])
 
     if (!showMetadata) {
