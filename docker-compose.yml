@@ -30,6 +30,8 @@ services:
       test: ["CMD-SHELL", "[ \"$(cat /tmp/health_status 2>/dev/null)\" = \"healthy\" ] && wget -qO- http://localhost:8080/api || [ \"$(cat /tmp/health_status 2>/dev/null)\" = \"starting\" ]"]
       interval: 5s
       retries: 5
+    networks:
+      - bloomnet
 
   postgres:
     image: postgres:15
