@@ -49,7 +49,7 @@ const config = {
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE || 50,
     SELF_URL: NEXT_PUBLIC_SELF_URL,
     CACHE_TTL: 30000,
-    bloom: 'http://localhost:8201/api/bloom'
+    bloom: 'http://bloom:8081/api/bloom'
 }
 
 export default config
