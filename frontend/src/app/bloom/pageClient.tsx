@@ -1,13 +1,14 @@
 'use client'
 
 import { postBloom } from '@/utils/bloom/checkPassword'
-import { ArrowLeft, Eye, Flower2Icon } from 'lucide-react'
+import { ArrowLeft, Eye } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
 
 export default function BloomPageClient() {
     const [password, setPassword] = useState('')
     const [didSearch, setDidSearch] = useState(false)
-    const [passwordFile, setPasswordFile] = useState<string | null>(null)
+    const [loading, setLoading] = useState(false)
+    const [breachFiles, setBreachFiles] = useState<BreachFile[] | null>(null)
     const [error, setError] = useState<string | null>(null)
     const color = password.length > 0 ? 'bg-green-500/80 cursor-pointer' : 'bg-dark cursor-not-allowed'
 
@@ -22,8 +23,8 @@ export default function BloomPageClient() {
             return setError('Please try again later.')
         }
 
-        if ('file' in result) {
-            setPasswordFile(result.file)
+        if ('files' in result) {
+            setBreachFiles(result.files)
         }
 
         setDidSearch(true)
@@ -32,7 +33,7 @@ export default function BloomPageClient() {
     function clear() {
         setPassword('')
         setDidSearch(false)
-        setPasswordFile(null)
+        setBreachFiles(null)
     }
 
     useEffect(() => {
@@ -52,11 +53,11 @@ export default function BloomPageClient() {
             <div className='h-full grid place-items-center'>
                 <div className='flex flex-col items-center gap-4'>
                     <div className='flex gap-2'>
-                        {didSearch ? <Flower2Icon /> : <Eye />}
+                        <Eye className={didSearch ? !breachFiles ? 'stroke-green-500' : 'stroke-red-500' : 'stroke-foreground'} />
                         <h1 className='text-xl'>{didSearch ? 'Results' : 'Check password'}</h1>
                     </div>
                     {didSearch ?
-                        <BloomSearch passwordFile={passwordFile} />
+                        <BloomSearch breachFiles={breachFiles} />
                         : (
                             <form onSubmit={handleSubmit} className='grid gap-2'>
                                 {error && (
@@ -101,16 +102,53 @@ export default function BloomPageClient() {
     )
 }
 
-function BloomSearch({ passwordFile }: { passwordFile: string | null }) {
+function BloomSearch({ breachFiles }: { breachFiles: BreachFile[] | null }) {
+    const sourceFiles = [
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+        "common-breach-pw.txt",
+    ]
+
+    const text = sourceFiles.length === 1 
+        ? `The password exists in file '${sourceFiles[0]}'.`
+        : `The password exists in the following ${sourceFiles.length} files`
+
     return (
-        <div className='flex gap-2 cursor-pointer items-center bg-dark px-6 py-2 rounded-xl'>
-            {passwordFile ? (
-                <div>
-                    <Eye height={15} width={15} className='stroke-gray-200' />
-                    <h1>The password exists in file &apos;{passwordFile}&apos;.</h1>
+        <div className='flex gap-2 cursor-pointer items-center rounded-xl'>
+            {breachFiles ? (
+                <div className='grid gap-2'>
+                    <div className='flex gap-2'>
+                        <h1 className={sourceFiles.length ? 'text-red-500' : ''}>{text}</h1>
+                    </div>
+                    <div className='bg-extralight rounded-lg p-2 max-h-[5rem] overflow-auto'>
+                        {sourceFiles.map((file) => (<h1 key={file}>{file}</h1>))}
+                    </div>
                 </div>
             ) : (
-                <h1>No hits found!</h1>
+                <h1 className='text-green-500'>No hits found!</h1>
             )}
         </div>
     )

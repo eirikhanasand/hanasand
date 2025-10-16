@@ -5,7 +5,7 @@ import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
 import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
-import { FileCode, Flower, Flower2, Flower2Icon, LinkIcon, UploadIcon } from 'lucide-react'
+import { FileCode, Eye, LinkIcon, UploadIcon } from 'lucide-react'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -30,7 +30,7 @@ export default async function layout({children}: {children: ReactNode}) {
                             <LinkIcon />
                         </Link>
                         <Link href='/bloom' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                            <Flower2Icon width={26} height={26} />
+                            <Eye />
                         </Link>
                     </div>
                     <div className='grid place-items-center'>
