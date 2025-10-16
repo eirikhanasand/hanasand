@@ -7,14 +7,14 @@ export default async function postBloom(req: FastifyRequest, res: FastifyReply) 
     try {
         const bloom = await checkBloom(password)
         if (bloom) {
-            return res.status(200).send({ result: {
-                message: `This password is weak, and exists in the public breach file '${bloom.file}'.`,
-                file: bloom.file
-            } })
+            return res.status(200).send({ 
+                ...bloom, 
+                message: `This password has previously been found in a data breach ${bloom.count} ${bloom.count > 1 ? 'times' : 'time'}. This implies that threat actors may use this password more commonly to breach accounts. Please select a new password. Using a password manager to generate random passwords is recommended.` 
+            })
         }
 
         return res.status(200).send({ result: 'No hits' })
     } catch (error) {
-        return res.status(400).send({ error: 'Unknown error'})
+        return res.status(400).send({ error: 'Unknown error' })
     }
 }

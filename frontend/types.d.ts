@@ -135,7 +135,13 @@ type PostFileResponse = {
     id: string
 }
 
+type Breach = {
+    ok: boolean
+    count: number
+    message: string
+}
+
 type BreachFile = {
     name: string
-    line: string
+    line: number
 }

@@ -13,6 +13,8 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000"]
       interval: 5s
       retries: 5
+    networks:
+      - hanasandnet
 
   api:
     container_name: hanasand_api
@@ -31,6 +33,7 @@ services:
       interval: 5s
       retries: 5
     networks:
+      - hanasandnet
       - bloomnet
 
   postgres:
@@ -50,6 +53,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U hanasand -d hanasand"]
       interval: 5s
       retries: 5
+    networks:
+      - hanasandnet
 
 volumes:
   postgres_data:
@@ -57,3 +62,5 @@ volumes:
 networks:
   bloomnet:
     external: true
+  hanasandnet:
+    driver: bridge

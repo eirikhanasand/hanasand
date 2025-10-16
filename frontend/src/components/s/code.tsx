@@ -128,6 +128,7 @@ export default function Code({
                 console.error('Invalid message from server:', err)
             }
         }
+
         return () => {
             ws.close()
         }
