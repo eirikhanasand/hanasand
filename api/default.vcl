@@ -10,9 +10,9 @@ sub vcl_recv {
         return (pass);
     }
 
-    if (req.url ~ "^/api/(list|statistics)(/.*)?$") {
-        return (pass);
-    }
+    # if (req.url ~ "^/api/(pathone|pathtwo)(/.*)?$") {
+    #     return (pass);
+    # }
 
     return (hash);
 }
