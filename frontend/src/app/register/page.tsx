@@ -168,7 +168,8 @@ export default function RegisterPage() {
                                     className={
                                         'py-2 px-4 rounded-lg ' + 
                                         `${passwordIsValid ? 'cursor-pointer bg-extralight glow-blue hover:bg-blue-500/80' 
-                                            : 'cursor-not-allowed bg-dark glow-red hover:bg-red-500/80'}`
+                                            : `${(!password.length && !username.length && !name.length) ? 'glow-blue' : 'glow-red'} 
+                                            cursor-not-allowed bg-dark hover:bg-red-500/80`}`
                                     }
                                 >
                                     Create account
