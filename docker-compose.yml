@@ -29,7 +29,7 @@ services:
     env_file:
       .env
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/api"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
       interval: 5s
       retries: 5
     networks:
