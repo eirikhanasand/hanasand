@@ -92,7 +92,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                     {uniqueBreachFiles.length > 0 && <div className='bg-extralight rounded-lg p-2 max-h-[8rem] overflow-auto z-10'>
                         {uniqueBreachFiles.map((breach) => (<h1 key={breach.file} className='text-gray-200'>{breach.file}:{breach.line}</h1>))}
                     </div>}
-                    {loading && <div className="min-w-[10rem] w-full h-[2px] shadow-red-500/50 loading-line" />}
+                    {loading && <div className="h-[2px] shadow-red-500/50 loading-line" />}
                 </div>
             ) : (
                 <h1 className='text-green-500 text-center w-full'>No hits found!</h1>
