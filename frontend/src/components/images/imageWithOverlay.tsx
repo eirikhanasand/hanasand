@@ -16,7 +16,7 @@ export default async function ImageWithOverlay({ image, path }: { image: string,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                 }}
-            ></div>
+            />
             <Image
                 src={image}
                 alt='logo'
