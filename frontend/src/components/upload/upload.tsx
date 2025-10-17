@@ -60,7 +60,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
     }
 
     return (
-        <div className='grid md:grid-cols-2 w-full spawn rounded-lg overflow-hidden'>
+        <div className='grid md:grid-cols-2 w-full spawn rounded-lg overflow-hidden glow-orange'>
             <div
                 className='hidden md:grid w-full h-full place-items-center bg-dark'
                 onDrop={handleDrop}

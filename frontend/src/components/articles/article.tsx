@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 export default async function Article({ article }: { article: string }) {
     const data = await fetchArticle(article)
-    if (article === 'featured' || article === 'main' || !data) {
+    if (article === 'featured' || article === 'main' || !data || !Array.isArray(data.commits) || !data.commits.length) {
         redirect('/articles')
     }
 

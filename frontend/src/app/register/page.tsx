@@ -106,7 +106,7 @@ export default function RegisterPage() {
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-100 grid gap-2 place-items-center'>
-            <div className='grid w-full spawn rounded-lg overflow-hidden'>
+            <div className='grid w-full spawn rounded-lg overflow-hidden glow-orange'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
                         {"hanasand.com"}
