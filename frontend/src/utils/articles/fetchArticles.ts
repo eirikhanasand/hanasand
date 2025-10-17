@@ -44,7 +44,7 @@ export default async function fetchArticles(): Promise<Articles> {
 
         return { recent, articles }
     } catch (error) {
-        console.error(error)
+        console.log(error)
         return {
             recent: [],
             articles: []

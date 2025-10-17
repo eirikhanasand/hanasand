@@ -199,3 +199,23 @@ body {
     inset 0 0 1em rgba(4, 207, 4, 0.3),
     inset 0 0 2em rgba(4, 207, 4, 0.15);
 }
+
+.eh {
+    background: conic-gradient(
+        crimson,
+        coral,
+        gold,
+        yellow,
+        limegreen,
+        cyan,
+        purple,
+        coral,
+        crimson
+    );
+    background-clip: text;
+    color: transparent;
+    background-size: 200vw 200vh;
+    animation: rgb 20s infinite linear;
+    text-align: center;
+    font-weight: bold;
+}

@@ -11,7 +11,7 @@ export default function PwnedPageClient() {
     const [breached, setBreached] = useState(false)
     const [breachCount, setBreachCount] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
-    const color = password.length > 0 ? 'bg-green-500/80 cursor-pointer' : 'bg-dark cursor-not-allowed'
+    const color = password.length > 0 ? 'bg-blue-500/80 cursor-pointer glow-blue' : 'bg-dark cursor-not-allowed'
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         if (!password.length) {
@@ -71,7 +71,8 @@ export default function PwnedPageClient() {
                                     placeholder='Password'
                                     onChange={(e) => setPassword(e.target.value)}
                                     value={password}
-                                    className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden'
+                                    required
+                                    className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                                 />
                                 <button
                                     type="submit"
