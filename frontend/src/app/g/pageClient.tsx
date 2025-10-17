@@ -12,7 +12,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
     const [error, setError] = useState<string | null>(null)
     const [didCopy, setDidCopy] = useState<boolean | 'error'>(false)
     const isValidLink = path.includes('http') || (path.includes('.') && path.length > 2) || path.includes(':')
-    const color = isValidLink ? 'bg-green-500/80 cursor-pointer' : path.length > 0 ? 'bg-red-500 cursor-not-allowed' : 'bg-dark cursor-not-allowed'
+    const color = isValidLink ? 'bg-blue-500/80 cursor-pointer glow-blue' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'bg-dark cursor-not-allowed glow-blue'
     const fullUrl = `https://hanasand.com/g/${serverId}`
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
@@ -71,16 +71,17 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
                 </div>
             )}
             <input
+                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                 placeholder='Shortcut'
                 onChange={(e) => setId(e.target.value)}
                 value={id}
-                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden'
             />
             <input
+                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                 placeholder='Link'
                 onChange={(e) => setPath(e.target.value)}
                 value={path}
-                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden'
+                required
             />
             <button
                 type="submit"

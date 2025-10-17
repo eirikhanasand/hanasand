@@ -11,7 +11,7 @@ export default function PwnedPageClient() {
     const [breached, setBreached] = useState(false)
     const [breachCount, setBreachCount] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
-    const color = password.length > 0 ? 'bg-blue-500/80 cursor-pointer glow-blue' : 'bg-dark cursor-not-allowed'
+    const color = password.length > 0 ? 'bg-blue-500/80 cursor-pointer glow-blue' : 'bg-dark cursor-not-allowed glow-blue'
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         if (!password.length) {

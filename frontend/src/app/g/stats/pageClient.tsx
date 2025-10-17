@@ -9,7 +9,7 @@ export default function LinkStatsPageClient() {
     const [query, setQuery] = useState('')
     const [link, setLink] = useState<FullLink | null>()
     const [error, setError] = useState<string | null>(null)
-    const color = query.length > 0 ? 'bg-green-500/80 cursor-pointer' : 'bg-dark cursor-not-allowed'
+    const color = query.length > 0 ? 'bg-blue-500/80 cursor-pointer glow-blue' : 'bg-dark cursor-not-allowed glow-blue'
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
@@ -61,10 +61,11 @@ export default function LinkStatsPageClient() {
                             </div>
                         )}
                         <input
+                            className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                             placeholder='Link'
                             onChange={(e) => setQuery(e.target.value)}
                             value={query}
-                            className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden'
+                            required
                         />
                         <button
                             type="submit"
