@@ -23,6 +23,7 @@ export default async function ImageWithOverlay({ image, path }: { image: string,
                 fill
                 quality={100}
                 className='rounded-full object-cover'
+                priority
             />
         </LinkIfPath>
     )
