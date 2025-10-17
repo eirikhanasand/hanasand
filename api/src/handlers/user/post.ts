@@ -13,7 +13,7 @@ type GetUserBodyProps = {
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     const { id, name, password, avatar } = req.body as GetUserBodyProps
 
-    if (!id || !name || !password || !avatar) {
+    if (!id || !name || !password) {
         return res.status(400).send({ error: "Missing fields" })
     }
 
@@ -54,7 +54,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             `INSERT INTO users (id, name, password, avatar) 
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO NOTHING`, 
-            [id, name, hashedPassword, avatar]
+            [id, name, hashedPassword, avatar || '']
         )
 
         if (!response.rowCount) {
