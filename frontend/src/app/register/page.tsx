@@ -34,12 +34,13 @@ export default function RegisterPage() {
 
         const formData = new FormData(e.currentTarget)
         const name = formData.get('name') as string
+        const username = formData.get('username') as string
         const password = formData.get('password') as string
 
         try {
             const response = await fetch(`${config.url.api}/user`, {
                 method: 'POST',
-                body: JSON.stringify({ name, password })
+                body: JSON.stringify({ name, username, password })
             })
 
             if (!response.ok) {
