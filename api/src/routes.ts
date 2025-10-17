@@ -4,7 +4,7 @@ import loginHandler from './handlers/auth/get.ts'
 import getUser from './handlers/user/get.ts'
 import postUser from './handlers/user/post.ts'
 import logoutHandler from './handlers/auth/logout.ts'
-import postBloom from './handlers/bloom/post.ts'
+import postPwned from './handlers/pwned/post.ts'
 
 /**
  * Defines the routes available in the API.
@@ -24,6 +24,6 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.post('/user', postUser)
     fastify.get('/user/:id', getUser)
 
-    // Bloom handler
-    fastify.post('/bloom', postBloom)
+    // Pwned handler
+    fastify.post('/pwned', postPwned)
 }

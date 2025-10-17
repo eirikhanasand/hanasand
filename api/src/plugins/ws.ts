@@ -9,12 +9,12 @@ const messageBuffer: Buffer[] = []
 
 export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.register(async function (fastify) {
-        fastify.get('/api/bloom/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
+        fastify.get('/api/pwned/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             
             registerClient(id, connection)
             
-            const internalWs = new WebSocket(`${config.bloom_ws}${id}`)
+            const internalWs = new WebSocket(`${config.pwned_ws}${id}`)
 
             internalWs.on('message', (msg) => {
                 connection.send(msg)

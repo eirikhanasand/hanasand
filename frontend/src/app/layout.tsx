@@ -29,7 +29,7 @@ export default async function layout({children}: {children: ReactNode}) {
                         <Link href='/g' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                             <LinkIcon />
                         </Link>
-                        <Link href='/bloom' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                        <Link href='/pwned' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                             <Eye />
                         </Link>
                     </div>

@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
-import checkBloom from '#utils/checkBloom.ts'
+import checkPwned from '#utils/checkPwned.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -43,9 +43,9 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         return res.status(400).send({ error: "The password does not meet the requirements." })
     }
 
-    const bloom = await checkBloom(password)
-    if (bloom) {
-        return res.status(400).send({ error: `This password is weak, and exists in the public breach file '${bloom.file}'.` })
+    const pwned = await checkPwned(password)
+    if (pwned) {
+        return res.status(400).send({ error: `This password is weak, and has been breached ${pwned.count} ${pwned.count === 1 ? 'time' : 'times'}.` })
     }
 
     try {

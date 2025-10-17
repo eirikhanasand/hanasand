@@ -1,8 +1,8 @@
 import config from '@/config'
 
-export async function postBloom(password: string): Promise<Breach | null> {
+export default async function postPwned(password: string): Promise<Breach | null> {
     try {
-        const res = await fetch(`${config.url.api}/bloom`, {
+        const res = await fetch(`${config.url.api}/pwned`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password }),

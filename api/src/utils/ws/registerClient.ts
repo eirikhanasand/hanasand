@@ -1,18 +1,18 @@
 import { WebSocket } from 'ws'
-import { bloomClients } from './handleMessage.ts'
+import { pwnedClients } from './handleMessage.ts'
 import { WebSocket as WS } from 'ws'
 
 export function registerClient(id: string, socket: WebSocket) {
-    if (!bloomClients.has(id)) {
-        bloomClients.set(id, new Set())
+    if (!pwnedClients.has(id)) {
+        pwnedClients.set(id, new Set())
     }
 
-    bloomClients.get(id)!.add(socket)
+    pwnedClients.get(id)!.add(socket)
     broadcastJoin(id)
 }
 
 function broadcastJoin(id: string) {
-    const clients = bloomClients.get(id)
+    const clients = pwnedClients.get(id)
     if (!clients) {
         return
     }

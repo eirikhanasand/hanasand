@@ -1,8 +1,8 @@
 import config from '#constants'
 
-export default async function checkBloom(password: string): Promise<{ count: number } | null> {
+export default async function checkPwned(password: string): Promise<{ count: number } | null> {
     try {
-        const response = await fetch(config.bloom, {
+        const response = await fetch(config.pwned, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -11,13 +11,13 @@ export default async function checkBloom(password: string): Promise<{ count: num
         })
 
         if (!response.ok) {
-            throw new Error("Error occured while querying bloom filter")
+            throw new Error("Error occured while querying pwned API.")
         }
 
         const data = await response.json()
         return data
     } catch (error) {
-        console.log("Unable to fetch bloom")
+        console.log("Unable to fetch pwned")
         return null
     }
 }

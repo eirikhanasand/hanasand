@@ -1,11 +1,11 @@
 'use client'
 
-import BloomSearch from '@/components/bloom/bloomSearch'
-import { postBloom } from '@/utils/bloom/checkPassword'
+import PwnedSearch from '@/components/bloom/bloomSearch'
+import postPwned from '@/utils/bloom/checkPassword'
 import { ArrowLeft, Eye } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
 
-export default function BloomPageClient() {
+export default function PwnedPageClient() {
     const [password, setPassword] = useState('')
     const [didSearch, setDidSearch] = useState(false)
     const [breached, setBreached] = useState(false)
@@ -19,7 +19,7 @@ export default function BloomPageClient() {
         }
 
         e.preventDefault()
-        const result = await postBloom(password)
+        const result = await postPwned(password)
         console.log(result)
         if (!result) {
             return setError('Please try again later.')
@@ -57,7 +57,7 @@ export default function BloomPageClient() {
                         <h1 className='text-xl'>{didSearch ? 'Results' : 'Check password'}</h1>
                     </div>
                     {didSearch ?
-                        <BloomSearch breached={breached} breachCount={breachCount} password={password} />
+                        <PwnedSearch breached={breached} breachCount={breachCount} password={password} />
                         : (
                             <form onSubmit={handleSubmit} className='grid gap-2'>
                                 {error && (

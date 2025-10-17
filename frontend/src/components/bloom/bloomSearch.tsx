@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import randomId from '../../utils/random/randomId'
 import config from '@/config'
 
-type BloomSearchProps = {
+type PwnedSearchProps = {
     breached: boolean
     breachCount: number | null
     password: string
@@ -17,7 +17,7 @@ type BreachMessage = {
     done?: boolean
 }
 
-export default function BloomSearch({ breached, breachCount, password }: BloomSearchProps) {
+export default function PwnedSearch({ breached, breachCount, password }: PwnedSearchProps) {
     const [id, setId] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
     const [breachFiles, setBreachFiles] = useState<BreachFile[]>([])
@@ -32,7 +32,7 @@ export default function BloomSearch({ breached, breachCount, password }: BloomSe
     useEffect(() => {
         if (!id) return
 
-        const ws = new WebSocket(`${config.url.api_ws}/bloom/ws/${randomId()}`)
+        const ws = new WebSocket(`${config.url.api_ws}/pwned/ws/${randomId()}`)
 
         ws.onopen = () => {
             setLoading(true)

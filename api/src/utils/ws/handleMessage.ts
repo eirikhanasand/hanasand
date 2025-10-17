@@ -2,7 +2,7 @@ import run from '#db'
 import type { RawData } from 'ws'
 import { WebSocket as WS } from 'ws'
 
-export const bloomClients = new Map<string, Set<WS>>()
+export const pwnedClients = new Map<string, Set<WS>>()
 export const pendingUpdates = new Map<string, { content: string; timer: NodeJS.Timeout }>()
 
 export async function handleMessage(
@@ -24,7 +24,7 @@ export async function handleMessage(
 }
 
 function broadcastUpdate(id: string, sender: WS, content: string) {
-    const clients = bloomClients.get(id)
+    const clients = pwnedClients.get(id)
     if (!clients) {
         return
     }

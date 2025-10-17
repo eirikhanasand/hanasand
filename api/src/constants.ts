@@ -49,9 +49,9 @@ const config = {
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE || 50,
     SELF_URL: NEXT_PUBLIC_SELF_URL,
     CACHE_TTL: 30000,
-    bloom: 'http://bloom:8080/api/bloom',
-    bloom_ws: 'ws://bloom:8080/api/bloom/ws/',
-    // bloom_ws: 'ws://localhost:8201/api/bloom/ws/',
+    pwned: 'http://pwned:8080/api/pwned',
+    pwned_ws: 'ws://pwned:8080/api/pwned/ws/',
+    // pwned_ws: 'ws://localhost:8201/api/pwned/ws/',
 }
 
 export default config
