@@ -30,7 +30,7 @@ export default async function fetchArticles(): Promise<Articles> {
         for (const article of detailedData) {
             const commits = article?.commits || []
             const now = new Date().getTime()
-            const created = new Date(commits[commits.length - 1].commit.committer.date || null!).getTime()
+            const created = new Date(commits[commits.length - 1]?.commit.committer.date || null!).getTime()
 
             if (article !== null) {
                 const parsedFile = parse(article)
