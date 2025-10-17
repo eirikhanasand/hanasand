@@ -37,7 +37,7 @@ export default function RegisterPage() {
         const password = formData.get('password') as string
 
         try {
-            const response = await fetch(`${config.url.api}/register`, {
+            const response = await fetch(`${config.url.api}/user`, {
                 method: 'POST',
                 body: JSON.stringify({ name, password })
             })
