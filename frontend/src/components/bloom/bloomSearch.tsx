@@ -74,7 +74,7 @@ export default function BloomSearch({ breached, breachCount, password }: BloomSe
         }
     }, [id, password])
 
-    const suffix = uniqueBreachFiles.length > 0 ? `and exists in the following ${uniqueBreachFiles.length} files` : `but the ${breachCount === 1 ? 'dataset is' : 'datasets are'} currently not publicly available.`
+    const suffix = uniqueBreachFiles.length > 0 ? `and exists in the following ${uniqueBreachFiles.length} files.` : `but the ${breachCount === 1 ? 'dataset is' : 'datasets are'} currently not publicly available.`
     const text = uniqueBreachFiles.length === 0 && loading 
         ? 'Loading...' 
         : uniqueBreachFiles.length === 1
