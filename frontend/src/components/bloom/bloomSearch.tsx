@@ -19,7 +19,7 @@ type BreachMessage = {
 
 export default function BloomSearch({ breached, breachCount, password }: BloomSearchProps) {
     const [id, setId] = useState<string | null>(null)
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(true)
     const [breachFiles, setBreachFiles] = useState<BreachFile[]>([])
     const uniqueBreachFiles = Array.from(
         new Map(breachFiles.map(b => [b.file, b])).values()
@@ -74,10 +74,12 @@ export default function BloomSearch({ breached, breachCount, password }: BloomSe
         }
     }, [id, password])
 
-    const suffix = breachFiles.length > 0 ? `and exists in the following ${breachFiles.length} files` : `but the ${breachCount === 1 ? 'dataset is' : 'datasets are'} currently not publicly available.`
-    const text = breachFiles.length === 1
-        ? `The password exists in file '${breachFiles[0]}'.`
-        : `The password has been breached ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
+    const suffix = uniqueBreachFiles.length > 0 ? `and exists in the following ${uniqueBreachFiles.length} files` : `but the ${breachCount === 1 ? 'dataset is' : 'datasets are'} currently not publicly available.`
+    const text = uniqueBreachFiles.length === 0 && loading 
+        ? 'Loading...' 
+        : uniqueBreachFiles.length === 1
+            ? `The password exists in file '${uniqueBreachFiles[0].file}:${uniqueBreachFiles[0].line}'.`
+            : `The password has been breached ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
 
 
     return (
@@ -88,7 +90,7 @@ export default function BloomSearch({ breached, breachCount, password }: BloomSe
                         <h1 className={breached ? 'text-red-500' : ''}>{text}</h1>
                     </div>
                     {uniqueBreachFiles.length > 0 && <div className='bg-extralight rounded-lg p-2 max-h-[8rem] overflow-auto'>
-                        {uniqueBreachFiles.map((breach) => (<h1 key={breach.file}>{breach.file}:{breach.line}</h1>))}
+                        {uniqueBreachFiles.map((breach) => (<h1 key={breach.file} className='text-gray-200'>{breach.file}:{breach.line}</h1>))}
                     </div>}
                     {loading && <div className="w-full h-[2px] shadow-red-500/50 loading-line" />}
                 </div>
