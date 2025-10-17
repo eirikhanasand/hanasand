@@ -142,6 +142,6 @@ type Breach = {
 }
 
 type BreachFile = {
-    name: string
+    file: string
     line: number
 }

@@ -5,7 +5,9 @@ import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
 
-export default fp(async function wsSharePlugin(fastify: FastifyInstance) {
+const messageBuffer: Buffer[] = []
+
+export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.register(async function (fastify) {
         fastify.get('/api/bloom/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
@@ -18,8 +20,17 @@ export default fp(async function wsSharePlugin(fastify: FastifyInstance) {
                 connection.send(msg)
             })
 
-            connection.on('message', (msg) => {
-                internalWs.send(msg)
+            internalWs.on('open', () => {
+                messageBuffer.forEach((msg) => internalWs.send(msg))
+                messageBuffer.length = 0
+            })
+
+            connection.on('message', (msg: Buffer) => {
+                if (internalWs.readyState === WebSocket.OPEN) {
+                    internalWs.send(msg)
+                } else {
+                    messageBuffer.push(msg)
+                }
             })
 
             connection.on('close', () => {
@@ -35,6 +46,5 @@ export default fp(async function wsSharePlugin(fastify: FastifyInstance) {
                 }
             })
         })
-
     })
 })

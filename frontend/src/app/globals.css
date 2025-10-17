@@ -147,3 +147,48 @@ body {
 	vertical-align: top;
 	animation: marquee 12s linear infinite;
 }
+
+@keyframes loading-line {
+  0%   { transform: translateX(-105%); opacity: 0.3; }
+  50%  { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0.3; }
+}
+
+.loading-line {
+  @apply relative bg-red-500 rounded-full;
+  width: 33.333%;
+  height: 3.5px;
+  box-shadow: 
+    0 0 10px #ff0000,
+    0 0 20px #ff0000,
+    0 0 40px #ff0000,
+    0 0 60px #ff0000,
+    0 0 80px #ff0000;
+  animation: loading-line 3s linear infinite;
+}
+
+.glow-red {
+  box-shadow: 
+    0 0 1em rgba(255, 0, 0, 0.5), 
+    0 0 3em rgba(255, 0, 0, 0.5), 
+    0 0 8em rgba(255, 0, 0, 0.4),
+    0 0 12em rgba(255, 0, 0, 0.1);
+}
+
+.glow-blue {
+  box-shadow: 
+    0 0 1em rgba(0, 55, 255, 0.5), 
+    0 0 3em rgba(0, 55, 255, 0.5), 
+    0 0 8em rgba(0, 55, 255, 0.4),
+    0 0 10em rgba(0, 55, 255, 0.2),
+    0 0 12em rgba(0, 55, 255, 0.1);
+}
+
+.glow-green {
+  box-shadow: 
+    0 0 1em rgba(4, 207, 4, 0.5), 
+    0 0 3em rgba(4, 207, 4, 0.5), 
+    0 0 8em rgba(4, 207, 4, 0.4),
+    0 0 10em rgba(4, 207, 4, 0.2),
+    0 0 12em rgba(4, 207, 4, 0.1);
+}
