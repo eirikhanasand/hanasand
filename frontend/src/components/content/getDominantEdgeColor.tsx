@@ -1,7 +1,8 @@
 import sharp from "sharp"
 
-export default async function getDominantEdge(imagePath: string): Promise<{ rgb: string | null, hex: string | null }> {
-    const metadata = await sharp(imagePath).metadata()
+export default async function getDominantEdgeColor(imagePath: string): Promise<{ rgb: string | null, hex: string | null }> {
+    const path = `public${imagePath}`
+    const metadata = await sharp(path).metadata()
     if (!metadata.width || !metadata.height) {
         return {
             rgb: null,
@@ -15,25 +16,25 @@ export default async function getDominantEdge(imagePath: string): Promise<{ rgb:
     const edgeWidth = Math.max(1, Math.floor(width * 0.05))
     const edgeHeight = Math.max(1, Math.floor(height * 0.05))
 
-    const top = await sharp(imagePath)
+    const top = await sharp(path)
         .extract({ left: 0, top: 0, width, height: edgeHeight })
         .removeAlpha()
         .raw()
         .toBuffer()
 
-    const bottom = await sharp(imagePath)
+    const bottom = await sharp(path)
         .extract({ left: 0, top: height - edgeHeight, width, height: edgeHeight })
         .removeAlpha()
         .raw()
         .toBuffer()
 
-    const left = await sharp(imagePath)
+    const left = await sharp(path)
         .extract({ left: 0, top: 0, width: edgeWidth, height })
         .removeAlpha()
         .raw()
         .toBuffer()
 
-    const right = await sharp(imagePath)
+    const right = await sharp(path)
         .extract({ left: width - edgeWidth, top: 0, width: edgeWidth, height })
         .removeAlpha()
         .raw()
