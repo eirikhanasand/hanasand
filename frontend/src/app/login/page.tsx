@@ -11,13 +11,13 @@ export default function LoginPage() {
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
         const formData = new FormData(e.currentTarget)
-        const name = formData.get('name') as string
+        const username = formData.get('username') as string
         const password = formData.get('password') as string
 
         try {
-            const response = await fetch(`${config.url.api}/login`, {
+            const response = await fetch(`${config.url.api}/auth/login/${username}`, {
                 method: 'POST',
-                body: JSON.stringify({ name, password })
+                body: JSON.stringify({ password })
             })
 
             if (!response.ok) {
@@ -70,7 +70,7 @@ export default function LoginPage() {
                             >
                                 <input
                                     type='text'
-                                    name='name'
+                                    name='username'
                                     placeholder='Username'
                                     className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
                                     required
