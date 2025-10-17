@@ -83,19 +83,19 @@ export default function BloomSearch({ breached, breachCount, password }: BloomSe
 
 
     return (
-        <div className='flex gap-2 items-center rounded-xl'>
+        <div className='flex gap-2 items-center rounded-xl min-w-[10rem]'>
             {breached ? (
-                <div className='relative grid gap-4 place-items-center max-w-fit'>
+                <div className='relative grid gap-4 place-items-center max-w-fit min-w-1/3'>
                     <div className='flex gap-2 max-w-xs text-center'>
                         <h1 className={breached ? 'text-red-500' : ''}>{text}</h1>
                     </div>
                     {uniqueBreachFiles.length > 0 && <div className='bg-extralight rounded-lg p-2 max-h-[8rem] overflow-auto'>
                         {uniqueBreachFiles.map((breach) => (<h1 key={breach.file} className='text-gray-200'>{breach.file}:{breach.line}</h1>))}
                     </div>}
-                    {loading && <div className="w-full h-[2px] shadow-red-500/50 loading-line" />}
+                    {loading && <div className="min-w-[10rem] w-full h-[2px] shadow-red-500/50 loading-line" />}
                 </div>
             ) : (
-                <h1 className='text-green-500'>No hits found!</h1>
+                <h1 className='text-green-500 text-center w-full'>No hits found!</h1>
             )}
         </div>
     )
