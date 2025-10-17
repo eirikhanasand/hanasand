@@ -107,7 +107,7 @@ export default function RegisterPage() {
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-100 grid gap-2 place-items-center'>
-            <div className='grid w-full spawn rounded-lg overflow-hidden glow-orange'>
+            <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
                         {"hanasand.com"}
@@ -130,7 +130,7 @@ export default function RegisterPage() {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder='Username'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
                                     required
                                 />
                                 <input
@@ -139,7 +139,7 @@ export default function RegisterPage() {
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     placeholder='Name'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
                                     required
                                 />
                                 <input
@@ -148,10 +148,10 @@ export default function RegisterPage() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder='Password'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
                                     required
                                 />
-                                {!passwordIsValid && <div className='flex text-sm text-center'>
+                                {!passwordIsValid && <div className='flex text-sm text-center z-10'>
                                     <h1>
                                         The password must be at 
                                         least <span className={`font-bold ${lengthColor}`}>16
@@ -166,22 +166,22 @@ export default function RegisterPage() {
                                 <button
                                     type='submit'
                                     className={
-                                        'py-2 px-4 rounded-lg font-bold ' + 
-                                        'text-lg hover:bg-extralight/80 ' +
-                                        `${passwordIsValid ? 'cursor-pointer bg-extralight' : 'cursor-not-allowed bg-dark text-extralight'}`
+                                        'py-2 px-4 rounded-lg ' + 
+                                        `${passwordIsValid ? 'cursor-pointer bg-extralight glow-blue hover:bg-blue-500/80' 
+                                            : 'cursor-not-allowed bg-dark glow-red hover:bg-red-500/80'}`
                                     }
                                 >
                                     Create account
                                 </button>
                             </form>
                         </div>
-                        <Or />
+                        <Or className='z-10' />
                         <Link href='/login' className='w-full flex flex-col gap-3 max-w-xs self-center'>
                             <button
                                 type='submit'
                                 className={
-                                    'py-2 px-4 rounded-lg bg-extralight font-bold ' + 
-                                    'text-lg hover:bg-extralight/80 cursor-pointer'
+                                    'py-2 px-4 rounded-lg bg-extralight glow-blue ' + 
+                                    'hover:bg-blue-500/80 cursor-pointer'
                                 }
                             >
                                 Login

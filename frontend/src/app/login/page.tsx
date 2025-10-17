@@ -51,7 +51,7 @@ export default function LoginPage() {
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-100 grid gap-2 place-items-center'>
-            <div className='grid w-full spawn rounded-lg overflow-hidden glow-orange'>
+            <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
                         {"hanasand.com"}
@@ -72,34 +72,34 @@ export default function LoginPage() {
                                     type='text'
                                     name='name'
                                     placeholder='Username'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
                                     required
                                 />
                                 <input
                                     type='password'
                                     name='password'
                                     placeholder='Password'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
                                     required
                                 />
                                 <button
                                     type='submit'
                                     className={
-                                        'py-2 px-4 rounded-lg bg-extralight font-bold ' + 
-                                        'text-lg hover:bg-extralight/80 cursor-pointer'
+                                        'py-1 px-3 rounded-lg bg-extralight ' + 
+                                        'hover:bg-blue-500/80 cursor-pointer glow-blue'
                                     }
                                 >
                                     Login
                                 </button>
                             </form>
                         </div>
-                        <Or />
+                        <Or className='z-10' />
                         <Link href='/register' className='w-full flex flex-col gap-3 max-w-xs self-center'>
                             <button
                                 type='submit'
                                 className={
-                                    'py-2 px-4 rounded-lg bg-extralight font-bold ' + 
-                                    'text-lg hover:bg-extralight/80 cursor-pointer'
+                                    'py-1 px-3 rounded-lg bg-extralight glow-blue ' + 
+                                    'text-lg hover:bg-blue-500/80 cursor-pointer'
                                 }
                             >
                                 Create account
