@@ -50,8 +50,8 @@ const config = {
     SELF_URL: NEXT_PUBLIC_SELF_URL,
     CACHE_TTL: 30000,
     bloom: 'http://bloom:8080/api/bloom',
-    bloom_ws: 'ws://localhost:8080/api/bloom/ws/',
-    // bloom_ws: 'ws://bloom:8080/api/bloom/ws/',
+    bloom_ws: 'ws://bloom:8080/api/bloom/ws/',
+    // bloom_ws: 'ws://localhost:8201/api/bloom/ws/',
 }
 
 export default config
