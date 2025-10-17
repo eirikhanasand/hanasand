@@ -6,6 +6,10 @@ backend default {
 }
 
 sub vcl_recv {
+    if (req.http.Upgrade ~ "(?i)websocket") {
+        return (pipe);
+    }
+
     if (req.method == "POST" || req.method == "PUT" || req.method == "HEAD" || req.method == "OPTIONS" || req.method == "DELETE") {
         return (pass);
     }
@@ -15,6 +19,13 @@ sub vcl_recv {
     # }
 
     return (hash);
+}
+
+sub vcl_pipe {
+    if (req.http.Upgrade) {
+        set bereq.http.Connection = "upgrade";
+        set bereq.http.Upgrade = req.http.Upgrade;
+    }
 }
 
 sub vcl_hash {
