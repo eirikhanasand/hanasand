@@ -33,13 +33,13 @@ export default function Marquee({ text, className = '', innerClassName = '' }: M
             className={`relative overflow-hidden whitespace-nowrap ${className}`}
             style={{ width: '100%' }}
         >
-            <div
+            <h1
                 ref={textRef}
                 className={`${shouldScroll ? 'marquee' : ''} ${innerClassName}`}
                 style={{ display: 'block', '--scroll-distance': `${scrollDistance}px`, '--duration': `${duration}s` } as React.CSSProperties}
             >
                 {text}
-            </div>
+            </h1>
         </div>
     )
 }

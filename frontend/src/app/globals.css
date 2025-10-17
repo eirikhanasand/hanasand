@@ -156,8 +156,6 @@ body {
 
 .loading-line {
   @apply relative bg-red-500 rounded-full;
-  width: 33.333%;
-  height: 3.5px;
   box-shadow: 
     0 0 10px #ff0000,
     0 0 20px #ff0000,

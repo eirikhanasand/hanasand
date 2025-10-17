@@ -83,7 +83,7 @@ export default function Code({
             if (!codeRef.current) {
                 return
             }
-            console.log("rehighlighting")
+
             codeRef.current.removeAttribute('data-highlighted')
             codeRef.current.textContent = editingContent
             hljs.highlightElement(codeRef.current)

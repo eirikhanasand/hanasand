@@ -20,7 +20,6 @@ export default function PwnedPageClient() {
 
         e.preventDefault()
         const result = await postPwned(password)
-        console.log(result)
         if (!result) {
             return setError('Please try again later.')
         }
