@@ -38,7 +38,7 @@ function LinkIfPath({ children, path }: { children: ReactNode, path?: string }) 
         )
     } else {
         return (
-            <div className='relative w-48 h-48 cursor-pointer select-none overflow-visible rounded-lg will-change-transform, filter backface-hidden hover:scale-[1.03]'>
+            <div className='relative w-48 h-48 cursor-pointer select-none overflow-visible rounded-lg will-change-transform, filter backface-hidden'>
                 {children}
             </div>
         )
