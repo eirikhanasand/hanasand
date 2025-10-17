@@ -29,9 +29,12 @@ export default async function layout({children}: {children: ReactNode}) {
                         <Link href='/g' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                             <LinkIcon />
                         </Link>
-                        <Link href='/pwned' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                            <Eye />
-                        </Link>
+                        <div className='group relative grid place-items-center'>
+                            <Link href='/pwned' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                                <Eye />
+                            </Link>
+                            <div className='hidden group-hover:block rounded-full bg-red-500 w-[5px] h-[5px] absolute z-100 self-center' />
+                        </div>
                     </div>
                     <div className='grid place-items-center'>
                         <Link className="font-semibold text-bright cursor-pointer" href="/">hanasand</Link>

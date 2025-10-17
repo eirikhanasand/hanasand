@@ -1,7 +1,7 @@
 'use client'
 
-import PwnedSearch from '@/components/bloom/bloomSearch'
-import postPwned from '@/utils/bloom/checkPassword'
+import PwnedSearch from '@/components/pwned/pwnedSearch'
+import postPwned from '@/utils/pwned/checkPassword'
 import { ArrowLeft, Eye } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
 

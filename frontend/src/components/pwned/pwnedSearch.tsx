@@ -79,7 +79,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
         ? 'Loading...' 
         : uniqueBreachFiles.length === 1
             ? `The password exists in file '${uniqueBreachFiles[0].file}:${uniqueBreachFiles[0].line}'.`
-            : `The password has been breached ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
+            : `The password has been pwned ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
 
 
     return (
