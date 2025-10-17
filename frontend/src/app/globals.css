@@ -170,25 +170,32 @@ body {
 .glow-red {
   box-shadow: 
     0 0 1em rgba(255, 0, 0, 0.5), 
-    0 0 3em rgba(255, 0, 0, 0.5), 
-    0 0 8em rgba(255, 0, 0, 0.4),
-    0 0 12em rgba(255, 0, 0, 0.1);
+    0 0 3em rgba(255, 0, 0, 0.4), 
+    0 0 8em rgba(255, 0, 0, 0.3),
+    0 0 10em rgba(255, 0, 0, 0.2),
+    0 0 12em rgba(255, 0, 0, 0.1),
+    inset 0 0 1em rgba(255, 0, 0, 0.3),
+    inset 0 0 2em rgba(255, 0, 0, 0.15);
 }
 
 .glow-blue {
   box-shadow: 
-    0 0 1em rgba(0, 55, 255, 0.5), 
-    0 0 3em rgba(0, 55, 255, 0.5), 
-    0 0 8em rgba(0, 55, 255, 0.4),
-    0 0 10em rgba(0, 55, 255, 0.2),
-    0 0 12em rgba(0, 55, 255, 0.1);
+    0 0 1em rgba(0, 72, 255, 0.5), 
+    0 0 3em rgba(0, 72, 255, 0.4), 
+    0 0 8em rgba(0, 72, 255, 0.3),
+    0 0 10em rgba(0, 72, 255, 0.2),
+    0 0 12em rgba(0, 72, 255, 0.05),
+    inset 0 0 1em rgba(0, 72, 255, 0.3),
+    inset 0 0 2em rgba(0, 72, 255, 0.15);
 }
 
 .glow-green {
   box-shadow: 
     0 0 1em rgba(4, 207, 4, 0.5), 
-    0 0 3em rgba(4, 207, 4, 0.5), 
-    0 0 8em rgba(4, 207, 4, 0.4),
+    0 0 3em rgba(4, 207, 4, 0.4), 
+    0 0 8em rgba(4, 207, 4, 0.3),
     0 0 10em rgba(4, 207, 4, 0.2),
-    0 0 12em rgba(4, 207, 4, 0.1);
+    0 0 12em rgba(4, 207, 4, 0.05),
+    inset 0 0 1em rgba(4, 207, 4, 0.3),
+    inset 0 0 2em rgba(4, 207, 4, 0.15);
 }
