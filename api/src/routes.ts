@@ -29,7 +29,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // User handlers
     fastify.get('/user/:id', getUser)
     fastify.post('/user', postUser)
-    
+
     // Roles handlers
     fastify.get('/role/:id', getRoles)
     fastify.post('/role', postRole)
