@@ -11,7 +11,7 @@ type GetUserBodyProps = {
 }
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
-    const { username, name, password, avatar } = req.body as GetUserBodyProps
+    const { username, name, password, avatar } = req.body as GetUserBodyProps ?? {}
 
     if (!username || !name || !password) {
         return res.status(400).send({ error: "Missing fields" })
@@ -44,6 +44,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     }
 
     const pwned = await checkPwned(password)
+    console.log("aBABA", pwned)
     if (pwned) {
         return res.status(400).send({ error: `This password is weak, and has been pwned ${pwned.count} ${pwned.count === 1 ? 'time' : 'times'}.` })
     }
