@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
 import { FileCode, Eye, LinkIcon, UploadIcon } from 'lucide-react'
+import Logout from '@/components/logout/logout'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -13,7 +14,9 @@ export const metadata = {
 }
 
 export default async function layout({children}: {children: ReactNode}) {
+    const Cookies = await cookies()
     const theme = (await cookies()).get('theme')?.value || 'dark'
+    const token = Cookies.get('access_token')?.value || undefined
 
     return (
         <html lang="en" className={theme}>
@@ -41,7 +44,7 @@ export default async function layout({children}: {children: ReactNode}) {
                     </div>
                     <div className='flex justify-end items-center'>
                         <ThemeSwitch />
-                        <Login />
+                        {token ? <Logout /> : <Login />}
                     </div>
                 </header>
                 <div className='mt-[6.5vh] h-[93.5vh] w-full overflow-auto'>
