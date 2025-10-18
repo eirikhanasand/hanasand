@@ -17,6 +17,9 @@ export default function LoginPage() {
         try {
             const response = await fetch(`${config.url.api}/auth/login/${username}`, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ password })
             })
 
@@ -29,6 +32,14 @@ export default function LoginPage() {
             setCookie('access_token', data.token, 1)
             document.location.href = `/profile`
         } catch (error) {
+            if ('message' in (error as { message: string })) {
+                try {
+                    const message = (error as { message: string }).message
+                    const msg = JSON.parse(message)
+                    return setError(msg?.error)
+                } catch {}
+            }
+
             setError(error instanceof Error
                 ? error.message.includes('Unauthorized')
                     ? 'Unauthorized'
@@ -50,18 +61,18 @@ export default function LoginPage() {
     }, [error])
 
     return (
-        <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-100 grid gap-2 place-items-center'>
+        <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-2 place-items-center'>
             <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
                         {"hanasand.com"}
                     </h1>
                     <div className='grid place-items-center gap-4'>
-                        <div>
+                        <div className='grid gap-4'>
                             {error && (
-                                <div className='w-full max-w-xs bg-extralight rounded-lg p-2'>
+                                <div className='w-full max-w-xs bg-extralight rounded-lg p-2 mt-4'>
                                     <h1 className='text-center'>{error}</h1>
-                                    <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
+                                    <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg glow-red' />
                                 </div>
                             )}
                             <form
@@ -85,7 +96,7 @@ export default function LoginPage() {
                                 <button
                                     type='submit'
                                     className={
-                                        'py-1 px-3 rounded-lg bg-extralight ' + 
+                                        'py-1 px-3 rounded-lg bg-extralight ' +
                                         'hover:bg-blue-500/80 cursor-pointer glow-blue'
                                     }
                                 >
@@ -98,7 +109,7 @@ export default function LoginPage() {
                             <button
                                 type='submit'
                                 className={
-                                    'py-1 px-3 rounded-lg bg-extralight glow-blue ' + 
+                                    'py-1 px-3 rounded-lg bg-extralight glow-blue ' +
                                     'text-lg hover:bg-blue-500/80 cursor-pointer'
                                 }
                             >
