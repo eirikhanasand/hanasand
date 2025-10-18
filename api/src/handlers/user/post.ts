@@ -44,8 +44,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     }
 
     const pwned = await checkPwned(password)
-    console.log("aBABA", pwned)
-    if (pwned) {
+    if ('count' in pwned) {
         return res.status(400).send({ error: `This password is weak, and has been pwned ${pwned.count} ${pwned.count === 1 ? 'time' : 'times'}.` })
     }
 
