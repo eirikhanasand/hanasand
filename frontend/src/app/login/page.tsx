@@ -37,7 +37,13 @@ export default function LoginPage() {
                     const message = (error as { message: string }).message
                     const msg = JSON.parse(message)
                     return setError(msg?.error)
-                } catch {}
+                } catch (err) {
+                    setError(err instanceof Error
+                        ? err.message.includes('Unauthorized')
+                            ? 'Unauthorized'
+                            : err.message
+                        : 'Unknown error! Please contact @eirikhanasand')
+                }
             }
 
             setError(error instanceof Error
@@ -68,7 +74,7 @@ export default function LoginPage() {
                         {"hanasand.com"}
                     </h1>
                     <div className='grid place-items-center gap-4'>
-                        <div className='grid gap-4'>
+                        <div className='grid gap-4 place-items-center'>
                             {error && (
                                 <div className='w-full max-w-xs bg-extralight rounded-lg p-2 mt-4'>
                                     <h1 className='text-center'>{error}</h1>

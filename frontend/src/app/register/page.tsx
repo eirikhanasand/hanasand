@@ -59,6 +59,20 @@ export default function RegisterPage() {
             setCookie('access_token', data.token, 1)
             document.location.href = `/profile`
         } catch (error) {
+            if ('message' in (error as { message: string })) {
+                try {
+                    const message = (error as { message: string }).message
+                    const msg = JSON.parse(message)
+                    return setError(msg?.error)
+                } catch (err) {
+                    setError(err instanceof Error
+                        ? err.message.includes('Unauthorized')
+                            ? 'Unauthorized'
+                            : err.message
+                        : 'Unknown error! Please contact @eirikhanasand')
+                }
+            }
+
             setError(error instanceof Error
                 ? error.message.includes('Unauthorized')
                     ? 'Unauthorized'
@@ -116,15 +130,15 @@ export default function RegisterPage() {
                         {"hanasand.com"}
                     </h1>
                     <div className='grid place-items-center gap-4'>
-                        <div>
+                        <div className='grid gap-4 max-w-xs'>
                             {error && (
-                                <div className='w-full max-w-xs bg-extralight rounded-lg p-2 mb-2'>
+                                <div className='w-full max-w-xs bg-extralight rounded-lg p-2'>
                                     <h1 className='text-center text-sm'>{error}</h1>
                                     <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
                                 </div>
                             )}
                             <form
-                                className='w-[18rem] flex flex-col gap-3 self-center'
+                                className='w-full flex flex-col gap-3 self-center'
                                 onSubmit={handleSubmit}
                             >
                                 <input
