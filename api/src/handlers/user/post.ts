@@ -4,16 +4,16 @@ import run from '#db'
 import checkPwned from '#utils/checkPwned.ts'
 
 type GetUserBodyProps = {
-    id: string
+    username: string
     name: string
     password: string
     avatar: string
 }
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
-    const { id, name, password, avatar } = req.body as GetUserBodyProps
+    const { username, name, password, avatar } = req.body as GetUserBodyProps
 
-    if (!id || !name || !password) {
+    if (!username || !name || !password) {
         return res.status(400).send({ error: "Missing fields" })
     }
 
@@ -54,7 +54,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             `INSERT INTO users (id, name, password, avatar) 
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO NOTHING`, 
-            [id, name, hashedPassword, avatar || '']
+            [username, name, hashedPassword, avatar || '']
         )
 
         if (!response.rowCount) {
