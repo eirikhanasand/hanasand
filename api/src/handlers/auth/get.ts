@@ -1,13 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
+import login from '#utils/login.ts'
 
 export default async function loginHandler(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string } ?? {}
     const { password } = req.body as { password: string } ?? {}
 
     if (!id || !password) {
-        console.log(id, password)
         return res.status(400).send({ error: "Missing username or password." })
     }
 
@@ -20,7 +20,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             return res.status(404).send({ error: "User not found" })
         }
 
-        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1 AND ip = $2', [id, ip]);
+        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
         if (attemptCheck.rows.length > 0 && attemptCheck.rows[0].attempts >= 3) {
             console.log("Too many failed attempts. Please try again later.")
             return res.status(429).send({ error: "Please try again later." })
@@ -44,10 +44,14 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         }
 
         await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
-
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password: _, ...userWithoutPassword } = user
-        return res.send(userWithoutPassword)
+
+        const token = await login({ username: id, ip })
+        if (!token) {
+            res.status(500).send({ ...userWithoutPassword, error: 'Unable to login. Please try again later.' })
+        }
+
+        return res.send({ ...userWithoutPassword, token })
     } catch (err: unknown) {
         const error = err as Error
         return res.status(500).send({ error: error.message })

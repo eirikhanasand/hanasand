@@ -7,8 +7,8 @@ export default async function invalidateOldTokens() {
       DELETE FROM tokens
       WHERE timestamp < NOW() - INTERVAL '${EXPIRATION_HOURS} hours'
       RETURNING id;
-    `;
+    `
 
     const result = await run(query)
-    console.log(`🧹 Deleted ${result.rowCount} old tokens`);
+    console.log(`🧹 Deleted ${result.rowCount} old tokens`)
 }
