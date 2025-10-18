@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
 import checkPwned from '#utils/checkPwned.ts'
+import login from '#utils/login.ts'
 
 type GetUserBodyProps = {
     username: string
@@ -12,9 +13,11 @@ type GetUserBodyProps = {
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     const { username, name, password, avatar } = req.body as GetUserBodyProps ?? {}
+    const user = { username, name, password }
+    const ip = req.ip
 
     if (!username || !name || !password) {
-        return res.status(400).send({ error: "Missing fields" })
+        return res.status(400).send({ error: 'Missing fields' })
     }
 
     let numbers = 0
@@ -40,7 +43,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     }
 
     if (password.length < 16 || numbers < 2 || specialCharacters < 2 || lowerCaseCharacters < 2 || upperCaseCharacters < 2) {
-        return res.status(400).send({ error: "The password does not meet the requirements." })
+        return res.status(400).send({ error: 'The password does not meet the requirements.' })
     }
 
     const pwned = await checkPwned(password)
@@ -58,14 +61,19 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         )
 
         if (!response.rowCount) {
-            return res.status(400).send({ error: "The username is taken." })
+            return res.status(400).send({ error: 'The username is taken.' })
         }
 
-        return res.status(201).send({ message: "User created" })
+        const token = await login({ username, ip })
+        if (!token) {
+            res.status(206).send({ ...user, message: 'User created', error: 'Unable to login. Please try again later.' })
+        }
+
+        return res.status(201).send({ ...user, message: 'User created', token })
     } catch (err) {
         const error = err as unknown as Error & { code: string }
         if (error.code === '23505') {
-            return res.status(409).send({ error: "User ID already exists" })
+            return res.status(409).send({ error: 'User ID already exists' })
         }
         return res.status(500).send({ error: error.message })
     }
