@@ -54,12 +54,14 @@ export default async function getArticles(req: FastifyRequest<{
             }
 
             if (recent) {
-                if (new Date(stats.mtime).getTime() < two_weeks_in_ms) {
+                if (new Date(created).getTime() < (new Date().getTime() - two_weeks_in_ms)) {
                     old.push(data)
+                } else {
+                    articles.push(data)
                 }
+            } else {
+                articles.push(data)
             }
-
-            articles.push(data)
         }
     }
 
