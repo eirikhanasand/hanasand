@@ -187,6 +187,12 @@ body {
     inset 0 0 2em rgba(0, 72, 255, 0.15);
 }
 
+.glow-blue-small {
+  box-shadow: 
+    0 0 1em rgba(0, 72, 255, 0.4), 
+    0 0 3em rgba(0, 72, 255, 0.3);
+}
+
 .glow-green {
   box-shadow: 
     0 0 1em rgba(4, 207, 4, 0.5), 
