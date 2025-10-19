@@ -3,6 +3,7 @@ import Link from "next/link"
 import './animate.css'
 import fetchArticles from "@/utils/articles/fetchArticles"
 import { prettyDate } from '@/utils/prettyDate'
+import ArticleNotification from './articleNotification'
 
 type ArticleProps = {
     article: Article
@@ -13,6 +14,8 @@ type ArticlesProps = {
     max?: number
     includeRecentTitle?: boolean
     backfill?: boolean
+    error?: string
+    errorPath?: string
 }
 
 type RecentProps = {
@@ -21,16 +24,25 @@ type RecentProps = {
     includeTitle?: boolean
 }
 
-export default async function Articles({ recent = false, max, includeRecentTitle = true, backfill = true }: ArticlesProps) {
+export default async function Articles({
+    recent = false,
+    max,
+    includeRecentTitle = true,
+    backfill = true,
+    error,
+    errorPath
+}: ArticlesProps) {
     const response = await fetchArticles<typeof recent>(recent, backfill)
     // @ts-expect-error TS is not smart enough no infer the type of the response
     const articles: Article[] = recent ? response.recent : response.articles
     // @ts-expect-error TS is not smart enough no infer the type of the response
     const allArticles: Article[] = response.articles
     const displayed = max ? articles.slice(max) : articles
+    const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 
     return (
         <div className="p-8 md:p-16">
+            {message && <ArticleNotification message={message} />}
             <h1 className="text-foreground text-2xl font-semibold">Articles</h1>
             <Recent recent={articles} max={max} includeTitle={includeRecentTitle} />
             {recent && articles.length > 0 && allArticles.length > 0 &&

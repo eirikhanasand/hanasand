@@ -4,24 +4,27 @@ import { redirect } from 'next/navigation'
 import MarkdownRender from '../markdown/markdown'
 import Link from 'next/link'
 
-export default async function Article({ article }: { article: string }) {
-    const data = await fetchArticle(article)
-    if (article === 'featured' || article === 'main' || !data || !Array.isArray(data.commits) || !data.commits.length) {
+export default async function Article({ id }: { id: string }) {
+    const article = await fetchArticle(id)
+    if (id === 'featured' || id === 'main') {
         redirect('/articles')
     }
 
-    const text = data.text
-    const commits = data.commits
-    const created = prettyDate(commits[commits.length - 1].commit.committer.date)
-    const edited = prettyDate(commits[0].commit.committer.date)
+    if (!article) {
+        redirect(`/articles?error=404&path=${id}`)
+    }
+
+    const text = article.content
     const contentMatch = text.match(/---[\s\S]*?---\s*([\s\S]*)/)
     const content = contentMatch ? contentMatch[1].trim() : ""
+    const published = prettyDate(article.created)
+    const edited = prettyDate(article.modified)
 
     return (
-        <div className='px-[20vw] max-h-full -mt-2'>
+        <div className='px-[20vw] max-h-full -mt-2 pb-10'>
             <div className='float-right text-superlight text-right w-fit'>
                 <h1>Last edited {edited}</h1>
-                <h1>Published {created}</h1>
+                <h1>Published {published}</h1>
             </div>
             <div>
                 <MarkdownRender MDstr={content} />
