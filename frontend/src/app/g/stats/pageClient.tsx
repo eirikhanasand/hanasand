@@ -1,5 +1,6 @@
 'use client'
 
+import Notify from '@/components/notify/notify'
 import { getLink } from '@/utils/links/get'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'
@@ -54,12 +55,7 @@ export default function LinkStatsPageClient() {
                         <h1 className='text-xl'>Link statistics</h1>
                     </div>
                     <form onSubmit={handleSubmit} className='grid gap-2'>
-                        {error && (
-                            <div className='w-full max-w-xs bg-extralight rounded-lg px-2 py-1'>
-                                <h1 className='text-center'>{error}</h1>
-                                <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
-                            </div>
-                        )}
+                        {error && <Notify message={error} />}
                         <input
                             className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                             placeholder='Link'

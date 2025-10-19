@@ -1,4 +1,5 @@
 'use client'
+import Notify from '@/components/notify/notify'
 import config from '@/config'
 import { setCookie } from '@/utils/cookies'
 import Or from '@/utils/or'
@@ -97,12 +98,7 @@ export default function LoginPage({ path, serverInternal }: LoginPageProps) {
                     </h1>
                     <div className='grid place-items-center gap-4'>
                         <div className='grid gap-4 place-items-center'>
-                            {error && (
-                                <div className='w-full max-w-xs bg-extralight rounded-lg p-2 mt-4'>
-                                    <h1 className='text-center'>{error}</h1>
-                                    <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg glow-red' />
-                                </div>
-                            )}
+                            {error && <Notify message={error} />}
                             <form
                                 className='w-full flex flex-col gap-3 max-w-xs self-center'
                                 onSubmit={handleSubmit}
@@ -138,7 +134,7 @@ export default function LoginPage({ path, serverInternal }: LoginPageProps) {
                                 type='submit'
                                 className={
                                     'py-1 px-3 rounded-lg bg-extralight glow-blue ' +
-                                    'text-lg hover:bg-blue-500/80 cursor-pointer'
+                                    'hover:bg-blue-500/80 cursor-pointer'
                                 }
                             >
                                 Create account

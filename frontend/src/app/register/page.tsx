@@ -1,4 +1,5 @@
 'use client'
+import Notify from '@/components/notify/notify'
 import config from '@/config'
 import { setCookie } from '@/utils/cookies'
 import Or from '@/utils/or'
@@ -57,7 +58,7 @@ export default function RegisterPage() {
 
             setCookie('name', data.name, 1)
             setCookie('access_token', data.token, 1)
-            document.location.href = `/profile`
+            document.location.href = `/dashboard`
         } catch (error) {
             if ('message' in (error as { message: string })) {
                 try {
@@ -131,12 +132,7 @@ export default function RegisterPage() {
                     </h1>
                     <div className='grid place-items-center gap-4'>
                         <div className='grid gap-4 max-w-xs'>
-                            {error && (
-                                <div className='w-full max-w-xs bg-extralight rounded-lg p-2'>
-                                    <h1 className='text-center text-sm'>{error}</h1>
-                                    <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
-                                </div>
-                            )}
+                            {error && <Notify message={error} />}
                             <form
                                 className='w-full flex flex-col gap-3 self-center'
                                 onSubmit={handleSubmit}

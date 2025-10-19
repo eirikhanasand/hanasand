@@ -1,5 +1,6 @@
 'use client'
 
+import Notify from '@/components/notify/notify'
 import PwnedSearch from '@/components/pwned/pwnedSearch'
 import postPwned from '@/utils/pwned/checkPassword'
 import { ArrowLeft, Eye } from 'lucide-react'
@@ -59,12 +60,7 @@ export default function PwnedPageClient() {
                         <PwnedSearch breached={breached} breachCount={breachCount} password={password} />
                         : (
                             <form onSubmit={handleSubmit} className='grid gap-2'>
-                                {error && (
-                                    <div className='w-full max-w-xs bg-extralight rounded-lg px-2 py-1'>
-                                        <h1 className='text-center'>{error}</h1>
-                                        <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
-                                    </div>
-                                )}
+                                {error && <Notify message={error} />}
                                 <input
                                     type='password'
                                     placeholder='Password'
