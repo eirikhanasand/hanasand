@@ -63,7 +63,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
             }
 
             setCookie('name', data.name, 1)
-            setCookie('id', data.username, 1)
+            setCookie('id', data.id, 1)
             setCookie('avatar', data.avatar, 1)
             setCookie('access_token', data.token, 1)
             document.location.href = `/dashboard`

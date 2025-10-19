@@ -36,7 +36,7 @@ export default function LoginPage({ path, serverInternal }: LoginPageProps) {
 
             const data = await response.json()
             setCookie('name', data.name, 1)
-            setCookie('id', data.username, 1)
+            setCookie('id', data.id, 1)
             setCookie('avatar', data.avatar, 1)
             setCookie('access_token', data.token, 1)
 
