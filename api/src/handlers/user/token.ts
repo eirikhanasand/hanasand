@@ -31,6 +31,7 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
     }
 
     const token = authHeader.split(' ')[1]
+    console.log("token", `-${token}-`)
 
     try {
         const tokenResult = await run(
