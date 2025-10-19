@@ -8,7 +8,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
     const { password } = req.body as { password: string } ?? {}
 
     if (!id || !password) {
-        return res.status(400).send({ error: "Missing username or password." })
+        return res.status(400).send({ error: 'Missing username or password.' })
     }
 
     try {
@@ -17,13 +17,13 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         const result = await run(query, [id])
 
         if (result.rows.length === 0) {
-            return res.status(404).send({ error: "User not found" })
+            return res.status(404).send({ error: 'Incorrect username or password.' })
         }
 
         const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
         if (attemptCheck.rows.length > 0 && attemptCheck.rows[0].attempts >= 3) {
-            console.log("Too many failed attempts. Please try again later.")
-            return res.status(429).send({ error: "Please try again later." })
+            console.log('Too many failed attempts. Please try again later.')
+            return res.status(429).send({ error: 'Please try again later.' })
         }
 
         const user = result.rows[0]
@@ -40,7 +40,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             `
             await run(attemptQuery, [id, ip])
             console.log(`Invalid password for ${id}.`)
-            return res.status(401).send({ error: "Please try again later." })
+            return res.status(401).send({ error: 'Incorrect username or password.' })
         }
 
         await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
@@ -48,7 +48,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
 
         const token = await login({ username: id, ip })
         if (!token) {
-            res.status(500).send({ ...userWithoutPassword, error: 'Unable to login. Please try again later.' })
+            res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
         }
 
         return res.send({ ...userWithoutPassword, token })
