@@ -24,7 +24,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // Auth handlers
     fastify.get('/auth/logout/:id', logoutHandler)
     fastify.post('/auth/login/:id', loginHandler)
-    fastify.post('/auth/token/:id', tokenHandler)
+    fastify.get('/auth/token/:id', tokenHandler)
 
     // User handlers
     fastify.get('/user/:id', getUser)
