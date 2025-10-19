@@ -3,18 +3,21 @@ import config from './config'
 
 export async function middleware(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
+    const idCookie = req.cookies.get('id')
+    const path = req.nextUrl.pathname
     let validToken = false
 
-    if (!pathIsAllowedWhileUnauthorized(req.nextUrl.pathname)) {
-        if (!tokenCookie) {
-            return NextResponse.redirect(new URL('/', req.url))
+    if (!pathIsAllowedWhileUnauthorized(path)) {
+        if (!tokenCookie || !idCookie) {
+            return NextResponse.redirect(new URL(`/login?internal=true&path=${path}`, req.url))
         }
 
         const token = tokenCookie.value
-        if (!validToken) {
-            validToken = await tokenIsValid(token)
+        const id = idCookie.value
+        if (!validToken || !id) {
+            validToken = await tokenIsValid(token, id)
             if (!validToken) {
-                return NextResponse.redirect(new URL('/logout', req.url))
+                return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}`, req.url))
             }
         }
     }
@@ -33,9 +36,9 @@ function pathIsAllowedWhileUnauthorized(path: string) {
     return true
 }
 
-async function tokenIsValid(token: string): Promise<boolean> {
+async function tokenIsValid(token: string, id: string): Promise<boolean> {
     try {
-        const response = await fetch(`${config.url.api}/user`, {
+        const response = await fetch(`${config.url.api}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
         })
 
