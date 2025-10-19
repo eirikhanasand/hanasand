@@ -13,7 +13,7 @@ type GetUserBodyProps = {
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     const { username, name, password, avatar } = req.body as GetUserBodyProps ?? {}
-    const user = { username, name, password }
+    const user = { username, name }
     const ip = req.ip
 
     if (!username || !name || !password) {
