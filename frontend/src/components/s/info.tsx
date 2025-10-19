@@ -2,6 +2,7 @@ import { Eye, Link, Pencil } from 'lucide-react'
 import Marquee from '../marquee/marquee'
 import { useEffect, useState } from 'react'
 import copy from '@/utils/copy'
+import { prettyDate } from '@/utils/prettyDate'
 
 type HeaderProps = {
     share: Share | null
@@ -37,7 +38,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                 </div>
                 <span className='gap-2 text-sm text-gray-400 flex'>
                     <Pencil height={18} width={18} />
-                    <h1>{new Date(share.timestamp).toLocaleString()}</h1>
+                    <h1>{prettyDate(new Date(share.timestamp).toLocaleString())}</h1>
                 </span>
                 <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
                     <Link className={didCopy === true ? 'stroke-green-600' : didCopy === false ? '' : 'stroke-red-500'} height={18} width={18} />

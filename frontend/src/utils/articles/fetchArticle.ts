@@ -1,6 +1,6 @@
 import config from '@/config'
 
-export default async function fetchArticle(id: string) {
+export default async function fetchArticle(id: string): Promise<Article | null> {
     try {
         const response = await fetch(`${config.url.api}/article/${id}`)
 

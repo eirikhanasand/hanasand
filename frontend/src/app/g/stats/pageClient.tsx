@@ -2,6 +2,7 @@
 
 import Notify from '@/components/notify/notify'
 import { getLink } from '@/utils/links/get'
+import { prettyDate } from '@/utils/prettyDate'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'
 import { FormEvent, useEffect, useState } from 'react'
@@ -82,7 +83,7 @@ export default function LinkStatsPageClient() {
                             </div>
                             <div className='flex gap-2'>
                                 <Watch />
-                                <h1>{new Date().toLocaleString()}</h1>
+                                <h1>{prettyDate(new Date().toLocaleString())}</h1>
                             </div>
                             <div className='flex gap-2'>
                                 <Eye />
