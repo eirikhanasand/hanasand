@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import indexHandler from './handlers/index.ts'
-import loginHandler from './handlers/auth/get.ts'
+import loginHandler from './handlers/auth/login.ts'
 import getUser from './handlers/user/get.ts'
 import postUser from './handlers/user/post.ts'
 import logoutHandler from './handlers/auth/logout.ts'
