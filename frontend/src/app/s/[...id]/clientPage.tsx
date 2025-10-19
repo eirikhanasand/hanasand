@@ -1,5 +1,6 @@
 'use client'
 
+import Notify from '@/components/notify/notify'
 import Code from '@/components/s/code'
 import Info from '@/components/s/info'
 import useMovable from '@/hooks/movable'
@@ -186,10 +187,7 @@ function Metadata({
                     <ListOrdered height={22} width={22} />
                 </div>
             </div>
-            {error && <div className='bg-light px-4 py-2 shadow-md rounded-lg'>
-                <h1>{error}</h1>
-                <div className='h-1 bg-red-500 w-0 my-1 animate-slide-line rounded-lg' />
-            </div>}
+            {error && <Notify message={error} />}
             <Info share={share} isConnected={isConnected} participants={participants} />
             <WordControl clickedWord={clickedWord} />
         </div>
