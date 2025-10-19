@@ -28,11 +28,13 @@ export default async function getArticles(req: FastifyRequest<{ Querystring: { r
         if (stats.isFile()) {
             const content = await readFile(filePath, 'utf-8')
             const parsed = matter(content)
+            const body = parsed.content.trim()
+            const readTime = estimateReadingTime(body)
             const data = {
                 id: file,
                 size: stats.size,
                 modified: stats.mtime,
-                metadata: parsed.data
+                metadata: { ...parsed.data, ...readTime },
             }
 
             if (recent) {

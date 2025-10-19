@@ -22,7 +22,7 @@ type RecentProps = {
 export default async function Articles({ recent = false, max, includeRecentTitle = true }: ArticlesProps) {
     const response = await fetchArticles<typeof recent>(recent)
     // @ts-expect-error TS is not smart enough no infer the type of the response
-    const articles: Article[] = recent ? response.recent : response
+    const articles: Article[] = recent ? response.recent : response.articles
     // @ts-expect-error TS is not smart enough no infer the type of the response
     const allArticles: Article[] = response.articles
     const displayed = max ? articles.slice(max) : articles
@@ -62,7 +62,8 @@ function Recent({ recent, max, includeTitle = true }: RecentProps) {
 }
 
 function Article({ article }: ArticleProps) {
-    const { title, description, href, image, created, length } = article
+    const { title, description, href, image, created, metadata } = article
+    console.log("this one", article)
     return (
         <Link
             className="hover:scale-[1.03] animate transition-1000 rounded-3xl"
@@ -76,7 +77,7 @@ function Article({ article }: ArticleProps) {
                         <h1 className='text-gray-500/70 min-w-fit text-xs mt-1'>Published {created}</h1>
                     </div>
                     <p className='text-gray-500'>{description}</p>
-                    {length.wordCount > 100
+                    {metadata.wordCount > 100
                         ? <h1 className="text-foreground text-lg">See more →</h1>
                         : <h1 className='text-red-400'>This article is coming soon! &lt;3
                         </h1>}
