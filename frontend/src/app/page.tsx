@@ -18,7 +18,7 @@ export default async function Page({
             <LogoutClient logoutServer={logout} />
             <Content />
             <Featured />
-            <Articles includeAll={false} max={4} includeRecentTitle={false} />
+            <Articles recent={false} max={4} includeRecentTitle={false} />
             <Apps />
         </div>
     )

@@ -5,15 +5,17 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 
-export async function postArticle(req: FastifyRequest<{ Body: { name: string, content: string } }>, res: FastifyReply) {
-    const filePath = join(ARTICLES_DIR, req.body.name)
+export default async function postArticle(req: FastifyRequest<{ Params: { id: string }, Body: { content: string } }>, res: FastifyReply) {
+    const id = req.params.id
+    const content = req.body.content
+    const filePath = join(ARTICLES_DIR, id)
 
     if (await fileExists(filePath)) {
         return res.status(409).send({ error: 'Article already exists, use PUT to update' })
     }
 
-    await writeFile(filePath, req.body.content)
-    await commitAndPush(`Create article ${req.body.name}`)
+    await writeFile(filePath, content)
+    await commitAndPush(`Created article ${id}`)
 
-    return res.status(201).send({ created: true, name: req.body.name })
+    return res.status(201).send({ created: true, name: id })
 }

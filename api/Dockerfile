@@ -4,10 +4,11 @@ FROM node:alpine
 # Sets the working directory
 WORKDIR /app
 
+# Sets the node environment to production (removes dev features)
 ENV NODE_ENV=production
 
 # Installs apk dependencies
-RUN apk add varnish
+RUN apk add varnish git openssh-client
 
 # Starts varnish
 COPY ./default.vcl /etc/varnish/default.vcl

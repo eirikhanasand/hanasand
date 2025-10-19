@@ -1,17 +1,15 @@
-import { articles, articles_commits } from "@parent/constants"
+import config from '@/config'
 
-export default async function fetchArticle(page: string, suffix: boolean = true) {
+export default async function fetchArticle(id: string) {
     try {
-        const textResponse = await fetch(`${articles}${page}${suffix ? '.md' : ''}`)
-        const commitResponse = await fetch(`${articles_commits}${page}${suffix ? '.md' : ''}`)
+        const response = await fetch(`${config.url.api}/article/${id}`)
 
-        if (!textResponse.ok || !commitResponse.ok) {
+        if (!response.ok) {
             throw new Error("This page does not exist.")
         }
 
-        const text = await textResponse.text()
-        const commits = await commitResponse.json() as Commit[]
-        return { text, commits }
+        const data = await response.json()
+        return data
     } catch (error) {
         console.error(error)
         return null

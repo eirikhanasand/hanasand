@@ -10,6 +10,9 @@ import getRoles from './handlers/roles/get.ts'
 import postRole from './handlers/roles/post.ts'
 import putRole from './handlers/roles/put.ts'
 import deleteRole from './handlers/roles/delete.ts'
+import getArticles, { getArticle } from './handlers/articles/get.ts'
+import postArticle from './handlers/articles/post.ts'
+import putArticle from './handlers/articles/put.ts'
 
 /**
  * Defines the routes available in the API.
@@ -38,4 +41,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Pwned handler
     fastify.post('/pwned', postPwned)
+
+    // Article handlers
+    fastify.get('/articles', getArticles)
+    fastify.get('/article/:id', getArticle)
+    fastify.post('/article', postArticle)
+    fastify.put('/article/:id', putArticle)
 }

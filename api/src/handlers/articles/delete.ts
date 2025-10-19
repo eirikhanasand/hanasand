@@ -6,8 +6,9 @@ import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import commitAndPush from '#utils/git/commitAndPush.ts'
 import { join } from 'path'
 
-export async function deleteArticle(req: FastifyRequest<{ Params: { name: string } }>, res: FastifyReply) {
-    const filePath = join(ARTICLES_DIR, req.params.name)
+export async function deleteArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
+    const id = req.params.id
+    const filePath = join(ARTICLES_DIR, id)
     let deleted = false
 
     if (await fileExists(filePath)) {
@@ -25,6 +26,6 @@ export async function deleteArticle(req: FastifyRequest<{ Params: { name: string
         return res.status(404).send({ error: 'Article does not exist' })
     }
 
-    await commitAndPush(`Deleted article ${req.params.name}.`)
-    return res.send({ deleted: true, name: req.params.name })
+    await commitAndPush(`Deleted article ${id}.`)
+    return res.send({ deleted: true, id })
 }

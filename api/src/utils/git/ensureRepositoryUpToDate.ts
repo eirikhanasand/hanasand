@@ -1,4 +1,4 @@
-import git from './git'
+import git from './git.ts'
 
 export default async function ensureRepositoryUpToDate() {
     try {
