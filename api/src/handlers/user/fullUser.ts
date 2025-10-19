@@ -28,7 +28,7 @@ export default async function authorizedUserHandler(req: FastifyRequest, res: Fa
 
     try {
         const tokenResult = await run(
-            `SELECT token FROM tokens WHERE id = $1 AND token = $2`,
+            `SELECT token FROM tokens WHERE username = $1 AND token = $2`,
             [id, token]
         )
 

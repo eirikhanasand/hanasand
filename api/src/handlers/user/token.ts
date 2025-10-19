@@ -34,7 +34,7 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
 
     try {
         const tokenResult = await run(
-            `SELECT token FROM tokens WHERE id = $1 AND token = $2`,
+            `SELECT token FROM tokens WHERE username = $1 AND token = $2`,
             [id, token]
         )
 

@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Token table
 CREATE TABLE IF NOT EXISTS tokens (
-    id TEXT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
     token TEXT NOT NULL,
     ip TEXT NOT NULL,
     timestamp TIMESTAMPTZ DEFAULT NOW()
