@@ -4,7 +4,7 @@ export default function page() {
     return (
         <div className="h-full">
             <div className="p-16">
-                <Article article='readme' />
+                <Article id='readme' />
             </div>
         </div>
     )

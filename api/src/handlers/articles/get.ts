@@ -15,7 +15,8 @@ export default async function getArticles(req: FastifyRequest<{
     Querystring: {
         recent?: string,
         backfill?: string,
-        sortBy: 'created' | 'updated'
+        sortBy: 'created' | 'updated',
+        featured?: string
     }
 }>, res: FastifyReply) {
     const recent = req.query.recent
