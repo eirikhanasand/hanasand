@@ -1,12 +1,16 @@
 import git from './git.ts'
+import { relative } from 'path'
+import { resolve } from 'path'
+const LOCAL_REPO_PATH = resolve('./articles')
 
-export async function createdAt(filePath: string): Promise<string | null> {
+export default async function createdAt(filePath: string): Promise<string> {
     try {
-        const stdout = await git(`log --diff-filter=A --follow --format=%aI -- "${filePath}"`)
+        const relativePath = relative(LOCAL_REPO_PATH, filePath)
+        const stdout = await git(`log --diff-filter=A --follow --format=%aI -- "${relativePath}"`)
         const firstLine = stdout.split('\n')[0]
-        return firstLine || null
+        return firstLine || new Date().toString()
     } catch (err) {
         console.error('Failed to get file created time', err)
-        return null
+        return new Date().toString()
     }
 }

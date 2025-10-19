@@ -16,7 +16,10 @@ export default async function git(cmd: string) {
 
     try {
         const { stdout, stderr } = await execAsync(`git -C "${LOCAL_REPO_PATH}" ${cmd}`)
-        if (stderr) console.error(stderr)
+        if (stderr) {
+            console.error(stderr)
+        }
+
         return stdout.trim()
     } catch (err) {
         console.error(`Git command failed: git ${cmd}`, err)

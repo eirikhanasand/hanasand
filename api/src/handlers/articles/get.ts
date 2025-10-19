@@ -6,12 +6,21 @@ import { readdir, stat, readFile } from 'fs/promises'
 import matter from 'gray-matter'
 import { join } from 'path'
 import estimateReadingTime from '#utils/estimateReadTime.ts'
-import { createdAt } from '#utils/git/createdAt.ts'
+import createdAt from '#utils/git/createdAt.ts'
+import updatedAt from '#utils/git/updatedAt.ts'
 
 const two_weeks_in_ms = 1209600000
 
-export default async function getArticles(req: FastifyRequest<{ Querystring: { recent?: string } }>, res: FastifyReply) {
+export default async function getArticles(req: FastifyRequest<{
+    Querystring: {
+        recent?: string,
+        backfill?: string,
+        sortBy: 'created' | 'updated'
+    }
+}>, res: FastifyReply) {
     const recent = req.query.recent
+    const backfill = req.query.backfill
+    const sortBy = req.query.sortBy
     await ensureRepositoryUpToDate()
 
     if (!(await fileExists(ARTICLES_DIR))) {
@@ -27,9 +36,10 @@ export default async function getArticles(req: FastifyRequest<{ Querystring: { r
         const stats = await stat(filePath)
 
         if (stats.isFile()) {
-            const file = await readFile(filePath, 'utf-8')
-            const created = createdAt(filePath)
-            const parsed = matter(file)
+            const fileContent = await readFile(filePath, 'utf-8')
+            const created = await createdAt(filePath)
+            const updated = await updatedAt(filePath)
+            const parsed = matter(fileContent)
             const content = parsed.content.trim()
             const readTime = estimateReadingTime(content)
             const titleMatch = content.match(/^#\s+(.*)/m)
@@ -38,7 +48,7 @@ export default async function getArticles(req: FastifyRequest<{ Querystring: { r
                 id: file,
                 size: stats.size,
                 created,
-                modified: stats.mtime,
+                modified: updated,
                 metadata: { ...parsed.data, ...readTime },
                 title,
             }
@@ -53,7 +63,35 @@ export default async function getArticles(req: FastifyRequest<{ Querystring: { r
         }
     }
 
-    return res.send(recent ? { recent: articles, articles: old } : { articles })
+    // Ensures recent always has 4 articles
+    if (backfill) {
+        for (const article of old) {
+            if (articles.length < 4) {
+                articles.push(article)
+            }
+        }
+    }
+    
+    const articlesByCreated = articles.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
+    const articlesByUpdated = articles.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
+    const oldArticlesByCreated = old.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
+    const oldArticlesByUpdated = old.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
+    
+    switch (sortBy) {
+        case 'created': return res.send(recent 
+            ? { recent: articlesByCreated, articles: oldArticlesByCreated } 
+            : { articles: articlesByCreated }
+        )
+    }
+
+    return res.send(recent ?
+        {
+            recent: articlesByUpdated,
+            articles: oldArticlesByUpdated,
+        } : {
+            articles: articlesByUpdated
+        }
+    )
 }
 
 export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
@@ -68,7 +106,8 @@ export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>
 
     const stats = await stat(filePath)
     const file = await readFile(filePath, 'utf-8')
-    const created = createdAt(filePath)
+    const created = await createdAt(filePath)
+    const updated = await updatedAt(filePath)
     const parsed = matter(file)
     const content = parsed.content.trim()
     const readTime = estimateReadingTime(content)
@@ -78,7 +117,7 @@ export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>
         id,
         size: stats.size,
         created,
-        modified: stats.mtime,
+        modified: updated,
         metadata: { ...parsed.data, ...readTime },
         title,
         content,

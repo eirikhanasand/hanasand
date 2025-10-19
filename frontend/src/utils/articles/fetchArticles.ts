@@ -6,16 +6,15 @@ type Articles = {
 }
 
 export default async function fetchArticles<T extends boolean>(
-    recent?: T
+    recent?: T,
+    backfill?: boolean
 ): Promise<T extends true ? Articles : Article[]> {
     try {
         const url = new URL(`${config.url.api}/articles`)
-        if (recent) {
-            url.searchParams.set('recent', 'true')
-        }
+        if (recent) url.searchParams.set('recent', 'true')
+        if (backfill) url.searchParams.set('backfill', 'true')
 
         const response = await fetch(url)
-
         if (!response.ok) {
             throw new Error("Failed to fetch articles.")
         }

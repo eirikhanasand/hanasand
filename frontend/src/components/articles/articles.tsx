@@ -11,6 +11,7 @@ type ArticlesProps = {
     recent?: boolean
     max?: number
     includeRecentTitle?: boolean
+    backfill?: boolean
 }
 
 type RecentProps = {
@@ -19,8 +20,8 @@ type RecentProps = {
     includeTitle?: boolean
 }
 
-export default async function Articles({ recent = false, max, includeRecentTitle = true }: ArticlesProps) {
-    const response = await fetchArticles<typeof recent>(recent)
+export default async function Articles({ recent = false, max, includeRecentTitle = true, backfill = true }: ArticlesProps) {
+    const response = await fetchArticles<typeof recent>(recent, backfill)
     // @ts-expect-error TS is not smart enough no infer the type of the response
     const articles: Article[] = recent ? response.recent : response.articles
     // @ts-expect-error TS is not smart enough no infer the type of the response
