@@ -47,18 +47,18 @@ type Verification = {
 }
 
 type Article = {
-    title: string
-    image: string
-    href: string
-    description: string
-    length: ArticleLength
+    id: string
+    size: number
     created: string
-    updated: string
-}
-
-type ArticleLength = {
-    wordCount: number
-    estimatedMinutes: number
+    modified: string
+    metadata: {
+        image: string
+        description: string
+        wordCount: number
+        estimatedMinutes: number
+    }
+    title: string
+    content: string
 }
 
 type GithubContent = {

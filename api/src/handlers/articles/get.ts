@@ -6,6 +6,7 @@ import { readdir, stat, readFile } from 'fs/promises'
 import matter from 'gray-matter'
 import { join } from 'path'
 import estimateReadingTime from '#utils/estimateReadTime.ts'
+import { createdAt } from '#utils/git/createdAt.ts'
 
 const two_weeks_in_ms = 1209600000
 
@@ -26,15 +27,20 @@ export default async function getArticles(req: FastifyRequest<{ Querystring: { r
         const stats = await stat(filePath)
 
         if (stats.isFile()) {
-            const content = await readFile(filePath, 'utf-8')
-            const parsed = matter(content)
-            const body = parsed.content.trim()
-            const readTime = estimateReadingTime(body)
+            const file = await readFile(filePath, 'utf-8')
+            const created = createdAt(filePath)
+            const parsed = matter(file)
+            const content = parsed.content.trim()
+            const readTime = estimateReadingTime(content)
+            const titleMatch = content.match(/^#\s+(.*)/m)
+            const title = titleMatch ? titleMatch[1].trim() : 'Untitled'
             const data = {
                 id: file,
                 size: stats.size,
+                created,
                 modified: stats.mtime,
                 metadata: { ...parsed.data, ...readTime },
+                title,
             }
 
             if (recent) {
@@ -61,15 +67,20 @@ export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>
     }
 
     const stats = await stat(filePath)
-    const content = await readFile(filePath, 'utf-8')
-    const parsed = matter(content)
-    const body = parsed.content.trim()
-    const readTime = estimateReadingTime(body)
+    const file = await readFile(filePath, 'utf-8')
+    const created = createdAt(filePath)
+    const parsed = matter(file)
+    const content = parsed.content.trim()
+    const readTime = estimateReadingTime(content)
+    const titleMatch = content.match(/^#\s+(.*)/m)
+    const title = titleMatch ? titleMatch[1].trim() : 'Untitled'
     return res.send({
         id,
         size: stats.size,
+        created,
         modified: stats.mtime,
         metadata: { ...parsed.data, ...readTime },
-        content: body,
+        title,
+        content,
     })
 }
