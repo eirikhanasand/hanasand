@@ -15,7 +15,7 @@ export const metadata = {
 
 export default async function layout({children}: {children: ReactNode}) {
     const Cookies = await cookies()
-    const theme = (await cookies()).get('theme')?.value || 'dark'
+    const theme = Cookies.get('theme')?.value || 'dark'
     const token = Cookies.get('access_token')?.value || undefined
 
     return (

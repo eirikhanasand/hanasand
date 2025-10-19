@@ -85,8 +85,6 @@ function All({ recent, max, includeTitle = true }: RecentProps) {
 function Article({ article }: ArticleProps) {
     const { id, title, created, metadata } = article
 
-    console.log(article)
-
     return (
         <Link
             className="hover:scale-[1.03] animate transition-1000 rounded-3xl cursor-pointer"

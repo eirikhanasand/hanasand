@@ -83,7 +83,7 @@ export default async function getArticles(req: FastifyRequest<{
     switch (sortBy) {
         case 'created': return res.send(recent
             ? { recent: articlesByCreated, articles: oldArticlesByCreated }
-            : { articles: articlesByCreated }
+            : articlesByCreated
         )
     }
 
@@ -91,9 +91,7 @@ export default async function getArticles(req: FastifyRequest<{
         {
             recent: articlesByUpdated,
             articles: oldArticlesByUpdated,
-        } : {
-            articles: articlesByUpdated
-        }
+        } : articlesByUpdated
     )
 }
 

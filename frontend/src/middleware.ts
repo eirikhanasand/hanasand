@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
         if (!validToken || !id) {
             validToken = await tokenIsValid(token, id)
             if (!validToken) {
-                return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}`, req.url))
+                return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&expired=true'}`, req.url))
             }
         }
     }

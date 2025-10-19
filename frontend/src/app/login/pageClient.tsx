@@ -9,11 +9,13 @@ import { useEffect, useState } from 'react'
 type LoginPageProps = {
     path: string | null
     serverInternal: boolean
+    serverExpired: boolean
 }
 
-export default function LoginPage({ path, serverInternal }: LoginPageProps) {
+export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
     const [error, setError] = useState('')
     const [internal, setInternal] = useState<boolean>(serverInternal)
+    const [expired, setExpired] = useState<boolean>(serverExpired)
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -41,9 +43,9 @@ export default function LoginPage({ path, serverInternal }: LoginPageProps) {
             setCookie('access_token', data.token, 1)
 
             if (path) {
-                document.location.href = path
+                window.location.href = path
             } else {
-                document.location.href = `/dashboard`
+                window.location.href = `/dashboard`
             }
         } catch (error) {
             if ('message' in (error as { message: string })) {
@@ -88,8 +90,17 @@ export default function LoginPage({ path, serverInternal }: LoginPageProps) {
         }
     }, [internal])
 
+    useEffect(() => {
+        if (expired) {
+            setTimeout(() => {
+                setExpired(false)
+            }, 8000)
+        }
+    }, [expired])
+
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-4 place-items-center'>
+            {(expired && path) && <h1 className='grid w-full rounded-lg bg-blue-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>Token expired. You will be redirected back to {path} after reauthenticating.</h1>}
             {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>{path} is internal. Please log in.</h1>}
             <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
