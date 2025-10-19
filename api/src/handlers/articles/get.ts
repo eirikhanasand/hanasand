@@ -74,10 +74,10 @@ export default async function getArticles(req: FastifyRequest<{
         }
     }
     
-    const articlesByCreated = articles.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
-    const articlesByUpdated = articles.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
-    const oldArticlesByCreated = old.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
-    const oldArticlesByUpdated = old.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime())
+    const articlesByCreated = articles.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+    const articlesByUpdated = articles.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+    const oldArticlesByCreated = old.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+    const oldArticlesByUpdated = old.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
     
     switch (sortBy) {
         case 'created': return res.send(recent 
