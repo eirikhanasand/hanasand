@@ -33,7 +33,7 @@ async function ensureRepo() {
         await fs.access(LOCAL_REPO_PATH)
     } catch {
         console.log('Cloning repository...')
-        await execAsync(`GIT_SSH_COMMAND="ssh -v" git clone ${config.github_articles_ssh} "${LOCAL_REPO_PATH}"`)
+        await execAsync(`git clone ${config.github_articles_ssh} "${LOCAL_REPO_PATH}"`)
     }
 
     try {
