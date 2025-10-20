@@ -1,6 +1,6 @@
 'use client'
 
-import { ChangeEvent, RefObject, useEffect, useRef, useState } from 'react'
+import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
@@ -8,8 +8,8 @@ import './editor.css'
 import { postArticle } from '@/components/editor/postArticle'
 
 type EditorProps = {
-    article: string
-    text: string[]
+    id: string
+    content: string[]
     customSaveLogic?: true
     hideSaveButton?: true
     save?: () => void
@@ -17,6 +17,7 @@ type EditorProps = {
     className?: string
     placeholder?: string
     placeholderClassName?: string
+    setEditing?: Dispatch<SetStateAction<boolean>>
 }
 
 type EditorWithoutLogicProps = {
@@ -65,26 +66,30 @@ marked.use({
         },
         codespan(token) {
             return `<code class='break-all bg-extralight p-0.3 rounded-xs'>${token.text}</code>`
+        },
+        hr() {
+            return `<hr class='my-6 border-t-2 border-white-400 opacity-50' />`
         }
     }
 })
 
 export default function Editor({
-    article,
-    text,
+    id,
+    content,
     customSaveLogic,
     hideSaveButton,
     save,
     onChange,
     className,
     placeholder,
-    placeholderClassName
+    placeholderClassName,
+    setEditing
 }: EditorProps) {
-    const [markdown, setMarkdown] = useState(text.join('\n'))
+    const [markdown, setMarkdown] = useState(content.join('\n'))
     const [displayEditor, setDisplayEditor] = useState(false)
     const [hideSave, setHideSave] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
-    const edited = text.join('\n') !== markdown
+    const edited = content.join('\n') !== markdown
 
     function handleMarkdownChange(event: ChangeEvent<HTMLTextAreaElement>) {
         if (customSaveLogic && onChange) {
@@ -106,7 +111,7 @@ export default function Editor({
         if (customSaveLogic && save) {
             save()
         } else {
-            postArticle(article, markdown.split('\n'))
+            postArticle(id, markdown.split('\n'))
         }
 
         setDisplayEditor(false)
@@ -130,11 +135,17 @@ export default function Editor({
         if (textareaRef.current) {
             autoResize(textareaRef.current)
         }
-    }, [])
+    }, [markdown, displayEditor, textareaRef.current])
 
     useEffect(() => {
-        setMarkdown(text.join('\n'))
-    }, [text])
+        setMarkdown(content.join('\n'))
+    }, [content])
+
+    useEffect(() => {
+        if (typeof setEditing !== 'undefined') {
+            setEditing(displayEditor)
+        }
+    }, [displayEditor])
 
     return <EditorWithoutLogic
         className={className}
@@ -172,13 +183,13 @@ export function EditorWithoutLogic({
             onClick={() => textareaRef?.current?.focus()}
         >
             <div className=''>
-                {displayEditor && <div className='grid grid-cols-2'>
-                    <h1 className='text-lg text-almostbright'>Markdown</h1>
-                    <h1 className='text-lg pl-2 text-almostbright'>Preview</h1>
+                {displayEditor && <div className='grid grid-cols-2 bg-dark rounded-lg p-2 mb-2'>
+                    <h1 className='text-lg font-semibold text-almostbright'>Markdown</h1>
+                    <h1 className='text-lg font-semibold pl-2 text-almostbright'>Preview</h1>
                 </div>}
                 <div className={`markdown-editor space-x-2 h-full ${displayEditor && 'grid grid-cols-2'}`}>
                     {(displayEditor || !markdown.length) && <textarea
-                        className={`w-full h-full rounded-sm text-white bg-transparent focus:outline-hidden resize-none overflow-hidden outline-hidden caret-orange-500 ${placeholderClassName}`}
+                        className={`w-full h-full rounded-sm text-white bg-transparent focus:outline-hidden resize-none overflow-hidden outline-hidden caret-orange-500 pr-2 ${placeholderClassName}`}
                         value={markdown}
                         onChange={handleMarkdownChange}
                         placeholder={placeholder || 'Write your markdown here...'}

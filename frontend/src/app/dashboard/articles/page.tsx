@@ -1,13 +1,16 @@
-import Editor from '@/components/editor/editor'
+import DashboardArticle from '@/components/articles/dashboardArticle'
+import fetchArticles from '@/utils/articles/fetchArticles'
 
-export default function Page() {
-    // list files
-    // editor/[id] - get file and open the editor for it
+export default async function Page() {
+    const articles = await fetchArticles()
+
     return (
         <div className="h-full">
             <div className="p-16">
-                <h1>hello wlrd dashboard/articles</h1>
-                {/* <Editor /> */}
+                <div className='grid w-full p-2 bg-dark rounded-lg gap-2'>
+                    <h1 className='font-semibold text-lg'>Articles</h1>
+                    {(articles as Article[]).map((article) => <DashboardArticle key={article.id} article={article} />)}
+                </div>
             </div>
         </div>
     )

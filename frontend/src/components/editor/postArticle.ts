@@ -1,22 +1,18 @@
 import config from '@/config'
 import { getCookie } from '@/utils/cookies'
 
-export async function postArticle(article: string, text: string[]): Promise<void | string> {
+export async function postArticle(id: string, content: string[]): Promise<void | string> {
     const token = getCookie('token')
-    const name = getCookie('name')
+    const username = getCookie('id')
 
-    if (token && name) {
-        const response = await fetch(`${config.url.api}/article`, {
+    if (token && username) {
+        const response = await fetch(`${config.url.api}/article/${id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                username: name,
-                article,
-                text
-            }),
+            body: JSON.stringify({ username, content })
         })
 
         if (!response.ok) {

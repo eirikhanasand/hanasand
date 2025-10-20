@@ -33,10 +33,8 @@ export default async function Articles({
     errorPath
 }: ArticlesProps) {
     const response = await fetchArticles<typeof recent>(recent, backfill)
-    // @ts-expect-error TS is not smart enough no infer the type of the response
-    const articles: Article[] = recent ? response.recent : response.articles
-    // @ts-expect-error TS is not smart enough no infer the type of the response
-    const allArticles: Article[] = response.articles
+    const articles: Article[] = Array.isArray(response) ? response : recent ? response.recent : response.articles
+    const allArticles: Article[] = articles
     const displayed = max ? allArticles.slice(max) : allArticles
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 

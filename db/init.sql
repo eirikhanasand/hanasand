@@ -68,3 +68,9 @@ CREATE TABLE IF NOT EXISTS user_roles (
 
 -- Index on user-roles 
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
+
+-- Logs connections to the database
+ALTER SYSTEM SET log_connections = 'on';
+ALTER SYSTEM SET log_disconnections = 'on';
+ALTER SYSTEM SET log_min_messages = 'info';
+SELECT pg_reload_conf();

@@ -7,6 +7,7 @@ import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
 import { FileCode, Eye, LinkIcon, UploadIcon } from 'lucide-react'
 import Logout from '@/components/logout/logout'
+import Dashboard from '@/components/dashboard/dashboard'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -44,6 +45,7 @@ export default async function layout({children}: {children: ReactNode}) {
                     </div>
                     <div className='flex justify-end items-center'>
                         <ThemeSwitch />
+                        {token ? <Dashboard /> : ''}
                         {token ? <Logout /> : <Login />}
                     </div>
                 </header>
