@@ -34,7 +34,7 @@ export default async function Articles({
 }: ArticlesProps) {
     const response = await fetchArticles<typeof recent>(recent, backfill)
     const articles: Article[] = Array.isArray(response) ? response : recent ? response.recent : response.articles
-    const allArticles: Article[] = articles
+    const allArticles: Article[] = Array.isArray(response) ? articles : response.articles
     const displayed = max ? allArticles.slice(max) : allArticles
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 
