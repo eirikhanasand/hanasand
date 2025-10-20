@@ -1,6 +1,8 @@
 import DashboardArticle from '@/components/articles/dashboardArticle'
 import fetchArticles from '@/utils/articles/fetchArticles'
+import { Plus } from 'lucide-react'
 import { cookies } from 'next/headers'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 export default async function Page() {
@@ -21,7 +23,13 @@ export default async function Page() {
                     <h1 className='text-2xl font-semibold'>{text}</h1>
                 </div>
                 <div className='grid w-full p-2 bg-dark rounded-lg gap-2'>
-                    <h1 className='font-semibold text-lg'>Articles</h1>
+                    <div className='flex justify-between'>
+                        <h1 className='font-semibold text-lg'>Articles</h1>
+                        <Link href='/dashboard/articles/create' className='flex gap-2 rounded-lg p-2 px-6 bg-light cursor-pointer hover:bg-green-500'>
+                            <Plus />
+                            <h1 className='font-semibold'>Create</h1>
+                        </Link>
+                    </div>
                     {(articles as Article[]).map((article) => <DashboardArticle key={article.id} article={article} />)}
                 </div>
             </div>

@@ -1,6 +1,6 @@
 import fetchArticle from '@/utils/articles/fetchArticle'
 import { redirect } from 'next/navigation'
-import Editorclient from './editorClient'
+import EditorClient from './editorClient'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
@@ -14,7 +14,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     return (
         <div className="h-full">
             <div className="p-16">
-                <Editorclient article={article} />
+                <EditorClient article={article} />
             </div>
         </div>
     )

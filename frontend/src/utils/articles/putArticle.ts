@@ -1,13 +1,13 @@
 import config from '@/config'
 import { getCookie } from '@/utils/cookies'
 
-export async function postArticle(id: string, content: string[]): Promise<void | string> {
+export async function putArticle(id: string, content: string[]): Promise<void | string> {
     const token = getCookie('token')
     const username = getCookie('id')
 
     if (token && username) {
         const response = await fetch(`${config.url.api}/article/${id}`, {
-            method: 'POST',
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
@@ -24,5 +24,5 @@ export async function postArticle(id: string, content: string[]): Promise<void |
         return await response.json()
     }
 
-    return 'Please log in to add articles'
+    return 'Please log in to update articles.'
 }

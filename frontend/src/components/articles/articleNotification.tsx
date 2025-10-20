@@ -9,11 +9,17 @@ export default function ArticleNotification({ message }: { message: string }) {
     const router = useRouter()
 
     useEffect(() => {
-        setTimeout(() => {
+        if (!error) {
+            return
+        }
+
+        const timeout = setTimeout(() => {
             setError(null)
             router.push('/articles')
         }, 5000)
-    }, [])
+
+        return () => clearTimeout(timeout)
+    }, [error])
 
     return error ? (
         <div className='absolute top-0 left-0 p-10 mt-10 grid place-items-center w-full'>

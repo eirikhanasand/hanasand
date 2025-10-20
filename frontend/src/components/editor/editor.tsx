@@ -5,7 +5,7 @@ import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import './editor.css'
-import { postArticle } from '@/components/editor/postArticle'
+import { postArticle } from '@/utils/articles/postArticle'
 
 type EditorProps = {
     id: string
@@ -17,6 +17,7 @@ type EditorProps = {
     className?: string
     placeholder?: string
     placeholderClassName?: string
+    editing: boolean
     setEditing?: Dispatch<SetStateAction<boolean>>
 }
 
@@ -83,6 +84,7 @@ export default function Editor({
     className,
     placeholder,
     placeholderClassName,
+    editing,
     setEditing
 }: EditorProps) {
     const [markdown, setMarkdown] = useState(content.join('\n'))
@@ -111,7 +113,7 @@ export default function Editor({
         if (customSaveLogic && save) {
             save()
         } else {
-            postArticle(id, markdown.split('\n'))
+            postArticle(id, markdown)
         }
 
         setDisplayEditor(false)
@@ -123,8 +125,8 @@ export default function Editor({
         textarea.style.height = `${textarea.scrollHeight}px`
     }
 
-    function handleDisplayEditor() {
-        setDisplayEditor(!displayEditor)
+    function handleDisplayEditor(force?: boolean) {
+        setDisplayEditor(force ?? !displayEditor)
         setHideSave(false)
         if (textareaRef.current) {
             autoResize(textareaRef.current)
@@ -147,6 +149,13 @@ export default function Editor({
         }
     }, [displayEditor])
 
+    useEffect(() => {
+        if (!editing) {
+            setDisplayEditor(false)
+            handleDisplayEditor(false)
+        }
+    }, [editing])
+
     return <EditorWithoutLogic
         className={className}
         placeholder={placeholder}
@@ -154,7 +163,8 @@ export default function Editor({
         handleMarkdownChange={handleMarkdownChange}
         handleSave={handleSave}
         displayEditor={displayEditor}
-        handleDisplayEditor={handleDisplayEditor}
+        // @ts-expect-error This is intended to make sure its called instead of passed as a function
+        handleDisplayEditor={() => handleDisplayEditor((prev: boolean) => !prev)}
         hideSaveButton={hideSaveButton}
         hideSave={hideSave}
         textareaRef={textareaRef}

@@ -176,6 +176,12 @@ body {
     inset 0 0 2em rgba(255, 0, 0, 0.15);
 }
 
+.glow-red-small {
+  box-shadow: 
+    0 0 1em rgba(255, 0, 0, 0.4), 
+    0 0 3em rgba(255, 0, 0, 0.3);
+}
+
 .glow-blue {
   box-shadow: 
     0 0 1em rgba(0, 72, 255, 0.5), 
