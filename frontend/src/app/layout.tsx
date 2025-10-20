@@ -22,7 +22,7 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang="en" className={theme}>
             <body className='h-full w-full'>
-                <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-white bg-dark grid grid-cols-3 px-4 select-none'>
+                <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-foreground bg-dark grid grid-cols-3 px-4 select-none'>
                     <div className='flex items-center'>
                         <Link href='/upload' className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                             <UploadIcon />

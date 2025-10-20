@@ -13,7 +13,7 @@ export default function Editorclient({ article }: { article: Article }) {
             <h1 className='font-semibold text-2xl'>{text}</h1>
             <Editor
                 setEditing={setEditing}
-                className='bg-light rounded-lg p-2'
+                className='bg-light rounded-lg p-2 glow-blue-small'
                 id={article.id}
                 content={article.content.split('\n')}
             />

@@ -182,14 +182,14 @@ export function EditorWithoutLogic({
             className={`${className}`}
             onClick={() => textareaRef?.current?.focus()}
         >
-            <div className=''>
+            <div>
                 {displayEditor && <div className='grid grid-cols-2 bg-dark rounded-lg p-2 mb-2'>
                     <h1 className='text-lg font-semibold text-almostbright'>Markdown</h1>
                     <h1 className='text-lg font-semibold pl-2 text-almostbright'>Preview</h1>
                 </div>}
                 <div className={`markdown-editor space-x-2 h-full ${displayEditor && 'grid grid-cols-2'}`}>
                     {(displayEditor || !markdown.length) && <textarea
-                        className={`w-full h-full rounded-sm text-white bg-transparent focus:outline-hidden resize-none overflow-hidden outline-hidden caret-orange-500 pr-2 ${placeholderClassName}`}
+                        className={`z-10 w-full h-full rounded-sm text-foreground bg-transparent focus:outline-hidden resize-none overflow-hidden outline-hidden caret-blue-500 pr-2 ${placeholderClassName}`}
                         value={markdown}
                         onChange={handleMarkdownChange}
                         placeholder={placeholder || 'Write your markdown here...'}
@@ -204,7 +204,7 @@ export function EditorWithoutLogic({
             </div>
             {edited && !hideSave && !hideSaveButton && <div className='mt-2'>
                 <button
-                    className='text-md bg-login px-8 rounded-xl h-[4vh]'
+                    className='text-md bg-blue-500 glow-blue-small px-8 rounded-xl h-[4vh]'
                     onClick={handleSave}
                 >
                     Save
@@ -222,7 +222,7 @@ export function Markdown({
 }: MarkdownProps) {
     return (
         <div
-            className={`markdown-preview ${displayEditor && 'pl-2 border-l-2 border-orange-500'} text-foreground h-full break-words ${className}`}
+            className={`markdown-preview ${displayEditor && 'pl-2 border-l-2 border-blue-500'} text-foreground h-full break-words ${className}`}
             onClick={handleDisplayEditor}
             dangerouslySetInnerHTML={{ __html: marked(markdown) }}
         />
