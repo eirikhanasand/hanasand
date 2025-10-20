@@ -5,7 +5,7 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { getShare } from '@/utils/share/get'
 import config from '@/config'
-import Editor from '@/components/s/editor'
+import Editor from '@/components/share/editor'
 
 type CodeProps = {
     id: string
@@ -18,6 +18,7 @@ type CodeProps = {
     editingContent: string
     setEditingContent: Dispatch<SetStateAction<string>>
     displayLineNumbers: boolean
+    syntaxHighlighting: boolean
 }
 
 export default function Code({
@@ -30,7 +31,8 @@ export default function Code({
     setClickedWord,
     editingContent,
     setEditingContent,
-    displayLineNumbers
+    displayLineNumbers,
+    syntaxHighlighting
 }: CodeProps) {
     const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
@@ -71,10 +73,14 @@ export default function Code({
     useEffect(() => {
         if (codeRef.current) {
             codeRef.current.removeAttribute('data-highlighted')
-            codeRef.current.textContent = editingContent
-            hljs.highlightElement(codeRef.current)
+            if (syntaxHighlighting) {
+                codeRef.current.textContent = editingContent
+                hljs.highlightElement(codeRef.current)
+            } else {
+                codeRef.current.innerText = editingContent
+            }
         }
-    }, [editingContent])
+    }, [editingContent, syntaxHighlighting])
 
     useEffect(() => {
         if (!codeRef.current) return
@@ -85,12 +91,16 @@ export default function Code({
             }
 
             codeRef.current.removeAttribute('data-highlighted')
-            codeRef.current.textContent = editingContent
-            hljs.highlightElement(codeRef.current)
+            if (syntaxHighlighting) {
+                codeRef.current.textContent = editingContent
+                hljs.highlightElement(codeRef.current)
+            } else {
+                codeRef.current.innerText = editingContent
+            }
         }, 1000)
 
         return () => clearTimeout(timeout)
-    }, [lastEdit, share?.content])
+    }, [lastEdit, share?.content, syntaxHighlighting])
 
     useEffect(() => {
         if (!share) return
@@ -144,8 +154,12 @@ export default function Code({
 
         if (codeRef.current) {
             codeRef.current.removeAttribute('data-highlighted')
-            codeRef.current.textContent = editingContent
-            hljs.highlightElement(codeRef.current)
+            if (syntaxHighlighting) {
+                codeRef.current.textContent = editingContent
+                hljs.highlightElement(codeRef.current)
+            } else {
+                codeRef.current.innerText = editingContent
+            }
         }
 
         function sendUpdate() {
@@ -177,5 +191,6 @@ export default function Code({
         handleChange={handleChange}
         setClickedWord={setClickedWord}
         displayLineNumbers={displayLineNumbers}
+        syntaxHighlighting={syntaxHighlighting}
     />
 }

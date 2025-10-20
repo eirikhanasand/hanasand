@@ -246,3 +246,19 @@ body {
 @keyframes fadein {
   to { opacity: 1; }
 }
+
+.stroke-rgb {
+  stroke: var(--foreground);
+  animation: stroke-color-change 180s infinite alternate;
+}
+
+@keyframes stroke-color-change {
+  0%   { stroke: white; }
+  10%  { stroke: red; }
+  16.667%  { stroke: orange; }
+  33.333%  { stroke: green; }
+  50%  { stroke: lightblue; }
+  66.667%  { stroke: yellow; }
+  83.333%  { stroke: orange; }
+  100% { stroke: red; }
+}

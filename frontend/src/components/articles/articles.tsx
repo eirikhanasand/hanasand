@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from "next/link"
 import './animate.css'
 import fetchArticles from "@/utils/articles/fetchArticles"
-import { prettyDate } from '@/utils/prettyDate'
+import prettyDate from '@/utils/prettyDate'
 import ArticleNotification from './articleNotification'
 
 type ArticleProps = {
@@ -93,7 +93,7 @@ function Article({ article }: ArticleProps) {
                 <div className='p-5 text-foreground grid gap-2'>
                     <div className='flex justify-between w-full'>
                         <h1 className='text-lg font-semibold'>{title}</h1>
-                        <h1 className='text-gray-500/70 min-w-fit text-xs mt-1'>Published {prettyDate(new Date(created).toLocaleString())}</h1>
+                        <h1 className='text-gray-500/70 min-w-fit text-xs mt-1'>Published {prettyDate(new Date(created).toISOString())}</h1>
                     </div>
                     <p className='text-gray-500'>{metadata.description}</p>
                     {metadata.wordCount > 100

@@ -83,7 +83,7 @@ export default function Contact() {
                 </div>
                 <button
                     type="submit"
-                    className="grid w-[98%] mt-5 rounded-xl h-12 place-items-center text-xl text-white"
+                    className="grid w-[98%] mt-5 rounded-xl h-12 place-items-center text-xl text-foreground"
                     style={{
                         cursor: formik.isValid ? 'pointer' : 'not-allowed',
                         background: formik.isValid ? 'green' : 'red',

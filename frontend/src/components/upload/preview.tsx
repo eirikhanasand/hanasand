@@ -94,7 +94,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
     if (!url || !file) return null
 
     return (
-        <div className="bg-dark text-white p-4 rounded-lg w-full space-y-4 grid">
+        <div className="bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid">
             <div className='grid place-items-center'>
                 <ImagePreview file={file} url={url} />
             </div>
@@ -105,7 +105,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                         type="text"
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        className="w-full p-2 rounded bg-light text-white"
+                        className="w-full p-2 rounded bg-light text-foreground"
                     />
                 </label>
 
@@ -115,7 +115,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                         value={description}
                         onChange={e => setDescription(e.target.value)}
                         maxLength={1024}
-                        className="w-full h-fit p-2 rounded bg-light text-white"
+                        className="w-full h-fit p-2 rounded bg-light text-foreground"
                     />
                 </label>
 
@@ -125,7 +125,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                         type="text"
                         value={path || ''}
                         onChange={handlePathChange}
-                        className="w-full p-2 rounded bg-light text-white"
+                        className="w-full p-2 rounded bg-light text-foreground"
                     />
                     {checkingPath && <span className="text-xs text-gray-400">Checking availability...</span>}
                     {!pathAvailable && <span className="text-xs text-red-500">Path is taken</span>}
@@ -137,7 +137,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                         type="text"
                         value={type}
                         readOnly
-                        className="w-full p-2 rounded bg-light text-white cursor-not-allowed"
+                        className="w-full p-2 rounded bg-light text-foreground cursor-not-allowed"
                     />
                 </label>
             </div>

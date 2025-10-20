@@ -105,6 +105,8 @@ type Share = {
     id: string
     path: string
     content: string
+    wordCount: number
+    estimatedMinutes: number
     timestamp: string
     git: string
     locked: boolean

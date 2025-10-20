@@ -6,6 +6,7 @@ type EditorProps = {
     handleChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
     setClickedWord: (word: string) => void
     displayLineNumbers: boolean
+    syntaxHighlighting: boolean
 }
 
 type HandleKeyDownProps = {
@@ -18,11 +19,19 @@ type HandleKeyDownProps = {
     setHistoryIndex: Dispatch<SetStateAction<number>>
 }
 
-export default function Editor({ codeRef, editingContent, handleChange, setClickedWord, displayLineNumbers }: EditorProps) {
+export default function Editor({
+    codeRef,
+    editingContent,
+    handleChange,
+    setClickedWord,
+    displayLineNumbers,
+    syntaxHighlighting
+}: EditorProps) {
     const [history, setHistory] = useState<string[]>([])
     const [historyIndex, setHistoryIndex] = useState(-1)
-    const lineNumberRef = useRef<HTMLDivElement | null>(null)
+    const lineNumberRef = useRef<HTMLElement | null>(null)
     const [lineNumberWidth, setLineNumberWidth] = useState(0)
+    const lines = editingContent.split(/\r?\n/)
 
     function handleWordClick(e: React.MouseEvent<HTMLTextAreaElement>) {
         const textarea = e.currentTarget
@@ -36,62 +45,86 @@ export default function Editor({ codeRef, editingContent, handleChange, setClick
         setClickedWord(word)
     }
 
+    function handleScrollDiv(e: React.UIEvent<HTMLDivElement>) {
+        if (codeRef.current) {
+            const codePre = codeRef.current
+            if (codePre) {
+                codePre.scrollTop = e.currentTarget.scrollTop
+                codePre.scrollLeft = e.currentTarget.scrollLeft
+            }
+            handleScroll(e)
+        }
+    }
+
+    function handleScroll(e: React.UIEvent<HTMLDivElement | HTMLPreElement | HTMLTextAreaElement>) {
+        const current = e.currentTarget
+
+        document.querySelectorAll<HTMLElement>('.sync-scroll').forEach(el => {
+            if (el !== current) {
+                el.scrollTop = current.scrollTop
+            }
+        })
+    }
+
     useEffect(() => {
         if (lineNumberRef.current) {
-            setLineNumberWidth(lineNumberRef.current.offsetWidth);
+            setLineNumberWidth(lineNumberRef.current.offsetWidth)
         }
-    }, [editingContent])
+    }, [editingContent, syntaxHighlighting])
 
     return (
-        <main className="flex-1 relative overflow-hidden">
-            <h1 className={`absolute top-[6.7px] left-2 z-50 ${displayLineNumbers && 'pl-4'} pointer-events-none select-none text-gray-500`}>
+        <main className='w-full h-full relative overflow-hidden'>
+            <h1 className={`absolute top-[6.7px] z-50 left-4 ${displayLineNumbers && 'pl-4'} pointer-events-none select-none text-gray-500`}>
                 {editingContent.trim().length <= 0 && 'Hello world...'}
             </h1>
-            <div className="relative w-full h-full">
-                <pre
-                    className="hljs w-full h-full overflow-auto text-sm font-mono absolute top-0 left-0 m-0 flex p-2"
-                    style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}
-                    onScroll={(e) => {
-                        const textarea = e.currentTarget.nextSibling as HTMLTextAreaElement | null
-                        if (textarea) textarea.scrollTop = e.currentTarget.scrollTop
-                        if (textarea) textarea.scrollLeft = e.currentTarget.scrollLeft
-                    }}
-                >
-                    {displayLineNumbers && <code ref={lineNumberRef} className="select-none text-gray-500">
-                        {editingContent.split(/\r?\n/).map((_, i) => (
-                            <div key={i}>{i + 1}</div>
+            <div className={`hljs relative w-full h-full flex`}>
+                {displayLineNumbers && (
+                    <div
+                        // @ts-expect-error Not fully compatible because ref is
+                        // element specific, but its close enough (<div> vs <pre>)
+                        ref={lineNumberRef}
+                        className={`min-w-fit sync-scroll select-none text-gray-500 text-right pl-2 overflow-auto pt-[8px] noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                        onScroll={handleScrollDiv}
+                    >
+                        {lines.map((_, i) => (
+                            <h1 key={i} className='text-sm' style={{ color: 'var(--text-foreground)', opacity: 0.5 }}>
+                                {i + 1}
+                            </h1>
                         ))}
-                    </code>}
-                    <code style={{ padding: 0, paddingLeft: 6 }} ref={codeRef}>{editingContent}</code>
-                </pre>
+                    </div>
+                )}
 
-                <textarea
-                    value={editingContent}
-                    onChange={handleChange}
-                    onClick={handleWordClick}
-                    className="w-full h-full bg-transparent text-transparent resize-none rounded-lg p-2 text-sm font-mono outline-none caret-gray-200 absolute z-10"
-                    style={{
-                        whiteSpace: 'pre-wrap',
-                        wordWrap: 'break-word',
-                        overflow: 'auto',
-                        paddingLeft: displayLineNumbers ? `${lineNumberWidth + 14}px` : '14px'
-                    }}
-                    onKeyDown={(e) => HandleKeyDown({
-                        e,
-                        handleChange,
-                        editingContent,
-                        history,
-                        setHistory,
-                        historyIndex,
-                        setHistoryIndex
-                    })}
-                    onScroll={(e) => {
-                        const pre = e.currentTarget.previousSibling as HTMLTextAreaElement | null
-                        if (pre) pre.scrollTop = e.currentTarget.scrollTop
-                        if (pre) pre.scrollLeft = e.currentTarget.scrollLeft
-                    }}
-                />
+                <pre className={`sync-scroll -mt-[6px] overflow-auto text-sm font-mono ${lines.length > 100 ? 'pb-[100vh]' : ''}`}>
+                    <code ref={codeRef}>{editingContent}</code>
+                </pre>
             </div>
+            <textarea
+                value={editingContent}
+                onChange={handleChange}
+                onClick={handleWordClick}
+                onScroll={(e) => {
+                    const lineNumbers = lineNumberRef.current
+                    if (lineNumbers) {
+                        lineNumbers.scrollTop = e.currentTarget.scrollTop
+                        handleScroll(e)
+                    }
+                }}
+                className={`sync-scroll min-w-full min-h-full bg-transparent text-transparent resize-none rounded-lg pt-2 mr-2 text-sm font-mono overflow-auto outline-none caret-gray-200 absolute z-10 top-0 left-0 ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                style={{
+                    paddingLeft: displayLineNumbers ? `${lineNumberWidth + 14}px` : '14px',
+                    whiteSpace: 'pre',
+                    overflowWrap: 'normal',
+                }}
+                onKeyDown={(e) => HandleKeyDown({
+                    e,
+                    handleChange,
+                    editingContent,
+                    history,
+                    setHistory,
+                    historyIndex,
+                    setHistoryIndex
+                })}
+            />
         </main>
     )
 }
