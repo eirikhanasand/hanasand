@@ -1,8 +1,8 @@
 import fetchArticle from '@/utils/articles/fetchArticle'
-import { prettyDate } from '@/utils/prettyDate'
 import { redirect } from 'next/navigation'
 import MarkdownRender from '../markdown/markdown'
 import Link from 'next/link'
+import prettyDate from '@/utils/prettyDate'
 
 export default async function Article({ id }: { id: string }) {
     const article = await fetchArticle(id.endsWith('.md') ? id : `${id}.md`)
