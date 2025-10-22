@@ -46,7 +46,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/auth/token/:id', tokenHandler)
 
     // User handlers
-    fastify.get('users', getUsers)
+    fastify.get('/users', getUsers)
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)
@@ -69,7 +69,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/article/:id', getArticle)
     fastify.post('/article', postArticle)
     fastify.put('/article/:id', putArticle)
-    fastify.delete('article/:id', deleteArticle)
+    fastify.delete('/article/:id', deleteArticle)
 
     // Test handlers
     fastify.get('/test/:id', getTest)
