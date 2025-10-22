@@ -68,7 +68,7 @@ export default async function layout({children}: {children: ReactNode}) {
                     <div className='flex justify-end items-center'>
                         <ThemeSwitch />
                         {token ? <Dashboard /> : ''}
-                        {token ? <Logout /> : <Login />}
+                        {token ? <Logout baseStyles={baseStyles} /> : <Login />}
                     </div>
                 </header>
                 <div className='mt-[6.5vh] h-[93.5vh] w-full overflow-auto'>

@@ -48,7 +48,7 @@ function timeBasedGreeting({ name }: { name: string }) {
     } else if (hour >= 8 && hour < 12) {
         return `Good morning ${name}! Hope your day’s off to a great start.`;
     } else if (hour >= 12 && hour < 14) {
-        return `Good noon! Time for a lunch break ${name}?`;
+        return `Good day ${name}! Time for a lunch break?`;
     } else if (hour >= 14 && hour < 17) {
         return `Good afternoon ${name}! Keep up the good work.`;
     } else if (hour >= 17 && hour < 20) {
