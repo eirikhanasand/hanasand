@@ -4,7 +4,7 @@
   --background: #0a0a0a;
   --foreground: #ededed;
   --color-dark: #1a1a1a;
-  --color-dark-rgb: 26, 26, 26;
+  --color-dark-reverse: #222222;
   --color-normal: #171717;
   --color-light: #212121;
   --color-extralight: #323232;
@@ -25,7 +25,7 @@
   --background: #0a0a0a;
   --foreground: #ededed;
   --color-dark: #1a1a1a;
-  --color-dark-rgb: 26, 26, 26;
+  --color-dark-reverse: #222222;
   --color-normal: #171717;
   --color-light: #212121;
   --color-extralight: #323232;
@@ -37,7 +37,7 @@
   --background: #ffffff;
   --foreground: #171717;
   --color-dark: #e7e5dd;
-  --color-dark-rgb: 231, 229, 221;
+  --color-dark-reverse: #dad8d2;
   --color-normal: #e0e0e0;
   --color-light: #d6d6d6;
   --color-extralight: #c4c4c4;
@@ -92,6 +92,14 @@ body {
 
 .group:hover .upload {
   animation: drop-heavy 0.3s ease;
+}
+
+.dark .upload-overlay {
+  background: white;
+}
+
+.light .upload-overlay {
+  background:black;
 }
 
 @keyframes drop {
@@ -364,9 +372,16 @@ body {
   transition: text-shadow 0.3s ease, color 0.3s ease;
 }
 
-.group:hover .text-glow {
+.dark .group:hover .text-glow {
   text-shadow:
-    0 0 8px rgba(var(--color-dark-rgb), 0.8),
-    0 0 16px rgba(var(--color-dark-rgb), 0.6),
-    0 0 24px rgba(var(--color-dark-rgb), 0.4);
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 16px rgba(255, 255, 255, 0.8),
+    0 0 24px rgba(255, 255, 255, 0.7);
+}
+
+.light .group:hover .text-glow {
+  text-shadow:
+    0 0 8px rgba(226, 88, 34, 0.9),
+    0 0 16px rgba(226, 88, 34, 0.8),
+    0 0 24px rgba(226, 88, 34, 0.7);
 }

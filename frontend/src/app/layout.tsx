@@ -36,15 +36,16 @@ export default async function layout({children}: {children: ReactNode}) {
                             <div className={baseStyles}>
                                 <UploadIcon />
                             </div>
-                            <div className={`${!isUpload && 'hidden'} group-hover:block absolute pointer-events-none grid place-items-center w-[16px] h-[20px] -mt-[3px] overflow-hidden`}>
-                                <ArrowUp className={`stroke-[#e25822] stroke-[2.8px] bg-dark group-hover:bg-[#222222] h-[100px] z-100 self-center upload rounded-lg`} />
+                            <div className={`${!isUpload && 'hidden'} group-hover:block absolute pointer-events-none grid place-items-center w-[16px] h-[22px] -mt-[3px] overflow-hidden`}>
+                                <ArrowUp className={`stroke-[#e25822] stroke-[2.8px] bg-dark group-hover:bg-dark-reverse h-full z-10 self-center upload rounded-lg`} />
+                                <div className='upload-overlay absolute bottom-0 w-full h-[1.5px] z-20' />
                             </div>
-                        </Link> 
+                        </Link>
                         <Link href='/s' className='group relative grid place-items-center'>
                             <div className={baseStyles}>
                                 <FileCode />
                             </div>
-                            <Code className={`${!isShare && 'hidden'} group-hover:block absolute stroke-[#e25822] pointer-events-none stroke-4 bg-dark group-hover:bg-[#222222] w-[10px] h-[10px] mt-[5px] z-100`} />
+                            <Code className={`${!isShare && 'hidden'} group-hover:block absolute stroke-[#e25822] pointer-events-none stroke-4 bg-dark group-hover:bg-dark-reverse w-[10px] h-[10px] mt-[5px] z-100`} />
                         </Link> 
                         <Link href='/g' className={baseStyles}>
                             <LinkIcon className={`${isLink && 'stroke-blue-400'} group-hover:stroke-blue-400`} />
@@ -61,7 +62,7 @@ export default async function layout({children}: {children: ReactNode}) {
                     </div>
                     <div className='grid place-items-center w-full'>
                         <Link href='/' className='group w-fit grid place-items-center h-12 hover:bg-[#6464641a] px-10 rounded-lg cursor-pointer'>
-                            <h1 className='font-semibold text-bright group-hover:text-bright/70 text-glow'>hanasand</h1>
+                            <h1 className='font-semibold text-bright text-glow'>hanasand</h1>
                         </Link>
                     </div>
                     <div className='flex justify-end items-center'>
