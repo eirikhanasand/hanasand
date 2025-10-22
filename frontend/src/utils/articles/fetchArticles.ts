@@ -1,10 +1,5 @@
 import config from '@/config'
 
-type Articles = {
-    recent: Article[]
-    articles: Article[]
-}
-
 export default async function fetchArticles<T extends boolean>(
     recent?: T,
     backfill?: boolean

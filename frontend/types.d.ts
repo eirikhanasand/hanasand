@@ -147,3 +147,8 @@ type BreachFile = {
     file: string
     line: number
 }
+
+type Articles = {
+    recent: Article[]
+    articles: Article[]
+}
