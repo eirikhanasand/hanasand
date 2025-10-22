@@ -54,7 +54,7 @@ export default async function layout({children}: {children: ReactNode}) {
                             <div className={baseStyles}>
                                 <Eye />
                             </div>
-                            <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-red-500 w-[5px] h-[5px] absolute z-100 self-center`} />
+                            <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-[5px] h-[5px] absolute z-100 self-center`} />
                         </Link>
                         <Link href='/test' className={baseStyles}>
                             <Flame className={`group-hover:stroke-[#e25822] ${isTest && 'stroke-[#e25822]'}`} />

@@ -7,6 +7,10 @@
     fill: white
 }
 
+.dark .group:hover .theme-toggle_svg {
+    fill: yellow
+}
+
 .theme-toggle_sun-ray {
     transition: .4s;
 }
@@ -37,7 +41,17 @@
     fill: black;
 }
 
+.light .group:hover .theme-toggle_sun-moon {
+    transform: scale(1.9);
+    fill: #374c66;
+}
+
 .dark .theme-toggle_sun-moon {
     transform: scale(1);
     fill: white;
+}
+
+.dark .group:hover .theme-toggle_sun-moon {
+    transform: scale(1);
+    fill: yellow;
 }
