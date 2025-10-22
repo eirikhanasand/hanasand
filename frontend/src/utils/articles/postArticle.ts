@@ -4,7 +4,7 @@ import config from '@/config'
 import { getCookie } from '@/utils/cookies'
 
 export async function postArticle(id: string, content: string): Promise<{ status: number, message: string }> {
-    const token = getCookie('token')
+    const token = getCookie('access_token')
     const username = getCookie('id')
 
     if (!token || !id) {

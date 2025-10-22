@@ -9,7 +9,7 @@ export default function LoginIcon() {
     const [token, setToken] = useState(false)
 
     useEffect(() => {
-        const cookie = getCookie('token')
+        const cookie = getCookie('access_token')
         if (cookie) {
             setToken(Boolean(cookie))
         }
