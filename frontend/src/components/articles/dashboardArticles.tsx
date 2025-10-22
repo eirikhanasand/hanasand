@@ -10,7 +10,7 @@ export default async function DashboardArticles() {
         <div className='grid w-full p-2 outline-1 outline-dark rounded-lg gap-2'>
             <div className='flex justify-between'>
                 <h1 className='font-semibold text-lg self-center'>Articles</h1>
-                <Link href='/dashboard/articles/create' className='flex gap-2 rounded-lg p-2 px-6 border-2 border-normal cursor-pointer hover:bg-green-500'>
+                <Link href='/dashboard/articles/create' className='flex gap-2 rounded-lg p-[3px] px-5 border-2 border-normal cursor-pointer hover:bg-green-500'>
                     <Plus />
                     <h1 className='font-semibold'>Create</h1>
                 </Link>
