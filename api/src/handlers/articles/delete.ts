@@ -5,9 +5,15 @@ import { unlink } from 'fs/promises'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import commitAndPush from '#utils/git/commitAndPush.ts'
 import { join } from 'path'
+import tokenWrapper from '#utils/tokenWrapper.ts'
 
 export async function deleteArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
-    const id = req.params.id
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
+    const { id } = req.params
     const filePath = join(ARTICLES_DIR, id)
     let deleted = false
 

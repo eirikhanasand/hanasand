@@ -20,20 +20,27 @@ type Valid = {
  * if an error occured while verifying the token.
  */
 export default async function tokenWrapper(req: FastifyRequest, res: FastifyReply): Promise<Valid> {
-
     const authHeader = req.headers['authorization']
+    const id = req.headers['id']
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return {
             valid: false,
-            error: 'Missing or invalid Authorization header'
+            error: 'Missing or invalid Authorization header.'
+        }
+    }
+
+    if (!id) {
+        return {
+            valid: false,
+            error: 'No id provided.'
         }
     }
 
     const token = authHeader.split(' ')[1]
 
     try {
-        const response = await fetch(SELF_URL, {
+        const response = await fetch(`${SELF_URL}/${id}`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }

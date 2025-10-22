@@ -1,8 +1,14 @@
 import sanitize from '#utils/sanitize.ts'
+import tokenWrapper from '#utils/tokenWrapper.ts'
 import { exec } from 'child_process'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function restartHandler(req: FastifyRequest, res: FastifyReply) {
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
     const { id: Id } = req.params as { id: string }
     const id = sanitize(Id)
 

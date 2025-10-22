@@ -22,6 +22,8 @@ BEGIN
     END IF;
 END $$;
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- User table
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -49,9 +51,10 @@ CREATE TABLE IF NOT EXISTS attempts (
 
 -- Roles table
 CREATE TABLE IF NOT EXISTS roles (
-    id SERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     description TEXT,
+    priority INT NOT NULL DEFAULT 1000,
     created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -66,6 +69,15 @@ CREATE TABLE IF NOT EXISTS user_roles (
     PRIMARY KEY (user_id, role_id)
 );
 
+-- User table
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    password TEXT NOT NULL,
+    avatar TEXT NOT NULL
+);
+
+-- Load tests table
 CREATE TABLE IF NOT EXISTS load_tests (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -84,3 +96,25 @@ ALTER SYSTEM SET log_connections = 'on';
 ALTER SYSTEM SET log_disconnections = 'on';
 ALTER SYSTEM SET log_min_messages = 'info';
 SELECT pg_reload_conf();
+
+-- Creates the root user (required for creating roles)
+INSERT INTO users (id, name, password, avatar) 
+VALUES (
+    'administrator',
+    'Administrator',
+    crypt(encode(gen_random_bytes(32), 'base64'), gen_salt('bf', 12)),
+    ''
+);
+
+-- Creates initial roles
+INSERT INTO roles (id, name, priority, description, created_by) VALUES ('administrator', 'Administrator', 0, 'Administrators', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by) VALUES ('user_admin', 'User Administrator', 100, 'User Administrator', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by) VALUES ('users', 'Users', 200, 'Default role for all users. Gives base access to internal services.', 'administrator');
+
+-- Maps initial roles for the administrator
+INSERT INTO user_roles (user_id, role_id, assigned_by) 
+VALUES ('administrator', 'administrator', 'administrator');
+INSERT INTO user_roles (user_id, role_id, assigned_by) 
+VALUES ('administrator', 'user_admin', 'administrator');
+INSERT INTO user_roles (user_id, role_id, assigned_by) 
+VALUES ('administrator', 'users', 'administrator');

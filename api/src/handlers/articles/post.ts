@@ -1,13 +1,19 @@
 import commitAndPush from '#utils/git/commitAndPush.ts'
 import fileExists from '#utils/git/fileExists.ts'
 import { ARTICLES_DIR } from '#utils/git/git.ts'
+import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 
 export default async function postArticle(req: FastifyRequest<{ Params: { id: string }, Body: { content: string } }>, res: FastifyReply) {
-    const id = req.params.id
-    const content = req.body.content
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
+    const { id } = req.params as { id: string } ?? {}
+    const { content } = req.body as { content: string } ?? {}
     const filePath = join(ARTICLES_DIR, id)
 
     if (await fileExists(filePath)) {

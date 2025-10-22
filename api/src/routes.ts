@@ -6,7 +6,7 @@ import postUser from './handlers/user/post.ts'
 import logoutHandler from './handlers/auth/logout.ts'
 import postPwned from './handlers/pwned/post.ts'
 import tokenHandler from './handlers/user/token.ts'
-import getRoles from './handlers/roles/get.ts'
+import getRole from './handlers/roles/get.ts'
 import postRole from './handlers/roles/post.ts'
 import putRole from './handlers/roles/put.ts'
 import deleteRole from './handlers/roles/delete.ts'
@@ -16,6 +16,11 @@ import putArticle from './handlers/articles/put.ts'
 import getTest from './handlers/test/get.ts'
 import postTest from './handlers/test/post.ts'
 import restartHandler from './handlers/restart/getRestart.ts'
+import getRoles from './handlers/roles/getRoles.ts'
+import getRolesForUser from './handlers/roles/getRolesForUser.ts'
+import putUser from './handlers/user/putUser.ts'
+import deleteUser from './handlers/user/deleteUser.ts'
+import authorizedUserHandler from './handlers/user/fullUser.ts'
 
 /**
  * Defines the routes available in the API.
@@ -34,10 +39,15 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // User handlers
     fastify.get('/user/:id', getUser)
+    fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)
+    fastify.put('/user', putUser)
+    fastify.delete('/user', deleteUser)
 
     // Roles handlers
-    fastify.get('/role/:id', getRoles)
+    fastify.get('/role/:id', getRole)
+    fastify.get('/roles', getRoles)
+    fastify.get('/roles/user/:id', getRolesForUser)
     fastify.post('/role', postRole)
     fastify.put('/role/:id', putRole)
     fastify.delete('/role/:id', deleteRole)

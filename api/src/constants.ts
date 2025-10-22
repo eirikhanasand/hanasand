@@ -52,7 +52,8 @@ const config = {
     pwned: 'http://pwned:8080/api/pwned',
     pwned_ws: 'ws://pwned:8080/api/pwned/ws/',
     // pwned_ws: 'ws://localhost:8201/api/pwned/ws/',
-    github_articles_ssh: 'git@github.com:eirikhanasand/hanasand.git'
+    github_articles_ssh: 'git@github.com:eirikhanasand/hanasand.git',
+    self_url: 'https://api.hanasand.com/api/auth/token'
 }
 
 export default config

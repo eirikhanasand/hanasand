@@ -1,4 +1,5 @@
 import run from '#db'
+import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 /**
@@ -6,6 +7,16 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
  * Update a role's name or description
  */
 export default async function putRole(req: FastifyRequest, res: FastifyReply) {
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
+    const { valid: roleValid } = await tokenWrapper(req, res)
+    if (!roleValid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
     const { id } = req.params as { id: string }
     const { name, description } = req.body as { name?: string; description?: string }
 
