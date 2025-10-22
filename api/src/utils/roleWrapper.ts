@@ -1,9 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import config from '../constants.js'
-import { loadSQL } from './loadSQL.js'
+import { loadSQL } from '#utils/loadSQL.ts'
 import run from '#db'
-
-const { SELF_URL } = config
 
 type Valid = {
     valid: boolean

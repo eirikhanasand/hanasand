@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
-import config from '../constants.js'
+import config from '#constants'
 
 const { SELF_URL } = config
 
