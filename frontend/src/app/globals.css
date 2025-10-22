@@ -9,6 +9,7 @@
   --color-light: #212121;
   --color-extralight: #323232;
   --color-superlight: #424242;
+  --color-almostbright: #606060;
   --color-bright: white;
 }
 
@@ -30,6 +31,7 @@
   --color-light: #212121;
   --color-extralight: #323232;
   --color-superlight: #424242;
+  --color-almostbright: #606060;
   --color-bright: white;
 }
 
@@ -42,6 +44,7 @@
   --color-light: #d6d6d6;
   --color-extralight: #c4c4c4;
   --color-superlight: #b0b0b0;
+  --color-almostbright: #929090;
   --color-bright: black;
 }
 
