@@ -25,7 +25,7 @@ export default async function getUsers(req: FastifyRequest, res: FastifyReply) {
             return res.status(404).send({ error: `There are no users.` })
         }
 
-        return res.send(usersResult)
+        return res.send(usersResult.rows)
     } catch (error) {
         console.error(`Database error: ${JSON.stringify(error)}`)
         return res.status(500).send({ error: 'Internal Server Error' })

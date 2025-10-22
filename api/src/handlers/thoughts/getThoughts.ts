@@ -12,7 +12,7 @@ export default async function getThoughts(_: FastifyRequest, res: FastifyReply) 
             return res.status(404).send({ error: 'No thoughts found.' })
         }
 
-        return res.send(result)
+        return res.send(result.rows)
     } catch (error) {
         console.error(error)
         return res.status(500).send({ error: 'Internal Server Error.' })
