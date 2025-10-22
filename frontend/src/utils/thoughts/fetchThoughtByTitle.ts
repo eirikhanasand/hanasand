@@ -3,6 +3,10 @@ import config from '@/config'
 export default async function fetchThoughtByTitle(title: string): Promise<Thought[]> {
     try {
         const response = await fetch(`${config.url.api}/thoughts`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify({ title })
         })
 
