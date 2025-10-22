@@ -15,10 +15,11 @@ export async function middleware(req: NextRequest) {
         const token = tokenCookie.value
         const id = idCookie.value
         if (!validToken || !id) {
+            console.log("checking", token, id)
             validToken = await tokenIsValid(token, id)
 
             if (!validToken) {
-                console.log('invalid token middleware', token, id)
+                console.log("invalid", token, id)
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&expired=true'}`, req.url))
             }
         }

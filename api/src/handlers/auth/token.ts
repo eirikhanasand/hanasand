@@ -38,6 +38,7 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
             [id, token]
         )
 
+        console.log(JSON.stringify(tokenResult))
         if (!tokenResult.rows.length) {
             return res.status(401).send({ error: 'Invalid token.' })
         }
