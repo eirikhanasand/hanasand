@@ -69,7 +69,6 @@ export default function CreateClient() {
             )}
             <h1 className='font-semibold text-2xl'>{text}</h1>
             <div className='grid gap-5 w-full'>
-                {title.length > 10 && <h1 className='font-semibold z-10'>Title</h1>}
                 <Editor
                     editing={editing}
                     setEditing={setEditing}
