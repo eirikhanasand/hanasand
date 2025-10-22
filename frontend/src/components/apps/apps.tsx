@@ -21,7 +21,7 @@ export default function Apps() {
     ]
     
     return (
-        <div className='grid bg-normal'>
+        <div className='grid'>
             {apps.map((app, index) => {
                 return (
                     <AppView

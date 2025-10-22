@@ -85,10 +85,10 @@ function Article({ article }: ArticleProps) {
 
     return (
         <Link
-            className='hover:scale-[1.03] animate transition-1000 rounded-3xl cursor-pointer'
+            className='hover:scale-[1.03] transition-1000 rounded-3xl cursor-pointer'
             href={`/articles/${id}`}
         >
-            <article className='bg-dark w-full h-full max-h-[58vh] overflow-hidden rounded-2xl'>
+            <article className='outline-1 outline-dark w-full h-full max-h-[58vh] overflow-hidden rounded-2xl'>
                 {metadata.image && <Image className='w-full h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
                 <div className='p-5 text-foreground grid gap-2'>
                     <div className='flex justify-between w-full'>
