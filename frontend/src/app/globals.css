@@ -4,6 +4,7 @@
   --background: #0a0a0a;
   --foreground: #ededed;
   --color-dark: #1a1a1a;
+  --color-dark-rgb: 26, 26, 26;
   --color-normal: #171717;
   --color-light: #212121;
   --color-extralight: #323232;
@@ -24,6 +25,7 @@
   --background: #0a0a0a;
   --foreground: #ededed;
   --color-dark: #1a1a1a;
+  --color-dark-rgb: 26, 26, 26;
   --color-normal: #171717;
   --color-light: #212121;
   --color-extralight: #323232;
@@ -35,6 +37,7 @@
   --background: #ffffff;
   --foreground: #171717;
   --color-dark: #e7e5dd;
+  --color-dark-rgb: 231, 229, 221;
   --color-normal: #e0e0e0;
   --color-light: #d6d6d6;
   --color-extralight: #c4c4c4;
@@ -69,6 +72,24 @@ body {
   border: 2px solid var(--foreground);
   border-radius: 50%;
   background: transparent;
+}
+
+.group:hover .user-icon::before {
+  animation: head-drop 0.2s ease;
+}
+
+@keyframes head-drop {
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(2px);
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 /* Shoulders (arc outline) */
@@ -121,42 +142,53 @@ body {
 
 /* Marquee */
 @keyframes marquee {
-	0% {
-		transform: translateX(0);
-	}
+  0% {
+    transform: translateX(0);
+  }
 
-	20% {
-		transform: translateX(0);
-	}
+  20% {
+    transform: translateX(0);
+  }
 
-	70% {
-		transform: translateX(calc(-1 * var(--scroll-distance)));
-	}
+  70% {
+    transform: translateX(calc(-1 * var(--scroll-distance)));
+  }
 
-	90% {
-		transform: translateX(calc(-1 * var(--scroll-distance)));
-	}
+  90% {
+    transform: translateX(calc(-1 * var(--scroll-distance)));
+  }
 
-	100% {
-		transform: translateX(0);
-	}
+  100% {
+    transform: translateX(0);
+  }
 }
 
 .marquee {
-	display: inline-block;
-	vertical-align: top;
-	animation: marquee 12s linear infinite;
+  display: inline-block;
+  vertical-align: top;
+  animation: marquee 12s linear infinite;
 }
 
 @keyframes loading-line {
-  0%   { transform: translateX(-105%); opacity: 0.3; }
-  50%  { transform: translateX(0); opacity: 1; }
-  100% { transform: translateX(100%); opacity: 0.3; }
+  0% {
+    transform: translateX(-105%);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(100%);
+    opacity: 0.3;
+  }
 }
 
 .loading-line {
   @apply relative bg-red-500 rounded-full;
-  box-shadow: 
+  box-shadow:
     0 0 10px #ff0000,
     0 0 20px #ff0000,
     0 0 40px #ff0000,
@@ -166,9 +198,9 @@ body {
 }
 
 .glow-red {
-  box-shadow: 
-    0 0 1em rgba(255, 0, 0, 0.5), 
-    0 0 3em rgba(255, 0, 0, 0.4), 
+  box-shadow:
+    0 0 1em rgba(255, 0, 0, 0.5),
+    0 0 3em rgba(255, 0, 0, 0.4),
     0 0 8em rgba(255, 0, 0, 0.3),
     0 0 10em rgba(255, 0, 0, 0.2),
     0 0 12em rgba(255, 0, 0, 0.1),
@@ -177,15 +209,15 @@ body {
 }
 
 .glow-red-small {
-  box-shadow: 
-    0 0 1em rgba(255, 0, 0, 0.4), 
+  box-shadow:
+    0 0 1em rgba(255, 0, 0, 0.4),
     0 0 3em rgba(255, 0, 0, 0.3);
 }
 
 .glow-blue {
-  box-shadow: 
-    0 0 1em rgba(0, 72, 255, 0.5), 
-    0 0 3em rgba(0, 72, 255, 0.4), 
+  box-shadow:
+    0 0 1em rgba(0, 72, 255, 0.5),
+    0 0 3em rgba(0, 72, 255, 0.4),
     0 0 8em rgba(0, 72, 255, 0.3),
     0 0 10em rgba(0, 72, 255, 0.2),
     0 0 12em rgba(0, 72, 255, 0.05),
@@ -194,15 +226,15 @@ body {
 }
 
 .glow-blue-small {
-  box-shadow: 
-    0 0 1em rgba(0, 72, 255, 0.4), 
+  box-shadow:
+    0 0 1em rgba(0, 72, 255, 0.4),
     0 0 3em rgba(0, 72, 255, 0.3);
 }
 
 .glow-green {
-  box-shadow: 
-    0 0 1em rgba(4, 207, 4, 0.5), 
-    0 0 3em rgba(4, 207, 4, 0.4), 
+  box-shadow:
+    0 0 1em rgba(4, 207, 4, 0.5),
+    0 0 3em rgba(4, 207, 4, 0.4),
     0 0 8em rgba(4, 207, 4, 0.3),
     0 0 10em rgba(4, 207, 4, 0.2),
     0 0 12em rgba(4, 207, 4, 0.05),
@@ -211,9 +243,9 @@ body {
 }
 
 .glow-orange {
-  box-shadow: 
-    0 0 1em rgba(253, 135, 56, 0.5), 
-    0 0 3em rgba(253, 135, 56, 0.4), 
+  box-shadow:
+    0 0 1em rgba(253, 135, 56, 0.5),
+    0 0 3em rgba(253, 135, 56, 0.4),
     0 0 8em rgba(253, 135, 56, 0.3),
     0 0 10em rgba(253, 135, 56, 0.2),
     0 0 12em rgba(253, 135, 56, 0.05),
@@ -221,36 +253,42 @@ body {
     inset 0 0 2em rgba(253, 135, 56, 0.15);
 }
 
+.glow-orange-small {
+  box-shadow:
+    0 0 1em rgba(253, 135, 56, 0.4),
+    0 0 3em rgba(253, 135, 56, 0.3);
+}
+
 .eh {
-    background: conic-gradient(
-        crimson,
-        coral,
-        gold,
-        yellow,
-        limegreen,
-        cyan,
-        purple,
-        coral,
-        crimson
-    );
-    background-clip: text;
-    color: transparent;
-    background-size: 200vw 200vh;
-    animation: rgb 20s infinite linear;
-    text-align: center;
-    font-weight: bold;
+  background: conic-gradient(crimson,
+      coral,
+      gold,
+      yellow,
+      limegreen,
+      cyan,
+      purple,
+      coral,
+      crimson);
+  background-clip: text;
+  color: transparent;
+  background-size: 200vw 200vh;
+  animation: rgb 20s infinite linear;
+  text-align: center;
+  font-weight: bold;
 }
 
 .fadein {
   transform: translateZ(0);
-  -webkit-transform: translate3d(0,0,0);
+  -webkit-transform: translate3d(0, 0, 0);
   will-change: filter, transform;
   opacity: 0;
   animation: fadein 0.5s forwards;
 }
 
 @keyframes fadein {
-  to { opacity: 1; }
+  to {
+    opacity: 1;
+  }
 }
 
 .stroke-rgb {
@@ -259,12 +297,46 @@ body {
 }
 
 @keyframes stroke-color-change {
-  0%   { stroke: white; }
-  10%  { stroke: red; }
-  16.667%  { stroke: orange; }
-  33.333%  { stroke: green; }
-  50%  { stroke: lightblue; }
-  66.667%  { stroke: yellow; }
-  83.333%  { stroke: orange; }
-  100% { stroke: red; }
+  0% {
+    stroke: white;
+  }
+
+  10% {
+    stroke: red;
+  }
+
+  16.667% {
+    stroke: orange;
+  }
+
+  33.333% {
+    stroke: green;
+  }
+
+  50% {
+    stroke: lightblue;
+  }
+
+  66.667% {
+    stroke: yellow;
+  }
+
+  83.333% {
+    stroke: orange;
+  }
+
+  100% {
+    stroke: red;
+  }
+}
+
+.text-glow {
+  transition: text-shadow 0.3s ease, color 0.3s ease;
+}
+
+.group:hover .text-glow {
+  text-shadow:
+    0 0 8px rgba(var(--color-dark-rgb), 0.8),
+    0 0 16px rgba(var(--color-dark-rgb), 0.6),
+    0 0 24px rgba(var(--color-dark-rgb), 0.4);
 }

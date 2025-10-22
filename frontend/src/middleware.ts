@@ -5,7 +5,7 @@ export async function middleware(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
     const idCookie = req.cookies.get('id')
     const path = req.nextUrl.pathname
-    let validToken = false
+    let validToken: boolean | 'noroot' = false
 
     if (!pathIsAllowedWhileUnauthorized(path)) {
         if (!tokenCookie || !idCookie) {
@@ -16,6 +16,10 @@ export async function middleware(req: NextRequest) {
         const id = idCookie.value
         if (!validToken || !id) {
             validToken = await tokenIsValid(token, id)
+            if (validToken === 'noroot') {
+                return NextResponse.redirect(new URL('/register?noroot=true', req.url))
+            }
+
             if (!validToken) {
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&expired=true'}`, req.url))
             }
@@ -25,6 +29,7 @@ export async function middleware(req: NextRequest) {
     const theme = req.cookies.get('theme')?.value || 'dark'
     const res = NextResponse.next()
     res.headers.set('x-theme', theme)
+    res.headers.set('x-current-path', req.nextUrl.pathname)
     return res
 }
 
@@ -36,7 +41,7 @@ function pathIsAllowedWhileUnauthorized(path: string) {
     return true
 }
 
-async function tokenIsValid(token: string, id: string): Promise<boolean> {
+async function tokenIsValid(token: string, id: string): Promise<boolean | 'noroot'> {
     try {
         const response = await fetch(`${config.url.api}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -44,6 +49,11 @@ async function tokenIsValid(token: string, id: string): Promise<boolean> {
 
         if (!response.ok) {
             throw new Error(`Failed to connect to API: ${await response.text()}`)
+        }
+
+        const data = await response.json()
+        if (data.noRoot) {
+            return 'noroot'
         }
 
         return true
