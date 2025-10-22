@@ -21,10 +21,10 @@ export default function CreateClient() {
         }
 
         const result = await postThought(title)
-        if (result.status === 200) {
-            router.push(`/dashboard/thoughts?message=${result.message}`)
+        if (result.status === 201) {
+            return router.push(`/dashboard/thoughts?message=${result.message}`)
         } else {
-            setError(result.message)
+            return setError(result.message)
         }
     }
 
