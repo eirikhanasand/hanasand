@@ -17,7 +17,7 @@ export default async function Page() {
 
     return (
         <div className='h-full'>
-            <div className='p-16 grid gap-2'>
+            <div className='px-16 py-8 grid gap-2'>
                 <div className='grid w-full p-2 rounded-lg'>
                     <h1 className='text-2xl font-semibold'>{text}</h1>
                 </div>
