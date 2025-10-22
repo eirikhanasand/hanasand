@@ -6,14 +6,14 @@ type ImagePreviewProps = {
 }
 
 export default function ImagePreview({file, url}: ImagePreviewProps) {
-    if (file?.type.startsWith("image/")) {
+    if (file?.type.startsWith('image/')) {
         return (
             <Image
                 src={url}
-                alt="Preview"
+                alt='Preview'
                 width={300}
                 height={300}
-                className="max-w-xs rounded-lg shadow-md"
+                className='max-w-xs rounded-lg shadow-md'
             />
         )
     }
@@ -21,7 +21,7 @@ export default function ImagePreview({file, url}: ImagePreviewProps) {
         <video
             src={url}
             controls
-            className="max-w-xs rounded-lg shadow-md"
+            className='max-w-xs rounded-lg shadow-md'
         />
     )
 }

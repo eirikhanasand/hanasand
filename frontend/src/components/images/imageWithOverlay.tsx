@@ -9,12 +9,12 @@ export default async function ImageWithOverlay({ image, path }: { image: string,
     return (
         <LinkIfPath path={path}>
             <div
-                className="fadein absolute -inset-[1px] scale-[1.15] rounded-full brightness-[0.8] saturate-[150%] blur-[30px] pointer-events-none z-0"
+                className='fadein absolute -inset-[1px] scale-[1.15] rounded-full brightness-[0.8] saturate-[150%] blur-[30px] pointer-events-none z-0'
                 style={{
                     backgroundColor: hex || 'transparent',
                     backgroundImage: `url(${image})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
                 }}
             />
             <Image

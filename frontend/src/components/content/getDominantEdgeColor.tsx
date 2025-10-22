@@ -1,4 +1,4 @@
-import sharp from "sharp"
+import sharp from 'sharp'
 
 export default async function getDominantEdgeColor(imagePath: string): Promise<{ rgb: string | null, hex: string | null }> {
     const path = `public${imagePath}`
@@ -59,7 +59,7 @@ export default async function getDominantEdgeColor(imagePath: string): Promise<{
     g = Math.round(g / count)
     b = Math.round(b / count)
 
-    const toHex = (v: number) => v.toString(16).padStart(2, "0")
+    const toHex = (v: number) => v.toString(16).padStart(2, '0')
     return {
         rgb: `rgb(${r}, ${g}, ${b})`,
         hex: `#${toHex(r)}${toHex(g)}${toHex(b)}`

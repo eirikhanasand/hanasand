@@ -11,7 +11,7 @@ export default async function checkPwned(password: string): Promise<{ count: num
         })
 
         if (!response.ok) {
-            throw new Error("Error occured while querying pwned API.")
+            throw new Error('Error occured while querying pwned API.')
         }
 
         const data = await response.json()

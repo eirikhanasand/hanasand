@@ -27,7 +27,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         e.preventDefault()
         const result = await postLink(id, path)
         if (typeof result === 'number') {
-            return setError("This path is already taken.")
+            return setError('This path is already taken.')
         }
 
         if (!result) {
@@ -77,7 +77,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                 required
             />
             <button
-                type="submit"
+                type='submit'
                 className={`${color} w-full rounded-lg px-2 py-1 text-gray-300`}
             >
                 <h1>Test</h1>

@@ -10,7 +10,7 @@ type PwnedSearchProps = {
 }
 
 type BreachMessage = {
-    type: "update"
+    type: 'update'
     timestamp: string
     ok?: boolean
     file?: string
@@ -112,7 +112,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                     )}
                     <div ref={ref} className='min-w-full grid place-items-center'>
                         {loading && (
-                            <div key={ref.current?.offsetWidth} className="h-[2px] bg-red-500 loading-line w-1/3" />
+                            <div key={ref.current?.offsetWidth} className='h-[2px] bg-red-500 loading-line w-1/3' />
                         )}
                     </div>
                 </div>

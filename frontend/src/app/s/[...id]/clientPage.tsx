@@ -17,7 +17,7 @@ export default function ClientPage({ id, randomId }: { id: string, randomId: str
     const [share, setShare] = useState<Share | null>(null)
 
     return (
-        <div className="flex w-full h-full max-w-[100vw]">
+        <div className='flex w-full h-full max-w-[100vw]'>
             <Explorer showExplorer={showExplorer} setShowExplorer={setShowExplorer} />
             <div className={`flex-1 flex flex-col min-h-full w-full ${showExplorer && showMetadata && 'max-w-[66vw]'} bg-light text-foreground`}>
                 <Code

@@ -12,8 +12,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className="h-full">
-            <div className="p-16">
+        <div className='h-full'>
+            <div className='p-16'>
                 <EditorClient article={article} />
             </div>
         </div>

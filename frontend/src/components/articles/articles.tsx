@@ -1,7 +1,7 @@
 import Image from 'next/image'
-import Link from "next/link"
+import Link from 'next/link'
 import './animate.css'
-import fetchArticles from "@/utils/articles/fetchArticles"
+import fetchArticles from '@/utils/articles/fetchArticles'
 import prettyDate from '@/utils/prettyDate'
 import ArticleNotification from './articleNotification'
 
@@ -39,9 +39,9 @@ export default async function Articles({
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 
     return (
-        <div className="p-8 md:p-16">
+        <div className='p-8 md:p-16'>
             {message && <ArticleNotification message={message} />}
-            <h1 className="text-foreground text-2xl font-semibold">Articles</h1>
+            <h1 className='text-foreground text-2xl font-semibold'>Articles</h1>
             <Recent recent={articles} max={max} includeTitle={includeRecentTitle} />
             {recent && articles.length > 0 && <All recent={displayed} max={max} includeTitle={includeRecentTitle} />}
         </div>
@@ -85,11 +85,11 @@ function Article({ article }: ArticleProps) {
 
     return (
         <Link
-            className="hover:scale-[1.03] animate transition-1000 rounded-3xl cursor-pointer"
+            className='hover:scale-[1.03] animate transition-1000 rounded-3xl cursor-pointer'
             href={`/articles/${id}`}
         >
             <article className='bg-dark w-full h-full max-h-[58vh] overflow-hidden rounded-2xl'>
-                {metadata.image && <Image className="w-full h-[55%] object-cover" src={metadata.image} alt={title} width={800} height={450} />}
+                {metadata.image && <Image className='w-full h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
                 <div className='p-5 text-foreground grid gap-2'>
                     <div className='flex justify-between w-full'>
                         <h1 className='text-lg font-semibold'>{title}</h1>
@@ -97,7 +97,7 @@ function Article({ article }: ArticleProps) {
                     </div>
                     <p className='text-gray-500'>{metadata.description}</p>
                     {metadata.wordCount > 100
-                        ? <h1 className="text-foreground text-lg">See more →</h1>
+                        ? <h1 className='text-foreground text-lg'>See more →</h1>
                         : <h1 className='text-red-400'>This article is coming soon! &lt;3
                         </h1>}
                 </div>

@@ -85,7 +85,7 @@ export default function Metadata({
                     <InfoIcon className={!isConnected ? color : 'stroke-light/50 group-hover:stroke-bright'} />
                 </h1>
                 {isConnected && (
-                    <h1 className="flex gap-2 text-light/50 group-hover:text-bright">
+                    <h1 className='flex gap-2 text-light/50 group-hover:text-bright'>
                         {participants}
                         <Eye className={color} />
                     </h1>

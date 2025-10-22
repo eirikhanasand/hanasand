@@ -16,7 +16,7 @@ fastify.register(cors, {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD']
 })
 
-fastify.register(ws, { prefix: "/api" })
+fastify.register(ws, { prefix: '/api' })
 fastify.register(apiRoutes, { prefix: '/api' })
 fastify.get('/', IndexHandler)
 

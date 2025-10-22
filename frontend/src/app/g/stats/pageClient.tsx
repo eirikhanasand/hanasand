@@ -65,7 +65,7 @@ export default function LinkStatsPageClient() {
                             required
                         />
                         <button
-                            type="submit"
+                            type='submit'
                             className={`${color} w-full rounded-lg px-2 py-1 text-gray-300`}
                         >
                             <h1>Search</h1>

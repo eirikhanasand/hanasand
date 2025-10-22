@@ -15,7 +15,7 @@ export default async function git(cmd: string) {
     await ensureRepo()
 
     try {
-        const { stdout, stderr } = await execAsync(`git -C "${LOCAL_REPO_PATH}" ${cmd}`)
+        const { stdout, stderr } = await execAsync(`git -C '${LOCAL_REPO_PATH}' ${cmd}`)
         if (stderr) {
             console.error(stderr)
         }
@@ -33,7 +33,7 @@ async function ensureRepo() {
         await fs.access(LOCAL_REPO_PATH)
     } catch {
         console.log('Cloning repository...')
-        await execAsync(`git clone ${config.github_articles_ssh} "${LOCAL_REPO_PATH}"`)
+        await execAsync(`git clone ${config.github_articles_ssh} '${LOCAL_REPO_PATH}'`)
     }
 
     try {
@@ -43,9 +43,9 @@ async function ensureRepo() {
     }
 
     try {
-        await execAsync(`git -C "${LOCAL_REPO_PATH}" rev-parse --abbrev-ref --symbolic-full-name @{u}`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' rev-parse --abbrev-ref --symbolic-full-name @{u}`)
     } catch {
         console.log('Setting upstream to origin/main...')
-        await execAsync(`git -C "${LOCAL_REPO_PATH}" branch --set-upstream-to=origin/main main`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/main main`)
     }
 }

@@ -57,7 +57,7 @@ marked.use({
             return `<pre class='${className}'><code style='${style}' class='hljs ${language}'>${text}</code></pre>`
         },
         image(token) {
-            const width = 'width="300"'
+            const width = 'width=\'300\''
             return `<img src='${token.href}' alt='${token.title}' ${width} />`
         },
         link(token) {

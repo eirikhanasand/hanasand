@@ -1,4 +1,4 @@
-import Articles from "@/components/articles/articles"
+import Articles from '@/components/articles/articles'
 
 export default async function Page({
     searchParams,
@@ -10,7 +10,7 @@ export default async function Page({
     const errorPath = Array.isArray(params.path) ? params.path[0] : params.path
 
     return (
-        <div className="h-full grid relative">
+        <div className='h-full grid relative'>
             <Articles recent error={error} errorPath={errorPath} backfill={false} />
         </div>
     )

@@ -33,9 +33,9 @@ export default async function Page({
                     {created && <Link href='/test' className='absolute bottom-0 right-16 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                         <ArrowLeft />
                     </Link> }
-                    <div className="-ml-4 flex w-full absolute bottom-0 p-4">
+                    <div className='-ml-4 flex w-full absolute bottom-0 p-4'>
                         <div className='w-12' />
-                        <h1 className="flex-1 rounded-lg w-full grid place-items-center text-superlight text-center md:text-left text-sm md:text-base">
+                        <h1 className='flex-1 rounded-lg w-full grid place-items-center text-superlight text-center md:text-left text-sm md:text-base'>
                             Only test websites you have permission to test.
                         </h1>
                     </div>

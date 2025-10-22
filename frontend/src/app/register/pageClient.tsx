@@ -9,9 +9,10 @@ import { useEffect, useState } from 'react'
 type RegisterPageProps = {
     path: string | null
     serverInternal: boolean
+    noroot: boolean
 }
 
-export default function RegisterPageClient({ path, serverInternal }: RegisterPageProps) {
+export default function RegisterPageClient({ path, serverInternal, noroot }: RegisterPageProps) {
     const [error, setError] = useState('')
     const [name, setName] = useState('')
     const [username, setUsername] = useState('')
@@ -36,7 +37,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
         if (!passwordIsValid) {
-            return setError("Invalid password. Check the requirements.")
+            return setError('Invalid password. Check the requirements.')
         }
 
         const formData = new FormData(e.currentTarget)
@@ -141,11 +142,16 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>
-            {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>{path} is internal. Please log in.</h1>}
+            {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
+                {path} is internal. Please log in.
+            </h1>}
+            {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
+                {path} is internal. Please log in.
+            </h1>}
             <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
-                        {"hanasand.com"}
+                        hanasand.com
                     </h1>
                     <div className='grid place-items-center gap-4'>
                         <div className='grid gap-4 max-w-xs'>

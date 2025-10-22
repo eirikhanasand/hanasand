@@ -70,7 +70,7 @@ export default function PwnedPageClient() {
                                     className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                                 />
                                 <button
-                                    type="submit"
+                                    type='submit'
                                     className={`${color} w-full rounded-lg px-2 py-1 text-gray-300`}
                                 >
                                     <h1>Check</h1>
@@ -80,15 +80,15 @@ export default function PwnedPageClient() {
                     }
                 </div>
             </div>
-            <div className="-ml-4 flex w-full absolute bottom-0 p-4">
+            <div className='-ml-4 flex w-full absolute bottom-0 p-4'>
                 <div className='w-12' />
-                <h1 className="flex-1 rounded-lg w-full grid place-items-center text-superlight text-center md:text-left text-sm md:text-base">
+                <h1 className='flex-1 rounded-lg w-full grid place-items-center text-superlight text-center md:text-left text-sm md:text-base'>
                     {didSearch ? '' : 'Check if your password exists in any common breach file'}
                 </h1>
                 <div className='grid items-end w-12'>
                     {didSearch && <button
                         onClick={clear}
-                        className="rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer"
+                        className='rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'
                     >
                         <ArrowLeft />
                     </button>}

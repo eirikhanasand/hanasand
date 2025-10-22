@@ -1,6 +1,6 @@
-import React from "react"
+import React from 'react'
 import './apps.css'
-import Image from "next/image"
+import Image from 'next/image'
 
 type AppViewProps = {
     text: string
@@ -11,17 +11,17 @@ type AppViewProps = {
 export default function Apps() {
     const apps = [
         {
-            text: "Follow up on activities, even when offline",
-            image: "/images/assets/iphone-events.png"
+            text: 'Follow up on activities, even when offline',
+            image: '/images/assets/iphone-events.png'
         },
         {
-            text: "Or explore potential designs for other apps",
-            image: "/images/assets/pecubit.png"
+            text: 'Or explore potential designs for other apps',
+            image: '/images/assets/pecubit.png'
         },
     ]
     
     return (
-        <div className="grid bg-normal">
+        <div className='grid bg-normal'>
             {apps.map((app, index) => {
                 return (
                     <AppView
@@ -43,8 +43,8 @@ function AppView({text, image, reverse}: AppViewProps) {
     if (reverse) {
         return (
             <div className='grid md:grid-cols-2'>
-                <div className="left_div grid place-items-center px-20">
-                    <p className="text-center text-5xl py-50 md:py-0 md:text-7xl text-balance">{text}</p>
+                <div className='left_div grid place-items-center px-20'>
+                    <p className='text-center text-5xl py-50 md:py-0 md:text-7xl text-balance'>{text}</p>
                 </div>
                 <AppImage image={image} />
             </div>
@@ -54,8 +54,8 @@ function AppView({text, image, reverse}: AppViewProps) {
     return (
         <div className='flex md:grid flex-col-reverse md:grid-cols-2'>
             <AppImage image={image} />
-            <div className="left_div grid place-items-center px-20">
-                <p className="text-center py-50 md:py-0 text-5xl md:text-7xl text-balance">{text}</p>
+            <div className='left_div grid place-items-center px-20'>
+                <p className='text-center py-50 md:py-0 text-5xl md:text-7xl text-balance'>{text}</p>
             </div>
         </div>
     )
@@ -63,12 +63,12 @@ function AppView({text, image, reverse}: AppViewProps) {
 
 function AppImage({image}: {image: string}) {
     return (
-        <div className="grid place-items-center">
+        <div className='grid place-items-center'>
             <Image
                 height={900}
                 width={450} 
                 src={image}
-                alt="React Native Gambling App" 
+                alt='React Native Gambling App' 
                 quality={100}
             />
         </div>

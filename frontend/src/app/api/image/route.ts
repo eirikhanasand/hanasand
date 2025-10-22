@@ -8,8 +8,8 @@ export async function GET(req: Request) {
     }
 
     try {
-        if (url.toString().includes("https://")) {
-            const parts = url.toString().split("https://")
+        if (url.toString().includes('https://')) {
+            const parts = url.toString().split('https://')
             if (parts.length > 2) {
                 url = `https://${parts[1]}`
             }
@@ -48,28 +48,28 @@ async function fetchTenorDirectMedia(url: string) {
             throw new Error(`Failed to fetch URL: ${response.status}`)
         }
 
-        let contentType = response.headers.get("content-type") || ""
-        if (url.includes("tenor.com") && contentType.includes("text/html")) {
+        let contentType = response.headers.get('content-type') || ''
+        if (url.includes('tenor.com') && contentType.includes('text/html')) {
             const html = await response.text()
-            const matches = Array.from(html.matchAll(/https:\/\/[^/]+\/[^\s"']+\.(gif|mp4|webm)/g))
+            const matches = Array.from(html.matchAll(/https:\/\/[^/]+\/[^\s'']+\.(gif|mp4|webm)/g))
             if (!matches.length) {
-                throw new Error("No media URLs found")
+                throw new Error('No media URLs found')
             }
 
-            const mediaUrl = matches[0][0].replace('/m/', '/').replace(/^https:\/\/[^/]+/, "https://c.tenor.com")
+            const mediaUrl = matches[0][0].replace('/m/', '/').replace(/^https:\/\/[^/]+/, 'https://c.tenor.com')
             response = await fetch(mediaUrl)
 
             if (!response.ok) {
-                throw new Error("Failed to fetch media URL")
+                throw new Error('Failed to fetch media URL')
             }
 
-            contentType = response.headers.get("content-type") || "application/octet-stream"
+            contentType = response.headers.get('content-type') || 'application/octet-stream'
             return { buffer: await response.arrayBuffer(), contentType }
         }
 
         return { buffer: await response.arrayBuffer(), contentType }
     } catch (err) {
-        console.error("Error fetching Tenor media:", err)
+        console.error('Error fetching Tenor media:', err)
         throw err
     }
 }

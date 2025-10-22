@@ -94,67 +94,67 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
     if (!url || !file) return null
 
     return (
-        <div className="bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid">
+        <div className='bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid'>
             <div className='grid place-items-center'>
                 <ImagePreview file={file} url={url} />
             </div>
-            <div className="space-y-2">
-                <label className="block">
-                    <span className="text-sm font-semibold">Name</span>
+            <div className='space-y-2'>
+                <label className='block'>
+                    <span className='text-sm font-semibold'>Name</span>
                     <input
-                        type="text"
+                        type='text'
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        className="w-full p-2 rounded bg-light text-foreground"
+                        className='w-full p-2 rounded bg-light text-foreground'
                     />
                 </label>
 
-                <label className="block">
-                    <span className="text-sm font-semibold">Description</span>
+                <label className='block'>
+                    <span className='text-sm font-semibold'>Description</span>
                     <textarea
                         value={description}
                         onChange={e => setDescription(e.target.value)}
                         maxLength={1024}
-                        className="w-full h-fit p-2 rounded bg-light text-foreground"
+                        className='w-full h-fit p-2 rounded bg-light text-foreground'
                     />
                 </label>
 
-                <label className="block">
-                    <span className="text-sm font-semibold">Path</span>
+                <label className='block'>
+                    <span className='text-sm font-semibold'>Path</span>
                     <input
-                        type="text"
+                        type='text'
                         value={path || ''}
                         onChange={handlePathChange}
-                        className="w-full p-2 rounded bg-light text-foreground"
+                        className='w-full p-2 rounded bg-light text-foreground'
                     />
-                    {checkingPath && <span className="text-xs text-gray-400">Checking availability...</span>}
-                    {!pathAvailable && <span className="text-xs text-red-500">Path is taken</span>}
+                    {checkingPath && <span className='text-xs text-gray-400'>Checking availability...</span>}
+                    {!pathAvailable && <span className='text-xs text-red-500'>Path is taken</span>}
                 </label>
 
-                <label className="block">
-                    <span className="text-sm font-semibold">File Type</span>
+                <label className='block'>
+                    <span className='text-sm font-semibold'>File Type</span>
                     <input
-                        type="text"
+                        type='text'
                         value={type}
                         readOnly
-                        className="w-full p-2 rounded bg-light text-foreground cursor-not-allowed"
+                        className='w-full p-2 rounded bg-light text-foreground cursor-not-allowed'
                     />
                 </label>
             </div>
 
-            {error && <div className="text-red-500 text-sm">{error}</div>}
+            {error && <div className='text-red-500 text-sm'>{error}</div>}
 
-            <div className="flex justify-end gap-2">
+            <div className='flex justify-end gap-2'>
                 <button
                     onClick={handleDiscard}
-                    className="px-4 py-2 bg-light hover:bg-light/90 rounded cursor-pointer"
+                    className='px-4 py-2 bg-light hover:bg-light/90 rounded cursor-pointer'
                 >
                     Discard
                 </button>
                 <button
                     onClick={handleUpload}
                     disabled={uploading || !pathAvailable}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded disabled:opacity-50 cursor-pointer"
+                    className='px-4 py-2 bg-green-600 hover:bg-green-500 rounded disabled:opacity-50 cursor-pointer'
                 >
                     {uploading ? 'Uploading...' : 'Upload'}
                 </button>

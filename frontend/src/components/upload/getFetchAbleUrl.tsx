@@ -9,15 +9,15 @@ export default function getFetchableUrl(url: string): string {
         const path = u.pathname
 
         // -------- TENOR --------
-        if (host.includes("tenor.com")) {
-            if (host === "c.tenor.com") return url
+        if (host.includes('tenor.com')) {
+            if (host === 'c.tenor.com') return url
             return url
         }
 
         // -------- GIPHY --------
-        if (host.includes("giphy.com")) {
+        if (host.includes('giphy.com')) {
             // Direct media URL
-            if (host === "media.giphy.com") return url
+            if (host === 'media.giphy.com') return url
             // Convert /gifs/<slug>-<id> to media
             const gifMatch = path.match(/gifs\/[^-]+-([a-zA-Z0-9]+)/)
             if (gifMatch) {
@@ -27,9 +27,9 @@ export default function getFetchableUrl(url: string): string {
         }
 
         // -------- IMGUR --------
-        if (host.includes("imgur.com")) {
+        if (host.includes('imgur.com')) {
             // Direct image URL
-            if (host === "i.imgur.com") return url
+            if (host === 'i.imgur.com') return url
             // Convert /gallery/<id> or /a/<id> to direct image
             const imgMatch = path.match(/(?:gallery|a)\/([a-zA-Z0-9]+)/)
             if (imgMatch) {

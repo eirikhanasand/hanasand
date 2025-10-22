@@ -73,32 +73,32 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             <div className='w-full h-full grid place-items-center bg-light'>
                 <div className='flex flex-col items-center gap-4'>
                     <label
-                        htmlFor="fileInput"
-                        className="flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition"
+                        htmlFor='fileInput'
+                        className='flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition'
                     >
                         <ImageIcon />
                         <h1>Choose Photo / Video</h1>
                         <input
-                            id="fileInput"
-                            type="file"
-                            accept="image/*,video/*"
-                            className="hidden"
+                            id='fileInput'
+                            type='file'
+                            accept='image/*,video/*'
+                            className='hidden'
                             onChange={handleFileChange}
                         />
                     </label>
                     <Or />
                     <label
-                        htmlFor="cameraInput"
-                        className="md:hidden flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition"
+                        htmlFor='cameraInput'
+                        className='md:hidden flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition'
                     >
                         <Camera />
                         <h1>Capture the moment</h1>
                         <input
-                            id="cameraInput"
-                            type="file"
-                            accept="image/*,video/*"
-                            capture="environment"
-                            className="hidden"
+                            id='cameraInput'
+                            type='file'
+                            accept='image/*,video/*'
+                            capture='environment'
+                            className='hidden'
                         />
                     </label>
                     <Or className='md:hidden' />

@@ -75,10 +75,19 @@ body {
 }
 
 .group:hover .user-icon::before {
-  animation: head-drop 0.2s ease;
+  animation: drop 0.2s ease;
+  border: 2px solid cyan;
 }
 
-@keyframes head-drop {
+.upload::before {
+  margin-top: -6px;
+}
+
+.upload::before:hover {
+  animation: drop 0.2s ease;
+}
+
+@keyframes drop {
   0% {
     transform: translateX(-50%) translateY(0);
   }

@@ -16,7 +16,7 @@ export default async function fetchArticles<T extends boolean>(
 
         const response = await fetch(url)
         if (!response.ok) {
-            throw new Error("Failed to fetch articles.")
+            throw new Error('Failed to fetch articles.')
         }
 
         const data = await response.json()

@@ -34,16 +34,16 @@ export default function Page() {
         return (
             <div className={`min-h-[93.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses} relative`}>
                 <div>
-                    <div className="bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid place-items-center">
+                    <div className='bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid place-items-center'>
                         <div className='grid place-items-center'>
-                            <Image alt="Uploaded image" src={url} height={300} width={348} className='rounded-lg' />
+                            <Image alt='Uploaded image' src={url} height={300} width={348} className='rounded-lg' />
                         </div>
-                        <div onClick={() => copy({ text: url, setDidCopy })} className="bg-light flex rounded-lg gap-2 p-2 px-4 cursor-pointer">
+                        <div onClick={() => copy({ text: url, setDidCopy })} className='bg-light flex rounded-lg gap-2 p-2 px-4 cursor-pointer'>
                             <LinkIcon className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'} height={18} width={18} />
                             <h1 className='text-gray-200'>{url}</h1>
                         </div>
                     </div>
-                    <div className="text-foreground rounded-lg grid grid-cols-2 gap-2 mt-2">
+                    <div className='text-foreground rounded-lg grid grid-cols-2 gap-2 mt-2'>
                         <Link href='/' className='rounded-lg hover:bg-[#6464641a] cursor-pointer flex justify-center items-center bg-dark gap-2 p-2'>
                             <DoorOpen className='stroke-gray-200' />
                             <h1 className='text-gray-200'>Leave</h1>

@@ -105,7 +105,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
             <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
                 <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
-                        {"hanasand.com"}
+                        hanasand.com
                     </h1>
                     <div className='grid place-items-center gap-4'>
                         <div className='grid gap-4 place-items-center'>

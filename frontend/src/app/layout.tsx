@@ -5,10 +5,9 @@ import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
 import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
-import { FileCode, Eye, LinkIcon, UploadIcon, Flame, Code } from 'lucide-react'
+import { FileCode, Eye, LinkIcon, UploadIcon, Flame, Code, ArrowUp } from 'lucide-react'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
-import UploadIconArrow from '@/components/upload/uploadIconarrow'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -29,7 +28,7 @@ export default async function layout({children}: {children: ReactNode}) {
     const isTest = path.includes('/test')
 
     return (
-        <html lang="en" className={theme}>
+        <html lang='en' className={theme}>
             <body className='h-full w-full'>
                 <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-foreground bg-dark grid grid-cols-3 px-4 select-none'>
                     <div className='flex items-center'>
@@ -37,13 +36,15 @@ export default async function layout({children}: {children: ReactNode}) {
                             <div className={baseStyles}>
                                 <UploadIcon />
                             </div>
-                            <UploadIconArrow isUpload={isUpload} />
+                            <div className={`${!isShare && 'hidden'} hover:block absolute grid place-items-center w-[16px] h-[26px upload pb-[6px] overflow-hidden bg-red-500`}>
+                                <ArrowUp className={`stroke-[#e25822] stroke-2 bg-dark group-hover:bg-[#515151] w-[20px] h-[20px] z-100 self-center -ml-[2px]`} />
+                            </div>
                         </Link> 
                         <Link href='/s' className='group relative grid place-items-center'>
                             <div className={baseStyles}>
                                 <FileCode />
                             </div>
-                            <Code className={`${!isShare && 'hidden'} group-hover:block absolute stroke-[#e25822] stroke-4 bg-dark group-hover:bg-dark/50 w-[10px] h-[10px] mt-[5px] z-100`} />
+                            <Code className={`${!isShare && 'hidden'} group-hover:block absolute stroke-[#e25822] pointer-events-none stroke-4 bg-dark group-hover:bg-[#222222] w-[10px] h-[10px] mt-[5px] z-100`} />
                         </Link> 
                         <Link href='/g' className={baseStyles}>
                             <LinkIcon className={`${isLink && 'stroke-blue-400'} group-hover:stroke-blue-400`} />
@@ -52,15 +53,15 @@ export default async function layout({children}: {children: ReactNode}) {
                             <div className={baseStyles}>
                                 <Eye />
                             </div>
-                            <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full bg-red-500 w-[5px] h-[5px] absolute z-100 self-center`} />
+                            <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-red-500 w-[5px] h-[5px] absolute z-100 self-center`} />
                         </Link>
                         <Link href='/test' className={baseStyles}>
                             <Flame className={`group-hover:stroke-[#e25822] ${isTest && 'stroke-[#e25822]'}`} />
                         </Link>
                     </div>
                     <div className='grid place-items-center w-full'>
-                        <Link href="/" className='group w-fit grid place-items-center h-12 hover:bg-[#6464641a] px-10 rounded-lg cursor-pointer'>
-                            <h1 className="font-semibold text-bright group-hover:text-bright/70 text-glow">hanasand</h1>
+                        <Link href='/' className='group w-fit grid place-items-center h-12 hover:bg-[#6464641a] px-10 rounded-lg cursor-pointer'>
+                            <h1 className='font-semibold text-bright group-hover:text-bright/70 text-glow'>hanasand</h1>
                         </Link>
                     </div>
                     <div className='flex justify-end items-center'>

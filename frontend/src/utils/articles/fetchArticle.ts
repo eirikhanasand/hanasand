@@ -5,7 +5,7 @@ export default async function fetchArticle(id: string): Promise<Article | null> 
         const response = await fetch(`${config.url.api}/article/${id}`)
 
         if (!response.ok) {
-            throw new Error("This page does not exist.")
+            throw new Error('This page does not exist.')
         }
 
         const data = await response.json()
