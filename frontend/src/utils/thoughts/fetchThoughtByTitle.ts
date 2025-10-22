@@ -11,7 +11,7 @@ export default async function fetchThoughtByTitle(title: string): Promise<Though
         })
 
         if (!response.ok) {
-            throw new Error('Failed to fetch thoughts.')
+            throw new Error('No thought matched the title.')
         }
 
         const data = await response.json()

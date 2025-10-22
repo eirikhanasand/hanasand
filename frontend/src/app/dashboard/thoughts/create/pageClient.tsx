@@ -45,8 +45,7 @@ export default function CreateClient() {
         if (title) {
             (async() => {
                 const response = await fetchThoughtByTitle(title)
-                console.log(response)
-                if (response) {
+                if (Array.isArray(response) && response.length > 0) {
                     setError(`The thought already exists!`)
                 }
             })()
