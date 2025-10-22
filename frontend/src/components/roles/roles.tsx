@@ -4,8 +4,9 @@ import fetchRoles from '@/utils/roles/fetchRoles'
 
 export default async function Roles() {
     const Cookies = await cookies()
-    const token = Cookies.get('access_token')?.value
-    const roles = await fetchRoles({ token })
+    const token = Cookies.get('access_token')?.value || ''
+    const id = Cookies.get('id')?.value || ''
+    const roles = await fetchRoles({ id, token })
 
     return (
         <div className='grid w-full p-2 outline-1 outline-dark rounded-lg gap-2'>

@@ -1,7 +1,12 @@
 import config from '@/config'
 import { redirect } from 'next/navigation'
 
-export default async function fetchRoles({ id, token }: { id?: string, token?: string }): Promise<Role[]> {
+type FetchRoleProps = { 
+    id: string
+    token: string
+}
+
+export default async function fetchRoles({ id, token }: FetchRoleProps): Promise<Role[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
