@@ -94,11 +94,11 @@ CREATE TABLE IF NOT EXISTS root (
 -- Load tests table
 CREATE TABLE IF NOT EXISTS load_tests (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
     url TEXT NOT NULL,
     timeout INTEGER DEFAULT 1,
-    stages JSONB NOT NULL,
+    stages JSONB NOT NULL DEFAULT '{ "default": "true" }',
     status TEXT DEFAULT 'pending',
+    visits INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW()
 );
 

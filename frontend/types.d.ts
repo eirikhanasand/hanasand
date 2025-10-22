@@ -183,3 +183,13 @@ type Updates = {
     path?: string
     content?: string
 }
+
+type Test = {
+    id: number
+    url: string
+    timeout: number
+    stages: object
+    status: string
+    created_at: string
+    visits: number
+}

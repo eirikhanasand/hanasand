@@ -1,15 +1,15 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
-import { getLink } from '@/utils/links/get'
 import prettyDate from '@/utils/prettyDate'
+import { fetchTest } from '@/utils/test/fetchTest'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'
 import { FormEvent, useEffect, useState } from 'react'
 
 export default function TestStatsPageClient() {
     const [query, setQuery] = useState('')
-    const [test, setTest] = useState<FullLink | null>()
+    const [test, setTest] = useState<Test | null>()
     const [error, setError] = useState<string | null>(null)
     const color = query.length > 0 
         ? 'bg-orange-500/80 cursor-pointer glow-orange-small'
@@ -22,12 +22,7 @@ export default function TestStatsPageClient() {
             return
         }
 
-        const result = await getLink(query)
-
-        if (typeof result === 'number') {
-            return setError('Test does not exist')
-        }
-
+        const result = await fetchTest(query)
         if (!result) {
             return setError('Please try again later.')
         }
@@ -77,11 +72,11 @@ export default function TestStatsPageClient() {
                         <div className='grid gap-2'>
                             <div className='flex gap-2'>
                                 <Rocket />
-                                <h1>{test.id}</h1>
+                                <h1>{JSON.stringify(test)}</h1>
                             </div>
                             <div className='flex gap-2'>
                                 <Globe />
-                                <h1>{test.path}</h1>
+                                {/* <h1>{test.path}</h1> */}
                             </div>
                             <div className='flex gap-2'>
                                 <Watch />
@@ -94,8 +89,8 @@ export default function TestStatsPageClient() {
                         </div>
                     )}
                 </div>
-                <Link href='/test' className='absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                    <ArrowLeft />
+                <Link href='/test' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                    <ArrowLeft className='group-hover:stroke-[#e25822]' />
                 </Link> 
             </div>
         </div>

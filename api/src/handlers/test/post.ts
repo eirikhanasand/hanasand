@@ -2,10 +2,9 @@ import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 type BodyProps = {
-    name: string
     url: string
-    timeout: number
-    stages: Stage[]
+    timeout?: number
+    stages?: Stage[]
 }
 
 type Stage = {
@@ -14,10 +13,10 @@ type Stage = {
 }
 
 export default async function postTest(req: FastifyRequest, res: FastifyReply) {
-    const { name, url, timeout, stages } = req.body as BodyProps ?? {}
+    const { url, timeout, stages } = req.body as BodyProps ?? {}
     const result = await run(
-        'INSERT INTO load_tests (name, url, timeout, stages) VALUES ($1, $2, $3, $4) RETURNING *',
-        [name, url, timeout, JSON.stringify(stages)]
+        'INSERT INTO load_tests (url, timeout, stages) VALUES ($1, $2, $3) RETURNING *',
+        [url, timeout || null, JSON.stringify(stages) || null]
     )
 
     return res.send(result.rows[0])

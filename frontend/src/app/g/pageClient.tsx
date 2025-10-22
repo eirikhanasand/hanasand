@@ -32,7 +32,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
         }
 
         if (result.id) {
-            redirect(`/g?created=true&id=${id}`)
+            return redirect(`/g?created=true&id=${result.id}`)
         }
     }
 

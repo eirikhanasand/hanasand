@@ -3,17 +3,16 @@
 import Notify from '@/components/notify/notify'
 import config from '@/config'
 import copy from '@/utils/copy'
-import { postLink } from '@/utils/links/post'
+import { postTest } from '@/utils/test/postTest'
 import { Copy } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
-    const [id, setId] = useState('')
     const [path, setPath] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [didCopy, setDidCopy] = useState<boolean | 'error'>(false)
-    const isValidLink = 
+    const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
     const color = isValidLink ? 'bg-orange-500/80 cursor-pointer glow-orange-small' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'bg-dark cursor-not-allowed glow-orange-small'
@@ -25,17 +24,13 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         }
 
         e.preventDefault()
-        const result = await postLink(id, path)
-        if (typeof result === 'number') {
-            return setError('This path is already taken.')
-        }
-
+        const result = await postTest({ url: path })
         if (!result) {
             return setError('Please try again later.')
         }
 
         if (result.id) {
-            redirect(`/g?created=true&id=${id}`)
+            redirect(`/test/${result.id}`)
         }
     }
 

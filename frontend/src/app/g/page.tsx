@@ -33,8 +33,8 @@ export default async function Page({
                     {created && <Link href='/g' className='absolute bottom-0 right-16 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                         <ArrowLeft />
                     </Link> }
-                    <Link href='/g/stats' className='absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                        <ChartColumn />
+                    <Link href='/g/stats' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                        <ChartColumn className='group-hover:stroke-blue-500' />
                     </Link> 
                 </div>
             </div>

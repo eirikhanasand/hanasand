@@ -1,18 +1,13 @@
-import { getLink } from '@/utils/links/get'
-import { redirect } from 'next/navigation'
+import { fetchTest } from '@/utils/test/fetchTest'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
     const id = params.id[0]
-    const link = await getLink(id)
+    const test = await fetchTest(id)
 
-    if (typeof link === 'number') {
-        return redirect(`/g?id=${id}&null=true`)
-    }    
-
-    if (!link?.path.includes('http')) {
-        return redirect(`https://${link?.path}` || `/g?id=${id}&null=true`)
-    }
-
-    return redirect(link?.path || `/g?id=${id}&null=true`)
+    return (
+        <div>
+            <h1>{JSON.stringify(test)}</h1>
+        </div>
+    )
 }
