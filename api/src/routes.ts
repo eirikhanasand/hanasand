@@ -21,7 +21,7 @@ import getRolesForUser from './handlers/roles/getRolesForUser.ts'
 import putUser from './handlers/user/putUser.ts'
 import deleteUser from './handlers/user/deleteUser.ts'
 import authorizedUserHandler from './handlers/user/fullUser.ts'
-import getRoot from './handlers/roles/getRoot.ts'
+import getUsers from './handlers/user/getUsers.ts'
 
 /**
  * Defines the routes available in the API.
@@ -39,9 +39,9 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/auth/token/:id', tokenHandler)
 
     // User handlers
+    fastify.get('users', getUsers)
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
-    fastify.get('/user/root', getRoot)
     fastify.post('/user', postUser)
     fastify.put('/user', putUser)
     fastify.delete('/user', deleteUser)
