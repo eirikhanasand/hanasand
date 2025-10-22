@@ -19,6 +19,7 @@ export async function postThought(title: string): Promise<{ status: number, mess
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'id': id,
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({ title, id })
