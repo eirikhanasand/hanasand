@@ -12,7 +12,7 @@ export async function putArticle(id: string, content: string[]): Promise<void | 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ username, content })
+            body: JSON.stringify({ id: username, content })
         })
 
         if (!response.ok) {

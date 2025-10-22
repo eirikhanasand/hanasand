@@ -2,6 +2,13 @@ import run from '#db'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
+type PostRoleBody = {
+    id: string
+    name: string
+    description?: string
+    created_by: string
+}
+
 /**
  * POST /role
  * Create a new role
@@ -17,11 +24,7 @@ export default async function postRole(req: FastifyRequest, res: FastifyReply) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 
-    const { name, description, created_by } = req.body as {
-        name: string
-        description?: string
-        created_by: string
-    } ?? {}
+    const { id, name, description, created_by } = req.body as PostRoleBody ?? {}
 
     if (!name || !created_by) {
         return res.status(400).send({ error: 'Missing required fields: name or created_by' })
@@ -29,8 +32,8 @@ export default async function postRole(req: FastifyRequest, res: FastifyReply) {
 
     try {
         const result = await run(
-            `INSERT INTO roles (name, description, created_by) VALUES ($1, $2, $3) RETURNING *`,
-            [name, description || null, created_by]
+            `INSERT INTO roles (id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
+            [id, name, description || null, created_by]
         )
 
         return res.status(201).send(result.rows[0])

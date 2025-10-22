@@ -41,7 +41,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
 
         const formData = new FormData(e.currentTarget)
         const name = formData.get('name') as string
-        const username = formData.get('username') as string
+        const id = formData.get('username') as string
         const password = formData.get('password') as string
 
         try {
@@ -50,7 +50,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ name, username, password })
+                body: JSON.stringify({ name, id, password })
             })
 
             if (!response.ok) {

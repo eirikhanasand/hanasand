@@ -5,7 +5,7 @@ export async function postArticle(id: string, content: string): Promise<{ status
     const token = getCookie('token')
     const username = getCookie('id')
 
-    if (!token || !username) {
+    if (!token || !id) {
         return {
             status: 401,
             message: 'Please log in to add articles.'
@@ -19,7 +19,7 @@ export async function postArticle(id: string, content: string): Promise<{ status
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ username, content })
+            body: JSON.stringify({ id: username, content })
         })
     
         if (!response.ok) {

@@ -11,7 +11,7 @@ export default async function logoutHandler(req: FastifyRequest, res: FastifyRep
     try {
         const query = `
             DELETE FROM tokens
-            WHERE username = $1
+            WHERE id = $1
             RETURNING token;
         `
 

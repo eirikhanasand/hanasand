@@ -46,7 +46,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
         const { password: _, ...userWithoutPassword } = user
 
-        const token = await login({ username: id, ip })
+        const token = await login({ id, ip })
         if (!token) {
             res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
         }

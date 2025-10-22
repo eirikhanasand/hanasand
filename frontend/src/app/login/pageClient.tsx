@@ -20,11 +20,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
         const formData = new FormData(e.currentTarget)
-        const username = formData.get('username') as string
+        const id = formData.get('username') as string
         const password = formData.get('password') as string
 
         try {
-            const response = await fetch(`${config.url.api}/auth/login/${username}`, {
+            const response = await fetch(`${config.url.api}/auth/login/${id}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

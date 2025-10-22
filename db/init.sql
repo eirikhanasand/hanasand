@@ -34,8 +34,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Token table
 CREATE TABLE IF NOT EXISTS tokens (
-    id SERIAL PRIMARY KEY,
-    username TEXT NOT NULL,
+    token_id SERIAL PRIMARY KEY,
+    id TEXT NOT NULL,
     token TEXT NOT NULL,
     ip TEXT NOT NULL,
     timestamp TIMESTAMPTZ DEFAULT NOW()
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS roles (
 -- User roles table
 CREATE TABLE IF NOT EXISTS user_roles (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     assigned_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     assigned_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_id, role_id)
@@ -75,6 +75,12 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     password TEXT NOT NULL,
     avatar TEXT NOT NULL
+);
+
+-- Root table
+CREATE TABLE IF NOT EXISTS root (
+    id TEXT PRIMARY KEY,
+    created BOOLEAN NOT NULL DEFAULT false
 );
 
 -- Load tests table

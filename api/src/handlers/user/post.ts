@@ -3,20 +3,21 @@ import bcrypt from 'bcrypt'
 import run from '#db'
 import checkPwned from '#utils/checkPwned.ts'
 import login from '#utils/login.ts'
+import { loadSQL } from '#utils/loadSQL.ts'
 
 type GetUserBodyProps = {
-    username: string
+    id: string
     name: string
     password: string
     avatar: string
 }
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
-    const { username, name, password, avatar } = req.body as GetUserBodyProps ?? {}
-    const user = { username, name }
+    const { id, name, password, avatar } = req.body as GetUserBodyProps ?? {}
+    const user = { id, name }
     const ip = req.ip
 
-    if (!username || !name || !password) {
+    if (!id || !name || !password) {
         return res.status(400).send({ error: 'Missing fields' })
     }
 
@@ -57,14 +58,17 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             `INSERT INTO users (id, name, password, avatar) 
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO NOTHING`, 
-            [username, name, hashedPassword, avatar || '']
+            [id, name, hashedPassword, avatar || '']
         )
-
+        
         if (!response.rowCount) {
             return res.status(400).send({ error: 'The username is taken.' })
         }
 
-        const token = await login({ username, ip })
+        const userQuery = await loadSQL('assignUserRole.sql')
+        await run(userQuery, [id])
+
+        const token = await login({ id, ip })
         if (!token) {
             res.status(206).send({ ...user, message: 'User created', error: 'Unable to login. Please try again later.' })
         }

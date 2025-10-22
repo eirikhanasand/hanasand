@@ -6,7 +6,7 @@ import login from '#utils/login.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 
 type GetUserBodyProps = {
-    username: string
+    id: string
     name: string
     password: string
     avatar: string
@@ -72,7 +72,7 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
                 return res.status(400).send({ error: 'User not found.' })
             }
 
-            const token = await login({ username: id, ip })
+            const token = await login({ id, ip })
             if (!token) {
                 res.status(206).send({
                     message: 'Password updated, and you were logged out. Logging you back in was not possible due to an unknown error.',
@@ -117,7 +117,7 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
         }
 
         const updatedUser = response.rows[0]
-        const token = await login({ username: updatedUser.id, ip })
+        const token = await login({ id: updatedUser.id, ip })
 
         return res.status(200).send({ ...updatedUser, message: 'User updated', token })
     } catch (err) {
