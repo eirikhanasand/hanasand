@@ -1,6 +1,6 @@
 import config from '@/config'
 
-export async function updateShare(id: string, updates: { path?: string; content?: string }): Promise<Share | null> {
+export async function updateShare(id: string, updates: Updates): Promise<Share | null> {
     try {
         const res = await fetch(`${config.url.cdn}/share/${id}`, {
             method: 'PUT',

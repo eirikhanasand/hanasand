@@ -5,11 +5,16 @@ import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
 
+type PendingUpdates = { 
+    content: string
+    timer: NodeJS.Timeout
+}
+
 const messageBuffer: Buffer[] = []
 
 export const pwnedClients = new Map<string, Set<WebSocket>>()
 export const testClients = new Map<string, Set<WebSocket>>()
-export const pendingUpdates = new Map<string, { content: string; timer: NodeJS.Timeout }>()
+export const pendingUpdates = new Map<string, PendingUpdates>()
 
 export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.register(async function (fastify) {

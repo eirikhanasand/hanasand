@@ -33,24 +33,24 @@ export default async function Page() {
 }
 
 function timeBasedGreeting({ name }: { name: string }) {
-    const now = new Date();
-    const hour = now.getHours();
+    const now = new Date()
+    const hour = now.getHours()
 
-    if (hour >= 0 && hour < 5) {
-        return `You're up late ${name}! Hope everything's okay.`;
+    if (hour >= 1 && hour < 5) {
+        return `You're up late ${name}! Hope everything's okay.`
     } else if (hour >= 5 && hour < 8) {
-        return `Good early morning ${name}! Ready to start the day?`;
+        return `Good early morning ${name}! Ready to start the day?`
     } else if (hour >= 8 && hour < 12) {
-        return `Good morning ${name}! Hope your day’s off to a great start.`;
+        return `Good morning ${name}! Hope your day’s off to a great start.`
     } else if (hour >= 12 && hour < 14) {
-        return `Good day ${name}! Time for a lunch break?`;
+        return `Good day ${name}! Time for a lunch break?`
     } else if (hour >= 14 && hour < 17) {
-        return `Good afternoon ${name}! Keep up the good work.`;
+        return `Good afternoon ${name}! Keep up the good work.`
     } else if (hour >= 17 && hour < 20) {
-        return `Good evening ${name}! How was your day?`;
+        return `Good evening ${name}! How was your day?`
     } else if (hour >= 20 && hour < 23) {
-        return `Good night ${name}! Time to unwind.`;
+        return `Good night ${name}! Time to unwind.`
     } else {
-        return `It’s getting late ${name}, don’t forget to rest!`;
+        return `It’s getting late ${name}, don’t forget to rest!`
     }
 }

@@ -2,6 +2,11 @@ import run from '#db'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
+type PutRoleBody = {
+    name?: string
+    description?: string
+}
+
 /**
  * PUT /role/:id
  * Update a role's name or description
@@ -18,7 +23,7 @@ export default async function putRole(req: FastifyRequest, res: FastifyReply) {
     }
 
     const { id } = req.params as { id: string }
-    const { name, description } = req.body as { name?: string; description?: string }
+    const { name, description } = req.body as PutRoleBody ?? {}
 
     if (!id) {
         return res.status(400).send({ error: 'Missing role id' })

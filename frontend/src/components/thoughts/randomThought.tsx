@@ -1,4 +1,4 @@
-import fetchRandomThought from '@/utils/thoughts/fetchRandomThought';
+import fetchRandomThought from '@/utils/thoughts/fetchRandomThought'
 
 export default async function RandomThought() {
     const thought = await fetchRandomThought()

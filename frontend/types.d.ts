@@ -178,3 +178,8 @@ type Role = {
     created_at: string
     updated_at: string
 }
+
+type Updates = {
+    path?: string
+    content?: string
+}
