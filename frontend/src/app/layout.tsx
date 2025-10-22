@@ -36,8 +36,8 @@ export default async function layout({children}: {children: ReactNode}) {
                             <div className={baseStyles}>
                                 <UploadIcon />
                             </div>
-                            <div className={`${!isShare && 'hidden'} hover:block absolute grid place-items-center w-[16px] h-[26px upload pb-[6px] overflow-hidden bg-red-500`}>
-                                <ArrowUp className={`stroke-[#e25822] stroke-2 bg-dark group-hover:bg-[#515151] w-[20px] h-[20px] z-100 self-center -ml-[2px]`} />
+                            <div className={`${!isUpload && 'hidden'} group-hover:block absolute pointer-events-none grid place-items-center w-[16px] h-[20px] -mt-[3px] overflow-hidden`}>
+                                <ArrowUp className={`stroke-[#e25822] stroke-[2.8px] bg-dark group-hover:bg-[#222222] h-[100px] z-100 self-center upload rounded-lg`} />
                             </div>
                         </Link> 
                         <Link href='/s' className='group relative grid place-items-center'>

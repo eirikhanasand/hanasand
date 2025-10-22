@@ -79,12 +79,19 @@ body {
   border: 2px solid cyan;
 }
 
-.upload::before {
-  margin-top: -6px;
+.upload {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 24px;
+  overflow: hidden;
+  bottom: 10%;
 }
 
-.upload::before:hover {
-  animation: drop 0.2s ease;
+.group:hover .upload {
+  animation: drop-heavy 0.3s ease;
 }
 
 @keyframes drop {
@@ -94,6 +101,20 @@ body {
 
   50% {
     transform: translateX(-50%) translateY(2px);
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes drop-heavy {
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(5px);
   }
 
   100% {
