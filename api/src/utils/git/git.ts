@@ -27,7 +27,6 @@ export default async function git(cmd: string) {
     }
 }
 
-
 async function ensureRepo() {
     try {
         await fs.access(LOCAL_REPO_PATH)
@@ -36,16 +35,21 @@ async function ensureRepo() {
         await execAsync(`git clone ${config.github_articles_ssh} '${LOCAL_REPO_PATH}'`)
     }
 
+    await fs.access(join(LOCAL_REPO_PATH, '.git'))
+
+    const { stdout: head } = await execAsync(`git -C '${LOCAL_REPO_PATH}' remote show origin`)
+    const match = head.match(/HEAD branch: (.+)/)
+    const defaultBranch = match ? match[1].trim() : 'main'
+
     try {
-        await fs.access(join(LOCAL_REPO_PATH, '.git'))
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout ${defaultBranch}`)
     } catch {
-        throw new Error(`${LOCAL_REPO_PATH} exists but is not a Git repository!`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout -b ${defaultBranch} origin/${defaultBranch}`)
     }
 
     try {
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' rev-parse --abbrev-ref --symbolic-full-name @{u}`)
-    } catch {
-        console.log('Setting upstream to origin/main...')
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/main main`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/${defaultBranch} ${defaultBranch}`)
+    } catch (e) {
+        console.warn(`Could not set upstream for ${defaultBranch}:`, e)
     }
 }

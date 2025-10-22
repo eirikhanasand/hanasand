@@ -9,7 +9,7 @@ export default async function getThoughts(_: FastifyRequest, res: FastifyReply) 
     try {
         const result = await run(`SELECT * FROM thoughts`)
         if (!result.rows.length) {
-            return res.status(404).send({ error: 'Thought not found.' })
+            return res.status(404).send({ error: 'No thoughts found.' })
         }
 
         return res.send(result)
