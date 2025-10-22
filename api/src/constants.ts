@@ -13,7 +13,6 @@ type ENV = {
     DB_IDLE_TIMEOUT_MS: string
     DB_TIMEOUT_MS: string
     DEFAULT_RESULTS_PER_PAGE: string
-    NEXT_PUBLIC_SELF_URL: string
     NEXT_PUBLIC_API: string
 }
 
@@ -29,7 +28,6 @@ const {
     DB_IDLE_TIMEOUT_MS,
     DB_TIMEOUT_MS,
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE,
-    NEXT_PUBLIC_SELF_URL,
     NEXT_PUBLIC_API,
 } = process.env as unknown as ENV
 if (!NEXT_PUBLIC_API || !DB_PASSWORD) {
@@ -47,7 +45,6 @@ const config = {
     DB_IDLE_TIMEOUT_MS,
     DB_TIMEOUT_MS,
     DEFAULT_RESULTS_PER_PAGE: ENV_DEFAULT_RESULTS_PER_PAGE || 50,
-    SELF_URL: NEXT_PUBLIC_SELF_URL,
     CACHE_TTL: 30000,
     pwned: 'http://pwned:8080/api/pwned',
     pwned_ws: 'ws://pwned:8080/api/pwned/ws/',

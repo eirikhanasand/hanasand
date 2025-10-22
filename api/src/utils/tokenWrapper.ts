@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import config from '#constants'
 
-const { SELF_URL } = config
+const { self_url } = config
 
 type Valid = {
     valid: boolean
@@ -40,7 +40,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     const token = authHeader.split(' ')[1]
 
     try {
-        const response = await fetch(`${SELF_URL}/${id}`, {
+        const response = await fetch(`${self_url}/${id}`, {
             headers: {
                 Authorization: `Bearer ${token}`
             }
