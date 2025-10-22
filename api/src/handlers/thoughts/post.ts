@@ -2,21 +2,21 @@ import run from '#db'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
-export default async function postThought(req: FastifyRequest<{ Body: { title: string, created_by: string } }>, res: FastifyReply) {
+export default async function postThought(req: FastifyRequest<{ Body: { title: string, id: string } }>, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 
-    const { title, created_by } = req.body ?? {}
-    if (!title || !created_by) {
+    const { title, id } = req.body ?? {}
+    if (!title || !id) {
         return res.status(400).send({ error: 'Missing thought title or creator.' })
     }
 
     try {
         const result = await run(
             `INSERT INTO thoughts (title, created_by) VALUES ($1, $2) RETURNING *`,
-            [title, created_by]
+            [title, id]
         )
 
         return res.status(201).send(result.rows[0])
