@@ -37,7 +37,7 @@ function timeBasedGreeting({ name }: { name: string }) {
     const hour = now.getHours()
 
     if (hour >= 1 && hour < 5) {
-        return `You're up late ${name}! Hope everything's okay.`
+        return `You're up late ${name}! Remember that you’re far more productive when rested.`
     } else if (hour >= 5 && hour < 8) {
         return `Good early morning ${name}! Ready to start the day?`
     } else if (hour >= 8 && hour < 12) {
