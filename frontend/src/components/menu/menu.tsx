@@ -3,7 +3,7 @@
 import { getCookie } from '@/utils/cookies'
 import { Menu as MenuIcon, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Eye, LinkIcon, Flame } from 'lucide-react'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -12,7 +12,7 @@ import ShareIcon from './shareIcon'
 
 export default function Menu() {
     const [open, setOpen] = useState(true)
-    const token = getCookie('access_token') || undefined
+    const [token, setToken] = useState<string | null>(null)
     const path = usePathname()
     const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer hover:bg-[#6464641a]'
     const isUpload = path.includes('/upload')
@@ -24,6 +24,13 @@ export default function Menu() {
     function toggleOpen() {
         setOpen(prev => !prev)
     }
+
+    useEffect(() => {
+        const cookieToken = getCookie('access_token') || undefined
+        if (cookieToken) {
+            setToken(cookieToken)
+        }
+    }, [])
 
     if (!open) {
         return (

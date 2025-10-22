@@ -1,10 +1,10 @@
 import { LayoutDashboard } from 'lucide-react'
-import Link from 'next/link'
+import LinkorDiv from '../misc/linkOrDiv'
 
-export default function Dashboard() {
+export default function Dashboard({ href }: { href?: string }) {
     return (
-        <Link href='/dashboard' className='group rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center'>
+        <LinkorDiv href={href} className='group rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center'>
             <LayoutDashboard className='stroke-current group-hover:stroke-[#374c66]' />
-        </Link> 
+        </LinkorDiv>
     )
 }

@@ -1,12 +1,13 @@
 import DashboardArticles from '@/components/articles/dashboardArticles'
-import fetchArticles from '@/utils/articles/fetchArticles'
+import Roles from '@/components/roles/roles'
+import Thoughts from '@/components/thoughts/thoughts'
+import Users from '@/components/users/users'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 export default async function Page() {
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
-    const articles = await fetchArticles()
     
     if (!name) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
@@ -20,7 +21,12 @@ export default async function Page() {
                 <div className='grid w-full p-2 rounded-lg'>
                     <h1 className='text-2xl font-semibold'>{text}</h1>
                 </div>
-                <DashboardArticles articles={articles} />
+                <div className='grid grid-cols-2 gap-2'>
+                    <DashboardArticles />
+                    <Thoughts />
+                    <Users />
+                    <Roles />
+                </div>
             </div>
         </div>
     )

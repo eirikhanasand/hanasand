@@ -152,3 +152,29 @@ type Articles = {
     recent: Article[]
     articles: Article[]
 }
+
+type User = {
+    id: string
+    name: string
+    avatar: string
+}
+
+type UserWithRole = User & { role: string }
+
+type Thought = {
+    id: string
+    title: string
+    created_at: string
+    created_by: string
+    updated_at: string
+}
+
+type Role = {
+    id: string
+    name: string
+    description: string
+    priority: number
+    created_by: string
+    created_at: string
+    updated_at: string
+}

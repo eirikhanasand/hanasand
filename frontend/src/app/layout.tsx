@@ -4,11 +4,13 @@ import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
 import Footer from '@/components/footer/footer'
 import Login from '@/components/login/login'
-import { FileCode, Eye, LinkIcon, UploadIcon, Flame, Code, ArrowUp } from 'lucide-react'
+import { Eye, LinkIcon, Flame } from 'lucide-react'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
 import Menu from '@/components/menu/menu'
 import './globals.css'
+import Upload from '@/components/menu/uploadIcon'
+import ShareIcon from '@/components/menu/shareIcon'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -34,21 +36,8 @@ export default async function layout({children}: {children: ReactNode}) {
                 <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-foreground bg-dark grid grid-cols-3 px-4 select-none'>
                     <div className='block md:hidden w-full' />
                     <div className='hidden md:flex items-center'>
-                        <Link href='/upload' className='group relative grid place-items-center'>
-                            <div className={baseStyles}>
-                                <UploadIcon />
-                            </div>
-                            <div className={`${!isUpload && 'hidden'} group-hover:block absolute pointer-events-none grid place-items-center w-[16px] h-[22px] -mt-[3px] overflow-hidden`}>
-                                <ArrowUp className={`stroke-[#e25822] stroke-[2.8px] bg-dark group-hover:bg-dark-reverse h-full z-10 self-center upload rounded-lg`} />
-                                <div className='upload-overlay absolute bottom-0 w-full h-[1.5px] z-20' />
-                            </div>
-                        </Link>
-                        <Link href='/s' className='group relative grid place-items-center'>
-                            <div className={baseStyles}>
-                                <FileCode />
-                            </div>
-                            <Code className={`${!isShare && 'hidden'} group-hover:block absolute stroke-[#e25822] pointer-events-none stroke-4 bg-dark group-hover:bg-dark-reverse w-[10px] h-[10px] mt-[5px] z-100`} />
-                        </Link> 
+                        <Upload baseStyles={baseStyles} isUpload={isUpload} href='/upload' />
+                        <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' />
                         <Link href='/g' className={baseStyles}>
                             <LinkIcon className={`${isLink && 'stroke-blue-400'} group-hover:stroke-blue-400`} />
                         </Link>
@@ -69,7 +58,7 @@ export default async function layout({children}: {children: ReactNode}) {
                     </div>
                     <div className='flex justify-end items-center'>
                         <ThemeSwitch />
-                        {token ? <Dashboard /> : ''}
+                        {token ? <Dashboard href='/dashboard' /> : ''}
                         {token ? <Logout baseStyles={baseStyles} /> : <Login />}
                         <Menu />
                     </div>

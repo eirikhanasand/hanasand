@@ -1,9 +1,15 @@
 import { ArrowUp, UploadIcon } from 'lucide-react'
-import Link from 'next/link'
+import LinkorDiv from '../misc/linkOrDiv'
 
-export default function Upload({ baseStyles, isUpload }: { baseStyles: string, isUpload: boolean }) {
+type UploadProps = { 
+    baseStyles: string
+    isUpload: boolean
+    href?: string 
+}
+
+export default function Upload({ baseStyles, isUpload, href }: UploadProps) {
     return (
-        <Link href='/upload' className='group relative grid place-items-center'>
+        <LinkorDiv href={href} className='group relative grid place-items-center'>
             <div className={baseStyles}>
                 <UploadIcon />
             </div>
@@ -11,6 +17,6 @@ export default function Upload({ baseStyles, isUpload }: { baseStyles: string, i
                 <ArrowUp className={`stroke-[#e25822] stroke-[2.8px] bg-dark group-hover:bg-dark-reverse h-full z-10 self-center upload rounded-lg`} />
                 <div className='upload-overlay absolute bottom-0 w-full h-[1.5px] z-20' />
             </div>
-        </Link>
+        </LinkorDiv>
     )
 }

@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import DashboardArticle from './dashboardArticle'
 import { Plus } from 'lucide-react'
+import fetchArticles from '@/utils/articles/fetchArticles'
 
-export default function DashboardArticles({ articles }: { articles: Article[] | Articles }) {
+export default async function DashboardArticles() {
+    const articles = await fetchArticles()
+
     return (
         <div className='grid w-full p-2 outline-1 outline-dark rounded-lg gap-2'>
             <div className='flex justify-between'>
