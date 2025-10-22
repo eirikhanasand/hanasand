@@ -11,7 +11,7 @@ import Upload from './uploadIcon'
 import ShareIcon from './shareIcon'
 
 export default function Menu() {
-    const [open, setOpen] = useState(true)
+    const [open, setOpen] = useState(false)
     const [token, setToken] = useState<string | null>(null)
     const path = usePathname()
     const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer hover:bg-[#6464641a]'
