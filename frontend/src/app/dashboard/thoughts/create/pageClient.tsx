@@ -45,6 +45,7 @@ export default function CreateClient() {
         if (title) {
             (async() => {
                 const response = await fetchThoughtByTitle(title)
+                console.log(response)
                 if (response) {
                     setError(`The thought already exists!`)
                 }
@@ -61,8 +62,10 @@ export default function CreateClient() {
     return (
         <div className={`relative grid gap-2 ${editing ? '' : 'px-10 md:px-[20vw]'}`}>
             {error && (
-                <div className='glow-red-small w-full rounded-lg'>
-                    <Notify message={error} className=' min-w-full' />
+                <div className='w-full rounded-lg grid place-items-center'>
+                    <div className='glow-red-small w-fit rounded-lg'>
+                        <Notify message={error} className=' min-w-full px-4 bg-light' />
+                    </div>
                 </div>
             )}
             <h1 className='font-semibold text-2xl'>{text}</h1>

@@ -29,6 +29,7 @@ import postThought from './handlers/thoughts/post.ts'
 import putThought from './handlers/thoughts/put.ts'
 import { deleteThought } from './handlers/thoughts/delete.ts'
 import getRandomThought from './handlers/thoughts/getRandomThought.ts'
+import postThoughtByTitle from './handlers/thoughts/postThoughtByTitle.ts'
 
 /**
  * Defines the routes available in the API.
@@ -83,6 +84,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/thought/:id', getThought)
     fastify.get('/thought/random', getRandomThought)
     fastify.post('/thought', postThought)
+    fastify.post('/thought/title', postThoughtByTitle)
     fastify.put('/thought/:id', putThought)
     fastify.delete('/thought/:id', deleteThought)
 }
