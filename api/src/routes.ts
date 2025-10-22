@@ -83,7 +83,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/thoughts', getThoughts)
     fastify.get('/thought/:id', getThought)
     fastify.get('/thought/random', getRandomThought)
-    fastify.post('/thought', postThought)
+    fastify.post('/thoughts', postThought)
     fastify.post('/thought/title', postThoughtByTitle)
     fastify.put('/thought/:id', putThought)
     fastify.delete('/thought/:id', deleteThought)

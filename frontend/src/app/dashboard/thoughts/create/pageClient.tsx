@@ -16,7 +16,6 @@ export default function CreateClient() {
     const text = editing ? `Creating thought` : `Start writing...`
 
     async function handleCreate() {
-
         if (!title) {
             return setError('You cannot create an empty thought.')
         }
