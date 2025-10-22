@@ -1,22 +1,20 @@
 import { WebSocket } from 'ws'
 
-export function registerClient(id: string, socket: WebSocket, clients: Map<string, Set<WebSocket>>) {
-    if (!clients.has(id)) {
-        clients.set(id, new Set())
-    }
-
-    clients.get(id)!.add(socket)
-    broadcastJoin(id, clients)
+type BroadCastProps = {
+    data: any
+    id: string
+    clients: Map<string, Set<WebSocket>>
 }
 
-function broadcastJoin(id: string, Clients: Map<string, Set<WebSocket>>) {
+export default function broadcast({ data, id, clients: Clients }: BroadCastProps) {
     const clients = Clients.get(id)
     if (!clients) {
         return
     }
 
     const payload = JSON.stringify({
-        type: 'join',
+        type: 'update',
+        data,
         timestamp: new Date().toISOString(),
         participants: clients.size
     })

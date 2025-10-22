@@ -1,14 +1,13 @@
 import run from '#db'
 import type { RawData } from 'ws'
 import { WebSocket as WS } from 'ws'
-
-export const pwnedClients = new Map<string, Set<WS>>()
-export const pendingUpdates = new Map<string, { content: string; timer: NodeJS.Timeout }>()
+import { pendingUpdates } from '../../plugins/ws'
 
 export async function handleMessage(
     id: string,
     socket: WS,
     rawMessage: RawData,
+    clients: Map<string, Set<WS>>,
 ) {
     try {
         const msg = JSON.parse(rawMessage.toString())
@@ -16,15 +15,15 @@ export async function handleMessage(
             return
         }
 
-        broadcastUpdate(id, socket, msg.content)
+        broadcastUpdate(id, socket, msg.content, clients)
         queueSave(id, msg.content)
     } catch (err) {
         console.error('Invalid WebSocket message:', err)
     }
 }
 
-function broadcastUpdate(id: string, sender: WS, content: string) {
-    const clients = pwnedClients.get(id)
+function broadcastUpdate(id: string, sender: WS, content: string, Clients: Map<string, Set<WS>>) {
+    const clients = Clients.get(id)
     if (!clients) {
         return
     }
@@ -58,9 +57,9 @@ function queueSave(id: string, content: string) {
                 `UPDATE share SET content = $1, timestamp = NOW() WHERE id = $2`,
                 [entry.content, id]
             )
-            console.log(`💾 Saved share ${id} to DB`)
+            console.log(`Saved share ${id} to DB`)
         } catch (err) {
-            console.error(`❌ Failed to save share ${id}:`, err)
+            console.error(`Failed to save share ${id}:`, err)
         } finally {
             pendingUpdates.delete(id)
         }

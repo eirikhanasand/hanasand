@@ -7,12 +7,16 @@ import config from '#constants'
 
 const messageBuffer: Buffer[] = []
 
+export const pwnedClients = new Map<string, Set<WebSocket>>()
+export const testClients = new Map<string, Set<WebSocket>>()
+export const pendingUpdates = new Map<string, { content: string; timer: NodeJS.Timeout }>()
+
 export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.register(async function (fastify) {
         fastify.get('/api/pwned/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             
-            registerClient(id, connection)
+            registerClient(id, connection, pwnedClients)
             
             const internalWs = new WebSocket(`${config.pwned_ws}${id}`)
 
@@ -34,7 +38,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             })
 
             connection.on('close', () => {
-                removeClient(id, connection)
+                removeClient(id, connection, pwnedClients)
                 internalWs.close()
             })
 
@@ -44,6 +48,15 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
                 } catch (error) { 
                     console.log(`Error occured while closing connection for id ${id}: ${error}`)
                 }
+            })
+        })
+
+        fastify.get('/api/test/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
+            const id = (req.params as { id: string}).id
+            registerClient(id, connection, testClients)
+
+            connection.on('close', () => {
+                removeClient(id, connection, testClients)
             })
         })
     })

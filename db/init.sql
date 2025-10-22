@@ -60,10 +60,20 @@ CREATE TABLE IF NOT EXISTS roles (
 -- User roles table
 CREATE TABLE IF NOT EXISTS user_roles (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     assigned_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     assigned_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS load_tests (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    timeout INTEGER DEFAULT 1,
+    stages JSONB NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Index on user-roles 

@@ -13,6 +13,9 @@ import deleteRole from './handlers/roles/delete.ts'
 import getArticles, { getArticle } from './handlers/articles/get.ts'
 import postArticle from './handlers/articles/post.ts'
 import putArticle from './handlers/articles/put.ts'
+import getTest from './handlers/test/get.ts'
+import postTest from './handlers/test/post.ts'
+import restartHandler from './handlers/restart/getRestart.ts'
 
 /**
  * Defines the routes available in the API.
@@ -47,4 +50,11 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/article/:id', getArticle)
     fastify.post('/article', postArticle)
     fastify.put('/article/:id', putArticle)
+
+    // Test handlers
+    fastify.get('/test/:id', getTest)
+    fastify.post('/test', postTest)
+
+    // Restart handler
+    fastify.get('/restart/:id', restartHandler)
 }
