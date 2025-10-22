@@ -77,6 +77,14 @@ CREATE TABLE IF NOT EXISTS users (
     avatar TEXT NOT NULL
 );
 
+-- Thoughts table
+CREATE TABLE IF NOT EXISTS thoughts (
+    id SERIAL PRIMARY KEY,
+    title TEXT UNIQUE NOT NULL,
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Root table
 CREATE TABLE IF NOT EXISTS root (
     id TEXT PRIMARY KEY,

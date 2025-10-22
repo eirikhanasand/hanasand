@@ -22,6 +22,13 @@ import putUser from './handlers/user/putUser.ts'
 import deleteUser from './handlers/user/deleteUser.ts'
 import authorizedUserHandler from './handlers/user/fullUser.ts'
 import getUsers from './handlers/user/getUsers.ts'
+import { deleteArticle } from './handlers/articles/delete.ts'
+import getThought from './handlers/thoughts/get.ts'
+import getThoughts from './handlers/thoughts/getThoughts.ts'
+import postThought from './handlers/thoughts/post.ts'
+import putThought from './handlers/thoughts/put.ts'
+import { deleteThought } from './handlers/thoughts/delete.ts'
+import getRandomThought from './handlers/thoughts/getRandomThought.ts'
 
 /**
  * Defines the routes available in the API.
@@ -62,6 +69,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/article/:id', getArticle)
     fastify.post('/article', postArticle)
     fastify.put('/article/:id', putArticle)
+    fastify.delete('article/:id', deleteArticle)
 
     // Test handlers
     fastify.get('/test/:id', getTest)
@@ -69,4 +77,12 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Restart handler
     fastify.get('/restart/:id', restartHandler)
+
+    // Thought handlers
+    fastify.get('/thoughts', getThoughts)
+    fastify.get('/thought/:id', getThought)
+    fastify.get('/thought/random', getRandomThought)
+    fastify.post('/thought', postThought)
+    fastify.put('/thought/:id', putThought)
+    fastify.delete('/thought/:id', deleteThought)
 }

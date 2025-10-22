@@ -1,4 +1,4 @@
-import { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { loadSQL } from '#utils/loadSQL.ts'
 import run from '#db'
 
