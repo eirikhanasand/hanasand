@@ -53,14 +53,15 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
+        let assignedRoot = false
         const hashedPassword = await bcrypt.hash(password, 10)
         const response = await run(
             `INSERT INTO users (id, name, password, avatar) 
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (id) DO NOTHING`, 
+            ON CONFLICT (id) DO NOTHING`,
             [id, name, hashedPassword, avatar || '']
         )
-        
+
         if (!response.rowCount) {
             return res.status(400).send({ error: 'The username is taken.' })
         }
@@ -68,17 +69,29 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         const userQuery = await loadSQL('assignUserRole.sql')
         await run(userQuery, [id])
 
-        const token = await login({ id, ip })
-        if (!token) {
-            res.status(206).send({ ...user, message: 'User created', error: 'Unable to login. Please try again later.' })
+        const rootResult = await run(`SELECT * FROM root`)
+        if (rootResult.rows.length <= 1) {
+            const rootQuery = await loadSQL('assignAdministratorRole.sql')
+            await run(rootQuery, [id])
+            assignedRoot = true
         }
 
-        return res.status(201).send({ ...user, message: 'User created', token })
+        const token = await login({ id, ip })
+        if (!token) {
+            const base = { ...user, message: 'User created', error: 'Unable to login. Please try again later.' }
+            const data = assignedRoot ? { ...base, assignedRoot } : base
+            res.status(206).send(data)
+        }
+
+        const base = { ...user, message: 'User created', token }
+        const data = assignedRoot ? { ...base, assignedRoot } : base
+        return res.status(201).send(data)
     } catch (err) {
         const error = err as unknown as Error & { code: string }
         if (error.code === '23505') {
             return res.status(409).send({ error: 'User ID already exists' })
         }
+
         return res.status(500).send({ error: error.message })
     }
 }

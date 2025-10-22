@@ -33,11 +33,6 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
     const token = authHeader.split(' ')[1]
 
     try {
-        const rootResult = await run(`SELECT * FROM root`)
-        if (!rootResult.rows.length) {
-            return res.status(200).send({ noRoot: true, error: 'No administrator found.' })
-        }
-
         const tokenResult = await run(
             `SELECT token FROM tokens WHERE username = $1 AND token = $2`,
             [id, token]
