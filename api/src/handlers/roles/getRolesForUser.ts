@@ -23,7 +23,7 @@ export default async function getRolesForUser(req: FastifyRequest, res: FastifyR
             return res.status(404).send({ error: 'No roles found.' })
         }
 
-        return res.send(result.rows[0])
+        return res.send(result.rows)
     } catch (error) {
         console.error(error)
         return res.status(500).send({ error: 'Internal Server Error.' })

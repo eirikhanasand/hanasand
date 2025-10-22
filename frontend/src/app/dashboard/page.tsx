@@ -8,12 +8,12 @@ import { redirect } from 'next/navigation'
 export default async function Page() {
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
-    
+
     if (!name) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
-    const text = timeBasedGreeting({name})
+    const text = timeBasedGreeting({ name })
 
     return (
         <div className='h-full'>

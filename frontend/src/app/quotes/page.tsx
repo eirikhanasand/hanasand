@@ -2,7 +2,8 @@ import quotes from './quotes.json'
 import './page.css'
 
 export default function page() {
-    const shuffledQuotes = shuffleArray(quotes)
+    const shuffledQuotes = shuffleArray(Array.isArray(quotes) ? quotes : [])
+
     return (
         <div className='relative max-h-[93.5vh] w-full overflow-hidden bg-black'>
             <div className='scrolling-quotes grid md:grid-cols-4'>

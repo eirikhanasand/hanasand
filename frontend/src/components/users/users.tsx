@@ -6,7 +6,7 @@ export default async function Users() {
     const Cookies = await cookies()
     const id = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
-    const users = await fetchUsersWithRoles({id, token})
+    const users = await fetchUsersWithRoles({ id, token })
 
     return (
         <div className='grid w-full p-2 outline-1 outline-dark rounded-lg gap-2'>
