@@ -1,5 +1,4 @@
 import React, { ReactNode } from 'react'
-import './globals.css'
 import { cookies, headers } from 'next/headers'
 import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
@@ -8,6 +7,8 @@ import Login from '@/components/login/login'
 import { FileCode, Eye, LinkIcon, UploadIcon, Flame, Code, ArrowUp } from 'lucide-react'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
+import Menu from '@/components/menu/menu'
+import './globals.css'
 
 export const metadata = {
     title: 'Eirik Hanasand',
@@ -31,7 +32,8 @@ export default async function layout({children}: {children: ReactNode}) {
         <html lang='en' className={theme}>
             <body className='h-full w-full'>
                 <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-foreground bg-dark grid grid-cols-3 px-4 select-none'>
-                    <div className='flex items-center'>
+                    <div className='w-full' />
+                    <div className='hidden md:flex items-center'>
                         <Link href='/upload' className='group relative grid place-items-center'>
                             <div className={baseStyles}>
                                 <UploadIcon />
@@ -61,7 +63,7 @@ export default async function layout({children}: {children: ReactNode}) {
                         </Link>
                     </div>
                     <div className='grid place-items-center w-full'>
-                        <Link href='/' className='group w-fit grid place-items-center h-12 hover:bg-[#6464641a] px-10 rounded-lg cursor-pointer'>
+                        <Link href='/' className='group w-fit grid place-items-center h-12 hover:bg-[#6464641a] md:px-10 rounded-lg cursor-pointer'>
                             <h1 className='font-semibold text-bright text-glow'>hanasand</h1>
                         </Link>
                     </div>
@@ -69,6 +71,7 @@ export default async function layout({children}: {children: ReactNode}) {
                         <ThemeSwitch />
                         {token ? <Dashboard /> : ''}
                         {token ? <Logout baseStyles={baseStyles} /> : <Login />}
+                        <Menu />
                     </div>
                 </header>
                 <div className='mt-[6.5vh] h-[93.5vh] w-full overflow-auto'>
