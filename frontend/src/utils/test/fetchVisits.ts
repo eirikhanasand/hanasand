@@ -1,8 +1,8 @@
 import config from '@/config'
 
-export async function fetchTest(id: string): Promise<Test | null> {
+export async function fetchVisits(id: number): Promise<number | null> {
     try {
-        const res = await fetch(`${config.url.api}/test/${id}`)
+        const res = await fetch(`${config.url.api}/test/visits/${id}`)
         if (!res.ok) {
             throw new Error(`Failed to fetch test: ${res.status}`)
         }

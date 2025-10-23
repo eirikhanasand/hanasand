@@ -188,7 +188,7 @@ type Test = {
     id: number
     url: string
     timeout: number
-    stages: object
+    stages: object & { default: boolean }
     status: string
     created_at: string
     visits: number

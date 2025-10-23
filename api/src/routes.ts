@@ -81,6 +81,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Test handlers
     fastify.get('/test/:id', getTest)
+    fastify.get('/test/visits/:id', getTest)
     fastify.post('/test', postTest)
 
     // Restart handler
