@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS root (
 
 -- Load tests table
 CREATE TABLE IF NOT EXISTS load_tests (
-    id SERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY DEFAULT substring(translate(encode(gen_random_bytes(4), 'base64'), '+/', 'AB') for 6),
     url TEXT NOT NULL,
     timeout INTEGER DEFAULT 1,
     stages JSONB NOT NULL DEFAULT '{"default": true}',
