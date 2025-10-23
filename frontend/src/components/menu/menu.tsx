@@ -12,7 +12,7 @@ import ShareIcon from './shareIcon'
 
 export default function Menu() {
     const [open, setOpen] = useState(false)
-    const [token, setToken] = useState<string | null>(null)
+    const [token, setToken] = useState<boolean>(false)
     const path = usePathname()
     const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer hover:bg-[#6464641a]'
     const isUpload = path.includes('/upload')
@@ -26,10 +26,8 @@ export default function Menu() {
     }
 
     useEffect(() => {
-        const cookieToken = getCookie('access_token') || undefined
-        if (cookieToken) {
-            setToken(cookieToken)
-        }
+        const cookieToken = getCookie('access_token')
+        setToken(Boolean(cookieToken))
     }, [])
 
     if (!open) {
@@ -73,10 +71,10 @@ export default function Menu() {
                     </div>
                     <h1 className='self-center font-semibold'>Load test</h1>
                 </Link>
-                {token && <Link href='/dashboard' onClick={toggleOpen} className='flex pl-2 pr-5'>
-                    <Dashboard />
-                    <h1 className='self-center font-semibold'>Dashboard</h1>
-                </Link>}
+                <Link href='/dashboard' onClick={toggleOpen} className='flex pl-2 pr-5'>
+                    <Dashboard serverToken={token} />
+                    {token && <h1 className='self-center font-semibold'>Dashboard</h1>}
+                </Link>
             </div>
         </div>
     )

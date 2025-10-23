@@ -2,9 +2,12 @@
 
 import config from '@/config'
 import { getCookie, removeCookies } from '@/utils/cookies'
+import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 export default function LogoutPageClient({ path }: { path?: string }) {
+    const router = useRouter()
+
     useEffect(() => {
         (async () => {
             try {
@@ -21,13 +24,13 @@ export default function LogoutPageClient({ path }: { path?: string }) {
                 }
 
                 if (path) {
-                    window.location.href = path
+                    router.push(path)
                 } else {
-                    window.location.href = `/?${queryString}&logout=true`
+                    router.push(`/?${queryString}&logout=true`)
                 }
             } catch (error) {
                 console.log(error)
-                window.location.href = `/?logout=true&error=true`
+                router.push('/?logout=true&error=true')
             }
         })()
     }, [])

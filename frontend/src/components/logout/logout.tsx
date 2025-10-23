@@ -1,7 +1,24 @@
+'use client'
+
+import { getCookie } from '@/utils/cookies'
 import { ArrowRight, LogOut } from 'lucide-react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
-export default function Logout({ baseStyles }: { baseStyles: string }) {
+export default function Logout({ baseStyles, serverToken }: { baseStyles: string, serverToken: boolean }) {
+    const [token, setToken] = useState<boolean>(serverToken)
+    const path = usePathname()
+
+    useEffect(() => {
+        const clientToken = getCookie('access_token')
+        setToken(Boolean(clientToken))
+    }, [path])
+
+    if (!token) {
+        return
+    } 
+
     return (
         <Link href='/logout' className='group relative grid place-items-center'>
             <div className={baseStyles}>

@@ -21,7 +21,7 @@ export default async function layout({children}: {children: ReactNode}) {
     const Cookies = await cookies()
     const Headers = await headers()
     const theme = Cookies.get('theme')?.value || 'dark'
-    const token = Cookies.get('access_token')?.value || undefined
+    const token = Boolean(Cookies.get('access_token')?.value) || false
     const path = Headers.get('x-current-path') || ''
     const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer hover:bg-[#6464641a]'
     const isUpload = path.includes('/upload')
@@ -58,8 +58,9 @@ export default async function layout({children}: {children: ReactNode}) {
                     </div>
                     <div className='flex justify-end items-center'>
                         <ThemeSwitch />
-                        {token ? <Dashboard href='/dashboard' /> : ''}
-                        {token ? <Logout baseStyles={baseStyles} /> : <Login />}
+                        <Dashboard href='/dashboard' serverToken={token} />
+                        <Logout baseStyles={baseStyles} serverToken={token} />
+                        <Login serverToken={token} />
                         <Menu />
                     </div>
                 </header>

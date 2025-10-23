@@ -1,9 +1,10 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import config from '@/config'
-import { setCookie } from '@/utils/cookies'
+import { getCookie, setCookie } from '@/utils/cookies'
 import Or from '@/utils/or'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 type LoginPageProps = {
@@ -16,6 +17,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const [error, setError] = useState('')
     const [internal, setInternal] = useState<boolean>(serverInternal)
     const [expired, setExpired] = useState<boolean>(serverExpired)
+    const router = useRouter()
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -43,9 +45,9 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
             setCookie('access_token', data.token, 1)
 
             if (path) {
-                window.location.href = path
+                router.push(path)
             } else {
-                window.location.href = `/dashboard`
+                router.push(`/dashboard`)
             }
         } catch (error) {
             if ('message' in (error as { message: string })) {
@@ -97,6 +99,14 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
             }, 8000)
         }
     }, [expired])
+
+    useEffect(() => {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (token && id) {
+            router.push('/dashboard')
+        }
+    }, [router])
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-4 place-items-center'>

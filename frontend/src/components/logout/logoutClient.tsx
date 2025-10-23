@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Notify from '../notify/notify'
 
-export default function LogoutClient({ logoutServer }: { logoutServer?: string }) {
-    const [logout, setLogout] = useState(Boolean(logoutServer) ?? false)
+export default function LogoutClient({ logoutServer }: { logoutServer: boolean }) {
+    const [logout, setLogout] = useState(logoutServer)
     const router = useRouter()
 
     useEffect(() => {

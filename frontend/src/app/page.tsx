@@ -11,12 +11,12 @@ export default async function Page({
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
     const params = await searchParams
-    const logout = Array.isArray(params.logout) ? params.logout[0] : params.logout
+    const logout = Boolean(Array.isArray(params.logout) ? params.logout[0] : params.logout) || false
 
     return (
         <div className='grid relative'>
             <LogoutClient logoutServer={logout} />
-            <Content />
+            <Content logout={logout} />
             <Featured />
             <Articles recent={false} max={4} includeRecentTitle={false} />
             <Apps />
