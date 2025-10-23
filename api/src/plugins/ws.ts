@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
+import followTest from '../handlers/test/follow'
 
 type PendingUpdates = { 
     content: string
@@ -59,6 +60,8 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         fastify.get('/api/test/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             registerClient(id, connection, testClients)
+
+            followTest(id)
 
             connection.on('close', () => {
                 removeClient(id, connection, testClients)
