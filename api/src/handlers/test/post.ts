@@ -43,4 +43,3 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
     const result = await run(sql, values)
     return res.send(result.rows[0])
 }
-
