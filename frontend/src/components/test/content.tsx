@@ -52,7 +52,7 @@ export default function Content({ test, setParticipants, setIsConnected }: Conte
         return () => {
             ws.close()
         }
-    }, [test.id, reconnect])
+    }, [test.id, reconnect, setIsConnected, setParticipants])
 
     return (
         <div className="p-4  rounded-lg shadow-sm outline-1 outline-dark w-full max-w-3xl mx-auto space-y-4">

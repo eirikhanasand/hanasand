@@ -3,10 +3,10 @@
 import prettyDate from '@/utils/prettyDate'
 import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
 import { ActivityIcon, Fingerprint, LinkIcon, Timer, Users, Watch, Wifi, WifiOff, Workflow } from 'lucide-react'
-import Visits from './visits'
-import Content from './content'
-import ConnectionStatus from './connectionStatus'
+import Visits from '@/components/test/visits'
+import Content from '@/components/test/content'
 import { useState } from 'react'
+import ConnectionStatus from '@/components/test/connectionStatus'
 
 type LeftSideProps = {
     test: Test
