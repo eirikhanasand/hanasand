@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
-import followTest from '../handlers/test/follow'
+import followTest from '../handlers/test/follow.ts'
 
 type PendingUpdates = { 
     content: string

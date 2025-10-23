@@ -1,15 +1,20 @@
-# Latest node alpine image
+# Stage 1: Build stage
+FROM grafana/k6:latest AS k6builder
+
+# Stage 2: Final image
 FROM node:alpine
 
-# Sets the working directory
+# Install dependencies
+RUN apk add --no-cache varnish git openssh-client
+
+# Copy k6 binary from the build stage
+COPY --from=k6builder /usr/bin/k6 /usr/bin/k6
+
+# Set the working directory
 WORKDIR /app
 
-# Sets the node environment to production (removes dev features)
+# Set the node environment to production
 ENV NODE_ENV=production
-
-# Installs apk dependencies
-RUN apk add --no-cache varnish git openssh-client \
-    && apk add --no-cache --repository https://dl.k6.io/alpine/edge/main k6
 
 # Starts varnish
 COPY ./default.vcl /etc/varnish/default.vcl
@@ -20,14 +25,14 @@ COPY ./package*.json ./
 # Installs node dependencies
 RUN npm ci --omit=dev
 
-# Copies the rest of the API source code
+# Copy the rest of the API source code
 COPY . .
 
 # Adds script execution permissions
 RUN chmod +x /app/entrypoint.sh
 
-# Exposes API port
+# Expose API port
 EXPOSE 8080
 
-# Starts the application by executing the entrypoint script
+# Start the application
 CMD chmod +x /app/entrypoint.sh; /app/entrypoint.sh
