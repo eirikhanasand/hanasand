@@ -31,7 +31,7 @@ import { deleteThought } from './handlers/thoughts/delete.ts'
 import getRandomThought from './handlers/thoughts/getRandomThought.ts'
 import postThoughtByTitle from './handlers/thoughts/postThoughtByTitle.ts'
 import assignRole from './handlers/roles/assignRole.ts'
-import unassignRole from './handlers/roles/unAssignRole.ts'
+import unassignRole from './handlers/roles/unassignRole.ts'
 import putSelf from './handlers/user/putSelf.ts'
 
 /**
