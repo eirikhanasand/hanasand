@@ -1,11 +1,12 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import { getLink } from '@/utils/links/get'
 import prettyDate from '@/utils/prettyDate'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useState } from 'react'
 
 export default function LinkStatsPageClient() {
     const [query, setQuery] = useState('')
@@ -35,17 +36,7 @@ export default function LinkStatsPageClient() {
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     return (
         <div className='w-full h-full bg-light p-4 space-y-4 relative'>

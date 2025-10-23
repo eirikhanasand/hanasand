@@ -4,6 +4,7 @@ import Notify from '@/components/notify/notify'
 import Info from '@/components/share/info'
 import Lock from '@/components/share/lock'
 import WordControl from '@/components/share/wordControl'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import HideIfLittleSpace from '@/hooks/hideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
@@ -47,7 +48,7 @@ export default function Metadata({
     const [id, setId] = useState(randomServerId)
     const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
     const [error, setError] = useState<string | null>(null)
-    HideIfLittleSpace({set: setShowMetadata})
+    HideIfLittleSpace({ set: setShowMetadata })
 
     useEffect(() => {
         const random = randomId()
@@ -60,17 +61,7 @@ export default function Metadata({
         }, 350)
     }, [didCopy])
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError(null)
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'

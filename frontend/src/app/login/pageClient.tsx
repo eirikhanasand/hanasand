@@ -1,6 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import config from '@/config'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import { getCookie, setCookie } from '@/utils/cookies'
 import Or from '@/utils/or'
 import Link from 'next/link'
@@ -14,7 +15,7 @@ type LoginPageProps = {
 }
 
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
-    const [error, setError] = useState('')
+    const [error, setError] = useState<string | null>(null)
     const [internal, setInternal] = useState<boolean>(serverInternal)
     const [expired, setExpired] = useState<boolean>(serverExpired)
     const router = useRouter()
@@ -72,33 +73,9 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
-
-    useEffect(() => {
-        if (internal) {
-            setTimeout(() => {
-                setInternal(false)
-            }, 5000)
-        }
-    }, [internal])
-
-    useEffect(() => {
-        if (expired) {
-            setTimeout(() => {
-                setExpired(false)
-            }, 8000)
-        }
-    }, [expired])
+    ClearStateAfter({ condition: error, set: setError })
+    ClearStateAfter({ condition: internal, set: setInternal })
+    ClearStateAfter({ condition: expired, set: setExpired, timeout: 8000 })
 
     useEffect(() => {
         const token = getCookie('access_token')

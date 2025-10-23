@@ -1,6 +1,7 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import copy from '@/utils/copy'
 import { postLink } from '@/utils/links/post'
 import { Copy } from 'lucide-react'
@@ -36,17 +37,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     useEffect(() => {
         setTimeout(() => {

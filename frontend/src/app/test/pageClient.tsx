@@ -2,6 +2,7 @@
 
 import Notify from '@/components/notify/notify'
 import config from '@/config'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import copy from '@/utils/copy'
 import { postTest } from '@/utils/test/postTest'
 import { Copy } from 'lucide-react'
@@ -34,17 +35,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
         setTimeout(() => {

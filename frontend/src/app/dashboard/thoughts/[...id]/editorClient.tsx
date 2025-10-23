@@ -1,10 +1,11 @@
 'use client'
 
 import Editor from '@/components/editor/editor'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import deleteThought from '@/utils/thoughts/deleteThought'
 import { Trash } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 export default function EditorClient({ thought }: { thought: Thought }) {
     const [error, setError] = useState<string | null>(null)
@@ -21,17 +22,7 @@ export default function EditorClient({ thought }: { thought: Thought }) {
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError(null)
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     return (
         <div className={`grid gap-2 ${editing ? '' : 'px-10 md:px-[20vw]'}`}>

@@ -4,8 +4,9 @@ import useKeyPress from '@/hooks/keyPressed'
 import deleteArticle from '@/utils/articles/deleteArticle'
 import { Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Notify from '../notify/notify'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 
 export default function DashboardArticle({ article }: { article: Article }) {
     const [deleted, setDeleted] = useState(false)
@@ -28,11 +29,7 @@ export default function DashboardArticle({ article }: { article: Article }) {
         }
     }
 
-    useEffect(() => {
-        setTimeout(() => {
-            setError(null)
-        }, 5000)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     return (
         <div className='group'>

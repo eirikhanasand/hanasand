@@ -1,6 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import config from '@/config'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import { setCookie } from '@/utils/cookies'
 import Or from '@/utils/or'
 import Link from 'next/link'
@@ -92,18 +93,6 @@ export default function RegisterPageClient({ path, serverInternal, noroot }: Reg
     }
 
     useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
-
-    useEffect(() => {
         let numbers = 0
         let specialCharacters = 0
         let lowerCaseCharacters = 0
@@ -112,33 +101,28 @@ export default function RegisterPageClient({ path, serverInternal, noroot }: Reg
             if (!isNaN(Number(char))) {
                 numbers++
             }
-
+            
             if (/[^a-zA-Z0-9]/.test(char)) {
                 specialCharacters++
             }
-
+            
             if (/[a-z]/.test(char)) {
                 lowerCaseCharacters++
             }
-
+            
             if (/[A-Z]/.test(char)) {
                 upperCaseCharacters++
             }
         }
-
+        
         setNumbersInPasswordCount(numbers)
         setCharactersInPasswordCount(specialCharacters)
         setLowercaseInPasswordCount(lowerCaseCharacters)
         setUppercaseInPasswordCount(upperCaseCharacters)
     }, [password])
 
-    useEffect(() => {
-        if (internal) {
-            setTimeout(() => {
-                setInternal(false)
-            }, 5000)
-        }
-    }, [internal])
+    ClearStateAfter({ condition: error, set: setError })
+    ClearStateAfter({ condition: internal, set: setInternal })
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>

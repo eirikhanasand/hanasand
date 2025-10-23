@@ -2,10 +2,11 @@
 
 import deleteThought from '@/utils/thoughts/deleteThought'
 import { Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Notify from '../notify/notify'
 import useKeyPress from '@/hooks/keyPressed'
 import { useRouter } from 'next/navigation'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 
 export default function DashboardThought({ thought }: { thought: Thought }) {
     const [deleted, setDeleted] = useState(false)
@@ -28,11 +29,7 @@ export default function DashboardThought({ thought }: { thought: Thought }) {
         }
     }
 
-    useEffect(() => {
-        setTimeout(() => {
-            setError(null)
-        }, 5000)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     return (
         <div className='group'>

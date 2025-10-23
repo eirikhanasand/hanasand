@@ -1,9 +1,10 @@
 'use client'
 
-import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 import ImagePreview from './imagePreview'
 import config from '@/config'
 import { postFile } from '@/utils/files/post'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 
 type PreviewProps = {
     url: string
@@ -79,17 +80,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     if (!url || !file) return null
 

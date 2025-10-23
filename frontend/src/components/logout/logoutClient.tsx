@@ -1,21 +1,15 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Notify from '../notify/notify'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 
 export default function LogoutClient({ logoutServer }: { logoutServer: boolean }) {
     const [logout, setLogout] = useState(logoutServer)
     const router = useRouter()
 
-    useEffect(() => {
-        if (logout) {
-            setTimeout(() => {
-                setLogout(false)
-                router.push('/')
-            }, 5000)
-        }
-    }, [logout])
+    ClearStateAfter({ condition: logout, set: setLogout, timeout: 5000, onClear: () => router.push('/') })
 
     if (!logout) {
         return

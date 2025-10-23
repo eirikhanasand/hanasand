@@ -52,7 +52,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)
     fastify.put('/user', putUser)
-    fastify.delete('/user', deleteUser)
+    fastify.delete('/user/:id', deleteUser)
 
     // Roles handlers
     fastify.get('/role/:id', getRole)

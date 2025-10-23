@@ -6,6 +6,7 @@ import 'highlight.js/styles/github-dark.css'
 import { getShare } from '@/utils/share/get'
 import config from '@/config'
 import Editor from '@/components/share/editor'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 
 type CodeProps = {
     id: string
@@ -58,17 +59,7 @@ export default function Code({
         fetchShare()
     }, [id])
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
         if (codeRef.current) {

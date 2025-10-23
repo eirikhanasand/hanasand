@@ -2,9 +2,10 @@
 
 import Notify from '@/components/notify/notify'
 import PwnedSearch from '@/components/pwned/pwnedSearch'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import postPwned from '@/utils/pwned/checkPassword'
 import { ArrowLeft, Eye } from 'lucide-react'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useState } from 'react'
 
 export default function PwnedPageClient() {
     const [password, setPassword] = useState('')
@@ -36,17 +37,7 @@ export default function PwnedPageClient() {
         setDidSearch(false)
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError('')
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError })
 
     return (
         <div className={`w-full h-full bg-light p-4 space-y-4 relative rounded-lg ${!didSearch ? 'glow-green' : breached ? 'glow-red' : 'glow-green'}`}>

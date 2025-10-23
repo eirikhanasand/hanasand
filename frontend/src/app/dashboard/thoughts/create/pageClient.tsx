@@ -2,6 +2,7 @@
 
 import Editor from '@/components/editor/editor'
 import Notify from '@/components/notify/notify'
+import ClearStateAfter from '@/hooks/clearStateAfter'
 import fetchThoughtByTitle from '@/utils/thoughts/fetchThoughtByTitle'
 import { postThought } from '@/utils/thoughts/postThought'
 import { Plus } from 'lucide-react'
@@ -28,17 +29,7 @@ export default function CreateClient() {
         }
     }
 
-    useEffect(() => {
-        if (!error) {
-            return
-        }
-
-        const timeout = setTimeout(() => {
-            setError(null)
-        }, 5000)
-
-        return () => clearTimeout(timeout)
-    }, [error])
+    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     useEffect(() => {
         if (title) {
