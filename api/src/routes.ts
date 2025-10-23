@@ -30,6 +30,8 @@ import putThought from './handlers/thoughts/put.ts'
 import { deleteThought } from './handlers/thoughts/delete.ts'
 import getRandomThought from './handlers/thoughts/getRandomThought.ts'
 import postThoughtByTitle from './handlers/thoughts/postThoughtByTitle.ts'
+import assignRole from './handlers/roles/assignRole.ts'
+import unassignRole from './handlers/roles/unAssignRole.ts'
 
 /**
  * Defines the routes available in the API.
@@ -59,6 +61,8 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/roles', getRoles)
     fastify.get('/roles/user/:id', getRolesForUser)
     fastify.post('/role', postRole)
+    fastify.post('/role/assign/:id', assignRole)
+    fastify.post('/role/unassign/:id', unassignRole)
     fastify.put('/role/:id', putRole)
     fastify.delete('/role/:id', deleteRole)
 

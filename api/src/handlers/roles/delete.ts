@@ -1,14 +1,18 @@
 import run from '#db'
+import hasPermissionToModifyRole from '#utils/hasPermissionToModifyRole.ts'
+import hasRole from '#utils/hasRole.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 /**
  * DELETE /role/:id
- * Delete a role by ID
+ * Deletes a role by ID
  */
 export default async function deleteRole(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
+    const { valid: validRole } = await hasRole(req, res, 'user_admin')
+    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
+    if (!valid || !validRole || !hasPermission) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 

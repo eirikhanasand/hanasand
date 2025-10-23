@@ -6,7 +6,8 @@ import { getCookie } from '../cookies'
 export default async function deleteRole(id: string): Promise<{ status: number, message: string }> {
     try {
         const token = getCookie('access_token')
-        if (!token) {
+        const id = getCookie('id')
+        if (!token || !id) {
             return {
                 status: 401,
                 message: 'Please log in to delete roles.'
@@ -16,7 +17,8 @@ export default async function deleteRole(id: string): Promise<{ status: number, 
         const response = await fetch(`${config.url.api}/role/${id}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                'id': id
             }
         })
 
