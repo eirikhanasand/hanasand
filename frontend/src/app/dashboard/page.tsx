@@ -21,7 +21,7 @@ export default async function Page() {
                 <div className='grid w-full p-2 rounded-lg'>
                     <h1 className='text-2xl font-semibold'>{text}</h1>
                 </div>
-                <div className='grid grid-cols-2 gap-2'>
+                <div className='grid md:grid-cols-2 gap-2'>
                     <DashboardArticles />
                     <Thoughts />
                     <Users />
