@@ -96,10 +96,16 @@ CREATE TABLE IF NOT EXISTS load_tests (
     id SERIAL PRIMARY KEY,
     url TEXT NOT NULL,
     timeout INTEGER DEFAULT 1,
-    stages JSONB NOT NULL DEFAULT '{ "default": "true" }',
+    stages JSONB NOT NULL DEFAULT '{"default": true}',
     status TEXT DEFAULT 'pending',
     visits INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
+    logs TEXT[] DEFAULT '{}',
+    errors TEXT[] DEFAULT '{}',
+    exit_code INT,
+    summary JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP DEFAULT NOW(),
+    finished_at TIMESTAMP,
+    duration INTERVAL
 );
 
 -- Index on user-roles 

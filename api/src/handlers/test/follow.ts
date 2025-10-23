@@ -6,6 +6,11 @@ import { testClients } from '#ws'
 export default async function followTest(id: string) {
     const result = await run('SELECT * FROM load_tests WHERE id = $1', [id])
     const test = result.rows[0]
+    if (!test) {
+        return
+    }
+
+    const start = new Date()
 
     await run('UPDATE load_tests SET status = $1 WHERE id = $2', ['running', id])
 
@@ -17,17 +22,28 @@ export default async function followTest(id: string) {
         '../../utils/test.ts'
     ])
 
-    k6.stdout.on('data', (data) => {
+    k6.stdout.on('data', async (data) => {
         const message = data.toString()
         broadcast({ data: { type: 'log', message }, id, clients: testClients })
+        await run('UPDATE load_tests SET logs = array_append(logs, $1) WHERE id = $2', [message, id])
     })
 
-    k6.stderr.on('data', (data) => {
-        broadcast({ data: { type: 'error', message: data.toString() }, id, clients: testClients })
+    k6.stderr.on('data', async (data) => {
+        const message = data.toString()
+        broadcast({ data: { type: 'error', message }, id, clients: testClients })
+        await run('UPDATE load_tests SET errors = array_append(errors, $1) WHERE id = $2', [message, id])
     })
 
     k6.on('close', async (code) => {
-        await run('UPDATE load_tests SET status = $1 WHERE id = $2', ['done', id])
+        const finished = new Date()
+        const durationMs = finished.getTime() - start.getTime()
+        await run(
+            `UPDATE load_tests 
+            SET status = $1, exit_code = $2, finished_at = $3, duration = $4 
+            WHERE id = $5`,
+            ['done', code, finished, `${durationMs} milliseconds`, id]
+        )
+
         broadcast({ data: { type: 'done', code }, id, clients: testClients })
     })
 }
