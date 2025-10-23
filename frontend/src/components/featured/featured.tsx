@@ -31,8 +31,8 @@ export default function Featured() {
             <div className='grid md:grid-rows-2 md:grid-cols-2 gap-8 place-items-center mt-4'>
                 {images.map((image) => <Project
                     key={image.title}
-                    image={image.image} 
-                    title={image.title} 
+                    image={image.image}
+                    title={image.title}
                     description={image.description}
                 />)}
             </div>
@@ -40,15 +40,14 @@ export default function Featured() {
     )
 }
 
-function Project({title, description, image}: ArticleProps) {
-    console.log(image)
+function Project({ title, description, image }: ArticleProps) {
     return (
-        <article className='outline-1 outline-dark cursor-pointer hover:scale-[1.03] w-full h-fit pb-2 md:pb-0 md:h-[25vh] overflow-hidden rounded-3xl'>
+        <article className='outline-1 outline-dark cursor-pointer hover:scale-[1.03] w-full h-fit md:h-full pb-2 md:pb-0 overflow-hidden rounded-3xl'>
             {/* <article className='bg-dark w-full h-[55vh] overflow-hidden rounded-3xl'> */}
             {/* <Image className='w-full h-[62%] object-cover' src={image} alt={title} width={800} height={450} /> */}
-            <div className='mx-5 mt-5 text-foreground grid gap-2'>
+            <div className='m-5 text-foreground grid gap-2'>
                 <h1>{title}</h1>
-                <p className='text-gray-500' dangerouslySetInnerHTML={{__html: description}} />
+                <p className='text-gray-500' dangerouslySetInnerHTML={{ __html: description }} />
                 <h1 className='text-red-400'>This section is coming soon! &lt;3</h1>
                 {/* <h1 className='text-foreground text-lg'>See more &#x2192;</h1> */}
             </div>

@@ -54,7 +54,7 @@ function Recent({ recent, max, includeTitle = true }: RecentProps) {
     return (
         <div className='grid gap-4 my-4'>
             {includeTitle && <h1 className='font-semibold text-xl'>Recently published</h1>}
-            <div className='grid grid-cols-2 gap-8'>
+            <div className='grid md:grid-cols-2 gap-8'>
                 {displayed.map((article) => <Article
                     key={article.title}
                     article={article}
@@ -70,7 +70,7 @@ function All({ recent, max, includeTitle = true }: RecentProps) {
     return (
         <div className='grid gap-4 my-4'>
             {includeTitle && <h1 className='font-semibold text-xl'>All articles</h1>}
-            <div className='grid grid-cols-2 gap-8'>
+            <div className='grid md:grid-cols-2 gap-8'>
                 {displayed.map((article) => <Article
                     key={article.title}
                     article={article}
@@ -85,15 +85,15 @@ function Article({ article }: ArticleProps) {
 
     return (
         <Link
-            className='hover:scale-[1.03] transition-1000 rounded-3xl cursor-pointer'
+            className='hover:scale-[1.03] transition-1000 rounded-3xl cursor-pointer h-fit md:h-full'
             href={`/articles/${id}`}
         >
-            <article className='outline-1 outline-dark w-full h-full max-h-[58vh] overflow-hidden rounded-2xl'>
-                {metadata.image && <Image className='w-full h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
+            <article className='outline-1 outline-dark w-full h-full max-h-fit md:max-h-full lg:max-h-[58vh] overflow-hidden rounded-2xl'>
+                {metadata.image && <Image className='w-full max-h-[15rem] md:h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
                 <div className='p-5 text-foreground grid gap-2'>
-                    <div className='flex justify-between w-full'>
-                        <h1 className='text-lg font-semibold'>{title}</h1>
-                        <h1 className='text-gray-500/70 min-w-fit text-xs mt-1'>Published {prettyDate(new Date(created).toISOString())}</h1>
+                    <div className='w-full'>
+                        <h1 className='text-gray-500/70 min-w-fit text-xs mt-1 float-right'>Published {prettyDate(new Date(created).toISOString())}</h1>
+                        <h1 className='lg:text-lg font-semibold'>{title}</h1>
                     </div>
                     <p className='text-gray-500'>{metadata.description}</p>
                     {metadata.wordCount > 100
