@@ -1,10 +1,12 @@
 import run from '#db'
+import hasRole from '#utils/hasRole.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function putThought(req: FastifyRequest<{ Params: { id: string }, Body: { title: string } }>, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
+    const { valid: validRole } = await hasRole(req, res, 'content_admin')
+    if (!valid || !validRole) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 

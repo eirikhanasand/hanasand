@@ -1,6 +1,7 @@
 import commitAndPush from '#utils/git/commitAndPush.ts'
 import fileExists from '#utils/git/fileExists.ts'
 import { ARTICLES_DIR } from '#utils/git/git.ts'
+import hasRole from '#utils/hasRole.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { writeFile } from 'fs/promises'
@@ -8,7 +9,8 @@ import { join } from 'path'
 
 export default async function postArticle(req: FastifyRequest<{ Params: { id: string }, Body: { content: string } }>, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
+    const { valid: validRole } = await hasRole(req, res, 'content_admin')
+    if (!valid || !validRole) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 

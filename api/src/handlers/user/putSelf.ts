@@ -4,7 +4,6 @@ import run from '#db'
 import checkPwned from '#utils/checkPwned.ts'
 import login from '#utils/login.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
-import hasRole from '#utils/hasRole.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -13,18 +12,16 @@ type GetUserBodyProps = {
     avatar: string
 }
 
-export default async function putUser(req: FastifyRequest, res: FastifyReply) {
+export default async function putSelf(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    const { valid: validRole } = await hasRole(req, res, 'user_admin')
-    if (!valid || !validRole) {
+    if (!valid) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 
-    const { id } = req.params as { id: string } ?? {}
     const { name, password, avatar } = req.body as GetUserBodyProps ?? {}
     const ip = req.ip
-
-    if (!id) {
+    const id = req.headers['id']
+    if (!id || Array.isArray(id)) {
         return res.status(400).send({ error: 'No user provided.' })
     }
 

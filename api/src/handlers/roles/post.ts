@@ -1,4 +1,5 @@
 import run from '#db'
+import hasRole from '#utils/hasRole.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
@@ -15,17 +16,12 @@ type PostRoleBody = {
  */
 export default async function postRole(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
-        return res.status(404).send({ error: 'Unauthorized.' })
-    }
-
-    const { valid: roleValid } = await tokenWrapper(req, res)
-    if (!roleValid) {
+    const { valid: validRole } = await hasRole(req, res, 'user_admin')
+    if (!valid || !validRole) {
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 
     const { id, name, description, created_by } = req.body as PostRoleBody ?? {}
-
     if (!name || !created_by) {
         return res.status(400).send({ error: 'Missing required fields: name or created_by' })
     }
