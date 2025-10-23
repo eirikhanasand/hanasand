@@ -190,6 +190,13 @@ type Test = {
     timeout: number
     stages: object & { default: boolean }
     status: string
+    logs: object[]
+    errors: object[]
+    duration: number
     created_at: string
+    finished_at: string
+    exit_code: number
     visits: number
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    summary: any
 }
