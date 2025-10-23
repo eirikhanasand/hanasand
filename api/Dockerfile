@@ -8,7 +8,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Installs apk dependencies
-RUN apk add varnish git openssh-client
+RUN apk add --no-cache varnish git openssh-client \
+    && apk add --no-cache --repository https://dl.k6.io/alpine/edge/main k6
 
 # Starts varnish
 COPY ./default.vcl /etc/varnish/default.vcl
