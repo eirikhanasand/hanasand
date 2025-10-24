@@ -33,6 +33,7 @@ import postThoughtByTitle from './handlers/thoughts/postThoughtByTitle.ts'
 import assignRole from './handlers/roles/assignRole.ts'
 import unassignRole from './handlers/roles/unassignRole.ts'
 import putSelf from './handlers/user/putSelf.ts'
+import getVisits from './handlers/test/getVisits.ts'
 
 /**
  * Defines the routes available in the API.
@@ -81,7 +82,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Test handlers
     fastify.get('/test/:id', getTest)
-    fastify.get('/test/visits/:id', getTest)
+    fastify.get('/test/visits/:id', getVisits)
     fastify.post('/test', postTest)
 
     // Restart handler
