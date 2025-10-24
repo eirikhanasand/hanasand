@@ -3,6 +3,22 @@ import { spawn } from 'child_process'
 import broadcast from '#utils/ws/broadcast.ts'
 import { testClients } from '#ws'
 
+const defaultStages = [
+    { "duration": "5s", "target": 1 },
+    { "duration": "10s", "target": 10 },
+    { "duration": "10s", "target": 50 },
+    { "duration": "10s", "target": 100 },
+    { "duration": "10s", "target": 200 },
+    { "duration": "10s", "target": 500 },
+    { "duration": "10s", "target": 1000 },
+    { "duration": "10s", "target": 500 },
+    { "duration": "10s", "target": 200 },
+    { "duration": "10s", "target": 100 },
+    { "duration": "10s", "target": 50 },
+    { "duration": "10s", "target": 10 },
+    { "duration": "10s", "target": 1 }
+]
+
 export default async function followTest(id: string) {
     const result = await run('SELECT * FROM load_tests WHERE id = $1', [id])
     const test = result.rows[0]
@@ -11,6 +27,7 @@ export default async function followTest(id: string) {
     }
 
     const start = new Date()
+    const stages = test.stages.default ? defaultStages : test.stages
 
     await run('UPDATE load_tests SET status = $1 WHERE id = $2', ['running', id])
 
@@ -18,8 +35,8 @@ export default async function followTest(id: string) {
         'run',
         '--env', `URL=${test.url}`,
         '--env', `TIMEOUT=${test.timeout}`,
-        '--env', `STAGES=${JSON.stringify(test.stages)}`,
-        '../../utils/test.ts'
+        '--env', `STAGES=${JSON.stringify(stages)}`,
+        'src/utils/test.ts'
     ])
 
     k6.stdout.on('data', async (data) => {

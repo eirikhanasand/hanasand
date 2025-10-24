@@ -1,7 +1,7 @@
 'use client'
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { CircleCheckBig } from 'lucide-react'
+import { CircleCheckBig, Hourglass } from 'lucide-react'
 
 type TestContentProps = {
     test: Test
@@ -13,6 +13,7 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
     const logs = test.logs.join('\n')
     const errors = test.errors.join('\n')
     const isDone = test.status === 'done'
+    const isPending = test.status === 'pending'
 
     const metrics = test.summary || {}
 
@@ -23,7 +24,12 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
             <div className="flex justify-between items-center">
                 <h1 className="text-lg font-semibold">Test Results</h1>
                 <div className="text-sm text-gray-300">
-                    {isDone ? <CircleCheckBig className='stroke-green-500 w-5 h-5' /> : <h1>Status: <span className="font-medium">{test.status}</span></h1>}
+                    {isDone 
+                        ? <CircleCheckBig className='stroke-green-500 w-5 h-5' /> 
+                        : isPending 
+                            ? <Hourglass className='stroke-yellow-500 w-5 h-5' /> 
+                            : <h1>Status: <span className="font-medium">{test.status}</span></h1>
+                    }
                 </div>
             </div>
 
