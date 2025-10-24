@@ -17,8 +17,8 @@ export default async function Page({
             <div className='grid w-full spawn rounded-lg overflow-hidden glow-orange'>
                 <div className='w-full h-full bg-light p-4 space-y-4 relative grid place-items-center'>
                     {pathDidNotExist && (
-                        <div className='w-full bg-dark rounded-lg p-2 text-gray-200'>
-                            <h1>The test &apos;{id}&apos; does not exist yet! Feel free to create it 😃</h1>
+                        <div className='absolute top-2 w-full px-2'>
+                            <h1 className='p-2 bg-dark rounded-lg'>The test &apos;{id}&apos; does not exist yet! Feel free to create it 😃</h1>
                         </div>
                     )}
                     <div className={!pathDidNotExist ? 'h-full grid place-items-center' : ''}>
