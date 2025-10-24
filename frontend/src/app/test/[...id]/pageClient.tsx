@@ -18,11 +18,12 @@ type LeftSideProps = {
     setShowErrors: Dispatch<SetStateAction<boolean>>
 }
 
-export default function TestClient({ test }: { test: Test }) {
+export default function TestClient({ test: serverTest }: { test: Test }) {
     const [participants, setParticipants] = useState(1)
     const [isConnected, setIsConnected] = useState(false)
     const [showLogs, setShowLogs] = useState(false)
     const [showErrors, setShowErrors] = useState(false)
+    const [test, setTest] = useState(serverTest)
 
     return (
         <>
@@ -36,6 +37,7 @@ export default function TestClient({ test }: { test: Test }) {
             />
             <Content
                 test={test}
+                setTest={setTest}
                 setParticipants={setParticipants}
                 setIsConnected={setIsConnected}
                 showLogs={showLogs}

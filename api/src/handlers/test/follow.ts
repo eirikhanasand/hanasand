@@ -21,8 +21,13 @@ const defaultStages = [
 
 export default async function followTest(id: string) {
     const result = await run('SELECT * FROM load_tests WHERE id = $1', [id])
-    const test = result.rows[0]
+    const test: Test = result.rows[0]
     if (!test) {
+        return
+    }
+
+    if (test.status === 'running') {
+        console.log("RETURNING SINCE IT WAS ALREADY RUNNING")
         return
     }
 

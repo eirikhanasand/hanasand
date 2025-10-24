@@ -14,7 +14,6 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
     const errors = test.errors.join('\n')
     const isDone = test.status === 'done'
     const isPending = test.status === 'pending'
-
     const metrics = test.summary || {}
 
     return (
