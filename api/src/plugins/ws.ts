@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin'
-import WebSocket, { RawData } from 'ws'
+import WebSocket from 'ws'
+import type { RawData } from 'ws'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
