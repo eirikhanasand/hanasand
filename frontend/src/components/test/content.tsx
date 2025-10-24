@@ -57,7 +57,7 @@ export default function Content({ test, setParticipants, setIsConnected, showLog
     }, [test.id, reconnect, setIsConnected, setParticipants])
 
     return (
-        <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full space-y-4">
+        <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4">
             <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
         </div>
     )
