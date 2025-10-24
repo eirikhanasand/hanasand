@@ -18,6 +18,15 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
         return res.status(400).send({ error: 'No url provided.' })
     }
 
+    const existing = await run(
+        `SELECT id FROM load_tests WHERE url = $1 LIMIT 1`,
+        [url]
+    )
+
+    if (existing.rows.length > 0) {
+        return res.status(200).send({ id: existing.rows[0].id, existing: true })
+    }
+
     const fields: string[] = ['url']
     const values: any[] = [url]
     const placeholders: string[] = ['$1']
