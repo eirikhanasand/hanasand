@@ -19,10 +19,10 @@ const defaultStages = [
     { "duration": "10s", "target": 1 }
 ]
 
-export default async function followTest(id: string) {
+export default async function followTest(id: string, rerun?: boolean) {
     const result = await run('SELECT * FROM load_tests WHERE id = $1', [id])
     const test: Test = result.rows[0]
-    if (!test || test.status === 'running' || test.status === 'done') {
+    if (!test || test.status === 'running' || (test.status === 'done' && !rerun)) {
         return
     }
 

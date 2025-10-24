@@ -12,9 +12,20 @@ type ContentProps = {
     setIsConnected: Dispatch<SetStateAction<boolean>>
     showLogs: boolean
     showErrors: boolean
+    rerun: boolean
+    setRerun: Dispatch<SetStateAction<boolean>>
 }
 
-export default function Content({ test, setTest, setParticipants, setIsConnected, showLogs, showErrors }: ContentProps) {
+export default function Content({ 
+    test, 
+    setTest, 
+    setParticipants, 
+    setIsConnected, 
+    showLogs, 
+    showErrors, 
+    rerun, 
+    setRerun 
+}: ContentProps) {
     const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
     const id = test.id
@@ -28,6 +39,9 @@ export default function Content({ test, setTest, setParticipants, setIsConnected
         ws.onopen = () => {
             setReconnect(false)
             setIsConnected(true)
+            if (rerun) {
+                ws.send(JSON.stringify({ type: 'rerun', id }))
+            }
         }
 
         ws.onclose = () => {
@@ -56,6 +70,7 @@ export default function Content({ test, setTest, setParticipants, setIsConnected
                             errors: [...(prev.errors || []), msg.data.message],
                         }))
                     } else if (msg.data.type === 'done') {
+                        setRerun(false)
                         setTest((prev: Test) => ({
                             ...prev,
                             status: 'done',
@@ -73,7 +88,7 @@ export default function Content({ test, setTest, setParticipants, setIsConnected
         return () => {
             ws.close()
         }
-    }, [id, setTest, reconnect, setIsConnected, setParticipants])
+    }, [id, setTest, reconnect, setIsConnected, setParticipants, rerun, setRerun])
 
     return (
         <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4">

@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin'
-import WebSocket from 'ws'
+import WebSocket, { RawData } from 'ws'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
@@ -62,6 +62,12 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             registerClient(id, connection, testClients)
 
             followTest(id)
+
+            connection.on('message', (msg) => {
+                if ((msg as RawData & { type: string}).type === 'rerun') {
+                    followTest(id, true)
+                }
+            })
 
             connection.on('close', () => {
                 removeClient(id, connection, testClients)

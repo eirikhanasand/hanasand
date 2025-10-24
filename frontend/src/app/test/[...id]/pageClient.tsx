@@ -2,7 +2,7 @@
 
 import prettyDate from '@/utils/prettyDate'
 import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
-import { ActivityIcon, Bug, Fingerprint, Hourglass, LinkIcon, Logs, Timer, Users, Watch, Wifi, WifiOff, Workflow } from 'lucide-react'
+import { ActivityIcon, Bug, Fingerprint, Hourglass, LinkIcon, Logs, RefreshCw, Timer, Users, Watch, Wifi, WifiOff, Workflow } from 'lucide-react'
 import Visits from '@/components/test/visits'
 import Content from '@/components/test/content'
 import { Dispatch, SetStateAction, useState } from 'react'
@@ -16,6 +16,8 @@ type LeftSideProps = {
     setShowLogs: Dispatch<SetStateAction<boolean>>
     showErrors: boolean
     setShowErrors: Dispatch<SetStateAction<boolean>>
+    rerun: boolean
+    setRerun: Dispatch<SetStateAction<boolean>>
 }
 
 export default function TestClient({ test: serverTest }: { test: Test }) {
@@ -24,6 +26,7 @@ export default function TestClient({ test: serverTest }: { test: Test }) {
     const [showLogs, setShowLogs] = useState(true)
     const [showErrors, setShowErrors] = useState(false)
     const [test, setTest] = useState(serverTest)
+    const [rerun, setRerun] = useState(false)
 
     return (
         <>
@@ -34,6 +37,8 @@ export default function TestClient({ test: serverTest }: { test: Test }) {
                 setShowLogs={setShowLogs}
                 showErrors={showErrors}
                 setShowErrors={setShowErrors}
+                rerun={rerun}
+                setRerun={setRerun}
             />
             <Content
                 test={test}
@@ -42,6 +47,8 @@ export default function TestClient({ test: serverTest }: { test: Test }) {
                 setIsConnected={setIsConnected}
                 showLogs={showLogs}
                 showErrors={showErrors}
+                rerun={rerun}
+                setRerun={setRerun}
             />
         </>
     )
@@ -54,9 +61,18 @@ function LeftSide({
     showLogs,
     setShowLogs,
     showErrors,
-    setShowErrors
+    setShowErrors,
+    rerun,
+    setRerun
 }: LeftSideProps) {
     const ms = test.duration?.milliseconds
+
+    function handleRerun() {
+        if (!rerun) {
+            setRerun(true)
+        }
+    }
+    
     return (
         <div className='p-2 outline-1 outline-dark rounded-lg h-[100%] overflow-auto min-w-[15rem] w-fit space-y-2'>
             <div className='flex justify-between items-center gap-5'>
@@ -123,6 +139,10 @@ function LeftSide({
                 <Bug />
                 <h1>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
             </button>}
+            <button onClick={handleRerun} className={`group flex gap-2 rounded-lg hover:bg-dark p-2 w-full ${rerun ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                {rerun ? <Hourglass className='group-hover:stroke-yellow-400' /> : <RefreshCw className='group-hover:stroke-blue-400' />}
+                {rerun ? <h1>Running...</h1> : <h1>Rerun</h1>}
+            </button>
         </div>
     )
 }
