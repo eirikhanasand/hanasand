@@ -17,12 +17,13 @@ type ContentProps = {
 export default function Content({ test, setTest, setParticipants, setIsConnected, showLogs, showErrors }: ContentProps) {
     const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
+    const id = test.id
     ClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
-        if (!test.id) return
+        if (!id) return
 
-        const ws = new WebSocket(`${config.url.api_ws}/test/ws/${test.id}`)
+        const ws = new WebSocket(`${config.url.api_ws}/test/ws/${id}`)
 
         ws.onopen = () => {
             setReconnect(false)
@@ -35,7 +36,6 @@ export default function Content({ test, setTest, setParticipants, setIsConnected
 
         ws.onerror = (error) => {
             console.log('WebSocket error:', error)
-            setIsConnected(false)
             setError('Connection error')
         }
 
@@ -46,7 +46,6 @@ export default function Content({ test, setTest, setParticipants, setIsConnected
                     setParticipants(msg.participants)
                 } else if (msg.type === 'update') {
                     if (msg.data.type === 'log') {
-                        console.log("inside", test)
                         setTest((prev: Test) => ({
                             ...prev,
                             logs: [...(prev.logs || []), msg.data.message],
@@ -74,7 +73,7 @@ export default function Content({ test, setTest, setParticipants, setIsConnected
         return () => {
             ws.close()
         }
-    }, [test, setTest, reconnect, setIsConnected, setParticipants])
+    }, [id, setTest, reconnect, setIsConnected, setParticipants])
 
     return (
         <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4">

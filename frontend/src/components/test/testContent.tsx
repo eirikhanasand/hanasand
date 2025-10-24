@@ -2,6 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { CircleCheckBig, Hourglass } from 'lucide-react'
+import LogViewer from './logViewer'
 
 type TestContentProps = {
     test: Test
@@ -10,14 +11,12 @@ type TestContentProps = {
 }
 
 export default function TestContent({ test, showLogs, showErrors }: TestContentProps) {
-    const logs = test.logs.join('\n')
-    const errors = test.errors.join('\n')
     const isDone = test.status === 'done'
     const isPending = test.status === 'pending'
     const metrics = test.summary || {}
 
     return (
-        <div className="space-y-6 w-full">
+        <div className="space-y-6 w-full h-[100%] overflow-hidden pb-2 relative">
 
             {/* Header / Overview */}
             <div className="flex justify-between items-center">
@@ -78,19 +77,10 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
                 )}
             </div>
 
-            {/* Logs */}
-            {showLogs && (
-                <pre className="bg-dark rounded-md p-2 max-h-64 overflow-auto text-xs text-gray-200">
-                    {logs}
-                </pre>
-            )}
-
-            {/* Errors */}
-            {showErrors && (
-                <pre className="bg-dark rounded-md p-2 max-h-64 overflow-auto text-xs text-red-300">
-                    {errors}
-                </pre>
-            )}
+            {showLogs && <LogViewer isDone={isDone} text={test.logs || []} />}
+            {showErrors && <div className={`absolute bottom-0 left-0 ${isDone ? 'bg-red-500/40  backdrop-blur-md' : 'bg-red-500/20'} w-full rounded-lg max-h-[20rem] overflow-auto`}>
+                <LogViewer text={test.errors || []} />
+            </div>}
         </div>
     )
 }

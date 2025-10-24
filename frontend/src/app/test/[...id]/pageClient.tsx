@@ -21,7 +21,7 @@ type LeftSideProps = {
 export default function TestClient({ test: serverTest }: { test: Test }) {
     const [participants, setParticipants] = useState(1)
     const [isConnected, setIsConnected] = useState(false)
-    const [showLogs, setShowLogs] = useState(false)
+    const [showLogs, setShowLogs] = useState(true)
     const [showErrors, setShowErrors] = useState(false)
     const [test, setTest] = useState(serverTest)
 
@@ -58,7 +58,7 @@ function LeftSide({
 }: LeftSideProps) {
     const ms = test.duration?.milliseconds
     return (
-        <div className='p-2 outline-1 outline-dark rounded-lg h-full min-w-[15rem] w-fit space-y-2'>
+        <div className='p-2 outline-1 outline-dark rounded-lg h-[100%] overflow-auto min-w-[15rem] w-fit space-y-2'>
             <div className='flex justify-between items-center gap-5'>
                 <h1 className='text-lg font-semibold'>Metadata</h1>
                 <div className="flex items-center gap-2">

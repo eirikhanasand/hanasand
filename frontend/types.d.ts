@@ -190,8 +190,8 @@ type Test = {
     timeout: number
     stages: object & { default: boolean }
     status: string
-    logs: object[]
-    errors: object[]
+    logs: string[]
+    errors: string[]
     duration: { milliseconds: number }
     created_at: string
     finished_at: string
