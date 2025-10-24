@@ -8,7 +8,7 @@ export async function fetchVisits(id: number): Promise<number | null> {
         }
 
         const data = await res.json()
-        return data
+        return data.visits
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
             console.error('Request timed out after 1s')

@@ -1,37 +1,31 @@
 'use client'
 
-import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import prettyDate from '@/utils/prettyDate'
+import { CircleCheckBig } from 'lucide-react'
 
 type TestContentProps = {
     test: Test
+    showLogs: boolean
+    showErrors: boolean
 }
 
-export default function TestContent({ test }: TestContentProps) {
-    const [logsVisible, setLogsVisible] = useState(false)
-    const [errorsVisible, setErrorsVisible] = useState(false)
+export default function TestContent({ test, showLogs, showErrors }: TestContentProps) {
+    const logs = test.logs.join('\n')
+    const errors = test.errors.join('\n')
+    const isDone = test.status === 'done'
 
     const metrics = test.summary || {}
-    console.log("test.summary", test.summary)
+    console.log("test.summary", test)
 
     return (
-        <div className="p-4 space-y-6 w-full max-w-4xl mx-auto bg-white/5 rounded-xl shadow-md">
+        <div className="space-y-6 w-full">
 
             {/* Header / Overview */}
             <div className="flex justify-between items-center">
-                <h1 className="text-xl font-semibold">Load Test: {test.url}</h1>
+                <h1 className="text-lg font-semibold">Test Results</h1>
                 <div className="text-sm text-gray-300">
-                    Status: <span className="font-medium">{test.status}</span>
+                    {isDone ? <CircleCheckBig className='stroke-green-500 w-5 h-5' /> : <h1>Status: <span className="font-medium">{test.status}</span></h1>}
                 </div>
-            </div>
-
-            {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-4 text-sm text-gray-300">
-                <div>Timeout: {test.timeout}s</div>
-                <div>Created: {prettyDate(test.created_at)}</div>
-                <div>Duration: {test.duration ? test.duration : '-'}</div>
-                <div>Visits: {test.visits}</div>
             </div>
 
             {/* Metrics Charts */}
@@ -81,34 +75,18 @@ export default function TestContent({ test }: TestContentProps) {
             </div>
 
             {/* Logs */}
-            <div>
-                <button
-                    onClick={() => setLogsVisible((prev) => !prev)}
-                    className="text-sm text-blue-400 underline"
-                >
-                    {logsVisible ? 'Hide Logs' : 'Show Logs'}
-                </button>
-                {logsVisible && (
-                    <pre className="bg-black/20 rounded-md p-2 max-h-64 overflow-auto text-xs text-gray-200">
-                        {test.logs.join('\n')}
-                    </pre>
-                )}
-            </div>
+            {showLogs && (
+                <pre className="bg-dark rounded-md p-2 max-h-64 overflow-auto text-xs text-gray-200">
+                    {logs}
+                </pre>
+            )}
 
             {/* Errors */}
-            <div>
-                <button
-                    onClick={() => setErrorsVisible((prev) => !prev)}
-                    className="text-sm text-red-400 underline"
-                >
-                    {errorsVisible ? 'Hide Errors' : 'Show Errors'}
-                </button>
-                {errorsVisible && (
-                    <pre className="bg-black/20 rounded-md p-2 max-h-64 overflow-auto text-xs text-red-300">
-                        {test.errors.join('\n')}
-                    </pre>
-                )}
-            </div>
+            {showErrors && (
+                <pre className="bg-dark rounded-md p-2 max-h-64 overflow-auto text-xs text-red-300">
+                    {errors}
+                </pre>
+            )}
         </div>
     )
 }

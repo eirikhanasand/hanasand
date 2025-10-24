@@ -192,7 +192,7 @@ type Test = {
     status: string
     logs: object[]
     errors: object[]
-    duration: number
+    duration: { milliseconds: number }
     created_at: string
     finished_at: string
     exit_code: number

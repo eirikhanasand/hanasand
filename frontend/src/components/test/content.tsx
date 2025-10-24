@@ -9,9 +9,11 @@ type ContentProps = {
     test: Test
     setParticipants: Dispatch<SetStateAction<number>>
     setIsConnected: Dispatch<SetStateAction<boolean>>
+    showLogs: boolean
+    showErrors: boolean
 }
 
-export default function Content({ test, setParticipants, setIsConnected }: ContentProps) {
+export default function Content({ test, setParticipants, setIsConnected, showLogs, showErrors }: ContentProps) {
     const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
     const wsRef = useRef<WebSocket | null>(null)
@@ -55,10 +57,8 @@ export default function Content({ test, setParticipants, setIsConnected }: Conte
     }, [test.id, reconnect, setIsConnected, setParticipants])
 
     return (
-        <div className="p-4  rounded-lg shadow-sm outline-1 outline-dark w-full max-w-3xl mx-auto space-y-4">
-            <div className="space-y-3 text-sm text-gray-300">
-                <TestContent test={test} />
-            </div>
+        <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full space-y-4">
+            <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
         </div>
     )
 }
