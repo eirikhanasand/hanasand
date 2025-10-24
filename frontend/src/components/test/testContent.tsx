@@ -15,7 +15,6 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
     const isDone = test.status === 'done'
 
     const metrics = test.summary || {}
-    console.log("test.summary", test)
 
     return (
         <div className="space-y-6 w-full">
