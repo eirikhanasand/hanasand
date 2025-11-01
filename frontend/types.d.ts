@@ -200,3 +200,19 @@ type Test = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     summary: any
 }
+
+type FileItemBase = {
+    id: string
+    name: string
+}
+
+type FileFile = FileItemBase & {
+    type: 'file'
+}
+
+type FileFolder = FileItemBase & {
+    type: 'folder'
+    children: FileItem[]
+}
+
+type FileItem = FileFile | FileFolder

@@ -5,7 +5,7 @@ import Explorer from '@/components/share/explorer'
 import Metadata from '@/components/share/metadata'
 import { useState } from 'react'
 
-export default function ClientPage({ id, randomId }: { id: string, randomId: string }) {
+export default function ClientPage({ id, randomId, openFolders }: { id: string, randomId: string, openFolders: string[] }) {
     const [showExplorer, setShowExplorer] = useState(true)
     const [showMetadata, setShowMetaData] = useState(true)
     const [participants, setParticipants] = useState(1)
@@ -18,7 +18,7 @@ export default function ClientPage({ id, randomId }: { id: string, randomId: str
 
     return (
         <div className='flex w-full h-full max-w-[100vw]'>
-            <Explorer showExplorer={showExplorer} setShowExplorer={setShowExplorer} />
+            <Explorer showExplorer={showExplorer} setShowExplorer={setShowExplorer} openFolders={openFolders} />
             <div className={`flex-1 flex flex-col min-h-full w-full ${showExplorer && showMetadata && 'max-w-[66vw]'} bg-light text-foreground`}>
                 <Code
                     id={id}

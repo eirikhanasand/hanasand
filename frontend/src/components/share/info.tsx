@@ -29,7 +29,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     const lineText = `${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`
 
     return (
-        <div className='bg-light p-4 flex justify-between items-center shadow-md rounded-lg'>
+        <div className='p-2 flex justify-between items-center rounded-lg'>
             <h1 className='font-semibold text-lg'>{share.path}</h1>
             <div className='grid w-full gap-4'>
                 <div className='flex gap-2'>
