@@ -216,3 +216,9 @@ type FileFolder = FileItemBase & {
 }
 
 type FileItem = FileFile | FileFolder
+
+type Log = {
+    content: string
+    timestamp: string
+    type: 'stdout' | 'stderr'
+}

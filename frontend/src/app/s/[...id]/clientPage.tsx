@@ -1,6 +1,8 @@
 'use client'
 
 import Code from '@/components/share/code'
+import Terminal from '@/components/share/terminal'
+import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/explorer'
 import Metadata from '@/components/share/metadata'
 import { useState } from 'react'
@@ -15,6 +17,8 @@ export default function ClientPage({ id, randomId, openFolders }: { id: string, 
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
     const [syntaxHighlighting, setSyntaxHighlighting] = useState(true)
     const [share, setShare] = useState<Share | null>(null)
+    const [open, setOpen] = useState(false)
+    const [deploying, setDeploying] = useState(false)
 
     return (
         <div className='flex w-full h-full max-w-[100vw]'>
@@ -49,6 +53,8 @@ export default function ClientPage({ id, randomId, openFolders }: { id: string, 
                 syntaxHighlighting={syntaxHighlighting}
                 setSyntaxHighlighting={setSyntaxHighlighting}
             />
+            <Terminal share={share} open={open} setOpen={setOpen} />
+            <Deploy deploying={deploying} setDeploying={setDeploying} setOpen={setOpen} />
         </div>
     )
 }

@@ -363,6 +363,16 @@ body {
   animation: fadein 0.5s forwards;
 }
 
+@keyframes gradient-fast {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-fast {
+  animation: gradient-fast 5s linear infinite;
+}
+
 @keyframes fadein {
   to {
     opacity: 1;
@@ -424,4 +434,8 @@ body {
     0 0 8px rgba(226, 88, 34, 0.9),
     0 0 16px rgba(226, 88, 34, 0.8),
     0 0 24px rgba(226, 88, 34, 0.7);
+}
+
+body.dragging {
+  user-select: none !important;
 }
