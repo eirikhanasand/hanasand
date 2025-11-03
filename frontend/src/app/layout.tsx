@@ -33,7 +33,7 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang='en' className={theme}>
             <body className='h-full w-full'>
-                <header className='fixed top-0 left-0 h-[6.5vh] z-100 w-full max-h-[6.5vh] text-foreground bg-dark grid grid-cols-3 px-4 select-none'>
+                <header className='fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] text-foreground bg-dark grid grid-cols-3 px-4 select-none'>
                     <div className='block md:hidden w-full' />
                     <div className='hidden md:flex items-center'>
                         <Upload baseStyles={baseStyles} isUpload={isUpload} href='/upload' />

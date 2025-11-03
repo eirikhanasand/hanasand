@@ -5,6 +5,7 @@ import Terminal from '@/components/share/terminal'
 import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/explorer'
 import Metadata from '@/components/share/metadata'
+import RenderSite from '@/components/share/renderSite'
 import { useState } from 'react'
 
 export default function ClientPage({ id, randomId, openFolders }: { id: string, randomId: string, openFolders: string[] }) {
@@ -19,6 +20,7 @@ export default function ClientPage({ id, randomId, openFolders }: { id: string, 
     const [share, setShare] = useState<Share | null>(null)
     const [open, setOpen] = useState(false)
     const [deploying, setDeploying] = useState(false)
+    const [renderSite, setRenderSite] = useState(false)
 
     return (
         <div className='flex w-full h-full max-w-[100vw]'>
@@ -55,6 +57,7 @@ export default function ClientPage({ id, randomId, openFolders }: { id: string, 
             />
             <Terminal share={share} open={open} setOpen={setOpen} />
             <Deploy deploying={deploying} setDeploying={setDeploying} setOpen={setOpen} />
+            <RenderSite name={id} renderSite={renderSite} setRenderSite={setRenderSite} />
         </div>
     )
 }
