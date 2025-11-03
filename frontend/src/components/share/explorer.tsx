@@ -16,7 +16,7 @@ const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center 
 export default function Explorer({ showExplorer, setShowExplorer, openFolders }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
     HideIfLittleSpace({ set: setShowExplorer })
-    const [files] = useState([])
+    const [files] = useState(sampleFiles)
 
     if (!showExplorer) {
         return (
@@ -86,3 +86,97 @@ function FileNode({ file }: { file: FileItem }) {
         </Link>
     )
 }
+
+const sampleFiles: FileItem[] = [
+    {
+        id: '1',
+        name: 'src',
+        type: 'folder',
+        children: [
+            {
+                id: '2',
+                name: 'components',
+                type: 'folder',
+                children: [
+                    { id: '3', name: 'Header.tsx', type: 'file' },
+                    {
+                        id: '26',
+                        name: 'components',
+                        type: 'folder',
+                        children: [
+                            { id: '3', name: 'Header.tsx', type: 'file' },
+                            {
+                                id: '26',
+                                name: 'components',
+                                type: 'folder',
+                                children: [
+                                    { id: '3', name: 'Header.tsx', type: 'file' },
+                                    {
+                                        id: '26',
+                                        name: 'components',
+                                        type: 'folder',
+                                        children: [
+                                            { id: '3', name: 'Header.tsx', type: 'file' },
+                                            {
+                                                id: '2',
+                                                name: 'components',
+                                                type: 'folder',
+                                                children: [
+                                                    { id: '3', name: 'Header.tsx', type: 'file' },
+                                                    {
+                                                        id: '26',
+                                                        name: 'components',
+                                                        type: 'folder',
+                                                        children: [
+                                                            { id: '3', name: 'Header.tsx', type: 'file' },
+                                                            {
+                                                                id: '26',
+                                                                name: 'components',
+                                                                type: 'folder',
+                                                                children: [
+                                                                    { id: '3', name: 'Header.tsx', type: 'file' },
+                                                                    {
+                                                                        id: '26',
+                                                                        name: 'components',
+                                                                        type: 'folder',
+                                                                        children: [
+                                                                            { id: '3', name: 'Header.tsx', type: 'file' },
+                                                                            { id: '4', name: 'Footer.tsx', type: 'file' },
+                                                                        ],
+                                                                    },
+                                                                ],
+                                                            },
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                id: '5',
+                name: 'pages',
+                type: 'folder',
+                children: [
+                    { id: '6', name: 'index.tsx', type: 'file' },
+                    { id: '7', name: 'about.tsx', type: 'file' },
+                ],
+            },
+        ],
+    },
+    {
+        id: '8',
+        name: 'package.json',
+        type: 'file',
+    },
+    {
+        id: '9',
+        name: 'README.md',
+        type: 'file',
+    },
+]

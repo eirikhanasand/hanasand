@@ -439,3 +439,8 @@ body {
 body.dragging {
   user-select: none !important;
 }
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  50.1%, 100% { opacity: 0; }
+}

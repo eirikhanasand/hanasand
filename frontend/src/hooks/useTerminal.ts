@@ -1,18 +1,23 @@
 import config from '@/config'
 import randomId from '@/utils/random/randomId'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-export default function useTerminal({ share }: { share: Share | null }) {
+type TerminalProps = {
+    share: Share | null
+}
+
+export default function useTerminal({ share }: TerminalProps) {
     const [reconnect, setReconnect] = useState(false)
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [log, setLog] = useState<Log[]>([])
+    const wsRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
         if (!share || share.id) return
 
         const session = randomId(6)
-        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.id}/terminal/${session}`)
+        const ws = new WebSocket(`${config.url.internal_wss}/share/ws/${share.id}/terminal/${session}`)
 
         ws.onopen = () => {
             setReconnect(false)
@@ -49,5 +54,15 @@ export default function useTerminal({ share }: { share: Share | null }) {
         }
     }, [share, reconnect])
 
-    return { isConnected, participants, log }
+    function sendMessage(message: string) {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify(message))
+            return { status: true }
+        } else {
+            console.warn('WebSocket not connected.')
+            return { status: false, message: 'Websocket not connected' }
+        }
+    }
+
+    return { isConnected, participants, log, sendMessage }
 }

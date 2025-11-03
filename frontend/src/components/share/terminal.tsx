@@ -15,7 +15,7 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
     const startY = useRef(0)
     const startHeight = useRef(0)
     const [isDone, setIsDone] = useState(false)
-    const { isConnected, participants, log } = useTerminal({ share })
+    const { isConnected, participants, log, sendMessage } = useTerminal({ share })
 
     function handleMouseDown(e: React.MouseEvent) {
         setIsDragging(true)
@@ -121,9 +121,8 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
                     </button>
                 </div>
 
-                {/* Content area */}
-                <div className="p-3 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300">
-                    <TerminalViewer text={log.map((l) => l.content)} isDone={isDone} />
+                <div className="px-2 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300">
+                    <TerminalViewer sendMessage={sendMessage} text={log.map((l) => l.content)} isDone={isDone} />
                 </div>
             </div>
         </>
