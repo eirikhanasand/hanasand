@@ -11,7 +11,6 @@ const config = {
         cdn: 'https://cdn.hanasand.com/api',
         // cdn: 'http://localhost:8501/api',
         link: 'https://hanasand.com/g',
-        internal_wss: 'wss://internal.hanasand.com/api',
     },
     version: packagejson.version
 }

@@ -1,10 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 
-interface User {
-  id: string
-  name: string
-  avatar: string
+type User = {
+    id: string
+    name: string
+    avatar: string
 }
 
 /**
