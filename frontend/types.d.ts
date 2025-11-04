@@ -15,7 +15,7 @@ type InnerCommit = {
     author: Author
     committer: Committer
     message: string
-    tree: Tree
+    tree: CommitTree
     url: string
     comment_count: number
     verification: Verification
@@ -33,7 +33,7 @@ type Committer = {
     date: string
 }
 
-type Tree = {
+type CommitTree = {
     sha: string
     url: string
 }
@@ -112,6 +112,7 @@ type Share = {
     locked: boolean
     owner: string
     parent: string
+    alias: string
 }
 
 type Link = {
@@ -204,6 +205,8 @@ type Test = {
 type FileItemBase = {
     id: string
     name: string
+    alias: string | null
+    parent: string | null
 }
 
 type FileFile = FileItemBase & {
@@ -222,3 +225,5 @@ type Log = {
     timestamp: string
     type: 'stdout' | 'stderr'
 }
+
+type Tree = FileItem[]

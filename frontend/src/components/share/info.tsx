@@ -12,13 +12,18 @@ type HeaderProps = {
 
 export default function Info({ share, isConnected, participants }: HeaderProps) {
     const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
-    
+    const [copyText, setCopyText] = useState(share?.id || '')
+
     useEffect(() => {
         setTimeout(() => {
             setDidCopy(false)
         }, 1000)
     }, [didCopy])
-    
+
+    useEffect(() => {
+        setCopyText(window.location.href.split('/').reverse()[0])
+    }, [])
+
     if (!share) {
         return <></>
     }
@@ -48,7 +53,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                 <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
                     <Link className={didCopy === true ? 'stroke-green-600' : didCopy === false ? '' : 'stroke-red-500'} height={18} width={18} />
                     <div className='flex flex-col flex-1 overflow-hidden'>
-                        <Marquee className='truncate' text={window.location.href.split('/').reverse()[0]} />
+                        <Marquee className='truncate' text={copyText} />
                     </div>
                 </span>
                 <span className='gap-2 text-sm text-gray-400 flex'>

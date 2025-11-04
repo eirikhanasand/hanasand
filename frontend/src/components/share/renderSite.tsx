@@ -2,12 +2,12 @@ import { Monitor } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
 type ShowSiteProps = {
-    name: string
+    share: Share | null
     renderSite: boolean
     setRenderSite: Dispatch<SetStateAction<boolean>>
 }
 
-export default function RenderSite({ name, renderSite, setRenderSite }: ShowSiteProps) {
+export default function RenderSite({ share, renderSite, setRenderSite }: ShowSiteProps) {
     const [width, setWidth] = useState(0)
 
     function handleMouseDown(e: React.MouseEvent) {
@@ -93,9 +93,13 @@ export default function RenderSite({ name, renderSite, setRenderSite }: ShowSite
                 <div className="absolute h-10 w-1 right-5 bg-extralight group-hover:bg-white/30 rounded-full" />
             </div>
 
-            {renderSite && width > 0 && (
+            {renderSite && width > 0 && !share?.alias && (
+                <h1 className='w-full h-full grid place-items-center text-center border-none text-gray-400 mt-13'>Loading...</h1>
+            )}
+
+            {renderSite && width > 0 && share?.alias && (
                 <iframe
-                    src={`https://${name}.hanasand.com`}
+                    src={`https://${share.alias}.hanasand.com`}
                     style={{ width: '100%', height: '100vh', border: 'none' }}
                     title="Embedded Site"
                 ></iframe>

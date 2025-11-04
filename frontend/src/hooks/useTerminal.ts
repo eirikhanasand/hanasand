@@ -13,18 +13,25 @@ export default function useTerminal({ share }: TerminalProps) {
     const [log, setLog] = useState<Log[]>([])
     const wsRef = useRef<WebSocket | null>(null)
 
-    useEffect(() => {
-        if (!share || share.id) return
+    console.log("is inside")
 
+    useEffect(() => {
+        console.log("before", share, share?.id)
+        if (!share || !('id' in share)) return
+
+        console.log("after", share, share.id)
+        console.log('attempting to get shell')
         const session = randomId(6)
-        const ws = new WebSocket(`${config.url.internal_wss}/share/ws/${share.id}/terminal/${session}`)
+        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.id}/shell/${session}`)
 
         ws.onopen = () => {
+            console.log("connection opened")
             setReconnect(false)
             setIsConnected(true)
         }
 
         ws.onclose = () => {
+            console.log("connection closed")
             setIsConnected(false)
         }
 

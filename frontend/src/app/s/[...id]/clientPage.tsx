@@ -3,12 +3,20 @@
 import Code from '@/components/share/code'
 import Terminal from '@/components/share/terminal'
 import Deploy from '@/components/share/deploy'
-import Explorer from '@/components/share/explorer'
+import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
 import { useState } from 'react'
 
-export default function ClientPage({ id, randomId, openFolders }: { id: string, randomId: string, openFolders: string[] }) {
+type ClientPageProps = {
+    id: string
+    share: Share | null
+    randomId: string
+    openFolders: string[]
+    tree: Tree | null
+}
+
+export default function ClientPage({ id, share: serverShare, randomId, openFolders, tree }: ClientPageProps) {
     const [showExplorer, setShowExplorer] = useState(true)
     const [showMetadata, setShowMetaData] = useState(true)
     const [participants, setParticipants] = useState(1)
@@ -17,17 +25,23 @@ export default function ClientPage({ id, randomId, openFolders }: { id: string, 
     const [editingContent, setEditingContent] = useState<string>('')
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
     const [syntaxHighlighting, setSyntaxHighlighting] = useState(true)
-    const [share, setShare] = useState<Share | null>(null)
+    const [share, setShare] = useState<Share | null>(serverShare)
     const [open, setOpen] = useState(false)
     const [deploying, setDeploying] = useState(false)
     const [renderSite, setRenderSite] = useState(false)
 
     return (
         <div className='flex w-full h-full max-w-[100vw]'>
-            <Explorer showExplorer={showExplorer} setShowExplorer={setShowExplorer} openFolders={openFolders} />
+            <Explorer 
+                showExplorer={showExplorer} 
+                setShowExplorer={setShowExplorer}
+                openFolders={openFolders}
+                tree={tree}
+                share={share}
+            />
             <div className={`flex-1 flex flex-col min-h-full w-full ${showExplorer && showMetadata && 'max-w-[66vw]'} bg-light text-foreground`}>
                 <Code
-                    id={id}
+                    id={share?.id || id}
                     setParticipants={setParticipants}
                     isConnected={isConnected}
                     setIsConnected={setIsConnected}
@@ -57,7 +71,7 @@ export default function ClientPage({ id, randomId, openFolders }: { id: string, 
             />
             <Terminal share={share} open={open} setOpen={setOpen} />
             <Deploy deploying={deploying} setDeploying={setDeploying} setOpen={setOpen} />
-            <RenderSite name={id} renderSite={renderSite} setRenderSite={setRenderSite} />
+            <RenderSite share={share} renderSite={renderSite} setRenderSite={setRenderSite} />
         </div>
     )
 }

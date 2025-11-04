@@ -1,6 +1,8 @@
 import randomId from '@/utils/random/randomId'
 import SharePageClient from './clientPage'
 import { cookies } from 'next/headers'
+import { getTree } from '@/utils/share/getTree'
+import { getShare } from '@/utils/share/get'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
@@ -9,10 +11,12 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const Cookies = await cookies()
     const openFoldersCookie = Cookies.get('openFolders')
     const openFolders: string[] = JSON.parse(openFoldersCookie?.value ?? '') || [] as string[]
+    const tree = await getTree(id)
+    const share = await getShare(id)
 
     return (
         <div className='w-full h-[93.5vh]'>
-            <SharePageClient id={id} randomId={random} openFolders={openFolders} />
+            <SharePageClient id={id} share={share} randomId={random} openFolders={openFolders} tree={tree} />
         </div>
     )
 }
