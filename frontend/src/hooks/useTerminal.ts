@@ -40,9 +40,17 @@ export default function useTerminal({ share }: TerminalProps) {
             setIsConnected(false)
         }
 
-        ws.onmessage = (event) => {
+        ws.onmessage = async (event) => {
             try {
-                const msg = JSON.parse(event.data)
+                let data = event.data
+
+                if (data instanceof Blob) {
+                    data = await data.text()
+                }
+
+                console.log('Raw message:', data)
+                const msg = JSON.parse(data)
+
                 if (msg.type === 'update') {
                     setParticipants(msg.participants)
                     setLog((prev) => [...prev, msg])
