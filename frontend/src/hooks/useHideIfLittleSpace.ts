@@ -1,6 +1,6 @@
 import { Dispatch, SetStateAction, useEffect } from 'react'
 
-export default function HideIfLittleSpace({ set }: { set: Dispatch<SetStateAction<boolean>> }) {
+export default function useHideIfLittleSpace({ set }: { set: Dispatch<SetStateAction<boolean>> }) {
     useEffect(() => {
         function handleResize() {
             if (window.innerWidth < 768) {

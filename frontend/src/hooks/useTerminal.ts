@@ -13,8 +13,6 @@ export default function useTerminal({ share }: TerminalProps) {
     const [log, setLog] = useState<Log[]>([])
     const wsRef = useRef<WebSocket | null>(null)
 
-    console.log("is inside")
-
     useEffect(() => {
         console.log("before", share, share?.id)
         if (!share || !('id' in share)) return
@@ -48,10 +46,9 @@ export default function useTerminal({ share }: TerminalProps) {
                     data = await data.text()
                 }
 
-                console.log('Raw message:', data)
                 const msg = JSON.parse(data)
 
-                if (msg.type === 'update') {
+                if (msg.type === 'update' || msg.type === 'terminalMessage') {
                     setParticipants(msg.participants)
                     setLog((prev) => [...prev, msg])
                 }

@@ -1,7 +1,7 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import prettyDate from '@/utils/prettyDate'
 import { fetchTest } from '@/utils/test/fetchTest'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
@@ -33,7 +33,7 @@ export default function TestStatsPageClient() {
         }
     }
 
-    ClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: error, set: setError })
 
     return (
         <div className='w-full h-full bg-light p-4 space-y-4 relative'>

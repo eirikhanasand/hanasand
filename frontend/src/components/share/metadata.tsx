@@ -4,8 +4,8 @@ import Notify from '@/components/notify/notify'
 import Info from '@/components/share/info'
 import Lock from '@/components/share/lock'
 import WordControl from '@/components/share/wordControl'
-import ClearStateAfter from '@/hooks/clearStateAfter'
-import HideIfLittleSpace from '@/hooks/hideIfLittleSpace'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
+import HideIfLittleSpace from '@/hooks/useHideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
 import randomId from '@/utils/random/randomId'
@@ -46,7 +46,7 @@ export default function Metadata({
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const [id, setId] = useState(randomServerId)
-    const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
+    const [didCopy, setDidCopy] = useState<string | boolean>(false)
     const [error, setError] = useState<string | null>(null)
     HideIfLittleSpace({ set: setShowMetadata })
 
@@ -61,7 +61,7 @@ export default function Metadata({
         }, 350)
     }, [didCopy])
 
-    ClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: error, set: setError })
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'

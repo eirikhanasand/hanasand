@@ -1,7 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import config from '@/config'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { setCookie } from '@/utils/cookies'
 import Or from '@/utils/or'
 import Link from 'next/link'
@@ -10,10 +10,9 @@ import { useEffect, useState } from 'react'
 type RegisterPageProps = {
     path: string | null
     serverInternal: boolean
-    noroot: boolean
 }
 
-export default function RegisterPageClient({ path, serverInternal, noroot }: RegisterPageProps) {
+export default function RegisterPageClient({ path, serverInternal }: RegisterPageProps) {
     const [error, setError] = useState('')
     const [name, setName] = useState('')
     const [username, setUsername] = useState('')
@@ -121,8 +120,8 @@ export default function RegisterPageClient({ path, serverInternal, noroot }: Reg
         setUppercaseInPasswordCount(upperCaseCharacters)
     }, [password])
 
-    ClearStateAfter({ condition: error, set: setError })
-    ClearStateAfter({ condition: internal, set: setInternal })
+    useClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: internal, set: setInternal })
 
     return (
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>

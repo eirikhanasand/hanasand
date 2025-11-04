@@ -1,8 +1,9 @@
-import { BookText, Eye, Link, ListOrdered, Pencil, Timer } from 'lucide-react'
+import { BookText, Eye, Link, ListOrdered, MessageCircleHeart, Pencil, Timer } from 'lucide-react'
 import Marquee from '../marquee/marquee'
 import { useEffect, useState } from 'react'
 import copy from '@/utils/copy'
 import prettyDate from '@/utils/prettyDate'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 type HeaderProps = {
     share: Share | null
@@ -11,8 +12,10 @@ type HeaderProps = {
 }
 
 export default function Info({ share, isConnected, participants }: HeaderProps) {
-    const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
-    const [copyText, setCopyText] = useState(share?.id || '')
+    const [didCopy, setDidCopy] = useState<string | boolean>(false)
+    const [linkText, setLinkText] = useState(share?.id || '')
+    const aliasText = share?.alias || ''
+    const [error, setError] = useState(null)
 
     useEffect(() => {
         setTimeout(() => {
@@ -21,8 +24,10 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     }, [didCopy])
 
     useEffect(() => {
-        setCopyText(window.location.href.split('/').reverse()[0])
+        setLinkText(window.location.href.split('/').reverse()[0])
     }, [])
+
+    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     if (!share) {
         return <></>
@@ -51,11 +56,17 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                     <h1>{prettyDate(share.timestamp)}</h1>
                 </span>
                 <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
-                    <Link className={didCopy === true ? 'stroke-green-600' : didCopy === false ? '' : 'stroke-red-500'} height={18} width={18} />
+                    <Link className={didCopy === 'link' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-link' ? 'stroke-red-500' : ''} height={18} width={18} />
                     <div className='flex flex-col flex-1 overflow-hidden'>
-                        <Marquee className='truncate' text={copyText} />
+                        <Marquee className='truncate' text={linkText} />
                     </div>
                 </span>
+                {aliasText !== linkText && <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
+                    <MessageCircleHeart className={didCopy === 'alias' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-alias' ? 'stroke-red-500' : ''} height={18} width={18} />
+                    <div className='flex flex-col flex-1 overflow-hidden'>
+                        <Marquee className='truncate' text={aliasText} />
+                    </div>
+                </span>}
                 <span className='gap-2 text-sm text-gray-400 flex'>
                     <BookText height={18} width={18} />
                     <h1>{wordText}</h1>

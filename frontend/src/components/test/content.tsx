@@ -1,7 +1,7 @@
 'use client'
 
 import config from '@/config'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import TestContent from './testContent'
 
@@ -29,7 +29,7 @@ export default function Content({
     const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
     const id = test.id
-    ClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
         if (!id) return

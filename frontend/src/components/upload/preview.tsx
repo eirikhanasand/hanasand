@@ -4,7 +4,7 @@ import { Dispatch, SetStateAction, useState } from 'react'
 import ImagePreview from './imagePreview'
 import config from '@/config'
 import { postFile } from '@/utils/files/post'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 type PreviewProps = {
     url: string
@@ -80,7 +80,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
         }
     }
 
-    ClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: error, set: setError })
 
     if (!url || !file) return null
 

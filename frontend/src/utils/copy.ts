@@ -1,17 +1,18 @@
 import { Dispatch, SetStateAction } from 'react'
 
 type CopyProps = {
-    text: string
-    setDidCopy: Dispatch<SetStateAction<'error' | boolean>>
+  text: string
+  setDidCopy: Dispatch<SetStateAction<boolean | string>>
+  type?: 'link' | 'alias'
 }
 
-export default function copy({ text, setDidCopy }: CopyProps) {
+export default function copy({ type, text, setDidCopy }: CopyProps) {
     navigator.clipboard.writeText(text)
         .then(() => {
             setDidCopy(true)
         })
         .catch((error) => {
             console.log(error)
-            setDidCopy('error')
+            setDidCopy(`error${type ? `-${type}` : '' }`)
         })
 }

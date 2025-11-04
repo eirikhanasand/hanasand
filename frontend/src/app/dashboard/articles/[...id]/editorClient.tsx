@@ -1,7 +1,7 @@
 'use client'
 
 import Editor from '@/components/editor/editor'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteArticle from '@/utils/articles/deleteArticle'
 import { Trash } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -23,7 +23,7 @@ export default function EditorClient({ article }: { article: Article }) {
         }
     }
 
-    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
+    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     return (
         <div className={`grid gap-2 ${editing ? '' : 'px-10 md:px-[20vw]'}`}>

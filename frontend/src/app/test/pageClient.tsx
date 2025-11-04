@@ -2,7 +2,7 @@
 
 import Notify from '@/components/notify/notify'
 import config from '@/config'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import copy from '@/utils/copy'
 import { postTest } from '@/utils/test/postTest'
 import { Copy } from 'lucide-react'
@@ -12,7 +12,7 @@ import { FormEvent, useEffect, useState } from 'react'
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [path, setPath] = useState('')
     const [error, setError] = useState<string | null>(null)
-    const [didCopy, setDidCopy] = useState<boolean | 'error'>(false)
+    const [didCopy, setDidCopy] = useState<boolean | string>(false)
     const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
@@ -35,7 +35,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         }
     }
 
-    ClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
         setTimeout(() => {

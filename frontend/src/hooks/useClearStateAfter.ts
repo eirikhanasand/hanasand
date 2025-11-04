@@ -10,7 +10,7 @@ type ClearStateAfterProps = {
 }
 
 // Generic function to clear any variable after x seconds. 
-export default function ClearStateAfter({ condition, set, timeout = 5000, onClear }: ClearStateAfterProps) {
+export default function useClearStateAfter({ condition, set, timeout = 5000, onClear }: ClearStateAfterProps) {
     useEffect(() => {
         if (!condition) {
             return

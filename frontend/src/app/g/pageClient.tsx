@@ -1,7 +1,7 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import copy from '@/utils/copy'
 import { postLink } from '@/utils/links/post'
 import { Copy } from 'lucide-react'
@@ -12,7 +12,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
     const [id, setId] = useState('')
     const [path, setPath] = useState('')
     const [error, setError] = useState<string | null>(null)
-    const [didCopy, setDidCopy] = useState<boolean | 'error'>(false)
+    const [didCopy, setDidCopy] = useState<boolean | string>(false)
     const isValidLink = path.includes('http') || (path.includes('.') && path.length > 2) || path.includes(':')
     const color = isValidLink ? 'bg-blue-500/80 cursor-pointer glow-blue' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'bg-dark cursor-not-allowed glow-blue'
     const fullUrl = `https://hanasand.com/g/${serverId}`
@@ -37,7 +37,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
         }
     }
 
-    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
+    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     useEffect(() => {
         setTimeout(() => {

@@ -6,7 +6,7 @@ import 'highlight.js/styles/github-dark.css'
 import { getShare } from '@/utils/share/get'
 import config from '@/config'
 import Editor from '@/components/share/editor'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 type CodeProps = {
     id: string
@@ -49,6 +49,7 @@ export default function Code({
                     setError('Share not found')
                     return
                 }
+
                 setShare(data)
                 setEditingContent(data.content)
             } catch (err) {
@@ -57,9 +58,9 @@ export default function Code({
             }
         }
         fetchShare()
-    }, [id])
+    }, [id, setEditingContent, setShare])
 
-    ClearStateAfter({ condition: error, set: setError })
+    useClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
         if (codeRef.current) {
@@ -91,7 +92,7 @@ export default function Code({
         }, 1000)
 
         return () => clearTimeout(timeout)
-    }, [lastEdit, share?.content, syntaxHighlighting])
+    }, [lastEdit, share?.content, syntaxHighlighting, editingContent])
 
     useEffect(() => {
         if (!share) return
@@ -133,7 +134,7 @@ export default function Code({
         return () => {
             ws.close()
         }
-    }, [id, share, reconnect])
+    }, [id, share, reconnect, editingContent, setEditingContent, setIsConnected, setShare, setParticipants])
 
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
         if (!isConnected) {

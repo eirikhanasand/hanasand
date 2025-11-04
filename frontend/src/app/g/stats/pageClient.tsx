@@ -1,7 +1,7 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getLink } from '@/utils/links/get'
 import prettyDate from '@/utils/prettyDate'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
@@ -36,7 +36,7 @@ export default function LinkStatsPageClient() {
         }
     }
 
-    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
+    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     return (
         <div className='w-full h-full bg-light p-4 space-y-4 relative'>

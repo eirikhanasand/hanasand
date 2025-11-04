@@ -1,6 +1,6 @@
 'use client'
 
-import ClearStateAfter from '@/hooks/clearStateAfter'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 import useKeyPress from '@/hooks/keyPressed'
 import deleteUser from '@/utils/users/deleteUser'
 import { Trash2 } from 'lucide-react'
@@ -13,7 +13,7 @@ export default function DashboardUser({ user }: { user: UserWithRole }) {
     const [error, setError] = useState<string | null>(null)
     const keys = useKeyPress('Shift')
     const router = useRouter()
-    ClearStateAfter({ condition: error, set: setError, timeout: 5000 })
+    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     async function handleClick() {
         if (!keys['Shift']) {
