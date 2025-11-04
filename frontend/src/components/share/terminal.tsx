@@ -122,7 +122,12 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
                 </div>
 
                 <div className="px-2 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300">
-                    <TerminalViewer sendMessage={sendMessage} text={log.map((l) => l.content)} isDone={isDone} />
+                    {share && <TerminalViewer 
+                        share={share} 
+                        sendMessage={sendMessage} 
+                        text={log.map((l) => l.content)} 
+                        isDone={isDone}
+                    />}
                 </div>
             </div>
         </>

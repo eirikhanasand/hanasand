@@ -33,5 +33,5 @@ export default function LogoutPageClient({ path }: { path?: string }) {
                 router.push('/?logout=true&error=true')
             }
         })()
-    }, [])
+    })
 }

@@ -58,7 +58,7 @@ export default function Code({
             }
         }
         fetchShare()
-    }, [id, setEditingContent, setShare])
+    }, [id])
 
     useClearStateAfter({ condition: error, set: setError })
 
@@ -92,7 +92,7 @@ export default function Code({
         }, 1000)
 
         return () => clearTimeout(timeout)
-    }, [lastEdit, share?.content, syntaxHighlighting, editingContent])
+    }, [lastEdit, share?.content, syntaxHighlighting])
 
     useEffect(() => {
         if (!share) return
@@ -134,7 +134,7 @@ export default function Code({
         return () => {
             ws.close()
         }
-    }, [id, share, reconnect, editingContent, setEditingContent, setIsConnected, setShare, setParticipants])
+    }, [id, share, reconnect])
 
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
         if (!isConnected) {

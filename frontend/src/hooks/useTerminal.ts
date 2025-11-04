@@ -14,22 +14,17 @@ export default function useTerminal({ share }: TerminalProps) {
     const wsRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
-        console.log("before", share, share?.id)
         if (!share || !('id' in share)) return
 
-        console.log("after", share, share.id)
-        console.log('attempting to get shell')
         const session = randomId(6)
-        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.id}/shell/${session}`)
+        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.alias}/shell/${session}`)
 
         ws.onopen = () => {
-            console.log("connection opened")
             setReconnect(false)
             setIsConnected(true)
         }
 
         ws.onclose = () => {
-            console.log("connection closed")
             setIsConnected(false)
         }
 
@@ -48,7 +43,7 @@ export default function useTerminal({ share }: TerminalProps) {
 
                 const msg = JSON.parse(data)
 
-                if (msg.type === 'update' || msg.type === 'terminalMessage') {
+                if (msg.type === 'update') {
                     setParticipants(msg.participants)
                     setLog((prev) => [...prev, msg])
                 }

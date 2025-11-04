@@ -37,8 +37,6 @@ export default function Explorer({ showExplorer, setShowExplorer, openFolders, t
         )
     }
 
-    console.log("this", tree, share)
-
     return (
         <div className='bg-normal min-w-fit w-[15vw] h-full p-2 space-y-2'>
             <div className='bg-light rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>

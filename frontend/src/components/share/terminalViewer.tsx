@@ -1,40 +1,44 @@
 import { useEffect, useRef, useMemo, useState, KeyboardEvent } from 'react'
 
 type TerminalViewerProps = {
+    share: Share
     text: string[]
     isDone?: boolean
     sendMessage: (message: string) => { status: boolean, message?: string }
 }
 
-export default function ConsoleViewer({ text, isDone, sendMessage }: TerminalViewerProps) {
+export default function TerminalViewer({ share, text, isDone, sendMessage }: TerminalViewerProps) {
     const containerRef = useRef<HTMLPreElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const [input, setInput] = useState<string | null>(null)
     const [lines, setLines] = useState<string[]>(text)
-    const [caretPos, setCaretPos] = useState({ top: 0, left: 0 })
-    const hostname = 'root@root$'
+    const hostname = `${share.alias}@${share.alias}$`
+    const initialLeft = hostname.length * 8.65
+    const [caretPos, setCaretPos] = useState({ top: 0, left: initialLeft })
     const spaces = ' '.repeat(hostname.length)
     const processed = useMemo(() => {
-        const result: string[] = []
-
-        for (const line of lines) {
-            if (line.includes('running (') && line.includes('default')) {
-                if (result.length && result[result.length - 1].includes('running (')) {
-                    result[result.length - 1] = line
-                } else {
-                    result.push(line)
+        const normalized: { type: string, content: string }[] = lines.map(item => {
+            if (typeof item === 'string') {
+                try {
+                    const parsed = JSON.parse(item)
+                    return parsed
+                } catch {
+                    return {type: 'log', content: item}
                 }
-            } else {
-                result.push(line)
             }
-        }
 
-        return result
-    }, [text, lines])
+            return item
+        })
+
+        return normalized
+    }, [lines])
 
     function updateCaret() {
         const textarea = inputRef.current
-        if (!textarea) return
+        if (!textarea) {
+            return
+        }
+
         const selectionStart = textarea.selectionStart
         const textBeforeCursor = textarea.value.slice(0, selectionStart)
         const lines = textBeforeCursor.split('\n')
@@ -44,7 +48,7 @@ export default function ConsoleViewer({ text, isDone, sendMessage }: TerminalVie
 
         setCaretPos({
             top: (lines.length - 1) * lineHeight,
-            left: line.length * (fontSize * 0.54)
+            left: (lines.length === 1 ? ((line.length * (fontSize * 0.54) || initialLeft)) : line.length * (fontSize * 0.54))
         })
     }
 
@@ -70,11 +74,23 @@ export default function ConsoleViewer({ text, isDone, sendMessage }: TerminalVie
     }, [input])
 
     useEffect(() => {
+        inputRef.current?.focus()
+    })
+
+    useEffect(() => {
+        setLines(prev => [...prev, ...text])
+    }, [text])
+
+    useEffect(() => {
         const el = containerRef.current
-        if (!el) return
+        if (!el) {
+            return
+        }
 
         const shouldScroll = el.scrollTop + el.clientHeight >= el.scrollHeight - (isDone ? 1000 : 200)
-        if (shouldScroll) el.scrollTop = el.scrollHeight
+        if (shouldScroll) {
+            el.scrollTop = el.scrollHeight
+        }
     }, [processed, isDone])
 
     return (
@@ -83,7 +99,7 @@ export default function ConsoleViewer({ text, isDone, sendMessage }: TerminalVie
                 ref={containerRef}
                 className={`rounded-md h-fit overflow-auto text-gray-300/50`}
             >
-                {processed.join('\n')}
+                {processed.map((line, index) => <h1 key={index}>{line.content}</h1>)}
             </pre>}
             <div className={`flex justify-center items-center mt-1 gap-2 ${!processed.length ? 'h-full' : 'h-fit'} relative`}>
                 <h1 className='h-full absolute top-0 left-0 text-green-500'>{hostname}</h1>
