@@ -12,7 +12,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className='p-8 flex w-[100vw] h-[93.5vh] gap-2 overflow-hidden'>
+        <div className='p-8 flex w-[100vw] h-[90.5vh] gap-2 overflow-hidden'>
             <TestPageClient test={test} />
         </div>
     )

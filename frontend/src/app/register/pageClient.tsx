@@ -128,7 +128,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     useClearStateAfter({ condition: internal, set: setInternal })
 
     return (
-        <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>
+        <section className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>
             {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
                 {path} is internal. Please log in.
             </h1>}

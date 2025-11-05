@@ -67,7 +67,7 @@ export default async function layout({children}: {children: ReactNode}) {
                     </div>
                 </header>
                 <div className='mt-[9.5vh] h-[90.5vh] w-full overflow-auto'>
-                    <main className='w-full min-h-[93.5vh]'>
+                    <main className='w-full min-h-[90.5vh]'>
                         {children}
                     </main>
                     <Footer />

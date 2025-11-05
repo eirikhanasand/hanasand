@@ -38,17 +38,19 @@ export default function Explorer({ showExplorer, setShowExplorer, openFolders, t
     }
 
     return (
-        <div className='bg-normal min-w-fit w-[15vw] h-full p-2 space-y-2'>
-            <div className='bg-light rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />
+        <div className='p-2 min-w-fit w-[15vw] h-full'>
+            <div className='outline outline-dark rounded-lg p-2 h-full space-y-2'>
+                <div className='outline outline-dark rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
+                    <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />
+                </div>
+                {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
+                    <h1 className='text-sm text-bright/85'>Unable to load file tree.</h1>
+                </div>}
+                {tree && share && <OpenFoldersProvider serverOpenFolders={openFolders}>
+                    <TreeHeader share={share} />
+                    <Tree tree={tree} />
+                </OpenFoldersProvider>}
             </div>
-            {(!tree || !share) && <div className='bg-red-500/50 w-full rounded-lg p-2'>
-                <h1 className='text-sm'>Unable to load file tree.</h1>
-            </div>}
-            {tree && share && <OpenFoldersProvider serverOpenFolders={openFolders}>
-                <TreeHeader share={share} />
-                <Tree tree={tree} />
-            </OpenFoldersProvider>}
         </div>
     )
 }

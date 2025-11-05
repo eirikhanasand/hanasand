@@ -1,4 +1,3 @@
-import React from 'react'
 import Content from '@/components/content/content'
 import Apps from '@/components/apps/apps'
 import Featured from '@/components/featured/featured'

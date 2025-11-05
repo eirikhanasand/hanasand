@@ -13,7 +13,7 @@ export default async function Page({
     const id = Array.isArray(params.id) ? params.id[0] : params.id
 
     return (
-        <div className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-2 place-items-center'>
+        <div className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-2 place-items-center'>
             <div className='grid w-full spawn rounded-lg overflow-hidden outline outline-dark'>
                 <div className='w-full h-full outline outline-dark p-4 space-y-4 relative grid place-items-center'>
                     {pathDidNotExist && (

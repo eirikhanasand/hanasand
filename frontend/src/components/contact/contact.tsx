@@ -1,5 +1,5 @@
 'use client'
-import React from 'react'
+
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
 import './contact.css'
@@ -29,7 +29,7 @@ export default function Contact() {
     })
 
     return (
-        <div className='grid place-items-center min-h-[93.5vh]'>
+        <div className='grid place-items-center min-h-[90.5vh]'>
             <form className='w-[80vw] md:w-1/2' onSubmit={formik.handleSubmit} title='Contact me'>
                 <h1 className='text-foreground text-2xl mb-5' title='Contact me'>
                     Contact

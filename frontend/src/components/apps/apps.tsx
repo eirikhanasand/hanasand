@@ -1,4 +1,3 @@
-import React from 'react'
 import './apps.css'
 import Image from 'next/image'
 

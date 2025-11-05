@@ -15,7 +15,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const share = await getShare(id)
 
     return (
-        <div className='w-full h-[93.5vh]'>
+        <div className='w-full h-[90.5vh]'>
             <SharePageClient id={id} share={share} randomId={random} openFolders={openFolders} tree={tree} />
         </div>
     )

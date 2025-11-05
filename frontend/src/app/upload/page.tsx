@@ -32,7 +32,7 @@ export default function Page() {
 
     if (isUploaded) {
         return (
-            <div className={`min-h-[93.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses} relative`}>
+            <div className={`min-h-[90.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses} relative`}>
                 <div>
                     <div className='bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid place-items-center'>
                         <div className='grid place-items-center'>
@@ -59,7 +59,7 @@ export default function Page() {
     }
 
     return (
-        <div className={`min-h-[93.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses}`}>
+        <div className={`min-h-[90.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses}`}>
             <Upload
                 url={url}
                 setUrl={setUrl}
