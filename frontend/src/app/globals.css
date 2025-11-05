@@ -3,6 +3,7 @@
 @theme {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --color-background: #0a0a0a;
   --color-dark: #1a1a1a;
   --color-dark-reverse: #222222;
   --color-normal: #171717;
@@ -25,6 +26,7 @@
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --color-background: #0a0a0a;
   --color-dark: #1a1a1a;
   --color-dark-reverse: #222222;
   --color-normal: #171717;
@@ -38,6 +40,7 @@
 .light {
   --background: #ffffff;
   --foreground: #171717;
+  --color-background: #ffffff;
   --color-dark: #e7e5dd;
   --color-dark-reverse: #dad8d2;
   --color-normal: #e0e0e0;
