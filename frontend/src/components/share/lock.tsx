@@ -5,7 +5,13 @@ import { lockShare } from '@/utils/share/lockShare'
 import { LockKeyhole, LockKeyholeOpen } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
-export default function Lock({ share, setError }: { share: Share | null, setError: Dispatch<SetStateAction<string | null>> }) {
+type LockProps = {
+    share: Share | null
+    setError: Dispatch<SetStateAction<string | null>>
+    baseButtonStyle: string
+}
+
+export default function Lock({ share, setError, baseButtonStyle }: LockProps) {
     const [locked, setLocked] = useState(share?.locked)
 
     async function handleLock() {
@@ -28,14 +34,14 @@ export default function Lock({ share, setError }: { share: Share | null, setErro
 
     if (!share) {
         return (
-            <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+            <div className={baseButtonStyle}>
                 <LockKeyholeOpen height={22} width={22} />
             </div>
         )
     }
 
     return (
-        <div onClick={handleLock} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
+        <div onClick={handleLock} className={baseButtonStyle}>
             {locked ? <LockKeyhole height={22} width={22} /> : <LockKeyholeOpen height={22} width={22} />}
         </div>
     )

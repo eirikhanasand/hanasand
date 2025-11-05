@@ -30,6 +30,7 @@ type MetadataProps = {
 }
 
 const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
+const baseButtonStyle = 'outline outline-dark rounded-lg h-12 w-12 hover:bg-light/50 grid place-items-center cursor-pointer'
 
 export default function Metadata({
     share,
@@ -86,31 +87,33 @@ export default function Metadata({
     }
 
     return (
-        <div className='bg-normal min-w-fit w-[10vw] h-full p-2 space-y-2'>
-            <div className='grid grid-cols-5 gap-2'>
-                <div className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                    <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+        <div className='min-w-fit w-[9vw] h-full p-2'>
+            <div className='outline outline-dark space-y-2 h-full p-2 rounded-lg w-full'>
+                <div className='grid grid-cols-5 gap-2'>
+                    <div className={baseButtonStyle}>
+                        <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+                    </div>
+                    <Link href={`/s/${id}`} className={baseButtonStyle}>
+                        <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+                    </Link>
+                    <div onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
+                        <Copy height={22} width={22} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-bright' : 'stroke-red-500'} />
+                    </div>
+                    <Lock baseButtonStyle={baseButtonStyle} share={share} setError={setError} />
+                    <div onClick={() => setDisplayLineNumbers(prev => !prev)} className={baseButtonStyle}>
+                        <ListOrdered height={22} width={22} />
+                    </div>
+                    <div
+                        onClick={() => setSyntaxHighlighting(prev => !prev)}
+                        className={`stroke-rgb ${baseButtonStyle}`}
+                    >
+                        <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={22} width={22} />
+                    </div>
                 </div>
-                <Link href={`/s/${id}`} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                    <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
-                </Link>
-                <div onClick={() => copy({ text: editingContent, setDidCopy })} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                    <Copy height={22} width={22} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'} />
-                </div>
-                <Lock share={share} setError={setError} />
-                <div onClick={() => setDisplayLineNumbers(prev => !prev)} className='bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                    <ListOrdered height={22} width={22} />
-                </div>
-                <div
-                    onClick={() => setSyntaxHighlighting(prev => !prev)}
-                    className='stroke-rgb bg-light rounded-lg hover:bg-light/50 h-12 w-12 grid place-items-center cursor-pointer'
-                >
-                    <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-white'} height={22} width={22} />
-                </div>
+                {error && <Notify message={error} />}
+                <Info share={share} isConnected={isConnected} participants={participants} />
+                <WordControl clickedWord={clickedWord} />
             </div>
-            {error && <Notify message={error} />}
-            <Info share={share} isConnected={isConnected} participants={participants} />
-            <WordControl clickedWord={clickedWord} />
         </div>
     )
 }

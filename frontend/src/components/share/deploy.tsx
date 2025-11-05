@@ -12,7 +12,7 @@ export default function Deploy({ setOpen, deploying, setDeploying }: DeployProps
             onClick={() => { setOpen(true); setDeploying(true) }}
             className="
                 group fixed bottom-3 right-3 z-[100] cursor-pointer select-none
-                w-[17.5%] min-w-[130px] py-2 rounded-xl text-center
+                w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
                 hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
                 backdrop-blur-md bg-white/3 group-hover:bg-white/10 overflow-hidden
                 hover:scale-[1.03] hover:border-white/30 transition-all
