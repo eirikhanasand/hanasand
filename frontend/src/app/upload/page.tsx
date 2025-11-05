@@ -13,7 +13,7 @@ export default function Page() {
     const [url, setUrl] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [preview, setPreview] = useState<string | null>(null)
-    const [didCopy, setDidCopy] = useState<'error' | boolean>(false)
+    const [didCopy, setDidCopy] = useState<string | boolean>(false)
     const uploadClasses = (!file || !preview) && 'py-40 px-15 h-[30vh md:p-60'
     const previewClasses = preview && 'p-5 md:p-10 md:px-[33.333vw]'
     const isUploaded = url.includes(config.url.cdn)

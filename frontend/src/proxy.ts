@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import config from './config'
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
     const idCookie = req.cookies.get('id')
     const path = req.nextUrl.pathname

@@ -13,8 +13,8 @@ export default function TestStatsPageClient() {
     const [test, setTest] = useState<Test | null>()
     const [error, setError] = useState<string | null>(null)
     const color = query.length > 0 
-        ? 'bg-orange-500/80 cursor-pointer glow-orange-small'
-        : 'bg-dark cursor-not-allowed glow-orange-small'
+        ? 'bg-orange-500/80 cursor-pointer glow-orange-small outline outline-dark'
+        : 'outline outline-dark cursor-not-allowed'
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
@@ -36,7 +36,7 @@ export default function TestStatsPageClient() {
     useClearStateAfter({ condition: error, set: setError })
 
     return (
-        <div className='w-full h-full bg-light p-4 space-y-4 relative'>
+        <div className='w-full h-full p-4 space-y-4 relative'>
             <div className='h-full grid place-items-center'>
                 <div className='flex flex-col items-center gap-4'>
                     <div className='flex gap-2'>
@@ -46,7 +46,7 @@ export default function TestStatsPageClient() {
                     <form onSubmit={handleSubmit} className='grid gap-2'>
                         {error && <Notify message={error} />}
                         <input
-                            className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
+                            className='outline outline-dark w-full rounded-md px-2 py-1 z-10'
                             placeholder='Test'
                             onChange={(e) => setQuery(e.target.value)}
                             value={query}

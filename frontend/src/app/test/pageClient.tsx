@@ -16,7 +16,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
     const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
-    const color = isValidLink ? 'bg-orange-500/80 cursor-pointer glow-orange-small' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'bg-dark cursor-not-allowed glow-orange-small'
+    const color = isValidLink ? 'bg-orange-500/80 cursor-pointer glow-orange-small' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'outline outline-dark cursor-not-allowed'
     const fullUrl = `${config.url.link}/${serverId}`
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
@@ -56,7 +56,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         <form onSubmit={handleSubmit} className='grid gap-2'>
             {error && <Notify message={error} />}
             <input
-                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
+                className='outline outline-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                 placeholder='Link'
                 onChange={(e) => setPath(e.target.value)}
                 value={path}
@@ -66,7 +66,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                 type='submit'
                 className={`${color} w-full rounded-lg px-2 py-1 text-gray-300`}
             >
-                <h1>Test</h1>
+                Test
             </button>
         </form>
     )

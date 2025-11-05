@@ -19,11 +19,11 @@ export default async function Page() {
 
     return (
         <div className='h-full'>
-            <div className='px-16 py-8 grid gap-2'>
+            <div className='px-32 py-8 grid gap-2'>
                 <div className='flex w-full rounded-lg justify-between items-center'>
                     <h1 className='text-2xl font-semibold flex-1'>{text}</h1>
-                    <div className='grid h-fit w-fit p-2 outline-1 outline-dark rounded-lg gap-2'>
-                        <Link href={`/profile/${id}`} className='flex justify-between px-10 group cursor-pointer'>
+                    <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2'>
+                        <Link href={`/profile/${id}`} className='flex justify-between px-10 group cursor-pointer items-center'>
                             <div className='user-icon' />
                             <h1 className='font-semibold text-base self-center'>Profile</h1>
                         </Link>
