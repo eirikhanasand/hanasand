@@ -9,8 +9,8 @@ export default async function createdAt(filePath: string): Promise<string> {
         const stdout = await git(`log --diff-filter=A --follow --format=%aI -- '${relativePath}'`)
         const firstLine = stdout.split('\n')[0]
         return firstLine || new Date().toString()
-    } catch (err) {
-        console.error('Failed to get file created time', err)
+    } catch (error) {
+        console.error(`Failed to get file created time: ${error}`)
         return new Date().toString()
     }
 }

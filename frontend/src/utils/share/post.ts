@@ -14,8 +14,8 @@ export async function postShare(path: string, content: string): Promise<Share | 
 
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error creating share:', err)
+    } catch (error) {
+        console.error(`Error creating share: ${error}`)
         return null
     }
 }

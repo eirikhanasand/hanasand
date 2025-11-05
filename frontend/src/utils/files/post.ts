@@ -38,8 +38,8 @@ export async function postFile({ name, file, description, path, type }: PostFile
 
         const json = await response.json()
         return json
-    } catch (err) {
-        console.error('Error uploading file:', err)
+    } catch (error) {
+        console.error(`Error uploading file: ${error}`)
         return null
     }
 }

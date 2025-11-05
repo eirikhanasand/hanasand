@@ -14,8 +14,8 @@ export default async function postPwned(password: string): Promise<Breach | null
 
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error checking password:', err)
+    } catch (error) {
+        console.error(`Error checking password: ${error}`)
         return null
     }
 }

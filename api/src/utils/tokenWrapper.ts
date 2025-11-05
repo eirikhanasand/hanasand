@@ -54,8 +54,8 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         }
 
         return { valid: true }
-    } catch (err) {
-        res.log.error(err)
+    } catch (error) {
+        res.log.error(error)
         return res.status(500).send({
             valid: false,
             error: 'Internal server error'

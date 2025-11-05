@@ -16,8 +16,8 @@ export async function lockShare(share: Share, name: string): Promise<Share | nul
 
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error locking/unlocking share:', err)
+    } catch (error) {
+        console.error(`Error locking/unlocking share: ${error}`)
         return null
     }
 }

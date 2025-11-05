@@ -11,8 +11,8 @@ export async function updateLink(id: string, path: string): Promise<Link | null>
         if (!res.ok) throw new Error('Failed to update link')
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error updating link:', err)
+    } catch (error) {
+        console.error(`Error updating link: ${error}`)
         return null
     }
 }

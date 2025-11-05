@@ -3,13 +3,15 @@ import Roles from '@/components/roles/roles'
 import Thoughts from '@/components/thoughts/thoughts'
 import Users from '@/components/users/users'
 import { cookies } from 'next/headers'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 export default async function Page() {
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
+    const id = Cookies.get('id')?.value
 
-    if (!name) {
+    if (!name || !id) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
@@ -18,8 +20,14 @@ export default async function Page() {
     return (
         <div className='h-full'>
             <div className='px-16 py-8 grid gap-2'>
-                <div className='grid w-full p-2 rounded-lg'>
-                    <h1 className='text-2xl font-semibold'>{text}</h1>
+                <div className='flex w-full rounded-lg justify-between items-center'>
+                    <h1 className='text-2xl font-semibold flex-1'>{text}</h1>
+                    <div className='grid h-fit w-fit p-2 outline-1 outline-dark rounded-lg gap-2'>
+                        <Link href={`/profile/${id}`} className='flex justify-between px-10 group cursor-pointer'>
+                            <div className='user-icon' />
+                            <h1 className='font-semibold text-base self-center'>Profile</h1>
+                        </Link>
+                    </div>
                 </div>
                 <div className='grid md:grid-cols-2 gap-2'>
                     <DashboardArticles />

@@ -20,8 +20,8 @@ export async function postTest({ url, timeout, stages }: PostTestProps): Promise
 
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error creating test:', err)
+    } catch (error) {
+        console.error(`Error creating test: ${error}`)
         return null
     }
 }

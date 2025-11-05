@@ -18,8 +18,8 @@ export async function postLink(id: string, path: string): Promise<Link | 409 | n
 
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error creating link:', err)
+    } catch (error) {
+        console.error(`Error creating link: ${error}`)
         return null
     }
 }

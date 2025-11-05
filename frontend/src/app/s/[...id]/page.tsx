@@ -10,7 +10,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const random = randomId()
     const Cookies = await cookies()
     const openFoldersCookie = Cookies.get('openFolders')
-    const openFolders: string[] = JSON.parse(openFoldersCookie?.value ?? '') || [] as string[]
+    const openFolders: string[] = openFoldersCookie?.value ? JSON.parse(openFoldersCookie?.value ?? '') || [] as string[] : [] as string[]
     const tree = await getTree(id)
     const share = await getShare(id)
 

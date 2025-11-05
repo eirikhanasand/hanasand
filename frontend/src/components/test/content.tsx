@@ -80,8 +80,8 @@ export default function Content({
                 } else {
                     console.log("Unhandled msg.type:", msg.type)
                 }
-            } catch (err) {
-                console.error('Invalid message from server:', err)
+            } catch (error) {
+                console.error(`Invalid message from server: ${error}`)
             }
         }
 

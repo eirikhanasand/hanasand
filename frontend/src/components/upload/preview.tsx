@@ -30,8 +30,8 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
             const res = await fetch(`${config.url.cdn}/files/check?path=${encodeURIComponent(p)}`)
             const data = await res.json()
             setPathAvailable(!data.exists)
-        } catch (err) {
-            console.error(err)
+        } catch (error) {
+            console.error(error)
             setPathAvailable(false)
         } finally {
             setCheckingPath(false)
@@ -72,8 +72,8 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
             if (status.id) {
                 setUrl(`${config.url.cdn}/files/${path ? `path/${path}` : status.id}`)
             }
-        } catch (err) {
-            console.error(err)
+        } catch (error) {
+            console.error(error)
             setError('Upload failed.')
         } finally {
             setUploading(false)

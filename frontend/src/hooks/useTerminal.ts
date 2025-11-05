@@ -51,8 +51,8 @@ export default function useTerminal({ share }: TerminalProps) {
                 if (msg.type === 'join') {
                     setParticipants(msg.participants)
                 }
-            } catch (err) {
-                console.error('Invalid message from server:', err)
+            } catch (error) {
+                console.error(`Invalid message from server: ${error}`)
             }
         }
 

@@ -9,11 +9,11 @@ export async function fetchVisits(id: number): Promise<number | null> {
 
         const data = await res.json()
         return data.visits
-    } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
             console.error('Request timed out after 1s')
         } else {
-            console.error('Error fetching test:', err)
+            console.error(`Error fetching test: ${error}`)
         }
 
         return null

@@ -52,8 +52,8 @@ export default function Code({
 
                 setShare(data)
                 setEditingContent(data.content)
-            } catch (err) {
-                console.error('Error fetching share:', err)
+            } catch (error) {
+                console.error(`Error fetching share: ${error}`)
                 setError('Failed to load share')
             }
         }
@@ -126,8 +126,8 @@ export default function Code({
                 if (msg.type === 'join') {
                     setParticipants(msg.participants)
                 }
-            } catch (err) {
-                console.error('Invalid message from server:', err)
+            } catch (error) {
+                console.error(`Invalid message from server: ${error}`)
             }
         }
 

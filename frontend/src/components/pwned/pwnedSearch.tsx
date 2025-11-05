@@ -69,8 +69,8 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                         setBreachFiles(prev => [...prev, { file: msg.file!, line: msg.line! }])
                     }
                 }
-            } catch (err) {
-                console.error('Invalid message from server:', err)
+            } catch (error) {
+                console.error(`Invalid message from server: ${error}`)
             }
         }
 

@@ -56,11 +56,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     const message = (error as { message: string }).message
                     const msg = JSON.parse(message)
                     return setError(msg?.error)
-                } catch (err) {
-                    setError(err instanceof Error
-                        ? err.message.includes('Unauthorized')
+                } catch (error) {
+                    setError(error instanceof Error
+                        ? error.message.includes('Unauthorized')
                             ? 'Unauthorized'
-                            : err.message
+                            : error.message
                         : 'Unknown error! Please contact @eirikhanasand')
                 }
             }
@@ -89,8 +89,8 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         <section className='min-h-[93.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-4 place-items-center'>
             {(expired && path) && <h1 className='grid w-full rounded-lg bg-blue-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>Token expired. You will be redirected back to {path} after reauthenticating.</h1>}
             {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>{path} is internal. Please log in.</h1>}
-            <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
-                <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
+            <div className='grid w-full spawn rounded-lg overflow-hidden bg-normal shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.4)] backdrop-blur-lg'>
+                <div className='w-full h-full p-4 relative grid place-items-center'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
                         hanasand.com
                     </h1>
@@ -119,7 +119,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     type='submit'
                                     className={
                                         'py-1 px-3 rounded-lg bg-extralight ' +
-                                        'hover:bg-blue-500/80 cursor-pointer glow-blue'
+                                        'hover:bg-blue-500/80 cursor-pointer'
                                     }
                                 >
                                     Login
@@ -131,7 +131,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             <button
                                 type='submit'
                                 className={
-                                    'py-1 px-3 rounded-lg bg-extralight glow-blue ' +
+                                    'py-1 px-3 rounded-lg bg-extralight ' +
                                     'hover:bg-blue-500/80 cursor-pointer'
                                 }
                             >

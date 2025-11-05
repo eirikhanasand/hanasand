@@ -36,8 +36,8 @@ export async function GET(req: Request) {
         return new NextResponse(Buffer.from(buffer), {
             headers: { 'Content-Type': contentType },
         })
-    } catch (err) {
-        return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+    } catch (error) {
+        return NextResponse.json({ error: (error as Error).message }, { status: 500 })
     }
 }
 
@@ -68,8 +68,8 @@ async function fetchTenorDirectMedia(url: string) {
         }
 
         return { buffer: await response.arrayBuffer(), contentType }
-    } catch (err) {
-        console.error('Error fetching Tenor media:', err)
-        throw err
+    } catch (error) {
+        console.error(`Error fetching Tenor media: ${error}`)
+        throw error
     }
 }

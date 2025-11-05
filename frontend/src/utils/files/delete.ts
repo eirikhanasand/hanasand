@@ -20,8 +20,8 @@ export async function deleteFile(id: string): Promise<boolean> {
 
         const json = await res.json()
         return Boolean(json.deleted)
-    } catch (err) {
-        console.error('Error deleting file:', err)
+    } catch (error) {
+        console.error(`Error deleting file: ${error}`)
         return false
     }
 }

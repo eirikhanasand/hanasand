@@ -40,8 +40,8 @@ export default async function hasRole(req: FastifyRequest, res: FastifyReply, ro
         }
 
         return { valid: true }
-    } catch (err) {
-        res.log.error(err)
+    } catch (error) {
+        res.log.error(error)
         return { valid: false, error: 'Internal server error' }
     }
 }

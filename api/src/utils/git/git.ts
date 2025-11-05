@@ -21,9 +21,9 @@ export default async function git(cmd: string) {
         }
 
         return stdout.trim()
-    } catch (err) {
-        console.error(`Git command failed: git ${cmd}`, err)
-        throw err
+    } catch (error) {
+        console.error(`Git command failed: git ${cmd}: ${error}`)
+        throw error
     }
 }
 

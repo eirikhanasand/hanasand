@@ -227,3 +227,12 @@ type Log = {
 }
 
 type Tree = FileItem[]
+
+type Certificate = {
+    id: string
+    public_key: string
+    name: string
+    owner: string
+    created_at: string
+    created_by: string
+}

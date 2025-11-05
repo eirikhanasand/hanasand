@@ -14,8 +14,8 @@ export async function updateShare(id: string, updates: Updates): Promise<Share |
 
         const data = await res.json()
         return data
-    } catch (err) {
-        console.error('Error updating share:', err)
+    } catch (error) {
+        console.error(`Error updating share: ${error}`)
         return null
     }
 }

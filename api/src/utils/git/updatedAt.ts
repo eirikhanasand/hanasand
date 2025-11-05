@@ -11,8 +11,8 @@ export default async function updatedAt(filePath: string): Promise<string> {
         const firstLineCreated = stdoutCreated.split('\n')[0]
         const firstLineUpdated = stdoutUpdated.split('\n')[0]
         return firstLineUpdated ?? firstLineCreated ?? new Date().toISOString()
-    } catch (err) {
-        console.error('Failed to get file updated time', err)
+    } catch (error) {
+        console.error(`Failed to get file updated time: ${error}`)
         return new Date().toISOString()
     }
 }

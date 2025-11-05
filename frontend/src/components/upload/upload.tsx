@@ -42,8 +42,8 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             const fileName = urlObj.pathname.split('/').pop() || 'image.png'
             const file = await fetchImageAsFile(value, fileName)
             handleFile(file)
-        } catch (err) {
-            console.log('Not a valid URL or failed to fetch image', err)
+        } catch (error) {
+            console.log(`Not a valid URL or failed to fetch image: ${error}`)
         }
     }
 

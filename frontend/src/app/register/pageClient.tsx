@@ -74,11 +74,11 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     const message = (error as { message: string }).message
                     const msg = JSON.parse(message)
                     return setError(msg?.error)
-                } catch (err) {
-                    setError(err instanceof Error
-                        ? err.message.includes('Unauthorized')
+                } catch (error) {
+                    setError(error instanceof Error
+                        ? error.message.includes('Unauthorized')
                             ? 'Unauthorized'
-                            : err.message
+                            : error.message
                         : 'Unknown error! Please contact @eirikhanasand')
                 }
             }
@@ -131,8 +131,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
             {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
                 {path} is internal. Please log in.
             </h1>}
-            <div className='grid w-full spawn rounded-lg overflow-hidden glow-blue'>
-                <div className='w-full h-full bg-light p-4 relative grid place-items-center'>
+            <div className='grid w-full spawn rounded-lg overflow-hidden bg-normal shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.3)] backdrop-blur-xl'>
+                <div className='w-full h-full p-4 relative grid place-items-center gap-4'>
                     <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
                         hanasand.com
                     </h1>
@@ -149,7 +149,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder='Username'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium text-sm focus:outline-none z-10'
                                     required
                                 />
                                 <input
@@ -158,7 +158,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     placeholder='Name'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium text-sm focus:outline-none z-10'
                                     required
                                 />
                                 <input
@@ -167,7 +167,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder='Password'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
+                                    className='py-2 px-3 rounded-lg bg-extralight font-medium text-sm focus:outline-none z-10'
                                     required
                                 />
                                 {!passwordIsValid && <div className='flex text-sm text-center z-10'>
@@ -186,9 +186,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     type='submit'
                                     className={
                                         'py-2 px-4 rounded-lg ' + 
-                                        `${passwordIsValid ? 'cursor-pointer bg-extralight glow-blue hover:bg-blue-500/80' 
-                                            : `${(!password.length && !username.length && !name.length) ? 'glow-blue' : 'glow-red'} 
-                                            cursor-not-allowed bg-dark hover:bg-red-500/80`}`
+                                        `${passwordIsValid ? 'cursor-pointer bg-extralight hover:bg-blue-500/80' 
+                                            : 'cursor-not-allowed text-sm hover:bg-red-500/80 bg-extralight'}`
                                     }
                                 >
                                     Create account
@@ -200,8 +199,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             <button
                                 type='submit'
                                 className={
-                                    'py-2 px-4 rounded-lg bg-extralight glow-blue ' + 
-                                    'hover:bg-blue-500/80 cursor-pointer'
+                                    'py-2 px-4 rounded-lg bg-extralight ' + 
+                                    'hover:bg-blue-500/80 cursor-pointer text-sm'
                                 }
                             >
                                 Login

@@ -14,11 +14,11 @@ export async function getLink(id: string): Promise<FullLink | 404 | null> {
 
         const data = await res.json()
         return data
-    } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
             console.error('Request timed out after 1s')
         } else {
-            console.error('Error fetching link:', err)
+            console.error(`Error fetching link: ${error}`)
         }
         return null
     }
