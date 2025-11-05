@@ -80,10 +80,10 @@ export default function RenderSite({ share, renderSite, setRenderSite }: ShowSit
         } else if (width < 20 && renderSite) {
             setRenderSite(false)
         }
-    }, [width, renderSite])
+    }, [width, renderSite, setRenderSite])
 
     return (
-        <div style={{ width, paddingBottom: 100 }} className="relative">
+        <div style={{ width }} className={`${renderSite ? 'relative' : 'absolute right-0 bottom-0 z-100 w-2 h-full'} pb-25`}>
             <div
                 onMouseDown={handleMouseDown}
                 className="absolute top-0 right-0 h-full w-2 cursor-col-resize z-20 pl-2 pr-8 group grid place-items-center"
@@ -100,13 +100,13 @@ export default function RenderSite({ share, renderSite, setRenderSite }: ShowSit
             {renderSite && width > 0 && share?.alias && (
                 <iframe
                     src={`https://${share.alias}.hanasand.com`}
-                    style={{ width: '100%', height: '100vh', border: 'none' }}
+                    className='absolute w-full h-full border-none rounded-lg'
                     title="Embedded Site"
                 ></iframe>
             )}
 
             <div
-                onClick={() => { setRenderSite(prev => { fade(prev); return !prev; }) }}
+                onClick={() => { setRenderSite(prev => { fade(prev); return !prev }) }}
                 className="
                     group fixed bottom-16 right-3 z-[100] cursor-pointer select-none
                     w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
