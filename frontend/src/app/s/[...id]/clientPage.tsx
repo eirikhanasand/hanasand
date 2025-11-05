@@ -31,7 +31,7 @@ export default function ClientPage({ id, share: serverShare, randomId, openFolde
     const [renderSite, setRenderSite] = useState(false)
 
     return (
-        <div className='flex w-full h-full max-w-[100vw]'>
+        <div className='flex w-full h-full max-w-[100vw] p-2 gap-2'>
             <Explorer 
                 showExplorer={showExplorer} 
                 setShowExplorer={setShowExplorer}
@@ -39,7 +39,7 @@ export default function ClientPage({ id, share: serverShare, randomId, openFolde
                 tree={tree}
                 share={share}
             />
-            <div className={`flex-1 flex flex-col min-h-full w-full ${showExplorer && showMetadata && 'max-w-[66vw]'} bg-light text-foreground`}>
+            <div className={`flex-1 flex flex-col min-h-full w-full ${showExplorer && showMetadata && 'max-w-[66vw]'} outline outline-dark rounded-lg text-foreground`}>
                 <Code
                     id={share?.id || id}
                     setParticipants={setParticipants}

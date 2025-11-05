@@ -38,7 +38,7 @@ export default function Explorer({ showExplorer, setShowExplorer, openFolders, t
     }
 
     return (
-        <div className='p-2 min-w-fit w-[15vw] h-full'>
+        <div className='min-w-fit w-[15vw] h-full'>
             <div className='outline outline-dark rounded-lg p-2 h-full space-y-2'>
                 <div className='outline outline-dark rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />

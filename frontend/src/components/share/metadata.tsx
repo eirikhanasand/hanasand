@@ -87,7 +87,7 @@ export default function Metadata({
     }
 
     return (
-        <div className='min-w-fit w-[9vw] h-full p-2'>
+        <div className='min-w-fit w-[9vw] h-full'>
             <div className='outline outline-dark space-y-2 h-full p-2 rounded-lg w-full'>
                 <div className='grid grid-cols-5 gap-2'>
                     <div className={baseButtonStyle}>
