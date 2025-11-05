@@ -10,7 +10,7 @@ export async function getTree(id: string): Promise<Tree | null> {
         const data = await res.json()
         return data
     } catch (error) {
-        console.error(`Error fetching share tree: ${error}`)
+        console.error(error)
         return null
     }
 }

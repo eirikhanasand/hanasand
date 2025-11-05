@@ -10,7 +10,7 @@ export async function getShare(id: string): Promise<Share | null> {
         const data = await res.json()
         return data
     } catch (error) {
-        console.error(`Error fetching share: ${error}`)
+        console.error(error)
         return null
     }
 }
