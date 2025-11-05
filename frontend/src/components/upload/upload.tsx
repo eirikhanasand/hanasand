@@ -60,15 +60,27 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
     }
 
     return (
-        <div className='grid md:grid-cols-2 w-full spawn rounded-lg overflow-hidden glow-orange'>
+        <div className='grid md:grid-cols-2 w-full spawn rounded-lg overflow-hidden'>
             <div
                 className='hidden md:grid w-full h-full place-items-center bg-dark'
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
             >
-                <h1 className='rounded-lg border-2 border-dashed border-amber-700 p-3 px-10 cursor-pointer'>
-                    Drop image here
-                </h1>
+                <label
+                    htmlFor='fileInput'
+                    className='flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition'
+                >
+                    <h1 className='rounded-lg border-2 border-dashed border-amber-700 p-3 px-10 cursor-pointer'>
+                        Drop image here
+                    </h1>
+                    <input
+                        id='fileInput'
+                        type='file'
+                        accept='image/*,video/*'
+                        className='hidden'
+                        onChange={handleFileChange}
+                    />
+                </label>
             </div>
             <div className='w-full h-full grid place-items-center bg-light'>
                 <div className='flex flex-col items-center gap-4'>
@@ -113,7 +125,9 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                         className='bg-darker w-full rounded-md border-[1px] border-[rgb(44,44,44)] px-2 py-1 focus:outline-hidden'
                     />
                 </div>
-                <Link href='/gallery' className='bg-extralight p-2 px-10 rounded-lg'><h1>My uploads</h1></Link>
+                <Link href='/gallery' className='bg-light p-2 px-10 md:px-15 rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_8px_rgba(0,0,0,0.4)] backdrop-blur-md text-bright/80'>
+                    <h1>My uploads</h1>
+                </Link>
             </div>
         </div>
     )
