@@ -1,8 +1,15 @@
 import config from '@/config'
 
 export default async function fetchThought(id: string): Promise<Thought | null> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
+
     try {
-        const response = await fetch(`${config.url.api}/thought/${id}`)
+        const response = await fetch(`${config.url.api}/thought/${id}`, {
+            signal: controller.signal
+        })
+
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(`Failed to fetch thought ${id}.`)
         }

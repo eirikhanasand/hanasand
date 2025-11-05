@@ -11,14 +11,20 @@ export default async function fetchRoles({ id, token }: FetchRoleProps): Promise
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
+
     try {
         const response = await fetch(`${config.url.api}/roles`, {
             headers: {
                 'Content-Type': 'application/json',
                 'id': id,
                 'Authorization': `Bearer ${token}`
-            }
+            },
+            signal: controller.signal
         })
+
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error('Failed to fetch roles.')
         }

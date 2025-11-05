@@ -1,23 +1,29 @@
 import config from '@/config'
 
-export default async function fetchThoughts(): Promise<Thought[]> {
+export default async function login(id: string, password: string) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const response = await fetch(`${config.url.api}/thoughts`, {
+        const response = await fetch(`${config.url.api}/auth/login/${id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password }),
             signal: controller.signal
         })
 
         clearTimeout(timeout)
+
         if (!response.ok) {
-            throw new Error('Failed to fetch thoughts.')
+            throw new Error(await response.text())
         }
 
         const data = await response.json()
         return data
     } catch (error) {
         console.log(error)
-        return []
+        return false
     }
 }

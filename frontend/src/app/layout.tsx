@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react'
+import { ReactNode } from 'react'
 import { cookies, headers } from 'next/headers'
 import ThemeSwitch from '@/components/theme/themeSwitch'
 import Link from 'next/link'
@@ -33,7 +33,7 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang='en' className={theme}>
             <body className='h-full w-full'>
-                <header className='fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] pt-4 px-8 md:px-32'>
+                <header className={`fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] pt-4 px-8 ${isShare ? 'md:px-59' : 'md:px-32'}`}>
                     <div className='w-full text-foreground grid grid-cols-3 px-4 select-none outline outline-dark rounded-lg py-1 bg-background'>
                         <div className='block md:hidden w-full' />
                         <div className='hidden md:flex items-center'>
@@ -66,7 +66,7 @@ export default async function layout({children}: {children: ReactNode}) {
                         </div>
                     </div>
                 </header>
-                <div className='mt-[6.5vh] h-[93.5vh] w-full overflow-auto'>
+                <div className='mt-[9.5vh] h-[90.5vh] w-full overflow-auto'>
                     <main className='w-full min-h-[93.5vh]'>
                         {children}
                     </main>

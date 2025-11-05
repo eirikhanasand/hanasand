@@ -1,9 +1,15 @@
 import config from '@/config'
 
 export async function getLink(id: string): Promise<FullLink | 404 | null> {
-    try {
-        const res = await fetch(`${config.url.cdn}/link/${id}`)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
 
+    try {
+        const res = await fetch(`${config.url.cdn}/link/${id}`, {
+            signal: controller.signal
+        })
+
+        clearTimeout(timeout)
         if (res.status === 404) {
             return 404
         }

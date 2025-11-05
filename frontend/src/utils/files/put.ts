@@ -1,14 +1,22 @@
 import config from '@/config'
 
 export async function updateFile(id: string, updates: Updates): Promise<Share | null> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
+
     try {
         const res = await fetch(`${config.url.cdn}/files/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updates),
+            signal: controller.signal
         })
 
-        if (!res.ok) throw new Error('Failed to update share')
+        clearTimeout(timeout)
+        if (!res.ok) {
+            throw new Error('Fetch failed.')
+        }
+
         const data = await res.json()
         return data
     } catch (error) {

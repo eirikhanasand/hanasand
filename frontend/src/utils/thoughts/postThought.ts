@@ -14,6 +14,9 @@ export async function postThought(title: string): Promise<{ status: number, mess
         }
     }
 
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
+
     try {
         const response = await fetch(`${config.url.api}/thoughts`, {
             method: 'POST',
@@ -22,9 +25,11 @@ export async function postThought(title: string): Promise<{ status: number, mess
                 'id': id,
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ title, id })
+            body: JSON.stringify({ title, id }),
+            signal: controller.signal
         })
-    
+
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }

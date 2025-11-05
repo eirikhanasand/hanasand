@@ -35,12 +35,12 @@ export default async function Page({
                     </Link> }
                     <div className='-ml-4 flex w-full absolute bottom-0 p-4'>
                         <div className='w-12' />
-                        <h1 className='flex-1 rounded-lg w-full grid place-items-center text-superlight text-center md:text-left text-sm md:text-base'>
+                        <h1 className='flex-1 rounded-lg w-full grid place-items-center text-superlight/90 text-center md:text-left text-sm md:text-base'>
                             Always get permission before testing.
                         </h1>
                     </div>
                     <Link href='/test/stats' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                        <ChartColumn className='group-hover:stroke-[#e25822]' />
+                        <ChartColumn className='stroke-bright/80 group-hover:stroke-[#e25822]' />
                     </Link> 
                 </div>
             </div>

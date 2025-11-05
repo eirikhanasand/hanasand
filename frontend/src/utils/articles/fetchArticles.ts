@@ -6,10 +6,21 @@ export default async function fetchArticles<T extends boolean>(
 ): Promise<T extends true ? Articles : Article[]> {
     try {
         const url = new URL(`${config.url.api}/articles`)
-        if (recent) url.searchParams.set('recent', 'true')
-        if (backfill) url.searchParams.set('backfill', 'true')
+        if (recent) {
+            url.searchParams.set('recent', 'true')
+        }
 
-        const response = await fetch(url)
+        if (backfill) {
+            url.searchParams.set('backfill', 'true')
+        }
+
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
+        const response = await fetch(url, {
+            signal: controller.signal
+        })
+
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error('Failed to fetch articles.')
         }

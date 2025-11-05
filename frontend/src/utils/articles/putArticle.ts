@@ -6,6 +6,8 @@ import { getCookie } from '@/utils/cookies'
 export async function putArticle(id: string, content: string[]): Promise<void | string> {
     const token = getCookie('access_token')
     const username = getCookie('id')
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
 
     if (token && username) {
         const response = await fetch(`${config.url.api}/article/${id}`, {
@@ -14,9 +16,11 @@ export async function putArticle(id: string, content: string[]): Promise<void | 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ id: username, content })
+            body: JSON.stringify({ id: username, content }),
+            signal: controller.signal
         })
 
+        clearTimeout(timeout)
         if (!response.ok) {
             const data = await response.json()
 

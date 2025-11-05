@@ -1,8 +1,8 @@
 'use client'
 import Notify from '@/components/notify/notify'
-import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie, setCookie } from '@/utils/cookies'
+import login from '@/utils/login/login'
 import Or from '@/utils/or'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -27,29 +27,23 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const password = formData.get('password') as string
 
         try {
-            const response = await fetch(`${config.url.api}/auth/login/${id}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ password })
-            })
+            const data = await login(id, password)
+            if (data) {
+                setCookie('name', data.name, 1)
+                setCookie('id', data.id, 1)
+                setCookie('avatar', data.avatar, 1)
+                setCookie('access_token', data.token, 1)
 
-            if (!response.ok) {
-                throw new Error(await response.text())
+                if (path) {
+                    router.push(path)
+                }
             }
 
-            const data = await response.json()
-            setCookie('name', data.name, 1)
-            setCookie('id', data.id, 1)
-            setCookie('avatar', data.avatar, 1)
-            setCookie('access_token', data.token, 1)
-
-            if (path) {
-                router.push(path)
-            } else {
-                router.push(`/dashboard`)
+            if (!data) {
+                setError('Please try again later.')
             }
+
+            router.push(`/dashboard`)
         } catch (error) {
             if ('message' in (error as { message: string })) {
                 try {

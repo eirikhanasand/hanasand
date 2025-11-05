@@ -15,9 +15,14 @@ export default function LogoutPageClient({ path }: { path?: string }) {
                 removeCookies('name', 'access_token', 'id', 'avatar')
                 const searchParams = new URLSearchParams(window.location.search)
                 const queryString = searchParams.toString()
+                const controller = new AbortController()
+                const timeout = setTimeout(() => controller.abort(), 1000)
 
                 if (id) {
-                    const response = await fetch(`${config.url.api}/auth/logout/${id}`)
+                    const response = await fetch(`${config.url.api}/auth/logout/${id}`, {
+                        signal: controller.signal
+                    })
+                    clearTimeout(timeout)
                     if (!response.ok) {
                         throw new Error(await response.text())
                     }

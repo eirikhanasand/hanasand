@@ -13,15 +13,19 @@ export default async function deleteUser(id: string): Promise<{ status: number, 
                 message: 'Please log in to delete users.'
             }
         }
-
+        
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
         const response = await fetch(`${config.url.api}/user/${id}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'id': id
-            }
+            },
+            signal: controller.signal
         })
 
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }

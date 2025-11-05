@@ -23,11 +23,15 @@ export async function postFile({ name, file, description, path, type }: PostFile
         }
 
         formData.append('type', type)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
         const response = await fetch(`${config.url.cdn}/files`, {
             method: 'POST',
             body: formData,
+            signal: controller.signal
         })
 
+        clearTimeout(timeout)
         if (response.status === 409) {
             return 409
         }

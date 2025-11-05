@@ -14,7 +14,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
     const [error, setError] = useState<string | null>(null)
     const [didCopy, setDidCopy] = useState<boolean | string>(false)
     const isValidLink = path.includes('http') || (path.includes('.') && path.length > 2) || path.includes(':')
-    const color = isValidLink ? 'bg-blue-500/80 cursor-pointer glow-blue' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'bg-dark cursor-not-allowed glow-blue'
+    const color = isValidLink ? 'bg-blue-500/80 cursor-pointer glow-blue' : path.length > 0 ? 'bg-red-500 cursor-not-allowed' : 'outline outline-dark cursor-not-allowed'
     const fullUrl = `https://hanasand.com/g/${serverId}`
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
@@ -58,13 +58,13 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
         <form onSubmit={handleSubmit} className='grid gap-2'>
             {error && <Notify message={error} />}
             <input
-                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
+                className='outline outline-dark w-full rounded-md px-2 py-1 z-10'
                 placeholder='Shortcut'
                 onChange={(e) => setId(e.target.value)}
                 value={id}
             />
             <input
-                className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
+                className='outline outline-dark w-full rounded-md px-2 py-1 z-10'
                 placeholder='Link'
                 onChange={(e) => setPath(e.target.value)}
                 value={path}

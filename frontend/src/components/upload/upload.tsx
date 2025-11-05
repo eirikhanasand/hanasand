@@ -49,7 +49,12 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
 
     async function fetchImageAsFile(url: string, fileName: string) {
         const fetchableUrl = getFetchableUrl(url)
-        const response = await fetch(`/api/image?url=${encodeURIComponent(fetchableUrl)}`)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
+        const response = await fetch(`/api/image?url=${encodeURIComponent(fetchableUrl)}`, {
+            signal: controller.signal
+        })
+        clearTimeout(timeout)
         const blob = await response.blob()
         const type = blob.type || 'image/png'
         return new File([blob], fileName, { type })

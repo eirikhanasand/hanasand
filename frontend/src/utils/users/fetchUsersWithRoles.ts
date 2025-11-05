@@ -7,14 +7,18 @@ export default async function fetchUsersWithRoles({ id, token }: { id?: string, 
     }
 
     try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
         const response = await fetch(`${config.url.api}/users`, {
             headers: {
                 'Content-Type': 'application/json',
                 'id': id,
                 'Authorization': `Bearer ${token}`
-            }
+            },
+            signal: controller.signal
         })
 
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error('Failed to fetch users.')
         }

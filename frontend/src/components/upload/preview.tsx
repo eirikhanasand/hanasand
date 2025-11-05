@@ -25,9 +25,15 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
     const [error, setError] = useState<string | null>(null)
 
     async function checkPath(p: string) {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
         setCheckingPath(true)
+
         try {
-            const res = await fetch(`${config.url.cdn}/files/check?path=${encodeURIComponent(p)}`)
+            const res = await fetch(`${config.url.cdn}/files/check?path=${encodeURIComponent(p)}`, {
+                signal: controller.signal
+            })
+            clearTimeout(timeout)
             const data = await res.json()
             setPathAvailable(!data.exists)
         } catch (error) {
@@ -57,18 +63,18 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
             setError('Path is already taken. Choose another.')
             return
         }
-        
+
         setUploading(true)
         try {
             const status = await postFile({ name, file, description, path: path || undefined, type })
             if (status === 409) {
                 setError('Path is already taken. Choose another.')
             }
-            
+
             if (!status || typeof status === 'number' || typeof status !== 'number' && !('id' in status)) {
                 return setError('Upload failed. Try again later.')
             }
-            
+
             if (status.id) {
                 setUrl(`${config.url.cdn}/files/${path ? `path/${path}` : status.id}`)
             }

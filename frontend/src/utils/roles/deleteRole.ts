@@ -4,6 +4,9 @@ import config from '@/config'
 import { getCookie } from '../cookies'
 
 export default async function deleteRole(id: string): Promise<{ status: number, message: string }> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
+
     try {
         const token = getCookie('access_token')
         const id = getCookie('id')
@@ -19,9 +22,11 @@ export default async function deleteRole(id: string): Promise<{ status: number, 
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'id': id
-            }
+            },
+            signal: controller.signal
         })
 
+        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }

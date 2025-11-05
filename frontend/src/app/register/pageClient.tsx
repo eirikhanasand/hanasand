@@ -22,17 +22,17 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const [lowerCaseInPasswordCount, setLowercaseInPasswordCount] = useState(0)
     const [upperCaseInPasswordCount, setUppercaseInPasswordCount] = useState(0)
     const [specialCharactersInPasswordCount, setCharactersInPasswordCount] = useState(0)
-    const passwordIsValid = 
-        password.length >= 16 
-        && numbersInPasswordCount >= 2 
+    const passwordIsValid =
+        password.length >= 16
+        && numbersInPasswordCount >= 2
         && specialCharactersInPasswordCount >= 2
         && lowerCaseInPasswordCount >= 2
         && upperCaseInPasswordCount >= 2
-    const lengthColor = password.length > 0 ? password.length >= 16 ? 'text-green-500' : 'text-red-500' : '' 
+    const lengthColor = password.length > 0 ? password.length >= 16 ? 'text-green-500' : 'text-red-500' : ''
     const numberColor = password.length > 0 ? numbersInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
     const lowerCaseColor = password.length > 0 ? lowerCaseInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
     const upperCaseColor = password.length > 0 ? upperCaseInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
-    const specialCharacterColor = password.length > 0 ? specialCharactersInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : '' 
+    const specialCharacterColor = password.length > 0 ? specialCharactersInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -44,6 +44,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         const name = formData.get('name') as string
         const id = formData.get('username') as string
         const password = formData.get('password') as string
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 1000)
 
         try {
             const response = await fetch(`${config.url.api}/user`, {
@@ -51,9 +53,11 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ name, id, password })
+                body: JSON.stringify({ name, id, password }),
+                signal: controller.signal
             })
 
+            clearTimeout(timeout)
             if (!response.ok) {
                 throw new Error(await response.text())
             }
@@ -100,20 +104,20 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
             if (!isNaN(Number(char))) {
                 numbers++
             }
-            
+
             if (/[^a-zA-Z0-9]/.test(char)) {
                 specialCharacters++
             }
-            
+
             if (/[a-z]/.test(char)) {
                 lowerCaseCharacters++
             }
-            
+
             if (/[A-Z]/.test(char)) {
                 upperCaseCharacters++
             }
         }
-        
+
         setNumbersInPasswordCount(numbers)
         setCharactersInPasswordCount(specialCharacters)
         setLowercaseInPasswordCount(lowerCaseCharacters)
@@ -172,12 +176,12 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 />
                                 {!passwordIsValid && <div className='flex text-sm text-center z-10'>
                                     <h1>
-                                        The password must be at 
+                                        The password must be at
                                         least <span className={`font-bold ${lengthColor}`}>16
                                         </span> characters, contain at least <span className={`font-bold ${lowerCaseColor}`}>2
                                         </span> lowercase letters, <span className={`font-bold ${upperCaseColor}`}>2
                                         </span> uppercase letters, <span className={`font-bold ${numberColor}`}>2
-                                        </span> numbers, 
+                                        </span> numbers,
                                         and <span className={`font-bold ${specialCharacterColor}`}>2
                                         </span> special characters.
                                     </h1>
@@ -185,8 +189,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 <button
                                     type='submit'
                                     className={
-                                        'py-2 px-4 rounded-lg ' + 
-                                        `${passwordIsValid ? 'cursor-pointer bg-extralight hover:bg-blue-500/80' 
+                                        'py-2 px-4 rounded-lg ' +
+                                        `${passwordIsValid ? 'cursor-pointer bg-extralight hover:bg-blue-500/80'
                                             : 'cursor-not-allowed text-sm hover:bg-red-500/80 bg-extralight'}`
                                     }
                                 >
@@ -199,7 +203,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             <button
                                 type='submit'
                                 className={
-                                    'py-2 px-4 rounded-lg bg-extralight ' + 
+                                    'py-2 px-4 rounded-lg bg-extralight ' +
                                     'hover:bg-blue-500/80 cursor-pointer text-sm'
                                 }
                             >

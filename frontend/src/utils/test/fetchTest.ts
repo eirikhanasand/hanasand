@@ -1,8 +1,15 @@
 import config from '@/config'
 
 export async function fetchTest(id: string): Promise<Test | null> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 1000)
+
     try {
-        const res = await fetch(`${config.url.api}/test/${id}`)
+        const res = await fetch(`${config.url.api}/test/${id}`, {
+            signal: controller.signal
+        })
+
+        clearTimeout(timeout)
         if (!res.ok) {
             throw new Error(`Failed to fetch test: ${res.status}`)
         }
