@@ -5,7 +5,7 @@ export async function updateFile(id: string, updates: Updates): Promise<Share | 
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.cdn}/files/${id}`, {
+        const response = await fetch(`${config.url.cdn}/files/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updates),
@@ -13,11 +13,11 @@ export async function updateFile(id: string, updates: Updates): Promise<Share | 
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Fetch failed.')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(`Error updating share: ${error}`)

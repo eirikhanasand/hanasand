@@ -5,16 +5,17 @@ export async function getTree(id: string): Promise<Tree | null> {
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.cdn}/share/tree/${id}`, {
+        const response = await fetch(`${config.url.cdn}/share/tree/${id}`, {
             signal: controller.signal
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
+            console.log(await response.text())
             throw new Error('Failed to fetch share tree')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(error)

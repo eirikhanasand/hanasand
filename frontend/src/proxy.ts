@@ -24,10 +24,10 @@ export async function proxy(req: NextRequest) {
     }
 
     const theme = req.cookies.get('theme')?.value || 'dark'
-    const res = NextResponse.next()
-    res.headers.set('x-theme', theme)
-    res.headers.set('x-current-path', req.nextUrl.pathname)
-    return res
+    const response = NextResponse.next()
+    response.headers.set('x-theme', theme)
+    response.headers.set('x-current-path', req.nextUrl.pathname)
+    return response
 }
 
 function pathIsAllowedWhileUnauthorized(path: string) {

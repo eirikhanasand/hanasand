@@ -11,7 +11,7 @@ export async function postTest({ url, timeout, stages }: PostTestProps): Promise
     const fetchTimeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.api}/test`, {
+        const response = await fetch(`${config.url.api}/test`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url, timeout, stages }),
@@ -19,11 +19,11 @@ export async function postTest({ url, timeout, stages }: PostTestProps): Promise
         })
 
         clearTimeout(fetchTimeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Failed to create test')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(`Error creating test: ${error}`)

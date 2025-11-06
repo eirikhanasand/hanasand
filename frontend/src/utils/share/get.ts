@@ -4,14 +4,14 @@ export async function getShare(id: string): Promise<Share | string> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
-        const res = await fetch(`${config.url.cdn}/share/${id}`, { signal: controller.signal })
+        const response = await fetch(`${config.url.cdn}/share/${id}`, { signal: controller.signal })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Failed to fetch share')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {

@@ -4,16 +4,16 @@ export default async function getCertificates(id: string): Promise<Certificate[]
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
-        const res = await fetch(`${config.url.cdn}/certificates/user/${id}`, {
+        const response = await fetch(`${config.url.cdn}/certificates/user/${id}`, {
             signal: controller.signal
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error(`Load failed for ${id}.`)
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.log(`Error fetching certificates: ${error}`)

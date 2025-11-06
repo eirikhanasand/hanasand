@@ -5,7 +5,7 @@ export async function lockShare(share: Share, name: string): Promise<Share | nul
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.cdn}/share/lock/${share.id}`, {
+        const response = await fetch(`${config.url.cdn}/share/lock/${share.id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -15,11 +15,11 @@ export async function lockShare(share: Share, name: string): Promise<Share | nul
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Failed to lock/unlock share')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(`Error locking/unlocking share: ${error}`)

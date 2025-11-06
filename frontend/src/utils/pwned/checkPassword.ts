@@ -5,7 +5,7 @@ export default async function postPwned(password: string): Promise<Breach | null
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.api}/pwned`, {
+        const response = await fetch(`${config.url.api}/pwned`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password }),
@@ -13,11 +13,11 @@ export default async function postPwned(password: string): Promise<Breach | null
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Failed to check password')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(`Error checking password: ${error}`)

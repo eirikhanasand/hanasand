@@ -5,7 +5,7 @@ export async function updateLink(id: string, path: string): Promise<Link | null>
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.cdn}/link/${id}`, {
+        const response = await fetch(`${config.url.cdn}/link/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path }),
@@ -13,11 +13,11 @@ export async function updateLink(id: string, path: string): Promise<Link | null>
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Failed to update link')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(`Error updating link: ${error}`)

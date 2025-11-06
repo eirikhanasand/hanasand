@@ -30,11 +30,11 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
         setCheckingPath(true)
 
         try {
-            const res = await fetch(`${config.url.cdn}/files/check?path=${encodeURIComponent(p)}`, {
+            const response = await fetch(`${config.url.cdn}/files/check?path=${encodeURIComponent(p)}`, {
                 signal: controller.signal
             })
             clearTimeout(timeout)
-            const data = await res.json()
+            const data = await response.json()
             setPathAvailable(!data.exists)
         } catch (error) {
             console.error(error)

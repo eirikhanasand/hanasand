@@ -5,16 +5,16 @@ export async function fetchVisits(id: number): Promise<number | null> {
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.api}/test/visits/${id}`, {
+        const response = await fetch(`${config.url.api}/test/visits/${id}`, {
             signal: controller.signal
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
-            throw new Error(`Failed to fetch test: ${res.status}`)
+        if (!response.ok) {
+            throw new Error(`Failed to fetch test: ${response.status}`)
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data.visits
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {

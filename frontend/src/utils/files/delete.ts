@@ -11,18 +11,18 @@ export async function deleteFile(id: string): Promise<boolean> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
-        const res = await fetch(`${config.url.cdn}/files/${id}`, {
+        const response = await fetch(`${config.url.cdn}/files/${id}`, {
             method: 'DELETE',
             signal: controller.signal
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
-            console.error('Failed to delete file', await res.text())
+        if (!response.ok) {
+            console.error('Failed to delete file', await response.text())
             return false
         }
 
-        const json = await res.json()
+        const json = await response.json()
         return Boolean(json.deleted)
     } catch (error) {
         console.error(`Error deleting file: ${error}`)

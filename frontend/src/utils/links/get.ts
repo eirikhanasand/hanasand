@@ -5,20 +5,20 @@ export async function getLink(id: string): Promise<FullLink | 404 | null> {
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.cdn}/link/${id}`, {
+        const response = await fetch(`${config.url.cdn}/link/${id}`, {
             signal: controller.signal
         })
 
         clearTimeout(timeout)
-        if (res.status === 404) {
+        if (response.status === 404) {
             return 404
         }
 
-        if (!res.ok) {
-            throw new Error(`Failed to fetch link: ${res.status}`)
+        if (!response.ok) {
+            throw new Error(`Failed to fetch link: ${response.status}`)
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {

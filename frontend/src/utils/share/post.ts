@@ -5,7 +5,7 @@ export async function postShare(path: string, content: string): Promise<Share | 
     const timeout = setTimeout(() => controller.abort(), 1000)
 
     try {
-        const res = await fetch(`${config.url.cdn}/share`, {
+        const response = await fetch(`${config.url.cdn}/share`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path, content }),
@@ -13,11 +13,11 @@ export async function postShare(path: string, content: string): Promise<Share | 
         })
 
         clearTimeout(timeout)
-        if (!res.ok) {
+        if (!response.ok) {
             throw new Error('Failed to create share')
         }
 
-        const data = await res.json()
+        const data = await response.json()
         return data
     } catch (error) {
         console.error(`Error creating share: ${error}`)

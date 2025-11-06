@@ -8,8 +8,8 @@ export default function () {
     const url = __ENV.URL
     // @ts-expect-error
     const timeout = Number(__ENV.TIMEOUT || 1)
-    const res = http.get(url)
-    check(res, { 'status 200': (r: Response) => r.status === 200 })
+    const response = http.get(url)
+    check(response, { 'status 200': (r: Response) => r.status === 200 })
     sleep(timeout)
 }
 
