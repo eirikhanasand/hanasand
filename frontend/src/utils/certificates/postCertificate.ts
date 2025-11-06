@@ -16,7 +16,7 @@ export default async function postCertificate(certificate: Partial<Certificate>)
 
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
-        const response = await fetch(`${config.url.api}/certificate`, {
+        const response = await fetch(`${config.url.api}/certificates`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, id },
             body: JSON.stringify({ certificate }),
