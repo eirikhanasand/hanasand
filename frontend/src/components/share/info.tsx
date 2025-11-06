@@ -40,7 +40,6 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
 
     return (
         <div className='p-2 flex justify-between items-center rounded-lg'>
-            <h1 className='font-semibold text-lg'>{share.path}</h1>
             <div className='grid w-full gap-4'>
                 <div className='flex gap-2'>
                     <Eye className='text-gray-400' height={18} width={18} />

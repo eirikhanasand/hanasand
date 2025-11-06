@@ -13,10 +13,11 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const openFolders: string[] = openFoldersCookie?.value ? JSON.parse(openFoldersCookie?.value ?? '') || [] as string[] : [] as string[]
     const tree = await getTree(id)
     const share = await getShare(id)
+    const safeShare = typeof share === 'string' ? null : share
 
     return (
-        <div className='w-full h-[90.5vh]'>
-            <SharePageClient id={id} share={share} randomId={random} openFolders={openFolders} tree={tree} />
+        <div className='w-full h-[92.5vh]'>
+            <SharePageClient id={id} share={safeShare} randomId={random} openFolders={openFolders} tree={tree} />
         </div>
     )
 }

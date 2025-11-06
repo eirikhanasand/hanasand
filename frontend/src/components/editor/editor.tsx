@@ -3,7 +3,7 @@
 import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
+import '@styles/github.css'
 import './editor.css'
 import { postArticle } from '@/utils/articles/postArticle'
 
@@ -137,6 +137,7 @@ export default function Editor({
         if (textareaRef.current) {
             autoResize(textareaRef.current)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [markdown, displayEditor, textareaRef.current])
 
     useEffect(() => {
@@ -147,13 +148,14 @@ export default function Editor({
         if (typeof setEditing !== 'undefined') {
             setEditing(displayEditor)
         }
-    }, [displayEditor])
+    }, [displayEditor, setEditing])
 
     useEffect(() => {
         if (!editing) {
             setDisplayEditor(false)
             handleDisplayEditor(false)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editing])
 
     return <EditorWithoutLogic

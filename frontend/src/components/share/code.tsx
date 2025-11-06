@@ -2,11 +2,10 @@
 
 import { useEffect, useState, useRef, Dispatch, SetStateAction } from 'react'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github-dark.css'
+import '@styles/github.css'
 import { getShare } from '@/utils/share/get'
 import config from '@/config'
 import Editor from '@/components/share/editor'
-import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 type CodeProps = {
     id: string
@@ -45,11 +44,12 @@ export default function Code({
         async function fetchShare() {
             try {
                 const data = await getShare(id)
-                if (!data) {
-                    setError('Share not found')
+                if (typeof data === 'string') {
+                    setError(data)
                     return
                 }
 
+                setError(null)
                 setShare(data)
                 setEditingContent(data.content)
             } catch (error) {
@@ -57,10 +57,9 @@ export default function Code({
                 setError('Failed to load share')
             }
         }
-        fetchShare()
-    }, [id])
 
-    useClearStateAfter({ condition: error, set: setError })
+        fetchShare()
+    }, [id, setEditingContent])
 
     useEffect(() => {
         if (codeRef.current) {
@@ -170,7 +169,7 @@ export default function Code({
     }
 
     if (error) {
-        return <div className='p-6 text-red-500'>{error}</div>
+        return <div className='p-6 text-red-500/90'>{error}</div>
     }
 
     if (!share) {
