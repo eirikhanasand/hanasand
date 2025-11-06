@@ -8,12 +8,11 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
         return res.status(404).send({ error: 'Unauthorized.' })
     }
 
-    const { public_key, name, owner, created_by } = req.body as {
-        id: string
+    const owner = id
+    const created_by = id
+    const { name, public_key } = req.body as {
         public_key: string
         name: string
-        owner: string
-        created_by: string
     }
 
     if (!id || !public_key || !name || !owner || !created_by) {
