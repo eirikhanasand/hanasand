@@ -33,7 +33,7 @@ export default async function layout({children}: {children: ReactNode}) {
     return (
         <html lang='en' className={theme}>
             <body className='h-full w-full'>
-                <header className={`fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] ${isShare ? 'p-2' : 'pt-4 px-8 md:px-32'}`}>
+                <header className={`fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] ${isShare ? 'p-2' : 'pt-4 px-8 md:px-16 lg:px-32'}`}>
                     <div className='w-full text-foreground grid grid-cols-3 px-4 select-none outline outline-dark rounded-lg py-1 bg-background'>
                         <div className='block md:hidden w-full' />
                         <div className='hidden md:flex items-center'>

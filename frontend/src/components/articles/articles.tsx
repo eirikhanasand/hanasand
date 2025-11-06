@@ -39,7 +39,7 @@ export default async function Articles({
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 
     return (
-        <div className='p-8 md:p-16'>
+        <div className='p-4 md:p-16'>
             {message && <ArticleNotification message={message} />}
             <h1 className='text-foreground text-2xl font-semibold'>Articles</h1>
             <Recent recent={articles} max={max} includeTitle={includeRecentTitle} />

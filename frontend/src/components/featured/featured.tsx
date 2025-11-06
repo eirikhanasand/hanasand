@@ -26,7 +26,7 @@ export default function Featured() {
     ]
 
     return (
-        <div className='bg-background p-8 md:p-16'>
+        <div className='bg-background p-4 md:p-16'>
             <h1 className='text-foreground text-2xl'>Featured Projects</h1>
             <div className='grid md:grid-rows-2 md:grid-cols-2 gap-8 place-items-center mt-4'>
                 {images.map((image) => <Project

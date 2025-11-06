@@ -21,7 +21,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <div className='h-full'>
-            <div className='px-16 py-8 grid gap-2'>
+            <div className='px-8 md:px-16 lg:px-32 py-8 grid gap-2'>
                 <div className='flex w-full rounded-lg justify-between items-center'>
                     <h1 className='text-xl font-semibold flex-1'>@{name}</h1>
                     <div className='grid h-fit w-fit p-2 outline-1 outline-dark rounded-lg gap-2'>

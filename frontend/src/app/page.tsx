@@ -13,7 +13,7 @@ export default async function Page({
     const logout = Boolean(Array.isArray(params.logout) ? params.logout[0] : params.logout) || false
 
     return (
-        <div className='grid relative px-8 md:px-16'>
+        <div className='grid relative px-4 md:px-16'>
             <LogoutClient logoutServer={logout} />
             <Content logout={logout} />
             <Featured />
