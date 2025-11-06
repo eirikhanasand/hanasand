@@ -34,7 +34,7 @@
     "#ws": "./src/plugins/ws.ts",
     "#constants": "./src/constants.ts",
     "#components/*": "./src/components/*",
-    "#db": "./src/db.ts",
+    "#db": "./src/utils/db.ts",
     "#/*": "./src/*"
   }
 }

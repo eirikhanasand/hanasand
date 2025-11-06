@@ -34,6 +34,11 @@ import assignRole from './handlers/roles/assignRole.ts'
 import unassignRole from './handlers/roles/unassignRole.ts'
 import putSelf from './handlers/user/putSelf.ts'
 import getVisits from './handlers/test/getVisits.ts'
+import getCertificate from './handlers/certificates/get.ts'
+import postCertificate from './handlers/certificates/post.ts'
+import putCertificate from './handlers/certificates/put.ts'
+import deleteCertificate from './handlers/certificates/delete.ts'
+import getUserCertificates from './handlers/certificates/getUserCertificates.ts'
 
 /**
  * Defines the routes available in the API.
@@ -96,4 +101,11 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.post('/thought/title', postThoughtByTitle)
     fastify.put('/thought/:id', putThought)
     fastify.delete('/thought/:id', deleteThought)
+
+    // certificates
+    fastify.get('certificates/:id', getCertificate)
+    fastify.get('certificates/user/:id', getUserCertificates)
+    fastify.post('certificates/:id', postCertificate)
+    fastify.put('certificates/:id', putCertificate)
+    fastify.delete('certificates/:id', deleteCertificate)
 }

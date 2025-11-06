@@ -32,14 +32,17 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                     </div>
                 </div>
                 <div className='grid h-fit w-full p-2 outline-1 outline-dark rounded-lg'>
-                    <div className='flex justify-between mb-2'>
+                    <div className='flex justify-between mb-2 items-center'>
                         <h1 className='font-semibold text-lg self-center'>Certificates</h1>
                         <Link href='/dashboard/thoughts/create' className='flex gap-2 rounded-lg p-[3px] px-8 hover:outline-green-500/40 outline-1 outline-dark cursor-pointer hover:bg-green-500/25'>
                             <Plus className='stroke-bright/80' />
                             <h1 className='font-semibold text-bright/80'>Add</h1>
                         </Link>
                     </div>
-                    {(certificates as Certificate[]).map((certificate) => <Certificate key={certificate.id} certificate={certificate} />)}
+                    {certificates 
+                        ? (certificates as Certificate[]).map((certificate) => <Certificate key={certificate.id} certificate={certificate} />)
+                        : <>No certificates found! Click create to add one.</>
+                    }
                 </div>
             </div>
         </div>

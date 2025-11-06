@@ -1,7 +1,7 @@
-import run from '#db'
 import hasRole from '#utils/hasRole.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import run from '#db'
 
 export default async function postThought(req: FastifyRequest<{ Body: { title: string, id: string } }>, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)

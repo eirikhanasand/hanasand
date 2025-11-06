@@ -1,7 +1,7 @@
-import run from '#db'
 import type { RawData } from 'ws'
 import { WebSocket as WS } from 'ws'
 import { pendingUpdates } from '../../plugins/ws'
+import run from '#db'
 
 export async function handleMessage(
     id: string,

@@ -108,6 +108,24 @@ CREATE TABLE IF NOT EXISTS load_tests (
     duration INTERVAL
 );
 
+-- Certificates
+CREATE TABLE IF NOT EXISTS certificates (
+    id TEXT PRIMARY KEY,
+    public_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by TEXT NOT NULL
+);
+
+-- User certificates
+CREATE TABLE IF NOT EXISTS user_certificates (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    certificate_id TEXT NOT NULL REFERENCES certificates(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, certificate_id)
+);
+
 -- Index on user-roles 
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 
