@@ -28,9 +28,9 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
         }
 
         await run(
-            `INSERT INTO certificates (public_key, name, owner, created_by)
-            VALUES ($1, $2, $3, $4, $5);`,
-            [public_key, name, owner, created_by]
+            `INSERT INTO certificates (name, public_key, owner, created_by)
+            VALUES ($1, $2, $3, $4);`,
+            [name, public_key, owner, created_by]
         )
 
         return res.status(201).send({ ok: true })
