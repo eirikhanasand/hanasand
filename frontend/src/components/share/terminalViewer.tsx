@@ -12,10 +12,11 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const [input, setInput] = useState<string | null>(null)
     const [lines, setLines] = useState<string[]>(text)
-    const hostname = `${share.alias}@${share.alias}$`
-    const initialLeft = hostname.length * 8.65
+    const [hostname, setHostname] = useState('$')
+    const [initialLeft, setInitialLeft] = useState(hostname.length * 8.65)
     const [caretPos, setCaretPos] = useState({ top: 0, left: initialLeft })
     const spaces = ' '.repeat(hostname.length)
+
     const processed = useMemo(() => {
         const normalized: { type: string, content: string }[] = lines.map(item => {
             if (typeof item === 'string') {
@@ -80,6 +81,22 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
     useEffect(() => {
         setLines(prev => [...prev, ...text])
     }, [text])
+
+    useEffect(() => {
+        function handleResize() {
+            const updatedWidth = window.matchMedia('(min-width: 768px)').matches
+            const updatedHostname = updatedWidth ? `${share.alias}@${share.alias}$` : '$'
+            const updatedLeft = updatedHostname.length * 8.65
+            setHostname(updatedHostname)
+            setInitialLeft(updatedLeft)
+            setCaretPos(prev => ({...prev, left: updatedLeft }))
+            return updatedWidth
+        }
+
+        handleResize()
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
 
     useEffect(() => {
         const el = containerRef.current
