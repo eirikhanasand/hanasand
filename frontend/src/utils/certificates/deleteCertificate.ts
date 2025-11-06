@@ -16,7 +16,7 @@ export default async function deleteCertificate(id: string): Promise<{ status: n
 
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
-        const response = await fetch(`${config.url.api}/certificate/${id}`, {
+        const response = await fetch(`${config.url.api}/certificates/${id}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
