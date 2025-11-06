@@ -12,7 +12,7 @@ export async function getTree(id: string): Promise<Tree | null> {
         clearTimeout(timeout)
         if (!response.ok) {
             console.log(await response.text())
-            throw new Error('Failed to fetch share tree')
+            throw new Error(`Failed to fetch share tree for ${id}.`)
         }
 
         const data = await response.json()
