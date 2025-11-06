@@ -11,7 +11,7 @@ import { FormEvent, useState } from 'react'
 export default function LinkStatsPageClient() {
     const [query, setQuery] = useState('')
     const [link, setLink] = useState<FullLink | null>()
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const color = query.length > 0 ? 'bg-blue-500/80 cursor-pointer glow-blue' : 'bg-dark cursor-not-allowed glow-blue'
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
@@ -36,8 +36,6 @@ export default function LinkStatsPageClient() {
         }
     }
 
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
-
     return (
         <div className='w-full h-full bg-light p-4 space-y-4 relative'>
             <div className='h-full grid place-items-center'>
@@ -47,7 +45,7 @@ export default function LinkStatsPageClient() {
                         <h1 className='text-xl'>Link statistics</h1>
                     </div>
                     <form onSubmit={handleSubmit} className='grid gap-2'>
-                        {error && <Notify message={error} />}
+                        <Notify message={error} />
                         <input
                             className='bg-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                             placeholder='Link'

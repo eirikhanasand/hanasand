@@ -7,7 +7,7 @@ import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
 type LockProps = {
     share: Share | null
-    setError: Dispatch<SetStateAction<string | null>>
+    setError: Dispatch<SetStateAction<string | boolean | null>>
     baseButtonStyle: string
 }
 

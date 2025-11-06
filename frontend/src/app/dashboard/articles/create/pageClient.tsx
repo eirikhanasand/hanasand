@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function CreateClient() {
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const [id, setId] = useState<string | null>(null)
     const [content, setContent] = useState<string>('')
     const [editing, setEditing] = useState(false)
@@ -34,8 +34,6 @@ export default function CreateClient() {
             setError(result.message)
         }
     }
-
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     useEffect(() => {
         if (id) {

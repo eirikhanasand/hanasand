@@ -1,6 +1,6 @@
 import config from '@/config'
 
-export async function getCertificates(id: string): Promise<Certificate[] | null> {
+export default async function getCertificates(id: string): Promise<Certificate[] | null> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
@@ -10,13 +10,13 @@ export async function getCertificates(id: string): Promise<Certificate[] | null>
 
         clearTimeout(timeout)
         if (!res.ok) {
-            throw new Error(`Failed to fetch certificates for ${id}`)
+            throw new Error(`Load failed for ${id}.`)
         }
 
         const data = await res.json()
         return data
     } catch (error) {
-        console.error(`Error fetching certificates: ${error}`)
+        console.log(`Error fetching certificates: ${error}`)
         return null
     }
 }

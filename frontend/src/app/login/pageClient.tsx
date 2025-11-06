@@ -6,7 +6,7 @@ import login from '@/utils/login/login'
 import Or from '@/utils/or'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 type LoginPageProps = {
     path: string | null
@@ -15,9 +15,6 @@ type LoginPageProps = {
 }
 
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
-    const [error, setError] = useState<string | null>(null)
-    const [internal, setInternal] = useState<boolean>(serverInternal)
-    const [expired, setExpired] = useState<boolean>(serverExpired)
     const router = useRouter()
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -52,24 +49,24 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     return setError(msg?.error)
                 } catch (error) {
                     setError(error instanceof Error
-                        ? error.message.includes('Unauthorized')
-                            ? 'Unauthorized'
+                        ? error.message.toLowerCase().includes('unauthorized')
+                            ? 'Unauthorized.'
                             : error.message
-                        : 'Unknown error! Please contact @eirikhanasand')
+                        : 'Unknown error! Please contact @eirikhanasand.')
                 }
             }
 
             setError(error instanceof Error
-                ? error.message.includes('Unauthorized')
-                    ? 'Unauthorized'
+                ? error.message.toLowerCase().includes('unauthorized')
+                    ? 'Unauthorized.'
                     : error.message
-                : 'Unknown error! Please contact @eirikhanasand')
+                : 'Unknown error! Please contact @eirikhanasand.')
         }
     }
 
-    useClearStateAfter({ condition: error, set: setError })
-    useClearStateAfter({ condition: internal, set: setInternal })
-    useClearStateAfter({ condition: expired, set: setExpired, timeout: 8000 })
+    const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
+    const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
 
     useEffect(() => {
         const token = getCookie('access_token')
@@ -90,7 +87,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     </h1>
                     <div className='grid place-items-center gap-4'>
                         <div className='grid gap-4 place-items-center'>
-                            {error && <Notify message={error} />}
+                            <Notify message={error as string | null} />
                             <form
                                 className='w-full flex flex-col gap-3 max-w-xs self-center'
                                 onSubmit={handleSubmit}

@@ -22,7 +22,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
     const [checkingPath, setCheckingPath] = useState(false)
     const [pathAvailable, setPathAvailable] = useState(true)
     const [uploading, setUploading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
 
     async function checkPath(p: string) {
         const controller = new AbortController()
@@ -86,7 +86,6 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
         }
     }
 
-    useClearStateAfter({ condition: error, set: setError })
 
     if (!url || !file) return null
 

@@ -13,11 +13,9 @@ type RegisterPageProps = {
 }
 
 export default function RegisterPageClient({ path, serverInternal }: RegisterPageProps) {
-    const [error, setError] = useState('')
     const [name, setName] = useState('')
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
-    const [internal, setInternal] = useState<boolean>(serverInternal)
     const [numbersInPasswordCount, setNumbersInPasswordCount] = useState(0)
     const [lowerCaseInPasswordCount, setLowercaseInPasswordCount] = useState(0)
     const [upperCaseInPasswordCount, setUppercaseInPasswordCount] = useState(0)
@@ -33,6 +31,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const lowerCaseColor = password.length > 0 ? lowerCaseInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
     const upperCaseColor = password.length > 0 ? upperCaseInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
     const specialCharacterColor = password.length > 0 ? specialCharactersInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
+    const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -80,18 +80,18 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     return setError(msg?.error)
                 } catch (error) {
                     setError(error instanceof Error
-                        ? error.message.includes('Unauthorized')
-                            ? 'Unauthorized'
+                        ? error.message.toLowerCase().includes('unauthorized')
+                            ? 'Unauthorized.'
                             : error.message
-                        : 'Unknown error! Please contact @eirikhanasand')
+                        : 'Unknown error! Please contact @eirikhanasand.')
                 }
             }
 
             setError(error instanceof Error
-                ? error.message.includes('Unauthorized')
-                    ? 'Unauthorized'
+                ? error.message.toLowerCase().includes('unauthorized')
+                    ? 'Unauthorized.'
                     : error.message
-                : 'Unknown error! Please contact @eirikhanasand')
+                : 'Unknown error! Please contact @eirikhanasand.')
         }
     }
 
@@ -124,9 +124,6 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         setUppercaseInPasswordCount(upperCaseCharacters)
     }, [password])
 
-    useClearStateAfter({ condition: error, set: setError })
-    useClearStateAfter({ condition: internal, set: setInternal })
-
     return (
         <section className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>
             {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
@@ -142,7 +139,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     </h1>
                     <div className='grid place-items-center gap-4'>
                         <div className='grid gap-4 max-w-xs'>
-                            {error && <Notify message={error} />}
+                            <Notify message={error} />
                             <form
                                 className='w-full flex flex-col gap-3 self-center'
                                 onSubmit={handleSubmit}

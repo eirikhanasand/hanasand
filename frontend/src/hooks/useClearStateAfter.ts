@@ -1,26 +1,31 @@
-import { Dispatch, SetStateAction, useEffect } from 'react'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
-type ClearStateAfterProps = { 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    condition: any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    set: Dispatch<SetStateAction<any>>
+type ClearStateAfterInputProps = {
+    initialState?: string | boolean | null
     timeout?: number
     onClear?: () => void
 }
 
+type ClearStateAfterProps = { 
+    condition: string | boolean | null
+    setCondition: Dispatch<SetStateAction<string | boolean | null>>
+}
+
 // Generic function to clear any variable after x seconds. 
-export default function useClearStateAfter({ condition, set, timeout = 5000, onClear }: ClearStateAfterProps) {
+export default function useClearStateAfter({ initialState = null, timeout = 5000, onClear }: ClearStateAfterInputProps = {}): ClearStateAfterProps {
+    const [condition, setCondition] = useState<string | null | boolean>(initialState)
     useEffect(() => {
         if (!condition) {
             return
         }
 
         const timeout = setTimeout(() => {
-            set(null)
+            setCondition(null)
             if (onClear) onClear()
         }, 5000)
 
         return () => clearTimeout(timeout)
-    }, [condition, set, timeout, onClear])
+    }, [condition, setCondition, timeout, onClear])
+
+    return { condition, setCondition }
 }

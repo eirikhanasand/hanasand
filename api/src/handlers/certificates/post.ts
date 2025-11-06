@@ -1,8 +1,14 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import tokenWrapper from '#utils/tokenWrapper.ts'
 
 export default async function postCertificate(req: FastifyRequest, res: FastifyReply) {
-    const { id, public_key, name, owner, created_by } = req.body as {
+    const { valid, id } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
+    const { public_key, name, owner, created_by } = req.body as {
         id: string
         public_key: string
         name: string

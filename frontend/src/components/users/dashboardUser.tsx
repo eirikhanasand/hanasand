@@ -10,10 +10,9 @@ import Notify from '../notify/notify'
 
 export default function DashboardUser({ user }: { user: UserWithRole }) {
     const [deleted, setDeleted] = useState(false)
-    const [error, setError] = useState<string | null>(null)
     const keys = useKeyPress('Shift')
     const router = useRouter()
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
+    const { condition: error, setCondition: setError } = useClearStateAfter()
 
     async function handleClick() {
         if (!keys['Shift']) {

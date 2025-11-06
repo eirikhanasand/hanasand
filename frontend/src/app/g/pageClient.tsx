@@ -11,7 +11,7 @@ import { FormEvent, useEffect, useState } from 'react'
 export default function LinkPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [id, setId] = useState('')
     const [path, setPath] = useState('')
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const [didCopy, setDidCopy] = useState<boolean | string>(false)
     const isValidLink = path.includes('http') || (path.includes('.') && path.length > 2) || path.includes(':')
     const color = isValidLink ? 'bg-blue-500/80 cursor-pointer glow-blue' : path.length > 0 ? 'bg-red-500 cursor-not-allowed' : 'outline outline-dark cursor-not-allowed'
@@ -37,8 +37,6 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
         }
     }
 
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
-
     useEffect(() => {
         setTimeout(() => {
             setDidCopy(false)
@@ -56,7 +54,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
 
     return (
         <form onSubmit={handleSubmit} className='grid gap-2'>
-            {error && <Notify message={error} />}
+            <Notify message={error} />
             <input
                 className='outline outline-dark w-full rounded-md px-2 py-1 z-10'
                 placeholder='Shortcut'

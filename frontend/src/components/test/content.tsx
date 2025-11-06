@@ -4,6 +4,7 @@ import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import TestContent from './testContent'
+import Notify from '../notify/notify'
 
 type ContentProps = { 
     test: Test
@@ -26,10 +27,9 @@ export default function Content({
     rerun, 
     setRerun 
 }: ContentProps) {
-    const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
     const id = test.id
-    useClearStateAfter({ condition: error, set: setError })
+    const { condition: error, setCondition: setError } = useClearStateAfter()
 
     useEffect(() => {
         if (!id) return
@@ -88,11 +88,12 @@ export default function Content({
         return () => {
             ws.close()
         }
-    }, [id, setTest, reconnect, setIsConnected, setParticipants, rerun, setRerun])
+    }, [id, setTest, reconnect, setIsConnected, setParticipants, rerun, setRerun, setError])
 
     return (
         <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4">
             <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
+            <Notify message={error} />
         </div>
     )
 }

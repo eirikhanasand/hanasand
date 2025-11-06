@@ -105,7 +105,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // certificates
     fastify.get('certificates/:id', getCertificate)
     fastify.get('certificates/user/:id', getUserCertificates)
-    fastify.post('certificates/:id', postCertificate)
+    fastify.post('certificates', postCertificate)
     fastify.put('certificates/:id', putCertificate)
     fastify.delete('certificates/:id', deleteCertificate)
 }

@@ -48,7 +48,7 @@ export default function Metadata({
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const [id, setId] = useState(randomServerId)
     const [didCopy, setDidCopy] = useState<string | boolean>(false)
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     HideIfLittleSpace({ set: setShowMetadata })
 
     useEffect(() => {
@@ -61,8 +61,6 @@ export default function Metadata({
             setDidCopy(false)
         }, 350)
     }, [didCopy])
-
-    useClearStateAfter({ condition: error, set: setError })
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
@@ -110,7 +108,7 @@ export default function Metadata({
                         <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={22} width={22} />
                     </div>
                 </div>
-                {error && <Notify message={error} />}
+                <Notify message={error} />
                 <Info share={share} isConnected={isConnected} participants={participants} />
                 <WordControl clickedWord={clickedWord} />
             </div>

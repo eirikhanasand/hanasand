@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import copy from '@/utils/copy'
 import prettyDate from '@/utils/prettyDate'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
+import Notify from '../notify/notify'
 
 type HeaderProps = {
     share: Share | null
@@ -15,7 +16,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     const [didCopy, setDidCopy] = useState<string | boolean>(false)
     const [linkText, setLinkText] = useState(share?.id || '')
     const aliasText = share?.alias || ''
-    const [error, setError] = useState(null)
+    const { condition: error } = useClearStateAfter()
 
     useEffect(() => {
         setTimeout(() => {
@@ -26,8 +27,6 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     useEffect(() => {
         setLinkText(window.location.href.split('/').reverse()[0])
     }, [])
-
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     if (!share) {
         return <></>
@@ -78,6 +77,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                     <Timer height={18} width={18} />
                     <h1>{readText}</h1>
                 </span>
+                <Notify message={error} />
             </div>
         </div>
     )

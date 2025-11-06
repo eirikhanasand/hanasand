@@ -11,7 +11,7 @@ import { FormEvent, useState } from 'react'
 export default function TestStatsPageClient() {
     const [query, setQuery] = useState('')
     const [test, setTest] = useState<Test | null>()
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const color = query.length > 0 
         ? 'bg-orange-500/80 cursor-pointer glow-orange-small outline outline-dark'
         : 'outline outline-dark cursor-not-allowed'
@@ -33,8 +33,6 @@ export default function TestStatsPageClient() {
         }
     }
 
-    useClearStateAfter({ condition: error, set: setError })
-
     return (
         <div className='w-full h-full p-4 space-y-4 relative'>
             <div className='h-full grid place-items-center'>
@@ -44,7 +42,7 @@ export default function TestStatsPageClient() {
                         <h1 className='text-xl'>Test results</h1>
                     </div>
                     <form onSubmit={handleSubmit} className='grid gap-2'>
-                        {error && <Notify message={error} />}
+                        <Notify message={error} />
                         <input
                             className='outline outline-dark w-full rounded-md px-2 py-1 z-10'
                             placeholder='Test'

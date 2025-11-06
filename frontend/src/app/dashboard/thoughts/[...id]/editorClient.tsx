@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export default function EditorClient({ thought }: { thought: Thought }) {
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const [editing, setEditing] = useState(false)
     const router = useRouter()
     const text = editing ? `Editing thought` : `Click to edit thought`
@@ -21,8 +21,6 @@ export default function EditorClient({ thought }: { thought: Thought }) {
             setError(result.message)
         }
     }
-
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     return (
         <div className={`grid gap-2 ${editing ? '' : 'px-10 md:px-[20vw]'}`}>

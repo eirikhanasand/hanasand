@@ -9,11 +9,10 @@ import Notify from '../notify/notify'
 import deleteRole from '@/utils/roles/deleteRole'
 
 export default function DashboardRole({ role }: { role: Role }) {
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const [deleted, setDeleted] = useState(false)
-    const [error, setError] = useState<string | null>(null)
     const keys = useKeyPress('Shift')
     const router = useRouter()
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     async function handleClick() {
         if (!keys['Shift']) {

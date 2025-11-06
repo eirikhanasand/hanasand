@@ -1,6 +1,7 @@
 'use client'
 
 import Editor from '@/components/editor/editor'
+import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteArticle from '@/utils/articles/deleteArticle'
 import { Trash } from 'lucide-react'
@@ -8,7 +9,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export default function EditorClient({ article }: { article: Article }) {
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const [editing, setEditing] = useState(false)
     const router = useRouter()
     const name = article.id.replace('.md', '')
@@ -22,8 +23,6 @@ export default function EditorClient({ article }: { article: Article }) {
             setError(result.message)
         }
     }
-
-    useClearStateAfter({ condition: error, set: setError, timeout: 5000 })
 
     return (
         <div className={`grid gap-2 ${editing ? '' : 'px-10 md:px-[20vw]'}`}>
@@ -39,6 +38,7 @@ export default function EditorClient({ article }: { article: Article }) {
                 <Trash />
                 <h1 className='font-semibold'>Delete</h1>
             </div>
+            <Notify message={error} />
         </div>
     )
 }

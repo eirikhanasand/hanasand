@@ -12,8 +12,8 @@ export default function PwnedPageClient() {
     const [didSearch, setDidSearch] = useState(false)
     const [breached, setBreached] = useState(false)
     const [breachCount, setBreachCount] = useState<number | null>(null)
-    const [error, setError] = useState<string | null>(null)
     const color = password.length > 0 ? 'bg-green-500/80 cursor-pointer' : 'outline outline-dark cursor-not-allowed'
+    const { condition: error, setCondition: setError } = useClearStateAfter()
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         if (!password.length) {
@@ -37,8 +37,6 @@ export default function PwnedPageClient() {
         setDidSearch(false)
     }
 
-    useClearStateAfter({ condition: error, set: setError })
-
     return (
         <div className={`w-full h-full p-4 space-y-4 relative rounded-lg outline outline-dark`}>
             <div className='h-full grid place-items-center'>
@@ -51,7 +49,7 @@ export default function PwnedPageClient() {
                         <PwnedSearch breached={breached} breachCount={breachCount} password={password} />
                         : (
                             <form onSubmit={handleSubmit} className='grid gap-2'>
-                                {error && <Notify message={error} />}
+                                <Notify message={error} />
                                 <input
                                     type='password'
                                     placeholder='Password'

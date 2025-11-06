@@ -11,13 +11,13 @@ import { FormEvent, useEffect, useState } from 'react'
 
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [path, setPath] = useState('')
-    const [error, setError] = useState<string | null>(null)
     const [didCopy, setDidCopy] = useState<boolean | string>(false)
     const isValidLink =
-        (path.includes('http://') && path.includes('.') && path.length >= 10)
-        || (path.includes('https://') && path.includes('.') && path.length >= 11)
+    (path.includes('http://') && path.includes('.') && path.length >= 10)
+    || (path.includes('https://') && path.includes('.') && path.length >= 11)
     const color = isValidLink ? 'bg-orange-500/80 cursor-pointer glow-orange-small' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'outline outline-dark cursor-not-allowed'
     const fullUrl = `${config.url.link}/${serverId}`
+    const { condition: error, setCondition: setError } = useClearStateAfter()
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         if (!isValidLink) {
@@ -34,8 +34,6 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
             redirect(`/test/${result.id}`)
         }
     }
-
-    useClearStateAfter({ condition: error, set: setError })
 
     useEffect(() => {
         setTimeout(() => {
@@ -54,7 +52,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
 
     return (
         <form onSubmit={handleSubmit} className='grid gap-2'>
-            {error && <Notify message={error} />}
+            <Notify message={error} />
             <input
                 className='outline outline-dark w-full rounded-md px-2 py-1 focus:outline-hidden z-10'
                 placeholder='Link'

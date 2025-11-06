@@ -10,7 +10,7 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 export default function DashboardArticle({ article }: { article: Article }) {
     const [deleted, setDeleted] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
     const keys = useKeyPress('Shift')
     const router = useRouter()
 
@@ -28,8 +28,6 @@ export default function DashboardArticle({ article }: { article: Article }) {
             }
         }
     }
-
-    useClearStateAfter({ condition: error, set: setError })
 
     return (
         <div className='group'>

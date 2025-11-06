@@ -5,6 +5,7 @@ const { self_url } = config
 
 type Valid = {
     valid: boolean
+    id?: string
     error?: string
 }
 
@@ -23,9 +24,18 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     const authHeader = req.headers['authorization']
     const id = req.headers['id']
 
+    if (Array.isArray(id)) {
+        return {
+            valid: false,
+            id: id[0],
+            error: 'Unauthorized.'
+        }
+    }
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return {
             valid: false,
+            id,
             error: 'Missing or invalid Authorization header.'
         }
     }
@@ -33,6 +43,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     if (!id) {
         return {
             valid: false,
+            id,
             error: 'No id provided.'
         }
     }
@@ -49,15 +60,17 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         if (!response.ok) {
             return {
                 valid: false,
-                error: 'Unauthorized'
+                id,
+                error: 'Unauthorized.'
             }
         }
 
-        return { valid: true }
+        return { valid: true, id }
     } catch (error) {
         res.log.error(error)
         return res.status(500).send({
             valid: false,
+            id,
             error: 'Internal server error'
         })
     }
