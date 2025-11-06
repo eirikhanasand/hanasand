@@ -75,7 +75,7 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
 
     useEffect(() => {
         inputRef.current?.focus()
-    })
+    }, [])
 
     useEffect(() => {
         setLines(prev => [...prev, ...text])
