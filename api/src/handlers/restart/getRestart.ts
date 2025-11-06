@@ -1,29 +1,37 @@
+import config from '#constants'
 import sanitize from '#utils/sanitize.ts'
 import tokenWrapper from '#utils/tokenWrapper.ts'
-import { exec } from 'child_process'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function restartHandler(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { id: Id } = req.params as { id: string }
-    const id = sanitize(Id)
-
+    const { id: rawId } = req.params as { id: string }
+    const id = sanitize(rawId)
     if (!id) {
         return res.status(400).send({ error: 'No service provided' })
     }
-    
 
-    exec(`cd ${id}; git pull; docker compose up --build`, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error redeploying service: ${error.message}`)
-            return res.status(500).send({ error: error.message })
+    try {
+        const internalRes = await fetch(`${config.internal_api}/docker/restart/${id}`, {
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'hanasand_internal'
+            }
+        })
+
+        const json = await internalRes.json()
+
+        if (!internalRes.ok) {
+            return res.status(internalRes.status).send(json)
         }
 
-        console.log(stdout || stderr)
-        return res.send({ ok: true })
-    })
+        return res.send({ ok: true, detail: json })
+    } catch (err: any) {
+        console.error(`Error calling internal redeploy for ${id}:`, err)
+        return res.status(500).send({ error: err.message })
+    }
 }
