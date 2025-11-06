@@ -35,10 +35,6 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
     function handleMouseUp() {
         setIsDragging(false)
         document.body.style.userSelect = ''
-
-        if (height < 200) {
-            setOpen(false)
-        }
     }
 
     useEffect(() => {
@@ -64,6 +60,13 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
             setIsDone(true)
         }, 1000)
     }, [])
+
+    useEffect(() => {
+        if (!isDragging && height < 50) {
+            setOpen(false)
+            setHeight(0)
+        }
+    }, [height, isDragging, setOpen])
 
     return (
         <>
