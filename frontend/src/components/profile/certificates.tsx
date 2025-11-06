@@ -25,7 +25,7 @@ export default function Certificates({ certificates }: { certificates: Certifica
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         const result = await postCertificate(formData)
-        if (result.status === 200) {
+        if (result.status === 201) {
             setMessage(`Successfully created certificate ${formData.name}.`)
             setDisplayNewCertificateDialog(false)
             setFormData({ name: '', public_key: '' })
