@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/tokenWrapper.ts'
+import { loadSQL } from '#utils/loadSQL.ts'
 
 export default async function postCertificate(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
@@ -11,8 +12,8 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
     const owner = id
     const created_by = id
     const { name, public_key } = req.body as {
+        name: string,
         public_key: string
-        name: string
     } ?? {}
 
     if (!id || !public_key || !name || !owner || !created_by) {
@@ -20,17 +21,17 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
     }
 
     try {
-        const result = await run(
-            `INSERT INTO certificates (id, public_key, name, owner, created_by)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (id) DO NOTHING
-            RETURNING id`,
-            [id, public_key, name, owner, created_by]
-        )
-
-        if (result.rows.length === 0) {
-            return res.status(409).send({ error: 'Certificate already exists. Use PUT to edit it.' })
+        const query = await loadSQL('checkIfCertificateExistsForUser.sql')
+        const { rows } = await run(query, [owner, name])
+        if (rows[0].exists) {
+            return res.status(409).send({ error: 'You already have a certificate with this name. Use PUT to edit it.' })
         }
+
+        await run(
+            `INSERT INTO certificates (public_key, name, owner, created_by)
+            VALUES ($1, $2, $3, $4, $5);`,
+            [public_key, name, owner, created_by]
+        )
 
         return res.status(201).send({ ok: true })
     } catch (error: any) {

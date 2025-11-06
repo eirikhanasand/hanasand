@@ -28,6 +28,11 @@ export default async function postCertificate(certificate: Partial<Certificate>)
         })
 
         clearTimeout(timeout)
+
+        if (response.status === 409) {
+            throw new Error('conflict')
+        }
+
         if (!response.ok) {
             throw new Error(await response.text())
         }
@@ -36,8 +41,15 @@ export default async function postCertificate(certificate: Partial<Certificate>)
             status: response.status,
             message: `Created certificate ${certificate.name}.`
         }
-    } catch (error) {
-        console.log(error)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+        if (error.message === 'conflict') {
+            return {
+                status: 409,
+                message: `You already have a certificate with this name.`
+            }
+        }
+
         return {
             status: 500,
             message: `Failed to create certificate ${certificate.name}.`

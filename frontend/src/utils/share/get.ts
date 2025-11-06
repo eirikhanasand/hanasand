@@ -21,7 +21,7 @@ export async function getShare(id: string): Promise<Share | string> {
             return 'Unable to load share.'
         } else {
             console.error(`Fetch failed: ${error}`)
-            return 'Share not found.'
+            return `Share ${id} not found.`
         }
     }
 }

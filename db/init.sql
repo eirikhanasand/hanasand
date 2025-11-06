@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS load_tests (
 
 -- Certificates
 CREATE TABLE IF NOT EXISTS certificates (
-    id TEXT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     public_key TEXT NOT NULL,
     name TEXT NOT NULL,
     owner TEXT NOT NULL,
