@@ -10,7 +10,7 @@ export default async function getUserCertificates(req: FastifyRequest, res: Fast
 
     try {
         const query = await loadSQL('getUserCertificates.sql')
-        const result = await run(query, [id])
+        const result = await run(query, [Number(id)])
         if (result.rows.length === 0) {
             return res.status(404).send({ error: "No certificates found for this user" })
         }
