@@ -7,7 +7,7 @@ import { Trash2 } from 'lucide-react'
 // import { useRouter } from 'next/navigation'
 import Notify from '../notify/notify'
 
-export default function Certificate({ certificate }: { certificate: Certificate }) {
+export default function Certificate({ certificate, update }: { certificate: Certificate, update: () => void }) {
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const keys = useKeyPress('Shift')
     // const router = useRouter()
@@ -22,6 +22,7 @@ export default function Certificate({ certificate }: { certificate: Certificate 
             const result = await deleteCertificate(certificate.id)
             if (result.status === 200) {
                 setMessage(`Successfully deleted certificate ${certificate.name}.`)
+                update()
             } else {
                 setMessage(result.message)
             }

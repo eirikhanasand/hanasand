@@ -7,8 +7,10 @@ import { getCookie, setCookie } from '@/utils/cookies'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import Notify from '../notify/notify'
 import postCertificate from '@/utils/certificates/postCertificate'
+import getCertificates from '@/utils/certificates/getCertificates'
 
-export default function Certificates({ certificates }: { certificates: Certificate[] | null }) {
+export default function Certificates({ certificates: serverCertificates }: { certificates: Certificate[] | null }) {
+    const [certificates, setCertificates] = useState(serverCertificates)
     const [displayNewCertificateDialog, setDisplayNewCertificateDialog] = useState(false)
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const [formData, setFormData] = useState<Partial<Certificate>>({
@@ -29,10 +31,19 @@ export default function Certificates({ certificates }: { certificates: Certifica
             setMessage(`Successfully created certificate ${formData.name}.`)
             setDisplayNewCertificateDialog(false)
             setFormData({ name: '', public_key: '' })
+            update()
         } else {
             save()
             console.log(result.message)
             setMessage(result.message)
+        }
+    }
+
+    async function update() {
+        const id = getCookie('id')
+        if (id) {
+            const updatedCertificates = await getCertificates(id)
+            setCertificates(updatedCertificates)
         }
     }
 
@@ -77,7 +88,7 @@ export default function Certificates({ certificates }: { certificates: Certifica
                 </button>
             </div>
             {certificates
-                ? (certificates as Certificate[]).map((certificate) => <Certificate key={certificate.id} certificate={certificate} />)
+                ? (certificates as Certificate[]).map((certificate) => <Certificate update={update} key={certificate.id} certificate={certificate} />)
                 : <>No certificates found! Click &apos;Add&apos; to add one.</>
             }
             {displayNewCertificateDialog && (
