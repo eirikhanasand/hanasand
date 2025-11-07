@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/tokenWrapper.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
+import assignCertificate from '#utils/certificate/assignCertificate.ts'
 
 export default async function postCertificate(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
@@ -17,7 +18,7 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
     } ?? {}
 
     if (!id || !public_key || !name || !owner || !created_by) {
-        return res.status(400).send({ error: "Missing required fields" })
+        return res.status(400).send({ error: "Missing required fields." })
     }
 
     try {
@@ -27,13 +28,9 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
             return res.status(409).send({ error: 'You already have a certificate with this name. Use PUT to edit it.' })
         }
 
-        await run(
-            `INSERT INTO certificates (name, public_key, owner, created_by)
-            VALUES ($1, $2, $3, $4);`,
-            [name, public_key, owner, created_by]
-        )
+        const certificateId = await assignCertificate({ name, public_key, created_by, owner, user_id: id })
 
-        return res.status(201).send({ ok: true })
+        return res.status(201).send({ ok: true, id: certificateId })
     } catch (error: any) {
         console.error(error)
         res.status(500).send({ error: error.message })

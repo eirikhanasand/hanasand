@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS certificates (
 -- User certificates
 CREATE TABLE IF NOT EXISTS user_certificates (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    certificate_id TEXT NOT NULL REFERENCES certificates(id) ON DELETE CASCADE,
+    certificate_id INT NOT NULL REFERENCES certificates(id) ON DELETE CASCADE,
     assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, certificate_id)
 );
