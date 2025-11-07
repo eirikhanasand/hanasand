@@ -73,7 +73,7 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
         <>
             {isDragging && (
                 <div
-                    className="fixed inset-0 z-[9999]"
+                    className="fixed inset-0 z-9999"
                     style={{ cursor: 'row-resize', userSelect: 'none', pointerEvents: 'all' }}
                 />
             )}

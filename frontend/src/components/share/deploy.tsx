@@ -11,7 +11,7 @@ export default function Deploy({ setOpen, deploying, setDeploying }: DeployProps
         <div
             onClick={() => { setOpen(true); setDeploying(true) }}
             className="
-                group fixed bottom-3 right-3 z-[100] cursor-pointer select-none
+                group fixed bottom-3 right-3 z-100 cursor-pointer select-none
                 w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
                 hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
                 backdrop-blur-md bg-white/3 group-hover:bg-white/10 overflow-hidden
@@ -20,8 +20,8 @@ export default function Deploy({ setOpen, deploying, setDeploying }: DeployProps
             "
         >
             {/* Animated gradient light shimmer */}
-            <div className="absolute inset-0 animate-gradient-fast bg-[length:200%_200%]
-        bg-gradient-to-r from-purple-500 via-red-400 to-orange-400 opacity-0 group-hover:opacity-50 blur-md" />
+            <div className="absolute inset-0 animate-gradient-fast bg-size-[200%_200%]
+        bg-linear-to-r from-purple-500 via-red-400 to-orange-400 opacity-0 group-hover:opacity-50 blur-md" />
 
             {/* Glass overlay */}
             <div className="absolute inset-0 bg-black/10" />

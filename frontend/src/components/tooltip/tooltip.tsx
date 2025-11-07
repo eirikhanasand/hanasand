@@ -43,7 +43,7 @@ export default function Tooltip({ children, content, align = 'left' }: TooltipPr
                 createPortal(
                     <div
                         ref={tooltipRef}
-                        className="fixed z-[99999] p-2 rounded-md mb-2 bg-blue-400/20 text-white/70 outline outline-blue-400/40 max-w-xs text-xs"
+                        className="fixed z-99999 p-2 rounded-md mb-2 bg-blue-400/20 text-white/70 outline outline-blue-400/40 max-w-xs text-xs"
                         style={{ left: pos.x, top: pos.y }}
                     >
                         {content}

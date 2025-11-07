@@ -108,7 +108,7 @@ export default function RenderSite({ share, renderSite, setRenderSite }: ShowSit
             <div
                 onClick={() => { setRenderSite(prev => { fade(prev); return !prev }) }}
                 className="
-                    group fixed bottom-16 right-3 z-[100] cursor-pointer select-none
+                    group fixed bottom-16 right-3 z-100 cursor-pointer select-none
                     w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
                     hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
                     backdrop-blur-md bg-bright/3 group-hover:bg-bright/10 overflow-hidden
