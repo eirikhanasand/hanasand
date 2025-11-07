@@ -3,7 +3,7 @@
 import { Plus, X } from 'lucide-react'
 import Certificate from './certificate'
 import { useEffect, useState } from 'react'
-import { getCookie, setCookie } from '@/utils/cookies'
+import { getCookie, removeCookie, setCookie } from '@/utils/cookies'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import Notify from '../notify/notify'
 import postCertificate from '@/utils/certificates/postCertificate'
@@ -27,11 +27,13 @@ export default function Certificates({ certificates: serverCertificates }: { cer
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         const result = await postCertificate(formData)
+
         if (result.status === 201) {
+            await update()
             setMessage(`Successfully created certificate ${formData.name}.`)
             setDisplayNewCertificateDialog(false)
             setFormData({ name: '', public_key: '' })
-            update()
+            clear()
         } else {
             save()
             console.log(result.message)
@@ -55,6 +57,11 @@ export default function Certificates({ certificates: serverCertificates }: { cer
         if (formData.public_key) {
             setCookie('newCertificateKeyInput', formData.public_key)
         }
+    }
+
+    function clear() {
+        removeCookie('newCertificateNameInput')
+        removeCookie('newCertificateKeyInput')
     }
 
     function close() {

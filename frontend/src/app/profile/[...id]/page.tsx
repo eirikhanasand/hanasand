@@ -25,7 +25,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                 <div className='flex w-full rounded-lg justify-between items-center'>
                     <h1 className='text-xl font-semibold flex-1'>@{name}</h1>
                     <div className='grid h-fit w-fit p-2 outline-1 outline-dark rounded-lg gap-2'>
-                        <Link href={`/profile/${userId}`} className='flex justify-between px-6 group cursor-pointer gap-2'>
+                        <Link href='/dashboard' className='flex justify-between px-6 group cursor-pointer gap-2'>
                             <LayoutDashboard className='stroke-current group-hover:stroke-[#374c66]' />
                             <h1 className='font-semibold text-base self-center'>Dashboard</h1>
                         </Link>

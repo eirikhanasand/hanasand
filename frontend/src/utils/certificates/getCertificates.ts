@@ -5,6 +5,7 @@ export default async function getCertificates(id: string): Promise<Certificate[]
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
         const response = await fetch(`${config.url.api}/certificates/user/${id}`, {
+            cache: 'no-store',
             signal: controller.signal
         })
 
