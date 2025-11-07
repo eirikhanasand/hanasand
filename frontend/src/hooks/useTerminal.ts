@@ -1,4 +1,5 @@
 import config from '@/config'
+import { getCookie } from '@/utils/cookies'
 import randomId from '@/utils/random/randomId'
 import { useEffect, useRef, useState } from 'react'
 
@@ -17,7 +18,9 @@ export default function useTerminal({ share }: TerminalProps) {
         if (!share || !('id' in share)) return
 
         const session = randomId(6)
-        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.alias}/shell/${session}`)
+        const userCookie = getCookie('id')
+        const terminalUser = userCookie || 'default'
+        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.alias}/shell/${terminalUser}/${session}`)
 
         ws.onopen = () => {
             setReconnect(false)
