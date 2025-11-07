@@ -15,7 +15,7 @@ export default async function getUserCertificates(req: FastifyRequest, res: Fast
             return res.status(404).send({ error: "No certificates found for this user" })
         }
 
-        return res.send({ id, certificates: result.rows })
+        return res.send(result.rows)
     } catch (err: any) {
         console.error(err)
         return res.status(500).send({ error: err.message })
