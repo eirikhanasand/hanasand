@@ -36,6 +36,8 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     const readText = `${share.estimatedMinutes} ${share.estimatedMinutes === 1 ? 'minute' : 'minutes'}`
     const lineCount = share.content.split(/\r?\n/).length
     const lineText = `${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`
+    const copyColorLink = didCopy === 'link' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-link' ? 'stroke-red-500' : ''
+    const copyColorAlias = didCopy === 'alias' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-alias' ? 'stroke-red-500' : ''
 
     return (
         <div className='p-2 flex justify-between items-center rounded-lg'>
@@ -53,18 +55,34 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                     <Pencil height={18} width={18} />
                     <h1>{prettyDate(share.timestamp)}</h1>
                 </span>
-                <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
-                    <Link className={didCopy === 'link' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-link' ? 'stroke-red-500' : ''} height={18} width={18} />
+                <span
+                    onClick={() => copy({ type: 'link', text: window.location.href, setDidCopy })}
+                    className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'
+                >
+                    <Link
+                        className={copyColorLink}
+                        height={18}
+                        width={18}
+                    />
                     <div className='flex flex-col flex-1 overflow-hidden'>
                         <Marquee className='truncate' text={linkText} />
                     </div>
                 </span>
-                {aliasText !== linkText && <span onClick={() => copy({ text: window.location.href, setDidCopy })} className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'>
-                    <MessageCircleHeart className={didCopy === 'alias' ? 'stroke-green-600' : didCopy === null ? '' : didCopy === 'error-alias' ? 'stroke-red-500' : ''} height={18} width={18} />
-                    <div className='flex flex-col flex-1 overflow-hidden'>
-                        <Marquee className='truncate' text={aliasText} />
-                    </div>
-                </span>}
+                {aliasText !== linkText && (
+                    <span
+                        onClick={() => copy({ type: 'alias', text: `https://${share.alias}.hanasand.com`, setDidCopy })}
+                        className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'
+                    >
+                        <MessageCircleHeart
+                            className={copyColorAlias}
+                            height={18}
+                            width={18}
+                        />
+                        <div className='flex flex-col flex-1 overflow-hidden'>
+                            <Marquee className='truncate' text={aliasText} />
+                        </div>
+                    </span>
+                )}
                 <span className='gap-2 text-sm text-gray-400 flex'>
                     <BookText height={18} width={18} />
                     <h1>{wordText}</h1>

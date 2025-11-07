@@ -9,7 +9,7 @@ type CopyProps = {
 export default function copy({ type, text, setDidCopy }: CopyProps) {
     navigator.clipboard.writeText(text)
         .then(() => {
-            setDidCopy(true)
+            setDidCopy(type || true)
         })
         .catch((error) => {
             console.log(error)
