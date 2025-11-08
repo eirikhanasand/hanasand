@@ -114,9 +114,9 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.delete('/certificates/:id', deleteCertificate)
 
     // vms
-    fastify.get('/vms/:id', getVM)
-    fastify.get('/vms/user/:user', getVM)
-    fastify.get('/vms/user/access/:user', getAccessibleVMs)
+    fastify.get('/vm/:id', getVM)
+    fastify.get('/vms/:user', getVM)
+    fastify.get('/vms/access/:user', getAccessibleVMs)
     fastify.post('/vm', postVM)
     fastify.delete('/vm/:id', deleteVM)
 }
