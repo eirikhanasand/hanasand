@@ -9,7 +9,7 @@ export const metadata = {
     description: 'Welcome to my world',
 }
 
-export default async function layout({children}: {children: ReactNode}) {
+export default async function layout({ children }: { children: ReactNode }) {
     const Cookies = await cookies()
     const token = Boolean(Cookies.get('access_token')?.value) || false
     const Headers = await headers()
