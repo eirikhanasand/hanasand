@@ -1,15 +1,15 @@
 import { Dispatch, SetStateAction } from 'react'
 
 type DeployProps = {
-    setOpen: Dispatch<SetStateAction<boolean>>
+    setTerminalOpen: Dispatch<SetStateAction<boolean>>
     deploying: boolean
     setDeploying: Dispatch<SetStateAction<boolean>>
 }
 
-export default function Deploy({ setOpen, deploying, setDeploying }: DeployProps) {
+export default function Deploy({ setTerminalOpen, deploying, setDeploying }: DeployProps) {
     return (
         <div
-            onClick={() => { setOpen(true); setDeploying(true) }}
+            onClick={() => { setTerminalOpen(true); setDeploying(true) }}
             className="
                 group fixed bottom-3 right-3 z-100 cursor-pointer select-none
                 w-[18.5%] min-w-[130px] py-2 rounded-xl text-center

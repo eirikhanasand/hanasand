@@ -14,9 +14,19 @@ type ClientPageProps = {
     randomId: string
     openFolders: string[]
     tree: Tree | null
+    sharePageWidth: number
+    shareTerminalHeight: number
 }
 
-export default function ClientPage({ id, share: serverShare, randomId, openFolders, tree }: ClientPageProps) {
+export default function ClientPage({ 
+    id,
+    share: serverShare,
+    randomId,
+    openFolders,
+    tree,
+    sharePageWidth,
+    shareTerminalHeight
+}: ClientPageProps) {
     const [showExplorer, setShowExplorer] = useState(true)
     const [showMetadata, setShowMetaData] = useState(true)
     const [participants, setParticipants] = useState(1)
@@ -26,9 +36,9 @@ export default function ClientPage({ id, share: serverShare, randomId, openFolde
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
     const [syntaxHighlighting, setSyntaxHighlighting] = useState(true)
     const [share, setShare] = useState<Share | null>(serverShare)
-    const [open, setOpen] = useState(false)
+    const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
     const [deploying, setDeploying] = useState(false)
-    const [renderSite, setRenderSite] = useState(false)
+    const [renderSite, setRenderSite] = useState(sharePageWidth > 0)
 
     return (
         <div className='flex w-full h-full max-w-[100vw] p-2 gap-2'>
@@ -69,9 +79,23 @@ export default function ClientPage({ id, share: serverShare, randomId, openFolde
                 syntaxHighlighting={syntaxHighlighting}
                 setSyntaxHighlighting={setSyntaxHighlighting}
             />
-            <Terminal share={share} open={open} setOpen={setOpen} />
-            <Deploy deploying={deploying} setDeploying={setDeploying} setOpen={setOpen} />
-            <RenderSite share={share} renderSite={renderSite} setRenderSite={setRenderSite} />
+            <Terminal 
+                share={share}
+                open={terminalOpen}
+                setOpen={setTerminalOpen}
+                shareTerminalHeight={shareTerminalHeight}
+            />
+            <Deploy
+                deploying={deploying}
+                setDeploying={setDeploying}
+                setTerminalOpen={setTerminalOpen}
+            />
+            <RenderSite
+                share={share}
+                renderSite={renderSite}
+                setRenderSite={setRenderSite}
+                sharePageWidth={sharePageWidth}
+            />
         </div>
     )
 }

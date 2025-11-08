@@ -1,3 +1,4 @@
+import { removeCookie, setCookie } from '@/utils/cookies'
 import { Monitor } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
@@ -5,10 +6,11 @@ type ShowSiteProps = {
     share: Share | null
     renderSite: boolean
     setRenderSite: Dispatch<SetStateAction<boolean>>
+    sharePageWidth: number
 }
 
-export default function RenderSite({ share, renderSite, setRenderSite }: ShowSiteProps) {
-    const [width, setWidth] = useState(0)
+export default function RenderSite({ share, renderSite, setRenderSite, sharePageWidth }: ShowSiteProps) {
+    const [width, setWidth] = useState(sharePageWidth)
 
     function handleMouseDown(e: React.MouseEvent) {
         e.preventDefault()
@@ -79,6 +81,14 @@ export default function RenderSite({ share, renderSite, setRenderSite }: ShowSit
             setRenderSite(true)
         } else if (width < 20 && renderSite) {
             setRenderSite(false)
+        }
+
+        return () => {
+            if (renderSite) {
+                setCookie('sharePageWidth', String(width))
+            } else {
+                removeCookie('sharePageWidth')
+            }
         }
     }, [width, renderSite, setRenderSite])
 

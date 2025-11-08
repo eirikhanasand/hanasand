@@ -2,15 +2,17 @@ import { useState, useRef, useEffect, Dispatch, SetStateAction } from 'react'
 import { ChevronDown, Eye, Wifi, WifiOff } from 'lucide-react'
 import TerminalViewer from './terminalViewer'
 import useTerminal from '@/hooks/useTerminal'
+import { removeCookie, setCookie } from '@/utils/cookies'
 
 type ConsoleProps = {
     open: boolean
     setOpen: Dispatch<SetStateAction<boolean>>
     share: Share | null
+    shareTerminalHeight: number
 }
 
-export default function Terminal({ share, open, setOpen }: ConsoleProps) {
-    const [height, setHeight] = useState(180)
+export default function Terminal({ share, open, setOpen, shareTerminalHeight }: ConsoleProps) {
+    const [height, setHeight] = useState(shareTerminalHeight)
     const [isDragging, setIsDragging] = useState(false)
     const startY = useRef(0)
     const startHeight = useRef(0)
@@ -66,6 +68,14 @@ export default function Terminal({ share, open, setOpen }: ConsoleProps) {
         if (!isDragging && height < 50) {
             setOpen(false)
             setHeight(0)
+        }
+
+        return () => {
+            if (open) {
+                setCookie('shareTerminalHeight', String(height))
+            } else {
+                removeCookie('shareTerminalHeight')
+            }
         }
     }, [height, isDragging, setOpen])
 

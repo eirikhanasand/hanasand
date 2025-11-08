@@ -10,6 +10,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const random = randomId()
     const Cookies = await cookies()
     const openFoldersCookie = Cookies.get('openFolders')
+    const sharePageWidth = Number(Cookies.get('sharePageWidth')?.value) || 0
+    const shareTerminalHeight = Number(Cookies.get('shareTerminalHeight')?.value) || 0
     const openFolders: string[] = openFoldersCookie?.value ? JSON.parse(openFoldersCookie?.value ?? '') || [] as string[] : [] as string[]
     const tree = await getTree(id)
     const share = await getShare(id)
@@ -17,7 +19,15 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <div className='w-full h-[92.5vh]'>
-            <SharePageClient id={id} share={safeShare} randomId={random} openFolders={openFolders} tree={tree} />
+            <SharePageClient 
+                id={id} 
+                share={safeShare} 
+                randomId={random} 
+                openFolders={openFolders} 
+                tree={tree}
+                sharePageWidth={sharePageWidth}
+                shareTerminalHeight={shareTerminalHeight}
+            />
         </div>
     )
 }
