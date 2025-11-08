@@ -1,6 +1,14 @@
 import config from '@/config'
 
-export async function postShare(path: string, content: string): Promise<Share | null> {
+type PostShareProps = {
+    path: string
+    content: string
+    name?: string
+    parent?: string
+    type?: string
+}
+
+export async function postShare({path, content, name, parent, type}: PostShareProps): Promise<Share | null> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 1000)
 
@@ -8,7 +16,7 @@ export async function postShare(path: string, content: string): Promise<Share | 
         const response = await fetch(`${config.url.cdn}/share`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path, content }),
+            body: JSON.stringify({ name, path, content, parent, type }),
             signal: controller.signal
         })
 

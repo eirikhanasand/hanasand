@@ -32,7 +32,7 @@ export default function Explorer({ showExplorer, setShowExplorer, openFolders, t
                     left: position.x,
                 }}
             >
-                <h1><Folder className='stroke-light/50 group-hover:stroke-bright' /></h1>
+                <Folder className='stroke-light/50 group-hover:stroke-bright' />
             </div>
         )
     }
@@ -46,10 +46,12 @@ export default function Explorer({ showExplorer, setShowExplorer, openFolders, t
                 {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
                     <h1 className='text-sm text-bright/85'>Unable to load file tree.</h1>
                 </div>}
-                {tree && share && <OpenFoldersProvider serverOpenFolders={openFolders}>
-                    <TreeHeader share={share} />
-                    <Tree tree={tree} />
-                </OpenFoldersProvider>}
+                {tree && share && (
+                    <OpenFoldersProvider serverOpenFolders={openFolders}>
+                        <TreeHeader share={share} />
+                        <Tree tree={tree} />
+                    </OpenFoldersProvider>
+                )}
             </div>
         </div>
     )
