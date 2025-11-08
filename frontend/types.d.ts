@@ -237,6 +237,16 @@ type Certificate = {
     created_by: string
 }
 
+type VM = {
+    id: string
+    name: string
+    owner: string
+    vm_ip: string
+    created_at: string
+    created_by: string
+    access_users: string[]
+}
+
 type BlocklistEntry = {
     id: number
     metric: 'ip' | 'user_agent'

@@ -128,7 +128,8 @@ CREATE TABLE IF NOT EXISTS user_certificates (
 
 CREATE TABLE IF NOT EXISTS vms (
     id SERIAL PRIMARY KEY,
-    'user' TEXT NOT NULL,
+    name TEXT NOT NULL,
+    owner TEXT NOT NULL,
     vm_ip TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by TEXT NOT NULL,
