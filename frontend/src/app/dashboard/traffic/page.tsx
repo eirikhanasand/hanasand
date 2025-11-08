@@ -7,25 +7,14 @@ import config from '@/config'
 import getMetrics from '@/utils/traffic/getMetrics'
 import getBlocklist from '@/utils/traffic/getBlocklist'
 import fetchLogs from '@/utils/traffic/getLogs'
+import postBlocklist from '@/utils/traffic/postBlocklist'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 type MetricSummary = {
     value: string
     hits_today: number
     hits_last_week: number
     hits_total: number
-}
-
-type BlocklistEntry = {
-    id: number
-    metric: 'ip' | 'user_agent'
-    value: string
-    is_vpn: boolean
-    is_proxy: boolean
-    is_tor: boolean
-    owner?: string
-    country?: string
-    region?: string
-    city?: string
 }
 
 type RequestLog = {
@@ -44,7 +33,7 @@ export default function TrafficDashboard() {
     const [showBlockModal, setShowBlockModal] = useState(false)
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
-    const [notify, setNotify] = useState<string>('')
+    const { condition: message, setCondition: setMessage } = useClearStateAfter()
 
     useEffect(() => {
         (async () => {
@@ -52,7 +41,8 @@ export default function TrafficDashboard() {
             setMetrics(updatedMetrics)
             const updatedBlocklist = await getBlocklist()
             setBlocklist(updatedBlocklist)
-            fetchLogs()
+            const updatedLogs = await fetchLogs()
+            setLogs(updatedLogs)
         })()
     }, [])
 
@@ -65,24 +55,19 @@ export default function TrafficDashboard() {
     async function handleBlockSubmit(e: React.FormEvent) {
         e.preventDefault()
         try {
-            const endpoint = editingBlock
-                ? `${config.url.api}/blocklist/${editingBlock.id}`
-                : `${config.url.api}/blocklist`
-            const method = editingBlock ? 'PUT' : 'POST'
-            const res = await fetch(endpoint, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
-            })
-            const data = await res.json()
-            setNotify(editingBlock ? 'Blocklist updated' : 'Blocklist entry added')
+            const data = await postBlocklist(editingBlock, form)
+            if ('error' in data) {
+                throw new Error(data.error)
+            }
+
+            setMessage(editingBlock ? 'Blocklist updated' : 'Blocklist entry added')
             setShowBlockModal(false)
             setEditingBlock(null)
             setForm({})
             getBlocklist()
         } catch (e) {
             console.error(e)
-            setNotify('Failed to save blocklist entry')
+            setMessage('Failed to save blocklist entry')
         }
     }
 
@@ -90,11 +75,11 @@ export default function TrafficDashboard() {
         if (!confirm('Delete this blocklist entry?')) return
         try {
             await fetch(`${config.url.api}/blocklist/${id}`, { method: 'DELETE' })
-            setNotify('Blocklist entry deleted')
+            setMessage('Blocklist entry deleted')
             getBlocklist()
         } catch (e) {
             console.error(e)
-            setNotify('Failed to delete entry')
+            setMessage('Failed to delete entry')
         }
     }
 
@@ -106,7 +91,7 @@ export default function TrafficDashboard() {
 
     return (
         <div className="p-8 grid gap-6 h-full">
-            {notify && <Notify message={notify} background="bg-dark" />}
+            <Notify message={message} background="bg-dark" />
 
             {/* Metrics */}
             <div className="grid grid-cols-3 gap-4">

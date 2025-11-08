@@ -11,6 +11,6 @@ export default async function fetchLogs(sortBy: 'hits' | 'last_seen' = 'last_see
         return data
     } catch (error) {
         console.log(error)
-        return null
+        return []
     }
 }

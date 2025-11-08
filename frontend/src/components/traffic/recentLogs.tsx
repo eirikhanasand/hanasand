@@ -8,8 +8,8 @@ export default function RecentLogs() {
 
     async function fetchLogs() {
         try {
-            const res = await getRequestLogs({ limit, sort })
-            setLogs(res)
+            const response = await getRequestLogs({ limit, sort })
+            setLogs(response)
         } catch (err) {
             console.error('Failed to fetch logs:', err)
         }

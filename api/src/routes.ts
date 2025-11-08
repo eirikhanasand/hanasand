@@ -39,6 +39,9 @@ import postCertificate from './handlers/certificates/post.ts'
 import putCertificate from './handlers/certificates/put.ts'
 import deleteCertificate from './handlers/certificates/delete.ts'
 import getUserCertificates from './handlers/certificates/getUserCertificates.ts'
+import { getVM } from './handlers/vms/get.ts'
+import { postVM } from './handlers/vms/post.ts'
+import { getAccessibleVMs } from './handlers/vms/getAccessibleVMs.ts'
 
 /**
  * Defines the routes available in the API.
@@ -108,4 +111,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.post('/certificates', postCertificate)
     fastify.put('/certificates/:id', putCertificate)
     fastify.delete('/certificates/:id', deleteCertificate)
+
+    // vms
+    fastify.get('/vms/:id', getVM)
+    fastify.get('/vms/user/:user', getVM)
+    fastify.get('/vms/user/access/:user', getAccessibleVMs)
+    fastify.post('/vm', postVM)
 }

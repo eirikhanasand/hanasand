@@ -11,6 +11,6 @@ export default async function fetchMetrics() {
         return data
     } catch (error) {
         console.log(error)
-        return null
+        return []
     }
 }

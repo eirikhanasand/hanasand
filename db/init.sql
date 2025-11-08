@@ -126,6 +126,15 @@ CREATE TABLE IF NOT EXISTS user_certificates (
     PRIMARY KEY (user_id, certificate_id)
 );
 
+CREATE TABLE IF NOT EXISTS vms (
+    id SERIAL PRIMARY KEY,
+    'user' TEXT NOT NULL,
+    vm_ip TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by TEXT NOT NULL,
+    access_users TEXT[] DEFAULT '{}'
+);
+
 -- Index on user-roles 
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 

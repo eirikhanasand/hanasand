@@ -236,3 +236,16 @@ type Certificate = {
     created_at: string
     created_by: string
 }
+
+type BlocklistEntry = {
+    id: number
+    metric: 'ip' | 'user_agent'
+    value: string
+    is_vpn: boolean
+    is_proxy: boolean
+    is_tor: boolean
+    owner?: string
+    country?: string
+    region?: string
+    city?: string
+}
