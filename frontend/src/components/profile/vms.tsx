@@ -53,9 +53,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
             {vms.length > 0 ? (
                 vms.map(vm => <VMRow update={update} key={vm.id} vm={vm} />)
             ) : (
-                <div className='flex gap-1'>
+                <div className='flex gap-1 text-sm text-almostbright'>
                     <span>No VMs found! Click</span>
-                    <Link href='/s' className='text-blue-400'>here</Link>
+                    <Link href='/s' className='text-blue-500'>here</Link>
                     <span>to create your first project.</span>
                 </div>
             )}

@@ -34,8 +34,10 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                         </Link>
                     </div>
                 </div>
-                <Certificates certificates={certificates} />
-                <VMs vms={vms} />
+                <div className='grid md:grid-cols-2 gap-2'>
+                    <VMs vms={vms} />
+                    <Certificates certificates={certificates} />
+                </div>
             </div>
         </div>
     )
