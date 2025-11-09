@@ -5,8 +5,7 @@ dotenv.config({ path: '../.env' })
 const requiredEnvironmentVariables = [
     'DB_PASSWORD',
     'DB_HOST',
-    'VM_TOKEN',
-    'VM_API_TOKEN'
+    'VM_API_TOKEN',
 ]
 
 const missingVariables = requiredEnvironmentVariables.filter(
