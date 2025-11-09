@@ -41,7 +41,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const commonListStyle = 'max-h-[62vh] gap-2 flex flex-col rounded-xl p-4 bg-white/10 backdrop-blur-md border border-white/20 overflow-y-auto'
+    const commonListStyle = 'max-h-[62vh] gap-2 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
 
     useEffect(() => {
         (async () => {
@@ -107,11 +107,11 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
             {/* Metrics */}
             <div className="grid grid-cols-3 gap-4">
                 {metrics.map((m, i) => (
-                    <div key={i} className="p-4 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex flex-col gap-1">
+                    <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
                         <h2 className="font-semibold">{m.value}</h2>
-                        <span>Today: {m.hits_today}</span>
-                        <span>Last Week: {m.hits_last_week}</span>
-                        <span>Total: {m.hits_total}</span>
+                        <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
+                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
+                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
                     </div>
                 ))}
             </div>
@@ -140,7 +140,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                             </thead>
                             <tbody>
                                 {blocklist.map((entry, id) => (
-                                    <tr key={id} className="border-b border-white/10 group">
+                                    <tr key={id} className="border-b border-white/10 group text-bright/80">
                                         <td>{entry.type}</td>
                                         <td>{entry.value}</td>
                                         {<td className="flex gap-2 w-full justify-end">
@@ -175,7 +175,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                         </thead>
                         <tbody>
                             {logs.map((log, i) => (
-                                <tr key={i} className="border-b border-white/10">
+                                <tr key={i} className="border-b border-white/10 text-bright/80">
                                     <td>{log.metric}</td>
                                     <td>{log.value}</td>
                                     <td>{log.path}</td>
