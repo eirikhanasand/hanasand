@@ -20,7 +20,7 @@ export default function useTerminal({ share }: TerminalProps) {
         const session = randomId(6)
         const userCookie = getCookie('id')
         const terminalUser = userCookie || 'default'
-        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.alias}/shell/${terminalUser}/${session}`)
+        const ws = new WebSocket(`${config.url.cdn_ws}/share/${share.alias}/shell/${terminalUser}/${session}`)
 
         ws.onopen = () => {
             setReconnect(false)

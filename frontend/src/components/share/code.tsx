@@ -96,7 +96,7 @@ export default function Code({
     useEffect(() => {
         if (!share) return
 
-        const ws = new WebSocket(`${config.url.cdn_ws}/share/ws/${share.id}`)
+        const ws = new WebSocket(`${config.url.cdn_ws}/share/${share.id}`)
         wsRef.current = ws
 
         ws.onopen = () => {

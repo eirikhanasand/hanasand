@@ -34,7 +34,7 @@ export default function Content({
     useEffect(() => {
         if (!id) return
 
-        const ws = new WebSocket(`${config.url.api_ws}/test/ws/${id}`)
+        const ws = new WebSocket(`${config.url.api_ws}/test/${id}`)
 
         ws.onopen = () => {
             setReconnect(false)

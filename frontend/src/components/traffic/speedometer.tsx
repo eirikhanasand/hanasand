@@ -1,21 +1,6 @@
-import { useState, useEffect } from "react"
 import { PieChart, Pie, Cell } from "recharts"
 
-export default function TrafficSpeedometerGlass({
-    name,
-    tps: serverTps,
-}: {
-    name: string
-    tps: number
-}) {
-    const [tps, setTps] = useState(serverTps)
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setTps(Math.random() * 100)
-        }, 800)
-        return () => clearInterval(interval)
-    }, [])
+export default function TrafficSpeedometerGlass({ name, tps }: { name: string, tps: number }) {
 
     function getColor(value: number) {
         if (value < 40) return "#10B981AA"

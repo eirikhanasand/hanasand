@@ -34,7 +34,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
     useEffect(() => {
         if (!id) return
 
-        const ws = new WebSocket(`${config.url.api_ws}/pwned/ws/${randomId()}`)
+        const ws = new WebSocket(`${config.url.api_ws}/pwned/${randomId()}`)
 
         ws.onopen = () => {
             setLoading(true)
@@ -90,14 +90,14 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
             : `The password has been pwned ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
 
     return (
-        <div className='grid gap-2 place-items-center rounded-xl min-w-[10rem]'>
+        <div className='grid gap-2 place-items-center rounded-xl min-w-40'>
             {breached ? (
                 <div className='relative grid gap-4 place-items-center max-w-fit min-w-1/3'>
                     <div className='flex gap-2 max-w-xs text-center'>
                         <h1 className={breached ? 'text-red-500 text-xs md:text-base' : ''}>{text}</h1>
                     </div>
                     {uniqueBreachFiles.length > 0 && (
-                        <div className=' rounded-lg p-2 max-h-[8rem] overflow-auto z-10 grid gap-1 w-full max-w-full'>
+                        <div className=' rounded-lg p-2 max-h-32 overflow-auto z-10 grid gap-1 w-full max-w-full'>
                             <div className='flex gap-2 bg-dark rounded-sm px-2 py-1'>
                                 <h1 className='text-gray-200 text-xs md:text-base break-all flex-1 font-bold'>File</h1>
                                 <h1 className='text-gray-200 text-xs md:text-base break-all text-right font-bold'>Line</h1>

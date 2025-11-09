@@ -11,6 +11,9 @@ import postBlocklist from '@/utils/traffic/postBlocklist'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import prettyDate from '@/utils/prettyDate'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
+import useWS from '@/hooks/useWS'
+import getUAs from '@/utils/traffic/getUAs'
+import getIPs from '@/utils/traffic/getIPs'
 
 type MetricSummary = {
     value: string
@@ -45,14 +48,16 @@ export default function TrafficDashboard({
     topUAs,
     topIPs
 }: DashboardProps) {
-    const [domains, setDomains] = useState<DomainTPS[]>(topDomains)
     const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
     const [blocklist, setBlocklist] = useState<BlocklistEntry[]>(serverBlocklist)
     const [logs, setLogs] = useState<RequestLog[]>(serverLogs)
+    const [UAs, setUAs] = useState<UAMetrics[]>(topUAs)
+    const [IPs, setIPs] = useState<IPMetrics[]>(topIPs)
     const [showBlockModal, setShowBlockModal] = useState(false)
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
+    const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id' })
     const commonListStyle = 'max-h-[62vh] gap-2 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
 
     useEffect(() => {
@@ -63,6 +68,10 @@ export default function TrafficDashboard({
             setBlocklist(updatedBlocklist)
             const updatedLogs = await getLogs()
             setLogs(updatedLogs)
+            const updatedIPs = await getIPs()
+            setIPs(updatedIPs)
+            const updatedUAs = await getUAs()
+            setUAs(updatedUAs)
         })()
     }, [])
 
@@ -141,24 +150,44 @@ export default function TrafficDashboard({
 
             <h1 className='font-semibold text-lg'>Top IPs</h1>
             <div className="grid grid-cols-5 gap-4">
-                {metrics.map((m, i) => (
-                    <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
-                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
-                        <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
-                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
-                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+                {IPs.map((ipMetric, i) => (
+                    <div
+                        key={i}
+                        className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
+                    >
+                        <h2 className="font-semibold text-bright/90">{ipMetric.ip}</h2>
+                        <span className='text-xs text-almostbright'>
+                            Most Common User Agent: {ipMetric.most_common_user_agent ?? 'N/A'}
+                        </span>
+                        <div className="mt-2">
+                            <h3 className='font-semibold text-xs'>Top Paths:</h3>
+                            <ul className='text-xs text-almostbright list-disc list-inside'>
+                                {ipMetric.top_paths.map((path, idx) => (
+                                    <li key={idx}>{path.path} ({path.hits})</li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 ))}
             </div>
 
             <h1 className='font-semibold text-lg'>Top user agents</h1>
             <div className="grid grid-cols-5 gap-4">
-                {metrics.map((m, i) => (
-                    <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
-                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
-                        <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
-                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
-                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+                {UAs.map((ua, i) => (
+                    <div
+                        key={i}
+                        className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
+                    >
+                        <h2 className="font-semibold text-bright/90">{ua.user_agent}</h2>
+                        <span className='text-xs text-almostbright'>Most Common IP: {ua.most_common_ip ?? 'N/A'}</span>
+                        <div className="mt-2">
+                            <h3 className='font-semibold text-xs'>Top Paths:</h3>
+                            <ul className='text-xs text-almostbright list-disc list-inside'>
+                                {ua.top_paths.map((path, idx) => (
+                                    <li key={idx}>{path.path} ({path.hits})</li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 ))}
             </div>

@@ -20,7 +20,7 @@ export const pendingUpdates = new Map<string, PendingUpdates>()
 
 export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.register(async function (fastify) {
-        fastify.get('/api/pwned/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
+        fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             
             registerClient(id, connection, pwnedClients)
@@ -58,7 +58,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             })
         })
 
-        fastify.get('/api/test/ws/:id', { websocket: true }, (connection, req: FastifyRequest) => {
+        fastify.get('/api/ws/test/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             registerClient(id, connection, testClients)
 
