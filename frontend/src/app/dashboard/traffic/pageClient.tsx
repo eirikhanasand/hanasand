@@ -41,6 +41,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
+    const commonListStyle = 'max-h-[62vh] gap-2 flex flex-col rounded-xl p-4 bg-white/10 backdrop-blur-md border border-white/20 overflow-y-auto'
 
     useEffect(() => {
         (async () => {
@@ -117,7 +118,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
 
             <div className="grid grid-cols-2 gap-4 h-full">
                 {/* Blocklist */}
-                <div className="p-4 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex flex-col gap-2">
+                <div className={commonListStyle}>
                     <div className="flex justify-between items-center">
                         <h1 className="font-semibold">Blocklist</h1>
                         <button
@@ -127,7 +128,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                             <Plus className="w-4 h-4" /> Add
                         </button>
                     </div>
-                    <div className="overflow-y-auto max-h-[400px]">
+                    <div className='h-full'>
                         <table className="w-full text-left text-sm">
                             <thead>
                                 <tr className="border-b border-white/20">
@@ -139,17 +140,19 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                             </thead>
                             <tbody>
                                 {blocklist.map((entry, id) => (
-                                    <tr key={id} className="border-b border-white/10">
-                                        <td>{entry.metric}</td>
+                                    <tr key={id} className="border-b border-white/10 group">
+                                        <td>{entry.type}</td>
                                         <td>{entry.value}</td>
-                                        <td className="flex gap-2 w-full justify-end">
-                                            <button onClick={() => editBlock(entry)} className="hover:text-yellow-400 cursor-pointer">
+                                        {<td className="flex gap-2 w-full justify-end">
+                                            <button onClick={() => editBlock(entry)} className="hidden group-hover:block hover:text-yellow-400 cursor-pointer">
                                                 <Pencil className='w-4 h-4' />
                                             </button>
-                                            <button onClick={() => handleDeleteBlock(entry.id)} className="hover:text-red-500 cursor-pointer">
+                                            <button onClick={() => handleDeleteBlock(entry.id)} className="hidden group-hover:block hover:text-red-500 cursor-pointer">
                                                 <X className='w-5 h-5' />
                                             </button>
-                                        </td>
+                                            <div className='block group-hover:hidden w-5' />
+                                            <div className='block group-hover:hidden w-5' />
+                                        </td>}
                                     </tr>
                                 ))}
                             </tbody>
@@ -158,10 +161,10 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                 </div>
 
                 {/* Recent Activity */}
-                <div className="p-4 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex flex-col gap-2 overflow-y-auto max-h-[400px]">
+                <div className={commonListStyle}>
                     <h1 className="font-semibold">Recent Activity</h1>
-                    <table className="w-full text-left text-sm">
-                        <thead>
+                    <table className="w-full text-left text-sm overflow-hidden">
+                        <thead className='w-full'>
                             <tr className="border-b border-white/20">
                                 <th>Metric</th>
                                 <th>Value</th>
@@ -177,7 +180,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                                     <td>{log.value}</td>
                                     <td>{log.path}</td>
                                     <td>{log.hits}</td>
-                                    <td>{prettyDate(log.last_seen)}</td>
+                                    <td className='min-w-fit'>{prettyDate(log.last_seen)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -202,7 +205,7 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                         <form className="flex flex-col gap-3" onSubmit={handleBlockSubmit}>
                             <label className="flex flex-col text-sm">
                                 Metric
-                                <select name="metric" value={form.metric || ''} onChange={handleChange} required className="p-2 rounded-lg bg-dark border border-white/20">
+                                <select name="metric" value={form.type || ''} onChange={handleChange} required className="p-2 rounded-lg bg-dark border border-white/20">
                                     <option value="">Select metric</option>
                                     <option value="ip">IP</option>
                                     <option value="user_agent">User Agent</option>

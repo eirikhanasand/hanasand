@@ -249,7 +249,7 @@ type VM = {
 
 type BlocklistEntry = {
     id: number
-    metric: 'ip' | 'user_agent'
+    type: 'ip' | 'user_agent'
     value: string
     is_vpn: boolean
     is_proxy: boolean
