@@ -1,12 +1,18 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import config from '#constants'
 
 export async function postVM(req: FastifyRequest, res: FastifyReply) {
+    const token = req.headers['Authorization']
     const { user, vm_ip, created_by, access_users } = req.body as {
         user: string
         vm_ip: string
         created_by: string
         access_users?: string[]
+    }
+
+    if (!token || Array.isArray(token) || token !== config.vm_api_token) {
+        return res.status(400).send({ error: 'Unauthorized.' })
     }
 
     if (!user || !vm_ip || !created_by) {
