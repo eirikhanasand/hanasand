@@ -259,3 +259,20 @@ type BlocklistEntry = {
     region?: string
     city?: string
 }
+
+type IPMetrics = {
+    ip: string
+    top_paths: TopPath[]
+    most_common_user_agent: string | null
+}
+
+type UAMetrics = {
+    user_agent: string
+    top_paths: TopPath[]
+    most_common_ip: string | null
+}
+
+type DomainTPS = {
+    name: string
+    tps: number
+}

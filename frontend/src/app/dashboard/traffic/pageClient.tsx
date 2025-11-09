@@ -10,6 +10,7 @@ import getLogs from '@/utils/traffic/getLogs'
 import postBlocklist from '@/utils/traffic/postBlocklist'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import prettyDate from '@/utils/prettyDate'
+import TrafficSpeedometer from '@/components/traffic/speedometer'
 
 type MetricSummary = {
     value: string
@@ -31,9 +32,20 @@ type DashboardProps = {
     metrics: MetricSummary[]
     blocklist: BlocklistEntry[]
     logs: RequestLog[]
+    topDomains: DomainTPS[]
+    topUAs: UAMetrics[]
+    topIPs: IPMetrics[]
 }
 
-export default function TrafficDashboard({metrics: serverMetrics, blocklist: serverBlocklist, logs: serverLogs}: DashboardProps) {
+export default function TrafficDashboard({
+    metrics: serverMetrics,
+    blocklist: serverBlocklist,
+    logs: serverLogs,
+    topDomains,
+    topUAs,
+    topIPs
+}: DashboardProps) {
+    const [domains, setDomains] = useState<DomainTPS[]>(topDomains)
     const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
     const [blocklist, setBlocklist] = useState<BlocklistEntry[]>(serverBlocklist)
     const [logs, setLogs] = useState<RequestLog[]>(serverLogs)
@@ -100,11 +112,22 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
         setShowBlockModal(true)
     }
 
+    const domainsSortedByTps = [...domains].sort((a, b) => b.tps - a.tps)
+
     return (
-        <div className="grid gap-6 h-full">
+        <div className="grid gap-4 h-full">
             <Notify message={message} background="bg-dark" />
 
             {/* Metrics */}
+            <div className="grid grid-cols-3 lg:grid-cols-5 gap-4 overflow-hidden max-h-60">
+                {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
+                    key={id}
+                    name={domain.name}
+                    tps={domain.tps} />
+                )}
+            </div>
+
+            <h1 className='font-semibold text-lg'>Top endpoints</h1>
             <div className="grid grid-cols-5 gap-4">
                 {metrics.map((m, i) => (
                     <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
@@ -116,6 +139,31 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
                 ))}
             </div>
 
+            <h1 className='font-semibold text-lg'>Top IPs</h1>
+            <div className="grid grid-cols-5 gap-4">
+                {metrics.map((m, i) => (
+                    <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
+                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
+                        <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
+                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
+                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+                    </div>
+                ))}
+            </div>
+
+            <h1 className='font-semibold text-lg'>Top user agents</h1>
+            <div className="grid grid-cols-5 gap-4">
+                {metrics.map((m, i) => (
+                    <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
+                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
+                        <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
+                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
+                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+                    </div>
+                ))}
+            </div>
+
+            <h1 className='font-semibold text-lg'>Blocklist & Live traffic</h1>
             <div className="grid grid-cols-2 gap-4 h-full">
                 {/* Blocklist */}
                 <div className={commonListStyle}>
