@@ -105,10 +105,10 @@ export default function TrafficDashboard({metrics: serverMetrics, blocklist: ser
             <Notify message={message} background="bg-dark" />
 
             {/* Metrics */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-5 gap-4">
                 {metrics.map((m, i) => (
                     <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
-                        <h2 className="font-semibold">{m.value}</h2>
+                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
                         <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
                         <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
                         <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
