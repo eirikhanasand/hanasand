@@ -72,7 +72,10 @@ export default function TrafficDashboard() {
     }
 
     async function handleDeleteBlock(id: number) {
-        if (!confirm('Delete this blocklist entry?')) return
+        if (!confirm('Delete this blocklist entry?')) {
+            return
+        }
+
         try {
             await fetch(`${config.url.api}/blocklist/${id}`, { method: 'DELETE' })
             setMessage('Blocklist entry deleted')
@@ -89,8 +92,10 @@ export default function TrafficDashboard() {
         setShowBlockModal(true)
     }
 
+    console.log(blocklist)
+
     return (
-        <div className="p-8 grid gap-6 h-full">
+        <div className="p-8 md:px-16 lg:px-32 grid gap-6 h-full">
             <Notify message={message} background="bg-dark" />
 
             {/* Metrics */}
