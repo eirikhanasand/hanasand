@@ -25,7 +25,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             
             registerClient(id, connection, pwnedClients)
             
-            const internalWs = new WebSocket(`${config.pwned_ws}${id}`)
+            const internalWs = new WebSocket(`${config.pwned_ws}/${id}`)
 
             internalWs.on('message', (msg) => {
                 connection.send(msg)
