@@ -9,9 +9,10 @@ import HideIfLittleSpace from '@/hooks/useHideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
 import randomId from '@/utils/random/randomId'
-import { Copy, Eye, Highlighter, Info as InfoIcon, ListOrdered, RefreshCw, X } from 'lucide-react'
+import { Cloud, Copy, Eye, Highlighter, Info as InfoIcon, ListOrdered, Package, PenTool, RefreshCw, Send, Server, X } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import Box from '../box/box'
 
 type MetadataProps = {
     share: Share | null
@@ -27,6 +28,8 @@ type MetadataProps = {
     setDisplayLineNumbers: Dispatch<SetStateAction<boolean>>
     syntaxHighlighting: boolean
     setSyntaxHighlighting: Dispatch<SetStateAction<boolean>>
+    box: boolean
+    setBox: Dispatch<SetStateAction<boolean>>
 }
 
 const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
@@ -43,7 +46,9 @@ export default function Metadata({
     editingContent,
     setDisplayLineNumbers,
     setSyntaxHighlighting,
-    syntaxHighlighting
+    syntaxHighlighting,
+    box,
+    setBox
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const [id, setId] = useState(randomServerId)
@@ -107,10 +112,17 @@ export default function Metadata({
                     >
                         <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={22} width={22} />
                     </div>
+                    <div
+                        onClick={() => setBox(prev => !prev)}
+                        className={`stroke-rgb ${baseButtonStyle}`}
+                    >
+                        <Package className={box ? 'stroke-rgb' : 'stroke-bright'} height={22} width={22} />
+                    </div>
                 </div>
                 <Notify message={error} />
                 <Info share={share} isConnected={isConnected} participants={participants} />
                 <WordControl clickedWord={clickedWord} />
+                <Box box={box} setBox={setBox} />
             </div>
         </div>
     )

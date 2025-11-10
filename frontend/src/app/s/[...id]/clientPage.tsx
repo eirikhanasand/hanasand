@@ -35,6 +35,7 @@ export default function ClientPage({
     const [editingContent, setEditingContent] = useState<string>('')
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
     const [syntaxHighlighting, setSyntaxHighlighting] = useState(true)
+    const [box, setBox] = useState(false)
     const [share, setShare] = useState<Share | null>(serverShare)
     const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
     const [deploying, setDeploying] = useState(false)
@@ -78,6 +79,8 @@ export default function ClientPage({
                 setDisplayLineNumbers={setDisplayLineNumbers}
                 syntaxHighlighting={syntaxHighlighting}
                 setSyntaxHighlighting={setSyntaxHighlighting}
+                box={box}
+                setBox={setBox}
             />
             <Terminal 
                 share={share}

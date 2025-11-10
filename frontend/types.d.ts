@@ -276,3 +276,16 @@ type DomainTPS = {
     name: string
     tps: number
 }
+
+type FetchRequest = {
+    type: RequestType
+    path: string
+    created: string
+}
+
+type RequestType = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "CONNECT" | "TRACE" | string
+
+type Parameter = {
+    parameter: string
+    value: string
+}
