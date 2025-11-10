@@ -1,9 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import tokenWrapper from '#utils/tokenWrapper.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
-import hasRole from '#utils/hasRole.ts'
-import hasPermissionToModifyRole from '#utils/hasPermissionToModifyRole.ts'
+import hasRole from '#utils/auth/hasRole.ts'
+import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
 
 /**
  * POST /role/assign

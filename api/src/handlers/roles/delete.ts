@@ -1,7 +1,7 @@
 import run from '#db'
-import hasPermissionToModifyRole from '#utils/hasPermissionToModifyRole.ts'
-import hasRole from '#utils/hasRole.ts'
-import tokenWrapper from '#utils/tokenWrapper.ts'
+import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
+import hasRole from '#utils/auth/hasRole.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 /**

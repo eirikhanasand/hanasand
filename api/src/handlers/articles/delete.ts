@@ -5,8 +5,8 @@ import { unlink } from 'fs/promises'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import commitAndPush from '#utils/git/commitAndPush.ts'
 import { join } from 'path'
-import tokenWrapper from '#utils/tokenWrapper.ts'
-import hasRole from '#utils/hasRole.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import hasRole from '#utils/auth/hasRole.ts'
 
 export async function deleteArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)

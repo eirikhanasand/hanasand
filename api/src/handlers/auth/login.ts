@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
-import login from '#utils/login.ts'
+import login from '#utils/auth/login.ts'
 
 export default async function loginHandler(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string } ?? {}

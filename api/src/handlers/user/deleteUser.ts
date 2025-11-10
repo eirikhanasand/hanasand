@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import tokenWrapper from '#utils/tokenWrapper.ts'
-import hasRole from '#utils/hasRole.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import hasRole from '#utils/auth/hasRole.ts'
 
 export default async function deleteUser(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)

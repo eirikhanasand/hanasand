@@ -1,6 +1,6 @@
 import config from '#constants'
 import sanitize from '#utils/sanitize.ts'
-import tokenWrapper from '#utils/tokenWrapper.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function restartHandler(req: FastifyRequest, res: FastifyReply) {

@@ -1,8 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
-import checkPwned from '#utils/checkPwned.ts'
-import login from '#utils/login.ts'
+import checkPwned from '#utils/pwned/checkPwned.ts'
+import login from '#utils/auth/login.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 
 type GetUserBodyProps = {

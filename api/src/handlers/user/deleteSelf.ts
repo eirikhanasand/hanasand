@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import tokenWrapper from '#utils/tokenWrapper.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 export default async function deleteSelf(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)

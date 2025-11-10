@@ -1,4 +1,4 @@
-import checkPwned from '#utils/checkPwned.ts'
+import checkPwned from '#utils/pwned/checkPwned.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 export default async function postPwned(req: FastifyRequest, res: FastifyReply) {
