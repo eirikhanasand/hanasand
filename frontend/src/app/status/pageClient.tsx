@@ -45,7 +45,7 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains }: 
     return (
         <div className="grid gap-4 h-full">
             {/* Metrics */}
-            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-hidden md:max-h-60">
+            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 md:overflow-hidden md:max-h-60">
                 {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
                     key={id}
                     name={domain.name}
@@ -54,9 +54,9 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains }: 
             </div>
 
             <h1 className='font-semibold text-lg'>Top endpoints</h1>
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid md:grid-cols-5 gap-4">
                 {metrics.map((m, i) => (
-                    <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
+                    <div key={i} className='md:max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark text-sm'>
                         <h2 className="font-semibold text-bright/90">{m.value}</h2>
                         <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
                         <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>

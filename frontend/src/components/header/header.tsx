@@ -57,8 +57,12 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
 
     return (
         <header className={`fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] ${isShare ? 'p-2' : 'pt-4 px-8 md:px-16 lg:px-32'}`}>
-            <div className='w-full text-foreground grid grid-cols-3 px-4 select-none outline outline-dark rounded-lg py-1 bg-background'>
-                <div className='block md:hidden w-full' />
+            <div className='w-full text-foreground flex md:grid md:grid-cols-3 px-4 select-none outline outline-dark rounded-lg py-1 bg-background'>
+                <div className='grid md:hidden place-items-center w-full flex-1'>
+                    <Link href='/' className='w-full flex px-3 items-center h-12 hover:bg-[#6464641a] rounded-lg cursor-pointer'>
+                        <h1 className='font-semibold text-bright text-glow'>hanasand</h1>
+                    </Link>
+                </div>
                 <div className='hidden md:flex items-center'>
                     <Upload baseStyles={baseStyles} isUpload={isUpload} href='/upload' />
                     <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' />
@@ -78,7 +82,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
                     </Link>
                 </div>
-                <div className='grid place-items-center w-full'>
+                <div className='hidden md:grid place-items-center w-full'>
                     <Link href='/' className='group w-fit grid place-items-center h-12 hover:bg-[#6464641a] md:px-10 rounded-lg cursor-pointer'>
                         <h1 className='font-semibold text-bright text-glow'>hanasand</h1>
                     </Link>

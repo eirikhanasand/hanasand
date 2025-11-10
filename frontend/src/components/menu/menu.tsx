@@ -42,7 +42,7 @@ export default function Menu() {
     return (
         <div className='grid md:hidden z-105 group rounded-lg hover:bg-[#6464641a] h-12 w-12 place-items-center'>
             <X onClick={toggleOpen} />
-            <div className='absolute bg-dark w-fit h-fit right-2 top-15 rounded-lg z-105'>
+            <div onClick={(e) => e.preventDefault()} className='absolute bg-bright/1 backdrop-blur-lg outline outline-dark w-fit h-fit right-8 top-20 rounded-lg z-105'>
                 <Link href='/upload' onClick={toggleOpen} className='flex pl-2 pr-5'>
                     <Upload baseStyles={baseStyles} isUpload={isUpload} />
                     <h1 className='self-center font-semibold'>Upload</h1>
@@ -72,13 +72,14 @@ export default function Menu() {
                     </div>
                     <h1 className='self-center font-semibold'>Load test</h1>
                 </Link>
-                <Link href='/status' className={baseStyles}>
+                <Link href='/status' onClick={toggleOpen} className='flex pl-2 pr-5'>
                     <div className={baseStyles}>
                         <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
                     </div>
                     <h1 className='self-center font-semibold'>Status</h1>
                 </Link>
                 <Link href='/dashboard' onClick={toggleOpen} className='flex pl-2 pr-5'>
+                    <Dashboard serverToken={token} />
                     <Dashboard serverToken={token} />
                     {token && <h1 className='self-center font-semibold'>Dashboard</h1>}
                 </Link>

@@ -16,7 +16,7 @@ export default function TrafficSpeedometerGlass({ name, tps }: { name: string, t
     ]
 
     return (
-        <div className="relative flex flex-col items-center justify-center w-full h-60 rounded-3xl p-6 bg-bright/5 backdrop-blur-md border border-bright/10 shadow-xl">
+        <div className="relative flex flex-col items-center justify-center w-full h-60 rounded-3xl p-6 bg-bright/3 backdrop-blur-md border border-dark shadow-xl">
             <div className="text-lg font-semibold mb-4 text-bright/80 tracking-wide drop-shadow">
                 {name}
             </div>
@@ -63,7 +63,7 @@ export default function TrafficSpeedometerGlass({ name, tps }: { name: string, t
                             {data.map((_, index) => (
                                 <Cell
                                     key={`cell-${index}`}
-                                    fill={index === 0 ? activeColor : "rgba(255,255,255,0.1)"}
+                                    fill={index === 0 ? activeColor : "rgba(255,255,255,0.02)"}
                                 />
                             ))}
                         </Pie>

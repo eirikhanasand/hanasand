@@ -128,7 +128,7 @@ export default function TrafficDashboard({
             <Notify message={message} background="bg-dark" />
 
             {/* Metrics */}
-            <div className="grid grid-cols-3 lg:grid-cols-5 gap-4 overflow-hidden max-h-60">
+            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-hidden md:max-h-60">
                 {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
                     key={id}
                     name={domain.name}
@@ -137,7 +137,7 @@ export default function TrafficDashboard({
             </div>
 
             <h1 className='font-semibold text-lg'>Top endpoints</h1>
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid md:grid-cols-5 gap-4">
                 {metrics.map((m, i) => (
                     <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
                         <h2 className="font-semibold text-bright/90">{m.value}</h2>
@@ -149,7 +149,7 @@ export default function TrafficDashboard({
             </div>
 
             <h1 className='font-semibold text-lg'>Top IPs</h1>
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid md:grid-cols-5 gap-4">
                 {IPs.map((ipMetric, i) => (
                     <div
                         key={i}
@@ -172,7 +172,7 @@ export default function TrafficDashboard({
             </div>
 
             <h1 className='font-semibold text-lg'>Top user agents</h1>
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid md:grid-cols-5 gap-4">
                 {UAs.map((ua, i) => (
                     <div
                         key={i}
@@ -192,8 +192,9 @@ export default function TrafficDashboard({
                 ))}
             </div>
 
-            <h1 className='font-semibold text-lg'>Blocklist & Live traffic</h1>
-            <div className="grid grid-cols-2 gap-4 h-full">
+            <h1 className='hidden md:block font-semibold text-lg'>Blocklist</h1>
+            <h1 className='block md:hidden font-semibold text-lg'>Blocklist & Live traffic</h1>
+            <div className="grid md:grid-cols-2 gap-4 h-full">
                 {/* Blocklist */}
                 <div className={commonListStyle}>
                     <div className="flex justify-between items-center">

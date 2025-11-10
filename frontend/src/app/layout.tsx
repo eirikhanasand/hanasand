@@ -19,10 +19,10 @@ export default async function layout({ children }: { children: ReactNode }) {
 
     return (
         <html lang='en' className={theme}>
-            <body className='h-full w-full'>
+            <body className='h-full w-full max-h-screen max-w-screen overflow-hidden'>
                 <Header token={token} path={path} />
                 <div className={`${isShare ? 'mt-[7.5vh] h-[92.5vh]' : 'mt-[9.5vh] h-[90.5vh]'} w-full overflow-auto`}>
-                    <main className='w-full min-h-[90.5vh]'>
+                    <main className={`w-full ${isShare ? 'pt-2' : 'pt-5 md:pt-0'} min-h-[90.5vh]`}>
                         {children}
                     </main>
                     <Footer />
