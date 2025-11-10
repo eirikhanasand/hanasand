@@ -97,22 +97,22 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                         <h1 className={breached ? 'text-red-500 text-xs md:text-base' : ''}>{text}</h1>
                     </div>
                     {uniqueBreachFiles.length > 0 && (
-                        <div className=' rounded-lg p-2 max-h-32 overflow-auto z-10 grid gap-1 w-full max-w-full'>
-                            <div className='flex gap-2 bg-dark rounded-sm px-2 py-1'>
-                                <h1 className='text-gray-200 text-xs md:text-base break-all flex-1 font-bold'>File</h1>
-                                <h1 className='text-gray-200 text-xs md:text-base break-all text-right font-bold'>Line</h1>
+                        <div className=' rounded-lg p-2 max-h-32 md:max-h-60 overflow-auto z-10 grid gap-1 w-full max-w-full'>
+                            <div className='flex gap-2 bg-dark/50 rounded-sm px-2 py-1'>
+                                <h1 className='text-bright/90 text-xs md:text-base break-all flex-1 font-bold'>File</h1>
+                                <h1 className='text-bright/90 text-xs md:text-base break-all text-right font-bold'>Line</h1>
                             </div>
                             <div className='grid gap-1 w-full max-w-full overflow-hidden'>
-                                {uniqueBreachFiles.map((breach) => (<div key={breach.file} className='flex gap-2 rounded-sm bg-dark px-2 py-1 min-w-0 w-full max-w-full'>
-                                    <Marquee className='truncate flex-1 ' innerClassName='text-gray-200 text-xs md:text-base break-all' text={breach.file} />
-                                    <h1 className='text-gray-200 text-xs md:text-base break-all w-fit min-w-fit'>{breach.line}</h1>
+                                {uniqueBreachFiles.map((breach) => (<div key={breach.file} className='flex gap-2 rounded-sm bg-dark/50 px-2 py-1 min-w-0 w-full max-w-full'>
+                                    <Marquee className='truncate flex-1 ' innerClassName='text-bright/80 text-xs md:text-base break-all' text={breach.file} />
+                                    <h1 className='text-bright/80 text-xs md:text-base break-all w-fit min-w-fit'>{breach.line}</h1>
                                 </div>))}
                             </div>
                         </div>
                     )}
                     <div ref={ref} className='min-w-full grid place-items-center'>
                         {loading && (
-                            <div key={ref.current?.offsetWidth} className='h-[2px] bg-red-500 loading-line w-1/3' />
+                            <div key={ref.current?.offsetWidth} className='h-0.5 bg-red-500 loading-line w-1/3' />
                         )}
                     </div>
                 </div>
