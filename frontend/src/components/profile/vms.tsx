@@ -41,7 +41,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                         </h1>
                     }
                 >
-                    <div className='p-[1px]'>
+                    <div className='p-px'>
                         <div className="p-1 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-md flex gap-1 items-center px-4">
                             <Info className="h-3 w-3 stroke-blue-400" />
                             <span className="text-white/70 text-[0.7rem]">Managed</span>

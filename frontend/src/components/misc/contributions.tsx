@@ -8,7 +8,7 @@ export default function Contributions() {
                     {months.map((month) => <th key={month}>{month}</th>)}
                 </tr>
             </thead>
-            <tbody className='flex text-2xs gap-[1px]'>
+            <tbody className='flex text-2xs gap-px'>
                 <tr className='grid pt-[3px]'>
                     <th>Mon</th>
                     <th>Wed</th>
