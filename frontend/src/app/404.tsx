@@ -1,6 +1,6 @@
 'use client'
 
-import Line from '../components/line'
+import Line from '../components/misc/line'
 
 // Handles invalid pages
 export default function Custom404 () {
