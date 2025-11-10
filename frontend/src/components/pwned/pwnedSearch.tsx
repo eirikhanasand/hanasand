@@ -97,7 +97,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                         <h1 className={breached ? 'text-red-500 text-xs md:text-base' : ''}>{text}</h1>
                     </div>
                     {uniqueBreachFiles.length > 0 && (
-                        <div className=' rounded-lg p-2 max-h-32 md:max-h-60 overflow-auto z-10 grid gap-1 w-full max-w-full'>
+                        <div className=' rounded-lg p-2 max-h-40 md:max-h-60 overflow-auto z-10 grid gap-1 w-full max-w-full'>
                             <div className='flex gap-2 bg-dark/50 rounded-sm px-2 py-1'>
                                 <h1 className='text-bright/90 text-xs md:text-base break-all flex-1 font-bold'>File</h1>
                                 <h1 className='text-bright/90 text-xs md:text-base break-all text-right font-bold'>Line</h1>
