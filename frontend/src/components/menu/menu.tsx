@@ -1,7 +1,7 @@
 'use client'
 
 import { getCookie } from '@/utils/cookies'
-import { Menu as MenuIcon, X } from 'lucide-react'
+import { ActivityIcon, Menu as MenuIcon, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -20,6 +20,7 @@ export default function Menu() {
     const isLink = path.includes('/g')
     const isPwned = path.includes('/pwned')
     const isTest = path.includes('/test')
+    const isStatus = path.includes('/status')
 
     function toggleOpen() {
         setOpen(prev => !prev)
@@ -70,6 +71,12 @@ export default function Menu() {
                         <Flame className={`group-hover:stroke-[#e25822] ${isTest && 'stroke-[#e25822]'}`} />
                     </div>
                     <h1 className='self-center font-semibold'>Load test</h1>
+                </Link>
+                <Link href='/status' className={baseStyles}>
+                    <div className={baseStyles}>
+                        <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
+                    </div>
+                    <h1 className='self-center font-semibold'>Status</h1>
                 </Link>
                 <Link href='/dashboard' onClick={toggleOpen} className='flex pl-2 pr-5'>
                     <Dashboard serverToken={token} />

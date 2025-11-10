@@ -57,7 +57,7 @@ export default function TrafficDashboard({
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id' })
+    const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id', replace: true })
     const commonListStyle = 'max-h-[62vh] gap-2 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
 
     useEffect(() => {
@@ -178,13 +178,13 @@ export default function TrafficDashboard({
                         key={i}
                         className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
                     >
-                        <h2 className="font-semibold text-bright/90">{ua.user_agent}</h2>
+                        <h2 className="font-semibold text-bright/90 text-xs break-all">{ua.user_agent}</h2>
                         <span className='text-xs text-almostbright'>Most Common IP: {ua.most_common_ip ?? 'N/A'}</span>
                         <div className="mt-2">
                             <h3 className='font-semibold text-xs'>Top Paths:</h3>
                             <ul className='text-xs text-almostbright list-disc list-inside'>
                                 {ua.top_paths.map((path, idx) => (
-                                    <li key={idx}>{path.path} ({path.hits})</li>
+                                    <li key={idx} className='break-all text-[0.7rem]'>{path.path} ({path.hits})</li>
                                 ))}
                             </ul>
                         </div>

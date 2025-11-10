@@ -5,10 +5,11 @@ import { useEffect, useState } from 'react'
 type WSProps<T> = {
     path: string
     initialState: T
-    id?: string
+    id?: string | null | undefined
+    replace?: boolean
 }
 
-export default function useWS<T>({ path, initialState, id }: WSProps<T>) {
+export default function useWS<T>({ path, initialState, id, replace = false }: WSProps<T>) {
     const [data, setData] = useState(initialState || [] as T)
     const [connected, setConnected] = useState(false)
     const [reconnect, setReconnect] = useState(false)
@@ -18,11 +19,11 @@ export default function useWS<T>({ path, initialState, id }: WSProps<T>) {
         if (id === null) return
 
         const pathWithId = path.replaceAll(/{id}/g, randomId()).replaceAll(/:id/g, randomId())
-        const ws = new WebSocket(`${config.url.api_ws}${pathWithId}`)
+        const ws = new WebSocket(`${config.url.cdn_ws}${pathWithId}`)
 
         ws.onopen = () => {
             setConnected(true)
-            if (data) {
+            if (data && id) {
                 ws.send(JSON.stringify({ data }))
             }
         }
@@ -47,7 +48,7 @@ export default function useWS<T>({ path, initialState, id }: WSProps<T>) {
 
                 if (msg.type === 'update') {
                     setParticipants(msg.participants)
-                    if (Array.isArray(msg.data)) {
+                    if (Array.isArray(msg.data) && !replace) {
                         // @ts-expect-error Typescript cant guarantee that prev has a iterator
                         setData((prev: T) => [...prev, ...msg.data])
                     } else {
@@ -66,7 +67,7 @@ export default function useWS<T>({ path, initialState, id }: WSProps<T>) {
         return () => {
             ws.close()
         }
-    }, [id, data, reconnect])
+    }, [id, reconnect])
 
     return {
         data,
