@@ -45,7 +45,7 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains }: 
     return (
         <div className="grid gap-4 h-full">
             {/* Metrics */}
-            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-hidden max-h-60">
+            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-hidden md:max-h-60">
                 {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
                     key={id}
                     name={domain.name}
