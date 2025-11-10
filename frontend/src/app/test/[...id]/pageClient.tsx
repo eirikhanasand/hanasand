@@ -92,7 +92,9 @@ function LeftSide({
                         )}
                     </div>
                 </div>
-                <ConnectionStatus isConnected={isConnected} />
+                <div className='px-px'>
+                    <ConnectionStatus isConnected={isConnected} />
+                </div>
                 <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
                     <Users />
                     <h1>{participants}</h1>
