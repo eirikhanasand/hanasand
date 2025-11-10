@@ -14,7 +14,7 @@ sub vcl_recv {
         return (pass);
     }
 
-    if (req.url ~ "^/api/(thought/random|test/visits|certificates)(/.*)?$") {
+    if (req.url ~ "^/api/(thought/random|test/visits|certificates|auth)(/.*)?$") {
         return (pass);
     }
 
