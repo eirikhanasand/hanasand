@@ -5,11 +5,13 @@ import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 type ShowSiteProps = {
     share: Share | null
     renderSite: boolean
-    setRenderSite: Dispatch<SetStateAction<boolean>>
     sharePageWidth: number
+    setRenderSite: Dispatch<SetStateAction<boolean>>
+    triggerChange: boolean
+    setTriggerChange: Dispatch<SetStateAction<boolean>>
 }
 
-export default function RenderSite({ share, renderSite, setRenderSite, sharePageWidth }: ShowSiteProps) {
+export default function RenderSite({ share, renderSite, setRenderSite, sharePageWidth, triggerChange, setTriggerChange }: ShowSiteProps) {
     const [width, setWidth] = useState(sharePageWidth)
 
     function handleMouseDown(e: React.MouseEvent) {
@@ -76,6 +78,10 @@ export default function RenderSite({ share, renderSite, setRenderSite, sharePage
         requestAnimationFrame(animate)
     }
 
+    function handleChange() {
+        setRenderSite(prev => { fade(prev); return !prev })
+    }
+
     useEffect(() => {
         if (width >= 20 && !renderSite) {
             setRenderSite(true)
@@ -91,6 +97,13 @@ export default function RenderSite({ share, renderSite, setRenderSite, sharePage
             }
         }
     }, [width, renderSite, setRenderSite])
+
+    useEffect(() => {
+        if (triggerChange) {
+            handleChange()
+            setTriggerChange(false)
+        }
+    }, [triggerChange, setTriggerChange])
 
     return (
         <div style={{ width }} className={`${renderSite ? 'relative' : 'absolute right-0 bottom-0 z-100 w-2 h-full'} pb-25`}>
@@ -116,7 +129,7 @@ export default function RenderSite({ share, renderSite, setRenderSite, sharePage
             )}
 
             <div
-                onClick={() => { setRenderSite(prev => { fade(prev); return !prev }) }}
+                onClick={handleChange}
                 className="
                     group fixed bottom-16 right-3 z-100 cursor-pointer select-none
                     w-[18.5%] min-w-[130px] py-2 rounded-xl text-center

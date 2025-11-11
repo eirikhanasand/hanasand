@@ -289,3 +289,12 @@ type Parameter = {
     parameter: string
     value: string
 }
+
+type SearchResult = {
+    action: string
+    text: string
+    metadata?: {
+        file?: string
+        line?: number
+    }
+}

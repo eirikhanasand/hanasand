@@ -7,6 +7,7 @@ import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
 import { useState } from 'react'
+import Search from '@/components/share/search/search'
 
 type ClientPageProps = {
     id: string
@@ -39,7 +40,8 @@ export default function ClientPage({
     const [share, setShare] = useState<Share | null>(serverShare)
     const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
     const [deploying, setDeploying] = useState(false)
-    const [renderSite, setRenderSite] = useState(sharePageWidth > 0)
+    const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
+    const [triggerSiteChange, setTriggerSiteChange] = useState(false)
 
     return (
         <div className='flex w-full h-full max-w-[100vw] p-2 gap-2'>
@@ -98,7 +100,10 @@ export default function ClientPage({
                 renderSite={renderSite}
                 setRenderSite={setRenderSite}
                 sharePageWidth={sharePageWidth}
+                triggerChange={triggerSiteChange}
+                setTriggerChange={setTriggerSiteChange}
             />
+            <Search setTriggerSiteChange={setTriggerSiteChange} />
         </div>
     )
 }
