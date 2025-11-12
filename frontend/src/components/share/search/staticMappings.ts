@@ -1,6 +1,6 @@
 export const staticMappings = [
     {
-        match: ['view site', 'site', 'view'],
+        match: ['view site', 'site', 'view', 'render', 'display', 'show'],
         action: (query: string) => ({ action: 'site', text: 'View Site' })
     },
     {
