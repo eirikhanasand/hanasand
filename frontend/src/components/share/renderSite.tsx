@@ -7,8 +7,8 @@ type ShowSiteProps = {
     renderSite: boolean
     sharePageWidth: number
     setRenderSite: Dispatch<SetStateAction<boolean>>
-    triggerChange: boolean
-    setTriggerChange: Dispatch<SetStateAction<boolean>>
+    triggerChange: boolean | 'close'
+    setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
 export default function RenderSite({ 
@@ -108,6 +108,13 @@ export default function RenderSite({
     }, [width, renderSite, setRenderSite])
 
     useEffect(() => {
+        if (triggerChange === 'close') {
+            fade(true)
+            setRenderSite(false)
+            setTriggerChange(false)
+            return
+        }
+
         if (triggerChange) {
             handleChange()
             setTriggerChange(false)

@@ -4,9 +4,9 @@ type PerformActionProps = {
     action: string
     setSearch: Dispatch<SetStateAction<string>>
     setVisible: Dispatch<SetStateAction<boolean>>
-    setTriggerSiteChange: Dispatch<SetStateAction<boolean>>
+    setTriggerSiteChange: Dispatch<SetStateAction<boolean | 'close'>>
     setBox: Dispatch<SetStateAction<boolean>>
-    setTriggerTerminalChange: Dispatch<SetStateAction<boolean>>
+    setTriggerTerminalChange: Dispatch<SetStateAction<boolean | 'close'>>
     toggleTheme: () => void
 }
 
@@ -24,6 +24,13 @@ export default function performAction({
         case 'fetch': return (setBox(prev => !prev), setSearch(''), setVisible(false))
         case 'terminal': return (setTriggerTerminalChange(true), setSearch(''), setVisible(false))
         case 'theme': return (toggleTheme(), setSearch(''), setVisible(false))
+        case 'hide': return (
+            setTriggerSiteChange('close'),
+            setSearch(''),
+            setBox(false),
+            setTriggerTerminalChange('close'),
+            setVisible(false)
+        )
         default: return (setVisible(false), setSearch(''), setVisible(false))
     }
 }

@@ -9,8 +9,8 @@ type ConsoleProps = {
     setOpen: Dispatch<SetStateAction<boolean>>
     share: Share | null
     shareTerminalHeight: number
-    triggerChange: boolean
-    setTriggerChange: Dispatch<SetStateAction<boolean>>
+    triggerChange: boolean | 'close'
+    setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
 export default function Terminal({ 
@@ -99,6 +99,12 @@ export default function Terminal({
     }, [height, isDragging, setOpen])
 
     useEffect(() => {
+        if (triggerChange === 'close') {
+            setOpen(false)
+            setTriggerChange(false)
+            return
+        }
+
         if (triggerChange) {
             handleChange()
             setTriggerChange(false)

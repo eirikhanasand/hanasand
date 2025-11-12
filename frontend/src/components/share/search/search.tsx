@@ -8,9 +8,9 @@ import performAction from './performAction'
 import { getCookie, setCookie } from '@/utils/cookies'
 
 type SearchProps = {
-    setTriggerSiteChange: Dispatch<SetStateAction<boolean>>
+    setTriggerSiteChange: Dispatch<SetStateAction<boolean | 'close'>>
     setBox: Dispatch<SetStateAction<boolean>>
-    setTriggerTerminalChange: Dispatch<SetStateAction<boolean>>
+    setTriggerTerminalChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
 export default function Search({

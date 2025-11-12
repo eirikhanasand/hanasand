@@ -41,8 +41,8 @@ export default function ClientPage({
     const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
     const [deploying, setDeploying] = useState(false)
     const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
-    const [triggerSiteChange, setTriggerSiteChange] = useState(false)
-    const [triggerTerminalChange, setTriggerTerminalChange] = useState(false)
+    const [triggerSiteChange, setTriggerSiteChange] = useState<boolean | 'close'>(false)
+    const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
 
     return (
         <div className='flex w-full h-full max-w-[100vw] p-2 gap-2'>

@@ -26,6 +26,10 @@ export const staticMappings = [
     {
         match: ['theme', 'dark', 'light', 'sun', 'moon'],
         action: () => ({ action: 'theme', text: 'Change Theme' })
+    },
+    {
+        match: ['hide', 'remove', 'debloat', 'close', 'nuke', 'tnt', 'despawn'],
+        action: () => ({ action: 'hide', text: 'Hide All Open Tabs' })
     }
 ]
 
