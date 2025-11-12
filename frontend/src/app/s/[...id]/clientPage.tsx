@@ -19,7 +19,7 @@ type ClientPageProps = {
     shareTerminalHeight: number
 }
 
-export default function ClientPage({ 
+export default function ClientPage({
     id,
     share: serverShare,
     randomId,
@@ -42,11 +42,12 @@ export default function ClientPage({
     const [deploying, setDeploying] = useState(false)
     const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
     const [triggerSiteChange, setTriggerSiteChange] = useState(false)
+    const [triggerTerminalChange, setTriggerTerminalChange] = useState(false)
 
     return (
         <div className='flex w-full h-full max-w-[100vw] p-2 gap-2'>
-            <Explorer 
-                showExplorer={showExplorer} 
+            <Explorer
+                showExplorer={showExplorer}
                 setShowExplorer={setShowExplorer}
                 openFolders={openFolders}
                 tree={tree}
@@ -84,11 +85,13 @@ export default function ClientPage({
                 box={box}
                 setBox={setBox}
             />
-            <Terminal 
+            <Terminal
                 share={share}
                 open={terminalOpen}
                 setOpen={setTerminalOpen}
                 shareTerminalHeight={shareTerminalHeight}
+                triggerChange={triggerTerminalChange}
+                setTriggerChange={setTriggerTerminalChange}
             />
             <Deploy
                 deploying={deploying}
@@ -103,7 +106,11 @@ export default function ClientPage({
                 triggerChange={triggerSiteChange}
                 setTriggerChange={setTriggerSiteChange}
             />
-            <Search setTriggerSiteChange={setTriggerSiteChange} />
+            <Search
+                setTriggerSiteChange={setTriggerSiteChange}
+                setBox={setBox}
+                setTriggerTerminalChange={setTriggerTerminalChange}
+            />
         </div>
     )
 }

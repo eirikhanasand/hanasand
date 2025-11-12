@@ -15,7 +15,7 @@ export default function Box({ box, setBox }: BoxProps) {
     }
 
     return (
-        <div className='absolute top-18 right-2 z-100 w-200 h-196 grid grid-cols-5 gap-2'>
+        <div className='absolute top-18 right-2 z-40 w-200 h-196 grid grid-cols-5 gap-2'>
             {!sidebar && <div className='col-span-2 w-full' />}
             {sidebar && <div className=' bg-bright/3 backdrop-blur-md outline outline-dark p-2 h-full w-full rounded-lg gap-2 max-h-full overflow-hidden col-span-2'>
                 <div className='w-full flex justify-between items-center'>

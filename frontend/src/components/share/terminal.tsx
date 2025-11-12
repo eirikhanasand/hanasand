@@ -9,9 +9,18 @@ type ConsoleProps = {
     setOpen: Dispatch<SetStateAction<boolean>>
     share: Share | null
     shareTerminalHeight: number
+    triggerChange: boolean
+    setTriggerChange: Dispatch<SetStateAction<boolean>>
 }
 
-export default function Terminal({ share, open, setOpen, shareTerminalHeight }: ConsoleProps) {
+export default function Terminal({ 
+    share, 
+    open, 
+    setOpen, 
+    shareTerminalHeight,
+    triggerChange, 
+    setTriggerChange
+}: ConsoleProps) {
     const [height, setHeight] = useState(shareTerminalHeight)
     const [isDragging, setIsDragging] = useState(false)
     const startY = useRef(0)
@@ -38,6 +47,16 @@ export default function Terminal({ share, open, setOpen, shareTerminalHeight }: 
     function handleMouseUp() {
         setIsDragging(false)
         document.body.style.userSelect = ''
+    }
+
+    function handleChange() {
+        if (open) {
+            setOpen(false)
+            setHeight(0)
+        } else {
+            setOpen(true)
+            setHeight(180)
+        }
     }
 
     useEffect(() => {
@@ -79,6 +98,13 @@ export default function Terminal({ share, open, setOpen, shareTerminalHeight }: 
         }
     }, [height, isDragging, setOpen])
 
+    useEffect(() => {
+        if (triggerChange) {
+            handleChange()
+            setTriggerChange(false)
+        }
+    }, [triggerChange, setTriggerChange])
+
     return (
         <>
             {isDragging && (
@@ -91,7 +117,7 @@ export default function Terminal({ share, open, setOpen, shareTerminalHeight }: 
             {/* Collapsed icon */}
             {!open && (
                 <div
-                    onClick={() => { setOpen(true); setHeight(180) }}
+                    onClick={handleChange}
                     className="fixed bottom-2 left-1/2 -translate-x-1/2 bg-dark/40 hover:bg-dark px-8 py-1 rounded-md cursor-pointer transition-all border border-light/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.4)] backdrop-blur-md z-100"
                 >
                     <div className="mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[2.5px]" />

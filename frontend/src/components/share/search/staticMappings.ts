@@ -4,8 +4,8 @@ export const staticMappings = [
         action: (query: string) => ({ action: 'site', text: 'View Site' })
     },
     {
-        match: ['fetch', 'request'],
-        action: (query: string) => ({ action: 'request', text: query })
+        match: ['fetch', 'request', 'get', 'post', 'put', 'delete', 'head', 'options', 'patch', 'connect', 'trace'],
+        action: (query: string) => ({ action: 'fetch', text: 'Fetch' })
     },
     {
         match: ['code', 'source'],
@@ -13,15 +13,19 @@ export const staticMappings = [
     },
     {
         match: ['file'],
-        action: (query: string) => ({ action: 'tree', text: query })
+        action: (query: string) => ({ action: 'tree', text: 'Open file' })
     },
     {
         match: ['github'],
-        action: (query: string) => ({ action: 'github', text: query })
+        action: (query: string) => ({ action: 'github', text: 'Open Github' })
     },
     {
-        match: ['terminal', 'vm', 'ssh'],
+        match: ['terminal', 'term', 'vm', 'ssh'],
         action: () => ({ action: 'terminal', text: 'Open Terminal' })
+    },
+    {
+        match: ['theme', 'dark', 'light', 'sun', 'moon'],
+        action: () => ({ action: 'theme', text: 'Change Theme' })
     }
 ]
 

@@ -5,12 +5,19 @@ import interpretQuery from './interpretQuery'
 import Result from './result'
 import Button from './button'
 import performAction from './performAction'
+import { getCookie, setCookie } from '@/utils/cookies'
 
 type SearchProps = {
     setTriggerSiteChange: Dispatch<SetStateAction<boolean>>
+    setBox: Dispatch<SetStateAction<boolean>>
+    setTriggerTerminalChange: Dispatch<SetStateAction<boolean>>
 }
 
-export default function Search({ setTriggerSiteChange }: SearchProps) {
+export default function Search({
+    setTriggerSiteChange,
+    setBox,
+    setTriggerTerminalChange
+}: SearchProps) {
     const [search, setSearch] = useState('')
     const [visible, setVisible] = useState(false)
     const [results, setResults] = useState<SearchResult[] | null>(null)
@@ -18,6 +25,18 @@ export default function Search({ setTriggerSiteChange }: SearchProps) {
     const [action, setAction] = useState<string | null>(null)
     const keys = useKeyPress(['meta', 'control', 'k', 'arrowup', 'arrowdown', 'enter'])
     const inputRef = useRef<HTMLInputElement>(null)
+
+    function act(action: string) {
+        performAction({
+            action,
+            setVisible,
+            setSearch,
+            setTriggerSiteChange,
+            setBox,
+            setTriggerTerminalChange,
+            toggleTheme
+        })
+    }
 
     useEffect(() => {
         if (keys['k'] && (keys['meta'] || keys['control'])) {
@@ -40,12 +59,7 @@ export default function Search({ setTriggerSiteChange }: SearchProps) {
             }
 
             if (search && keys['enter']) {
-                performAction({
-                    action: results.find((_, id) => id === selectedResult)?.action || '',
-                    setVisible,
-                    setSearch,
-                    setTriggerSiteChange
-                })
+                act(results.find((_, id) => id === selectedResult)?.action || '')
             }
         }
 
@@ -89,22 +103,35 @@ export default function Search({ setTriggerSiteChange }: SearchProps) {
 
     useEffect(() => {
         if (typeof action === 'string') {
-            performAction({
-                action,
-                setVisible,
-                setSearch,
-                setTriggerSiteChange
-            })
+            act(action)
             setAction(null)
         }
     }, [action])
+
+    const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+
+    useEffect(() => {
+        const savedTheme = getCookie('theme') as 'dark' | 'light'
+        if (savedTheme) {
+            setTheme(savedTheme)
+        }
+
+        document.documentElement.classList.remove('dark', 'light')
+        document.documentElement.classList.add(theme)
+    }, [theme])
+
+    function toggleTheme() {
+        const newTheme = theme === 'dark' ? 'light' : 'dark'
+        setCookie('theme', newTheme)
+        setTheme(newTheme)
+    }
 
     if (!visible) {
         return
     }
 
     return (
-        <div onClick={() => setVisible(false)} className='absolute top-0 left-0 w-full h-full z-50 grid place-items-center backdrop-blur-xs'>
+        <div onClick={() => setVisible(false)} className='absolute top-0 left-0 w-full h-full z-80 grid place-items-center backdrop-blur-xs'>
             <div onClick={(e) => e.stopPropagation()} className=' rounded-lg p-2 md:h-120 overflow-hidden z-10 w-[80vw] md:w-200 bg-bright/3 outline outline-bright/10 space-y-2'>
                 {/* input */}
                 <div className='flex gap-2 p-1 px-2 w-full items-center bg-bright/2 rounded-lg justify-between'>
@@ -121,10 +148,10 @@ export default function Search({ setTriggerSiteChange }: SearchProps) {
                 </div>
                 {/* results */}
                 <div className='w-full grid gap-2'>
-                    {results?.map((result, id) => <Result 
-                        key={id} 
-                        id={id} 
-                        result={result} 
+                    {results?.map((result, id) => <Result
+                        key={id}
+                        id={id}
+                        result={result}
                         selectedResult={selectedResult}
                         setAction={setAction}
                     />)}

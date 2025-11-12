@@ -11,7 +11,14 @@ type ShowSiteProps = {
     setTriggerChange: Dispatch<SetStateAction<boolean>>
 }
 
-export default function RenderSite({ share, renderSite, setRenderSite, sharePageWidth, triggerChange, setTriggerChange }: ShowSiteProps) {
+export default function RenderSite({ 
+    share, 
+    renderSite, 
+    setRenderSite, 
+    sharePageWidth, 
+    triggerChange, 
+    setTriggerChange
+}: ShowSiteProps) {
     const [width, setWidth] = useState(sharePageWidth)
 
     function handleMouseDown(e: React.MouseEvent) {
@@ -43,7 +50,9 @@ export default function RenderSite({ share, renderSite, setRenderSite, sharePage
         }
 
         function handleVisibilityChange() {
-            if (document.hidden) cleanup()
+            if (document.hidden) {
+                cleanup()
+            }
         }
 
         document.addEventListener('mousemove', onMouseMove)
