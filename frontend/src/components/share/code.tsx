@@ -19,6 +19,7 @@ type CodeProps = {
     setEditingContent: Dispatch<SetStateAction<string>>
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
+    setError: Dispatch<SetStateAction<string | boolean | null>>
 }
 
 export default function Code({
@@ -32,9 +33,9 @@ export default function Code({
     editingContent,
     setEditingContent,
     displayLineNumbers,
-    syntaxHighlighting
+    syntaxHighlighting,
+    setError
 }: CodeProps) {
-    const [error, setError] = useState<string | null>(null)
     const [reconnect, setReconnect] = useState(false)
     const [lastEdit, setLastEdit] = useState(new Date().getTime())
     const codeRef = useRef<HTMLPreElement>(null)
@@ -168,20 +169,19 @@ export default function Code({
         sendUpdate()
     }
 
-    if (error) {
-        return <div className='p-6 text-red-500/90'>{error}</div>
-    }
-
     if (!share) {
         return null
     }
 
-    return <Editor
-        codeRef={codeRef}
-        editingContent={editingContent}
-        handleChange={handleChange}
-        setClickedWord={setClickedWord}
-        displayLineNumbers={displayLineNumbers}
-        syntaxHighlighting={syntaxHighlighting}
-    />
+    return (
+        <Editor
+            codeRef={codeRef}
+            editingContent={editingContent}
+            handleChange={handleChange}
+            setClickedWord={setClickedWord}
+            displayLineNumbers={displayLineNumbers}
+            syntaxHighlighting={syntaxHighlighting}
+            setError={setError}
+        />
+    )
 }

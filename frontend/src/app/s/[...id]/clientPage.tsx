@@ -8,6 +8,9 @@ import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
 import { useState } from 'react'
 import Search from '@/components/share/search/search'
+import OpenFiles from '@/components/share/files/openFiles'
+import useClearStateAfter from '@/hooks/useClearStateAfter'
+import DisplayError from '@/components/share/search/displayError'
 
 type ClientPageProps = {
     id: string
@@ -17,6 +20,7 @@ type ClientPageProps = {
     tree: Tree | null
     sharePageWidth: number
     shareTerminalHeight: number
+    serverOpenFiles: OpenFile[]
 }
 
 export default function ClientPage({
@@ -26,7 +30,8 @@ export default function ClientPage({
     openFolders,
     tree,
     sharePageWidth,
-    shareTerminalHeight
+    shareTerminalHeight,
+    serverOpenFiles
 }: ClientPageProps) {
     const [showExplorer, setShowExplorer] = useState(true)
     const [showMetadata, setShowMetaData] = useState(true)
@@ -43,9 +48,14 @@ export default function ClientPage({
     const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
     const [triggerSiteChange, setTriggerSiteChange] = useState<boolean | 'close'>(false)
     const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
+    const [openFiles, setOpenFiles] = useState(serverOpenFiles)
+    const { condition: error, setCondition: setError } = useClearStateAfter()
+    const maxWidth = showMetadata && showExplorer 
+        ? 'max-w-[64vw]'
+        : 'max-w-full'
 
     return (
-        <div className='flex w-full h-full max-w-[100vw] p-2 gap-2'>
+        <div className='flex w-full h-full max-w-[100vw] overflow-hidden p-2 gap-2'>
             <Explorer
                 showExplorer={showExplorer}
                 setShowExplorer={setShowExplorer}
@@ -53,7 +63,8 @@ export default function ClientPage({
                 tree={tree}
                 share={share}
             />
-            <div className={`flex-1 flex flex-col min-h-full w-full ${showExplorer && showMetadata && 'max-w-[66vw]'} outline outline-dark rounded-lg text-foreground`}>
+            <div className={`flex-1 flex flex-col min-h-full w-full gap-2 text-foreground ${maxWidth}`}>
+                <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
                 <Code
                     id={share?.id || id}
                     setParticipants={setParticipants}
@@ -66,6 +77,7 @@ export default function ClientPage({
                     setClickedWord={setClickedWord}
                     displayLineNumbers={displayLineNumbers}
                     syntaxHighlighting={syntaxHighlighting}
+                    setError={setError}
                 />
             </div>
             <Metadata
@@ -113,6 +125,7 @@ export default function ClientPage({
                 setShowExplorer={setShowExplorer}
                 setShowMetaData={setShowMetaData}
             />
+            <DisplayError error={error} />
         </div>
     )
 }

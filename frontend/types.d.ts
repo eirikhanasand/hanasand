@@ -298,3 +298,8 @@ type SearchResult = {
         line?: number
     }
 }
+
+type OpenFile = {
+    id: string
+    name: string
+}

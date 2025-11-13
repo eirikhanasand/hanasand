@@ -7,6 +7,7 @@ type EditorProps = {
     setClickedWord: (word: string) => void
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
+    setError: Dispatch<SetStateAction<string | boolean | null>>
 }
 
 type HandleKeyDownProps = {
@@ -25,12 +26,14 @@ export default function Editor({
     handleChange,
     setClickedWord,
     displayLineNumbers,
-    syntaxHighlighting
+    syntaxHighlighting,
+    setError
 }: EditorProps) {
     const [history, setHistory] = useState<string[]>([])
     const [historyIndex, setHistoryIndex] = useState(-1)
     const lineNumberRef = useRef<HTMLElement | null>(null)
     const [lineNumberWidth, setLineNumberWidth] = useState(0)
+    const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const lines = editingContent.split(/\r?\n/)
 
     function handleWordClick(e: React.MouseEvent<HTMLTextAreaElement>) {
@@ -72,8 +75,28 @@ export default function Editor({
         }
     }, [editingContent, syntaxHighlighting])
 
+    useEffect(() => {
+        function handleBeforeUnload(e: BeforeUnloadEvent) {
+            e.preventDefault()
+            setError('cmdw')
+        }
+
+        const hasUnsavedChanges = editingContent.trim().length > 0
+        if (hasUnsavedChanges) {
+            window.addEventListener('beforeunload', handleBeforeUnload)
+        }
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+        }
+    }, [editingContent])
+
+    useEffect(() => {
+        inputRef.current?.focus()
+    }, [])
+
     return (
-        <main className='w-full h-full relative overflow-hidden'>
+        <main className='w-full h-full relative overflow-hidden outline outline-dark rounded-lg'>
             <h1 className={`absolute top-[6.7px] z-50 left-4 ${displayLineNumbers && 'pl-4'} pointer-events-none select-none text-gray-500`}>
                 {editingContent.trim().length <= 0 && 'Hello world...'}
             </h1>
@@ -83,7 +106,7 @@ export default function Editor({
                         // @ts-expect-error Not fully compatible because ref is
                         // element specific, but its close enough (<div> vs <pre>)
                         ref={lineNumberRef}
-                        className={`min-w-fit sync-scroll select-none text-gray-500 text-right pl-2 overflow-auto pt-[8px] noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                        className={`min-w-fit sync-scroll select-none text-gray-500 text-right pl-2 overflow-auto pt-2 noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
                         onScroll={handleScrollDiv}
                     >
                         {lines.map((_, i) => (
@@ -99,6 +122,7 @@ export default function Editor({
                 </pre>
             </div>
             <textarea
+                ref={inputRef}
                 value={editingContent}
                 onChange={handleChange}
                 onClick={handleWordClick}
@@ -174,6 +198,10 @@ function HandleKeyDown({
         }, 0)
     }
 
+    if (e.key === 'Ω' || (e.altKey && e.key === 'w')) {
+        e.preventDefault()
+    }
+
     if (
         (e.key === '7' && (e.metaKey || e.ctrlKey) && e.shiftKey)
     ) {
@@ -189,7 +217,10 @@ function HandleKeyDown({
         const after = value.substring(adjustedEnd)
         const lines = selection.split('\n')
         const commentedLines = lines.map((line) => {
-            if (line.trimStart().startsWith('//')) return line.slice(3)
+            if (line.trimStart().startsWith('//')) {
+                return line.slice(3)
+            }
+
             return '// ' + line
         })
 

@@ -6,13 +6,17 @@ type ClearStateAfterInputProps = {
     onClear?: () => void
 }
 
-type ClearStateAfterProps = { 
+type ClearStateAfterProps = {
     condition: string | boolean | null
     setCondition: Dispatch<SetStateAction<string | boolean | null>>
 }
 
 // Generic function to clear any variable after x seconds. 
-export default function useClearStateAfter({ initialState = null, timeout = 5000, onClear }: ClearStateAfterInputProps = {}): ClearStateAfterProps {
+export default function useClearStateAfter({
+    initialState = null,
+    timeout = 5000,
+    onClear
+}: ClearStateAfterInputProps = {}): ClearStateAfterProps {
     const [condition, setCondition] = useState<string | null | boolean>(initialState)
     useEffect(() => {
         if (!condition) {
@@ -21,7 +25,9 @@ export default function useClearStateAfter({ initialState = null, timeout = 5000
 
         const timeout = setTimeout(() => {
             setCondition(null)
-            if (onClear) onClear()
+            if (onClear) {
+                onClear()
+            }
         }, 5000)
 
         return () => clearTimeout(timeout)
