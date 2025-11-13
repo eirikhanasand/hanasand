@@ -110,6 +110,8 @@ export default function ClientPage({
                 setTriggerSiteChange={setTriggerSiteChange}
                 setBox={setBox}
                 setTriggerTerminalChange={setTriggerTerminalChange}
+                setShowExplorer={setShowExplorer}
+                setShowMetaData={setShowMetaData}
             />
         </div>
     )

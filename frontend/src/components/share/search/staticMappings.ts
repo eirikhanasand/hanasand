@@ -30,6 +30,18 @@ export const staticMappings = [
     {
         match: ['hide', 'remove', 'debloat', 'close', 'nuke', 'tnt', 'despawn'],
         action: () => ({ action: 'hide', text: 'Hide All Open Tabs' })
+    },
+    {
+        match: ['info', 'meta', 'data'],
+        action: () => ({ action: 'info', text: 'Show info' })
+    },
+    {
+        match: ['file', 'explore', 'sidebar'],
+        action: () => ({ action: 'explorer', text: 'Show files' })
+    },
+    {
+        match: ['reload', 'refresh'],
+        action: () => ({ action: 'reload', text: 'Reload' })
     }
 ]
 

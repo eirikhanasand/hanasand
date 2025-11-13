@@ -6,17 +6,22 @@ import Result from './result'
 import Button from './button'
 import performAction from './performAction'
 import { getCookie, setCookie } from '@/utils/cookies'
+import { useRouter } from 'next/navigation'
 
 type SearchProps = {
     setTriggerSiteChange: Dispatch<SetStateAction<boolean | 'close'>>
     setBox: Dispatch<SetStateAction<boolean>>
     setTriggerTerminalChange: Dispatch<SetStateAction<boolean | 'close'>>
+    setShowExplorer: Dispatch<SetStateAction<boolean>>
+    setShowMetaData: Dispatch<SetStateAction<boolean>>
 }
 
 export default function Search({
     setTriggerSiteChange,
     setBox,
-    setTriggerTerminalChange
+    setTriggerTerminalChange,
+    setShowExplorer,
+    setShowMetaData
 }: SearchProps) {
     const [search, setSearch] = useState('')
     const [visible, setVisible] = useState(false)
@@ -25,6 +30,7 @@ export default function Search({
     const [action, setAction] = useState<string | null>(null)
     const keys = useKeyPress(['meta', 'control', 'k', 'arrowup', 'arrowdown', 'enter'])
     const inputRef = useRef<HTMLInputElement>(null)
+    const router = useRouter()
 
     function act(action: string) {
         performAction({
@@ -34,7 +40,11 @@ export default function Search({
             setTriggerSiteChange,
             setBox,
             setTriggerTerminalChange,
-            toggleTheme
+            toggleTheme,
+            setShowExplorer,
+            setShowMetaData,
+            setSelectedResult,
+            router
         })
     }
 

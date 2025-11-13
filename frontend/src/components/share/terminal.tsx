@@ -96,7 +96,7 @@ export default function Terminal({
                 removeCookie('shareTerminalHeight')
             }
         }
-    }, [height, isDragging, setOpen])
+    }, [triggerChange, height, isDragging, setOpen])
 
     useEffect(() => {
         if (triggerChange === 'close') {

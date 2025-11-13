@@ -1,3 +1,4 @@
+import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { Dispatch, SetStateAction } from 'react'
 
 type PerformActionProps = {
@@ -8,6 +9,10 @@ type PerformActionProps = {
     setBox: Dispatch<SetStateAction<boolean>>
     setTriggerTerminalChange: Dispatch<SetStateAction<boolean | 'close'>>
     toggleTheme: () => void
+    setShowExplorer: Dispatch<SetStateAction<boolean>>
+    setShowMetaData: Dispatch<SetStateAction<boolean>>
+    setSelectedResult: Dispatch<SetStateAction<number>>
+    router: AppRouterInstance
 }
 
 export default function performAction({
@@ -17,20 +22,37 @@ export default function performAction({
     setTriggerSiteChange,
     setBox,
     setTriggerTerminalChange,
-    toggleTheme
+    toggleTheme,
+    setShowExplorer,
+    setShowMetaData,
+    setSelectedResult,
+    router
 }: PerformActionProps) {
-    switch (action) {
-        case 'site': return (setTriggerSiteChange(true), setSearch(''), setVisible(false))
-        case 'fetch': return (setBox(prev => !prev), setSearch(''), setVisible(false))
-        case 'terminal': return (setTriggerTerminalChange(true), setSearch(''), setVisible(false))
-        case 'theme': return (toggleTheme(), setSearch(''), setVisible(false))
-        case 'hide': return (
-            setTriggerSiteChange('close'),
-            setSearch(''),
-            setBox(false),
-            setTriggerTerminalChange('close'),
-            setVisible(false)
-        )
-        default: return (setVisible(false), setSearch(''), setVisible(false))
+    function reset() {
+        setSearch('')
+        setVisible(false)
+        setSelectedResult(0)
     }
+
+    function hide() {
+        setTriggerSiteChange('close')
+        setBox(false)
+        setTriggerTerminalChange('close')
+    }
+
+    switch (action) {
+        case 'site': setTriggerSiteChange(true); break
+        case 'fetch': setBox(prev => !prev); break
+        case 'terminal': setTriggerTerminalChange(true); break
+        case 'theme': toggleTheme(); break
+        case 'hide': hide(); break
+        case 'info': setShowMetaData(prev => !prev); break
+        case 'explorer': setShowExplorer(prev => !prev); break
+        case 'reload':
+            router.refresh()
+            reset()
+            break;
+    }
+
+    reset()
 }
