@@ -168,7 +168,8 @@ export default function Terminal({
                 </div>
 
                 <div className="px-2 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300">
-                    {share && <TerminalViewer 
+                    {share && <TerminalViewer
+                        open={open}
                         share={share} 
                         sendMessage={sendMessage} 
                         text={terminalLog} 

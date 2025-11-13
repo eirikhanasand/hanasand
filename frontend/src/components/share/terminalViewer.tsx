@@ -1,13 +1,14 @@
 import { useEffect, useRef, useMemo, useState, KeyboardEvent } from 'react'
 
 type TerminalViewerProps = {
+    open: boolean
     share: Share
     text: string[]
     isDone?: boolean
     sendMessage: (message: string) => { status: boolean, message?: string }
 }
 
-export default function TerminalViewer({ share, text, isDone, sendMessage }: TerminalViewerProps) {
+export default function TerminalViewer({ open, share, text, isDone, sendMessage }: TerminalViewerProps) {
     const containerRef = useRef<HTMLPreElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const [input, setInput] = useState<string | null>(null)
@@ -24,7 +25,7 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
                     const parsed = JSON.parse(item)
                     return parsed
                 } catch {
-                    return {type: 'log', content: item}
+                    return { type: 'log', content: item }
                 }
             }
 
@@ -75,10 +76,6 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
     }, [input])
 
     useEffect(() => {
-        inputRef.current?.focus()
-    }, [])
-
-    useEffect(() => {
         setLines(prev => [...prev, ...text])
     }, [text])
 
@@ -89,7 +86,7 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
             const updatedLeft = updatedHostname.length * 8.65
             setHostname(updatedHostname)
             setInitialLeft(updatedLeft)
-            setCaretPos(prev => ({...prev, left: updatedLeft }))
+            setCaretPos(prev => ({ ...prev, left: updatedLeft }))
             return updatedWidth
         }
 
@@ -109,6 +106,15 @@ export default function TerminalViewer({ share, text, isDone, sendMessage }: Ter
             el.scrollTop = el.scrollHeight
         }
     }, [processed, isDone])
+
+    useEffect(() => {
+        // Focuses 200 ms after being opened to ensure the transition is complete
+        if (open) {
+            setTimeout(() => {
+                inputRef.current?.focus()
+            }, 200)
+        }
+    }, [open])
 
     return (
         <div onClick={handleContainerClick} className='h-full flex flex-col'>

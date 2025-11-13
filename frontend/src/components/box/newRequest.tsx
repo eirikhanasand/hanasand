@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import requestColor from './requestColor'
 import Parameter from './parameter'
 import { exampleParameters } from './boxExamples'
@@ -7,12 +7,16 @@ export default function NewRequest() {
     const [type, setType] = useState('get')
     const [path, setPath] = useState('')
     const [parameters, setParameters] = useState<Parameter[]>(exampleParameters)
+    const inputRef = useRef<HTMLInputElement | null>(null)
     const typeColor = requestColor(type)
-
-
+    
     function send(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.preventDefault()
     }
+
+    useEffect(() => {
+        inputRef.current?.focus()
+    }, [])
 
     return (
         <div className='w-full'>
@@ -25,6 +29,7 @@ export default function NewRequest() {
                             <h1>{type.toUpperCase()}</h1>
                         </div>
                         <input
+                            ref={inputRef}
                             className='w-full outline outline-dark rounded-lg px-2'
                             placeholder='https://hanasand.com'
                             value={path}
