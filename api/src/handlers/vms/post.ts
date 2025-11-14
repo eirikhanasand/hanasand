@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import config from '#constants'
 
-export async function postVM(req: FastifyRequest, res: FastifyReply) {
+export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const token = req.headers['Authorization']
     const { user, vm_ip, created_by, access_users } = req.body as {
         user: string

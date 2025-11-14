@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 
-export async function getAccessibleVMs(req: FastifyRequest, res: FastifyReply) {
+export default async function getAccessibleVMs(req: FastifyRequest, res: FastifyReply) {
     const { user } = req.params as { user: string }
 
     if (!user) {

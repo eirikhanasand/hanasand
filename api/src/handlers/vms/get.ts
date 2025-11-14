@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 
-export async function getVM(req: FastifyRequest, res: FastifyReply) {
+export default async function getVM(req: FastifyRequest, res: FastifyReply) {
     const { id, user } = req.params as { id?: string; user?: string }
 
     try {

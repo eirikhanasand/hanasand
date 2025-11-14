@@ -136,8 +136,44 @@ CREATE TABLE IF NOT EXISTS vms (
     access_users TEXT[] DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS vm_metrics (
+    id BIGSERIAL PRIMARY KEY,
+    vm_id INTEGER NOT NULL REFERENCES vms(id) ON DELETE CASCADE,
+    cpu_usage_percent NUMERIC(5,2),
+    cpu_cores INT,
+    cpu_temperature NUMERIC(5,2),
+    ram_used_mb INT,
+    ram_total_mb INT,
+    gpu_usage_percent NUMERIC(5,2),
+    gpu_memory_used_mb INT,
+    gpu_memory_total_mb INT,
+    gpu_temperature NUMERIC(5,2),
+    system_temperature NUMERIC(5,2),
+    disk_used_mb INT,
+    disk_total_mb INT,
+    disk_read_iops INT,
+    disk_write_iops INT,
+    net_in_kbps INT,
+    net_out_kbps INT,
+    power_state TEXT CHECK (power_state IN ('on', 'off', 'suspended', 'idle')),
+    power_consumption_watts NUMERIC(10,2),
+    powered_on_at TIMESTAMPTZ,
+    powered_off_at TIMESTAMPTZ,
+    uptime_seconds BIGINT,
+    uptime_total_seconds BIGINT,
+    load_average_1 NUMERIC(6,2),
+    load_average_5 NUMERIC(6,2),
+    load_average_15 NUMERIC(6,2),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
 -- Index on user-roles 
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
+
+-- VM metrics indexes
+CREATE INDEX IF NOT EXISTS idx_vm_metrics_vm_id ON vm_metrics(vm_id);
+CREATE INDEX IF NOT EXISTS idx_vm_metrics_created_at ON vm_metrics(created_at);
 
 -- Logs connections to the database
 ALTER SYSTEM SET log_connections = 'on';

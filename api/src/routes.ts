@@ -22,12 +22,12 @@ import putUser from './handlers/user/putUser.ts'
 import deleteUser from './handlers/user/deleteUser.ts'
 import authorizedUserHandler from './handlers/user/fullUser.ts'
 import getUsers from './handlers/user/getUsers.ts'
-import { deleteArticle } from './handlers/articles/delete.ts'
+import deleteArticle from './handlers/articles/delete.ts'
 import getThought from './handlers/thoughts/get.ts'
 import getThoughts from './handlers/thoughts/getThoughts.ts'
 import postThought from './handlers/thoughts/post.ts'
 import putThought from './handlers/thoughts/put.ts'
-import { deleteThought } from './handlers/thoughts/delete.ts'
+import deleteThought from './handlers/thoughts/delete.ts'
 import getRandomThought from './handlers/thoughts/getRandomThought.ts'
 import postThoughtByTitle from './handlers/thoughts/postThoughtByTitle.ts'
 import assignRole from './handlers/roles/assignRole.ts'
@@ -39,10 +39,14 @@ import postCertificate from './handlers/certificates/post.ts'
 import putCertificate from './handlers/certificates/put.ts'
 import deleteCertificate from './handlers/certificates/delete.ts'
 import getUserCertificates from './handlers/certificates/getUserCertificates.ts'
-import { getVM } from './handlers/vms/get.ts'
-import { postVM } from './handlers/vms/post.ts'
-import { getAccessibleVMs } from './handlers/vms/getAccessibleVMs.ts'
-import { deleteVM } from './handlers/vms/delete.ts'
+import getVM from './handlers/vms/get.ts'
+import postVM from './handlers/vms/post.ts'
+import getAccessibleVMs from './handlers/vms/getAccessibleVMs.ts'
+import deleteVM from './handlers/vms/delete.ts'
+import getVMMetrics from './handlers/vms/metrics/get.ts'
+import postVMMetrics from './handlers/vms/metrics/post.ts'
+import putVMMetrics from './handlers/vms/metrics/put.ts'
+import deleteVMMetrics from './handlers/vms/metrics/delete.ts'
 
 /**
  * Defines the routes available in the API.
@@ -119,4 +123,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/vms/access/:user', getAccessibleVMs)
     fastify.post('/vm', postVM)
     fastify.delete('/vm/:id', deleteVM)
+    
+    // vm metrics
+    fastify.get('/vm/metrics/:id', getVMMetrics)
+    fastify.post('/vm/metrics', postVMMetrics)
+    fastify.put('/vm/metrics/:id', putVMMetrics)
+    fastify.delete('/vm/metrics/:id', deleteVMMetrics)
 }

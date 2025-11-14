@@ -8,7 +8,7 @@ import { join } from 'path'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 
-export async function deleteThought(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
+export default async function deleteThought(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'content_admin')
     if (!valid || !validRole) {

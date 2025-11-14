@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 
-export async function deleteVM(req: FastifyRequest, res: FastifyReply) {
+export default async function deleteVM(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
 
     if (!id) {
