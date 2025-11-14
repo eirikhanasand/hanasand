@@ -16,7 +16,7 @@ WORKDIR /app
 # Set the node environment to production
 ENV NODE_ENV=production
 
-# Starts varnish
+# Copies varnish
 COPY ./default.vcl /etc/varnish/default.vcl
 
 # Copy package.json first for caching
