@@ -3,7 +3,6 @@ import run from '#db'
 
 export default async function logoutHandler(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
-
     if (!id) {
         return res.status(400).send({ error: 'Missing userId' })
     }

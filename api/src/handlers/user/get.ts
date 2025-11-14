@@ -18,7 +18,6 @@ export default async function userHandler(req: FastifyRequest, res: FastifyReply
     }
 
     try {
-        console.log(`Fetching user ${id}`)
         const userResult = await run(`SELECT id, name, avatar FROM users WHERE id = $1`, [id])
         if (!userResult.rows.length) {
             return res.status(404).send({ error: `There is no user with id ${id}` })

@@ -8,9 +8,9 @@ import run from '#db'
 export default async function getRandomThought(_: FastifyRequest, res: FastifyReply) {
     try {
         const result = await run(`
-        SELECT * FROM thoughts
-        ORDER BY random()
-        LIMIT 1
+            SELECT * FROM thoughts
+            ORDER BY random()
+            LIMIT 1
         `)
 
         if (!result.rows.length) {

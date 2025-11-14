@@ -18,7 +18,6 @@ export default async function getUsers(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
-        console.log('Fetching users')
         const usersQuery = await loadSQL('getUsers.sql')
         const usersResult = await run(usersQuery)
         if (!usersResult.rows.length) {

@@ -6,7 +6,6 @@ export default async function getCertificate(req: FastifyRequest, res: FastifyRe
 
     try {
         const result = await run("SELECT * FROM certificates WHERE id = $1", [id])
-
         if (result.rows.length === 0) {
             return res.status(404).send({ error: "Certificate not found" })
         }

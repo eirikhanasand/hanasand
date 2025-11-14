@@ -20,7 +20,6 @@ type User = {
  */
 export default async function tokenHandler(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
-
     if (!id) {
         return res.status(400).send({ error: 'Missing id.' })
     }

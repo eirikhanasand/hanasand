@@ -1,9 +1,14 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 export default async function getUserCertificates(req: FastifyRequest, res: FastifyReply) {
-    const { id } = req.params as { id: string }
+    const { valid, id } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(404).send({ error: 'Unauthorized.' })
+    }
+
     if (!id) {
         return res.status(400).send({ error: "No user ID provided" })
     }

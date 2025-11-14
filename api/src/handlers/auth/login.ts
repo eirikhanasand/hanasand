@@ -6,7 +6,6 @@ import login from '#utils/auth/login.ts'
 export default async function loginHandler(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string } ?? {}
     const { password } = req.body as { password: string } ?? {}
-
     if (!id || !password) {
         return res.status(400).send({ error: 'Missing username or password.' })
     }
