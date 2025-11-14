@@ -16,13 +16,13 @@ export async function lockShare(share: Share, name: string): Promise<Share | nul
 
         clearTimeout(timeout)
         if (!response.ok) {
-            throw new Error('Failed to lock/unlock share')
+            throw new Error(`Failed to lock/unlock share: ${await response.text()}`)
         }
 
         const data = await response.json()
         return data
     } catch (error) {
-        console.error(`Error locking/unlocking share: ${error}`)
+        console.log(error)
         return null
     }
 }
