@@ -21,7 +21,7 @@ export default function DisplayError({ error }: { error: string | boolean | null
                     </div>
                 ) : (
                     <div className='w-[20rem]'>
-                        <Notify fullWidth message={'test'} />
+                        <Notify fullWidth message={error} />
                     </div>
                 )}
             </div>
