@@ -2,7 +2,7 @@ import config from '@/config'
 
 export default async function getDomains() {
     try {
-        const response = await fetch(`${config.url.cdn}/traffic/domains`)
+        const response = await fetch(`${config.url.cdn}/traffic/tps`)
         if (!response.ok) {
             throw new Error(await response.text())
         }
