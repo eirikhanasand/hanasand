@@ -191,10 +191,14 @@ VALUES (
 );
 
 -- Creates initial roles
-INSERT INTO roles (id, name, priority, description, created_by) VALUES ('administrator', 'Administrator', 0, 'Administrators', 'administrator');
-INSERT INTO roles (id, name, priority, description, created_by) VALUES ('user_admin', 'User Administrator', 100, 'User Administrator', 'administrator');
-INSERT INTO roles (id, name, priority, description, created_by) VALUES ('content_admin', 'Content Administrator', 200, 'Content Administrator. Gives base access to create and delete content.', 'administrator');
-INSERT INTO roles (id, name, priority, description, created_by) VALUES ('users', 'Users', 200, 'Default role for all users. Gives base access to internal services.', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by)
+VALUES ('administrator', 'Administrator', 0, 'Administrators', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by)
+VALUES ('user_admin', 'User Administrator', 100, 'User Administrator', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by)
+VALUES ('content_admin', 'Content Administrator', 200, 'Content Administrator. Gives base access to create and delete content.', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by)
+VALUES ('users', 'Users', 200, 'Default role for all users. Gives base access to internal services.', 'administrator');
 
 -- Maps initial roles for the administrator
 INSERT INTO user_roles (user_id, role_id, assigned_by) 

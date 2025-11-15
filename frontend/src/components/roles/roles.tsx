@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import DashboardRole from './dashboardRole'
-import fetchRoles from '@/utils/roles/fetchRoles'
+import fetchRoles from '@/utils/roles/getRoles'
 
 export default async function Roles() {
     const Cookies = await cookies()

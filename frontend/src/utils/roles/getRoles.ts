@@ -6,7 +6,7 @@ type FetchRoleProps = {
     token: string
 }
 
-export default async function fetchRoles({ id, token }: FetchRoleProps): Promise<Role[]> {
+export default async function getRoles({ id, token }: FetchRoleProps): Promise<Role[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }

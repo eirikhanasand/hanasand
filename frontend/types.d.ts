@@ -303,3 +303,100 @@ type OpenFile = {
     id: string
     name: string
 }
+
+type SystemMetric = {
+    name: string
+    value: string | number
+}
+
+type DockerContainer = {
+    id: string
+    name: string
+    status: 'running' | 'stopped' | 'paused'
+    cpu: number
+    memory: number
+    created_at?: string
+}
+
+type VM = {
+    id: number
+    name: string
+    owner: string
+    vm_ip: string
+    created_at: string
+    created_by: string
+    access_users: string[]
+}
+
+type VMMetrics = {
+    id: number
+    vm_id: string
+    cpu_usage_percent: number
+    cpu_cores: number
+    cpu_temperature: number
+    ram_used_mb: number
+    ram_total_mb: number
+    gpu_usage_percent: number
+    gpu_memory_used_mb: number
+    gpu_memory_total_mb: number
+    gpu_temperature: number
+    system_temperature: number
+    disk_used_mb: number
+    disk_total_mb: number
+    disk_read_iops: number
+    disk_write_iops: number
+    net_in_kbps: number
+    net_out_kbps: number
+    power_state: 'on' | 'off' | 'suspended' | 'idle'
+    power_consumption_watts: number
+    powered_on_at?: string
+    powered_off_at?: string
+    uptime_seconds: number
+    uptime_total_seconds: number
+    load_average_1: number
+    load_average_5: number
+    load_average_15: number
+    created_at: string
+}
+
+type MetricSummary = {
+    value: string
+    hits_today: number
+    hits_last_week: number
+    hits_total: number
+}
+
+type RequestLog = {
+    metric: 'ip' | 'user_agent' | 'path'
+    value: string
+    path: string
+    hits: number
+    last_seen: string
+    created_at: string
+}
+
+type DomainTPS = {
+    name: string
+    tps: number
+}
+
+type UAMetrics = {
+    user_agent: string
+    most_common_ip?: string
+    top_paths: { path: string; hits: number }[]
+}
+
+type IPMetrics = {
+    ip: string
+    most_common_user_agent?: string
+    top_paths: { path: string; hits: number }[]
+}
+
+type BlocklistEntry = {
+    id?: number
+    type: 'ip' | 'user_agent'
+    value: string
+    is_vpn?: boolean
+    is_proxy?: boolean
+    is_tor?: boolean
+}

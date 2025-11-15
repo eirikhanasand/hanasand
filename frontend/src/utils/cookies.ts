@@ -14,7 +14,6 @@ export function setCookie(name: string, value: string, days?: number) {
         expires = `expires=${date.toUTCString()};`
     }
 
-    // Ensure the cookie is set with a proper expiration, path, and SameSite
     document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax`
 }
 
