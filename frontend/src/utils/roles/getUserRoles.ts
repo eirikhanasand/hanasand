@@ -18,8 +18,8 @@ export default async function getUserRoles({ id, token }: FetchRoleProps): Promi
         const response = await fetch(`${config.url.api}/roles/user/${id}`, {
             headers: {
                 'Content-Type': 'application/json',
-                'id': id,
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                id
             },
             signal: controller.signal
         })
