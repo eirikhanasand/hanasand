@@ -7,7 +7,7 @@ export async function putArticle(id: string, content: string[]): Promise<void | 
     const token = getCookie('access_token')
     const username = getCookie('id')
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     if (token && username) {
         const response = await fetch(`${config.url.api}/article/${id}`, {

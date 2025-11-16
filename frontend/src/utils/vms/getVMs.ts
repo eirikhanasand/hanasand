@@ -3,7 +3,7 @@ import config from '@/config'
 export default async function getVMs(id: string): Promise<VM[]> {
     try {
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.api}/vms/user/access/${id}`, {
             cache: 'no-store',
             signal: controller.signal

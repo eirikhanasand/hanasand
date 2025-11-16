@@ -45,7 +45,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         const id = formData.get('username') as string
         const password = formData.get('password') as string
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
         try {
             const response = await fetch(`${config.url.api}/user`, {

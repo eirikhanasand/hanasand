@@ -2,7 +2,7 @@ import config from '@/config'
 
 export default async function roles(token: string, id: string): Promise<boolean> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.api}/auth/token/${id}`, {

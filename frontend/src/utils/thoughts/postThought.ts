@@ -15,7 +15,7 @@ export async function postThought(title: string): Promise<{ status: number, mess
     }
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.api}/thoughts`, {

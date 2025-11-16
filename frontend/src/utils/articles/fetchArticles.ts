@@ -15,7 +15,7 @@ export default async function fetchArticles<T extends boolean>(
         }
 
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(url, {
             signal: controller.signal
         })

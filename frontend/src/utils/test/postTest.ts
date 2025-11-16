@@ -8,7 +8,7 @@ type PostTestProps = {
 
 export async function postTest({ url, timeout, stages }: PostTestProps): Promise<Test | null> {
     const controller = new AbortController()
-    const fetchTimeout = setTimeout(() => controller.abort(), 1000)
+    const fetchTimeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.api}/test`, {

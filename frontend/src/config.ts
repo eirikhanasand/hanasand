@@ -12,7 +12,8 @@ const config = {
         // cdn: 'http://localhost:8501/api',
         link: 'https://hanasand.com/g',
     },
-    version: packagejson.version
+    version: packagejson.version,
+    abortTimeout: 3000
 }
 
 export default config

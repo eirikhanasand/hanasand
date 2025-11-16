@@ -26,7 +26,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
 
     async function checkPath(p: string) {
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         setCheckingPath(true)
 
         try {

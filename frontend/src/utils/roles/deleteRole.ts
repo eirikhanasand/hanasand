@@ -5,7 +5,7 @@ import { getCookie } from '../cookies'
 
 export default async function deleteRole(id: string): Promise<{ status: number, message: string }> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const token = getCookie('access_token')

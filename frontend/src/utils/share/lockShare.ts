@@ -2,7 +2,7 @@ import config from '@/config'
 
 export async function lockShare(share: Share, name: string): Promise<Share | null> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.cdn}/share/lock/${share.id}`, {

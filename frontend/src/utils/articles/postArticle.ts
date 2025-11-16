@@ -7,7 +7,7 @@ export async function postArticle(id: string, content: string): Promise<{ status
     const token = getCookie('access_token')
     const username = getCookie('id')
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     if (!token || !id) {
         return {

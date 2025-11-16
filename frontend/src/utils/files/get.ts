@@ -3,7 +3,7 @@ import config from '@/config'
 export async function getFile(id: string): Promise<Share | null> {
     try {
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.cdn}/files/${id}`, {
             signal: controller.signal
         })

@@ -8,7 +8,7 @@ type GetTreeProps = {
 
 export async function getTree({ id, token, userId }: GetTreeProps): Promise<Tree | null> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.cdn}/share/tree/${id}`, {

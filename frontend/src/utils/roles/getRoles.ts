@@ -12,7 +12,7 @@ export default async function getRoles({ id, token }: FetchRoleProps): Promise<R
     }
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.api}/roles`, {

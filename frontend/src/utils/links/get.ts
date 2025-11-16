@@ -2,7 +2,7 @@ import config from '@/config'
 
 export async function getLink(id: string): Promise<FullLink | 404 | null> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.cdn}/link/${id}`, {

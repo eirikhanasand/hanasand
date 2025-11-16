@@ -3,7 +3,7 @@ import config from '@/config'
 export default async function fetchArticle(id: string): Promise<Article | null> {
     try {
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.api}/article/${id}`, {
             signal: controller.signal
         })

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Dispatch, SetStateAction, useCallback } from 'react'
 import getFetchableUrl from './getFetchAbleUrl'
 import Or from '@/utils/or'
+import config from '@/config'
 
 type UploadProps = {
     url: string
@@ -50,7 +51,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
     async function fetchImageAsFile(url: string, fileName: string) {
         const fetchableUrl = getFetchableUrl(url)
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`/api/image?url=${encodeURIComponent(fetchableUrl)}`, {
             signal: controller.signal
         })
@@ -127,7 +128,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                             const pastedText = e.clipboardData.getData('text')
                             handlePasteOrChange(pastedText)
                         }}
-                        className='bg-darker w-full rounded-md border-[1px] border-[rgb(44,44,44)] px-2 py-1 focus:outline-hidden'
+                        className='bg-darker w-full rounded-md border border-[rgb(44,44,44)] px-2 py-1 focus:outline-hidden'
                     />
                 </div>
                 <Link href='/gallery' className='bg-light p-2 px-10 md:px-15 rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_8px_rgba(0,0,0,0.4)] backdrop-blur-md text-bright/80'>

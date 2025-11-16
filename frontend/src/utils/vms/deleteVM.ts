@@ -15,7 +15,7 @@ export default async function deleteVM(vmId: string): Promise<{ status: number, 
         }
 
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.api}/certificates/${vmId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}`, id },

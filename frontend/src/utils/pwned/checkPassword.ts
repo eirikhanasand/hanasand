@@ -2,7 +2,7 @@ import config from '@/config'
 
 export default async function postPwned(password: string): Promise<Breach | null> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 2000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.api}/pwned`, {

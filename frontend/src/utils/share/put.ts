@@ -2,7 +2,7 @@ import config from '@/config'
 
 export async function updateShare(id: string, updates: Updates): Promise<Share | null> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 1000)
+    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.cdn}/share/${id}`, {

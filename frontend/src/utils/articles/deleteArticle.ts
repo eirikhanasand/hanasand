@@ -15,7 +15,7 @@ export default async function deleteArticle(id: string): Promise<{ status: numbe
         }
 
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.api}/article/${id}`, {
             method: 'DELETE',
             headers: {

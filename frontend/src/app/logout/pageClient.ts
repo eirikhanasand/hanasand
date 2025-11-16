@@ -16,7 +16,7 @@ export default function LogoutPageClient({ path }: { path?: string }) {
                 const searchParams = new URLSearchParams(window.location.search)
                 const queryString = searchParams.toString()
                 const controller = new AbortController()
-                const timeout = setTimeout(() => controller.abort(), 1000)
+                const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
                 if (id) {
                     const response = await fetch(`${config.url.api}/auth/logout/${id}`, {

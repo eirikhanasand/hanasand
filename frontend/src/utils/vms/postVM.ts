@@ -15,7 +15,7 @@ export default async function postVM(vm: Partial<VM>): Promise<{ status: number,
         }
 
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 1000)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.api}/vm`, {
             method: 'POST',
             headers: { 
