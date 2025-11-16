@@ -37,6 +37,8 @@ sub vcl_pipe {
 }
 
 sub vcl_hash {
+    hash_data(req.url);
+
     if (req.method == "POST") {
         if (req.http.Content-Length) {
             set req.http.X-Content-Length = req.http.Content-Length;
