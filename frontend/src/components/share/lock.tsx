@@ -15,12 +15,13 @@ export default function Lock({ share, setError, baseButtonStyle }: LockProps) {
     const [locked, setLocked] = useState(share?.locked)
 
     async function handleLock() {
-        const name = getCookie('name')
-        if (!name) {
+        const id = getCookie('id')
+        const token = getCookie('access_token')
+        if (!id || !token) {
             return setError(`Login required.`)
         }
 
-        const response = await lockShare(share!, name)
+        const response = await lockShare(share!, id, token)
         if (response) {
             setLocked(response.locked)
         } else {
