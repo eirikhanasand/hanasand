@@ -33,7 +33,7 @@ export default async function assignRole({ id, token, role }: FetchRoleProps): P
 
         clearTimeout(timeout)
         if (!response.ok) {
-            throw new Error('Failed to fetch roles.')
+            throw new Error(`Failed to assign role ${id}.`)
         }
 
         const data = await response.json()

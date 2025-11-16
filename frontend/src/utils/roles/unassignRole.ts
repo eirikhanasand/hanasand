@@ -33,7 +33,7 @@ export default async function unassignRole({ id, token, role }: FetchRoleProps):
 
         clearTimeout(timeout)
         if (!response.ok) {
-            throw new Error('Failed to fetch roles.')
+            throw new Error(`Failed to unassign role ${id}.`)
         }
 
         const data = await response.json()
