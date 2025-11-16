@@ -12,7 +12,7 @@ export default function LogoutPageClient({ path }: { path?: string }) {
         (async () => {
             try {
                 const id = getCookie('id')
-                removeCookies('name', 'access_token', 'id', 'avatar')
+                removeCookies('name', 'access_token', 'id', 'avatar', 'roles')
                 const searchParams = new URLSearchParams(window.location.search)
                 const queryString = searchParams.toString()
                 const controller = new AbortController()
