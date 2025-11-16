@@ -43,7 +43,6 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
 
         await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
         const { password: _, ...userWithoutPassword } = user
-
         const roleQuery = `
             SELECT r.id, r.name, r.description, r.priority
             FROM roles r
@@ -51,7 +50,6 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             WHERE ur.user_id = $1
         `
         const roles = await run(roleQuery, [id])
-
         const token = await login({ id, ip })
         if (!token) {
             res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
