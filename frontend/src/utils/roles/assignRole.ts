@@ -22,6 +22,7 @@ export default async function assignRole({ id, token, role }: FetchRoleProps): P
 
     try {
         const response = await fetch(`${config.url.api}/role/assign/${role}`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,

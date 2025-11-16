@@ -22,6 +22,7 @@ export default async function unassignRole({ id, token, role }: FetchRoleProps):
 
     try {
         const response = await fetch(`${config.url.api}/role/unassign/${role}`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
