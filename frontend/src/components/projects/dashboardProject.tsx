@@ -8,7 +8,7 @@ import useKeyPress from '@/hooks/keyPressed'
 import { useRouter } from 'next/navigation'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 
-export default function DashboardProject({ project }: { project: Thought }) {
+export default function DashboardProject({ project }: { project: Project }) {
     const [deleted, setDeleted] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const keys = useKeyPress('shift')
@@ -16,7 +16,7 @@ export default function DashboardProject({ project }: { project: Thought }) {
 
     async function handleClick() {
         if (!keys['shift']) {
-            router.push(`/thought/${project.id}`)
+            router.push(`/project/${project.id}`)
         }
 
         if (keys['shift']) {
@@ -32,7 +32,7 @@ export default function DashboardProject({ project }: { project: Thought }) {
     return (
         <div className='group'>
             <div onClick={handleClick} className={`flex cursor-pointer justify-between p-2 ${keys['shift'] ? 'hover:bg-red-500' : 'hover:bg-dark'} rounded-lg hover:scale-[1.005]`}>
-                <h1 key={project.id}>{project.title}</h1>
+                <h1 key={project.id}>{project.id}</h1>
                 {keys['shift'] && <Trash2 className='hidden group-hover:block w-5 h-5' />}
             </div>
             {deleted && <div className='absolute top-16 right-2 w-50 h-fit'>

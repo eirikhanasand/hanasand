@@ -404,5 +404,9 @@ type BlocklistEntry = {
 type HighestRole = {
     highest_role_id: string
     highest_role_name: string
-    highest_role_priority: string
+    highest_role_priority: number
+}
+
+type Project = {
+    id: string
 }

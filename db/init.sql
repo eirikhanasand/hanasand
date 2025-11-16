@@ -194,9 +194,11 @@ VALUES (
 INSERT INTO roles (id, name, priority, description, created_by)
 VALUES ('administrator', 'Administrator', 0, 'Administrators', 'administrator');
 INSERT INTO roles (id, name, priority, description, created_by)
-VALUES ('user_admin', 'User Administrator', 100, 'User Administrator', 'administrator');
+VALUES ('system_admin', 'System Administrator', 20, 'System Administrator. Gives elevated access to the system, including ability to manage and delete vms and containers.', 'administrator');
 INSERT INTO roles (id, name, priority, description, created_by)
-VALUES ('content_admin', 'Content Administrator', 200, 'Content Administrator. Gives base access to create and delete content.', 'administrator');
+VALUES ('user_admin', 'User Administrator', 40, 'User Administrator', 'administrator');
+INSERT INTO roles (id, name, priority, description, created_by)
+VALUES ('content_admin', 'Content Administrator', 60, 'Content Administrator. Gives base access to create and delete content.', 'administrator');
 INSERT INTO roles (id, name, priority, description, created_by)
 VALUES ('users', 'Users', 200, 'Default role for all users. Gives base access to internal services.', 'administrator');
 
