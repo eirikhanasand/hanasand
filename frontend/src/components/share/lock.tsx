@@ -3,7 +3,7 @@
 import { getCookie } from '@/utils/cookies'
 import { lockShare } from '@/utils/share/lockShare'
 import { LockKeyhole, LockKeyholeOpen } from 'lucide-react'
-import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 
 type LockProps = {
     share: Share | null
@@ -28,10 +28,6 @@ export default function Lock({ share, setError, baseButtonStyle }: LockProps) {
             setError(`Failed to ${locked ? 'unlock' : 'lock'} share.`)
         }
     }
-
-    useEffect(() => {
-        setLocked(share?.locked || false)
-    }, [share])
 
     if (!share) {
         return (

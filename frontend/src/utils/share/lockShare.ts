@@ -11,6 +11,7 @@ export async function lockShare(share: Share, id: string, token: string): Promis
                 'Authorization': `Bearer ${token}`,
                 id,
             },
+            cache: 'no-store',
             signal: controller.signal
         })
 
