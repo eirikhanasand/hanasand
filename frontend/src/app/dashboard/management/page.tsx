@@ -1,9 +1,9 @@
-import GreetingNav from '@/components/dashboard/greetings/greetingNav'
-import GreetingNavButtons from '@/components/dashboard/greetings/greetingNavButtons'
-import VMs from '@/components/profile/vms'
-import Projects from '@/components/projects/projects'
-import Shares from '@/components/share/dashboard/projects'
-import getVMs from '@/utils/vms/getVMs'
+import DashboardArticles from '@/components/articles/dashboardArticles'
+import GreetingNav from '@/components/management/greetingNav'
+import GreetingNavButtons from '@/components/management/greetingNavButtons'
+import Roles from '@/components/roles/roles'
+import Thoughts from '@/components/thoughts/thoughts'
+import Users from '@/components/users/users'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
@@ -17,7 +17,6 @@ export default async function Page() {
     }
 
     const text = timeBasedGreeting({ name })
-    const vms = await getVMs(id)
 
     return (
         <div className='h-full w-full'>
@@ -25,9 +24,10 @@ export default async function Page() {
                 <GreetingNav text={text} id={id} />
                 <GreetingNavButtons id={id} />
                 <div className='grid md:grid-cols-2 gap-2'>
-                    <Projects />
-                    <Shares />
-                    <VMs vms={vms} />
+                    <DashboardArticles />
+                    <Thoughts />
+                    <Users />
+                    <Roles />
                 </div>
             </div>
         </div>
