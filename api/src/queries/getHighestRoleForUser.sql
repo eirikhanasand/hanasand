@@ -1,10 +1,11 @@
 SELECT 
-    u.id, 
-    r.id AS highest_role_id,
-    r.priority AS highest_role_priority
+    u.id AS user_id,
+    r.id AS id,
+    r.name AS name,
+    r.priority AS priority
 FROM users u
 LEFT JOIN LATERAL (
-    SELECT roles.id, roles.priority
+    SELECT roles.id, roles.name, roles.priority
     FROM user_roles
     JOIN roles ON user_roles.role_id = roles.id
     WHERE user_roles.user_id = u.id

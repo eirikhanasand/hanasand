@@ -400,3 +400,10 @@ type BlocklistEntry = {
     is_proxy?: boolean
     is_tor?: boolean
 }
+
+type HighestRole = {
+    user_id: string
+    id: string
+    name: string
+    priority: number
+}
