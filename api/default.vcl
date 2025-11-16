@@ -18,6 +18,14 @@ sub vcl_recv {
         return (pass);
     }
 
+    if (req.http.Authorization) {
+        set req.http.X-Auth-Hash = req.http.Authorization;
+    }
+
+    if (req.url ~ "/([0-9a-fA-F-]{6,})") {
+        set req.http.X-User-ID = regsub(req.url, ".*/([0-9a-fA-F-]{6,}).*", "\1");
+    }
+
     return (hash);
 }
 
@@ -30,20 +38,32 @@ sub vcl_pipe {
 
 sub vcl_hash {
     if (req.method == "POST") {
-        # Extract Content-Length header and use it in the hash
         if (req.http.Content-Length) {
             set req.http.X-Content-Length = req.http.Content-Length;
-
-            # Include the Content-Length in the cache key
             hash_data(req.http.X-Content-Length);
         }
     }
+
+    if (req.http.X-Auth-Hash) {
+        hash_data(req.http.X-Auth-Hash);
+    }
+
+    if (req.http.X-User-ID) {
+        hash_data(req.http.X-User-ID);
+    }
+
+    return (lookup);
 }
 
 sub vcl_backend_response {
-    # Caches for 1 hour
-    set beresp.http.Cache-Control = "hanasand-cache, max-age=3600";
     set beresp.ttl = 1h;
+    set beresp.http.Cache-Control = "hanasand-cache, max-age=3600";
+    
+    if (bereq.http.X-Auth-Hash && bereq.http.X-User-ID) {
+        set beresp.ttl = 1m;
+        set beresp.http.Cache-Control = "hanasand-cache, max-age=60";
+    }
+
     return (deliver);
 }
 
