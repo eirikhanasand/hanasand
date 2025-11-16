@@ -21,7 +21,7 @@ export default async function Shares() {
                 <h1 className='font-semibold text-lg self-center'>Shares</h1>
                 <Link href='/s' className='flex gap-2 rounded-lg p-[3px] px-5 hover:outline-green-500/35 outline-1 outline-dark cursor-pointer hover:bg-green-500/20'>
                     <Plus />
-                    <h1 className='font-semibold'>Create</h1>
+                    <h1 className='font-semibold select-none'>Create</h1>
                 </Link>
             </div>
             {typeof shares === 'string' 

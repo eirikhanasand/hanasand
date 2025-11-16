@@ -88,7 +88,7 @@ export default function CreateClient() {
             </div>
             <div onClick={handleCreate} className='bg-light hover:bg-green-500/20 hover:outline-green-500/35 cursor-pointer py-2 px-6 flex gap-2 rounded-lg w-fit place-self-end mt-10'>
                 <Plus />
-                <h1 className='font-semibold'>Create</h1>
+                <h1 className='font-semibold select-none'>Create</h1>
             </div>
         </div>
     )

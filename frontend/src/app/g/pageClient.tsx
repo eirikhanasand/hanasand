@@ -72,7 +72,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
                 type='submit'
                 className={`${color} w-full rounded-lg px-2 py-1 text-gray-300`}
             >
-                <h1>Create</h1>
+                <h1 className='select-none'>Create</h1>
             </button>
         </form>
     )
