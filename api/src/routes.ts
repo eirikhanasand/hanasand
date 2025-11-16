@@ -47,7 +47,6 @@ import getVMMetrics from './handlers/vms/metrics/get.ts'
 import postVMMetrics from './handlers/vms/metrics/post.ts'
 import putVMMetrics from './handlers/vms/metrics/put.ts'
 import deleteVMMetrics from './handlers/vms/metrics/delete.ts'
-import getHighestRoleForEveryUser from './handlers/roles/getHighestRoleForEveryUser.ts'
 
 /**
  * Defines the routes available in the API.
@@ -77,7 +76,6 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // Roles handlers
     fastify.get('/role/:id', getRole)
     fastify.get('/roles', getRoles)
-    fastify.get('/roles/highest', getHighestRoleForEveryUser)
     fastify.get('/roles/user/:id', getRolesForUser)
     fastify.post('/role', postRole)
     fastify.post('/role/assign/:id', assignRole)
