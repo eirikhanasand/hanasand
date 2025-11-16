@@ -49,7 +49,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                     }
                 </div>}
             </div>
-            <UserRoleHandler displayRoles={displayRoles} roles={roles} />
+            <UserRoleHandler user={user} displayRoles={displayRoles} roles={roles} />
             {deleted && <div className='absolute top-16 right-2 w-50 h-fit'>
                 <Notify message={`Deleted user ${user.id}.`} className=' min-w-full px-4 bg-light' />
             </div>}

@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation'
 type FetchRoleProps = { 
     id: string
     token: string
+    target?: string
 }
 
-export default async function getUserRoles({ id, token }: FetchRoleProps): Promise<Role[]> {
+export default async function getUserRoles({ id, token, target }: FetchRoleProps): Promise<Role[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
@@ -15,7 +16,7 @@ export default async function getUserRoles({ id, token }: FetchRoleProps): Promi
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
-        const response = await fetch(`${config.url.api}/roles/user/${id}`, {
+        const response = await fetch(`${config.url.api}/roles/user/${target || id}`, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,

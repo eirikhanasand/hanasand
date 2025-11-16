@@ -1,29 +1,47 @@
 import { getCookie } from '@/utils/cookies'
 import assignRole from '@/utils/roles/assignRole'
+import getUserRoles from '@/utils/roles/getUserRoles'
 import unassignRole from '@/utils/roles/unassignRole'
 import { Crown } from 'lucide-react'
 import { redirect } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type UserRoleHandlerProps = {
     displayRoles: boolean
     roles: Role[]
+    user: UserWithRole
 }
 
-export default function UserRoleHandler({ displayRoles, roles }: UserRoleHandlerProps) {
+export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleHandlerProps) {
+    const [userRoles, setUserRoles] = useState<Role[]>([])
+
+    useEffect(() => {
+        (async() => {
+            const id = getCookie('id')
+            const token = getCookie('access_token')
+            
+            if (!id || !token) {
+                return redirect('/logout?path=/login%3Fpath%3D/dashboard/management%26expired=true')
+            }
+
+            const response = await getUserRoles({ id, token, target: user.id })
+            setUserRoles(response)
+        })()
+    }, [])
+
     if (!displayRoles) {
         return
     }
 
     return (
         <div className='bg-dark absolute right-2 top-10 rounded-lg w-fit h-fit overflow-auto p-2 z-10 select-none'>
-            {roles.map((role) => <Role key={role.id} role={role} />)}
+            {roles.map((role) => <Role key={role.id} role={role} userRoles={userRoles} />)}
         </div>
     )
 }
 
-function Role({ role }: { role: Role }) {
-    const [active, setActive] = useState(false)
+function Role({ role, userRoles }: { role: Role, userRoles: Role[] }) {
+    const [active, setActive] = useState(userRoles.some((r) => r.name === role.name))
 
     async function handleClick() {
         const id = getCookie('id')

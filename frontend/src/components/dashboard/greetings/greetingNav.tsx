@@ -1,7 +1,11 @@
 import { SquareChartGantt } from 'lucide-react'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 
-export default function GreetingNav({ text, id }: { text: string, id: string }) {
+export default async function GreetingNav({ text, id }: { text: string, id: string }) {
+    const Cookies = await cookies()
+    const roles = Cookies.get('roles')?.value
+
     return (
         <div className='flex w-full rounded-lg justify-between items-center'>
             <h1 className='text-lg md:text-2xl font-semibold flex-1'>{text}</h1>

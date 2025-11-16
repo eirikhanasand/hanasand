@@ -30,7 +30,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                 setCookie('id', data.id, 1)
                 setCookie('avatar', data.avatar, 1)
                 setCookie('access_token', data.token, 1)
-                setCookie('roles', data.roles, 1)
+                setCookie('roles', JSON.stringify(data.roles), 1)
 
                 if (path) {
                     router.push(path)

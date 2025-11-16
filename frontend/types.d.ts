@@ -160,7 +160,7 @@ type User = {
     avatar: string
 }
 
-type UserWithRole = User & { role: string }
+type UserWithRole = User & HighestRole
 
 type Thought = {
     id: string
@@ -402,8 +402,7 @@ type BlocklistEntry = {
 }
 
 type HighestRole = {
-    user_id: string
-    id: string
-    name: string
-    priority: number
+    highest_role_id: string
+    highest_role_name: string
+    highest_role_priority: string
 }

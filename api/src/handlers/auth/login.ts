@@ -49,7 +49,8 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             JOIN user_roles ur ON ur.role_id = r.id
             WHERE ur.user_id = $1
         `
-        const roles = await run(roleQuery, [id])
+        const roleResponse = await run(roleQuery, [id])
+        const roles = roleResponse.rows
         const token = await login({ id, ip })
         if (!token) {
             res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
