@@ -6,6 +6,7 @@ import '@styles/github.css'
 import { getShare } from '@/utils/share/get'
 import config from '@/config'
 import Editor from '@/components/share/editor'
+import { getCookie } from '@/utils/cookies'
 
 type CodeProps = {
     id: string
@@ -44,7 +45,9 @@ export default function Code({
     useEffect(() => {
         async function fetchShare() {
             try {
-                const data = await getShare(id)
+                const userId = getCookie('id') ?? undefined
+                const token = getCookie('access_token') ?? undefined
+                const data = await getShare({ id, token, userId })
                 if (typeof data === 'string') {
                     setError(data)
                     return
