@@ -5,7 +5,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 export default async function deleteSelf(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const id = req.headers['id']

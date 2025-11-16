@@ -12,7 +12,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     }
 
     if (!token || Array.isArray(token) || token !== config.vm_api_token) {
-        return res.status(400).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     if (!user || !vm_ip || !created_by) {

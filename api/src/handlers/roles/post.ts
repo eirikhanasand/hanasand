@@ -18,7 +18,7 @@ export default async function postRole(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'user_admin')
     if (!valid || !validRole) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const { id, name, description, created_by } = req.body as PostRoleBody ?? {}

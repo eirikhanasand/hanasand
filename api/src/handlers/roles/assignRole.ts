@@ -14,7 +14,7 @@ export default async function assignRole(req: FastifyRequest, res: FastifyReply)
     const { valid: validRole } = await hasRole(req, res, 'user_admin')
     const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
     if (!valid || !validRole || !hasPermission) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const { id } = req.params as { id: string } ?? {}

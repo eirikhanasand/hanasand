@@ -7,7 +7,7 @@ export default async function postThought(req: FastifyRequest<{ Body: { title: s
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'content_admin')
     if (!valid || !validRole) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const { title, id } = req.body ?? {}

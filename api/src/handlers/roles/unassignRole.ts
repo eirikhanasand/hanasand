@@ -12,13 +12,13 @@ export default async function unassignRole(req: FastifyRequest, res: FastifyRepl
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'user_admin')
     if (!valid || !validRole) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const { id } = req.params as { id: string } ?? {}
     const { role_id  } = req.body as { role_id: string } ?? {}
     if (!id || !role_id) {
-        return res.status(404).send({ error: 'Missing user id (id) or role id (role_id).' })
+        return res.status(400).send({ error: 'Missing user id (id) or role id (role_id).' })
     }
 
     try {

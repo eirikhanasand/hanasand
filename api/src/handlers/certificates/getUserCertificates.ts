@@ -6,7 +6,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 export default async function getUserCertificates(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     if (!id) {

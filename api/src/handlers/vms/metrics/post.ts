@@ -7,7 +7,7 @@ export default async function postVMMetrics(req: FastifyRequest, res: FastifyRep
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'system_admin')
     if (!valid || !validRole) {
-        return res.status(404).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const data = req.body as any ?? {}
