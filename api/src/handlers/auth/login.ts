@@ -14,7 +14,6 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         const ip = req.ip
         const query = 'SELECT id, name, password, avatar FROM users WHERE id = $1'
         const result = await run(query, [id])
-
         if (result.rows.length === 0) {
             return res.status(404).send({ error: 'Incorrect username or password.' })
         }
@@ -24,7 +23,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             console.log('Too many failed attempts. Please try again later.')
             return res.status(429).send({ error: 'Please try again later.' })
         }
-
+        
         const user = result.rows[0]
         const isValid = await bcrypt.compare(password, user.password)
         if (!isValid) {
@@ -45,12 +44,20 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
         const { password: _, ...userWithoutPassword } = user
 
+        const roleQuery = `
+            SELECT r.id, r.name, r.description, r.priority
+            FROM roles r
+            JOIN user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = $1
+        `
+        const roles = await run(roleQuery, [id])
+
         const token = await login({ id, ip })
         if (!token) {
             res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
         }
 
-        return res.send({ ...userWithoutPassword, token })
+        return res.send({ ...userWithoutPassword, roles, token })
     } catch (err: unknown) {
         const error = err as Error
         return res.status(500).send({ error: error.message })
