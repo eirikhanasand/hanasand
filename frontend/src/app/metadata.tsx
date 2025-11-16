@@ -5,7 +5,6 @@ const metadata: Metadata = {
     keywords: ['hanasand', 'portfolio', 'developer', 'pwned', 'editor', 'markdown', 'load test', 'cdn', 'upload', 'image', 'code'],
     authors: [{ name: 'Eirik Hanasand', url: 'https://hanasand.com' }],
     description: 'Welcome to Hanasand',
-    themeColor: '#e25822',
     creator: 'Eirik Hanasand',
     publisher: 'Eirik Hanasand',
     openGraph: {
