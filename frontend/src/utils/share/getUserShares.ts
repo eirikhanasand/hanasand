@@ -3,17 +3,16 @@ import config from '@/config'
 type GetUserSharesProps = {
     id: string
     token: string
-    userId: string
 }
 
-export async function getUserShares({ id, token, userId }: GetUserSharesProps): Promise<Share[] | string> {
+export async function getUserShares({ id, token }: GetUserSharesProps): Promise<Share[] | string> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 1000)
         const response = await fetch(`${config.url.cdn}/share/user/${id}`, { 
             headers: {
                 'Authorization': `Bearer ${token}`,
-                id: userId
+                id
             },
             signal: controller.signal
         })

@@ -8,11 +8,12 @@ import { redirect } from 'next/navigation'
 export default async function Shares() {
     const Cookies = await cookies()
     const id = Cookies.get('id')?.value
-    if (!id) {
+    const token = Cookies.get('access_token')?.value
+    if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
-    const shares = await getUserShares(id)
+    const shares = await getUserShares({ id, token })
 
     return (
         <div className='grid h-fit w-full p-2 outline-1 outline-dark rounded-lg gap-2'>
