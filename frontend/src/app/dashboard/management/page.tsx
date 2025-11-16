@@ -6,16 +6,18 @@ import Thoughts from '@/components/thoughts/thoughts'
 import Users from '@/components/users/users'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import getRoles from '@/utils/roles/getRoles'
 
 export default async function Page() {
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
     const id = Cookies.get('id')?.value
-
-    if (!name || !id) {
+    const token = Cookies.get('access_token')?.value || ''
+    if (!name || !id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
-
+    
+    const roles = await getRoles({ id, token })
     const text = timeBasedGreeting({ name })
 
     return (
@@ -26,8 +28,8 @@ export default async function Page() {
                 <div className='grid md:grid-cols-2 gap-2'>
                     <DashboardArticles />
                     <Thoughts />
-                    <Users />
-                    <Roles />
+                    <Users roles={roles} />
+                    <Roles roles={roles} />
                 </div>
             </div>
         </div>

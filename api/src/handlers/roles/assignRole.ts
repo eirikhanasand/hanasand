@@ -14,23 +14,23 @@ export default async function assignRole(req: FastifyRequest, res: FastifyReply)
     const { valid: validRole } = await hasRole(req, res, 'user_admin')
     const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
     if (!valid || !validRole || !hasPermission) {
-        return res.status(401).send({ error: 'Unauthorized.' })
+        return res.status(401).send({ status: false, error: 'Unauthorized.' })
     }
 
     const { id } = req.params as { id: string } ?? {}
     const { role_id  } = req.body as { role_id: string } ?? {}
     if (!id || !role_id) {
-        return res.status(404).send({ error: 'Missing user id (id) or role id (role_id).' })
+        return res.status(404).send({ status: false, error: 'Missing user id (id) or role id (role_id).' })
     }
 
     try {
         const query = await loadSQL('assignRole.sql')
         const result = await run(query, [id, role_id])
         if (!result.rows.length) {
-            return res.status(404).send({ error: 'No roles found.' })
+            return res.status(404).send({ status: false, error: 'No roles found.' })
         }
 
-        return res.send(result.rows)
+        return res.send({ status: true, data: result.rows[0] })
     } catch (error) {
         console.error(error)
         return res.status(500).send({ error: 'Internal Server Error.' })

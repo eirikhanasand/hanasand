@@ -1,13 +1,6 @@
-import { cookies } from 'next/headers'
 import DashboardRole from './dashboardRole'
-import fetchRoles from '@/utils/roles/getRoles'
 
-export default async function Roles() {
-    const Cookies = await cookies()
-    const token = Cookies.get('access_token')?.value || ''
-    const id = Cookies.get('id')?.value || ''
-    const roles = await fetchRoles({ id, token })
-
+export default async function Roles({ roles }: { roles: Role[] }) {
     return (
         <div className='grid w-full p-2 outline-1 outline-dark h-fit rounded-lg gap-2'>
             <div className='flex justify-between'>
