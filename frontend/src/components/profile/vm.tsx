@@ -8,10 +8,10 @@ import prettyDate from '@/utils/prettyDate'
 
 export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const keys = useKeyPress('Shift')
+    const keys = useKeyPress('shift')
 
     async function handleClick() {
-        if (keys['Shift']) {
+        if (keys['shift']) {
             const result = await deleteVM(vm.id)
             if (result.status === 200) {
                 update()
@@ -25,7 +25,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
         <>
             <div
                 onClick={handleClick}
-                className={`rounded-lg ${keys['Shift']
+                className={`rounded-lg ${keys['shift']
                         ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none'
                         : 'hover:bg-dark'
                     } cursor-pointer p-2 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
@@ -53,7 +53,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                             </div>
                         </div>
                     </div>
-                    {keys['Shift'] && <Trash2 className='hidden group-hover:block group-hover:min-w-fit stroke-red-500 w-5 h-5' />}
+                    {keys['shift'] && <Trash2 className='hidden group-hover:block group-hover:min-w-fit stroke-red-500 w-5 h-5' />}
                 </div>
             </div>
             <div className='absolute top-2 right-2 z-1200'>

@@ -10,7 +10,7 @@ import Tooltip from '../tooltip/tooltip'
 
 export default function Certificate({ certificate, update }: { certificate: Certificate, update: () => void }) {
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const keys = useKeyPress('Shift')
+    const keys = useKeyPress('shift')
     const lastSpace = certificate.public_key.lastIndexOf(' ')
     const isManaged = certificate.public_key.endsWith('Hanasand API')
     const endsWith = certificate.public_key.includes(' ')
@@ -20,12 +20,12 @@ export default function Certificate({ certificate, update }: { certificate: Cert
     // const router = useRouter()
 
     async function handleClick() {
-        if (!keys['Shift']) {
+        if (!keys['shift']) {
             // router.push(`/profile/${user.id}`)
             // Not sure what to display when clicked? Maybe usage?
         }
 
-        if (keys['Shift']) {
+        if (keys['shift']) {
             const result = await deleteCertificate(certificate.id)
             if (result.status === 200) {
                 update()
@@ -37,7 +37,7 @@ export default function Certificate({ certificate, update }: { certificate: Cert
 
     return (
         <>
-            <div onClick={handleClick} className={`rounded-lg ${keys['Shift'] ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none' : 'hover:bg-dark'} cursor-pointer p-2 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}>
+            <div onClick={handleClick} className={`rounded-lg ${keys['shift'] ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none' : 'hover:bg-dark'} cursor-pointer p-2 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}>
                 <div className='flex w-full items-center'>
                     <div className='flex-1 overflow-auto'>
                         <div className='flex gap-2'>
@@ -82,7 +82,7 @@ export default function Certificate({ certificate, update }: { certificate: Cert
                             )}
                         </div>
                     </div>
-                    {keys['Shift'] && <Trash2 className='hidden group-hover:block group-hover:min-w-fit stroke-red-500 w-5 h-5' />}
+                    {keys['shift'] && <Trash2 className='hidden group-hover:block group-hover:min-w-fit stroke-red-500 w-5 h-5' />}
                 </div>
             </div>
             <div className='absolute top-2 right-2 z-1200'>

@@ -11,12 +11,14 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const Cookies = await cookies()
     const openFoldersCookie = Cookies.get('openFolders')
     const openFilesCookie = Cookies.get('openFiles')
+    const userId = Cookies.get('id')?.value
+    const token = Cookies.get('access_token')?.value
     const sharePageWidth = Number(Cookies.get('sharePageWidth')?.value) || 0
     const shareTerminalHeight = Number(Cookies.get('shareTerminalHeight')?.value) || 0
     const openFolders: string[] = openFoldersCookie?.value ? JSON.parse(openFoldersCookie?.value ?? '') || [] as string[] : [] as string[]
     const openFiles: OpenFile[] = openFilesCookie?.value ? JSON.parse(openFilesCookie?.value ?? null) || [] as OpenFile[] : [] as OpenFile[]
-    const tree = await getTree(id)
-    const share = await getShare(id)
+    const tree = await getTree({ id, token, userId })
+    const share = await getShare({ id, token, userId })
     const safeShare = typeof share === 'string' ? null : share
 
     return (
