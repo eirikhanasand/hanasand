@@ -3,16 +3,13 @@ import { cookies, headers } from 'next/headers'
 import Footer from '@/components/footer/footer'
 import './globals.css'
 import Header from '@/components/header/header'
-
-export const metadata = {
-    title: 'Eirik Hanasand',
-    description: 'Welcome to my world',
-}
+export { default as metadata } from './metadata'
+export { default as viewport } from './metadata'
 
 export default async function layout({ children }: { children: ReactNode }) {
     const Cookies = await cookies()
-    const token = Boolean(Cookies.get('access_token')?.value) || false
     const Headers = await headers()
+    const token = Boolean(Cookies.get('access_token')?.value) || false
     const theme = Cookies.get('theme')?.value || 'dark'
     const path = Headers.get('x-current-path') || ''
     const isShare = path.includes('/s')
