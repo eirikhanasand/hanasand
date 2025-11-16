@@ -20,7 +20,7 @@ export default async function getRolesForUser(req: FastifyRequest, res: FastifyR
     try {
         const result = await run(`SELECT * FROM user_roles WHERE user_id = $1`, [id])
         if (!result.rows.length) {
-            return res.status(404).send({ error: 'No roles found.' })
+            return res.status(200).send([])
         }
 
         return res.send(result.rows)
