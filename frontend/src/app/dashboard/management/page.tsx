@@ -22,7 +22,7 @@ export default async function Page() {
 
     return (
         <div className='h-full w-full'>
-            <div className='px-8 md:px-32 py-4 md:py-8 grid gap-2 w-full'>
+            <div className='px-8 md:px-16 lg:px-32 py-4 md:py-8 grid gap-2 w-full'>
                 <GreetingNav text={text} id={id} />
                 <GreetingNavButtons id={id} />
                 <div className='grid md:grid-cols-2 gap-2'>
