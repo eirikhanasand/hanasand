@@ -29,14 +29,16 @@ export default function FileNode({
     setIsCreatingNewFile,
     selectedFolder,
     setSelectedFolder,
-    setTree
+    setTree,
 }: FileNodeProps) {
     const { isOpen, toggleFolder } = useFolderState()
-    const pathname = usePathname()
     const open = isOpen(file.id)
-    const firstFileInFolder = tree[0].id === file.id
+    const pathname = usePathname()
     const isActive = pathname.includes(`/s/${file.id}`)
     const isFolderActive = selectedFolder === file.id
+    const isFirstFileInFolder = tree[0].id === file.id
+    const firstFileInSelectedFolder = isFirstFileInFolder && selectedFolder === file.parent
+    const shouldDisplay = Boolean((!selectedFolder && !file.parent) || (selectedFolder && firstFileInSelectedFolder))
 
     function handleFolderClick() {
         setSelectedFolder(file.id)
@@ -49,18 +51,26 @@ export default function FileNode({
         }
     }, [])
 
+    useEffect(() => {
+        const shouldDisplayNewFile = selectedFolder === file.id
+        if (file.type === 'folder' && !open && isCreatingNewFile && shouldDisplayNewFile) {
+            handleFolderClick()
+        }
+    }, [open, isCreatingNewFile, selectedFolder, file])
+
     if (file.type === 'folder') {
         const hasChildren = Boolean(file.children?.length)
+
         return (
             <li className='space-y-1' onClick={(e) => e.stopPropagation()}>
                 <div
                     onClick={handleFolderClick}
-                    className={`flex items-center gap-2 cursor-pointer ${isFolderActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md px-2 py-1 text-gray-400 text-sm`}
+                    className={`flex items-center gap-2 cursor-pointer ${isFolderActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md px-2 py-1 text-bright/80 text-sm`}
                 >
                     {open ? <FolderOpen size={16} /> : <Folder size={16} />}
                     <span>{file.name}</span>
                 </div>
-                {!hasChildren && <div className='ml-3.5 border-l group-hover:bg-light/70 border-transparent rounded-lg'>
+                {!hasChildren && <div className='ml-3.5 group-hover:bg-light/70 rounded-md'>
                     <NewFile
                         isCreatingNewFile={isCreatingNewFile}
                         display={isFolderActive}
@@ -68,11 +78,12 @@ export default function FileNode({
                         setNewFileName={setNewFileName}
                         setIsCreatingNewFile={setIsCreatingNewFile}
                         file={file}
+                        tree={tree}
                         setTree={setTree}
                     />
                 </div>}
                 {open && file.children && (
-                    <div className='ml-3.5 border-l group-hover:bg-light/70 border-transparent'>
+                    <div className='ml-3.5'>
                         <Tree
                             tree={file.children}
                             newFileName={newFileName}
@@ -93,16 +104,17 @@ export default function FileNode({
         <>
             <NewFile
                 isCreatingNewFile={isCreatingNewFile}
-                display={!selectedFolder && !isFolderActive && firstFileInFolder}
+                display={isFirstFileInFolder && shouldDisplay}
                 newFileName={newFileName}
                 setNewFileName={setNewFileName}
                 setIsCreatingNewFile={setIsCreatingNewFile}
                 file={file}
+                tree={tree}
                 setTree={setTree}
             />
             <Link href={file.id} className={`flex items-center gap-2 px-2 py-1 ${isActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md cursor-pointer`}>
-                <File size={14} className='text-gray-400' />
-                <span className='text-sm text-gray-400'>{file.name}</span>
+                <File size={14} className='text-bright/80' />
+                <span className='text-sm text-bright/80'>{file.name}</span>
             </Link>
         </>
     )
