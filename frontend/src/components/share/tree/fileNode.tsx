@@ -8,8 +8,10 @@ import { Dispatch, SetStateAction } from 'react'
 import postShare from '@/utils/share/post'
 import randomId from '@/utils/random/randomId'
 import { getCookie } from '@/utils/cookies'
+import { useRouter } from 'next/navigation'
 
 type FileNodeProps = {
+    tree: Tree
     file: FileItem
     newFileName: string
     setNewFileName: Dispatch<SetStateAction<string>>
@@ -19,6 +21,7 @@ type FileNodeProps = {
 }
 
 export default function FileNode({
+    tree,
     file,
     newFileName,
     setNewFileName,
@@ -27,16 +30,19 @@ export default function FileNode({
     setTree
 }: FileNodeProps) {
     const { isOpen, toggleFolder } = useFolderState()
+    const router = useRouter()
     const open = isOpen(file.id)
-    
+    const firstFileInFolder = tree[0].id === file.id
+
     async function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
         const id = getCookie('id')
         const token = getCookie('access_token')
         if (e.key === 'Enter') {
+            const newFileId = randomId()
             const response = await postShare({
                 includeTree: true,
-                id: randomId(),
-                content: '', 
+                id: newFileId,
+                content: '',
                 name: newFileName,
                 parent: file.id,
                 type: isCreatingNewFile ?? 'file',
@@ -45,7 +51,10 @@ export default function FileNode({
             })
 
             if (response && ('tree' in response)) {
+                setIsCreatingNewFile(null)
+                setNewFileName('')
                 setTree(response.tree)
+                router.push(`/s/${newFileId}`)
             }
         }
     }
@@ -78,7 +87,7 @@ export default function FileNode({
 
     return (
         <>
-            {isCreatingNewFile && <div className='flex items-center gap-2 px-2 py-1 hover:bg-light/70 rounded-md cursor-pointer'>
+            {isCreatingNewFile && firstFileInFolder && <div className='flex items-center gap-2 px-2 py-1 hover:bg-light/70 rounded-md cursor-pointer'>
                 {isCreatingNewFile === 'folder'
                     ? <Folder size={14} className='text-gray-400' />
                     : <File size={14} className='text-gray-400' />
