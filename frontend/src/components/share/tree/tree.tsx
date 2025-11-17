@@ -24,6 +24,7 @@ export default function Tree({
         <ul className='group space-y-1'>
             {tree.map((file) => (
                 <FileNode
+                    tree={tree}
                     key={file.id}
                     file={file}
                     newFileName={newFileName}
