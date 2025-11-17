@@ -43,21 +43,21 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
         <div className='p-2 flex justify-between items-center rounded-lg'>
             <div className='grid w-full gap-4'>
                 <div className='flex gap-2'>
-                    <Eye className='text-gray-400' height={18} width={18} />
-                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-gray-400'}`}>
+                    <Eye className='text-bright/80' height={18} width={18} />
+                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-bright/80'}`}>
                         {participants}
                     </span>
-                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-gray-400'}`}>
+                    <span className={`text-sm ${isConnected ? 'text-green-400' : 'text-bright/80'}`}>
                         {isConnected ? 'Connected' : 'Offline'}
                     </span>
                 </div>
-                <span className='gap-2 text-sm text-gray-400 flex'>
+                <span className='gap-2 text-sm text-bright/80 flex'>
                     <Pencil height={18} width={18} />
                     <h1>{prettyDate(share.timestamp)}</h1>
                 </span>
                 <span
                     onClick={() => copy({ type: 'link', text: window.location.href, setDidCopy })}
-                    className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'
+                    className='flex gap-2 text-sm text-bright/80 w-full overflow-hidden cursor-pointer'
                 >
                     <Link
                         className={copyColorLink}
@@ -71,7 +71,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                 {aliasText !== linkText && (
                     <span
                         onClick={() => copy({ type: 'alias', text: `https://${share.alias}.hanasand.com`, setDidCopy })}
-                        className='flex gap-2 text-sm text-gray-400 w-full overflow-hidden cursor-pointer'
+                        className='flex gap-2 text-sm text-bright/80 w-full overflow-hidden cursor-pointer'
                     >
                         <MessageCircleHeart
                             className={copyColorAlias}
@@ -83,15 +83,15 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                         </div>
                     </span>
                 )}
-                <span className='gap-2 text-sm text-gray-400 flex'>
+                <span className='gap-2 text-sm text-bright/80 flex'>
                     <BookText height={18} width={18} />
                     <h1>{wordText}</h1>
                 </span>
-                <span className='gap-2 text-sm text-gray-400 flex'>
+                <span className='gap-2 text-sm text-bright/80 flex'>
                     <ListOrdered height={18} width={18} />
                     <h1>{lineText}</h1>
                 </span>
-                <span className='gap-2 text-sm text-gray-400 flex'>
+                <span className='gap-2 text-sm text-bright/80 flex'>
                     <Timer height={18} width={18} />
                     <h1>{readText}</h1>
                 </span>
