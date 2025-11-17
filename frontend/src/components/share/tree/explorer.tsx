@@ -26,6 +26,7 @@ export default function Explorer({
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
     const [isCreatingNewFile, setIsCreatingNewFile] = useState<'file' | 'folder' | null>(null)
     const [newFileName, setNewFileName] = useState('')
+    const [selectedFolder, setSelectedFolder] = useState('')
     const [tree, setTree] = useState(serverTree)
     useHideIfLittleSpace({ set: setShowExplorer })
 
@@ -47,7 +48,7 @@ export default function Explorer({
 
     return (
         <div className='min-w-fit w-[15vw] h-full'>
-            <div className='outline outline-dark rounded-lg p-2 h-full space-y-2'>
+            <div className='outline outline-dark rounded-lg p-2 h-full space-y-2 overflow-auto'>
                 <div className='outline outline-dark rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
                     <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />
                 </div>
@@ -56,13 +57,18 @@ export default function Explorer({
                 </div>}
                 {tree && share && (
                     <OpenFoldersProvider serverOpenFolders={openFolders}>
-                        <TreeHeader share={share} setIsCreatingNewFile={setIsCreatingNewFile} />
+                        <TreeHeader 
+                            share={share} 
+                            setIsCreatingNewFile={setIsCreatingNewFile}
+                        />
                         <Tree
                             tree={tree}
                             newFileName={newFileName}
                             setNewFileName={setNewFileName}
                             isCreatingNewFile={isCreatingNewFile}
                             setIsCreatingNewFile={setIsCreatingNewFile}
+                            selectedFolder={selectedFolder}
+                            setSelectedFolder={setSelectedFolder}
                             setTree={setTree}
                         />
                     </OpenFoldersProvider>

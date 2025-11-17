@@ -4,11 +4,9 @@ import useFolderState from '@/hooks/useFolderState'
 import { File, Folder, FolderOpen } from 'lucide-react'
 import Link from 'next/link'
 import Tree from './tree'
-import { Dispatch, SetStateAction } from 'react'
-import postShare from '@/utils/share/post'
-import randomId from '@/utils/random/randomId'
-import { getCookie } from '@/utils/cookies'
-import { useRouter } from 'next/navigation'
+import { Dispatch, SetStateAction, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
+import NewFile from './newFile'
 
 type FileNodeProps = {
     tree: Tree
@@ -17,6 +15,8 @@ type FileNodeProps = {
     setNewFileName: Dispatch<SetStateAction<string>>
     isCreatingNewFile: 'file' | 'folder' | null
     setIsCreatingNewFile: Dispatch<SetStateAction<'file' | 'folder' | null>>
+    selectedFolder: string
+    setSelectedFolder: Dispatch<SetStateAction<string>>
     setTree: Dispatch<SetStateAction<Tree | null>>
 }
 
@@ -27,56 +27,60 @@ export default function FileNode({
     setNewFileName,
     isCreatingNewFile,
     setIsCreatingNewFile,
+    selectedFolder,
+    setSelectedFolder,
     setTree
 }: FileNodeProps) {
     const { isOpen, toggleFolder } = useFolderState()
-    const router = useRouter()
+    const pathname = usePathname()
     const open = isOpen(file.id)
     const firstFileInFolder = tree[0].id === file.id
+    const isActive = pathname.includes(`/s/${file.id}`)
+    const isFolderActive = selectedFolder === file.id
 
-    async function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-        const id = getCookie('id')
-        const token = getCookie('access_token')
-        if (e.key === 'Enter') {
-            const newFileId = randomId()
-            const response = await postShare({
-                includeTree: true,
-                id: newFileId,
-                content: '',
-                name: newFileName,
-                parent: file.id,
-                type: isCreatingNewFile ?? 'file',
-                token,
-                userId: id
-            })
-
-            if (response && ('tree' in response)) {
-                setIsCreatingNewFile(null)
-                setNewFileName('')
-                setTree(response.tree)
-                router.push(`/s/${newFileId}`)
-            }
-        }
+    function handleFolderClick() {
+        setSelectedFolder(file.id)
+        toggleFolder(file.id)
     }
 
+    useEffect(() => {
+        if (isActive && !selectedFolder && file.parent) {
+            setSelectedFolder(file.parent)
+        }
+    }, [])
+
     if (file.type === 'folder') {
+        const hasChildren = Boolean(file.children?.length)
         return (
-            <li>
+            <li className='space-y-1' onClick={(e) => e.stopPropagation()}>
                 <div
-                    onClick={() => toggleFolder(file.id)}
-                    className='flex items-center gap-2 cursor-pointer hover:bg-light/70 rounded-md px-2 py-1 text-gray-400 text-sm'
+                    onClick={handleFolderClick}
+                    className={`flex items-center gap-2 cursor-pointer ${isFolderActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md px-2 py-1 text-gray-400 text-sm`}
                 >
                     {open ? <FolderOpen size={16} /> : <Folder size={16} />}
                     <span>{file.name}</span>
                 </div>
+                {!hasChildren && <div className='ml-3.5 border-l group-hover:bg-light/70 border-transparent rounded-lg'>
+                    <NewFile
+                        isCreatingNewFile={isCreatingNewFile}
+                        display={isFolderActive}
+                        newFileName={newFileName}
+                        setNewFileName={setNewFileName}
+                        setIsCreatingNewFile={setIsCreatingNewFile}
+                        file={file}
+                        setTree={setTree}
+                    />
+                </div>}
                 {open && file.children && (
-                    <div className='ml-3.5 border-l group-hover:border-gray-400/40 border-transparent'>
+                    <div className='ml-3.5 border-l group-hover:bg-light/70 border-transparent'>
                         <Tree
                             tree={file.children}
                             newFileName={newFileName}
                             setNewFileName={setNewFileName}
                             isCreatingNewFile={isCreatingNewFile}
                             setIsCreatingNewFile={setIsCreatingNewFile}
+                            selectedFolder={selectedFolder}
+                            setSelectedFolder={setSelectedFolder}
                             setTree={setTree}
                         />
                     </div>
@@ -87,20 +91,16 @@ export default function FileNode({
 
     return (
         <>
-            {isCreatingNewFile && firstFileInFolder && <div className='flex items-center gap-2 px-2 py-1 hover:bg-light/70 rounded-md cursor-pointer'>
-                {isCreatingNewFile === 'folder'
-                    ? <Folder size={14} className='text-gray-400' />
-                    : <File size={14} className='text-gray-400' />
-                }
-                <input
-                    autoFocus
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    className='text-sm text-gray-400 outline-none'
-                    onKeyDown={handleKeyDown}
-                />
-            </div>}
-            <Link href={file.id} className='flex items-center gap-2 px-2 py-1 hover:bg-light/70 rounded-md cursor-pointer'>
+            <NewFile
+                isCreatingNewFile={isCreatingNewFile}
+                display={!selectedFolder && !isFolderActive && firstFileInFolder}
+                newFileName={newFileName}
+                setNewFileName={setNewFileName}
+                setIsCreatingNewFile={setIsCreatingNewFile}
+                file={file}
+                setTree={setTree}
+            />
+            <Link href={file.id} className={`flex items-center gap-2 px-2 py-1 ${isActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md cursor-pointer`}>
                 <File size={14} className='text-gray-400' />
                 <span className='text-sm text-gray-400'>{file.name}</span>
             </Link>
