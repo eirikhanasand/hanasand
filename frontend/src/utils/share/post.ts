@@ -1,22 +1,40 @@
 import config from '@/config'
 
 type PostShareProps = {
-    path: string
+    id: string
     content: string
+    includeTree?: boolean
+    path?: string
     name?: string
     parent?: string
     type?: string
+    token?: string | null
+    userId?: string | null
 }
 
-export async function postShare({path, content, name, parent, type}: PostShareProps): Promise<Share | null> {
+export default async function postShare({
+    includeTree,
+    id,
+    path,
+    content,
+    name,
+    parent,
+    type,
+    token,
+    userId
+}: PostShareProps): Promise<Share | ShareWithTree | null> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
         const response = await fetch(`${config.url.cdn}/share`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, path, content, parent, type }),
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                id: userId || ''
+            },
+            body: JSON.stringify({ id, includeTree, name, path, content, parent, type }),
             signal: controller.signal
         })
 

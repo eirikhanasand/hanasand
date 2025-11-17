@@ -115,6 +115,8 @@ type Share = {
     alias: string
 }
 
+type ShareWithTree = Share & { tree: Tree }
+
 type Link = {
     id: string
     path: string

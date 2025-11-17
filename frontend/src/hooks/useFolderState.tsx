@@ -26,7 +26,9 @@ export function OpenFoldersProvider({ children, serverOpenFolders }: { children:
         if (saved) {
             try {
                 const parsed = JSON.parse(saved)
-                if (Array.isArray(parsed)) setOpenFolders(parsed)
+                if (Array.isArray(parsed)) {
+                    setOpenFolders(parsed)
+                }
             } catch {
                 console.warn('Invalid openFolders cookie')
             }
