@@ -1,3 +1,5 @@
+'use client'
+
 import useFolderState from '@/hooks/useFolderState'
 import { File, Folder, FolderOpen } from 'lucide-react'
 import Link from 'next/link'
@@ -26,10 +28,10 @@ export default function FileNode({
 }: FileNodeProps) {
     const { isOpen, toggleFolder } = useFolderState()
     const open = isOpen(file.id)
-    const id = getCookie('id')
-    const token = getCookie('access_token')
-
+    
     async function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+        const id = getCookie('id')
+        const token = getCookie('access_token')
         if (e.key === 'Enter') {
             const response = await postShare({
                 includeTree: true,
