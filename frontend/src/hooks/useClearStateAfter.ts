@@ -14,7 +14,7 @@ type ClearStateAfterProps = {
 // Generic function to clear any variable after x seconds. 
 export default function useClearStateAfter({
     initialState = null,
-    timeout = 5000,
+    timeout: passedTimeout = 5000,
     onClear
 }: ClearStateAfterInputProps = {}): ClearStateAfterProps {
     const [condition, setCondition] = useState<string | null | boolean>(initialState)
@@ -28,10 +28,10 @@ export default function useClearStateAfter({
             if (onClear) {
                 onClear()
             }
-        }, 5000)
+        }, passedTimeout)
 
         return () => clearTimeout(timeout)
-    }, [condition, setCondition, timeout, onClear])
+    }, [condition, setCondition, passedTimeout, onClear])
 
     return { condition, setCondition }
 }
