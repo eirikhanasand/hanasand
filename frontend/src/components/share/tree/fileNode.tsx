@@ -59,7 +59,7 @@ export default function FileNode({
     }, [open, isCreatingNewFile, selectedFolder, file])
 
     if (file.type === 'folder') {
-        const hasChildren = Boolean(file.children?.length)
+        const hasChildren = Boolean(file.children?.filter((f) => f.type === 'file').length)
 
         return (
             <li className='space-y-1' onClick={(e) => e.stopPropagation()}>

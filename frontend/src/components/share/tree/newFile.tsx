@@ -60,7 +60,7 @@ export default function NewFile({
                 id: newFileId,
                 content: '',
                 name: newFileName,
-                parent: file.id,
+                parent: file.type === 'folder' ? file.id : file.parent || undefined,
                 type: isCreatingNewFile ?? 'file',
                 token,
                 userId: id
