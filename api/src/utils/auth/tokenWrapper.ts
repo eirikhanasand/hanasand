@@ -36,7 +36,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         return {
             valid: false,
             id,
-            error: 'Missing or invalid Authorization header.'
+            error: 'Unauthorized.'
         }
     }
 
@@ -44,7 +44,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         return {
             valid: false,
             id,
-            error: 'No id provided.'
+            error: 'Unauthorized.'
         }
     }
 
