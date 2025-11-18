@@ -49,6 +49,7 @@ import putVMMetrics from './handlers/vms/metrics/put.ts'
 import deleteVMMetrics from './handlers/vms/metrics/delete.ts'
 import getVMNames from './handlers/vms/getNames.ts'
 import postVMDetails from './handlers/vms/postVMDetails.ts'
+import deleteVMs from './handlers/vms/deleteVMs.ts'
 
 /**
  * Defines the routes available in the API.
@@ -127,7 +128,8 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.post('/vm', postVM)
     fastify.post('/vm/details', postVMDetails)
     fastify.delete('/vm/:id', deleteVM)
-    
+    fastify.delete('/vms', deleteVMs)
+
     // vm metrics
     fastify.get('/vm/metrics/:id', getVMMetrics)
     fastify.post('/vm/metrics', postVMMetrics)

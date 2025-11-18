@@ -3,7 +3,8 @@ import run from '#db'
 import config from '#constants'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
-    const token = req.headers['Authorization']
+    const tokenHeader = req.headers['authorization'] || ''
+    const token = tokenHeader.split(' ')[1] ?? ''
     const { name, user, created_by, access_users } = req.body as {
         name: string
         user: string

@@ -15,7 +15,8 @@ const requiredFields: (keyof PostVmDetails)[] = [
 ]
 
 export default async function postVMDetails(req: FastifyRequest, res: FastifyReply) {
-    const token = req.headers['Authorization']
+    const tokenHeader = req.headers['authorization'] || ''
+    const token = tokenHeader.split(' ')[1] ?? ''
     const { 
         name, status, type, architecture, created, last_used,
         config_architecture, config_image_architecture, config_image_description,
