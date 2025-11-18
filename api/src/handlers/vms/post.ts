@@ -5,9 +5,9 @@ import config from '#constants'
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const tokenHeader = req.headers['authorization'] || ''
     const token = tokenHeader.split(' ')[1] ?? ''
-    const { name, user, created_by, access_users } = req.body as {
+    const { name, owner, created_by, access_users } = req.body as {
         name: string
-        user: string
+        owner: string
         created_by: string
         access_users?: string[]
     } ?? {}
@@ -16,14 +16,14 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    if (!name || !user || !created_by) {
+    if (!name || !owner || !created_by) {
         return res.status(400).send({ error: "Missing required fields" })
     }
 
     try {
         const result = await run(
             "INSERT INTO vms (name, owner, created_by, access_users) VALUES ($1, $2, $3, $4) RETURNING *",
-            [name, user, created_by, access_users || null]
+            [name, owner, created_by, access_users || null]
         )
 
         return res.status(201).send(result.rows[0])
