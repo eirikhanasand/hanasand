@@ -123,12 +123,12 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // vms
     fastify.get('/vm/:id', getVM)
-    fastify.get('/vms/shutdown', shutdownVMs)
     fastify.get('/vms/names', getVMNames)
     fastify.get('/vms/:user', getVM)
     fastify.get('/vms/access/:user', getAccessibleVMs)
     fastify.post('/vm', postVM)
     fastify.post('/vm/details', postVMDetails)
+    fastify.post('/vms/shutdown', shutdownVMs)
     fastify.delete('/vm/:id', deleteVM)
     fastify.delete('/vms', deleteVMs)
 
