@@ -12,7 +12,7 @@ export default async function getVMNames(req: FastifyRequest, res: FastifyReply)
     try {
         const result = await run('SELECT name FROM vms;')
         if (result.rows.length === 0) {
-            return res.status(404).send({ error: "No VMs found." })
+            return res.status(200).send([])
         }
 
         return res.send(result.rows)
