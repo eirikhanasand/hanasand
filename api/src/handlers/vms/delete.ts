@@ -11,7 +11,6 @@ export default async function deleteVM(req: FastifyRequest, res: FastifyReply) {
     }
 
     const { id } = req.params as { id: string }
-
     if (!id) {
         return res.status(400).send({ error: "Missing VM id parameter" })
     }
