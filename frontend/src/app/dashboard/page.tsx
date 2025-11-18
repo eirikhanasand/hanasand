@@ -26,8 +26,8 @@ export default async function Page() {
                 <GreetingNavButtons id={id} />
                 <div className='grid md:grid-cols-2 gap-2'>
                     <Projects />
-                    <Shares />
                     <VMs vms={vms} />
+                    <Shares />
                 </div>
             </div>
         </div>

@@ -410,5 +410,10 @@ type HighestRole = {
 }
 
 type Project = {
-    id: string
+    alias: string
+    owner: string
+    editors: string[]
+    file_count: number
+    total_size: number
+    last_updated: string
 }

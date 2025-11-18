@@ -25,7 +25,7 @@ export default async function Projects() {
                     <h1 className='font-semibold select-none'>Create</h1>
                 </Link>
             </div>
-            {(projects as Project[]).map((project) => <DashboardProject key={project.id} project={project} />)}
+            {(projects as Project[]).map((project) => <DashboardProject key={project.alias} project={project} />)}
         </div>
     )
 }
