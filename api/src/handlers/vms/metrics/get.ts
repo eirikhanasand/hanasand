@@ -2,15 +2,15 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 
 export default async function getVMMetrics(req: FastifyRequest, res: FastifyReply) {
-    const { id, vmId } = req.params as { id?: string; vmId?: string }
+    const { id, name } = req.params as { id?: string; name?: string }
 
     try {
         let result
 
         if (id) {
-            result = await run("SELECT * FROM vm_metrics WHERE id = $1", [id])
-        } else if (vmId) {
-            result = await run("SELECT * FROM vm_metrics WHERE vm_id = $1 ORDER BY created_at DESC", [vmId])
+            result = await run("SELECT * FROM vm_metrics WHERE name = $1", [id])
+        } else if (name) {
+            result = await run("SELECT * FROM vm_metrics WHERE name = $1 ORDER BY created_at DESC", [name])
         } else {
             result = await run("SELECT * FROM vm_metrics ORDER BY created_at DESC")
         }

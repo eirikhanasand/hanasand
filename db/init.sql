@@ -213,12 +213,12 @@ CREATE TABLE IF NOT EXISTS vm_metrics (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-
 -- Index on user-roles 
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 
 -- VM metrics indexes
-CREATE INDEX IF NOT EXISTS idx_vm_metrics_vm_id ON vm_metrics(vm_id);
+CREATE INDEX IF NOT EXISTS idx_vm_metrics_id ON vm_metrics(id);
+CREATE INDEX IF NOT EXISTS idx_vm_metrics_name ON vm_metrics(name);
 CREATE INDEX IF NOT EXISTS idx_vm_metrics_created_at ON vm_metrics(created_at);
 
 -- Logs connections to the database

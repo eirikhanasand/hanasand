@@ -11,8 +11,8 @@ export default async function postVMMetrics(req: FastifyRequest, res: FastifyRep
     }
 
     const data = req.body as any ?? {}
-    if (!data || !data.vm_id) {
-        return res.status(400).send({ error: "Missing vm_id" })
+    if (!data || !data.name) {
+        return res.status(400).send({ error: "Missing name" })
     }
 
     try {
