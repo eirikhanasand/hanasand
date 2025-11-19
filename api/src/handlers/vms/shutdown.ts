@@ -15,24 +15,15 @@ export default async function shutdownVMs(req: FastifyRequest, res: FastifyReply
     }
 
     try {
-        const values: string[] = []
-        const params: any[] = []
-
-        vms.forEach((vm, idx) => {
-            const paramIndex = idx + 1
-            values.push(`($${paramIndex})`)
-            params.push(vm)
-        })
-
         const query = `
             INSERT INTO vm_shutdown (name, "time")
-            VALUES ${values.join(', ')}
+            SELECT unnest($1::text[]) AS name, NOW() + INTERVAL '20 minutes'
             ON CONFLICT (name) DO UPDATE
             SET "time" = NOW() + INTERVAL '20 minutes'
             RETURNING *
         `
 
-        const result = await run(query, params)
+        const result = await run(query, [vms])
         return res.status(201).send(result.rows)
     } catch (error) {
         console.error(error)
