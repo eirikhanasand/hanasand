@@ -13,16 +13,14 @@ type HeaderProps = {
 }
 
 export default function Info({ share, isConnected, participants }: HeaderProps) {
-    const [didCopy, setDidCopy] = useState<string | boolean>(false)
     const [linkText, setLinkText] = useState(share?.id || '')
     const aliasText = share?.alias || ''
     const { condition: error } = useClearStateAfter()
-
-    useEffect(() => {
-        setTimeout(() => {
-            setDidCopy(false)
-        }, 1000)
-    }, [didCopy])
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
+        initialState: false, 
+        timeout: 1000,
+        onClear: () => setDidCopy(false)
+    })
 
     useEffect(() => {
         setLinkText(window.location.href.split('/').reverse()[0])

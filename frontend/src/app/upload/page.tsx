@@ -20,7 +20,7 @@ export default function Page() {
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
         initialState: false, 
         timeout: 1000, 
-        onClear: () => {setDidCopy(false)} 
+        onClear: () => setDidCopy(false) 
     })
 
     function handleReset() {

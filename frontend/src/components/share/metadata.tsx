@@ -52,20 +52,18 @@ export default function Metadata({
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const [id, setId] = useState(randomServerId)
-    const [didCopy, setDidCopy] = useState<string | boolean>(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     HideIfLittleSpace({ set: setShowMetadata })
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
+        initialState: false, 
+        timeout: 350,
+        onClear: () => setDidCopy(false)
+    })
 
     useEffect(() => {
         const random = randomId()
         setId(random)
     }, [])
-
-    useEffect(() => {
-        setTimeout(() => {
-            setDidCopy(false)
-        }, 350)
-    }, [didCopy])
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'

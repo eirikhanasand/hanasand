@@ -12,7 +12,11 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
     const [id, setId] = useState('')
     const [path, setPath] = useState('')
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const [didCopy, setDidCopy] = useState<boolean | string>(false)
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
+        initialState: false, 
+        timeout: 350,
+        onClear: () => setDidCopy(false)
+    })
     const isValidLink = path.includes('http') || (path.includes('.') && path.length > 2) || path.includes(':')
     const color = isValidLink ? 'bg-blue-500/80 cursor-pointer glow-blue' : path.length > 0 ? 'bg-red-500 cursor-not-allowed' : 'outline outline-dark cursor-not-allowed'
     const fullUrl = `https://hanasand.com/g/${serverId}`
@@ -36,12 +40,6 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
             return redirect(`/g?created=true&id=${result.id}`)
         }
     }
-
-    useEffect(() => {
-        setTimeout(() => {
-            setDidCopy(false)
-        }, 350)
-    }, [didCopy])
 
     if (created) {
         return (

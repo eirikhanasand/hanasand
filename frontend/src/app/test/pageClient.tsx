@@ -7,17 +7,21 @@ import copy from '@/utils/copy'
 import { postTest } from '@/utils/test/postTest'
 import { Copy } from 'lucide-react'
 import { redirect } from 'next/navigation'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useState } from 'react'
 
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [path, setPath] = useState('')
-    const [didCopy, setDidCopy] = useState<boolean | string>(false)
     const isValidLink =
     (path.includes('http://') && path.includes('.') && path.length >= 10)
     || (path.includes('https://') && path.includes('.') && path.length >= 11)
     const color = isValidLink ? 'bg-orange-500/80 cursor-pointer glow-orange-small' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'outline outline-dark cursor-not-allowed'
     const fullUrl = `${config.url.link}/${serverId}`
     const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
+        initialState: false, 
+        timeout: 350,
+        onClear: () => setDidCopy(false)
+    })
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         if (!isValidLink) {
@@ -34,12 +38,6 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
             redirect(`/test/${result.id}`)
         }
     }
-
-    useEffect(() => {
-        setTimeout(() => {
-            setDidCopy(false)
-        }, 350)
-    }, [didCopy])
 
     if (created) {
         return (
