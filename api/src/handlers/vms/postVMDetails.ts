@@ -52,7 +52,8 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
                 volatile_last_state_power, volatile_uuid,
                 volatile_uuid_generation, volatile_vsock_id,
                 device_eth0_ipv4_address, device_eth0_name, device_eth0_network,
-                device_eth0_type, ephemeral, stateful, description, profiles
+                device_eth0_type, ephemeral, stateful, description, profiles,
+                last_checked
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, 
                 $7, $8, $9, 
