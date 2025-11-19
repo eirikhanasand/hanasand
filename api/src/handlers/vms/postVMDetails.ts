@@ -43,7 +43,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
 
     try {
         const result = await run(
-            `INSERT INTO vms (
+            `INSERT INTO vm_details (
                 name, status, type, architecture, created, last_used,
                 config_architecture, config_image_architecture, config_image_description,
                 config_image_label, config_image_os, config_image_release, config_image_serial,
@@ -75,7 +75,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
                 volatile_last_state_power, volatile_uuid,
                 volatile_uuid_generation, volatile_vsock_id,
                 device_eth0_ipv4_address, device_eth0_name, device_eth0_network,
-                device_eth0_type, ephemeral, stateful, description, JSON.stringify(profiles),
+                device_eth0_type, ephemeral, stateful, description, profiles.join(','),
                 new Date().toISOString()
             ]
         )
