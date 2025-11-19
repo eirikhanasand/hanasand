@@ -24,7 +24,7 @@ export default function Logout({ baseStyles, serverToken }: { baseStyles: string
             <div className={baseStyles}>
                 <LogOut />
             </div>
-            <div className={`hidden group-hover:block absolute pointer-events-none place-items-center w-[22px] h-[16px] -mr-[3px] overflow-hidden`}>
+            <div className={`hidden group-hover:block absolute pointer-events-none place-items-center w-[22px] h-4 -mr-[3px] overflow-hidden`}>
                 <ArrowRight className={`stroke-[#e25822] stroke-[2.8px] bg-dark group-hover:bg-dark-reverse h-full z-10 self-center logout rounded-lg`} />
                 <div className='logout-overlay absolute bottom-0 w-[1.5px] h-full z-20' />
             </div>
