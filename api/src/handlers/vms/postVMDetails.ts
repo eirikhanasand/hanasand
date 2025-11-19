@@ -75,7 +75,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
                 volatile_last_state_power, volatile_uuid,
                 volatile_uuid_generation, volatile_vsock_id,
                 device_eth0_ipv4_address, device_eth0_name, device_eth0_network,
-                device_eth0_type, ephemeral, stateful, description, profiles.join(','),
+                device_eth0_type, ephemeral, stateful, description, profiles,
                 new Date().toISOString()
             ]
         )
