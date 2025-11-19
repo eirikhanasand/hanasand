@@ -42,6 +42,8 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
     }
 
     try {
+        const ephemeralBool = ephemeral === 'true'
+        const statefulBool = stateful === 'true'
         const result = await run(
             `INSERT INTO vm_details (
                 name, status, type, architecture, created, last_used,
@@ -75,7 +77,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
                 volatile_last_state_power, volatile_uuid,
                 volatile_uuid_generation, volatile_vsock_id,
                 device_eth0_ipv4_address, device_eth0_name, device_eth0_network,
-                device_eth0_type, ephemeral, stateful, description, profiles,
+                device_eth0_type, ephemeralBool, statefulBool, description, profiles,
                 new Date().toISOString()
             ]
         )
