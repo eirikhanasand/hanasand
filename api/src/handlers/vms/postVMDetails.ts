@@ -65,7 +65,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
                 $25, $26, $27, 
                 $28, $29, $30, $31, $32, 
                 $33
-            ) RETURNING *`,
+            ) ON CONFLICT (name) DO NOTHING RETURNING *`,
             [
                 name, status, type, architecture, created, last_used,
                 config_architecture, config_image_architecture, config_image_description,
