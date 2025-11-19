@@ -76,7 +76,7 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
 
             const token = await login({ id, ip })
             if (!token) {
-                res.status(206).send({
+                return res.status(206).send({
                     message: 'Password updated, and you were logged out. Logging you back in was not possible due to an unknown error.',
                     error: 'Unable to login. Please try again later.'
                 })

@@ -35,6 +35,6 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
         return res.status(201).send({ ok: true, id: certificateId })
     } catch (error: any) {
         console.error(error)
-        res.status(500).send({ error: error.message })
+        return res.status(500).send({ error: error.message })
     }
 }

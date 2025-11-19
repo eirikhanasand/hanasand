@@ -26,6 +26,6 @@ export default async function getAccessibleVMs(req: FastifyRequest, res: Fastify
         return res.send(result.rows)
     } catch (error) {
         console.log(error)
-        res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: "Internal server error" })
     }
 }

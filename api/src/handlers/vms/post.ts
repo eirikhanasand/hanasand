@@ -29,6 +29,6 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         return res.status(201).send(result.rows[0])
     } catch (error) {
         console.log(error)
-        res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: "Internal server error" })
     }
 }

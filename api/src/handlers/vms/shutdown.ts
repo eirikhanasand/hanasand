@@ -36,6 +36,6 @@ export default async function shutdownVMs(req: FastifyRequest, res: FastifyReply
         return res.status(201).send(result.rows)
     } catch (error) {
         console.error(error)
-        res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: "Internal server error" })
     }
 }

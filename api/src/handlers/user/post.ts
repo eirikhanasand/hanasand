@@ -80,7 +80,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         if (!token) {
             const base = { ...user, message: 'User created', error: 'Unable to login. Please try again later.' }
             const data = assignedRoot ? { ...base, assignedRoot } : base
-            res.status(206).send(data)
+            return res.status(206).send(data)
         }
 
         const base = { ...user, message: 'User created', token }
