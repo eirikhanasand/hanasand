@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import config from '#constants'
+import { loadSQL } from '#utils/loadSQL.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const tokenHeader = req.headers['authorization'] || ''
@@ -21,11 +22,8 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
-        const result = await run(
-            "INSERT INTO vms (name, owner, created_by, access_users) VALUES ($1, $2, $3, $4) RETURNING *",
-            [name, owner, created_by, JSON.stringify(access_users ?? [])]
-        )
-
+        const query = await loadSQL('insertVM.sql')
+        const result = await run(query, [name, owner, created_by, JSON.stringify(access_users ?? [])])
         return res.status(201).send(result.rows[0])
     } catch (error) {
         console.log(error)
