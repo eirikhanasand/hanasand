@@ -52,7 +52,6 @@ type PostVmDetails = {
     volatile_cloud_init_instance_id: string
     volatile_eth0_hwaddr: string
     volatile_last_state_power: string
-    volatile_last_state_ready: string
     volatile_uuid: string
     volatile_uuid_generation: string
     volatile_vsock_id: string
