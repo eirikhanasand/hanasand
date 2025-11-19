@@ -23,7 +23,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     try {
         const result = await run(
             "INSERT INTO vms (name, owner, created_by, access_users) VALUES ($1, $2, $3, $4) RETURNING *",
-            [name, owner, created_by, access_users || null]
+            [name, owner, created_by, JSON.stringify(access_users ?? [])]
         )
 
         return res.status(201).send(result.rows[0])

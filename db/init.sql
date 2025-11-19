@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS vms (
     name TEXT NOT NULL,
     owner TEXT NOT NULL,
     created_by TEXT NOT NULL,
-    access_users TEXT[] DEFAULT '{}'
+    access_users JSONB DEFAULT '[]'::jsonb
 );
 
 CREATE TABLE IF NOT EXISTS vm_shutdown (
