@@ -2,7 +2,7 @@ import { Dispatch, SetStateAction } from 'react'
 
 type CopyProps = {
   text: string
-  setDidCopy: Dispatch<SetStateAction<boolean | string>>
+  setDidCopy: Dispatch<SetStateAction<boolean | string | null>>
   type?: 'link' | 'alias'
 }
 

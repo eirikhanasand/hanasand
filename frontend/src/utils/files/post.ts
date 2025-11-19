@@ -24,7 +24,7 @@ export async function postFile({ name, file, description, path, type }: PostFile
 
         formData.append('type', type)
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
+        const timeout = setTimeout(() => controller.abort(), config.abortTimeout * 10)
         const response = await fetch(`${config.url.cdn}/files`, {
             method: 'POST',
             body: formData,

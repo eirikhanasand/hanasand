@@ -76,7 +76,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                     htmlFor='fileInput'
                     className='flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition'
                 >
-                    <h1 className='rounded-lg border-2 border-dashed border-amber-700 p-3 px-10 cursor-pointer'>
+                    <h1 className='rounded-lg border-2 border-dashed border-amber-700 p-3 px-10 cursor-pointer hover:scale-105'>
                         Drop image here
                     </h1>
                     <input
@@ -92,7 +92,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                 <div className='flex flex-col items-center gap-4'>
                     <label
                         htmlFor='fileInput'
-                        className='flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition'
+                        className='flex gap-4 items-center cursor-pointer hover:opacity-80 active:scale-[0.98] transition hover:scale-105'
                     >
                         <ImageIcon />
                         <h1>Choose Photo / Video</h1>
@@ -128,10 +128,10 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                             const pastedText = e.clipboardData.getData('text')
                             handlePasteOrChange(pastedText)
                         }}
-                        className='bg-darker w-full rounded-md border border-[rgb(44,44,44)] px-2 py-1 focus:outline-hidden'
+                        className='bg-darker w-full rounded-md border border-[rgb(44,44,44)] px-2 py-1 focus:outline-hidden hover:scale-105'
                     />
                 </div>
-                <Link href='/gallery' className='bg-light p-2 px-10 md:px-15 rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_8px_rgba(0,0,0,0.4)] backdrop-blur-md text-bright/80'>
+                <Link href='/gallery' className='bg-light p-2 px-10 md:px-15 rounded-lg shadow-[inset_0_0.5px_0_rgba(255,255,255,0.1),0_2px_8px_rgba(0,0,0,0.4)] hover:scale-105 cursor-pointer backdrop-blur-md text-bright/80'>
                     <h1>My uploads</h1>
                 </Link>
             </div>
