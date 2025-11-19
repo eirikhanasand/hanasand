@@ -12,7 +12,7 @@ export default async function layout({ children }: { children: ReactNode }) {
     const token = Boolean(Cookies.get('access_token')?.value) || false
     const theme = Cookies.get('theme')?.value || 'dark'
     const path = Headers.get('x-current-path') || ''
-    const isShare = path.includes('/s')
+    const isShare = path.startsWith('/s')
 
     return (
         <html lang='en' className={theme}>
