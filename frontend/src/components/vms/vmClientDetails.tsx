@@ -35,13 +35,13 @@ export default function VMDetailClient({ vm, metrics }: VMDetailClientProps) {
             <div className="flex justify-between items-center">
                 <h2 className="font-semibold text-xl">Metrics</h2>
                 <div className="flex gap-2">
-                    <button onClick={handleStart} disabled={loading} className="hover:text-green-400">
+                    <button onClick={handleStart} disabled={loading} className="hover:text-green-400 cursor-pointer">
                         <Play />
                     </button>
-                    <button onClick={handleStop} disabled={loading} className="hover:text-red-400">
+                    <button onClick={handleStop} disabled={loading} className="hover:text-red-400 cursor-pointer">
                         <StopCircle />
                     </button>
-                    <button onClick={handleRestart} disabled={loading} className="hover:text-yellow-400">
+                    <button onClick={handleRestart} disabled={loading} className="hover:text-yellow-400 cursor-pointer">
                         <RefreshCcw />
                     </button>
                 </div>
