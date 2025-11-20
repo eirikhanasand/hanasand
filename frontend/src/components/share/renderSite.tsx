@@ -1,4 +1,4 @@
-import { removeCookie, setCookie } from '@/utils/cookies'
+import { removeCookie, setCookie } from '@/utils/cookies/cookies'
 import { Monitor } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 

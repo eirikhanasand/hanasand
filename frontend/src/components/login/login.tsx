@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import LoginIcon from './loginIcon'
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
 
 export default function Login({ serverToken }: { serverToken: boolean }) {

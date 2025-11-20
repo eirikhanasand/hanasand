@@ -1,7 +1,7 @@
 'use client'
 
 import config from '@/config'
-import { getCookie } from '../cookies'
+import { getCookie } from '../cookies/cookies'
 
 export default async function postCertificate(certificate: Partial<Certificate>): Promise<{ status: number, message: string }> {
     try {

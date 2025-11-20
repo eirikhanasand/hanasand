@@ -3,7 +3,7 @@
 import { Plus, X } from 'lucide-react'
 import Certificate from './certificate'
 import { useEffect, useState } from 'react'
-import { getCookie, removeCookie, setCookie } from '@/utils/cookies'
+import { getCookie, removeCookie, setCookie } from '@/utils/cookies/cookies'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import Notify from '../notify/notify'
 import postCertificate from '@/utils/certificates/postCertificate'

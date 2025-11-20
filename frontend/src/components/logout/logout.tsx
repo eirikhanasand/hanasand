@@ -1,6 +1,6 @@
 'use client'
 
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import { ArrowRight, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'

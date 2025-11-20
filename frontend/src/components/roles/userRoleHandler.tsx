@@ -1,4 +1,4 @@
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import assignRole from '@/utils/roles/assignRole'
 import getUserRoles from '@/utils/roles/getUserRoles'
 import unassignRole from '@/utils/roles/unassignRole'

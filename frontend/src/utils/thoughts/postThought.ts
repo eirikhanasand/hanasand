@@ -1,7 +1,7 @@
 'use client'
 
 import config from '@/config'
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 
 export async function postThought(title: string): Promise<{ status: number, message: string }> {
     const token = getCookie('access_token')

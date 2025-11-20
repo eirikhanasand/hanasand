@@ -6,7 +6,7 @@ import '@styles/github.css'
 import { getShare } from '@/utils/share/get'
 import config from '@/config'
 import Editor from '@/components/share/editor'
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 
 type CodeProps = {
     id: string

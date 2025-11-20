@@ -5,7 +5,7 @@ import interpretQuery from './interpretQuery'
 import Result from './result'
 import Button from './button'
 import performAction from './performAction'
-import { getCookie, setCookie } from '@/utils/cookies'
+import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 
 type SearchProps = {

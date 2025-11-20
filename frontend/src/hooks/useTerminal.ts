@@ -1,5 +1,5 @@
 import config from '@/config'
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
 import { useEffect, useRef, useState } from 'react'
 

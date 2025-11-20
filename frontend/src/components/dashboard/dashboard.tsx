@@ -3,7 +3,7 @@
 import { LayoutDashboard } from 'lucide-react'
 import LinkorDiv from '../misc/linkOrDiv'
 import { useEffect, useState } from 'react'
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import { usePathname } from 'next/navigation'
 
 export default function Dashboard({ href, serverToken }: { href?: string, serverToken: boolean }) {

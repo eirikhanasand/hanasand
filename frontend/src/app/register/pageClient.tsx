@@ -2,7 +2,7 @@
 import Notify from '@/components/notify/notify'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { setCookie } from '@/utils/cookies'
+import { setCookie } from '@/utils/cookies/cookies'
 import Or from '@/utils/or'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'

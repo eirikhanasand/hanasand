@@ -1,7 +1,7 @@
 'use client'
 
 import config from '@/config'
-import { getCookie, removeCookies } from '@/utils/cookies'
+import { getCookie, removeCookies } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 

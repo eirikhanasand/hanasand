@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { getCookie, setCookie } from '@/utils/cookies'
+import { getCookie, setCookie } from '@/utils/cookies/cookies'
 
 type OpenFoldersContextType = {
     openFolders: string[]

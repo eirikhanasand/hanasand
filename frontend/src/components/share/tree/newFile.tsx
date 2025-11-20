@@ -1,4 +1,4 @@
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
 import postShare from '@/utils/share/post'
 import { File, Folder } from 'lucide-react'

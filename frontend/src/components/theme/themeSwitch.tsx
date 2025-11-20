@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getCookie, setCookie } from '@/utils/cookies'
+import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import './toggle.css'
 
 export default function ThemeSwitch() {

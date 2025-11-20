@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Dispatch, SetStateAction } from 'react'
 import { ChevronDown, Eye, Wifi, WifiOff } from 'lucide-react'
 import TerminalViewer from './terminalViewer'
 import useTerminal from '@/hooks/useTerminal'
-import { removeCookie, setCookie } from '@/utils/cookies'
+import { removeCookie, setCookie } from '@/utils/cookies/cookies'
 
 type ConsoleProps = {
     open: boolean

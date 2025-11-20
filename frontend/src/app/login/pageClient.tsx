@@ -1,7 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { getCookie, setCookie } from '@/utils/cookies'
+import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import login from '@/utils/login/login'
 import Or from '@/utils/or'
 import Link from 'next/link'

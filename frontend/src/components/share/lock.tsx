@@ -1,6 +1,6 @@
 'use client'
 
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import { lockShare } from '@/utils/share/lockShare'
 import { LockKeyhole, LockKeyholeOpen } from 'lucide-react'
 import { Dispatch, SetStateAction, useState } from 'react'

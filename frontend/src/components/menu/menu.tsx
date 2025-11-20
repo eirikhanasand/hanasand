@@ -1,6 +1,6 @@
 'use client'
 
-import { getCookie } from '@/utils/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import { ActivityIcon, Menu as MenuIcon, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
