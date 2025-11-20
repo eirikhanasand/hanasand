@@ -329,7 +329,7 @@ type VM = {
 
 type VMMetrics = {
     id: number
-    vm_id: string
+    name: string
     cpu_usage_percent: number
     cpu_cores: number
     cpu_temperature: number

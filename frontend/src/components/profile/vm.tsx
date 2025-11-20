@@ -12,7 +12,7 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
 
     async function handleClick() {
         if (keys['shift']) {
-            const result = await deleteVM(vm.id)
+            const result = await deleteVM(vm.name)
             if (result.status === 200) {
                 update()
             } else {
@@ -36,14 +36,14 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                             <div className='flex gap-2 items-center max-h-5 min-w-fit'>
                                 <h1 className='text-sm font-semibold text-bright/70'>{vm.name}</h1>
                             </div>
-                            <h1 className='text-almostbright text-sm overflow-auto noscroll max-h-5 whitespace-nowrap'>{vm.vm_ip}</h1>
+                            <h1 className='text-almostbright text-sm overflow-auto noscroll max-h-5 whitespace-nowrap'>{"vm.ip"}</h1>
                         </div>
                         <div className='flex gap-1 text-almostbright/70 text-xs justify-between items-center'>
                             <div className='flex gap-1 items-center'>
-                                <span>ID: {vm.id}</span>
+                                <span>ID: {vm.name}</span>
                                 <span className='font-bold'>·</span>
                                 <span>Created</span>
-                                <span>{prettyDate(vm.created_at)}</span>
+                                <span>{prettyDate(vm.created_by)}</span>
                                 <span>by</span>
                                 <span>{vm.created_by}</span>
                                 <span>Owner:</span>

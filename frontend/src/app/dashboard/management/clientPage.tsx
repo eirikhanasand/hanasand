@@ -69,19 +69,19 @@ export default function SystemDashboard({
                 <div className="grid gap-4">
                     {vms.map(vm => {
                         const metrics = vmMetrics
-                            .filter(m => m.vm_id === vm.id)
+                            .filter(m => m.name === vm.name)
                             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 
-                        const isExpanded = expandedVMs.includes(vm.id)
+                        const isExpanded = expandedVMs.includes(vm.name)
                         return (
-                            <div key={vm.id} className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10">
-                                <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleVM(vm.id)}>
+                            <div key={vm.name} className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10">
+                                <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleVM(vm.name)}>
                                     <h3 className="font-semibold">{vm.name}</h3>
                                     <div className="flex gap-2 items-center">
-                                        <button onClick={e => { e.stopPropagation(); handleRestartVM(vm.id) }} className="hover:text-green-400">
+                                        <button onClick={e => { e.stopPropagation(); handleRestartVM(vm.name) }} className="hover:text-green-400">
                                             <RefreshCcw />
                                         </button>
-                                        <Link href={`/dashboard/vm/${vm.id}`} className="hover:text-blue-400">Details</Link>
+                                        <Link href={`/dashboard/vm/${vm.name}`} className="hover:text-blue-400">Details</Link>
                                     </div>
                                 </div>
                                 {isExpanded && metrics && (

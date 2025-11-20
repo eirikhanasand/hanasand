@@ -14,19 +14,19 @@ export default function VMDetailClient({ vm, metrics }: VMDetailClientProps) {
 
     async function handleRestart() {
         setLoading(true)
-        await fetch(`/api/vm/${vm.id}/restart`, { method: 'POST' })
+        await fetch(`/api/vm/${vm.name}/restart`, { method: 'POST' })
         setLoading(false)
     }
 
     async function handleStart() {
         setLoading(true)
-        await fetch(`/api/vm/${vm.id}/start`, { method: 'POST' })
+        await fetch(`/api/vm/${vm.name}/start`, { method: 'POST' })
         setLoading(false)
     }
 
     async function handleStop() {
         setLoading(true)
-        await fetch(`/api/vm/${vm.id}/stop`, { method: 'POST' })
+        await fetch(`/api/vm/${vm.name}/stop`, { method: 'POST' })
         setLoading(false)
     }
 
