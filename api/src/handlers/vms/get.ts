@@ -9,12 +9,16 @@ export default async function getVM(req: FastifyRequest, res: FastifyReply) {
         if (id) {
             result = await run("SELECT * FROM vms WHERE id = $1", [id])
         } else if (user) {
-            result = await run("SELECT * FROM vms WHERE user = $1", [user])
+            result = await run("SELECT * FROM vms WHERE owner = $1", [user])
         } else {
             result = await run("SELECT * FROM vms")
         }
 
         if (result.rows.length === 0) {
+            if (user) {
+                return res.status(200).send([])
+            }
+
             return res.status(404).send({ error: "VM not found" })
         }
 
