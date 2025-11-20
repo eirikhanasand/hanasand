@@ -8,8 +8,10 @@ import prettyDate from '@/utils/date/prettyDate'
 import formatDescription from '@/utils/vms/formatDescription'
 import Tag from '../tags/tag'
 import formatStatus from '@/utils/vms/formatStatus'
+import { useRouter } from 'next/navigation'
 
 export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
+    const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const keys = useKeyPress('shift')
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
@@ -22,6 +24,8 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
             } else {
                 setMessage(result.message)
             }
+        } else {
+            router.push(`/dashboard/vm/${vm.name}`)
         }
     }
 

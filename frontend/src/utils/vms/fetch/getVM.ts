@@ -4,7 +4,7 @@ export default async function getVM(id: string): Promise<VM | null> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/vms/${id}`, {
+        const response = await fetch(`${config.url.api}/vm/${id}`, {
             cache: 'no-store',
             signal: controller.signal
         })
