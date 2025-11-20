@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import { loadSQL } from '#utils/loadSQL.ts';
+import { loadSQL } from '#utils/loadSQL.ts'
 
 export default async function getVM(req: FastifyRequest, res: FastifyReply) {
     const { id, user } = req.params as { id?: string; user?: string }
