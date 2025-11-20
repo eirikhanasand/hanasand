@@ -240,11 +240,8 @@ type Certificate = {
 }
 
 type VM = {
-    id: string
     name: string
     owner: string
-    vm_ip: string
-    created_at: string
     created_by: string
     access_users: string[]
 }
