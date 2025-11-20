@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import './animate.css'
 import fetchArticles from '@/utils/articles/fetchArticles'
-import prettyDate from '@/utils/prettyDate'
+import prettyDate from '@/utils/date/prettyDate'
 import ArticleNotification from './articleNotification'
 
 type ArticleProps = {

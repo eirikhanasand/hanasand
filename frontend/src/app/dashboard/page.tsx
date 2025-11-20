@@ -3,7 +3,7 @@ import GreetingNavButtons from '@/components/dashboard/greetings/greetingNavButt
 import VMs from '@/components/profile/vms'
 import Projects from '@/components/projects/projects'
 import Shares from '@/components/share/dashboard/projects'
-import getVMs from '@/utils/vms/getVMs'
+import getVMs from '@/utils/vms/fetch/getVMs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 

@@ -2,7 +2,7 @@
 
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import prettyDate from '@/utils/prettyDate'
+import prettyDate from '@/utils/date/prettyDate'
 import { fetchTest } from '@/utils/test/fetchTest'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'

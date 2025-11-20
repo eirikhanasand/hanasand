@@ -1,6 +1,6 @@
 import VMDetailClient from '@/components/vms/vmClientDetails'
-import getVM from '@/utils/vms/getVM'
-import getVMMetrics from '@/utils/vms/metrics/getVMMetrics'
+import getVM from '@/utils/vms/fetch/getVM'
+import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params

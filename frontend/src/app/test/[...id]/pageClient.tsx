@@ -1,6 +1,6 @@
 'use client'
 
-import prettyDate from '@/utils/prettyDate'
+import prettyDate from '@/utils/date/prettyDate'
 import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
 import { ActivityIcon, Bug, Fingerprint, Hourglass, LinkIcon, Logs, RefreshCw, Timer, Users, Watch, Wifi, WifiOff, Workflow } from 'lucide-react'
 import Visits from '@/components/test/visits'

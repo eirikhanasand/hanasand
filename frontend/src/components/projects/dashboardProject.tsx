@@ -7,7 +7,7 @@ import useKeyPress from '@/hooks/keyPressed'
 import { useRouter } from 'next/navigation'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteProject from '@/utils/projects/deleteProject'
-import prettyDate from '@/utils/prettyDate'
+import prettyDate from '@/utils/date/prettyDate'
 
 export default function DashboardProject({ project }: { project: Project }) {
     const [deleted, setDeleted] = useState(false)

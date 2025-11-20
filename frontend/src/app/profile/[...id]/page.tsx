@@ -1,7 +1,7 @@
 import Certificates from '@/components/profile/certificates'
 import VMs from '@/components/profile/vms'
 import getCertificates from '@/utils/certificates/getCertificates'
-import getVMs from '@/utils/vms/getVMs'
+import getVMs from '@/utils/vms/fetch/getVMs'
 import { LayoutDashboard } from 'lucide-react'
 import { cookies } from 'next/headers'
 import Link from 'next/link'

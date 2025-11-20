@@ -2,7 +2,7 @@ import { BookText, Eye, Link, ListOrdered, MessageCircleHeart, Pencil, Timer } f
 import Marquee from '../marquee/marquee'
 import { useEffect, useState } from 'react'
 import copy from '@/utils/copy'
-import prettyDate from '@/utils/prettyDate'
+import prettyDate from '@/utils/date/prettyDate'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import Notify from '../notify/notify'
 

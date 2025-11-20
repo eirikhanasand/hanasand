@@ -239,13 +239,6 @@ type Certificate = {
     created_by: string
 }
 
-type VM = {
-    name: string
-    owner: string
-    created_by: string
-    access_users: string[]
-}
-
 type BlocklistEntry = {
     id: number
     type: 'ip' | 'user_agent'
@@ -318,13 +311,20 @@ type DockerContainer = {
 }
 
 type VM = {
-    id: number
     name: string
     owner: string
-    vm_ip: string
-    created_at: string
     created_by: string
     access_users: string[]
+    status: string
+    type: string
+    architecture: string
+    created: string
+    last_used: string
+    config_image_description: string
+    limits_cpu: string
+    limits_memory: string
+    device_eth0_ipv4_address: string
+    last_checked: string
 }
 
 type VMMetrics = {

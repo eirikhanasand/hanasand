@@ -3,7 +3,7 @@
 import { Info, Minus, Plus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import VMRow from './vm'
-import getVMs from '@/utils/vms/getVMs'
+import getVMs from '@/utils/vms/fetch/getVMs'
 import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import Tooltip from '../tooltip/tooltip'
@@ -29,7 +29,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
 
     return (
         <div className='grid h-fit w-full p-2 outline-1 outline-dark rounded-lg'>
-            <div className='flex justify-between mb-2 items-center'>
+            <div className='flex justify-between mb-1 items-center'>
                 <h1 className='font-semibold text-lg self-center'>Virtual Machines</h1>
                 <Tooltip
                     align='right'
@@ -42,9 +42,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     }
                 >
                     <div className='p-px'>
-                        <div className="p-1 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-md flex gap-1 items-center px-4">
+                        <div className="py-0.5 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-sm flex gap-1 items-center px-4">
                             <Info className="h-3 w-3 stroke-blue-400" />
-                            <span className="text-white/70 text-[0.7rem]">Managed</span>
+                            <span className="text-bright/70 text-[0.7rem]">Managed</span>
                         </div>
                     </div>
                 </Tooltip>

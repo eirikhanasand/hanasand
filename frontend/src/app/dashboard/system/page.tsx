@@ -1,9 +1,9 @@
-import getVMMetrics from '@/utils/vms/metrics/getVMMetrics'
-import getVMs from '@/utils/vms/getVMs'
+import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
+import getVMs from '@/utils/vms/fetch/getVMs'
 import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
-import getDockerContainers from '@/utils/vms/metrics/getDockerContainers'
-import getSystemMetrics from '@/utils/vms/metrics/getSystemMetrics'
+import getDockerContainers from '@/utils/vms/fetch/metrics/getDockerContainers'
+import getSystemMetrics from '@/utils/vms/fetch/metrics/getSystemMetrics'
 
 export default async function page() {
     const systemMetrics = await getSystemMetrics()

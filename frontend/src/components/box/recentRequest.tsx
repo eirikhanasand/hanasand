@@ -1,4 +1,4 @@
-import prettyDate from '@/utils/prettyDate'
+import prettyDate from '@/utils/date/prettyDate'
 import requestColor from './requestColor'
 
 export default function RecentRequest({ req }: { req: FetchRequest }) {
