@@ -8,4 +8,4 @@ SELECT
     d.last_checked
 FROM vms v
 LEFT JOIN vm_details d ON d.name = v.name
-WHERE v.id = $1
+WHERE v.name = $1
