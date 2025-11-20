@@ -1,10 +1,12 @@
+import parseCookie from '@/utils/cookies/parseCookie'
 import { SquareChartGantt } from 'lucide-react'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 
 export default async function GreetingNavButtons({ id }: { id: string }) {
     const Cookies = await cookies()
-    const roles: Role[] = JSON.parse(Cookies.get('roles')?.value || "[]")
+    const rolesCookie = Cookies.get('roles')?.value
+    const roles = parseCookie<Role[]>(rolesCookie, [])
     const isAdmin = roles.some((role) => role.id.includes('admin'))
 
     return (
