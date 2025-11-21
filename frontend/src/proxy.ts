@@ -28,7 +28,7 @@ export async function proxy(req: NextRequest) {
         const strictPath = pathToRoleArray.find((item) => path.startsWith(item.path))
         if (strictPath) {
             const roles = await getUserRoles({ token, id })
-            if (!roles.some((role) => role.name === strictPath.role)) {
+            if (!roles.some((role) => role.role_id === strictPath.role)) {
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&notAllowed=true'}`, req.url))
             }
         }

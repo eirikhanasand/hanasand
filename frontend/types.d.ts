@@ -172,6 +172,13 @@ type Thought = {
     updated_at: string
 }
 
+type SmallRole = {
+    user_id: string
+    role_id: string
+    assigned_by: string
+    assigned_at: string
+}
+
 type Role = {
     id: string
     name: string
