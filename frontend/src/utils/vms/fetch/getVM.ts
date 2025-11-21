@@ -1,6 +1,6 @@
 import config from '@/config'
 
-export default async function getVM(id: string): Promise<VM | null> {
+export default async function getVM(id: string): Promise<VM[] | null> {
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)

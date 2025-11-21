@@ -2,7 +2,7 @@ import config from '@/config'
 
 export default async function getVMMetrics(id: string): Promise<VMMetrics[]> {
     try {
-        const response = await fetch(`${config.url.cdn}/vm/metrics/${id}`)
+        const response = await fetch(`${config.url.api}/vm/metrics/${id}`)
         if (!response.ok) {
             throw new Error(await response.text())
         }

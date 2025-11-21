@@ -1,27 +1,55 @@
 'use client'
 
+import { RefreshCcw } from 'lucide-react'
+import smallDate from '@/utils/date/smallDate'
+import VMDetails from '@/components/vms/vmDetails'
+import VMHardware from '@/components/vms/vmHardware'
+import VMNetwork from '@/components/vms/vmNetwork'
+import VMOverview from '@/components/vms/vmOverview'
 import { useState } from 'react'
-import Link from 'next/link'
-import { RefreshCcw, Cpu, Server, HardDrive } from 'lucide-react'
+import getVM from '@/utils/vms/fetch/getVM'
+import { getCookie } from '@/utils/cookies/cookies'
+import { useRouter } from 'next/navigation'
+import getVMDetails from '@/utils/vms/fetch/metrics/getVMDetails'
+import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
+import VMMetrics from '@/components/vms/vmMetrics'
 
-type SystemDashboardProps = {
+type VMClientProps = {
     vm: VM
-    vmMetrics: VMMetrics[]
+    details: VMDetails | null
+    metrics: VMMetrics[]
 }
 
-export default function VMClient({
-    vm,
-    vmMetrics
-}: SystemDashboardProps) {
-    const [expandedVMs, setExpandedVMs] = useState<string[]>([])
-    const metrics = vmMetrics
-        .filter(m => m.name === vm.name)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics }: VMClientProps) {
+    const [vm, setVM] = useState<VM>(serverVM)
+    const [details, setDetails] = useState(serverDetails)
+    const [metrics, setMetrics] = useState(serverMetrics)
+    const router = useRouter()
+    const boxStyle = 'outline outline-dark p-2 rounded-md w-full'
+    const boxTitleStyle = 'text-lg font-semibold'
 
-    const isExpanded = expandedVMs.includes(vm.name)
+    async function handleRefresh() {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (!id || !token) {
+            return router.push(`/logout?path=/login%3Fpath%3D/dashboard/vms/${id}%26expired=true`)
+        }
 
-    function toggleVM(vmId: string) {
-        setExpandedVMs(prev => prev.includes(vmId) ? prev.filter(id => id !== vmId) : [...prev, vmId])
+        const vmResponse = await getVM(serverVM.name)
+        if (Array.isArray(vmResponse) && vmResponse.length) {
+            setVM(vmResponse[0])
+        }
+
+    
+        const detailsResponse = await getVMDetails(serverVM.name, token, id)
+        if (detailsResponse) {
+            setDetails(detailsResponse)
+        }
+
+        const metricsResponse = await getVMMetrics(serverVM.name)
+        if (metricsResponse) {
+            setMetrics(metricsResponse)
+        }
     }
 
     async function handleRestartVM(vmId: string) {
@@ -30,33 +58,26 @@ export default function VMClient({
 
     return (
         <div className="grid gap-2">
-            <div>
-                <h2 className="font-semibold text-xl mb-2">Virtual Machines</h2>
-                <div className="grid gap-2">
-                    <div key={vm.name} className="rounded-lg p-2 backdrop-blur-md outline outline-white/10">
-                        <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleVM(vm.name)}>
-                            <h3 className="font-semibold">{vm.name}</h3>
-                            <div className="flex gap-2 items-center">
-                                <button onClick={e => { e.stopPropagation(); handleRestartVM(vm.name) }} className="hover:text-green-400">
-                                    <RefreshCcw />
-                                </button>
-                                <Link href={`/dashboard/vm/${vm.name}`} className="hover:text-blue-400">Details</Link>
-                            </div>
-                        </div>
-                        {isExpanded && metrics && (
-                            <div className="mt-2 text-sm grid gap-1">
-                                <p className="flex items-center gap-1"><Cpu className="w-4 h-4" /> CPU: {metrics.cpu_usage_percent}% ({metrics.cpu_cores} cores)</p>
-                                <p className="flex items-center gap-1"><HardDrive className="w-4 h-4" /> RAM: {metrics.ram_used_mb}/{metrics.ram_total_mb} MB</p>
-                                <p className="flex items-center gap-1"><HardDrive className="w-4 h-4" /> Disk: {metrics.disk_used_mb}/{metrics.disk_total_mb} MB</p>
-                                <p className="flex items-center gap-1"><Server className="w-4 h-4" /> GPU: {metrics.gpu_usage_percent}% ({metrics.gpu_memory_used_mb}/{metrics.gpu_memory_total_mb} MB)</p>
-                                <p>System Temp: {metrics.system_temperature}°C</p>
-                                <p>GPU Temp: {metrics.gpu_temperature}°C</p>
-                                <p>Power State: {metrics.power_state}</p>
-                                <p>Uptime: {Math.floor(metrics.uptime_seconds / 3600)}h</p>
-                            </div>
-                        )}
-                    </div>
+            <div className='flex w-full justify-between'>
+                <h1 className="font-semibold text-2xl">{vm.name}</h1>
+                <div
+                    className="flex justify-between items-center cursor-pointer gap-2 text-bright/80 rounded-md hover:bg-bright/5 px-3 group"
+                    onClick={handleRefresh}
+                >
+                    <h1>Last checked {smallDate(vm.last_checked)}</h1>
+                    <button className="group-hover:text-green-400">
+                        <RefreshCcw className='w-5 h-5' />
+                    </button>
                 </div>
+            </div>
+            <div className='flex w-full justify-between gap-2'>
+                <VMOverview boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
+                <VMHardware boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} />
+                <VMNetwork boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
+                <VMDetails boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
+            </div>
+            <div className='flex w-full justify-between gap-2'>
+                <VMMetrics boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} metrics={metrics} />
             </div>
         </div>
     )
