@@ -172,7 +172,7 @@ type Thought = {
     updated_at: string
 }
 
-type SmallRole = {
+type MinimalRole = {
     user_id: string
     role_id: string
     assigned_by: string

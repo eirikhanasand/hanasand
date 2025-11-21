@@ -13,7 +13,7 @@ type UserRoleHandlerProps = {
 }
 
 export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleHandlerProps) {
-    const [userRoles, setUserRoles] = useState<Role[]>([])
+    const [userRoles, setUserRoles] = useState<MinimalRole[]>([])
 
     useEffect(() => {
         (async() => {
@@ -40,8 +40,8 @@ export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleH
     )
 }
 
-function Role({ role, userRoles }: { role: Role, userRoles: Role[] }) {
-    const [active, setActive] = useState(userRoles.some((r) => r.name === role.name))
+function Role({ role, userRoles }: { role: Role, userRoles: MinimalRole[] }) {
+    const [active, setActive] = useState(userRoles.some((r) => r.role_id === role.name))
 
     async function handleClick() {
         const id = getCookie('id')

@@ -7,7 +7,7 @@ type FetchRoleProps = {
     target?: string
 }
 
-export default async function getUserRoles({ id, token, target }: FetchRoleProps): Promise<SmallRole[]> {
+export default async function getUserRoles({ id, token, target }: FetchRoleProps): Promise<MinimalRole[]> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
