@@ -47,7 +47,6 @@ function getIcon(icon: string | undefined) {
 }
 
 function getMapIcon(value?: string, map?: Map) {
-    console.log(value, map)
     if (!value || !map) {
         return 
     }

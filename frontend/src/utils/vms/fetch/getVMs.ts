@@ -11,13 +11,13 @@ export default async function getVMs(id: string): Promise<VM[]> {
 
         clearTimeout(timeout)
         if (!response.ok) {
-            throw new Error(`Load failed for ${id}.`)
+            throw new Error(await response.text())
         }
 
         const data = await response.json()
         return data
     } catch (error) {
-        console.log(`Error fetching vms: ${error}`)
+        console.log(error)
         return []
     }
 }

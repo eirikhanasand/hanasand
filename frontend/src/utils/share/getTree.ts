@@ -21,7 +21,6 @@ export async function getTree({ id, token, userId }: GetTreeProps): Promise<Tree
 
         clearTimeout(timeout)
         if (!response.ok) {
-            console.log(await response.text())
             throw new Error(`Failed to fetch share tree for ${id}.`)
         }
 

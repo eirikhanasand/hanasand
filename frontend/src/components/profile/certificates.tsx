@@ -36,7 +36,6 @@ export default function Certificates({ certificates: serverCertificates }: { cer
             clear()
         } else {
             save()
-            console.log(result.message)
             setMessage(result.message)
         }
     }
