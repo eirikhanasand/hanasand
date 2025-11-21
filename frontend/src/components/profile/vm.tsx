@@ -9,6 +9,7 @@ import formatDescription from '@/utils/vms/formatDescription'
 import Tag from '../tags/tag'
 import formatStatus from '@/utils/vms/formatStatus'
 import { useRouter } from 'next/navigation'
+import RestartButtons from '../vms/restartButtons'
 
 export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
     const router = useRouter()
@@ -33,12 +34,12 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
         <>
             <div
                 onClick={handleClick}
-                className={`rounded-lg ${keys['shift']
+                className={`rounded-lg group ${keys['shift']
                         ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none'
                         : 'hover:bg-dark'
                     } cursor-pointer p-2 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
             >
-                <div className='flex w-full items-center'>
+                <div className='flex w-full items-center gap-2 h-full'>
                     <div className='flex-1 overflow-auto grid gap-1'>
                         <div className='flex gap-2 items-center justify-between'>
                             <div className='flex gap-2 items-center'>
@@ -79,7 +80,12 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                             </div>
                         </div>
                     </div>
-                    {keys['shift'] && <Trash2 className='hidden group-hover:block group-hover:min-w-fit stroke-red-500 w-5 h-5' />}
+                    {!keys['shift'] && <RestartButtons vm={vm} />}
+                    {keys['shift'] && (
+                        <div className='hidden group-hover:grid hover:bg-bright/3 rounded-md h-full px-3 place-items-center'>
+                            <Trash2 className='stroke-red-500 w-5 h-5' />
+                        </div>
+                    )}
                 </div>
             </div>
             <div className='absolute top-2 right-2 z-1200'>

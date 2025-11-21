@@ -36,10 +36,10 @@ export default function DashboardShare({ share }: { share: Share }) {
                 {keys['shift'] && <Trash2 className='hidden group-hover:block w-5 h-5' />}
             </div>
             {deleted && <div className='absolute top-16 right-2 w-50 h-fit'>
-                <Notify message={`Deleted share ${share.id}.`} className=' min-w-full px-4 bg-light' />
+                <Notify message={`Deleted share ${share.id}.`} className='min-w-full px-4 bg-light' />
             </div>}
             {error && <div className='absolute top-16 right-2 w-50 h-fit'>
-                <Notify message={error} className=' min-w-full px-4 bg-light' />
+                <Notify message={error} className='min-w-full px-4 bg-light' />
             </div>}
         </div>
     )

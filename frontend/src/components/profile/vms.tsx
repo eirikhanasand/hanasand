@@ -36,8 +36,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     content={
                         <h1>
                             VMs are created automatically when you make new projects.
-                            You can only view them, give access to new users, or
-                            delete them on this page.
+                            You can only manage them from this page.
                         </h1>
                     }
                 >
