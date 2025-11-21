@@ -65,7 +65,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                     onClick={handleRefresh}
                 >
                     <h1>Last checked {smallDate(vm.last_checked)}</h1>
-                    <button className="group-hover:text-green-400">
+                    <button className="group-hover:text-green-400 group-hover:cursor-pointer">
                         <RefreshCcw className='w-5 h-5' />
                     </button>
                 </div>
