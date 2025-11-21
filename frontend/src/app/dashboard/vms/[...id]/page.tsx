@@ -8,8 +8,6 @@ import { redirect } from 'next/navigation'
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
     const id = params.id[0]
-    const vmResponse = await getVM(id)
-    const vm = Array.isArray(vmResponse) && vmResponse.length ? vmResponse[0] : null
     const Cookies = await cookies()
     const token = Cookies.get('access_token')?.value
     const userId = Cookies.get('id')?.value
@@ -17,8 +15,10 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         return redirect(`/logout?path=/login%3Fpath%3D/dashboard/vms/${id}%26expired=true`)
     }
 
+    const vmResponse = await getVM(id, token, userId)
     const details = await getVMDetails(id, token, userId)
-    const metrics = await getVMMetrics(id)
+    const metrics = await getVMMetrics(id, token, userId)
+    const vm = Array.isArray(vmResponse) && vmResponse.length ? vmResponse[0] : null
     if (!vm) {
         return null
     }

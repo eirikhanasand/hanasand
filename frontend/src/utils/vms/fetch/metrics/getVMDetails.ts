@@ -8,6 +8,7 @@ export default async function getVMDetails(id: string, token: string, userId: st
                 id: userId
             }
         })
+
         if (!response.ok) {
             throw new Error(await response.text())
         }
