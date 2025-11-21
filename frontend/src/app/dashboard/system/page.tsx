@@ -4,14 +4,20 @@ import { cookies } from 'next/headers'
 import SystemDashboard from './clientPage'
 import getDockerContainers from '@/utils/vms/fetch/metrics/getDockerContainers'
 import getSystemMetrics from '@/utils/vms/fetch/metrics/getSystemMetrics'
+import { redirect } from 'next/navigation'
 
 export default async function page() {
     const systemMetrics = await getSystemMetrics()
     const dockerContainers = await getDockerContainers()
     const Cookies = await cookies()
-    const id = Cookies.get('id')?.value || ''
+    const token = Cookies.get('access_token')?.value
+    const id = Cookies.get('id')?.value
+    if (!id || !token) {
+        return redirect(`/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true`)
+    }
+
     const vms = await getVMs(id)
-    const vmMetrics = await getVMMetrics(id)
+    const vmMetrics = await getVMMetrics(id, token, id)
 
     return (
         <div className="h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6">

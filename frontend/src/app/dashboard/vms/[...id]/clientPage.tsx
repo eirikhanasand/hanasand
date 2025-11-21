@@ -46,7 +46,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
             setDetails(detailsResponse)
         }
 
-        const metricsResponse = await getVMMetrics(serverVM.name)
+        const metricsResponse = await getVMMetrics(serverVM.name, token, id)
         if (metricsResponse) {
             setMetrics(metricsResponse)
         }
