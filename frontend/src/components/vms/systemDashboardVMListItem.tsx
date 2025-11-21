@@ -2,12 +2,13 @@ import formatDescription from '@/utils/vms/formatDescription'
 import Tag from '../tags/tag'
 import smallDate from '@/utils/date/smallDate'
 import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
+import Link from 'next/link'
 
 export default function SystemDashboardVMListItem({ vm }: { vm: VM }) {
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
 
     return (
-        <div className='flex w-full gap-2 rounded-md p-2 hover:bg-bright/3 cursor-pointer items-center'>
+        <Link href={`/dashboard/vms/${vm.name}`} className='flex w-full gap-2 rounded-md p-2 hover:bg-bright/3 cursor-pointer items-center text-bright/80'>
             <h1 className='w-full'>{vm.name}</h1>
             <h1 className='w-full'>{vm.owner}</h1>
             <h1 className='min-w-25'>{vm.limits_cpu}</h1>
@@ -22,6 +23,6 @@ export default function SystemDashboardVMListItem({ vm }: { vm: VM }) {
                 <Tag color='green' icon='refresh' text={smallDate(vm.last_checked)} />
                 <Tag color='blue' text={vm.device_eth0_ipv4_address} />
             </div>
-        </div>
+        </Link>
     )
 }

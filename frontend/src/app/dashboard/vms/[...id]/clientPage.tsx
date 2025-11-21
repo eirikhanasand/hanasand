@@ -64,9 +64,9 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                     className="flex justify-between items-center cursor-pointer gap-2 text-bright/80 rounded-md hover:bg-bright/5 px-3 group"
                     onClick={handleRefresh}
                 >
-                    <h1>Last checked {smallDate(vm.last_checked)}</h1>
+                    <h1 className='text-sm'>Last checked {smallDate(vm.last_checked)}</h1>
                     <button className="group-hover:text-green-400 group-hover:cursor-pointer">
-                        <RefreshCcw className='w-5 h-5' />
+                        <RefreshCcw className='w-4 h-4' />
                     </button>
                 </div>
             </div>
