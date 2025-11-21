@@ -22,8 +22,8 @@ sub vcl_recv {
         set req.http.X-Auth-Hash = req.http.Authorization;
     }
 
-    if (req.url ~ "/([0-9a-fA-F-]{6,})") {
-        set req.http.X-User-ID = regsub(req.url, ".*/([0-9a-fA-F-]{6,}).*", "\1");
+    if (req.http.ID) {
+        set req.http.X-User-ID = req.http.ID;
     }
 
     return (hash);
@@ -60,7 +60,7 @@ sub vcl_hash {
 sub vcl_backend_response {
     set beresp.ttl = 1h;
     set beresp.http.Cache-Control = "hanasand-cache, max-age=3600";
-    
+
     if (bereq.http.X-Auth-Hash && bereq.http.X-User-ID) {
         set beresp.ttl = 1m;
         set beresp.http.Cache-Control = "hanasand-cache, max-age=60";
