@@ -9,8 +9,6 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const vm = await getVM(id)
     const metrics = await getVMMetrics(id)
 
-    console.log(vm)
-
     if (!vm) {
         return null
     }
