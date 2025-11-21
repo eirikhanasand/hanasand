@@ -10,7 +10,7 @@ import Notify from '../notify/notify'
 import UserRoleHandler from '../roles/userRoleHandler'
 
 export default function DashboardUser({ user, roles }: { user: UserWithRole, roles: Role[] }) {
-    const [deleted, setDeleted] = useState(false)
+    const { condition: deleted, setCondition: setDeleted } = useClearStateAfter()
     const [displayRoles, setDisplayRoles] = useState(false)
     const keys = useKeyPress('shift')
     const router = useRouter()
@@ -53,11 +53,11 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                 </div>}
             </div>
             <UserRoleHandler user={user} displayRoles={displayRoles} roles={roles} />
-            {deleted && <div className='absolute top-16 right-2 w-50 h-fit'>
-                <Notify message={`Deleted user ${user.id}.`} className=' min-w-full px-4 bg-light' />
+            {deleted && <div className='absolute top-16 right-2 w-50 h-fit z-100'>
+                <Notify color='bg-blue-500' background='bg-bright/3 backdrop-blur-md' message={`Deleted user ${user.id}.`} className=' min-w-full px-4 outline outline-dark' />
             </div>}
-            {error && <div className='absolute top-16 right-2 w-50 h-fit'>
-                <Notify message={error} className=' min-w-full px-4 bg-light' />
+            {error && <div className='absolute top-16 right-2 w-50 h-fit z-100'>
+                <Notify background='bg-bright/3 backdrop-blur-md' message={`Deleted user ${user.id}.`} className=' min-w-full px-4 outline outline-dark' />
             </div>}
         </div>
     )
