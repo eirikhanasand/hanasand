@@ -1,8 +1,14 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { loadSQL } from '#utils/loadSQL.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 export default async function getVM(req: FastifyRequest, res: FastifyReply) {
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(401).send({ error: 'Unautorized.' })
+    }
+
     const { id, user } = req.params as { id?: string; user?: string }
 
     try {

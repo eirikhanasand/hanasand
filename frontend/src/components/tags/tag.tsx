@@ -1,9 +1,9 @@
 import prettyDate from '@/utils/date/prettyDate'
 import smallDate from '@/utils/date/smallDate'
-import { Bug, CloudCheck, Cpu, Info, MemoryStick, RefreshCcw, StopCircle, TriangleAlert } from 'lucide-react'
+import { Bug, CloudCheck, Cpu, Info, MemoryStick, Pencil, RefreshCcw, StopCircle, TriangleAlert } from 'lucide-react'
 
 type Color = 'red' | 'green' | 'orange' | 'lightgreen' | 'blue' | 'yellow' | 'default' | 'none' | 'dynamic'
-type Icon = 'ram' | 'cpu' | 'refresh' | 'error' | 'warning' | 'success'
+type Icon = 'ram' | 'cpu' | 'refresh' | 'error' | 'warning' | 'success' | 'pencil'
 type Map = Record<string, { color: Color, icon: Icon }>
 type TagProps = {
     icon?: Icon
@@ -40,6 +40,7 @@ function getIcon(icon: string | undefined) {
         case 'warning': IconElement = <TriangleAlert className={smallIconClass} />; break
         case 'success': IconElement = <CloudCheck className={smallIconClass} />; break
         case 'bug': IconElement = <Bug className={smallIconClass} />; break
+        case 'pencil': IconElement = <Pencil className={smallIconClass} />; break
         default: IconElement = <Info className={smallIconClass} />; break
     }
 
