@@ -14,7 +14,7 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
     }
 
     try {
-        const userResult = await run(`DELETE FROM users WHERE id = $1`, [id])
+        const userResult = await run(`DELETE FROM users WHERE id = $1 RETURNING *`, [id])
         if (!userResult.rows.length) {
             return res.status(404).send({ error: `There is no user with id ${id}` })
         }
