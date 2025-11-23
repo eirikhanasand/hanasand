@@ -15,7 +15,8 @@ export default async function deleteArticle(req: FastifyRequest<{ Params: { id: 
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { id } = req.params
+    const { id: Id } = req.params
+    const id = Id.endsWith('.md') ? Id : `${Id}.md`
     const filePath = join(ARTICLES_DIR, id)
     let deleted = false
 

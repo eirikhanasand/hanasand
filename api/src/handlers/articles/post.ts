@@ -14,7 +14,8 @@ export default async function postArticle(req: FastifyRequest<{ Params: { id: st
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { id } = req.params as { id: string } ?? {}
+    const { id: Id } = req.params as { id: string } ?? {}
+    const id = Id.endsWith('.md') ? Id : `${Id}.md`
     const { content } = req.body as { content: string } ?? {}
     const filePath = join(ARTICLES_DIR, id)
 
