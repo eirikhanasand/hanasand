@@ -70,7 +70,7 @@ export default function CreateClient() {
                             value={id || ''} 
                             placeholder='example.md'
                             onChange={(e) => setId(e.target.value.replaceAll('.md', ''))} 
-                            className='bg-light rounded-lg p-2 mt-4 w-full glow-blue-small'
+                            className='bg-light rounded-lg p-2 mt-4 w-full'
                         />
                     </div>
                 ) : <></>}
@@ -80,13 +80,13 @@ export default function CreateClient() {
                     setEditing={setEditing}
                     customSaveLogic={true}
                     hideSaveButton
-                    className='bg-light rounded-lg p-2 glow-blue-small'
+                    className='outline outline-dark rounded-lg p-2'
                     id={id || ''}
                     content={content.split('\n')}
                     onChange={setContent}
                 />
             </div>
-            <div onClick={handleCreate} className='bg-light hover:bg-green-500/20 hover:outline-green-500/35 cursor-pointer py-2 px-6 flex gap-2 rounded-lg w-fit place-self-end mt-10'>
+            <div onClick={handleCreate} className='outline outline-dark hover:bg-green-500/20 hover:outline-green-500/35 cursor-pointer py-2 px-6 flex gap-2 rounded-lg w-fit place-self-end mt-10'>
                 <Plus />
                 <h1 className='font-semibold select-none'>Create</h1>
             </div>
