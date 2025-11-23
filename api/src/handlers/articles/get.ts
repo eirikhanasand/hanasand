@@ -96,7 +96,8 @@ export default async function getArticles(req: FastifyRequest<{
 }
 
 export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
-    const id = req.params.id
+    const { id: Id } = req.params
+    const id = Id.endsWith('.md') ? Id : `${Id}.md`
     const filePath = join(ARTICLES_DIR, id)
     if (!(await fileExists(filePath))) {
         await ensureRepositoryUpToDate()
