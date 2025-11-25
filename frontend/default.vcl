@@ -23,7 +23,8 @@ sub vcl_backend_response {
 }
 
 sub vcl_deliver {
-    # Set headers to indicate whether the content was served from cache
+    set resp.http.Via = "Varnish Hanasand Cache";
+
     if (obj.hits > 0) {
         set resp.http.X-Cache = "HIT:" + obj.hits;
     } else {
