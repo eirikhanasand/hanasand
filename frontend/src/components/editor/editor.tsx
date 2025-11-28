@@ -53,7 +53,7 @@ marked.use({
                 : 'plaintext'
             const text = hljs.highlight(token.text, { language }).value
             const style = 'padding: 5px 10px; margin: 0;'
-            const className = 'inline-block rounded-lg overflow-auto whitespace-pre-wrap break-words w-full'
+            const className = 'inline-block rounded-lg overflow-auto whitespace-pre-wrap wrap-break-word w-full'
             return `<pre class='${className}'><code style='${style}' class='hljs ${language}'>${text}</code></pre>`
         },
         image(token) {
