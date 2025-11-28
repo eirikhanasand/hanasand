@@ -14,17 +14,17 @@ export async function proxy(req: NextRequest) {
         if (!tokenCookie || !idCookie) {
             return NextResponse.redirect(new URL(`/login?internal=true&path=${path}`, req.url))
         }
-        
+
         const token = tokenCookie.value
         const id = idCookie.value
         if (!validToken || !id) {
             validToken = await tokenIsValid(token, id)
-            
+
             if (!validToken) {
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&expired=true'}`, req.url))
             }
         }
-        
+
         const strictPath = pathToRoleArray.find((item) => path.startsWith(item.path))
         if (strictPath) {
             const roles = await getUserRoles({ token, id })
