@@ -2,6 +2,8 @@ services:
   frontend:
     container_name: hanasand
     image: hanasand
+    mem_limit: 1g
+    cpus: "2.0"
     restart: always
     build:
       context: ./frontend
@@ -20,6 +22,8 @@ services:
   api:
     container_name: hanasand_api
     image: hanasand_api
+    mem_limit: 1g
+    cpus: "2.0"
     build:
       context: ./api
       dockerfile: ./Dockerfile
@@ -41,6 +45,8 @@ services:
   postgres:
     image: postgres:15
     container_name: hanasand_database
+    mem_limit: 1g
+    cpus: "2.0"
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER:-hanasand}
