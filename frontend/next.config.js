@@ -17,8 +17,7 @@ const nextConfig = {
                 search: '',
             },
         ]
-    },
-    /* config options here */
+    }
 }
 
 module.exports = nextConfig

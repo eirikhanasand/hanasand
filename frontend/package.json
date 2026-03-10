@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
     "dotenv": "^17.3.1",
     "formik": "^2.4.9",
     "highlight.js": "^11.11.1",
@@ -26,7 +27,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
-    "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "^25.3.5",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

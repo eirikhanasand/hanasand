@@ -5,11 +5,11 @@ FROM node:alpine
 WORKDIR /app
 
 # Production env vars
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 # Installs services
-RUN apk add varnish
+RUN ["apk", "add", "varnish"]
 
 # Starts varnish
 COPY ./default.vcl /etc/varnish/default.vcl
@@ -21,12 +21,12 @@ COPY ./entrypoint.sh /app/entrypoint.sh
 COPY ./package*.json ./
 
 # Installs dependencies
-RUN npm ci --omit=dev
+RUN ["npm", "i"]
 
 # Copies the rest of the UI source code
 COPY . .
 
-RUN npm run build
+RUN ["npm", "run", "build"]
 
 # Exposes port 3000
 EXPOSE 3000
