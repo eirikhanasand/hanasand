@@ -2,7 +2,7 @@ import config from '@/config'
 
 export default async function getSystemMetrics(): Promise<SystemMetric[]> {
     try {
-        const response = await fetch(`${config.url.cdn}/system/metrics`)
+        const response = await fetch(`${config.url.api}/metrics`)
         if (!response.ok) {
             throw new Error(await response.text())
         }

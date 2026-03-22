@@ -36,9 +36,9 @@ export default async function run(query: string, params?: SQLParamType) {
                 client.release()
             }
         } catch (error) {
-            console.log(`Pool currently unavailable, retrying in ${config.CACHE_TTL / 1000}s...`)
+            console.log(`Pool currently unavailable, retrying in ${config.CACHE_TTL_HOT / 1000}s...`)
             console.log(error)
-            await sleep(config.CACHE_TTL)
+            await sleep(config.CACHE_TTL_HOT)
         }
     }
 }
