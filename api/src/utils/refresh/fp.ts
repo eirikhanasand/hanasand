@@ -6,7 +6,6 @@ export default fp(async (fastify) => {
     async function refreshQueries() {
         const stats = getStats()
         fastify.stats = Buffer.from(JSON.stringify(stats))
-
         fastify.log.info('Cached queries refreshed')
     }
 
