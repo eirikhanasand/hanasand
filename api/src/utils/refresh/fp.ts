@@ -1,6 +1,6 @@
 import config from '#constants'
 import fp from 'fastify-plugin'
-import getStats from './queries/stats'
+import getStats from './queries/stats.ts'
 
 export default fp(async (fastify) => {
     async function refreshQueries() {
