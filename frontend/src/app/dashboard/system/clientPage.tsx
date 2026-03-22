@@ -9,19 +9,56 @@ import stopAllVms from '@/utils/vms/fetch/stopAllVms'
 import Notify from '@/components/notify/notify'
 
 type SystemDashboardProps = {
-    systemMetrics: SystemMetric[]
+    system: SystemSnapshot | null
     dockerContainers: DockerContainer[]
     vms: VM[]
     vmMetrics: VMMetrics[]
 }
 
-export default function SystemDashboard({ systemMetrics, dockerContainers, vms }: SystemDashboardProps) {
+function formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes < 0) return '—'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    let n = bytes
+    let i = 0
+    while (n >= 1024 && i < units.length - 1) {
+        n /= 1024
+        i++
+    }
+    const decimals = i === 0 ? 0 : 2
+    return `${n.toFixed(decimals)} ${units[i]}`
+}
+
+function formatLoad(load: number[] | undefined): string {
+    if (!load?.length) return '—'
+    return load.map((v) => (typeof v === 'number' ? v.toFixed(2) : String(v))).join(' / ')
+}
+
+function systemToMetricCards(system: SystemSnapshot): SystemMetric[] {
+    const { load, memory, swap, disk, temperature, powerUsage, processes, os } = system
+    return [
+        { name: 'Load average (1 / 5 / 15 min)', value: formatLoad(load) },
+        {
+            name: 'Memory',
+            value: `${memory.percent}% — ${formatBytes(memory.used)} / ${formatBytes(memory.total)}`,
+        },
+        { name: 'Swap usage', value: String(swap).includes('%') ? String(swap) : `${swap}%` },
+        { name: 'Disk', value: disk },
+        { name: 'Temperature', value: temperature },
+        { name: 'Power usage', value: powerUsage },
+        { name: 'Processes', value: processes },
+        { name: 'OS', value: os },
+    ]
+}
+
+export default function SystemDashboard({ system, dockerContainers, vms }: SystemDashboardProps) {
     const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const runningVms = vms.filter((vm) => vm.status.toLowerCase() === 'running').length
     const stoppedVms = vms.filter((vm) => vm.status.toLowerCase() === 'stopped').length
     const vmOverviewClass = "bg-bright/3 text-sm outline outline-dark rounded-md py-0.5 px-4 text-bright/80"
     const idleVms = vms.length - runningVms - stoppedVms
+
+    const metricCards = system ? systemToMetricCards(system) : []
 
     async function handleRestartContainer(containerId: string) {
         await fetch(`/api/docker/${containerId}/restart`, { method: 'POST' })
@@ -43,14 +80,34 @@ export default function SystemDashboard({ systemMetrics, dockerContainers, vms }
             <Notify absolute className='px-8' color='bg-blue-500' background='bg-dark/40 outline outline-dark text-bright/80' message={message} />
             <div className='outline outline-dark rounded-md p-2 space-y-2'>
                 <h1 className="font-semibold text-xl text-bright/80">System Metrics</h1>
-                <div className="grid md:grid-cols-3 gap-4">
-                    {systemMetrics.map(metric => (
-                        <div key={metric.name} className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2">
-                            <h2 className="font-semibold text-lg">{metric.name}</h2>
-                            <span className="text-sm text-gray-300">{metric.value}</span>
+                {!system ? (
+                    <p className="text-sm text-gray-400">No system metrics available.</p>
+                ) : (
+                    <>
+                        <div className="grid md:grid-cols-3 gap-4">
+                            {metricCards.map((metric) => (
+                                <div key={metric.name} className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2">
+                                    <h2 className="font-semibold text-lg">{metric.name}</h2>
+                                    <span className="text-sm text-gray-300 wrap-break-word">{metric.value}</span>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
+                        <div className="grid md:grid-cols-2 gap-4 pt-2">
+                            <div className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2 min-h-0">
+                                <h2 className="font-semibold text-lg">IPv4</h2>
+                                <pre className="text-xs text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto font-mono">
+                                    {system.ipv4?.length ? system.ipv4.join('\n') : '—'}
+                                </pre>
+                            </div>
+                            <div className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2 min-h-0">
+                                <h2 className="font-semibold text-lg">IPv6</h2>
+                                <pre className="text-xs text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto font-mono">
+                                    {system.ipv6?.length ? system.ipv6.join('\n') : '—'}
+                                </pre>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             <div className='outline outline-dark rounded-md p-2 space-y-2'>

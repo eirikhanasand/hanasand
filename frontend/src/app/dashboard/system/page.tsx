@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 import getVMList from '@/utils/vms/fetch/getVMList'
 
 export default async function page() {
-    const systemMetrics = await getSystemMetrics()
+    const system = await getSystemMetrics()
     const dockerContainers = await getDockerContainers()
     const Cookies = await cookies()
     const token = Cookies.get('access_token')?.value
@@ -23,7 +23,7 @@ export default async function page() {
         <div className="h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6">
             <h1 className="font-semibold text-2xl text-bright/80">System Dashboard</h1>
             <SystemDashboard
-                systemMetrics={systemMetrics}
+                system={system}
                 dockerContainers={dockerContainers}
                 vms={vms}
                 vmMetrics={vmMetrics}

@@ -308,6 +308,29 @@ type SystemMetric = {
     value: string | number
 }
 
+type SystemMemorySnapshot = {
+    used: number
+    total: number
+    percent: string
+}
+
+type SystemSnapshot = {
+    load: number[]
+    memory: SystemMemorySnapshot
+    swap: string
+    disk: string
+    temperature: string
+    powerUsage: string
+    processes: number
+    ipv4: string[]
+    ipv6: string[]
+    os: string
+}
+
+type SystemMetricsApiResponse = {
+    system: SystemSnapshot
+}
+
 type DockerContainer = {
     id: string
     name: string
