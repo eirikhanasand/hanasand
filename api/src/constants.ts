@@ -37,7 +37,7 @@ const config = {
     DB_TIMEOUT_MS: env.DB_TIMEOUT_MS,
     DEFAULT_RESULTS_PER_PAGE: env.DEFAULT_RESULTS_PER_PAGE || 50,
     CACHE_TTL_HOT: 5000,
-    CACHE_TTL_COLD: 30000,
+    CACHE_TTL_COLD: 300000,
     vm_api_token: env.VM_API_TOKEN,
     pwned: 'http://pwned:8080/api/pwned',
     pwned_ws: 'ws://pwned:8080/api/pwned/ws',
