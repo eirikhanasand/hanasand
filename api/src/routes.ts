@@ -54,6 +54,7 @@ import shutdownVMs from './handlers/vms/shutdown.ts'
 import getVMDetails from './handlers/vms/getVMDetails.ts'
 import stopVms from './handlers/vms/stopVms.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
+import getDocker from './handlers/docker/getDocker.ts'
 
 /**
  * Defines the routes available in the API.
@@ -146,4 +147,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Server metrics
     fastify.get('/metrics', getMetrics)
+
+    // Docker stats
+    fastify.get('/docker', getDocker)
 }
