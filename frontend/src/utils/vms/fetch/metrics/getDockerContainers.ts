@@ -1,8 +1,19 @@
 import config from '@/config'
 
-export default async function getDockerContainers(): Promise<DockerContainer[]> {
+type DockerContainerStats = {
+    id: string
+    token: string
+}
+
+export default async function getDockerContainers({ id, token }: DockerContainerStats): Promise<DockerContainer[]> {
     try {
-        const response = await fetch(`${config.url.cdn}/docker/containers`)
+        const response = await fetch(`${config.url.api}/docker`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                id
+            }
+        })
+
         if (!response.ok) {
             throw new Error(await response.text())
         }

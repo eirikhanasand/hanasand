@@ -7,11 +7,11 @@ import { redirect } from 'next/navigation'
 import getVMList from '@/utils/vms/fetch/getVMList'
 
 export default async function page() {
-    const system = await getSystemMetrics()
-    const dockerContainers = await getDockerContainers()
     const Cookies = await cookies()
-    const token = Cookies.get('access_token')?.value
-    const id = Cookies.get('id')?.value
+    const id = Cookies.get('id')?.value || ''
+    const token = Cookies.get('access_token')?.value || ''
+    const system = await getSystemMetrics({ id, token })
+    const dockerContainers = await getDockerContainers({ id, token })
     if (!id || !token) {
         return redirect(`/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true`)
     }

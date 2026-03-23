@@ -1,8 +1,19 @@
 import config from '@/config'
 
-export default async function getSystemMetrics(): Promise<SystemSnapshot | null> {
+type SystemMetricsProps = {
+    id: string
+    token: string
+}
+
+export default async function getSystemMetrics({ id, token }: SystemMetricsProps): Promise<SystemSnapshot | null> {
     try {
-        const response = await fetch(`${config.url.api}/metrics`)
+        const response = await fetch(`${config.url.api}/metrics`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                id
+            }
+        })
+
         if (!response.ok) {
             throw new Error(await response.text())
         }
