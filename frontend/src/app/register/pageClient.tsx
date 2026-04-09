@@ -2,9 +2,11 @@
 import Notify from '@/components/notify/notify'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { setCookie } from '@/utils/cookies/cookies'
+import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 import Or from '@/utils/or'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 type RegisterPageProps = {
@@ -13,6 +15,7 @@ type RegisterPageProps = {
 }
 
 export default function RegisterPageClient({ path, serverInternal }: RegisterPageProps) {
+    const router = useRouter()
     const [name, setName] = useState('')
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -44,20 +47,17 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         const name = formData.get('name') as string
         const id = formData.get('username') as string
         const password = formData.get('password') as string
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-
         try {
-            const response = await fetch(`${config.url.api}/user`, {
+            const response = await fetchWithRetry(`${config.url.api}/user`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ name, id, password }),
-                signal: controller.signal
+                timeoutMs: config.abortTimeout,
+                retries: 2,
             })
 
-            clearTimeout(timeout)
             if (!response.ok) {
                 throw new Error(await response.text())
             }
@@ -67,11 +67,17 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 return setError(data.error)
             }
 
-            setCookie('name', data.name, 1)
-            setCookie('id', data.id, 1)
-            setCookie('avatar', data.avatar, 1)
-            setCookie('access_token', data.token, 1)
-            window.location.href = `/dashboard`
+            if (data.token) {
+                setCookieWithExpiresAt('name', data.name, data.expires_at)
+                setCookieWithExpiresAt('id', data.id, data.expires_at)
+                setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
+                setCookieWithExpiresAt('access_token', data.token, data.expires_at)
+                setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
+                router.push(path || '/dashboard')
+                return
+            }
+
+            setError(data.error || 'Account created, but login could not be completed.')
         } catch (error) {
             if ('message' in (error as { message: string })) {
                 try {
@@ -96,6 +102,13 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     }
 
     useEffect(() => {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (token && id) {
+            router.push('/dashboard')
+            return
+        }
+
         let numbers = 0
         let specialCharacters = 0
         let lowerCaseCharacters = 0
@@ -122,7 +135,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         setCharactersInPasswordCount(specialCharacters)
         setLowercaseInPasswordCount(lowerCaseCharacters)
         setUppercaseInPasswordCount(upperCaseCharacters)
-    }, [password])
+    }, [password, router])
 
     return (
         <section className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>

@@ -76,14 +76,24 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             assignedRoot = true
         }
 
-        const token = await login({ id, ip })
-        if (!token) {
-            const base = { ...user, message: 'User created', error: 'Unable to login. Please try again later.' }
+        const roleQuery = `
+            SELECT r.id, r.name, r.description, r.priority
+            FROM roles r
+            JOIN user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = $1
+            ORDER BY r.priority ASC, r.id ASC
+        `
+        const roleResponse = await run(roleQuery, [id])
+        const roles = roleResponse.rows
+
+        const session = await login({ id, ip })
+        if (!session) {
+            const base = { ...user, message: 'User created', roles, error: 'Unable to login. Please try again later.' }
             const data = assignedRoot ? { ...base, assignedRoot } : base
             return res.status(206).send(data)
         }
 
-        const base = { ...user, message: 'User created', token }
+        const base = { ...user, message: 'User created', roles, token: session.token, expires_at: session.expires_at }
         const data = assignedRoot ? { ...base, assignedRoot } : base
         return res.status(201).send(data)
     } catch (err) {

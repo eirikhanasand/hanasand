@@ -1,6 +1,7 @@
 'use client'
 
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 import { getCookie } from '../../cookies/cookies'
 
 export default async function deleteVM(vmId: string): Promise<{ status: number, message: string }> {
@@ -14,22 +15,20 @@ export default async function deleteVM(vmId: string): Promise<{ status: number, 
             }
         }
 
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/certificates/${vmId}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/${vmId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}`, id },
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
-        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }
 
         return {
             status: response.status,
-            message: `Deleted vm ${id}.`
+            message: `Deleted VM ${vmId}.`
         }
     } catch (error) {
         console.log(error)

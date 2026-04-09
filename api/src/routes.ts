@@ -20,6 +20,7 @@ import getRoles from './handlers/roles/getRoles.ts'
 import getRolesForUser from './handlers/roles/getRolesForUser.ts'
 import putUser from './handlers/user/putUser.ts'
 import deleteUser from './handlers/user/deleteUser.ts'
+import deleteSelf from './handlers/user/deleteSelf.ts'
 import authorizedUserHandler from './handlers/user/fullUser.ts'
 import getUsers from './handlers/user/getUsers.ts'
 import deleteArticle from './handlers/articles/delete.ts'
@@ -76,10 +77,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/user/:id', getUser)
     fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)
-    fastify.put('/user', putUser)
+    fastify.put('/user/:id', putUser)
     fastify.put('/user/self', putSelf)
     fastify.delete('/user/:id', deleteUser)
-    fastify.delete('/user/self', deleteUser)
+    fastify.delete('/user/self', deleteSelf)
 
     // Roles handlers
     fastify.get('/role/:id', getRole)
@@ -134,8 +135,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/vms/:user', getVM)
     fastify.get('/vms/access/:user', getAccessibleVMs)
     fastify.post('/vm', postVM)
+    fastify.post('/vm/:id/stop', stopVms)
     fastify.post('/vm/details', postVMDetails)
     fastify.post('/vms/shutdown', shutdownVMs)
+    fastify.post('/vms/stop', stopVms)
     fastify.delete('/vm/:id', deleteVM)
     fastify.delete('/vms', deleteVMs)
 

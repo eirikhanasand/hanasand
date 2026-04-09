@@ -8,7 +8,8 @@ export async function proxy(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
     const idCookie = req.cookies.get('id')
     const path = req.nextUrl.pathname
-    let validToken: boolean = false
+    let validToken = false
+    const response = NextResponse.next()
 
     if (!pathIsAllowedWhileUnauthorized(path)) {
         if (!tokenCookie || !idCookie) {
@@ -18,10 +19,43 @@ export async function proxy(req: NextRequest) {
         const token = tokenCookie.value
         const id = idCookie.value
         if (!validToken || !id) {
-            validToken = await tokenIsValid(token, id)
+            const auth = await tokenIsValid(token, id)
+            validToken = auth.valid
 
             if (!validToken) {
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&expired=true'}`, req.url))
+            }
+
+            if (auth.token) {
+                response.cookies.set('access_token', auth.token, {
+                    sameSite: 'lax',
+                    path: '/',
+                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
+                })
+            }
+
+            if (auth.roles) {
+                response.cookies.set('roles', JSON.stringify(auth.roles), {
+                    sameSite: 'lax',
+                    path: '/',
+                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
+                })
+            }
+
+            if (auth.name) {
+                response.cookies.set('name', auth.name, {
+                    sameSite: 'lax',
+                    path: '/',
+                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
+                })
+            }
+
+            if (auth.avatar !== undefined) {
+                response.cookies.set('avatar', auth.avatar, {
+                    sameSite: 'lax',
+                    path: '/',
+                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
+                })
             }
         }
 
@@ -35,7 +69,6 @@ export async function proxy(req: NextRequest) {
     }
 
     const theme = req.cookies.get('theme')?.value || 'dark'
-    const response = NextResponse.next()
     response.headers.set('x-theme', theme)
     response.headers.set('x-current-path', req.nextUrl.pathname)
     return response

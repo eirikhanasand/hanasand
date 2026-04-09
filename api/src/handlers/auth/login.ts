@@ -51,12 +51,12 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         `
         const roleResponse = await run(roleQuery, [id])
         const roles = roleResponse.rows
-        const token = await login({ id, ip })
-        if (!token) {
+        const session = await login({ id, ip })
+        if (!session) {
             return res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
         }
 
-        return res.send({ ...userWithoutPassword, roles, token })
+        return res.send({ ...userWithoutPassword, roles, token: session.token, expires_at: session.expires_at })
     } catch (err: unknown) {
         const error = err as Error
         return res.status(500).send({ error: error.message })

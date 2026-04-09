@@ -1,11 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import run from '#db'
-
-type User = {
-    id: string
-    name: string
-    avatar: string
-}
+import { validateSession } from '#utils/auth/session.ts'
 
 /**
  * Tests if a token is valid for a user
@@ -32,26 +26,16 @@ export default async function tokenHandler(req: FastifyRequest, res: FastifyRepl
     const token = authHeader.split(' ')[1]
 
     try {
-        const tokenResult = await run(
-            `SELECT token FROM tokens WHERE id = $1 AND token = $2`,
-            [id, token]
-        )
-
-        if (!tokenResult.rows.length) {
+        const session = await validateSession({ id, token })
+        if (!session) {
             return res.status(401).send({ error: 'Invalid token.' })
         }
-
-        const userResult = await run(
-            `SELECT id, name, avatar FROM users WHERE id = $1`,
-            [id]
-        )
-
-        if (!userResult.rows.length) {
-            return res.status(404).send({ error: `There is no user with id ${id}` })
-        }
-
-        const user: User = userResult.rows[0]
-        return res.send(user)
+        return res.send({
+            ...session.user,
+            roles: session.roles,
+            token: session.refreshed.token,
+            expires_at: session.refreshed.expires_at,
+        })
     } catch (error) {
         console.error(`Database error: ${JSON.stringify(error)}`)
         return res.status(500).send({ error: 'Internal Server Error' })

@@ -1,12 +1,15 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function getVMDetails(id: string, token: string, userId: string): Promise<VMDetails | null> {
     try {
-        const response = await fetch(`${config.url.api}/vm/details/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/details/${id}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 id: userId
-            }
+            },
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
         if (!response.ok) {

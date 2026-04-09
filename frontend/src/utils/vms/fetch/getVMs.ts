@@ -1,15 +1,14 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function getVMs(id: string): Promise<VM[]> {
     try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/vms/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vms/${id}`, {
             cache: 'no-store',
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
-        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }

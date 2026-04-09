@@ -1,4 +1,5 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 type SystemMetricsProps = {
     id: string
@@ -7,11 +8,13 @@ type SystemMetricsProps = {
 
 export default async function getSystemMetrics({ id, token }: SystemMetricsProps): Promise<SystemSnapshot | null> {
     try {
-        const response = await fetch(`${config.url.api}/metrics`, {
+        const response = await fetchWithRetry(`${config.url.api}/metrics`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 id
-            }
+            },
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
         if (!response.ok) {

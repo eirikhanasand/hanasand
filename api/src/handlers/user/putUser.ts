@@ -74,15 +74,15 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
                 return res.status(400).send({ error: 'User not found.' })
             }
 
-            const token = await login({ id, ip })
-            if (!token) {
+            const session = await login({ id, ip })
+            if (!session) {
                 return res.status(206).send({
                     message: 'Password updated, and you were logged out. Logging you back in was not possible due to an unknown error.',
                     error: 'Unable to login. Please try again later.'
                 })
             }
 
-            return res.status(201).send({ message: 'Password updated', token })
+            return res.status(201).send({ message: 'Password updated', token: session.token, expires_at: session.expires_at })
         } catch (error) {
             console.error(`Database error: ${JSON.stringify(error)}`)
             return res.status(500).send({ error: 'Internal Server Error' })
@@ -119,9 +119,14 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
         }
 
         const updatedUser = response.rows[0]
-        const token = await login({ id: updatedUser.id, ip })
+        const session = await login({ id: updatedUser.id, ip })
 
-        return res.status(200).send({ ...updatedUser, message: 'User updated', token })
+        return res.status(200).send({
+            ...updatedUser,
+            message: 'User updated',
+            token: session?.token ?? null,
+            expires_at: session?.expires_at ?? null
+        })
     } catch (err) {
         const error = err as unknown as Error & { code?: string }
         if (error.code === '23505') {

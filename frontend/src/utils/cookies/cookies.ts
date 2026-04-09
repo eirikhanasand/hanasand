@@ -17,6 +17,11 @@ export function setCookie(name: string, value: string, days?: number) {
     document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax`
 }
 
+export function setCookieWithExpiresAt(name: string, value: string, expiresAt?: string | null) {
+    const expires = expiresAt ? `expires=${new Date(expiresAt).toUTCString()};` : ''
+    document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax`
+}
+
 export function removeCookies(...cookies: string[]) {
     for (const cookie of cookies) {
         removeCookie(cookie)

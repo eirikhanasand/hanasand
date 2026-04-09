@@ -1,20 +1,17 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function login(id: string, password: string) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-
     try {
-        const response = await fetch(`${config.url.api}/auth/login/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/auth/login/${id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ password }),
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
-
-        clearTimeout(timeout)
 
         if (!response.ok) {
             throw new Error(await response.text())

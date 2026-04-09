@@ -1,16 +1,16 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function stopAllVms(token: string, id: string): Promise<{ success: boolean, message: string }> {
     try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/vms/stop`, {
+        const response = await fetchWithRetry(`${config.url.api}/vms/stop`, {
+            method: 'POST',
             headers: { 'Authorization': `Bearer ${token}`, id },
             cache: 'no-store',
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
-        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }

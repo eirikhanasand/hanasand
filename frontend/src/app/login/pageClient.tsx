@@ -1,7 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { getCookie, setCookie } from '@/utils/cookies/cookies'
+import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 import login from '@/utils/login/login'
 import Or from '@/utils/or'
 import Link from 'next/link'
@@ -26,22 +26,18 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         try {
             const data = await login(id, password)
             if (data) {
-                setCookie('name', data.name, 1)
-                setCookie('id', data.id, 1)
-                setCookie('avatar', data.avatar, 1)
-                setCookie('access_token', data.token, 1)
-                setCookie('roles', JSON.stringify(data.roles), 1)
-
-                if (path) {
-                    router.push(path)
-                }
+                setCookieWithExpiresAt('name', data.name, data.expires_at)
+                setCookieWithExpiresAt('id', data.id, data.expires_at)
+                setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
+                setCookieWithExpiresAt('access_token', data.token, data.expires_at)
+                setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
+                router.push(path || '/dashboard')
+                return
             }
 
             if (!data) {
                 setError('Please try again later.')
             }
-
-            router.push(`/dashboard`)
         } catch (error) {
             if ('message' in (error as { message: string })) {
                 try {

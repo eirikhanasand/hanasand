@@ -6,6 +6,7 @@ import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import stopAllVms from '@/utils/vms/fetch/stopAllVms'
+import restartDocker from '@/utils/vms/fetch/restartDocker'
 import Notify from '@/components/notify/notify'
 
 type SystemDashboardProps = {
@@ -61,7 +62,7 @@ export default function SystemDashboard({ system, dockerContainers, vms }: Syste
     const metricCards = system ? systemToMetricCards(system) : []
 
     async function handleRestartContainer(containerId: string) {
-        await fetch(`/api/docker/${containerId}/restart`, { method: 'POST' })
+        setMessage(await restartDocker(containerId))
     }
 
     async function handleStopAll() {

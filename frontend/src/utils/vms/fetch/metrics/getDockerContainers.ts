@@ -1,4 +1,5 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 type DockerContainerStats = {
     id: string
@@ -7,11 +8,13 @@ type DockerContainerStats = {
 
 export default async function getDockerContainers({ id, token }: DockerContainerStats): Promise<DockerContainer[]> {
     try {
-        const response = await fetch(`${config.url.api}/docker`, {
+        const response = await fetchWithRetry(`${config.url.api}/docker`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 id
-            }
+            },
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
         if (!response.ok) {

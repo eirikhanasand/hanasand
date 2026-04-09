@@ -1,19 +1,18 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function getVM(id: string, token?: string, userId?: string): Promise<VM[] | null> {
     try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/vm/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/${id}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 id: userId || ''
             },
             cache: 'no-store',
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
-        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(`Error fetching vm ${id}.`)
         }

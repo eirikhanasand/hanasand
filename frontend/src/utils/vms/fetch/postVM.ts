@@ -1,6 +1,7 @@
 'use client'
 
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 import { getCookie } from '../../cookies/cookies'
 
 export default async function postVM(vm: Partial<VM>): Promise<{ status: number, message: string }> {
@@ -14,9 +15,7 @@ export default async function postVM(vm: Partial<VM>): Promise<{ status: number,
             }
         }
 
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/vm`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -24,10 +23,9 @@ export default async function postVM(vm: Partial<VM>): Promise<{ status: number,
                 id
             },
             body: JSON.stringify({ ...vm }),
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
-
-        clearTimeout(timeout)
 
         if (response.status === 409) {
             throw new Error('conflict')
@@ -39,20 +37,20 @@ export default async function postVM(vm: Partial<VM>): Promise<{ status: number,
 
         return {
             status: response.status,
-            message: `Created certificate ${vm.name}.`
+            message: `Created VM ${vm.name}.`
         }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         if (error.message === 'conflict') {
             return {
                 status: 409,
-                message: `You already have a certificate with this name.`
+                message: `A VM with the name ${vm.name} already exists.`
             }
         }
 
         return {
             status: 500,
-            message: `Failed to create certificate ${vm.name}.`
+            message: `Failed to create VM ${vm.name}.`
         }
     }
 }

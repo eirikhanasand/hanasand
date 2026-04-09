@@ -1,7 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import config from '#constants'
-
-const { self_url } = config
+import { validateSession } from './session.ts'
 
 type Valid = {
     valid: boolean
@@ -51,13 +49,8 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     const token = authHeader.split(' ')[1]
 
     try {
-        const response = await fetch(`${self_url}/${id}`, {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        })
-
-        if (!response.ok) {
+        const session = await validateSession({ id, token })
+        if (!session) {
             return {
                 valid: false,
                 id,
@@ -65,13 +58,21 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
             }
         }
 
+        res.header('x-access-token', session.refreshed.token)
+        res.header('x-access-token-expires-at', session.refreshed.expires_at)
         return { valid: true, id }
     } catch (error) {
         res.log.error(error)
-        return res.status(500).send({
+        res.status(500).send({
             valid: false,
             id,
             error: 'Internal server error'
         })
+
+        return {
+            valid: false,
+            id,
+            error: 'Internal server error'
+        }
     }
 }
