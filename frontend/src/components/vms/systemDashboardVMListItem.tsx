@@ -7,6 +7,8 @@ import Link from 'next/link'
 export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) {
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
     const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Unknown'
+    const accessUserCount = Array.isArray(vm.access_users) ? vm.access_users.length : 0
+    const ipAddress = vm.device_eth0_ipv4_address || 'No IPv4'
 
     return (
         <Link href={`/dashboard/vms/${vm.name}`} className='flex w-full gap-2 rounded-md p-2 hover:bg-bright/3 cursor-pointer items-center text-bright/80'>
@@ -20,9 +22,9 @@ export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; met
             <div className='w-full flex max-w-full flex-wrap gap-1'>
                 <Tag color='orange' text={formatDescription(vm.config_image_description)} />
                 <Tag color='blue' text={type} />
-                <Tag color='blue' icon='pencil' text={String(vm.access_users.length)} />
-                <Tag color='green' icon='refresh' text={smallDate(vm.last_checked)} />
-                <Tag color='blue' text={vm.device_eth0_ipv4_address} />
+                <Tag color='blue' icon='pencil' text={String(accessUserCount)} />
+                <Tag color='green' icon='refresh' text={vm.last_checked ? smallDate(vm.last_checked) : 'Unknown'} />
+                <Tag color='blue' text={ipAddress} />
             </div>
         </Link>
     )

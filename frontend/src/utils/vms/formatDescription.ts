@@ -1,4 +1,8 @@
-export default function formatDescription(input: string) {
+export default function formatDescription(input?: string | null) {
+    if (!input) {
+        return 'Unknown'
+    }
+
     if (!input.includes(' ') || input.length <= 2) {
         return input
     }
