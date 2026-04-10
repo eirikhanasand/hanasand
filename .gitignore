@@ -37,3 +37,6 @@ next-env.d.ts
 
 # runtime article repository clone
 /api/articles/
+
+# gpts
+/gpt/models/*

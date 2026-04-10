@@ -24,7 +24,7 @@ fastify.register(cors, {
 })
 
 fastify.register(fp)
-fastify.register(ws, { prefix: '/api' })
+fastify.register(ws)
 fastify.register(apiRoutes, { prefix: '/api' })
 fastify.get('/', IndexHandler)
 fastify.addHook('onError', async (req, _res, error) => {

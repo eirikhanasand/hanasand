@@ -6,6 +6,7 @@ import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
 import followTest from '../handlers/test/follow.ts'
+import { handleGptMessage } from '#utils/ws/handleGptMessage.ts'
 
 type PendingUpdates = { 
     content: string
@@ -14,12 +15,14 @@ type PendingUpdates = {
 
 const messageBuffer: Buffer[] = []
 
+export const gptClients = new Map<string, Set<WebSocket>>()
 export const pwnedClients = new Map<string, Set<WebSocket>>()
 export const testClients = new Map<string, Set<WebSocket>>()
 export const pendingUpdates = new Map<string, PendingUpdates>()
 
 export default fp(async function wsPlugin(fastify: FastifyInstance) {
     fastify.register(async function (fastify) {
+        // pwned
         fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             
@@ -58,6 +61,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             })
         })
 
+        // test
         fastify.get('/api/ws/test/:id', { websocket: true }, (connection, req: FastifyRequest) => {
             const id = (req.params as { id: string}).id
             registerClient(id, connection, testClients)
@@ -72,6 +76,20 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
 
             connection.on('close', () => {
                 removeClient(id, connection, testClients)
+            })
+        })
+
+        // gpt
+        fastify.get<{ Params: { id: string } }>('/api/client/ws/:id', { websocket: true }, (connection: WebSocket, req: FastifyRequest<{ Params: { id: string } }>) => {
+            const id = (req.params as { id: string}).id
+
+            registerClient(id, connection, gptClients)
+            connection.on('message', (message) => {
+                handleGptMessage(id, connection, message)
+            })
+
+            connection.on('close', () => {
+                removeClient(id, connection, gptClients)
             })
         })
     })

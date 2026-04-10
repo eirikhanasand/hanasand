@@ -21,8 +21,8 @@ function getSocketUrls(baseUrl: string) {
     const rootBaseUrl = webSocketBaseUrl.replace(/\/api$/, '')
 
     return [...new Set([
-        `${webSocketBaseUrl}/client/ws/hanasand`,
-        `${rootBaseUrl}/client/ws/hanasand`,
+        `${webSocketBaseUrl}/client/ws/gpt`,
+        `${rootBaseUrl}/client/ws/gpt`,
     ])]
 }
 
