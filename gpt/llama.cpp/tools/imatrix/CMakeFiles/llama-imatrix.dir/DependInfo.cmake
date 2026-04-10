@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/imatrix/imatrix.cpp" "tools/imatrix/CMakeFiles/llama-imatrix.dir/imatrix.cpp.o" "gcc" "tools/imatrix/CMakeFiles/llama-imatrix.dir/imatrix.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/imatrix/imatrix.cpp" "tools/imatrix/CMakeFiles/llama-imatrix.dir/imatrix.cpp.o" "gcc" "tools/imatrix/CMakeFiles/llama-imatrix.dir/imatrix.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

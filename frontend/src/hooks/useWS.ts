@@ -19,7 +19,7 @@ export default function useWS<T>({ path, initialState, id, replace = false }: WS
         if (id === null) return
 
         const pathWithId = path.replaceAll(/{id}/g, randomId()).replaceAll(/:id/g, randomId())
-        const ws = new WebSocket(`${config.url.cdn_ws}${pathWithId}`)
+        const ws = new WebSocket(`${config.url.cdn_wss}${pathWithId}`)
 
         ws.onopen = () => {
             setConnected(true)

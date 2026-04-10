@@ -1,4 +1,4 @@
-# Install script for directory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/llama-bench
+# Install script for directory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/llama-bench
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -38,11 +38,11 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/llama-bench")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/llama-bench")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-bench" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-bench")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-bench")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-bench")
@@ -53,6 +53,6 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/llama-bench/install_local_manifest.txt"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/llama-bench/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

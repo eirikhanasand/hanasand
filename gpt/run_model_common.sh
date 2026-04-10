@@ -254,8 +254,8 @@ download_model() {
     return
   fi
 
-  if [ "${BEESWARM_SKIP_DOWNLOAD:-0}" = "1" ]; then
-    echo "Skipping model download because BEESWARM_SKIP_DOWNLOAD=1"
+  if [ "${GPT_SKIP_DOWNLOAD:-0}" = "1" ]; then
+    echo "Skipping model download because GPT_SKIP_DOWNLOAD=1"
     return
   fi
 
@@ -319,7 +319,7 @@ echo "Model path:       $MODEL_PATH"
 echo "Context size:     $CTX_SIZE"
 echo "Port:             $MODEL_PORT"
 
-if [ "${BEESWARM_BUILD_ONLY:-0}" = "1" ]; then
+if [ "${GPT_BUILD_ONLY:-0}" = "1" ]; then
   echo "Build-only mode complete."
   exit 0
 fi

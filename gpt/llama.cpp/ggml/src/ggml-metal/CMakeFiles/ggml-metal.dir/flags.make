@@ -6,7 +6,7 @@
 # compile CXX with /usr/bin/c++
 ASM_DEFINES = -DGGML_BACKEND_BUILD -DGGML_BACKEND_SHARED -DGGML_METAL_EMBED_LIBRARY -DGGML_SCHED_MAX_COPIES=4 -DGGML_SHARED -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE=600 -Dggml_metal_EXPORTS
 
-ASM_INCLUDES = -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/ggml-metal/.. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/../include -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Foundation.framework -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Metal.framework -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/MetalKit.framework
+ASM_INCLUDES = -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/ggml-metal/.. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/../include -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Foundation.framework -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Metal.framework -I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/MetalKit.framework
 
 ASM_FLAGSarm64 = -O3 -DNDEBUG -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -fPIC
 
@@ -14,7 +14,7 @@ ASM_FLAGS = -O3 -DNDEBUG -arch arm64 -isysroot /Applications/Xcode.app/Contents/
 
 C_DEFINES = -DGGML_BACKEND_BUILD -DGGML_BACKEND_SHARED -DGGML_METAL_EMBED_LIBRARY -DGGML_SCHED_MAX_COPIES=4 -DGGML_SHARED -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE=600 -Dggml_metal_EXPORTS
 
-C_INCLUDES = -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/ggml-metal/.. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/../include -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks
+C_INCLUDES = -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/ggml-metal/.. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/../include -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks
 
 C_FLAGSarm64 = -O3 -DNDEBUG -std=gnu11 -arch arm64 -fPIC -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wunreachable-code-break -Wunreachable-code-return -Wdouble-promotion
 
@@ -22,7 +22,7 @@ C_FLAGS = -O3 -DNDEBUG -std=gnu11 -arch arm64 -fPIC -Wshadow -Wstrict-prototypes
 
 CXX_DEFINES = -DGGML_BACKEND_BUILD -DGGML_BACKEND_SHARED -DGGML_METAL_EMBED_LIBRARY -DGGML_SCHED_MAX_COPIES=4 -DGGML_SHARED -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE=600 -Dggml_metal_EXPORTS
 
-CXX_INCLUDES = -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/ggml-metal/.. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/../include -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks
+CXX_INCLUDES = -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/ggml-metal/.. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/../include -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks
 
 CXX_FLAGSarm64 = -O3 -DNDEBUG -std=gnu++17 -arch arm64 -fPIC -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
 

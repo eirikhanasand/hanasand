@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/llama-bench/llama-bench.cpp" "tools/llama-bench/CMakeFiles/llama-bench.dir/llama-bench.cpp.o" "gcc" "tools/llama-bench/CMakeFiles/llama-bench.dir/llama-bench.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/llama-bench/llama-bench.cpp" "tools/llama-bench/CMakeFiles/llama-bench.dir/llama-bench.cpp.o" "gcc" "tools/llama-bench/CMakeFiles/llama-bench.dir/llama-bench.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

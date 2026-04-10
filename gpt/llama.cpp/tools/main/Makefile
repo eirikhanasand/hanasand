@@ -57,10 +57,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -142,14 +142,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/main//CMakeFiles/progress.marks
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/main//CMakeFiles/progress.marks
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/clean
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/clean
 .PHONY : clean
 
 # The main clean target
@@ -158,22 +158,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 tools/main/CMakeFiles/llama-cli.dir/rule:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/CMakeFiles/llama-cli.dir/rule
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/main/CMakeFiles/llama-cli.dir/rule
 .PHONY : tools/main/CMakeFiles/llama-cli.dir/rule
 
 # Convenience name for target.
@@ -182,7 +182,7 @@ llama-cli: tools/main/CMakeFiles/llama-cli.dir/rule
 
 # fast build rule for target.
 llama-cli/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/build
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/build
 .PHONY : llama-cli/fast
 
 main.o: main.cpp.o
@@ -190,7 +190,7 @@ main.o: main.cpp.o
 
 # target to build an object file
 main.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/main.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/main.cpp.o
 .PHONY : main.cpp.o
 
 main.i: main.cpp.i
@@ -198,7 +198,7 @@ main.i: main.cpp.i
 
 # target to preprocess a source file
 main.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/main.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/main.cpp.i
 .PHONY : main.cpp.i
 
 main.s: main.cpp.s
@@ -206,7 +206,7 @@ main.s: main.cpp.s
 
 # target to generate assembly for a file
 main.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/main.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/main/CMakeFiles/llama-cli.dir/build.make tools/main/CMakeFiles/llama-cli.dir/main.cpp.s
 .PHONY : main.cpp.s
 
 # Help Target
@@ -237,6 +237,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

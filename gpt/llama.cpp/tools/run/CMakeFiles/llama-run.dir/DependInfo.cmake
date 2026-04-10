@@ -8,8 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/run/linenoise.cpp/linenoise.cpp" "tools/run/CMakeFiles/llama-run.dir/linenoise.cpp/linenoise.cpp.o" "gcc" "tools/run/CMakeFiles/llama-run.dir/linenoise.cpp/linenoise.cpp.o.d"
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/run/run.cpp" "tools/run/CMakeFiles/llama-run.dir/run.cpp.o" "gcc" "tools/run/CMakeFiles/llama-run.dir/run.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/run/linenoise.cpp/linenoise.cpp" "tools/run/CMakeFiles/llama-run.dir/linenoise.cpp/linenoise.cpp.o" "gcc" "tools/run/CMakeFiles/llama-run.dir/linenoise.cpp/linenoise.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/run/run.cpp" "tools/run/CMakeFiles/llama-run.dir/run.cpp.o" "gcc" "tools/run/CMakeFiles/llama-run.dir/run.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

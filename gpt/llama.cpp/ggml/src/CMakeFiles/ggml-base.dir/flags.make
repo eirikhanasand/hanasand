@@ -5,7 +5,7 @@
 # compile CXX with /usr/bin/c++
 C_DEFINES = -DGGML_BUILD -DGGML_COMMIT=\"17484f3f\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_SHARED -DGGML_VERSION=\"0.9.4\" -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE=600 -Dggml_base_EXPORTS
 
-C_INCLUDES = -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/../include
+C_INCLUDES = -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/../include
 
 C_FLAGSarm64 = -O3 -DNDEBUG -std=gnu11 -arch arm64 -fPIC -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wunreachable-code-break -Wunreachable-code-return -Wdouble-promotion
 
@@ -13,7 +13,7 @@ C_FLAGS = -O3 -DNDEBUG -std=gnu11 -arch arm64 -fPIC -Wshadow -Wstrict-prototypes
 
 CXX_DEFINES = -DGGML_BUILD -DGGML_COMMIT=\"17484f3f\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_SHARED -DGGML_VERSION=\"0.9.4\" -D_DARWIN_C_SOURCE -D_XOPEN_SOURCE=600 -Dggml_base_EXPORTS
 
-CXX_INCLUDES = -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/../include
+CXX_INCLUDES = -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/../include
 
 CXX_FLAGSarm64 = -O3 -DNDEBUG -std=gnu++17 -arch arm64 -fPIC -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
 

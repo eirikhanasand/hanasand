@@ -1,4 +1,4 @@
-# Install script for directory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools
+# Install script for directory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,77 +39,77 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/batched-bench/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/batched-bench/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/gguf-split/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/gguf-split/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/imatrix/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/imatrix/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/llama-bench/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/llama-bench/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/main/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/main/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/perplexity/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/perplexity/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/quantize/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/quantize/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/server/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/server/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/run/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/run/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/tokenize/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/tokenize/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/tts/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/tts/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/cvector-generator/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/cvector-generator/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/export-lora/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/export-lora/cmake_install.cmake")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/install_local_manifest.txt"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

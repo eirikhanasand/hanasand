@@ -4,8 +4,8 @@
 
 
 # Configuration directories and files
-SourceDirectory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
-BuildDirectory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+SourceDirectory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
+BuildDirectory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 # Where to place the cost data store
 CostDataFile: 
@@ -27,7 +27,7 @@ SubmitInactivityTimeout:
 NightlyStartTime: 00:00:00 EDT
 
 # Commands for the build/test/submit cycle
-ConfigureCommand: "/opt/homebrew/bin/cmake" "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp"
+ConfigureCommand: "/opt/homebrew/bin/cmake" "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp"
 MakeCommand: /opt/homebrew/bin/cmake --build . --config "${CTEST_CONFIGURATION_TYPE}"
 DefaultCTestConfigurationType: Release
 

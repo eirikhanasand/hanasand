@@ -57,10 +57,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -142,14 +142,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/tokenize//CMakeFiles/progress.marks
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/tokenize//CMakeFiles/progress.marks
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/clean
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/clean
 .PHONY : clean
 
 # The main clean target
@@ -158,22 +158,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 tools/tokenize/CMakeFiles/llama-tokenize.dir/rule:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/CMakeFiles/llama-tokenize.dir/rule
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tools/tokenize/CMakeFiles/llama-tokenize.dir/rule
 .PHONY : tools/tokenize/CMakeFiles/llama-tokenize.dir/rule
 
 # Convenience name for target.
@@ -182,7 +182,7 @@ llama-tokenize: tools/tokenize/CMakeFiles/llama-tokenize.dir/rule
 
 # fast build rule for target.
 llama-tokenize/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/build
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/build
 .PHONY : llama-tokenize/fast
 
 tokenize.o: tokenize.cpp.o
@@ -190,7 +190,7 @@ tokenize.o: tokenize.cpp.o
 
 # target to build an object file
 tokenize.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.o
 .PHONY : tokenize.cpp.o
 
 tokenize.i: tokenize.cpp.i
@@ -198,7 +198,7 @@ tokenize.i: tokenize.cpp.i
 
 # target to preprocess a source file
 tokenize.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.i
 .PHONY : tokenize.cpp.i
 
 tokenize.s: tokenize.cpp.s
@@ -206,7 +206,7 @@ tokenize.s: tokenize.cpp.s
 
 # target to generate assembly for a file
 tokenize.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f tools/tokenize/CMakeFiles/llama-tokenize.dir/build.make tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.s
 .PHONY : tokenize.cpp.s
 
 # Help Target
@@ -237,6 +237,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

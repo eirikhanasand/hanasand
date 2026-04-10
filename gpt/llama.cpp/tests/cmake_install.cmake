@@ -1,4 +1,4 @@
-# Install script for directory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tests
+# Install script for directory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tests
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -38,11 +38,11 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-tokenizer-0")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-tokenizer-0")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-0" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-0")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-0")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-0")
@@ -51,11 +51,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-sampling")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-sampling")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-sampling" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-sampling")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-sampling")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-sampling")
@@ -64,11 +64,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-grammar-parser")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-grammar-parser")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-parser" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-parser")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-parser")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-parser")
@@ -77,11 +77,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-grammar-integration")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-grammar-integration")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-integration" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-integration")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-integration")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-grammar-integration")
@@ -90,11 +90,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-llama-grammar")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-llama-grammar")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-llama-grammar" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-llama-grammar")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-llama-grammar")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-llama-grammar")
@@ -103,11 +103,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-chat")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-chat")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat")
@@ -116,11 +116,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-json-schema-to-grammar")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-json-schema-to-grammar")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-schema-to-grammar" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-schema-to-grammar")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-schema-to-grammar")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-schema-to-grammar")
@@ -129,11 +129,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-quantize-stats")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-quantize-stats")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-stats" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-stats")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-stats")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-stats")
@@ -142,11 +142,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-gbnf-validator")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-gbnf-validator")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gbnf-validator" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gbnf-validator")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gbnf-validator")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gbnf-validator")
@@ -155,11 +155,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-tokenizer-1-bpe")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-tokenizer-1-bpe")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-bpe" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-bpe")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-bpe")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-bpe")
@@ -168,11 +168,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-tokenizer-1-spm")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-tokenizer-1-spm")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-spm" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-spm")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-spm")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-tokenizer-1-spm")
@@ -181,11 +181,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-chat-parser")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-chat-parser")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-parser" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-parser")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-parser")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-parser")
@@ -194,11 +194,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-chat-template")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-chat-template")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-template" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-template")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-template")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-chat-template")
@@ -207,11 +207,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-json-partial")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-json-partial")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-partial" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-partial")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-partial")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-json-partial")
@@ -220,11 +220,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-log")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-log")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-log" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-log")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-log")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-log")
@@ -233,11 +233,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-regex-partial")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-regex-partial")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-regex-partial" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-regex-partial")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-regex-partial")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-regex-partial")
@@ -246,11 +246,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-thread-safety")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-thread-safety")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-thread-safety" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-thread-safety")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-thread-safety")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-thread-safety")
@@ -259,11 +259,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-arg-parser")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-arg-parser")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-arg-parser" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-arg-parser")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-arg-parser")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-arg-parser")
@@ -272,11 +272,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-opt")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-opt")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-opt" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-opt")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-opt")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-opt")
@@ -285,11 +285,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-gguf")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-gguf")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gguf" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gguf")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gguf")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-gguf")
@@ -298,11 +298,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-backend-ops")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-backend-ops")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-backend-ops" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-backend-ops")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-backend-ops")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-backend-ops")
@@ -311,11 +311,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-model-load-cancel")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-model-load-cancel")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-model-load-cancel" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-model-load-cancel")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-model-load-cancel")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-model-load-cancel")
@@ -324,11 +324,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-autorelease")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-autorelease")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-autorelease" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-autorelease")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-autorelease")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-autorelease")
@@ -337,11 +337,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-barrier")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-barrier")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-barrier" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-barrier")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-barrier")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-barrier")
@@ -350,11 +350,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-quantize-fns")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-quantize-fns")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-fns" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-fns")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-fns")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-fns")
@@ -363,11 +363,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-quantize-perf")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-quantize-perf")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-perf" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-perf")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-perf")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-quantize-perf")
@@ -376,11 +376,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-rope")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-rope")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-rope" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-rope")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-rope")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-rope")
@@ -389,11 +389,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-mtmd-c-api")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-mtmd-c-api")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-mtmd-c-api" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-mtmd-c-api")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-mtmd-c-api")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-mtmd-c-api")
@@ -402,11 +402,11 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/test-alloc")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/test-alloc")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-alloc" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-alloc")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-alloc")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/test-alloc")
@@ -417,6 +417,6 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tests/install_local_manifest.txt"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tests/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

@@ -5,8 +5,8 @@
 cmake_minimum_required(VERSION 4.3.1)
 
 # CTest Start Step
-set(CTEST_SOURCE_DIRECTORY "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp")
-set(CTEST_BINARY_DIRECTORY "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp")
+set(CTEST_SOURCE_DIRECTORY "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp")
+set(CTEST_BINARY_DIRECTORY "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp")
 
 # CTest Update Step
 set(CTEST_UPDATE_COMMAND "")

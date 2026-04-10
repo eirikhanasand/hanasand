@@ -1,4 +1,4 @@
-# Install script for directory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml
+# Install script for directory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,15 +39,15 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/cmake_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/libggml.dylib")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/libggml.dylib")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libggml.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libggml.dylib")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libggml.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -x "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libggml.dylib")
@@ -60,26 +60,26 @@ endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE FILE FILES
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-cpu.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-alloc.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-backend.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-blas.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-cann.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-cpp.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-cuda.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-opt.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-metal.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-rpc.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-sycl.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-vulkan.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/ggml-webgpu.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/include/gguf.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-cpu.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-alloc.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-backend.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-blas.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-cann.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-cpp.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-cuda.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-opt.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-metal.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-rpc.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-sycl.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-vulkan.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/ggml-webgpu.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/include/gguf.h"
     )
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/libggml-base.dylib")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/libggml-base.dylib")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libggml-base.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libggml-base.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
@@ -93,14 +93,14 @@ endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/ggml" TYPE FILE FILES
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/ggml-config.cmake"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/ggml-version.cmake"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/ggml-config.cmake"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/ggml-version.cmake"
     )
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/install_local_manifest.txt"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

@@ -1,4 +1,4 @@
-# Install script for directory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+# Install script for directory: /Users/eirikhanasand/Desktop/Login/gpt/model/llama.cpp
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,35 +39,35 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/src/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/src/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/common/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/common/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tests/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tests/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/cmake_install.cmake")
+  include("/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/cmake_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/libllama.dylib")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/libllama.dylib")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libllama.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libllama.dylib")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libllama.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -x "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libllama.dylib")
@@ -80,30 +80,30 @@ endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE FILE FILES
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/include/llama.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/include/llama-cpp.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/include/llama.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/include/llama-cpp.h"
     )
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/llama" TYPE FILE FILES
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/llama-config.cmake"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/llama-version.cmake"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/llama-config.cmake"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/llama-version.cmake"
     )
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE FILE PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/convert_hf_to_gguf.py")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE FILE PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/convert_hf_to_gguf.py")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig" TYPE FILE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/llama.pc")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig" TYPE FILE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/llama.pc")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/install_local_manifest.txt"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()
 if(CMAKE_INSTALL_COMPONENT)
@@ -119,6 +119,6 @@ else()
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

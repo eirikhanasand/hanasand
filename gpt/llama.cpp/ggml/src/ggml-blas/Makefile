@@ -57,10 +57,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -142,14 +142,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/ggml-blas//CMakeFiles/progress.marks
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/ggml-blas//CMakeFiles/progress.marks
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/clean
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/clean
 .PHONY : clean
 
 # The main clean target
@@ -158,22 +158,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/rule:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/rule
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/rule
 .PHONY : ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/rule
 
 # Convenience name for target.
@@ -182,7 +182,7 @@ ggml-blas: ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/rule
 
 # fast build rule for target.
 ggml-blas/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build
 .PHONY : ggml-blas/fast
 
 ggml-blas.o: ggml-blas.cpp.o
@@ -190,7 +190,7 @@ ggml-blas.o: ggml-blas.cpp.o
 
 # target to build an object file
 ggml-blas.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.o
 .PHONY : ggml-blas.cpp.o
 
 ggml-blas.i: ggml-blas.cpp.i
@@ -198,7 +198,7 @@ ggml-blas.i: ggml-blas.cpp.i
 
 # target to preprocess a source file
 ggml-blas.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.i
 .PHONY : ggml-blas.cpp.i
 
 ggml-blas.s: ggml-blas.cpp.s
@@ -206,7 +206,7 @@ ggml-blas.s: ggml-blas.cpp.s
 
 # target to generate assembly for a file
 ggml-blas.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/build.make ggml/src/ggml-blas/CMakeFiles/ggml-blas.dir/ggml-blas.cpp.s
 .PHONY : ggml-blas.cpp.s
 
 # Help Target
@@ -237,6 +237,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

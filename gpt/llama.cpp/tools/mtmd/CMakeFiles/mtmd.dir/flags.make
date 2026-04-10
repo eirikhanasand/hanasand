@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -DGGML_BACKEND_SHARED -DGGML_SHARED -DGGML_USE_BLAS -DGGML_USE_CPU -DGGML_USE_METAL -DLLAMA_BUILD -DLLAMA_SHARED -Dmtmd_EXPORTS
 
-CXX_INCLUDES = -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/../.. -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/../../vendor -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/ggml/src/../include -I/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/src/../include
+CXX_INCLUDES = -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/../.. -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/../../vendor -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/ggml/src/../include -I/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/src/../include
 
 CXX_FLAGSarm64 = -O3 -DNDEBUG -std=gnu++17 -arch arm64 -fPIC -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi -Wno-cast-qual
 

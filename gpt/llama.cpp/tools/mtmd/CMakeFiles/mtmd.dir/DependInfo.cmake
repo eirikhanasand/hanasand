@@ -8,10 +8,10 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/clip.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/clip.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/clip.cpp.o.d"
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/mtmd-audio.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-audio.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-audio.cpp.o.d"
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/mtmd-helper.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper.cpp.o.d"
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/mtmd.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/clip.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/clip.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/clip.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/mtmd-audio.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-audio.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-audio.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/mtmd-helper.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/mtmd.cpp" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd.cpp.o" "gcc" "tools/mtmd/CMakeFiles/mtmd.dir/mtmd.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/cvector-generator/cvector-generator.cpp" "tools/cvector-generator/CMakeFiles/llama-cvector-generator.dir/cvector-generator.cpp.o" "gcc" "tools/cvector-generator/CMakeFiles/llama-cvector-generator.dir/cvector-generator.cpp.o.d"
+  "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/cvector-generator/cvector-generator.cpp" "tools/cvector-generator/CMakeFiles/llama-cvector-generator.dir/cvector-generator.cpp.o" "gcc" "tools/cvector-generator/CMakeFiles/llama-cvector-generator.dir/cvector-generator.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

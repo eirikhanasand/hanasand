@@ -34,7 +34,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
     useEffect(() => {
         if (!id) return
 
-        const ws = new WebSocket(`${config.url.api_ws}/pwned/${randomId()}`)
+        const ws = new WebSocket(`${config.url.api_wss}/pwned/${randomId()}`)
 
         ws.onopen = () => {
             setLoading(true)

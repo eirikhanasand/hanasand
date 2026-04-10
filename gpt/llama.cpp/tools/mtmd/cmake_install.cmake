@@ -1,4 +1,4 @@
-# Install script for directory: /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd
+# Install script for directory: /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -38,11 +38,11 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/libmtmd.dylib")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/libmtmd.dylib")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmtmd.dylib" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmtmd.dylib")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmtmd.dylib")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -x "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmtmd.dylib")
@@ -55,17 +55,17 @@ endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE FILE FILES
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/mtmd.h"
-    "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/mtmd-helper.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/mtmd.h"
+    "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/mtmd-helper.h"
     )
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin/llama-mtmd-cli")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin/llama-mtmd-cli")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-mtmd-cli" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-mtmd-cli")
     execute_process(COMMAND /usr/bin/install_name_tool
-      -delete_rpath "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/bin"
+      -delete_rpath "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/bin"
       "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-mtmd-cli")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" -u -r "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/llama-mtmd-cli")
@@ -76,6 +76,6 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/tools/mtmd/install_local_manifest.txt"
+  file(WRITE "/Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/tools/mtmd/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

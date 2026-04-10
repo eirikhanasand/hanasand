@@ -9,8 +9,8 @@ const internalApiUrl =
 const config = {
     url: {
         api: typeof window === 'undefined' ? internalApiUrl : publicApiUrl,
-        api_ws: process.env.NEXT_PUBLIC_API_WS || 'wss://api.hanasand.com/api/ws',
-        cdn_ws: process.env.NEXT_PUBLIC_CDN_WS || 'wss://cdn.hanasand.com/api/ws',
+        api_wss: process.env.NEXT_PUBLIC_API_WS || 'wss://api.hanasand.com/api/ws',
+        cdn_wss: process.env.NEXT_PUBLIC_CDN_WS || 'wss://cdn.hanasand.com/api/ws',
         cdn: process.env.NEXT_PUBLIC_CDN || 'https://cdn.hanasand.com/api',
         link: process.env.NEXT_PUBLIC_LINK || 'https://hanasand.com/g',
     },

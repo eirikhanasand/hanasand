@@ -57,10 +57,10 @@ RM = /opt/homebrew/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_SOURCE_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp
+CMAKE_BINARY_DIR = /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -142,14 +142,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/src//CMakeFiles/progress.marks
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp/CMakeFiles 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/src//CMakeFiles/progress.marks
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/clean
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/clean
 .PHONY : clean
 
 # The main clean target
@@ -158,22 +158,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/preinstall
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 src/CMakeFiles/llama.dir/rule:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/CMakeFiles/llama.dir/rule
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/CMakeFiles/llama.dir/rule
 .PHONY : src/CMakeFiles/llama.dir/rule
 
 # Convenience name for target.
@@ -182,7 +182,7 @@ llama: src/CMakeFiles/llama.dir/rule
 
 # fast build rule for target.
 llama/fast:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/build
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/build
 .PHONY : llama/fast
 
 llama-adapter.o: llama-adapter.cpp.o
@@ -190,7 +190,7 @@ llama-adapter.o: llama-adapter.cpp.o
 
 # target to build an object file
 llama-adapter.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-adapter.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-adapter.cpp.o
 .PHONY : llama-adapter.cpp.o
 
 llama-adapter.i: llama-adapter.cpp.i
@@ -198,7 +198,7 @@ llama-adapter.i: llama-adapter.cpp.i
 
 # target to preprocess a source file
 llama-adapter.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-adapter.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-adapter.cpp.i
 .PHONY : llama-adapter.cpp.i
 
 llama-adapter.s: llama-adapter.cpp.s
@@ -206,7 +206,7 @@ llama-adapter.s: llama-adapter.cpp.s
 
 # target to generate assembly for a file
 llama-adapter.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-adapter.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-adapter.cpp.s
 .PHONY : llama-adapter.cpp.s
 
 llama-arch.o: llama-arch.cpp.o
@@ -214,7 +214,7 @@ llama-arch.o: llama-arch.cpp.o
 
 # target to build an object file
 llama-arch.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-arch.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-arch.cpp.o
 .PHONY : llama-arch.cpp.o
 
 llama-arch.i: llama-arch.cpp.i
@@ -222,7 +222,7 @@ llama-arch.i: llama-arch.cpp.i
 
 # target to preprocess a source file
 llama-arch.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-arch.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-arch.cpp.i
 .PHONY : llama-arch.cpp.i
 
 llama-arch.s: llama-arch.cpp.s
@@ -230,7 +230,7 @@ llama-arch.s: llama-arch.cpp.s
 
 # target to generate assembly for a file
 llama-arch.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-arch.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-arch.cpp.s
 .PHONY : llama-arch.cpp.s
 
 llama-batch.o: llama-batch.cpp.o
@@ -238,7 +238,7 @@ llama-batch.o: llama-batch.cpp.o
 
 # target to build an object file
 llama-batch.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-batch.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-batch.cpp.o
 .PHONY : llama-batch.cpp.o
 
 llama-batch.i: llama-batch.cpp.i
@@ -246,7 +246,7 @@ llama-batch.i: llama-batch.cpp.i
 
 # target to preprocess a source file
 llama-batch.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-batch.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-batch.cpp.i
 .PHONY : llama-batch.cpp.i
 
 llama-batch.s: llama-batch.cpp.s
@@ -254,7 +254,7 @@ llama-batch.s: llama-batch.cpp.s
 
 # target to generate assembly for a file
 llama-batch.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-batch.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-batch.cpp.s
 .PHONY : llama-batch.cpp.s
 
 llama-chat.o: llama-chat.cpp.o
@@ -262,7 +262,7 @@ llama-chat.o: llama-chat.cpp.o
 
 # target to build an object file
 llama-chat.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-chat.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-chat.cpp.o
 .PHONY : llama-chat.cpp.o
 
 llama-chat.i: llama-chat.cpp.i
@@ -270,7 +270,7 @@ llama-chat.i: llama-chat.cpp.i
 
 # target to preprocess a source file
 llama-chat.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-chat.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-chat.cpp.i
 .PHONY : llama-chat.cpp.i
 
 llama-chat.s: llama-chat.cpp.s
@@ -278,7 +278,7 @@ llama-chat.s: llama-chat.cpp.s
 
 # target to generate assembly for a file
 llama-chat.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-chat.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-chat.cpp.s
 .PHONY : llama-chat.cpp.s
 
 llama-context.o: llama-context.cpp.o
@@ -286,7 +286,7 @@ llama-context.o: llama-context.cpp.o
 
 # target to build an object file
 llama-context.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-context.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-context.cpp.o
 .PHONY : llama-context.cpp.o
 
 llama-context.i: llama-context.cpp.i
@@ -294,7 +294,7 @@ llama-context.i: llama-context.cpp.i
 
 # target to preprocess a source file
 llama-context.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-context.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-context.cpp.i
 .PHONY : llama-context.cpp.i
 
 llama-context.s: llama-context.cpp.s
@@ -302,7 +302,7 @@ llama-context.s: llama-context.cpp.s
 
 # target to generate assembly for a file
 llama-context.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-context.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-context.cpp.s
 .PHONY : llama-context.cpp.s
 
 llama-cparams.o: llama-cparams.cpp.o
@@ -310,7 +310,7 @@ llama-cparams.o: llama-cparams.cpp.o
 
 # target to build an object file
 llama-cparams.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-cparams.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-cparams.cpp.o
 .PHONY : llama-cparams.cpp.o
 
 llama-cparams.i: llama-cparams.cpp.i
@@ -318,7 +318,7 @@ llama-cparams.i: llama-cparams.cpp.i
 
 # target to preprocess a source file
 llama-cparams.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-cparams.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-cparams.cpp.i
 .PHONY : llama-cparams.cpp.i
 
 llama-cparams.s: llama-cparams.cpp.s
@@ -326,7 +326,7 @@ llama-cparams.s: llama-cparams.cpp.s
 
 # target to generate assembly for a file
 llama-cparams.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-cparams.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-cparams.cpp.s
 .PHONY : llama-cparams.cpp.s
 
 llama-grammar.o: llama-grammar.cpp.o
@@ -334,7 +334,7 @@ llama-grammar.o: llama-grammar.cpp.o
 
 # target to build an object file
 llama-grammar.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-grammar.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-grammar.cpp.o
 .PHONY : llama-grammar.cpp.o
 
 llama-grammar.i: llama-grammar.cpp.i
@@ -342,7 +342,7 @@ llama-grammar.i: llama-grammar.cpp.i
 
 # target to preprocess a source file
 llama-grammar.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-grammar.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-grammar.cpp.i
 .PHONY : llama-grammar.cpp.i
 
 llama-grammar.s: llama-grammar.cpp.s
@@ -350,7 +350,7 @@ llama-grammar.s: llama-grammar.cpp.s
 
 # target to generate assembly for a file
 llama-grammar.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-grammar.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-grammar.cpp.s
 .PHONY : llama-grammar.cpp.s
 
 llama-graph.o: llama-graph.cpp.o
@@ -358,7 +358,7 @@ llama-graph.o: llama-graph.cpp.o
 
 # target to build an object file
 llama-graph.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-graph.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-graph.cpp.o
 .PHONY : llama-graph.cpp.o
 
 llama-graph.i: llama-graph.cpp.i
@@ -366,7 +366,7 @@ llama-graph.i: llama-graph.cpp.i
 
 # target to preprocess a source file
 llama-graph.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-graph.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-graph.cpp.i
 .PHONY : llama-graph.cpp.i
 
 llama-graph.s: llama-graph.cpp.s
@@ -374,7 +374,7 @@ llama-graph.s: llama-graph.cpp.s
 
 # target to generate assembly for a file
 llama-graph.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-graph.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-graph.cpp.s
 .PHONY : llama-graph.cpp.s
 
 llama-hparams.o: llama-hparams.cpp.o
@@ -382,7 +382,7 @@ llama-hparams.o: llama-hparams.cpp.o
 
 # target to build an object file
 llama-hparams.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-hparams.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-hparams.cpp.o
 .PHONY : llama-hparams.cpp.o
 
 llama-hparams.i: llama-hparams.cpp.i
@@ -390,7 +390,7 @@ llama-hparams.i: llama-hparams.cpp.i
 
 # target to preprocess a source file
 llama-hparams.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-hparams.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-hparams.cpp.i
 .PHONY : llama-hparams.cpp.i
 
 llama-hparams.s: llama-hparams.cpp.s
@@ -398,7 +398,7 @@ llama-hparams.s: llama-hparams.cpp.s
 
 # target to generate assembly for a file
 llama-hparams.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-hparams.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-hparams.cpp.s
 .PHONY : llama-hparams.cpp.s
 
 llama-impl.o: llama-impl.cpp.o
@@ -406,7 +406,7 @@ llama-impl.o: llama-impl.cpp.o
 
 # target to build an object file
 llama-impl.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-impl.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-impl.cpp.o
 .PHONY : llama-impl.cpp.o
 
 llama-impl.i: llama-impl.cpp.i
@@ -414,7 +414,7 @@ llama-impl.i: llama-impl.cpp.i
 
 # target to preprocess a source file
 llama-impl.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-impl.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-impl.cpp.i
 .PHONY : llama-impl.cpp.i
 
 llama-impl.s: llama-impl.cpp.s
@@ -422,7 +422,7 @@ llama-impl.s: llama-impl.cpp.s
 
 # target to generate assembly for a file
 llama-impl.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-impl.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-impl.cpp.s
 .PHONY : llama-impl.cpp.s
 
 llama-io.o: llama-io.cpp.o
@@ -430,7 +430,7 @@ llama-io.o: llama-io.cpp.o
 
 # target to build an object file
 llama-io.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-io.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-io.cpp.o
 .PHONY : llama-io.cpp.o
 
 llama-io.i: llama-io.cpp.i
@@ -438,7 +438,7 @@ llama-io.i: llama-io.cpp.i
 
 # target to preprocess a source file
 llama-io.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-io.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-io.cpp.i
 .PHONY : llama-io.cpp.i
 
 llama-io.s: llama-io.cpp.s
@@ -446,7 +446,7 @@ llama-io.s: llama-io.cpp.s
 
 # target to generate assembly for a file
 llama-io.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-io.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-io.cpp.s
 .PHONY : llama-io.cpp.s
 
 llama-kv-cache-iswa.o: llama-kv-cache-iswa.cpp.o
@@ -454,7 +454,7 @@ llama-kv-cache-iswa.o: llama-kv-cache-iswa.cpp.o
 
 # target to build an object file
 llama-kv-cache-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.o
 .PHONY : llama-kv-cache-iswa.cpp.o
 
 llama-kv-cache-iswa.i: llama-kv-cache-iswa.cpp.i
@@ -462,7 +462,7 @@ llama-kv-cache-iswa.i: llama-kv-cache-iswa.cpp.i
 
 # target to preprocess a source file
 llama-kv-cache-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.i
 .PHONY : llama-kv-cache-iswa.cpp.i
 
 llama-kv-cache-iswa.s: llama-kv-cache-iswa.cpp.s
@@ -470,7 +470,7 @@ llama-kv-cache-iswa.s: llama-kv-cache-iswa.cpp.s
 
 # target to generate assembly for a file
 llama-kv-cache-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.s
 .PHONY : llama-kv-cache-iswa.cpp.s
 
 llama-kv-cache.o: llama-kv-cache.cpp.o
@@ -478,7 +478,7 @@ llama-kv-cache.o: llama-kv-cache.cpp.o
 
 # target to build an object file
 llama-kv-cache.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache.cpp.o
 .PHONY : llama-kv-cache.cpp.o
 
 llama-kv-cache.i: llama-kv-cache.cpp.i
@@ -486,7 +486,7 @@ llama-kv-cache.i: llama-kv-cache.cpp.i
 
 # target to preprocess a source file
 llama-kv-cache.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache.cpp.i
 .PHONY : llama-kv-cache.cpp.i
 
 llama-kv-cache.s: llama-kv-cache.cpp.s
@@ -494,7 +494,7 @@ llama-kv-cache.s: llama-kv-cache.cpp.s
 
 # target to generate assembly for a file
 llama-kv-cache.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-kv-cache.cpp.s
 .PHONY : llama-kv-cache.cpp.s
 
 llama-memory-hybrid.o: llama-memory-hybrid.cpp.o
@@ -502,7 +502,7 @@ llama-memory-hybrid.o: llama-memory-hybrid.cpp.o
 
 # target to build an object file
 llama-memory-hybrid.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.o
 .PHONY : llama-memory-hybrid.cpp.o
 
 llama-memory-hybrid.i: llama-memory-hybrid.cpp.i
@@ -510,7 +510,7 @@ llama-memory-hybrid.i: llama-memory-hybrid.cpp.i
 
 # target to preprocess a source file
 llama-memory-hybrid.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.i
 .PHONY : llama-memory-hybrid.cpp.i
 
 llama-memory-hybrid.s: llama-memory-hybrid.cpp.s
@@ -518,7 +518,7 @@ llama-memory-hybrid.s: llama-memory-hybrid.cpp.s
 
 # target to generate assembly for a file
 llama-memory-hybrid.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.s
 .PHONY : llama-memory-hybrid.cpp.s
 
 llama-memory-recurrent.o: llama-memory-recurrent.cpp.o
@@ -526,7 +526,7 @@ llama-memory-recurrent.o: llama-memory-recurrent.cpp.o
 
 # target to build an object file
 llama-memory-recurrent.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.o
 .PHONY : llama-memory-recurrent.cpp.o
 
 llama-memory-recurrent.i: llama-memory-recurrent.cpp.i
@@ -534,7 +534,7 @@ llama-memory-recurrent.i: llama-memory-recurrent.cpp.i
 
 # target to preprocess a source file
 llama-memory-recurrent.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.i
 .PHONY : llama-memory-recurrent.cpp.i
 
 llama-memory-recurrent.s: llama-memory-recurrent.cpp.s
@@ -542,7 +542,7 @@ llama-memory-recurrent.s: llama-memory-recurrent.cpp.s
 
 # target to generate assembly for a file
 llama-memory-recurrent.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.s
 .PHONY : llama-memory-recurrent.cpp.s
 
 llama-memory.o: llama-memory.cpp.o
@@ -550,7 +550,7 @@ llama-memory.o: llama-memory.cpp.o
 
 # target to build an object file
 llama-memory.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory.cpp.o
 .PHONY : llama-memory.cpp.o
 
 llama-memory.i: llama-memory.cpp.i
@@ -558,7 +558,7 @@ llama-memory.i: llama-memory.cpp.i
 
 # target to preprocess a source file
 llama-memory.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory.cpp.i
 .PHONY : llama-memory.cpp.i
 
 llama-memory.s: llama-memory.cpp.s
@@ -566,7 +566,7 @@ llama-memory.s: llama-memory.cpp.s
 
 # target to generate assembly for a file
 llama-memory.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-memory.cpp.s
 .PHONY : llama-memory.cpp.s
 
 llama-mmap.o: llama-mmap.cpp.o
@@ -574,7 +574,7 @@ llama-mmap.o: llama-mmap.cpp.o
 
 # target to build an object file
 llama-mmap.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-mmap.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-mmap.cpp.o
 .PHONY : llama-mmap.cpp.o
 
 llama-mmap.i: llama-mmap.cpp.i
@@ -582,7 +582,7 @@ llama-mmap.i: llama-mmap.cpp.i
 
 # target to preprocess a source file
 llama-mmap.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-mmap.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-mmap.cpp.i
 .PHONY : llama-mmap.cpp.i
 
 llama-mmap.s: llama-mmap.cpp.s
@@ -590,7 +590,7 @@ llama-mmap.s: llama-mmap.cpp.s
 
 # target to generate assembly for a file
 llama-mmap.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-mmap.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-mmap.cpp.s
 .PHONY : llama-mmap.cpp.s
 
 llama-model-loader.o: llama-model-loader.cpp.o
@@ -598,7 +598,7 @@ llama-model-loader.o: llama-model-loader.cpp.o
 
 # target to build an object file
 llama-model-loader.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-loader.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-loader.cpp.o
 .PHONY : llama-model-loader.cpp.o
 
 llama-model-loader.i: llama-model-loader.cpp.i
@@ -606,7 +606,7 @@ llama-model-loader.i: llama-model-loader.cpp.i
 
 # target to preprocess a source file
 llama-model-loader.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-loader.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-loader.cpp.i
 .PHONY : llama-model-loader.cpp.i
 
 llama-model-loader.s: llama-model-loader.cpp.s
@@ -614,7 +614,7 @@ llama-model-loader.s: llama-model-loader.cpp.s
 
 # target to generate assembly for a file
 llama-model-loader.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-loader.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-loader.cpp.s
 .PHONY : llama-model-loader.cpp.s
 
 llama-model-saver.o: llama-model-saver.cpp.o
@@ -622,7 +622,7 @@ llama-model-saver.o: llama-model-saver.cpp.o
 
 # target to build an object file
 llama-model-saver.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-saver.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-saver.cpp.o
 .PHONY : llama-model-saver.cpp.o
 
 llama-model-saver.i: llama-model-saver.cpp.i
@@ -630,7 +630,7 @@ llama-model-saver.i: llama-model-saver.cpp.i
 
 # target to preprocess a source file
 llama-model-saver.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-saver.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-saver.cpp.i
 .PHONY : llama-model-saver.cpp.i
 
 llama-model-saver.s: llama-model-saver.cpp.s
@@ -638,7 +638,7 @@ llama-model-saver.s: llama-model-saver.cpp.s
 
 # target to generate assembly for a file
 llama-model-saver.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-saver.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model-saver.cpp.s
 .PHONY : llama-model-saver.cpp.s
 
 llama-model.o: llama-model.cpp.o
@@ -646,7 +646,7 @@ llama-model.o: llama-model.cpp.o
 
 # target to build an object file
 llama-model.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model.cpp.o
 .PHONY : llama-model.cpp.o
 
 llama-model.i: llama-model.cpp.i
@@ -654,7 +654,7 @@ llama-model.i: llama-model.cpp.i
 
 # target to preprocess a source file
 llama-model.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model.cpp.i
 .PHONY : llama-model.cpp.i
 
 llama-model.s: llama-model.cpp.s
@@ -662,7 +662,7 @@ llama-model.s: llama-model.cpp.s
 
 # target to generate assembly for a file
 llama-model.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-model.cpp.s
 .PHONY : llama-model.cpp.s
 
 llama-quant.o: llama-quant.cpp.o
@@ -670,7 +670,7 @@ llama-quant.o: llama-quant.cpp.o
 
 # target to build an object file
 llama-quant.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-quant.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-quant.cpp.o
 .PHONY : llama-quant.cpp.o
 
 llama-quant.i: llama-quant.cpp.i
@@ -678,7 +678,7 @@ llama-quant.i: llama-quant.cpp.i
 
 # target to preprocess a source file
 llama-quant.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-quant.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-quant.cpp.i
 .PHONY : llama-quant.cpp.i
 
 llama-quant.s: llama-quant.cpp.s
@@ -686,7 +686,7 @@ llama-quant.s: llama-quant.cpp.s
 
 # target to generate assembly for a file
 llama-quant.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-quant.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-quant.cpp.s
 .PHONY : llama-quant.cpp.s
 
 llama-sampling.o: llama-sampling.cpp.o
@@ -694,7 +694,7 @@ llama-sampling.o: llama-sampling.cpp.o
 
 # target to build an object file
 llama-sampling.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-sampling.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-sampling.cpp.o
 .PHONY : llama-sampling.cpp.o
 
 llama-sampling.i: llama-sampling.cpp.i
@@ -702,7 +702,7 @@ llama-sampling.i: llama-sampling.cpp.i
 
 # target to preprocess a source file
 llama-sampling.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-sampling.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-sampling.cpp.i
 .PHONY : llama-sampling.cpp.i
 
 llama-sampling.s: llama-sampling.cpp.s
@@ -710,7 +710,7 @@ llama-sampling.s: llama-sampling.cpp.s
 
 # target to generate assembly for a file
 llama-sampling.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-sampling.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-sampling.cpp.s
 .PHONY : llama-sampling.cpp.s
 
 llama-vocab.o: llama-vocab.cpp.o
@@ -718,7 +718,7 @@ llama-vocab.o: llama-vocab.cpp.o
 
 # target to build an object file
 llama-vocab.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-vocab.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-vocab.cpp.o
 .PHONY : llama-vocab.cpp.o
 
 llama-vocab.i: llama-vocab.cpp.i
@@ -726,7 +726,7 @@ llama-vocab.i: llama-vocab.cpp.i
 
 # target to preprocess a source file
 llama-vocab.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-vocab.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-vocab.cpp.i
 .PHONY : llama-vocab.cpp.i
 
 llama-vocab.s: llama-vocab.cpp.s
@@ -734,7 +734,7 @@ llama-vocab.s: llama-vocab.cpp.s
 
 # target to generate assembly for a file
 llama-vocab.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-vocab.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama-vocab.cpp.s
 .PHONY : llama-vocab.cpp.s
 
 llama.o: llama.cpp.o
@@ -742,7 +742,7 @@ llama.o: llama.cpp.o
 
 # target to build an object file
 llama.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama.cpp.o
 .PHONY : llama.cpp.o
 
 llama.i: llama.cpp.i
@@ -750,7 +750,7 @@ llama.i: llama.cpp.i
 
 # target to preprocess a source file
 llama.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama.cpp.i
 .PHONY : llama.cpp.i
 
 llama.s: llama.cpp.s
@@ -758,7 +758,7 @@ llama.s: llama.cpp.s
 
 # target to generate assembly for a file
 llama.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/llama.cpp.s
 .PHONY : llama.cpp.s
 
 models/apertus.o: models/apertus.cpp.o
@@ -766,7 +766,7 @@ models/apertus.o: models/apertus.cpp.o
 
 # target to build an object file
 models/apertus.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/apertus.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/apertus.cpp.o
 .PHONY : models/apertus.cpp.o
 
 models/apertus.i: models/apertus.cpp.i
@@ -774,7 +774,7 @@ models/apertus.i: models/apertus.cpp.i
 
 # target to preprocess a source file
 models/apertus.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/apertus.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/apertus.cpp.i
 .PHONY : models/apertus.cpp.i
 
 models/apertus.s: models/apertus.cpp.s
@@ -782,7 +782,7 @@ models/apertus.s: models/apertus.cpp.s
 
 # target to generate assembly for a file
 models/apertus.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/apertus.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/apertus.cpp.s
 .PHONY : models/apertus.cpp.s
 
 models/arcee.o: models/arcee.cpp.o
@@ -790,7 +790,7 @@ models/arcee.o: models/arcee.cpp.o
 
 # target to build an object file
 models/arcee.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arcee.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arcee.cpp.o
 .PHONY : models/arcee.cpp.o
 
 models/arcee.i: models/arcee.cpp.i
@@ -798,7 +798,7 @@ models/arcee.i: models/arcee.cpp.i
 
 # target to preprocess a source file
 models/arcee.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arcee.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arcee.cpp.i
 .PHONY : models/arcee.cpp.i
 
 models/arcee.s: models/arcee.cpp.s
@@ -806,7 +806,7 @@ models/arcee.s: models/arcee.cpp.s
 
 # target to generate assembly for a file
 models/arcee.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arcee.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arcee.cpp.s
 .PHONY : models/arcee.cpp.s
 
 models/arctic.o: models/arctic.cpp.o
@@ -814,7 +814,7 @@ models/arctic.o: models/arctic.cpp.o
 
 # target to build an object file
 models/arctic.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arctic.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arctic.cpp.o
 .PHONY : models/arctic.cpp.o
 
 models/arctic.i: models/arctic.cpp.i
@@ -822,7 +822,7 @@ models/arctic.i: models/arctic.cpp.i
 
 # target to preprocess a source file
 models/arctic.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arctic.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arctic.cpp.i
 .PHONY : models/arctic.cpp.i
 
 models/arctic.s: models/arctic.cpp.s
@@ -830,7 +830,7 @@ models/arctic.s: models/arctic.cpp.s
 
 # target to generate assembly for a file
 models/arctic.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arctic.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arctic.cpp.s
 .PHONY : models/arctic.cpp.s
 
 models/arwkv7.o: models/arwkv7.cpp.o
@@ -838,7 +838,7 @@ models/arwkv7.o: models/arwkv7.cpp.o
 
 # target to build an object file
 models/arwkv7.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arwkv7.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arwkv7.cpp.o
 .PHONY : models/arwkv7.cpp.o
 
 models/arwkv7.i: models/arwkv7.cpp.i
@@ -846,7 +846,7 @@ models/arwkv7.i: models/arwkv7.cpp.i
 
 # target to preprocess a source file
 models/arwkv7.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arwkv7.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arwkv7.cpp.i
 .PHONY : models/arwkv7.cpp.i
 
 models/arwkv7.s: models/arwkv7.cpp.s
@@ -854,7 +854,7 @@ models/arwkv7.s: models/arwkv7.cpp.s
 
 # target to generate assembly for a file
 models/arwkv7.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arwkv7.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/arwkv7.cpp.s
 .PHONY : models/arwkv7.cpp.s
 
 models/baichuan.o: models/baichuan.cpp.o
@@ -862,7 +862,7 @@ models/baichuan.o: models/baichuan.cpp.o
 
 # target to build an object file
 models/baichuan.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/baichuan.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/baichuan.cpp.o
 .PHONY : models/baichuan.cpp.o
 
 models/baichuan.i: models/baichuan.cpp.i
@@ -870,7 +870,7 @@ models/baichuan.i: models/baichuan.cpp.i
 
 # target to preprocess a source file
 models/baichuan.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/baichuan.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/baichuan.cpp.i
 .PHONY : models/baichuan.cpp.i
 
 models/baichuan.s: models/baichuan.cpp.s
@@ -878,7 +878,7 @@ models/baichuan.s: models/baichuan.cpp.s
 
 # target to generate assembly for a file
 models/baichuan.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/baichuan.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/baichuan.cpp.s
 .PHONY : models/baichuan.cpp.s
 
 models/bailingmoe.o: models/bailingmoe.cpp.o
@@ -886,7 +886,7 @@ models/bailingmoe.o: models/bailingmoe.cpp.o
 
 # target to build an object file
 models/bailingmoe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe.cpp.o
 .PHONY : models/bailingmoe.cpp.o
 
 models/bailingmoe.i: models/bailingmoe.cpp.i
@@ -894,7 +894,7 @@ models/bailingmoe.i: models/bailingmoe.cpp.i
 
 # target to preprocess a source file
 models/bailingmoe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe.cpp.i
 .PHONY : models/bailingmoe.cpp.i
 
 models/bailingmoe.s: models/bailingmoe.cpp.s
@@ -902,7 +902,7 @@ models/bailingmoe.s: models/bailingmoe.cpp.s
 
 # target to generate assembly for a file
 models/bailingmoe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe.cpp.s
 .PHONY : models/bailingmoe.cpp.s
 
 models/bailingmoe2.o: models/bailingmoe2.cpp.o
@@ -910,7 +910,7 @@ models/bailingmoe2.o: models/bailingmoe2.cpp.o
 
 # target to build an object file
 models/bailingmoe2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.o
 .PHONY : models/bailingmoe2.cpp.o
 
 models/bailingmoe2.i: models/bailingmoe2.cpp.i
@@ -918,7 +918,7 @@ models/bailingmoe2.i: models/bailingmoe2.cpp.i
 
 # target to preprocess a source file
 models/bailingmoe2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.i
 .PHONY : models/bailingmoe2.cpp.i
 
 models/bailingmoe2.s: models/bailingmoe2.cpp.s
@@ -926,7 +926,7 @@ models/bailingmoe2.s: models/bailingmoe2.cpp.s
 
 # target to generate assembly for a file
 models/bailingmoe2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.s
 .PHONY : models/bailingmoe2.cpp.s
 
 models/bert.o: models/bert.cpp.o
@@ -934,7 +934,7 @@ models/bert.o: models/bert.cpp.o
 
 # target to build an object file
 models/bert.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bert.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bert.cpp.o
 .PHONY : models/bert.cpp.o
 
 models/bert.i: models/bert.cpp.i
@@ -942,7 +942,7 @@ models/bert.i: models/bert.cpp.i
 
 # target to preprocess a source file
 models/bert.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bert.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bert.cpp.i
 .PHONY : models/bert.cpp.i
 
 models/bert.s: models/bert.cpp.s
@@ -950,7 +950,7 @@ models/bert.s: models/bert.cpp.s
 
 # target to generate assembly for a file
 models/bert.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bert.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bert.cpp.s
 .PHONY : models/bert.cpp.s
 
 models/bitnet.o: models/bitnet.cpp.o
@@ -958,7 +958,7 @@ models/bitnet.o: models/bitnet.cpp.o
 
 # target to build an object file
 models/bitnet.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bitnet.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bitnet.cpp.o
 .PHONY : models/bitnet.cpp.o
 
 models/bitnet.i: models/bitnet.cpp.i
@@ -966,7 +966,7 @@ models/bitnet.i: models/bitnet.cpp.i
 
 # target to preprocess a source file
 models/bitnet.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bitnet.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bitnet.cpp.i
 .PHONY : models/bitnet.cpp.i
 
 models/bitnet.s: models/bitnet.cpp.s
@@ -974,7 +974,7 @@ models/bitnet.s: models/bitnet.cpp.s
 
 # target to generate assembly for a file
 models/bitnet.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bitnet.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bitnet.cpp.s
 .PHONY : models/bitnet.cpp.s
 
 models/bloom.o: models/bloom.cpp.o
@@ -982,7 +982,7 @@ models/bloom.o: models/bloom.cpp.o
 
 # target to build an object file
 models/bloom.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bloom.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bloom.cpp.o
 .PHONY : models/bloom.cpp.o
 
 models/bloom.i: models/bloom.cpp.i
@@ -990,7 +990,7 @@ models/bloom.i: models/bloom.cpp.i
 
 # target to preprocess a source file
 models/bloom.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bloom.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bloom.cpp.i
 .PHONY : models/bloom.cpp.i
 
 models/bloom.s: models/bloom.cpp.s
@@ -998,7 +998,7 @@ models/bloom.s: models/bloom.cpp.s
 
 # target to generate assembly for a file
 models/bloom.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bloom.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/bloom.cpp.s
 .PHONY : models/bloom.cpp.s
 
 models/chameleon.o: models/chameleon.cpp.o
@@ -1006,7 +1006,7 @@ models/chameleon.o: models/chameleon.cpp.o
 
 # target to build an object file
 models/chameleon.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chameleon.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chameleon.cpp.o
 .PHONY : models/chameleon.cpp.o
 
 models/chameleon.i: models/chameleon.cpp.i
@@ -1014,7 +1014,7 @@ models/chameleon.i: models/chameleon.cpp.i
 
 # target to preprocess a source file
 models/chameleon.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chameleon.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chameleon.cpp.i
 .PHONY : models/chameleon.cpp.i
 
 models/chameleon.s: models/chameleon.cpp.s
@@ -1022,7 +1022,7 @@ models/chameleon.s: models/chameleon.cpp.s
 
 # target to generate assembly for a file
 models/chameleon.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chameleon.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chameleon.cpp.s
 .PHONY : models/chameleon.cpp.s
 
 models/chatglm.o: models/chatglm.cpp.o
@@ -1030,7 +1030,7 @@ models/chatglm.o: models/chatglm.cpp.o
 
 # target to build an object file
 models/chatglm.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chatglm.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chatglm.cpp.o
 .PHONY : models/chatglm.cpp.o
 
 models/chatglm.i: models/chatglm.cpp.i
@@ -1038,7 +1038,7 @@ models/chatglm.i: models/chatglm.cpp.i
 
 # target to preprocess a source file
 models/chatglm.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chatglm.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chatglm.cpp.i
 .PHONY : models/chatglm.cpp.i
 
 models/chatglm.s: models/chatglm.cpp.s
@@ -1046,7 +1046,7 @@ models/chatglm.s: models/chatglm.cpp.s
 
 # target to generate assembly for a file
 models/chatglm.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chatglm.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/chatglm.cpp.s
 .PHONY : models/chatglm.cpp.s
 
 models/codeshell.o: models/codeshell.cpp.o
@@ -1054,7 +1054,7 @@ models/codeshell.o: models/codeshell.cpp.o
 
 # target to build an object file
 models/codeshell.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/codeshell.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/codeshell.cpp.o
 .PHONY : models/codeshell.cpp.o
 
 models/codeshell.i: models/codeshell.cpp.i
@@ -1062,7 +1062,7 @@ models/codeshell.i: models/codeshell.cpp.i
 
 # target to preprocess a source file
 models/codeshell.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/codeshell.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/codeshell.cpp.i
 .PHONY : models/codeshell.cpp.i
 
 models/codeshell.s: models/codeshell.cpp.s
@@ -1070,7 +1070,7 @@ models/codeshell.s: models/codeshell.cpp.s
 
 # target to generate assembly for a file
 models/codeshell.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/codeshell.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/codeshell.cpp.s
 .PHONY : models/codeshell.cpp.s
 
 models/cogvlm.o: models/cogvlm.cpp.o
@@ -1078,7 +1078,7 @@ models/cogvlm.o: models/cogvlm.cpp.o
 
 # target to build an object file
 models/cogvlm.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cogvlm.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cogvlm.cpp.o
 .PHONY : models/cogvlm.cpp.o
 
 models/cogvlm.i: models/cogvlm.cpp.i
@@ -1086,7 +1086,7 @@ models/cogvlm.i: models/cogvlm.cpp.i
 
 # target to preprocess a source file
 models/cogvlm.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cogvlm.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cogvlm.cpp.i
 .PHONY : models/cogvlm.cpp.i
 
 models/cogvlm.s: models/cogvlm.cpp.s
@@ -1094,7 +1094,7 @@ models/cogvlm.s: models/cogvlm.cpp.s
 
 # target to generate assembly for a file
 models/cogvlm.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cogvlm.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cogvlm.cpp.s
 .PHONY : models/cogvlm.cpp.s
 
 models/cohere2-iswa.o: models/cohere2-iswa.cpp.o
@@ -1102,7 +1102,7 @@ models/cohere2-iswa.o: models/cohere2-iswa.cpp.o
 
 # target to build an object file
 models/cohere2-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cohere2-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cohere2-iswa.cpp.o
 .PHONY : models/cohere2-iswa.cpp.o
 
 models/cohere2-iswa.i: models/cohere2-iswa.cpp.i
@@ -1110,7 +1110,7 @@ models/cohere2-iswa.i: models/cohere2-iswa.cpp.i
 
 # target to preprocess a source file
 models/cohere2-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cohere2-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cohere2-iswa.cpp.i
 .PHONY : models/cohere2-iswa.cpp.i
 
 models/cohere2-iswa.s: models/cohere2-iswa.cpp.s
@@ -1118,7 +1118,7 @@ models/cohere2-iswa.s: models/cohere2-iswa.cpp.s
 
 # target to generate assembly for a file
 models/cohere2-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cohere2-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/cohere2-iswa.cpp.s
 .PHONY : models/cohere2-iswa.cpp.s
 
 models/command-r.o: models/command-r.cpp.o
@@ -1126,7 +1126,7 @@ models/command-r.o: models/command-r.cpp.o
 
 # target to build an object file
 models/command-r.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/command-r.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/command-r.cpp.o
 .PHONY : models/command-r.cpp.o
 
 models/command-r.i: models/command-r.cpp.i
@@ -1134,7 +1134,7 @@ models/command-r.i: models/command-r.cpp.i
 
 # target to preprocess a source file
 models/command-r.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/command-r.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/command-r.cpp.i
 .PHONY : models/command-r.cpp.i
 
 models/command-r.s: models/command-r.cpp.s
@@ -1142,7 +1142,7 @@ models/command-r.s: models/command-r.cpp.s
 
 # target to generate assembly for a file
 models/command-r.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/command-r.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/command-r.cpp.s
 .PHONY : models/command-r.cpp.s
 
 models/dbrx.o: models/dbrx.cpp.o
@@ -1150,7 +1150,7 @@ models/dbrx.o: models/dbrx.cpp.o
 
 # target to build an object file
 models/dbrx.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dbrx.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dbrx.cpp.o
 .PHONY : models/dbrx.cpp.o
 
 models/dbrx.i: models/dbrx.cpp.i
@@ -1158,7 +1158,7 @@ models/dbrx.i: models/dbrx.cpp.i
 
 # target to preprocess a source file
 models/dbrx.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dbrx.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dbrx.cpp.i
 .PHONY : models/dbrx.cpp.i
 
 models/dbrx.s: models/dbrx.cpp.s
@@ -1166,7 +1166,7 @@ models/dbrx.s: models/dbrx.cpp.s
 
 # target to generate assembly for a file
 models/dbrx.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dbrx.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dbrx.cpp.s
 .PHONY : models/dbrx.cpp.s
 
 models/deci.o: models/deci.cpp.o
@@ -1174,7 +1174,7 @@ models/deci.o: models/deci.cpp.o
 
 # target to build an object file
 models/deci.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deci.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deci.cpp.o
 .PHONY : models/deci.cpp.o
 
 models/deci.i: models/deci.cpp.i
@@ -1182,7 +1182,7 @@ models/deci.i: models/deci.cpp.i
 
 # target to preprocess a source file
 models/deci.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deci.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deci.cpp.i
 .PHONY : models/deci.cpp.i
 
 models/deci.s: models/deci.cpp.s
@@ -1190,7 +1190,7 @@ models/deci.s: models/deci.cpp.s
 
 # target to generate assembly for a file
 models/deci.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deci.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deci.cpp.s
 .PHONY : models/deci.cpp.s
 
 models/deepseek.o: models/deepseek.cpp.o
@@ -1198,7 +1198,7 @@ models/deepseek.o: models/deepseek.cpp.o
 
 # target to build an object file
 models/deepseek.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek.cpp.o
 .PHONY : models/deepseek.cpp.o
 
 models/deepseek.i: models/deepseek.cpp.i
@@ -1206,7 +1206,7 @@ models/deepseek.i: models/deepseek.cpp.i
 
 # target to preprocess a source file
 models/deepseek.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek.cpp.i
 .PHONY : models/deepseek.cpp.i
 
 models/deepseek.s: models/deepseek.cpp.s
@@ -1214,7 +1214,7 @@ models/deepseek.s: models/deepseek.cpp.s
 
 # target to generate assembly for a file
 models/deepseek.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek.cpp.s
 .PHONY : models/deepseek.cpp.s
 
 models/deepseek2.o: models/deepseek2.cpp.o
@@ -1222,7 +1222,7 @@ models/deepseek2.o: models/deepseek2.cpp.o
 
 # target to build an object file
 models/deepseek2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek2.cpp.o
 .PHONY : models/deepseek2.cpp.o
 
 models/deepseek2.i: models/deepseek2.cpp.i
@@ -1230,7 +1230,7 @@ models/deepseek2.i: models/deepseek2.cpp.i
 
 # target to preprocess a source file
 models/deepseek2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek2.cpp.i
 .PHONY : models/deepseek2.cpp.i
 
 models/deepseek2.s: models/deepseek2.cpp.s
@@ -1238,7 +1238,7 @@ models/deepseek2.s: models/deepseek2.cpp.s
 
 # target to generate assembly for a file
 models/deepseek2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/deepseek2.cpp.s
 .PHONY : models/deepseek2.cpp.s
 
 models/dots1.o: models/dots1.cpp.o
@@ -1246,7 +1246,7 @@ models/dots1.o: models/dots1.cpp.o
 
 # target to build an object file
 models/dots1.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dots1.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dots1.cpp.o
 .PHONY : models/dots1.cpp.o
 
 models/dots1.i: models/dots1.cpp.i
@@ -1254,7 +1254,7 @@ models/dots1.i: models/dots1.cpp.i
 
 # target to preprocess a source file
 models/dots1.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dots1.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dots1.cpp.i
 .PHONY : models/dots1.cpp.i
 
 models/dots1.s: models/dots1.cpp.s
@@ -1262,7 +1262,7 @@ models/dots1.s: models/dots1.cpp.s
 
 # target to generate assembly for a file
 models/dots1.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dots1.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dots1.cpp.s
 .PHONY : models/dots1.cpp.s
 
 models/dream.o: models/dream.cpp.o
@@ -1270,7 +1270,7 @@ models/dream.o: models/dream.cpp.o
 
 # target to build an object file
 models/dream.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dream.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dream.cpp.o
 .PHONY : models/dream.cpp.o
 
 models/dream.i: models/dream.cpp.i
@@ -1278,7 +1278,7 @@ models/dream.i: models/dream.cpp.i
 
 # target to preprocess a source file
 models/dream.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dream.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dream.cpp.i
 .PHONY : models/dream.cpp.i
 
 models/dream.s: models/dream.cpp.s
@@ -1286,7 +1286,7 @@ models/dream.s: models/dream.cpp.s
 
 # target to generate assembly for a file
 models/dream.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dream.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/dream.cpp.s
 .PHONY : models/dream.cpp.s
 
 models/ernie4-5-moe.o: models/ernie4-5-moe.cpp.o
@@ -1294,7 +1294,7 @@ models/ernie4-5-moe.o: models/ernie4-5-moe.cpp.o
 
 # target to build an object file
 models/ernie4-5-moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.o
 .PHONY : models/ernie4-5-moe.cpp.o
 
 models/ernie4-5-moe.i: models/ernie4-5-moe.cpp.i
@@ -1302,7 +1302,7 @@ models/ernie4-5-moe.i: models/ernie4-5-moe.cpp.i
 
 # target to preprocess a source file
 models/ernie4-5-moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.i
 .PHONY : models/ernie4-5-moe.cpp.i
 
 models/ernie4-5-moe.s: models/ernie4-5-moe.cpp.s
@@ -1310,7 +1310,7 @@ models/ernie4-5-moe.s: models/ernie4-5-moe.cpp.s
 
 # target to generate assembly for a file
 models/ernie4-5-moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.s
 .PHONY : models/ernie4-5-moe.cpp.s
 
 models/ernie4-5.o: models/ernie4-5.cpp.o
@@ -1318,7 +1318,7 @@ models/ernie4-5.o: models/ernie4-5.cpp.o
 
 # target to build an object file
 models/ernie4-5.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5.cpp.o
 .PHONY : models/ernie4-5.cpp.o
 
 models/ernie4-5.i: models/ernie4-5.cpp.i
@@ -1326,7 +1326,7 @@ models/ernie4-5.i: models/ernie4-5.cpp.i
 
 # target to preprocess a source file
 models/ernie4-5.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5.cpp.i
 .PHONY : models/ernie4-5.cpp.i
 
 models/ernie4-5.s: models/ernie4-5.cpp.s
@@ -1334,7 +1334,7 @@ models/ernie4-5.s: models/ernie4-5.cpp.s
 
 # target to generate assembly for a file
 models/ernie4-5.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/ernie4-5.cpp.s
 .PHONY : models/ernie4-5.cpp.s
 
 models/exaone.o: models/exaone.cpp.o
@@ -1342,7 +1342,7 @@ models/exaone.o: models/exaone.cpp.o
 
 # target to build an object file
 models/exaone.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone.cpp.o
 .PHONY : models/exaone.cpp.o
 
 models/exaone.i: models/exaone.cpp.i
@@ -1350,7 +1350,7 @@ models/exaone.i: models/exaone.cpp.i
 
 # target to preprocess a source file
 models/exaone.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone.cpp.i
 .PHONY : models/exaone.cpp.i
 
 models/exaone.s: models/exaone.cpp.s
@@ -1358,7 +1358,7 @@ models/exaone.s: models/exaone.cpp.s
 
 # target to generate assembly for a file
 models/exaone.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone.cpp.s
 .PHONY : models/exaone.cpp.s
 
 models/exaone4.o: models/exaone4.cpp.o
@@ -1366,7 +1366,7 @@ models/exaone4.o: models/exaone4.cpp.o
 
 # target to build an object file
 models/exaone4.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone4.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone4.cpp.o
 .PHONY : models/exaone4.cpp.o
 
 models/exaone4.i: models/exaone4.cpp.i
@@ -1374,7 +1374,7 @@ models/exaone4.i: models/exaone4.cpp.i
 
 # target to preprocess a source file
 models/exaone4.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone4.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone4.cpp.i
 .PHONY : models/exaone4.cpp.i
 
 models/exaone4.s: models/exaone4.cpp.s
@@ -1382,7 +1382,7 @@ models/exaone4.s: models/exaone4.cpp.s
 
 # target to generate assembly for a file
 models/exaone4.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone4.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/exaone4.cpp.s
 .PHONY : models/exaone4.cpp.s
 
 models/falcon-h1.o: models/falcon-h1.cpp.o
@@ -1390,7 +1390,7 @@ models/falcon-h1.o: models/falcon-h1.cpp.o
 
 # target to build an object file
 models/falcon-h1.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon-h1.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon-h1.cpp.o
 .PHONY : models/falcon-h1.cpp.o
 
 models/falcon-h1.i: models/falcon-h1.cpp.i
@@ -1398,7 +1398,7 @@ models/falcon-h1.i: models/falcon-h1.cpp.i
 
 # target to preprocess a source file
 models/falcon-h1.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon-h1.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon-h1.cpp.i
 .PHONY : models/falcon-h1.cpp.i
 
 models/falcon-h1.s: models/falcon-h1.cpp.s
@@ -1406,7 +1406,7 @@ models/falcon-h1.s: models/falcon-h1.cpp.s
 
 # target to generate assembly for a file
 models/falcon-h1.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon-h1.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon-h1.cpp.s
 .PHONY : models/falcon-h1.cpp.s
 
 models/falcon.o: models/falcon.cpp.o
@@ -1414,7 +1414,7 @@ models/falcon.o: models/falcon.cpp.o
 
 # target to build an object file
 models/falcon.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon.cpp.o
 .PHONY : models/falcon.cpp.o
 
 models/falcon.i: models/falcon.cpp.i
@@ -1422,7 +1422,7 @@ models/falcon.i: models/falcon.cpp.i
 
 # target to preprocess a source file
 models/falcon.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon.cpp.i
 .PHONY : models/falcon.cpp.i
 
 models/falcon.s: models/falcon.cpp.s
@@ -1430,7 +1430,7 @@ models/falcon.s: models/falcon.cpp.s
 
 # target to generate assembly for a file
 models/falcon.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/falcon.cpp.s
 .PHONY : models/falcon.cpp.s
 
 models/gemma-embedding.o: models/gemma-embedding.cpp.o
@@ -1438,7 +1438,7 @@ models/gemma-embedding.o: models/gemma-embedding.cpp.o
 
 # target to build an object file
 models/gemma-embedding.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.o
 .PHONY : models/gemma-embedding.cpp.o
 
 models/gemma-embedding.i: models/gemma-embedding.cpp.i
@@ -1446,7 +1446,7 @@ models/gemma-embedding.i: models/gemma-embedding.cpp.i
 
 # target to preprocess a source file
 models/gemma-embedding.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.i
 .PHONY : models/gemma-embedding.cpp.i
 
 models/gemma-embedding.s: models/gemma-embedding.cpp.s
@@ -1454,7 +1454,7 @@ models/gemma-embedding.s: models/gemma-embedding.cpp.s
 
 # target to generate assembly for a file
 models/gemma-embedding.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.s
 .PHONY : models/gemma-embedding.cpp.s
 
 models/gemma.o: models/gemma.cpp.o
@@ -1462,7 +1462,7 @@ models/gemma.o: models/gemma.cpp.o
 
 # target to build an object file
 models/gemma.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma.cpp.o
 .PHONY : models/gemma.cpp.o
 
 models/gemma.i: models/gemma.cpp.i
@@ -1470,7 +1470,7 @@ models/gemma.i: models/gemma.cpp.i
 
 # target to preprocess a source file
 models/gemma.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma.cpp.i
 .PHONY : models/gemma.cpp.i
 
 models/gemma.s: models/gemma.cpp.s
@@ -1478,7 +1478,7 @@ models/gemma.s: models/gemma.cpp.s
 
 # target to generate assembly for a file
 models/gemma.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma.cpp.s
 .PHONY : models/gemma.cpp.s
 
 models/gemma2-iswa.o: models/gemma2-iswa.cpp.o
@@ -1486,7 +1486,7 @@ models/gemma2-iswa.o: models/gemma2-iswa.cpp.o
 
 # target to build an object file
 models/gemma2-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma2-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma2-iswa.cpp.o
 .PHONY : models/gemma2-iswa.cpp.o
 
 models/gemma2-iswa.i: models/gemma2-iswa.cpp.i
@@ -1494,7 +1494,7 @@ models/gemma2-iswa.i: models/gemma2-iswa.cpp.i
 
 # target to preprocess a source file
 models/gemma2-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma2-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma2-iswa.cpp.i
 .PHONY : models/gemma2-iswa.cpp.i
 
 models/gemma2-iswa.s: models/gemma2-iswa.cpp.s
@@ -1502,7 +1502,7 @@ models/gemma2-iswa.s: models/gemma2-iswa.cpp.s
 
 # target to generate assembly for a file
 models/gemma2-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma2-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma2-iswa.cpp.s
 .PHONY : models/gemma2-iswa.cpp.s
 
 models/gemma3-iswa.o: models/gemma3-iswa.cpp.o
@@ -1510,7 +1510,7 @@ models/gemma3-iswa.o: models/gemma3-iswa.cpp.o
 
 # target to build an object file
 models/gemma3-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3-iswa.cpp.o
 .PHONY : models/gemma3-iswa.cpp.o
 
 models/gemma3-iswa.i: models/gemma3-iswa.cpp.i
@@ -1518,7 +1518,7 @@ models/gemma3-iswa.i: models/gemma3-iswa.cpp.i
 
 # target to preprocess a source file
 models/gemma3-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3-iswa.cpp.i
 .PHONY : models/gemma3-iswa.cpp.i
 
 models/gemma3-iswa.s: models/gemma3-iswa.cpp.s
@@ -1526,7 +1526,7 @@ models/gemma3-iswa.s: models/gemma3-iswa.cpp.s
 
 # target to generate assembly for a file
 models/gemma3-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3-iswa.cpp.s
 .PHONY : models/gemma3-iswa.cpp.s
 
 models/gemma3n-iswa.o: models/gemma3n-iswa.cpp.o
@@ -1534,7 +1534,7 @@ models/gemma3n-iswa.o: models/gemma3n-iswa.cpp.o
 
 # target to build an object file
 models/gemma3n-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3n-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3n-iswa.cpp.o
 .PHONY : models/gemma3n-iswa.cpp.o
 
 models/gemma3n-iswa.i: models/gemma3n-iswa.cpp.i
@@ -1542,7 +1542,7 @@ models/gemma3n-iswa.i: models/gemma3n-iswa.cpp.i
 
 # target to preprocess a source file
 models/gemma3n-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3n-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3n-iswa.cpp.i
 .PHONY : models/gemma3n-iswa.cpp.i
 
 models/gemma3n-iswa.s: models/gemma3n-iswa.cpp.s
@@ -1550,7 +1550,7 @@ models/gemma3n-iswa.s: models/gemma3n-iswa.cpp.s
 
 # target to generate assembly for a file
 models/gemma3n-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3n-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gemma3n-iswa.cpp.s
 .PHONY : models/gemma3n-iswa.cpp.s
 
 models/glm4-moe.o: models/glm4-moe.cpp.o
@@ -1558,7 +1558,7 @@ models/glm4-moe.o: models/glm4-moe.cpp.o
 
 # target to build an object file
 models/glm4-moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4-moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4-moe.cpp.o
 .PHONY : models/glm4-moe.cpp.o
 
 models/glm4-moe.i: models/glm4-moe.cpp.i
@@ -1566,7 +1566,7 @@ models/glm4-moe.i: models/glm4-moe.cpp.i
 
 # target to preprocess a source file
 models/glm4-moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4-moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4-moe.cpp.i
 .PHONY : models/glm4-moe.cpp.i
 
 models/glm4-moe.s: models/glm4-moe.cpp.s
@@ -1574,7 +1574,7 @@ models/glm4-moe.s: models/glm4-moe.cpp.s
 
 # target to generate assembly for a file
 models/glm4-moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4-moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4-moe.cpp.s
 .PHONY : models/glm4-moe.cpp.s
 
 models/glm4.o: models/glm4.cpp.o
@@ -1582,7 +1582,7 @@ models/glm4.o: models/glm4.cpp.o
 
 # target to build an object file
 models/glm4.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4.cpp.o
 .PHONY : models/glm4.cpp.o
 
 models/glm4.i: models/glm4.cpp.i
@@ -1590,7 +1590,7 @@ models/glm4.i: models/glm4.cpp.i
 
 # target to preprocess a source file
 models/glm4.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4.cpp.i
 .PHONY : models/glm4.cpp.i
 
 models/glm4.s: models/glm4.cpp.s
@@ -1598,7 +1598,7 @@ models/glm4.s: models/glm4.cpp.s
 
 # target to generate assembly for a file
 models/glm4.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/glm4.cpp.s
 .PHONY : models/glm4.cpp.s
 
 models/gpt2.o: models/gpt2.cpp.o
@@ -1606,7 +1606,7 @@ models/gpt2.o: models/gpt2.cpp.o
 
 # target to build an object file
 models/gpt2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gpt2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gpt2.cpp.o
 .PHONY : models/gpt2.cpp.o
 
 models/gpt2.i: models/gpt2.cpp.i
@@ -1614,7 +1614,7 @@ models/gpt2.i: models/gpt2.cpp.i
 
 # target to preprocess a source file
 models/gpt2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gpt2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gpt2.cpp.i
 .PHONY : models/gpt2.cpp.i
 
 models/gpt2.s: models/gpt2.cpp.s
@@ -1622,7 +1622,7 @@ models/gpt2.s: models/gpt2.cpp.s
 
 # target to generate assembly for a file
 models/gpt2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gpt2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gpt2.cpp.s
 .PHONY : models/gpt2.cpp.s
 
 models/gptneox.o: models/gptneox.cpp.o
@@ -1630,7 +1630,7 @@ models/gptneox.o: models/gptneox.cpp.o
 
 # target to build an object file
 models/gptneox.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gptneox.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gptneox.cpp.o
 .PHONY : models/gptneox.cpp.o
 
 models/gptneox.i: models/gptneox.cpp.i
@@ -1638,7 +1638,7 @@ models/gptneox.i: models/gptneox.cpp.i
 
 # target to preprocess a source file
 models/gptneox.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gptneox.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gptneox.cpp.i
 .PHONY : models/gptneox.cpp.i
 
 models/gptneox.s: models/gptneox.cpp.s
@@ -1646,7 +1646,7 @@ models/gptneox.s: models/gptneox.cpp.s
 
 # target to generate assembly for a file
 models/gptneox.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gptneox.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/gptneox.cpp.s
 .PHONY : models/gptneox.cpp.s
 
 models/granite-hybrid.o: models/granite-hybrid.cpp.o
@@ -1654,7 +1654,7 @@ models/granite-hybrid.o: models/granite-hybrid.cpp.o
 
 # target to build an object file
 models/granite-hybrid.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.o
 .PHONY : models/granite-hybrid.cpp.o
 
 models/granite-hybrid.i: models/granite-hybrid.cpp.i
@@ -1662,7 +1662,7 @@ models/granite-hybrid.i: models/granite-hybrid.cpp.i
 
 # target to preprocess a source file
 models/granite-hybrid.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.i
 .PHONY : models/granite-hybrid.cpp.i
 
 models/granite-hybrid.s: models/granite-hybrid.cpp.s
@@ -1670,7 +1670,7 @@ models/granite-hybrid.s: models/granite-hybrid.cpp.s
 
 # target to generate assembly for a file
 models/granite-hybrid.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.s
 .PHONY : models/granite-hybrid.cpp.s
 
 models/granite.o: models/granite.cpp.o
@@ -1678,7 +1678,7 @@ models/granite.o: models/granite.cpp.o
 
 # target to build an object file
 models/granite.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite.cpp.o
 .PHONY : models/granite.cpp.o
 
 models/granite.i: models/granite.cpp.i
@@ -1686,7 +1686,7 @@ models/granite.i: models/granite.cpp.i
 
 # target to preprocess a source file
 models/granite.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite.cpp.i
 .PHONY : models/granite.cpp.i
 
 models/granite.s: models/granite.cpp.s
@@ -1694,7 +1694,7 @@ models/granite.s: models/granite.cpp.s
 
 # target to generate assembly for a file
 models/granite.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/granite.cpp.s
 .PHONY : models/granite.cpp.s
 
 models/graph-context-mamba.o: models/graph-context-mamba.cpp.o
@@ -1702,7 +1702,7 @@ models/graph-context-mamba.o: models/graph-context-mamba.cpp.o
 
 # target to build an object file
 models/graph-context-mamba.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/graph-context-mamba.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/graph-context-mamba.cpp.o
 .PHONY : models/graph-context-mamba.cpp.o
 
 models/graph-context-mamba.i: models/graph-context-mamba.cpp.i
@@ -1710,7 +1710,7 @@ models/graph-context-mamba.i: models/graph-context-mamba.cpp.i
 
 # target to preprocess a source file
 models/graph-context-mamba.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/graph-context-mamba.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/graph-context-mamba.cpp.i
 .PHONY : models/graph-context-mamba.cpp.i
 
 models/graph-context-mamba.s: models/graph-context-mamba.cpp.s
@@ -1718,7 +1718,7 @@ models/graph-context-mamba.s: models/graph-context-mamba.cpp.s
 
 # target to generate assembly for a file
 models/graph-context-mamba.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/graph-context-mamba.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/graph-context-mamba.cpp.s
 .PHONY : models/graph-context-mamba.cpp.s
 
 models/grok.o: models/grok.cpp.o
@@ -1726,7 +1726,7 @@ models/grok.o: models/grok.cpp.o
 
 # target to build an object file
 models/grok.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grok.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grok.cpp.o
 .PHONY : models/grok.cpp.o
 
 models/grok.i: models/grok.cpp.i
@@ -1734,7 +1734,7 @@ models/grok.i: models/grok.cpp.i
 
 # target to preprocess a source file
 models/grok.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grok.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grok.cpp.i
 .PHONY : models/grok.cpp.i
 
 models/grok.s: models/grok.cpp.s
@@ -1742,7 +1742,7 @@ models/grok.s: models/grok.cpp.s
 
 # target to generate assembly for a file
 models/grok.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grok.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grok.cpp.s
 .PHONY : models/grok.cpp.s
 
 models/grovemoe.o: models/grovemoe.cpp.o
@@ -1750,7 +1750,7 @@ models/grovemoe.o: models/grovemoe.cpp.o
 
 # target to build an object file
 models/grovemoe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grovemoe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grovemoe.cpp.o
 .PHONY : models/grovemoe.cpp.o
 
 models/grovemoe.i: models/grovemoe.cpp.i
@@ -1758,7 +1758,7 @@ models/grovemoe.i: models/grovemoe.cpp.i
 
 # target to preprocess a source file
 models/grovemoe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grovemoe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grovemoe.cpp.i
 .PHONY : models/grovemoe.cpp.i
 
 models/grovemoe.s: models/grovemoe.cpp.s
@@ -1766,7 +1766,7 @@ models/grovemoe.s: models/grovemoe.cpp.s
 
 # target to generate assembly for a file
 models/grovemoe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grovemoe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/grovemoe.cpp.s
 .PHONY : models/grovemoe.cpp.s
 
 models/hunyuan-dense.o: models/hunyuan-dense.cpp.o
@@ -1774,7 +1774,7 @@ models/hunyuan-dense.o: models/hunyuan-dense.cpp.o
 
 # target to build an object file
 models/hunyuan-dense.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.o
 .PHONY : models/hunyuan-dense.cpp.o
 
 models/hunyuan-dense.i: models/hunyuan-dense.cpp.i
@@ -1782,7 +1782,7 @@ models/hunyuan-dense.i: models/hunyuan-dense.cpp.i
 
 # target to preprocess a source file
 models/hunyuan-dense.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.i
 .PHONY : models/hunyuan-dense.cpp.i
 
 models/hunyuan-dense.s: models/hunyuan-dense.cpp.s
@@ -1790,7 +1790,7 @@ models/hunyuan-dense.s: models/hunyuan-dense.cpp.s
 
 # target to generate assembly for a file
 models/hunyuan-dense.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.s
 .PHONY : models/hunyuan-dense.cpp.s
 
 models/hunyuan-moe.o: models/hunyuan-moe.cpp.o
@@ -1798,7 +1798,7 @@ models/hunyuan-moe.o: models/hunyuan-moe.cpp.o
 
 # target to build an object file
 models/hunyuan-moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.o
 .PHONY : models/hunyuan-moe.cpp.o
 
 models/hunyuan-moe.i: models/hunyuan-moe.cpp.i
@@ -1806,7 +1806,7 @@ models/hunyuan-moe.i: models/hunyuan-moe.cpp.i
 
 # target to preprocess a source file
 models/hunyuan-moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.i
 .PHONY : models/hunyuan-moe.cpp.i
 
 models/hunyuan-moe.s: models/hunyuan-moe.cpp.s
@@ -1814,7 +1814,7 @@ models/hunyuan-moe.s: models/hunyuan-moe.cpp.s
 
 # target to generate assembly for a file
 models/hunyuan-moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.s
 .PHONY : models/hunyuan-moe.cpp.s
 
 models/internlm2.o: models/internlm2.cpp.o
@@ -1822,7 +1822,7 @@ models/internlm2.o: models/internlm2.cpp.o
 
 # target to build an object file
 models/internlm2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/internlm2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/internlm2.cpp.o
 .PHONY : models/internlm2.cpp.o
 
 models/internlm2.i: models/internlm2.cpp.i
@@ -1830,7 +1830,7 @@ models/internlm2.i: models/internlm2.cpp.i
 
 # target to preprocess a source file
 models/internlm2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/internlm2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/internlm2.cpp.i
 .PHONY : models/internlm2.cpp.i
 
 models/internlm2.s: models/internlm2.cpp.s
@@ -1838,7 +1838,7 @@ models/internlm2.s: models/internlm2.cpp.s
 
 # target to generate assembly for a file
 models/internlm2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/internlm2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/internlm2.cpp.s
 .PHONY : models/internlm2.cpp.s
 
 models/jais.o: models/jais.cpp.o
@@ -1846,7 +1846,7 @@ models/jais.o: models/jais.cpp.o
 
 # target to build an object file
 models/jais.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jais.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jais.cpp.o
 .PHONY : models/jais.cpp.o
 
 models/jais.i: models/jais.cpp.i
@@ -1854,7 +1854,7 @@ models/jais.i: models/jais.cpp.i
 
 # target to preprocess a source file
 models/jais.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jais.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jais.cpp.i
 .PHONY : models/jais.cpp.i
 
 models/jais.s: models/jais.cpp.s
@@ -1862,7 +1862,7 @@ models/jais.s: models/jais.cpp.s
 
 # target to generate assembly for a file
 models/jais.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jais.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jais.cpp.s
 .PHONY : models/jais.cpp.s
 
 models/jamba.o: models/jamba.cpp.o
@@ -1870,7 +1870,7 @@ models/jamba.o: models/jamba.cpp.o
 
 # target to build an object file
 models/jamba.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jamba.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jamba.cpp.o
 .PHONY : models/jamba.cpp.o
 
 models/jamba.i: models/jamba.cpp.i
@@ -1878,7 +1878,7 @@ models/jamba.i: models/jamba.cpp.i
 
 # target to preprocess a source file
 models/jamba.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jamba.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jamba.cpp.i
 .PHONY : models/jamba.cpp.i
 
 models/jamba.s: models/jamba.cpp.s
@@ -1886,7 +1886,7 @@ models/jamba.s: models/jamba.cpp.s
 
 # target to generate assembly for a file
 models/jamba.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jamba.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/jamba.cpp.s
 .PHONY : models/jamba.cpp.s
 
 models/lfm2.o: models/lfm2.cpp.o
@@ -1894,7 +1894,7 @@ models/lfm2.o: models/lfm2.cpp.o
 
 # target to build an object file
 models/lfm2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/lfm2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/lfm2.cpp.o
 .PHONY : models/lfm2.cpp.o
 
 models/lfm2.i: models/lfm2.cpp.i
@@ -1902,7 +1902,7 @@ models/lfm2.i: models/lfm2.cpp.i
 
 # target to preprocess a source file
 models/lfm2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/lfm2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/lfm2.cpp.i
 .PHONY : models/lfm2.cpp.i
 
 models/lfm2.s: models/lfm2.cpp.s
@@ -1910,7 +1910,7 @@ models/lfm2.s: models/lfm2.cpp.s
 
 # target to generate assembly for a file
 models/lfm2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/lfm2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/lfm2.cpp.s
 .PHONY : models/lfm2.cpp.s
 
 models/llada-moe.o: models/llada-moe.cpp.o
@@ -1918,7 +1918,7 @@ models/llada-moe.o: models/llada-moe.cpp.o
 
 # target to build an object file
 models/llada-moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada-moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada-moe.cpp.o
 .PHONY : models/llada-moe.cpp.o
 
 models/llada-moe.i: models/llada-moe.cpp.i
@@ -1926,7 +1926,7 @@ models/llada-moe.i: models/llada-moe.cpp.i
 
 # target to preprocess a source file
 models/llada-moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada-moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada-moe.cpp.i
 .PHONY : models/llada-moe.cpp.i
 
 models/llada-moe.s: models/llada-moe.cpp.s
@@ -1934,7 +1934,7 @@ models/llada-moe.s: models/llada-moe.cpp.s
 
 # target to generate assembly for a file
 models/llada-moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada-moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada-moe.cpp.s
 .PHONY : models/llada-moe.cpp.s
 
 models/llada.o: models/llada.cpp.o
@@ -1942,7 +1942,7 @@ models/llada.o: models/llada.cpp.o
 
 # target to build an object file
 models/llada.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada.cpp.o
 .PHONY : models/llada.cpp.o
 
 models/llada.i: models/llada.cpp.i
@@ -1950,7 +1950,7 @@ models/llada.i: models/llada.cpp.i
 
 # target to preprocess a source file
 models/llada.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada.cpp.i
 .PHONY : models/llada.cpp.i
 
 models/llada.s: models/llada.cpp.s
@@ -1958,7 +1958,7 @@ models/llada.s: models/llada.cpp.s
 
 # target to generate assembly for a file
 models/llada.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llada.cpp.s
 .PHONY : models/llada.cpp.s
 
 models/llama-iswa.o: models/llama-iswa.cpp.o
@@ -1966,7 +1966,7 @@ models/llama-iswa.o: models/llama-iswa.cpp.o
 
 # target to build an object file
 models/llama-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama-iswa.cpp.o
 .PHONY : models/llama-iswa.cpp.o
 
 models/llama-iswa.i: models/llama-iswa.cpp.i
@@ -1974,7 +1974,7 @@ models/llama-iswa.i: models/llama-iswa.cpp.i
 
 # target to preprocess a source file
 models/llama-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama-iswa.cpp.i
 .PHONY : models/llama-iswa.cpp.i
 
 models/llama-iswa.s: models/llama-iswa.cpp.s
@@ -1982,7 +1982,7 @@ models/llama-iswa.s: models/llama-iswa.cpp.s
 
 # target to generate assembly for a file
 models/llama-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama-iswa.cpp.s
 .PHONY : models/llama-iswa.cpp.s
 
 models/llama.o: models/llama.cpp.o
@@ -1990,7 +1990,7 @@ models/llama.o: models/llama.cpp.o
 
 # target to build an object file
 models/llama.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama.cpp.o
 .PHONY : models/llama.cpp.o
 
 models/llama.i: models/llama.cpp.i
@@ -1998,7 +1998,7 @@ models/llama.i: models/llama.cpp.i
 
 # target to preprocess a source file
 models/llama.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama.cpp.i
 .PHONY : models/llama.cpp.i
 
 models/llama.s: models/llama.cpp.s
@@ -2006,7 +2006,7 @@ models/llama.s: models/llama.cpp.s
 
 # target to generate assembly for a file
 models/llama.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/llama.cpp.s
 .PHONY : models/llama.cpp.s
 
 models/mamba.o: models/mamba.cpp.o
@@ -2014,7 +2014,7 @@ models/mamba.o: models/mamba.cpp.o
 
 # target to build an object file
 models/mamba.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mamba.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mamba.cpp.o
 .PHONY : models/mamba.cpp.o
 
 models/mamba.i: models/mamba.cpp.i
@@ -2022,7 +2022,7 @@ models/mamba.i: models/mamba.cpp.i
 
 # target to preprocess a source file
 models/mamba.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mamba.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mamba.cpp.i
 .PHONY : models/mamba.cpp.i
 
 models/mamba.s: models/mamba.cpp.s
@@ -2030,7 +2030,7 @@ models/mamba.s: models/mamba.cpp.s
 
 # target to generate assembly for a file
 models/mamba.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mamba.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mamba.cpp.s
 .PHONY : models/mamba.cpp.s
 
 models/minicpm3.o: models/minicpm3.cpp.o
@@ -2038,7 +2038,7 @@ models/minicpm3.o: models/minicpm3.cpp.o
 
 # target to build an object file
 models/minicpm3.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minicpm3.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minicpm3.cpp.o
 .PHONY : models/minicpm3.cpp.o
 
 models/minicpm3.i: models/minicpm3.cpp.i
@@ -2046,7 +2046,7 @@ models/minicpm3.i: models/minicpm3.cpp.i
 
 # target to preprocess a source file
 models/minicpm3.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minicpm3.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minicpm3.cpp.i
 .PHONY : models/minicpm3.cpp.i
 
 models/minicpm3.s: models/minicpm3.cpp.s
@@ -2054,7 +2054,7 @@ models/minicpm3.s: models/minicpm3.cpp.s
 
 # target to generate assembly for a file
 models/minicpm3.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minicpm3.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minicpm3.cpp.s
 .PHONY : models/minicpm3.cpp.s
 
 models/minimax-m2.o: models/minimax-m2.cpp.o
@@ -2062,7 +2062,7 @@ models/minimax-m2.o: models/minimax-m2.cpp.o
 
 # target to build an object file
 models/minimax-m2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minimax-m2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minimax-m2.cpp.o
 .PHONY : models/minimax-m2.cpp.o
 
 models/minimax-m2.i: models/minimax-m2.cpp.i
@@ -2070,7 +2070,7 @@ models/minimax-m2.i: models/minimax-m2.cpp.i
 
 # target to preprocess a source file
 models/minimax-m2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minimax-m2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minimax-m2.cpp.i
 .PHONY : models/minimax-m2.cpp.i
 
 models/minimax-m2.s: models/minimax-m2.cpp.s
@@ -2078,7 +2078,7 @@ models/minimax-m2.s: models/minimax-m2.cpp.s
 
 # target to generate assembly for a file
 models/minimax-m2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minimax-m2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/minimax-m2.cpp.s
 .PHONY : models/minimax-m2.cpp.s
 
 models/mpt.o: models/mpt.cpp.o
@@ -2086,7 +2086,7 @@ models/mpt.o: models/mpt.cpp.o
 
 # target to build an object file
 models/mpt.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mpt.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mpt.cpp.o
 .PHONY : models/mpt.cpp.o
 
 models/mpt.i: models/mpt.cpp.i
@@ -2094,7 +2094,7 @@ models/mpt.i: models/mpt.cpp.i
 
 # target to preprocess a source file
 models/mpt.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mpt.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mpt.cpp.i
 .PHONY : models/mpt.cpp.i
 
 models/mpt.s: models/mpt.cpp.s
@@ -2102,7 +2102,7 @@ models/mpt.s: models/mpt.cpp.s
 
 # target to generate assembly for a file
 models/mpt.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mpt.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/mpt.cpp.s
 .PHONY : models/mpt.cpp.s
 
 models/nemotron-h.o: models/nemotron-h.cpp.o
@@ -2110,7 +2110,7 @@ models/nemotron-h.o: models/nemotron-h.cpp.o
 
 # target to build an object file
 models/nemotron-h.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron-h.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron-h.cpp.o
 .PHONY : models/nemotron-h.cpp.o
 
 models/nemotron-h.i: models/nemotron-h.cpp.i
@@ -2118,7 +2118,7 @@ models/nemotron-h.i: models/nemotron-h.cpp.i
 
 # target to preprocess a source file
 models/nemotron-h.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron-h.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron-h.cpp.i
 .PHONY : models/nemotron-h.cpp.i
 
 models/nemotron-h.s: models/nemotron-h.cpp.s
@@ -2126,7 +2126,7 @@ models/nemotron-h.s: models/nemotron-h.cpp.s
 
 # target to generate assembly for a file
 models/nemotron-h.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron-h.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron-h.cpp.s
 .PHONY : models/nemotron-h.cpp.s
 
 models/nemotron.o: models/nemotron.cpp.o
@@ -2134,7 +2134,7 @@ models/nemotron.o: models/nemotron.cpp.o
 
 # target to build an object file
 models/nemotron.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron.cpp.o
 .PHONY : models/nemotron.cpp.o
 
 models/nemotron.i: models/nemotron.cpp.i
@@ -2142,7 +2142,7 @@ models/nemotron.i: models/nemotron.cpp.i
 
 # target to preprocess a source file
 models/nemotron.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron.cpp.i
 .PHONY : models/nemotron.cpp.i
 
 models/nemotron.s: models/nemotron.cpp.s
@@ -2150,7 +2150,7 @@ models/nemotron.s: models/nemotron.cpp.s
 
 # target to generate assembly for a file
 models/nemotron.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/nemotron.cpp.s
 .PHONY : models/nemotron.cpp.s
 
 models/neo-bert.o: models/neo-bert.cpp.o
@@ -2158,7 +2158,7 @@ models/neo-bert.o: models/neo-bert.cpp.o
 
 # target to build an object file
 models/neo-bert.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/neo-bert.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/neo-bert.cpp.o
 .PHONY : models/neo-bert.cpp.o
 
 models/neo-bert.i: models/neo-bert.cpp.i
@@ -2166,7 +2166,7 @@ models/neo-bert.i: models/neo-bert.cpp.i
 
 # target to preprocess a source file
 models/neo-bert.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/neo-bert.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/neo-bert.cpp.i
 .PHONY : models/neo-bert.cpp.i
 
 models/neo-bert.s: models/neo-bert.cpp.s
@@ -2174,7 +2174,7 @@ models/neo-bert.s: models/neo-bert.cpp.s
 
 # target to generate assembly for a file
 models/neo-bert.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/neo-bert.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/neo-bert.cpp.s
 .PHONY : models/neo-bert.cpp.s
 
 models/olmo.o: models/olmo.cpp.o
@@ -2182,7 +2182,7 @@ models/olmo.o: models/olmo.cpp.o
 
 # target to build an object file
 models/olmo.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo.cpp.o
 .PHONY : models/olmo.cpp.o
 
 models/olmo.i: models/olmo.cpp.i
@@ -2190,7 +2190,7 @@ models/olmo.i: models/olmo.cpp.i
 
 # target to preprocess a source file
 models/olmo.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo.cpp.i
 .PHONY : models/olmo.cpp.i
 
 models/olmo.s: models/olmo.cpp.s
@@ -2198,7 +2198,7 @@ models/olmo.s: models/olmo.cpp.s
 
 # target to generate assembly for a file
 models/olmo.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo.cpp.s
 .PHONY : models/olmo.cpp.s
 
 models/olmo2.o: models/olmo2.cpp.o
@@ -2206,7 +2206,7 @@ models/olmo2.o: models/olmo2.cpp.o
 
 # target to build an object file
 models/olmo2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo2.cpp.o
 .PHONY : models/olmo2.cpp.o
 
 models/olmo2.i: models/olmo2.cpp.i
@@ -2214,7 +2214,7 @@ models/olmo2.i: models/olmo2.cpp.i
 
 # target to preprocess a source file
 models/olmo2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo2.cpp.i
 .PHONY : models/olmo2.cpp.i
 
 models/olmo2.s: models/olmo2.cpp.s
@@ -2222,7 +2222,7 @@ models/olmo2.s: models/olmo2.cpp.s
 
 # target to generate assembly for a file
 models/olmo2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmo2.cpp.s
 .PHONY : models/olmo2.cpp.s
 
 models/olmoe.o: models/olmoe.cpp.o
@@ -2230,7 +2230,7 @@ models/olmoe.o: models/olmoe.cpp.o
 
 # target to build an object file
 models/olmoe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmoe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmoe.cpp.o
 .PHONY : models/olmoe.cpp.o
 
 models/olmoe.i: models/olmoe.cpp.i
@@ -2238,7 +2238,7 @@ models/olmoe.i: models/olmoe.cpp.i
 
 # target to preprocess a source file
 models/olmoe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmoe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmoe.cpp.i
 .PHONY : models/olmoe.cpp.i
 
 models/olmoe.s: models/olmoe.cpp.s
@@ -2246,7 +2246,7 @@ models/olmoe.s: models/olmoe.cpp.s
 
 # target to generate assembly for a file
 models/olmoe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmoe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/olmoe.cpp.s
 .PHONY : models/olmoe.cpp.s
 
 models/openai-moe-iswa.o: models/openai-moe-iswa.cpp.o
@@ -2254,7 +2254,7 @@ models/openai-moe-iswa.o: models/openai-moe-iswa.cpp.o
 
 # target to build an object file
 models/openai-moe-iswa.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openai-moe-iswa.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openai-moe-iswa.cpp.o
 .PHONY : models/openai-moe-iswa.cpp.o
 
 models/openai-moe-iswa.i: models/openai-moe-iswa.cpp.i
@@ -2262,7 +2262,7 @@ models/openai-moe-iswa.i: models/openai-moe-iswa.cpp.i
 
 # target to preprocess a source file
 models/openai-moe-iswa.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openai-moe-iswa.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openai-moe-iswa.cpp.i
 .PHONY : models/openai-moe-iswa.cpp.i
 
 models/openai-moe-iswa.s: models/openai-moe-iswa.cpp.s
@@ -2270,7 +2270,7 @@ models/openai-moe-iswa.s: models/openai-moe-iswa.cpp.s
 
 # target to generate assembly for a file
 models/openai-moe-iswa.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openai-moe-iswa.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openai-moe-iswa.cpp.s
 .PHONY : models/openai-moe-iswa.cpp.s
 
 models/openelm.o: models/openelm.cpp.o
@@ -2278,7 +2278,7 @@ models/openelm.o: models/openelm.cpp.o
 
 # target to build an object file
 models/openelm.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openelm.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openelm.cpp.o
 .PHONY : models/openelm.cpp.o
 
 models/openelm.i: models/openelm.cpp.i
@@ -2286,7 +2286,7 @@ models/openelm.i: models/openelm.cpp.i
 
 # target to preprocess a source file
 models/openelm.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openelm.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openelm.cpp.i
 .PHONY : models/openelm.cpp.i
 
 models/openelm.s: models/openelm.cpp.s
@@ -2294,7 +2294,7 @@ models/openelm.s: models/openelm.cpp.s
 
 # target to generate assembly for a file
 models/openelm.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openelm.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/openelm.cpp.s
 .PHONY : models/openelm.cpp.s
 
 models/orion.o: models/orion.cpp.o
@@ -2302,7 +2302,7 @@ models/orion.o: models/orion.cpp.o
 
 # target to build an object file
 models/orion.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/orion.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/orion.cpp.o
 .PHONY : models/orion.cpp.o
 
 models/orion.i: models/orion.cpp.i
@@ -2310,7 +2310,7 @@ models/orion.i: models/orion.cpp.i
 
 # target to preprocess a source file
 models/orion.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/orion.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/orion.cpp.i
 .PHONY : models/orion.cpp.i
 
 models/orion.s: models/orion.cpp.s
@@ -2318,7 +2318,7 @@ models/orion.s: models/orion.cpp.s
 
 # target to generate assembly for a file
 models/orion.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/orion.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/orion.cpp.s
 .PHONY : models/orion.cpp.s
 
 models/phi2.o: models/phi2.cpp.o
@@ -2326,7 +2326,7 @@ models/phi2.o: models/phi2.cpp.o
 
 # target to build an object file
 models/phi2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi2.cpp.o
 .PHONY : models/phi2.cpp.o
 
 models/phi2.i: models/phi2.cpp.i
@@ -2334,7 +2334,7 @@ models/phi2.i: models/phi2.cpp.i
 
 # target to preprocess a source file
 models/phi2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi2.cpp.i
 .PHONY : models/phi2.cpp.i
 
 models/phi2.s: models/phi2.cpp.s
@@ -2342,7 +2342,7 @@ models/phi2.s: models/phi2.cpp.s
 
 # target to generate assembly for a file
 models/phi2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi2.cpp.s
 .PHONY : models/phi2.cpp.s
 
 models/phi3.o: models/phi3.cpp.o
@@ -2350,7 +2350,7 @@ models/phi3.o: models/phi3.cpp.o
 
 # target to build an object file
 models/phi3.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi3.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi3.cpp.o
 .PHONY : models/phi3.cpp.o
 
 models/phi3.i: models/phi3.cpp.i
@@ -2358,7 +2358,7 @@ models/phi3.i: models/phi3.cpp.i
 
 # target to preprocess a source file
 models/phi3.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi3.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi3.cpp.i
 .PHONY : models/phi3.cpp.i
 
 models/phi3.s: models/phi3.cpp.s
@@ -2366,7 +2366,7 @@ models/phi3.s: models/phi3.cpp.s
 
 # target to generate assembly for a file
 models/phi3.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi3.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/phi3.cpp.s
 .PHONY : models/phi3.cpp.s
 
 models/plamo.o: models/plamo.cpp.o
@@ -2374,7 +2374,7 @@ models/plamo.o: models/plamo.cpp.o
 
 # target to build an object file
 models/plamo.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo.cpp.o
 .PHONY : models/plamo.cpp.o
 
 models/plamo.i: models/plamo.cpp.i
@@ -2382,7 +2382,7 @@ models/plamo.i: models/plamo.cpp.i
 
 # target to preprocess a source file
 models/plamo.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo.cpp.i
 .PHONY : models/plamo.cpp.i
 
 models/plamo.s: models/plamo.cpp.s
@@ -2390,7 +2390,7 @@ models/plamo.s: models/plamo.cpp.s
 
 # target to generate assembly for a file
 models/plamo.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo.cpp.s
 .PHONY : models/plamo.cpp.s
 
 models/plamo2.o: models/plamo2.cpp.o
@@ -2398,7 +2398,7 @@ models/plamo2.o: models/plamo2.cpp.o
 
 # target to build an object file
 models/plamo2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo2.cpp.o
 .PHONY : models/plamo2.cpp.o
 
 models/plamo2.i: models/plamo2.cpp.i
@@ -2406,7 +2406,7 @@ models/plamo2.i: models/plamo2.cpp.i
 
 # target to preprocess a source file
 models/plamo2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo2.cpp.i
 .PHONY : models/plamo2.cpp.i
 
 models/plamo2.s: models/plamo2.cpp.s
@@ -2414,7 +2414,7 @@ models/plamo2.s: models/plamo2.cpp.s
 
 # target to generate assembly for a file
 models/plamo2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plamo2.cpp.s
 .PHONY : models/plamo2.cpp.s
 
 models/plm.o: models/plm.cpp.o
@@ -2422,7 +2422,7 @@ models/plm.o: models/plm.cpp.o
 
 # target to build an object file
 models/plm.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plm.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plm.cpp.o
 .PHONY : models/plm.cpp.o
 
 models/plm.i: models/plm.cpp.i
@@ -2430,7 +2430,7 @@ models/plm.i: models/plm.cpp.i
 
 # target to preprocess a source file
 models/plm.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plm.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plm.cpp.i
 .PHONY : models/plm.cpp.i
 
 models/plm.s: models/plm.cpp.s
@@ -2438,7 +2438,7 @@ models/plm.s: models/plm.cpp.s
 
 # target to generate assembly for a file
 models/plm.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plm.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/plm.cpp.s
 .PHONY : models/plm.cpp.s
 
 models/qwen.o: models/qwen.cpp.o
@@ -2446,7 +2446,7 @@ models/qwen.o: models/qwen.cpp.o
 
 # target to build an object file
 models/qwen.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen.cpp.o
 .PHONY : models/qwen.cpp.o
 
 models/qwen.i: models/qwen.cpp.i
@@ -2454,7 +2454,7 @@ models/qwen.i: models/qwen.cpp.i
 
 # target to preprocess a source file
 models/qwen.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen.cpp.i
 .PHONY : models/qwen.cpp.i
 
 models/qwen.s: models/qwen.cpp.s
@@ -2462,7 +2462,7 @@ models/qwen.s: models/qwen.cpp.s
 
 # target to generate assembly for a file
 models/qwen.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen.cpp.s
 .PHONY : models/qwen.cpp.s
 
 models/qwen2.o: models/qwen2.cpp.o
@@ -2470,7 +2470,7 @@ models/qwen2.o: models/qwen2.cpp.o
 
 # target to build an object file
 models/qwen2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2.cpp.o
 .PHONY : models/qwen2.cpp.o
 
 models/qwen2.i: models/qwen2.cpp.i
@@ -2478,7 +2478,7 @@ models/qwen2.i: models/qwen2.cpp.i
 
 # target to preprocess a source file
 models/qwen2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2.cpp.i
 .PHONY : models/qwen2.cpp.i
 
 models/qwen2.s: models/qwen2.cpp.s
@@ -2486,7 +2486,7 @@ models/qwen2.s: models/qwen2.cpp.s
 
 # target to generate assembly for a file
 models/qwen2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2.cpp.s
 .PHONY : models/qwen2.cpp.s
 
 models/qwen2moe.o: models/qwen2moe.cpp.o
@@ -2494,7 +2494,7 @@ models/qwen2moe.o: models/qwen2moe.cpp.o
 
 # target to build an object file
 models/qwen2moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2moe.cpp.o
 .PHONY : models/qwen2moe.cpp.o
 
 models/qwen2moe.i: models/qwen2moe.cpp.i
@@ -2502,7 +2502,7 @@ models/qwen2moe.i: models/qwen2moe.cpp.i
 
 # target to preprocess a source file
 models/qwen2moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2moe.cpp.i
 .PHONY : models/qwen2moe.cpp.i
 
 models/qwen2moe.s: models/qwen2moe.cpp.s
@@ -2510,7 +2510,7 @@ models/qwen2moe.s: models/qwen2moe.cpp.s
 
 # target to generate assembly for a file
 models/qwen2moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2moe.cpp.s
 .PHONY : models/qwen2moe.cpp.s
 
 models/qwen2vl.o: models/qwen2vl.cpp.o
@@ -2518,7 +2518,7 @@ models/qwen2vl.o: models/qwen2vl.cpp.o
 
 # target to build an object file
 models/qwen2vl.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2vl.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2vl.cpp.o
 .PHONY : models/qwen2vl.cpp.o
 
 models/qwen2vl.i: models/qwen2vl.cpp.i
@@ -2526,7 +2526,7 @@ models/qwen2vl.i: models/qwen2vl.cpp.i
 
 # target to preprocess a source file
 models/qwen2vl.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2vl.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2vl.cpp.i
 .PHONY : models/qwen2vl.cpp.i
 
 models/qwen2vl.s: models/qwen2vl.cpp.s
@@ -2534,7 +2534,7 @@ models/qwen2vl.s: models/qwen2vl.cpp.s
 
 # target to generate assembly for a file
 models/qwen2vl.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2vl.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen2vl.cpp.s
 .PHONY : models/qwen2vl.cpp.s
 
 models/qwen3.o: models/qwen3.cpp.o
@@ -2542,7 +2542,7 @@ models/qwen3.o: models/qwen3.cpp.o
 
 # target to build an object file
 models/qwen3.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3.cpp.o
 .PHONY : models/qwen3.cpp.o
 
 models/qwen3.i: models/qwen3.cpp.i
@@ -2550,7 +2550,7 @@ models/qwen3.i: models/qwen3.cpp.i
 
 # target to preprocess a source file
 models/qwen3.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3.cpp.i
 .PHONY : models/qwen3.cpp.i
 
 models/qwen3.s: models/qwen3.cpp.s
@@ -2558,7 +2558,7 @@ models/qwen3.s: models/qwen3.cpp.s
 
 # target to generate assembly for a file
 models/qwen3.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3.cpp.s
 .PHONY : models/qwen3.cpp.s
 
 models/qwen3moe.o: models/qwen3moe.cpp.o
@@ -2566,7 +2566,7 @@ models/qwen3moe.o: models/qwen3moe.cpp.o
 
 # target to build an object file
 models/qwen3moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3moe.cpp.o
 .PHONY : models/qwen3moe.cpp.o
 
 models/qwen3moe.i: models/qwen3moe.cpp.i
@@ -2574,7 +2574,7 @@ models/qwen3moe.i: models/qwen3moe.cpp.i
 
 # target to preprocess a source file
 models/qwen3moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3moe.cpp.i
 .PHONY : models/qwen3moe.cpp.i
 
 models/qwen3moe.s: models/qwen3moe.cpp.s
@@ -2582,7 +2582,7 @@ models/qwen3moe.s: models/qwen3moe.cpp.s
 
 # target to generate assembly for a file
 models/qwen3moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3moe.cpp.s
 .PHONY : models/qwen3moe.cpp.s
 
 models/qwen3vl-moe.o: models/qwen3vl-moe.cpp.o
@@ -2590,7 +2590,7 @@ models/qwen3vl-moe.o: models/qwen3vl-moe.cpp.o
 
 # target to build an object file
 models/qwen3vl-moe.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl-moe.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl-moe.cpp.o
 .PHONY : models/qwen3vl-moe.cpp.o
 
 models/qwen3vl-moe.i: models/qwen3vl-moe.cpp.i
@@ -2598,7 +2598,7 @@ models/qwen3vl-moe.i: models/qwen3vl-moe.cpp.i
 
 # target to preprocess a source file
 models/qwen3vl-moe.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl-moe.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl-moe.cpp.i
 .PHONY : models/qwen3vl-moe.cpp.i
 
 models/qwen3vl-moe.s: models/qwen3vl-moe.cpp.s
@@ -2606,7 +2606,7 @@ models/qwen3vl-moe.s: models/qwen3vl-moe.cpp.s
 
 # target to generate assembly for a file
 models/qwen3vl-moe.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl-moe.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl-moe.cpp.s
 .PHONY : models/qwen3vl-moe.cpp.s
 
 models/qwen3vl.o: models/qwen3vl.cpp.o
@@ -2614,7 +2614,7 @@ models/qwen3vl.o: models/qwen3vl.cpp.o
 
 # target to build an object file
 models/qwen3vl.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl.cpp.o
 .PHONY : models/qwen3vl.cpp.o
 
 models/qwen3vl.i: models/qwen3vl.cpp.i
@@ -2622,7 +2622,7 @@ models/qwen3vl.i: models/qwen3vl.cpp.i
 
 # target to preprocess a source file
 models/qwen3vl.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl.cpp.i
 .PHONY : models/qwen3vl.cpp.i
 
 models/qwen3vl.s: models/qwen3vl.cpp.s
@@ -2630,7 +2630,7 @@ models/qwen3vl.s: models/qwen3vl.cpp.s
 
 # target to generate assembly for a file
 models/qwen3vl.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/qwen3vl.cpp.s
 .PHONY : models/qwen3vl.cpp.s
 
 models/refact.o: models/refact.cpp.o
@@ -2638,7 +2638,7 @@ models/refact.o: models/refact.cpp.o
 
 # target to build an object file
 models/refact.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/refact.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/refact.cpp.o
 .PHONY : models/refact.cpp.o
 
 models/refact.i: models/refact.cpp.i
@@ -2646,7 +2646,7 @@ models/refact.i: models/refact.cpp.i
 
 # target to preprocess a source file
 models/refact.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/refact.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/refact.cpp.i
 .PHONY : models/refact.cpp.i
 
 models/refact.s: models/refact.cpp.s
@@ -2654,7 +2654,7 @@ models/refact.s: models/refact.cpp.s
 
 # target to generate assembly for a file
 models/refact.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/refact.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/refact.cpp.s
 .PHONY : models/refact.cpp.s
 
 models/rwkv6-base.o: models/rwkv6-base.cpp.o
@@ -2662,7 +2662,7 @@ models/rwkv6-base.o: models/rwkv6-base.cpp.o
 
 # target to build an object file
 models/rwkv6-base.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.o
 .PHONY : models/rwkv6-base.cpp.o
 
 models/rwkv6-base.i: models/rwkv6-base.cpp.i
@@ -2670,7 +2670,7 @@ models/rwkv6-base.i: models/rwkv6-base.cpp.i
 
 # target to preprocess a source file
 models/rwkv6-base.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.i
 .PHONY : models/rwkv6-base.cpp.i
 
 models/rwkv6-base.s: models/rwkv6-base.cpp.s
@@ -2678,7 +2678,7 @@ models/rwkv6-base.s: models/rwkv6-base.cpp.s
 
 # target to generate assembly for a file
 models/rwkv6-base.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.s
 .PHONY : models/rwkv6-base.cpp.s
 
 models/rwkv6.o: models/rwkv6.cpp.o
@@ -2686,7 +2686,7 @@ models/rwkv6.o: models/rwkv6.cpp.o
 
 # target to build an object file
 models/rwkv6.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6.cpp.o
 .PHONY : models/rwkv6.cpp.o
 
 models/rwkv6.i: models/rwkv6.cpp.i
@@ -2694,7 +2694,7 @@ models/rwkv6.i: models/rwkv6.cpp.i
 
 # target to preprocess a source file
 models/rwkv6.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6.cpp.i
 .PHONY : models/rwkv6.cpp.i
 
 models/rwkv6.s: models/rwkv6.cpp.s
@@ -2702,7 +2702,7 @@ models/rwkv6.s: models/rwkv6.cpp.s
 
 # target to generate assembly for a file
 models/rwkv6.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6.cpp.s
 .PHONY : models/rwkv6.cpp.s
 
 models/rwkv6qwen2.o: models/rwkv6qwen2.cpp.o
@@ -2710,7 +2710,7 @@ models/rwkv6qwen2.o: models/rwkv6qwen2.cpp.o
 
 # target to build an object file
 models/rwkv6qwen2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.o
 .PHONY : models/rwkv6qwen2.cpp.o
 
 models/rwkv6qwen2.i: models/rwkv6qwen2.cpp.i
@@ -2718,7 +2718,7 @@ models/rwkv6qwen2.i: models/rwkv6qwen2.cpp.i
 
 # target to preprocess a source file
 models/rwkv6qwen2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.i
 .PHONY : models/rwkv6qwen2.cpp.i
 
 models/rwkv6qwen2.s: models/rwkv6qwen2.cpp.s
@@ -2726,7 +2726,7 @@ models/rwkv6qwen2.s: models/rwkv6qwen2.cpp.s
 
 # target to generate assembly for a file
 models/rwkv6qwen2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.s
 .PHONY : models/rwkv6qwen2.cpp.s
 
 models/rwkv7-base.o: models/rwkv7-base.cpp.o
@@ -2734,7 +2734,7 @@ models/rwkv7-base.o: models/rwkv7-base.cpp.o
 
 # target to build an object file
 models/rwkv7-base.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.o
 .PHONY : models/rwkv7-base.cpp.o
 
 models/rwkv7-base.i: models/rwkv7-base.cpp.i
@@ -2742,7 +2742,7 @@ models/rwkv7-base.i: models/rwkv7-base.cpp.i
 
 # target to preprocess a source file
 models/rwkv7-base.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.i
 .PHONY : models/rwkv7-base.cpp.i
 
 models/rwkv7-base.s: models/rwkv7-base.cpp.s
@@ -2750,7 +2750,7 @@ models/rwkv7-base.s: models/rwkv7-base.cpp.s
 
 # target to generate assembly for a file
 models/rwkv7-base.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.s
 .PHONY : models/rwkv7-base.cpp.s
 
 models/rwkv7.o: models/rwkv7.cpp.o
@@ -2758,7 +2758,7 @@ models/rwkv7.o: models/rwkv7.cpp.o
 
 # target to build an object file
 models/rwkv7.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7.cpp.o
 .PHONY : models/rwkv7.cpp.o
 
 models/rwkv7.i: models/rwkv7.cpp.i
@@ -2766,7 +2766,7 @@ models/rwkv7.i: models/rwkv7.cpp.i
 
 # target to preprocess a source file
 models/rwkv7.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7.cpp.i
 .PHONY : models/rwkv7.cpp.i
 
 models/rwkv7.s: models/rwkv7.cpp.s
@@ -2774,7 +2774,7 @@ models/rwkv7.s: models/rwkv7.cpp.s
 
 # target to generate assembly for a file
 models/rwkv7.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/rwkv7.cpp.s
 .PHONY : models/rwkv7.cpp.s
 
 models/seed-oss.o: models/seed-oss.cpp.o
@@ -2782,7 +2782,7 @@ models/seed-oss.o: models/seed-oss.cpp.o
 
 # target to build an object file
 models/seed-oss.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/seed-oss.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/seed-oss.cpp.o
 .PHONY : models/seed-oss.cpp.o
 
 models/seed-oss.i: models/seed-oss.cpp.i
@@ -2790,7 +2790,7 @@ models/seed-oss.i: models/seed-oss.cpp.i
 
 # target to preprocess a source file
 models/seed-oss.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/seed-oss.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/seed-oss.cpp.i
 .PHONY : models/seed-oss.cpp.i
 
 models/seed-oss.s: models/seed-oss.cpp.s
@@ -2798,7 +2798,7 @@ models/seed-oss.s: models/seed-oss.cpp.s
 
 # target to generate assembly for a file
 models/seed-oss.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/seed-oss.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/seed-oss.cpp.s
 .PHONY : models/seed-oss.cpp.s
 
 models/smallthinker.o: models/smallthinker.cpp.o
@@ -2806,7 +2806,7 @@ models/smallthinker.o: models/smallthinker.cpp.o
 
 # target to build an object file
 models/smallthinker.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smallthinker.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smallthinker.cpp.o
 .PHONY : models/smallthinker.cpp.o
 
 models/smallthinker.i: models/smallthinker.cpp.i
@@ -2814,7 +2814,7 @@ models/smallthinker.i: models/smallthinker.cpp.i
 
 # target to preprocess a source file
 models/smallthinker.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smallthinker.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smallthinker.cpp.i
 .PHONY : models/smallthinker.cpp.i
 
 models/smallthinker.s: models/smallthinker.cpp.s
@@ -2822,7 +2822,7 @@ models/smallthinker.s: models/smallthinker.cpp.s
 
 # target to generate assembly for a file
 models/smallthinker.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smallthinker.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smallthinker.cpp.s
 .PHONY : models/smallthinker.cpp.s
 
 models/smollm3.o: models/smollm3.cpp.o
@@ -2830,7 +2830,7 @@ models/smollm3.o: models/smollm3.cpp.o
 
 # target to build an object file
 models/smollm3.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smollm3.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smollm3.cpp.o
 .PHONY : models/smollm3.cpp.o
 
 models/smollm3.i: models/smollm3.cpp.i
@@ -2838,7 +2838,7 @@ models/smollm3.i: models/smollm3.cpp.i
 
 # target to preprocess a source file
 models/smollm3.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smollm3.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smollm3.cpp.i
 .PHONY : models/smollm3.cpp.i
 
 models/smollm3.s: models/smollm3.cpp.s
@@ -2846,7 +2846,7 @@ models/smollm3.s: models/smollm3.cpp.s
 
 # target to generate assembly for a file
 models/smollm3.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smollm3.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/smollm3.cpp.s
 .PHONY : models/smollm3.cpp.s
 
 models/stablelm.o: models/stablelm.cpp.o
@@ -2854,7 +2854,7 @@ models/stablelm.o: models/stablelm.cpp.o
 
 # target to build an object file
 models/stablelm.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/stablelm.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/stablelm.cpp.o
 .PHONY : models/stablelm.cpp.o
 
 models/stablelm.i: models/stablelm.cpp.i
@@ -2862,7 +2862,7 @@ models/stablelm.i: models/stablelm.cpp.i
 
 # target to preprocess a source file
 models/stablelm.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/stablelm.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/stablelm.cpp.i
 .PHONY : models/stablelm.cpp.i
 
 models/stablelm.s: models/stablelm.cpp.s
@@ -2870,7 +2870,7 @@ models/stablelm.s: models/stablelm.cpp.s
 
 # target to generate assembly for a file
 models/stablelm.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/stablelm.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/stablelm.cpp.s
 .PHONY : models/stablelm.cpp.s
 
 models/starcoder.o: models/starcoder.cpp.o
@@ -2878,7 +2878,7 @@ models/starcoder.o: models/starcoder.cpp.o
 
 # target to build an object file
 models/starcoder.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder.cpp.o
 .PHONY : models/starcoder.cpp.o
 
 models/starcoder.i: models/starcoder.cpp.i
@@ -2886,7 +2886,7 @@ models/starcoder.i: models/starcoder.cpp.i
 
 # target to preprocess a source file
 models/starcoder.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder.cpp.i
 .PHONY : models/starcoder.cpp.i
 
 models/starcoder.s: models/starcoder.cpp.s
@@ -2894,7 +2894,7 @@ models/starcoder.s: models/starcoder.cpp.s
 
 # target to generate assembly for a file
 models/starcoder.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder.cpp.s
 .PHONY : models/starcoder.cpp.s
 
 models/starcoder2.o: models/starcoder2.cpp.o
@@ -2902,7 +2902,7 @@ models/starcoder2.o: models/starcoder2.cpp.o
 
 # target to build an object file
 models/starcoder2.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder2.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder2.cpp.o
 .PHONY : models/starcoder2.cpp.o
 
 models/starcoder2.i: models/starcoder2.cpp.i
@@ -2910,7 +2910,7 @@ models/starcoder2.i: models/starcoder2.cpp.i
 
 # target to preprocess a source file
 models/starcoder2.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder2.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder2.cpp.i
 .PHONY : models/starcoder2.cpp.i
 
 models/starcoder2.s: models/starcoder2.cpp.s
@@ -2918,7 +2918,7 @@ models/starcoder2.s: models/starcoder2.cpp.s
 
 # target to generate assembly for a file
 models/starcoder2.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder2.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/starcoder2.cpp.s
 .PHONY : models/starcoder2.cpp.s
 
 models/t5-dec.o: models/t5-dec.cpp.o
@@ -2926,7 +2926,7 @@ models/t5-dec.o: models/t5-dec.cpp.o
 
 # target to build an object file
 models/t5-dec.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-dec.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-dec.cpp.o
 .PHONY : models/t5-dec.cpp.o
 
 models/t5-dec.i: models/t5-dec.cpp.i
@@ -2934,7 +2934,7 @@ models/t5-dec.i: models/t5-dec.cpp.i
 
 # target to preprocess a source file
 models/t5-dec.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-dec.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-dec.cpp.i
 .PHONY : models/t5-dec.cpp.i
 
 models/t5-dec.s: models/t5-dec.cpp.s
@@ -2942,7 +2942,7 @@ models/t5-dec.s: models/t5-dec.cpp.s
 
 # target to generate assembly for a file
 models/t5-dec.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-dec.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-dec.cpp.s
 .PHONY : models/t5-dec.cpp.s
 
 models/t5-enc.o: models/t5-enc.cpp.o
@@ -2950,7 +2950,7 @@ models/t5-enc.o: models/t5-enc.cpp.o
 
 # target to build an object file
 models/t5-enc.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-enc.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-enc.cpp.o
 .PHONY : models/t5-enc.cpp.o
 
 models/t5-enc.i: models/t5-enc.cpp.i
@@ -2958,7 +2958,7 @@ models/t5-enc.i: models/t5-enc.cpp.i
 
 # target to preprocess a source file
 models/t5-enc.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-enc.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-enc.cpp.i
 .PHONY : models/t5-enc.cpp.i
 
 models/t5-enc.s: models/t5-enc.cpp.s
@@ -2966,7 +2966,7 @@ models/t5-enc.s: models/t5-enc.cpp.s
 
 # target to generate assembly for a file
 models/t5-enc.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-enc.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/t5-enc.cpp.s
 .PHONY : models/t5-enc.cpp.s
 
 models/wavtokenizer-dec.o: models/wavtokenizer-dec.cpp.o
@@ -2974,7 +2974,7 @@ models/wavtokenizer-dec.o: models/wavtokenizer-dec.cpp.o
 
 # target to build an object file
 models/wavtokenizer-dec.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.o
 .PHONY : models/wavtokenizer-dec.cpp.o
 
 models/wavtokenizer-dec.i: models/wavtokenizer-dec.cpp.i
@@ -2982,7 +2982,7 @@ models/wavtokenizer-dec.i: models/wavtokenizer-dec.cpp.i
 
 # target to preprocess a source file
 models/wavtokenizer-dec.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.i
 .PHONY : models/wavtokenizer-dec.cpp.i
 
 models/wavtokenizer-dec.s: models/wavtokenizer-dec.cpp.s
@@ -2990,7 +2990,7 @@ models/wavtokenizer-dec.s: models/wavtokenizer-dec.cpp.s
 
 # target to generate assembly for a file
 models/wavtokenizer-dec.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.s
 .PHONY : models/wavtokenizer-dec.cpp.s
 
 models/xverse.o: models/xverse.cpp.o
@@ -2998,7 +2998,7 @@ models/xverse.o: models/xverse.cpp.o
 
 # target to build an object file
 models/xverse.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/xverse.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/xverse.cpp.o
 .PHONY : models/xverse.cpp.o
 
 models/xverse.i: models/xverse.cpp.i
@@ -3006,7 +3006,7 @@ models/xverse.i: models/xverse.cpp.i
 
 # target to preprocess a source file
 models/xverse.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/xverse.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/xverse.cpp.i
 .PHONY : models/xverse.cpp.i
 
 models/xverse.s: models/xverse.cpp.s
@@ -3014,7 +3014,7 @@ models/xverse.s: models/xverse.cpp.s
 
 # target to generate assembly for a file
 models/xverse.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/xverse.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/models/xverse.cpp.s
 .PHONY : models/xverse.cpp.s
 
 unicode-data.o: unicode-data.cpp.o
@@ -3022,7 +3022,7 @@ unicode-data.o: unicode-data.cpp.o
 
 # target to build an object file
 unicode-data.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode-data.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode-data.cpp.o
 .PHONY : unicode-data.cpp.o
 
 unicode-data.i: unicode-data.cpp.i
@@ -3030,7 +3030,7 @@ unicode-data.i: unicode-data.cpp.i
 
 # target to preprocess a source file
 unicode-data.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode-data.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode-data.cpp.i
 .PHONY : unicode-data.cpp.i
 
 unicode-data.s: unicode-data.cpp.s
@@ -3038,7 +3038,7 @@ unicode-data.s: unicode-data.cpp.s
 
 # target to generate assembly for a file
 unicode-data.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode-data.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode-data.cpp.s
 .PHONY : unicode-data.cpp.s
 
 unicode.o: unicode.cpp.o
@@ -3046,7 +3046,7 @@ unicode.o: unicode.cpp.o
 
 # target to build an object file
 unicode.cpp.o:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode.cpp.o
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode.cpp.o
 .PHONY : unicode.cpp.o
 
 unicode.i: unicode.cpp.i
@@ -3054,7 +3054,7 @@ unicode.i: unicode.cpp.i
 
 # target to preprocess a source file
 unicode.cpp.i:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode.cpp.i
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode.cpp.i
 .PHONY : unicode.cpp.i
 
 unicode.s: unicode.cpp.s
@@ -3062,7 +3062,7 @@ unicode.s: unicode.cpp.s
 
 # target to generate assembly for a file
 unicode.cpp.s:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode.cpp.s
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(MAKE) $(MAKESILENT) -f src/CMakeFiles/llama.dir/build.make src/CMakeFiles/llama.dir/unicode.cpp.s
 .PHONY : unicode.cpp.s
 
 # Help Target
@@ -3450,6 +3450,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/eirikhanasand/Desktop/Login/beeswarm/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/eirikhanasand/Desktop/personal/hanasand/gpt/model/llama.cpp && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

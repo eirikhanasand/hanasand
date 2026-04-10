@@ -1,8 +1,8 @@
 import type { RawData } from 'ws'
 import { WebSocket as WS } from 'ws'
 
-export const beeswarm = new Map<string, Set<WS>>()
-export const beeswarmSockets = new Map<WS, GPT_SocketState>()
+export const gpt = new Map<string, Set<WS>>()
+export const gptSockets = new Map<WS, GPT_SocketState>()
 
 function defaultModelMetrics(): GPT_ModelMetrics {
     return {
@@ -46,7 +46,7 @@ export async function handleGptMessage(
 
                 const normalizedClient = normalizeClient(msg.client)
 
-                beeswarmSockets.set(socket, {
+                gptSockets.set(socket, {
                     role: 'producer',
                     clientName: normalizedClient.name,
                 })
@@ -73,7 +73,7 @@ export async function handleGptMessage(
 }
 
 function relayPromptRequest(id: string, requester: WS, request: GPT_PromptRequest) {
-    const clients = beeswarm.get(id)
+    const clients = gpt.get(id)
     if (!clients) {
         return
     }
@@ -83,7 +83,7 @@ function relayPromptRequest(id: string, requester: WS, request: GPT_PromptReques
             return false
         }
 
-        const state = beeswarmSockets.get(client)
+        const state = gptSockets.get(client)
         if (!state || state.role !== 'producer') {
             return false
         }
@@ -108,7 +108,7 @@ function relayPromptRequest(id: string, requester: WS, request: GPT_PromptReques
 }
 
 function broadcastUpdate(id: string, sender: WS, client: GPT_Client) {
-    const clients = beeswarm.get(id)
+    const clients = gpt.get(id)
     if (!clients) {
         return
     }
@@ -128,7 +128,7 @@ function broadcastUpdate(id: string, sender: WS, client: GPT_Client) {
 }
 
 function broadcastPromptEvent(id: string, sender: WS, event: { type?: string }) {
-    const clients = beeswarm.get(id)
+    const clients = gpt.get(id)
     if (!clients) {
         return
     }
