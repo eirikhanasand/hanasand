@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { cookies, headers } from 'next/headers'
 import Footer from '@/components/footer/footer'
+import BackgroundSketches from '@/components/background/backgroundSketches'
 import './globals.css'
 import Header from '@/components/header/header'
 export { default as metadata } from './metadata'
@@ -20,6 +21,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <div className='site-atmosphere' />
                 <Header token={token} path={path} />
                 <div className={`relative z-10 ${isShare ? 'mt-[7.5vh] h-[92.5vh]' : 'mt-[9.5vh] h-[90.5vh]'} w-full overflow-auto`}>
+                    <BackgroundSketches />
                     <main className={`w-full ${isShare ? '' : 'pt-5 md:pt-0'} min-h-[90.5vh]`}>
                         {children}
                     </main>
