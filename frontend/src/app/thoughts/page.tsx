@@ -2,6 +2,8 @@ import fetchThoughts from '@/utils/thoughts/fetchThoughts'
 import prettyDate from '@/utils/date/prettyDate'
 import Link from 'next/link'
 
+export const dynamic = 'force-dynamic'
+
 export default async function Page() {
     const thoughts = await fetchThoughts()
 

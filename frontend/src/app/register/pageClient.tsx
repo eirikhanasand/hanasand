@@ -8,6 +8,7 @@ import Or from '@/utils/or'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ArrowRight, CheckCircle2, Fingerprint, KeyRound, UserPlus } from 'lucide-react'
 
 type RegisterPageProps = {
     path: string | null
@@ -138,21 +139,25 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     }, [password, router])
 
     return (
-        <section className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-53 md:px-40 lg:px-100 grid gap-2 place-items-center'>
-            {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
-                {path} is internal. Please log in.
-            </h1>}
-            {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>
-                {path} is internal. Please log in.
-            </h1>}
-            <div className='grid w-full spawn rounded-lg overflow-hidden bg-normal shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.3)] backdrop-blur-xl'>
-                <div className='w-full h-full p-4 relative grid place-items-center gap-4'>
-                    <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
-                        hanasand.com
-                    </h1>
-                    <div className='grid place-items-center gap-4'>
-                        <div className='grid gap-4 max-w-xs'>
-                            <Notify message={error} />
+        <section className='min-h-[90.5vh] w-full px-4 py-10 md:px-10 lg:px-24 grid place-items-center'>
+            <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center'>
+                <div className='glass-panel spawn grid w-full overflow-hidden rounded-[2rem] p-5 md:p-8'>
+                    <div className='grid gap-6'>
+                        <div>
+                            <div className='icon-tile bg-orange-500/15 text-orange-300'>
+                                <UserPlus className='h-5 w-5' />
+                            </div>
+                            <p className='mt-5 text-xs uppercase tracking-[0.35em] text-bright/35'>Create access</p>
+                            <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Register account</h1>
+                            <p className='mt-2 text-sm text-bright/45'>Strong credentials and a clean token are issued immediately after registration.</p>
+                        </div>
+
+                        {(internal && path) && <h1 className='grid w-full rounded-xl border border-red-400/20 bg-red-500/12 p-3 text-sm text-red-100'>
+                            {path} is internal. Please log in.
+                        </h1>}
+
+                        <Notify message={error} />
+                        <div className='grid gap-4'>
                             <form
                                 className='w-full flex flex-col gap-3 self-center'
                                 onSubmit={handleSubmit}
@@ -163,7 +168,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder='Username'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium text-sm focus:outline-none z-10'
+                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
                                 <input
@@ -172,7 +177,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                     placeholder='Name'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium text-sm focus:outline-none z-10'
+                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
                                 <input
@@ -181,10 +186,10 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder='Password'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium text-sm focus:outline-none z-10'
+                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
-                                {!passwordIsValid && <div className='flex text-sm text-center z-10'>
+                                {!passwordIsValid && <div className='rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-bright/55'>
                                     <h1>
                                         The password must be at
                                         least <span className={`font-bold ${lengthColor}`}>16
@@ -198,24 +203,21 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 </div>}
                                 <button
                                     type='submit'
-                                    className={
-                                        'py-2 px-4 rounded-lg ' +
-                                        `${passwordIsValid ? 'cursor-pointer bg-extralight hover:bg-blue-500/80'
-                                            : 'cursor-not-allowed text-sm hover:bg-red-500/80 bg-extralight'}`
-                                    }
+                                    className={`group flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                                        passwordIsValid
+                                            ? 'cursor-pointer bg-bright text-background hover:bg-orange-200'
+                                            : 'cursor-not-allowed border border-white/10 bg-white/5 text-bright/35'
+                                    }`}
                                 >
                                     Create account
+                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
                                 </button>
                             </form>
-                        </div>
-                        <Or className='z-10' />
-                        <Link href='/login' className='w-full flex flex-col gap-3 max-w-xs self-center'>
+                            <Or className='z-10 text-bright/35' />
+                        <Link href='/login' className='w-full flex flex-col gap-3 self-center'>
                             <button
                                 type='submit'
-                                className={
-                                    'py-2 px-4 rounded-lg bg-extralight ' +
-                                    'hover:bg-blue-500/80 cursor-pointer text-sm'
-                                }
+                                className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
                             >
                                 Login
                             </button>
@@ -223,6 +225,28 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     </div>
                 </div>
             </div>
+                <div className='hidden gap-3 lg:grid'>
+                    <RegisterInfo icon={<Fingerprint className='h-4 w-4' />} label='Identity' value='Bearer token only' tone='orange' />
+                    <RegisterInfo icon={<KeyRound className='h-4 w-4' />} label='Password' value='16 chars, mixed entropy' tone='blue' />
+                    <RegisterInfo icon={<CheckCircle2 className='h-4 w-4' />} label='Session' value='Roles attached immediately' tone='emerald' />
+                </div>
+            </div>
         </section>
+    )
+}
+
+function RegisterInfo({ icon, label, value, tone }: { icon: React.ReactNode, label: string, value: string, tone: 'orange' | 'blue' | 'emerald' }) {
+    const tones = {
+        orange: 'bg-orange-500/12 text-orange-300',
+        blue: 'bg-sky-500/12 text-sky-300',
+        emerald: 'bg-emerald-500/12 text-emerald-300',
+    }
+
+    return (
+        <div className='glass-card rounded-3xl p-5'>
+            <div className={`icon-tile ${tones[tone]}`}>{icon}</div>
+            <p className='mt-4 text-xs uppercase tracking-[0.22em] text-bright/35'>{label}</p>
+            <p className='mt-2 text-lg font-semibold text-bright'>{value}</p>
+        </div>
     )
 }

@@ -1,11 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import config from '#constants'
+import hasInternalToken from '#utils/auth/internalToken.ts'
 
 export default async function getVMNames(req: FastifyRequest, res: FastifyReply) {
-    const tokenHeader = req.headers['authorization'] || ''
-    const token = tokenHeader.split(' ')[1] ?? ''
-    if (!token || Array.isArray(token) || token !== config.vm_api_token) {
+    if (!hasInternalToken(req)) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 

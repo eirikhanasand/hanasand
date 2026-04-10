@@ -2,12 +2,11 @@
 
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export async function postArticle(id: string, content: string): Promise<{ status: number, message: string }> {
     const token = getCookie('access_token')
     const username = getCookie('id')
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     if (!token || !id) {
         return {
@@ -17,17 +16,18 @@ export async function postArticle(id: string, content: string): Promise<{ status
     }
 
     try {
-        const response = await fetch(`${config.url.api}/article/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/article/${id}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${token}`,
+                id: username || ''
             },
             body: JSON.stringify({ id: username, content }),
-            signal: controller.signal
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
-        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(await response.text())
         }

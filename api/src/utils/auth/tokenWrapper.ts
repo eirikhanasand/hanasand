@@ -38,14 +38,6 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         }
     }
 
-    if (!id) {
-        return {
-            valid: false,
-            id,
-            error: 'Unauthorized.'
-        }
-    }
-
     const token = authHeader.split(' ')[1]
 
     try {
@@ -58,9 +50,10 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
             }
         }
 
+        req.headers.id = session.user.id
         res.header('x-access-token', session.refreshed.token)
         res.header('x-access-token-expires-at', session.refreshed.expires_at)
-        return { valid: true, id }
+        return { valid: true, id: session.user.id }
     } catch (error) {
         res.log.error(error)
         res.status(500).send({

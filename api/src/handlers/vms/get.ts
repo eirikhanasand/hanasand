@@ -6,7 +6,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 export default async function getVM(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     if (!valid) {
-        return res.status(401).send({ error: 'Unautorized.' })
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const { id, user } = req.params as { id?: string; user?: string }

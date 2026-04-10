@@ -19,6 +19,7 @@ export default async function restartHandler(req: FastifyRequest, res: FastifyRe
         const internalRes = await fetch(`${config.internal_api}/docker/restart/${id}`, {
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
                 'User-Agent': 'hanasand_internal'
             }
         })

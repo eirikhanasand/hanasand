@@ -5,6 +5,8 @@ import getLogs from '@/utils/traffic/getLogs'
 import getDomains from '@/utils/traffic/getDomains'
 import getUAs from '@/utils/traffic/getUAs'
 
+export const dynamic = 'force-dynamic'
+
 export default async function page() {
     const metrics = await getMetrics()
     const blocklist = await getBlocklist()

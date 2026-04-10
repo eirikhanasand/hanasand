@@ -10,11 +10,7 @@ export default async function manageVM(id: string, action: 'start' | 'stop' | 'r
             return 'Please log in to manage VMs.'
         }
 
-        if (action !== 'stop') {
-            return 'VM start/restart is not implemented on the server yet.'
-        }
-
-        const response = await fetchWithRetry(`${config.url.api}/vm/${id}/stop`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/${id}/${action}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -28,10 +24,10 @@ export default async function manageVM(id: string, action: 'start' | 'stop' | 'r
 
         const data = await response.json()
         if (!response.ok) {
-            throw new Error(data?.error || `Error stopping VM ${id}.`)
+            throw new Error(data?.error || `Error running ${action} for VM ${id}.`)
         }
 
-        return data?.message || `Queued shutdown for ${id}.`
+        return data?.message || `${action} completed for ${id}.`
     } catch (error) {
         console.log(error)
         return `Failed to ${action} vm`

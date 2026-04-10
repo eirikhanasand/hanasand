@@ -34,7 +34,7 @@ export default async function assignCertificate({
         `
         await run(assignQuery, [user_id, certificateId])
 
-        return { certificateId }
+        return certificateId
     } catch (error) {
         console.error('Error creating certificate:', error)
         throw error

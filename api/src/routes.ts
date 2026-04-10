@@ -56,6 +56,7 @@ import getVMDetails from './handlers/vms/getVMDetails.ts'
 import stopVms from './handlers/vms/stopVms.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDocker from './handlers/docker/getDocker.ts'
+import vmAction from './handlers/vms/action.ts'
 
 /**
  * Defines the routes available in the API.
@@ -98,7 +99,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // Article handlers
     fastify.get('/articles', getArticles)
     fastify.get('/article/:id', getArticle)
-    fastify.post('/article', postArticle)
+    fastify.post('/article/:id', postArticle)
     fastify.put('/article/:id', putArticle)
     fastify.delete('/article/:id', deleteArticle)
 
@@ -112,8 +113,8 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Thought handlers
     fastify.get('/thoughts', getThoughts)
-    fastify.get('/thought/:id', getThought)
     fastify.get('/thought/random', getRandomThought)
+    fastify.get('/thought/:id', getThought)
     fastify.post('/thoughts', postThought)
     fastify.post('/thought/title', postThoughtByTitle)
     fastify.put('/thought/:id', putThought)
@@ -128,6 +129,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Vms
     fastify.get('/vm/:id', getVM)
+    fastify.post('/vm/:id/:action', vmAction)
     fastify.get('/vm/details/:name', getVMDetails)
     fastify.get('/vms', getVM)
     fastify.get('/vms/stop', stopVms)

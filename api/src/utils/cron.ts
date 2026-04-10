@@ -4,7 +4,13 @@ import invalidateOldAttempts from './auth/invalidateOldAttempts.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
-        invalidateOldTokens()
-        invalidateOldAttempts()
+        try {
+            await Promise.all([
+                invalidateOldTokens(),
+                invalidateOldAttempts(),
+            ])
+        } catch (error) {
+            console.error('Failed to run cleanup cron', error)
+        }
     })
 }

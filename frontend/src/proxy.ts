@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import pathIsAllowedWhileUnauthorized from './utils/proxy/pathIsAllowedWhileUnauthorized'
 import tokenIsValid from './utils/proxy/tokenIsValid'
 import pathToRoleArray from './utils/proxy/pathToRoleArray'
-import getUserRoles from './utils/roles/getUserRoles'
 
 export async function proxy(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
@@ -18,6 +17,7 @@ export async function proxy(req: NextRequest) {
 
         const token = tokenCookie.value
         const id = idCookie.value
+        let roles: Role[] = []
         if (!validToken || !id) {
             const auth = await tokenIsValid(token, id)
             validToken = auth.valid
@@ -35,6 +35,7 @@ export async function proxy(req: NextRequest) {
             }
 
             if (auth.roles) {
+                roles = auth.roles
                 response.cookies.set('roles', JSON.stringify(auth.roles), {
                     sameSite: 'lax',
                     path: '/',
@@ -61,8 +62,12 @@ export async function proxy(req: NextRequest) {
 
         const strictPath = pathToRoleArray.find((item) => path.startsWith(item.path))
         if (strictPath) {
-            const roles = await getUserRoles({ token, id })
-            if (!roles.some((role) => role.role_id === strictPath.role)) {
+            if (!roles.length) {
+                const rolesCookie = req.cookies.get('roles')?.value
+                roles = rolesCookie ? JSON.parse(rolesCookie) : []
+            }
+
+            if (!roles.some((role) => role.id === strictPath.role || ('role_id' in role && role.role_id === strictPath.role))) {
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&notAllowed=true'}`, req.url))
             }
         }

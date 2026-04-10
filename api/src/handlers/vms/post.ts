@@ -1,20 +1,30 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import config from '#constants'
 import { loadSQL } from '#utils/loadSQL.ts'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import hasRole from '#utils/auth/hasRole.ts'
+import hasInternalToken from '#utils/auth/internalToken.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
-    const tokenHeader = req.headers['authorization'] || ''
-    const token = tokenHeader.split(' ')[1] ?? ''
-    const { name, owner, created_by, access_users } = req.body as {
+    const body = req.body as {
         name: string
-        owner: string
-        created_by: string
+        owner?: string
+        created_by?: string
         access_users?: string[]
     } ?? {}
+    const { name, access_users } = body
+    let owner = body.owner
+    let created_by = body.created_by
 
-    if (!token || Array.isArray(token) || token !== config.vm_api_token) {
-        return res.status(401).send({ error: 'Unauthorized.' })
+    if (!hasInternalToken(req)) {
+        const { valid, id } = await tokenWrapper(req, res)
+        const { valid: validRole } = await hasRole(req, res, 'system_admin')
+        if (!valid || !validRole || !id) {
+            return res.status(401).send({ error: 'Unauthorized.' })
+        }
+
+        owner = owner || id
+        created_by = created_by || id
     }
 
     if (!name || !owner || !created_by) {
@@ -24,6 +34,10 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     try {
         const query = await loadSQL('insertVM.sql')
         const result = await run(query, [name, owner, created_by, JSON.stringify(access_users ?? [])])
+        if (!result.rows.length) {
+            return res.status(409).send({ error: 'VM already exists' })
+        }
+
         return res.status(201).send(result.rows[0])
     } catch (error) {
         console.log(error)

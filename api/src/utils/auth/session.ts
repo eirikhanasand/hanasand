@@ -47,28 +47,29 @@ export async function issueToken({ id, ip }: { id: string, ip: string }) {
     }
 }
 
-export async function validateSession({ id, token }: { id: string, token: string }) {
+export async function validateSession({ id, token }: { id?: string, token: string }) {
     const tokenResult = await run(`
         SELECT id, token, ip, timestamp
         FROM tokens
-        WHERE id = $1
+        WHERE ($1::text IS NULL OR id = $1)
           AND token = $2
           AND timestamp >= NOW() - INTERVAL '${SESSION_TTL_HOURS} hours'
         LIMIT 1
-    `, [id, token])
+    `, [id ?? null, token])
 
     if (!tokenResult.rows.length) {
         return null
     }
 
     const session = tokenResult.rows[0] as SessionRow
+    const userId = session.id
 
     const userResult = await run(`
         SELECT id, name, avatar
         FROM users
         WHERE id = $1
         LIMIT 1
-    `, [id])
+    `, [userId])
 
     if (!userResult.rows.length) {
         return null
@@ -80,24 +81,21 @@ export async function validateSession({ id, token }: { id: string, token: string
         JOIN user_roles ur ON ur.role_id = r.id
         WHERE ur.user_id = $1
         ORDER BY r.priority ASC, r.id ASC
-    `, [id])
-
-    const refreshedToken = `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`
+    `, [userId])
 
     await run(`
         UPDATE tokens
-        SET token = $3,
-            timestamp = NOW()
+        SET timestamp = NOW()
         WHERE id = $1
           AND token = $2
-    `, [id, token, refreshedToken])
+    `, [userId, token])
 
     return {
         user: userResult.rows[0] as SessionUser,
         roles: roleResult.rows as SessionRole[],
         session,
         refreshed: {
-            token: refreshedToken,
+            token,
             expires_at: new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString(),
         }
     }

@@ -17,7 +17,7 @@ export default async function deleteVM(req: FastifyRequest, res: FastifyReply) {
 
     try {
         const result = await run(
-            "DELETE FROM vms WHERE id = $1 RETURNING *",
+            "DELETE FROM vms WHERE name = $1 RETURNING *",
             [id]
         )
 

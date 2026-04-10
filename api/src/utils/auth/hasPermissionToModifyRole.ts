@@ -38,7 +38,7 @@ export default async function hasPermissionToModifyRole(req: FastifyRequest, res
     
         const checkPermissionQuery = await loadSQL('compareRoles.sql')
         const hasPermissionToModifyRole = await run(checkPermissionQuery, [highestRole, target])
-        if (!hasPermissionToModifyRole.rows.length) {
+        if (!hasPermissionToModifyRole.rows.length || !hasPermissionToModifyRole.rows[0].can_assign) {
             return res.status(401).send({ error: 'Insufficient permissions.' })
         }
 

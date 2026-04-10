@@ -8,14 +8,15 @@ const execAsync = util.promisify(exec)
 
 const LOCAL_REPO_PATH = resolve('./articles')
 const ARTICLES_DIR = join(LOCAL_REPO_PATH, 'articles')
+let ensureRepoPromise: Promise<void> | null = null
 
-export { ARTICLES_DIR }
+export { ARTICLES_DIR, LOCAL_REPO_PATH, ensureRepo }
 
-export default async function git(cmd: string) {
+export default async function git(cmd: string, timeout = 15000) {
     await ensureRepo()
 
     try {
-        const { stdout, stderr } = await execAsync(`git -C '${LOCAL_REPO_PATH}' ${cmd}`)
+        const { stdout, stderr } = await execAsync(`git -C '${LOCAL_REPO_PATH}' ${cmd}`, { timeout })
         if (stderr) {
             console.error(stderr)
         }
@@ -28,27 +29,40 @@ export default async function git(cmd: string) {
 }
 
 async function ensureRepo() {
+    if (ensureRepoPromise) {
+        return ensureRepoPromise
+    }
+
+    ensureRepoPromise = ensureRepoInternal().catch((error) => {
+        ensureRepoPromise = null
+        throw error
+    })
+
+    return ensureRepoPromise
+}
+
+async function ensureRepoInternal() {
     try {
         await fs.access(LOCAL_REPO_PATH)
     } catch {
         console.log('Cloning repository...')
-        await execAsync(`git clone ${config.github_articles_ssh} '${LOCAL_REPO_PATH}'`)
+        await execAsync(`git clone ${config.github_articles_ssh} '${LOCAL_REPO_PATH}'`, { timeout: 120000 })
     }
 
     await fs.access(join(LOCAL_REPO_PATH, '.git'))
 
-    const { stdout: head } = await execAsync(`git -C '${LOCAL_REPO_PATH}' remote show origin`)
+    const { stdout: head } = await execAsync(`git -C '${LOCAL_REPO_PATH}' remote show origin`, { timeout: 15000 })
     const match = head.match(/HEAD branch: (.+)/)
     const defaultBranch = match ? match[1].trim() : 'main'
 
     try {
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout ${defaultBranch}`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout ${defaultBranch}`, { timeout: 15000 })
     } catch {
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout -b ${defaultBranch} origin/${defaultBranch}`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout -b ${defaultBranch} origin/${defaultBranch}`, { timeout: 15000 })
     }
 
     try {
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/${defaultBranch} ${defaultBranch}`)
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/${defaultBranch} ${defaultBranch}`, { timeout: 15000 })
     } catch (e) {
         console.warn(`Could not set upstream for ${defaultBranch}:`, e)
     }

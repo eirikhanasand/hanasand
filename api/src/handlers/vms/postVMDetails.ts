@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
-import config from '#constants'
+import hasInternalToken from '#utils/auth/internalToken.ts'
 
 const requiredFields: (keyof PostVmDetails)[] = [
     "name", "status", "type", "architecture", "created", "last_used",
@@ -15,8 +15,6 @@ const requiredFields: (keyof PostVmDetails)[] = [
 ]
 
 export default async function postVMDetails(req: FastifyRequest, res: FastifyReply) {
-    const tokenHeader = req.headers['authorization'] || ''
-    const token = tokenHeader.split(' ')[1] ?? ''
     const {
         name, status, type, architecture, created, last_used,
         config_architecture, config_image_architecture, config_image_description,
@@ -29,7 +27,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
         device_eth0_type, ephemeral, stateful, description, profiles
     } = req.body as PostVmDetails ?? {}
 
-    if (!token || Array.isArray(token) || token !== config.vm_api_token) {
+    if (!hasInternalToken(req)) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 

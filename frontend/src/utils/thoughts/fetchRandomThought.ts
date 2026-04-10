@@ -1,15 +1,13 @@
 import config from '@/config'
+import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function fetchRandomThought(): Promise<Thought | null> {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-
     try {
-        const response = await fetch(`${config.url.api}/thought/random`, {
-            signal: controller.signal
+        const response = await fetchWithRetry(`${config.url.api}/thought/random`, {
+            timeoutMs: config.abortTimeout,
+            retries: 2,
         })
 
-        clearTimeout(timeout)
         if (!response.ok) {
             throw new Error(`Failed to fetch random thought.`)
         }

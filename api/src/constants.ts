@@ -40,7 +40,7 @@ const config = {
     // pwned_ws: 'ws://localhost:8201/api/pwned/ws',
     github_articles_ssh: 'git@github.com:eirikhanasand/hanasand.git',
     self_url: 'https://api.hanasand.com/api/auth/token',
-    internal_api: 'https://internal.hanasand.com/api',
+    internal_api: process.env.INTERNAL_API || 'https://internal.hanasand.com/api',
 }
 
 export default config

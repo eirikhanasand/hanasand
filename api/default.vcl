@@ -14,19 +14,22 @@ sub vcl_recv {
         return (pass);
     }
 
-    if (req.url ~ "^/api/(thought/random|test/visits|certificates|auth)(/.*)?$") {
+    if (req.http.Authorization || req.http.ID) {
         return (pass);
     }
 
-    if (req.http.Authorization) {
-        set req.http.X-Auth-Hash = req.http.Authorization;
-    }
-
-    if (req.http.ID) {
-        set req.http.X-User-ID = req.http.ID;
+    if (req.url ~ "^/api/(thought/random|test/visits|certificates|auth|vm|vms|metrics|docker)(/.*)?$") {
+        return (pass);
     }
 
     return (hash);
+}
+
+sub vcl_backend_response {
+    set beresp.ttl = 1h;
+    set beresp.http.Cache-Control = "hanasand-cache, max-age=3600";
+
+    return (deliver);
 }
 
 sub vcl_pipe {
@@ -34,39 +37,6 @@ sub vcl_pipe {
         set bereq.http.Connection = "upgrade";
         set bereq.http.Upgrade = req.http.Upgrade;
     }
-}
-
-sub vcl_hash {
-    hash_data(req.url);
-
-    if (req.method == "POST") {
-        if (req.http.Content-Length) {
-            set req.http.X-Content-Length = req.http.Content-Length;
-            hash_data(req.http.X-Content-Length);
-        }
-    }
-
-    if (req.http.X-Auth-Hash) {
-        hash_data(req.http.X-Auth-Hash);
-    }
-
-    if (req.http.X-User-ID) {
-        hash_data(req.http.X-User-ID);
-    }
-
-    return (lookup);
-}
-
-sub vcl_backend_response {
-    set beresp.ttl = 1h;
-    set beresp.http.Cache-Control = "hanasand-cache, max-age=3600";
-
-    if (bereq.http.X-Auth-Hash && bereq.http.X-User-ID) {
-        set beresp.ttl = 1m;
-        set beresp.http.Cache-Control = "hanasand-cache, max-age=60";
-    }
-
-    return (deliver);
 }
 
 sub vcl_deliver {

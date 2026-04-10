@@ -7,6 +7,7 @@ import Or from '@/utils/or'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from 'lucide-react'
 
 type LoginPageProps = {
     path: string | null
@@ -74,54 +75,71 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     }, [router])
 
     return (
-        <section className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-40 lg:px-100 grid gap-4 place-items-center'>
-            {(expired && path) && <h1 className='grid w-full rounded-lg bg-blue-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>Token expired. You will be redirected back to {path} after reauthenticating.</h1>}
-            {(internal && path) && <h1 className='grid w-full rounded-lg bg-red-500 p-2 z-10 text-center spawn min-w-fit min-h-fit'>{path} is internal. Please log in.</h1>}
-            <div className='grid w-full spawn rounded-lg overflow-hidden bg-normal shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.4)] backdrop-blur-lg'>
-                <div className='w-full h-full p-4 relative grid place-items-center'>
-                    <h1 className='text-2xl font-light md:font-semibold text-center tracking-tight'>
-                        hanasand.com
-                    </h1>
-                    <div className='grid place-items-center gap-4'>
-                        <div className='grid gap-4 place-items-center'>
-                            <Notify message={error as string | null} />
+        <section className='min-h-[90.5vh] w-full px-4 py-10 md:px-10 lg:px-24 grid place-items-center'>
+            <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center'>
+                <div className='hidden gap-5 lg:grid'>
+                    <div className='glass-panel rounded-[2rem] p-8'>
+                        <div className='icon-tile bg-orange-500/15 text-orange-300'>
+                            <Sparkles className='h-5 w-5' />
+                        </div>
+                        <p className='mt-8 text-xs uppercase tracking-[0.35em] text-orange-200/80'>hanasand.com</p>
+                        <h1 className='mt-4 max-w-xl text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-bright'>
+                            Fast access to the control plane.
+                        </h1>
+                        <p className='mt-5 max-w-lg text-sm leading-7 text-bright/55'>
+                            Sessions now refresh cleanly in the background, so dashboard access stays stable while requests retry transient server stalls.
+                        </p>
+                    </div>
+                    <div className='grid gap-3 sm:grid-cols-2'>
+                        <AuthInfo icon={<ShieldCheck className='h-4 w-4' />} label='Session' value='Sliding 24h token' tone='emerald' />
+                        <AuthInfo icon={<KeyRound className='h-4 w-4' />} label='Latency' value='Retry protected' tone='amber' />
+                    </div>
+                </div>
+
+                <div className='glass-panel spawn grid w-full overflow-hidden rounded-[2rem] p-5 md:p-8'>
+                    <div className='grid gap-6'>
+                        <div>
+                            <p className='text-xs uppercase tracking-[0.35em] text-bright/35'>Secure login</p>
+                            <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Welcome back</h1>
+                            <p className='mt-2 text-sm text-bright/45'>Enter your credentials to continue to the dashboard.</p>
+                        </div>
+
+                        {(expired && path) && <h1 className='grid w-full rounded-xl border border-blue-400/20 bg-blue-500/12 p-3 text-sm text-blue-100'>Token expired. You will be redirected back to {path} after reauthenticating.</h1>}
+                        {(internal && path) && <h1 className='grid w-full rounded-xl border border-red-400/20 bg-red-500/12 p-3 text-sm text-red-100'>{path} is internal. Please log in.</h1>}
+
+                        <Notify message={error as string | null} />
+                        <div className='grid gap-4'>
                             <form
-                                className='w-full flex flex-col gap-3 max-w-xs self-center'
+                                className='w-full flex flex-col gap-3 self-center'
                                 onSubmit={handleSubmit}
                             >
                                 <input
                                     type='text'
                                     name='username'
                                     placeholder='Username'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
+                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
                                 <input
                                     type='password'
                                     name='password'
                                     placeholder='Password'
-                                    className='py-2 px-3 rounded-lg bg-extralight font-medium focus:outline-none z-10'
+                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
                                 <button
                                     type='submit'
-                                    className={
-                                        'py-1 px-3 rounded-lg bg-extralight ' +
-                                        'hover:bg-blue-500/80 cursor-pointer'
-                                    }
+                                    className='group flex items-center justify-between rounded-2xl bg-bright px-4 py-3 text-sm font-semibold text-background transition hover:bg-orange-200'
                                 >
                                     Login
+                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
                                 </button>
                             </form>
-                        </div>
-                        <Or className='z-10' />
-                        <Link href='/register' className='w-full flex flex-col gap-3 max-w-xs self-center'>
+                            <Or className='z-10 text-bright/35' />
+                        <Link href='/register' className='w-full flex flex-col gap-3 self-center'>
                             <button
                                 type='submit'
-                                className={
-                                    'py-1 px-3 rounded-lg bg-extralight ' +
-                                    'hover:bg-blue-500/80 cursor-pointer'
-                                }
+                                className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
                             >
                                 Create account
                             </button>
@@ -129,6 +147,18 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     </div>
                 </div>
             </div>
+            </div>
         </section>
+    )
+}
+
+function AuthInfo({ icon, label, value, tone }: { icon: React.ReactNode, label: string, value: string, tone: 'emerald' | 'amber' }) {
+    const toneClass = tone === 'emerald' ? 'bg-emerald-500/12 text-emerald-300' : 'bg-amber-500/12 text-amber-300'
+    return (
+        <div className='glass-card rounded-3xl p-5'>
+            <div className={`icon-tile ${toneClass}`}>{icon}</div>
+            <p className='mt-4 text-xs uppercase tracking-[0.22em] text-bright/35'>{label}</p>
+            <p className='mt-2 text-lg font-semibold text-bright'>{value}</p>
+        </div>
     )
 }

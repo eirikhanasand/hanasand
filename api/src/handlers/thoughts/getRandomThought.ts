@@ -14,7 +14,7 @@ export default async function getRandomThought(_: FastifyRequest, res: FastifyRe
         `)
 
         if (!result.rows.length) {
-            return res.status(404).send({ error: 'No thoughts found.' })
+            return res.send(null)
         }
 
         return res.send(result.rows[0])

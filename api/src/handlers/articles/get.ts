@@ -1,4 +1,4 @@
-import { ARTICLES_DIR } from '#utils/git/git.ts'
+import { ARTICLES_DIR, ensureRepo } from '#utils/git/git.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import fileExists from '#utils/git/fileExists.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
@@ -22,7 +22,10 @@ export default async function getArticles(req: FastifyRequest<{
     const recent = req.query.recent
     const backfill = req.query.backfill
     const sortBy = req.query.sortBy
-    await ensureRepositoryUpToDate()
+    await ensureRepo()
+    void ensureRepositoryUpToDate().catch(error => {
+        req.log.warn({ error }, 'Failed to refresh articles repository')
+    })
 
     if (!(await fileExists(ARTICLES_DIR))) {
         return res.status(404).send({ error: 'Articles directory does not exist' })

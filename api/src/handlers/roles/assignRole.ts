@@ -25,7 +25,12 @@ export default async function assignRole(req: FastifyRequest, res: FastifyReply)
 
     try {
         const query = await loadSQL('assignRole.sql')
-        const result = await run(query, [id, role_id])
+        const assignedBy = req.headers.id
+        if (!assignedBy || Array.isArray(assignedBy)) {
+            return res.status(401).send({ status: false, error: 'Unauthorized.' })
+        }
+
+        const result = await run(query, [id, role_id, assignedBy])
         if (!result.rows.length) {
             return res.status(404).send({ status: false, error: 'No roles found.' })
         }

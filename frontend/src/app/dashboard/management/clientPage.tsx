@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { RefreshCcw, Cpu, Server, HardDrive } from 'lucide-react'
 import restartDocker from '@/utils/vms/fetch/restartDocker'
+import manageVM from '@/utils/vms/fetch/manage/manage'
 
 type SystemDashboardProps = {
     systemMetrics: SystemMetric[]
@@ -29,7 +30,7 @@ export default function SystemDashboard({
     }
 
     async function handleRestartVM(vmId: string) {
-        console.warn(`VM restart is not implemented for ${vmId} yet.`)
+        await manageVM(vmId, 'restart')
     }
 
     return (

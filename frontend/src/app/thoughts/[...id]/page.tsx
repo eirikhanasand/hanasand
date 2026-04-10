@@ -2,6 +2,8 @@ import fetchThought from '@/utils/thoughts/fetchThought'
 import prettyDate from '@/utils/date/prettyDate'
 import { notFound } from 'next/navigation'
 
+export const dynamic = 'force-dynamic'
+
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
     const id = params.id[0]
