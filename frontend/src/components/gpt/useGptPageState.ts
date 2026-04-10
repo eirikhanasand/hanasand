@@ -21,7 +21,7 @@ export default function useGptPageState() {
     const socketRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
-        const ws = new WebSocket(`${config.url.api_wss}/client/ws/gpt`)
+        const ws = new WebSocket(`${config.url.api_client_wss}/client/ws/gpt`)
         socketRef.current = ws
 
         ws.onopen = () => {

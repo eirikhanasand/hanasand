@@ -31,28 +31,27 @@ export default function GPT_Content({
                 <SummaryCard title='CPU load' icon={<Cpu className='h-4 w-4' />} metric={totalLoad.cpu} />
                 <SummaryCard title='GPU load' icon={<HardDrive className='h-4 w-4' />} metric={totalLoad.gpu} />
                 <ThroughputCard tps={totalLoad.tps} />
-                <div className='rounded-2xl border border-login-100/10 bg-login-900/50 p-4'>
+                <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
                     <div className='flex items-center justify-between'>
                         <div>
                             <p className='text-xs font-medium uppercase tracking-[0.18em] text-login-200'>Active clients</p>
-                            <h2 className='mt-2 text-2xl font-semibold text-login-50'>{clients.length}</h2>
+                            <h2 className='mt-2 text-2xl font-semibold text-bright/90'>{clients.length}</h2>
                         </div>
                         <div className='rounded-full bg-login/10 p-3 text-login'>
                             <Bot className='h-5 w-5' />
                         </div>
                     </div>
-                    <p className='mt-3 text-sm text-login-100'>
+                    <p className='mt-3 text-sm text-bright/50'>
                         Click any client card below to open its per-device RAM, CPU, and GPU metrics.
                     </p>
                 </div>
             </div>
 
-            <div className='w-full rounded-2xl border border-login-100/10 bg-login-900/50 p-4 space-y-4'>
+            <div className='w-full rounded-xl bg-bright/3 p-4 outline outline-dark space-y-4'>
                 <div className='flex items-center justify-between'>
-                    <h2 className='text-lg font-semibold text-login-50'>Clients</h2>
+                    <h2 className='text-lg font-semibold text-bright/90'>Clients</h2>
                     <span
-                        className='rounded-full border border-login-100/10 bg-login-50/5 px-3 py-1
-                            text-xs font-medium uppercase tracking-[0.16em] text-login-200'
+                        className='rounded-full bg-login/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-login-200 outline outline-login/20'
                     >
                         Live telemetry
                     </span>
@@ -73,7 +72,7 @@ export default function GPT_Content({
 
 function SummaryCard({ title, icon, metric }: { title: string, icon: ReactNode, metric: number }) {
     return (
-        <div className='rounded-2xl border border-login-100/10 bg-login-900/50 p-4'>
+        <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
             <div className='flex items-center justify-between text-login-200'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>{title}</span>
                 {icon}
@@ -93,13 +92,13 @@ function SummaryCard({ title, icon, metric }: { title: string, icon: ReactNode, 
 
 function ThroughputCard({ tps }: { tps: number }) {
     return (
-        <div className='rounded-2xl border border-login-100/10 bg-login-900/50 p-4'>
+        <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
             <div className='flex items-center justify-between text-login-200'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>Throughput</span>
                 <Gauge className='h-4 w-4' />
             </div>
             <div className='mt-3 flex items-end justify-between gap-4'>
-                <span className='text-2xl font-semibold text-login-50'>{tps.toFixed(1)} TPS</span>
+                <span className='text-2xl font-semibold text-bright/90'>{tps.toFixed(1)} TPS</span>
                 <div className='text-right text-xs uppercase tracking-[0.18em] text-login-200'>
                     Live generation
                 </div>

@@ -54,7 +54,15 @@ function systemToMetricCards(system: SystemSnapshot): SystemMetric[] {
 export default function SystemDashboard({ system, dockerContainers, vms, vmMetrics }: SystemDashboardProps) {
     const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const normalizedVms = vms.filter((vm): vm is VM => Boolean(vm))
+    const normalizedDockerContainers = Array.isArray(dockerContainers)
+        ? dockerContainers.filter((container): container is DockerContainer => Boolean(container))
+        : []
+    const normalizedVms = Array.isArray(vms)
+        ? vms.filter((vm): vm is VM => Boolean(vm))
+        : []
+    const normalizedMetrics = Array.isArray(vmMetrics)
+        ? vmMetrics.filter((metric): metric is VMMetrics => Boolean(metric))
+        : []
     const runningVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'running').length
     const stoppedVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'stopped').length
     const vmOverviewClass = "bg-bright/3 text-sm outline outline-dark rounded-md py-0.5 px-4 text-bright/80"
@@ -115,7 +123,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
             <div className='rounded-md p-2 space-y-2'>
                 <h1 className="font-semibold text-xl text-bright/80">Docker Containers</h1>
                 <div className="grid md:grid-cols-3 gap-4">
-                    {dockerContainers.map(container => (
+                    {normalizedDockerContainers.map(container => (
                         <div key={container.id} className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2">
                             <div className="flex justify-between items-center">
                                 <h3 className="font-semibold">{container.name}</h3>
@@ -157,7 +165,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                     <h1 className='w-full'>Tags</h1>
                 </div>
                 {normalizedVms.map((vm) => {
-                    const latestMetrics = vmMetrics
+                    const latestMetrics = normalizedMetrics
                         .filter((metric) => metric.name === vm.name)
                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 

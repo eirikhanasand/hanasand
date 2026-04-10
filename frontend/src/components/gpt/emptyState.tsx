@@ -2,12 +2,14 @@ import { Bot } from 'lucide-react'
 
 export default function GPT_EmptyState() {
     return (
-        <div className='w-full rounded-2xl border border-login-100/10 bg-login-900/50 px-6 py-10 text-center'>
-            <div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-login-50/5 text-login'>
+        <div className='w-full rounded-xl bg-bright/3 px-6 py-12 text-center outline outline-dark'>
+            <div className='mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-login/10 text-login'>
                 <Bot className='h-6 w-6' />
             </div>
-            <h2 className='mt-4 font-semibold text-login-50'>No GPTs connected</h2>
-            <p className='mt-2 text-sm text-login-100'>The dashboard will populate automatically when a client joins the room.</p>
+            <h2 className='mt-4 font-semibold text-bright/90'>No GPTs connected</h2>
+            <p className='mt-2 text-sm text-bright/50'>
+                The dashboard will populate automatically when a client joins the room.
+            </p>
         </div>
     )
 }

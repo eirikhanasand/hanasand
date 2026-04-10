@@ -1,4 +1,4 @@
-import { Eye, Wifi, WifiOff } from 'lucide-react'
+import { Bot, Eye, Wifi, WifiOff } from 'lucide-react'
 
 export default function GPT_Header({
     isConnected,
@@ -8,16 +8,25 @@ export default function GPT_Header({
     participants: number
 }) {
     return (
-        <div className='w-full rounded-2xl border border-login-100/10 bg-login-900/70 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]'>
-            <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
+        <div className='grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(22rem,1fr)]'>
+            <div className='rounded-xl bg-bright/3 p-5 outline outline-dark'>
                 <div>
-                    <h1 className='font-semibold text-lg'>AI (Login GPT)</h1>
-                    <p className='max-w-2xl text-sm text-login-100'>Live metrics from connected inference clients.</p>
+                    <div className='flex items-center gap-3'>
+                        <div className='rounded-full bg-login/10 p-3 text-login'>
+                            <Bot className='h-5 w-5' />
+                        </div>
+                        <div>
+                            <h1 className='font-semibold text-lg text-bright/90'>Hanasand AI</h1>
+                            <p className='max-w-2xl text-sm text-bright/50'>
+                                Live metrics from connected inference clients.
+                            </p>
+                        </div>
+                    </div>
                 </div>
-                <div className='grid gap-3 sm:grid-cols-2 lg:min-w-[24rem]'>
+            </div>
+            <div className='grid gap-3 sm:grid-cols-2'>
                     <GPT_HeaderCard label='Viewers' value={String(participants)} icon={<Eye className='h-4 w-4' />} />
                     <GPT_ConnectionCard isConnected={isConnected} />
-                </div>
             </div>
         </div>
     )
@@ -25,19 +34,19 @@ export default function GPT_Header({
 
 function GPT_HeaderCard({ label, value, icon }: { label: string, value: string, icon: React.ReactNode }) {
     return (
-        <div className='rounded-xl border border-login-100/10 bg-login-50/5 p-4'>
+        <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
             <div className='flex items-center justify-between text-login-200'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>{label}</span>
                 {icon}
             </div>
-            <div className='mt-3 text-3xl font-semibold text-login-50'>{value}</div>
+            <div className='mt-3 text-3xl font-semibold text-bright/90'>{value}</div>
         </div>
     )
 }
 
 function GPT_ConnectionCard({ isConnected }: { isConnected: boolean }) {
     return (
-        <div className='rounded-xl border border-login-100/10 bg-login-50/5 p-4'>
+        <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
             <div className='flex items-center justify-between text-login-200'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>Connection</span>
                 {isConnected ? <Wifi className='h-4 w-4 text-emerald-400' /> : <WifiOff className='h-4 w-4 text-red-400' />}

@@ -13,7 +13,7 @@ export default function useGptSocket(
     const reconnectState = useReconnect(isConnected)
 
     useEffect(() => {
-        const ws = new WebSocket(`${config.url.api_wss}/client/ws/gpt`)
+        const ws = new WebSocket(`${config.url.api_client_wss}/client/ws/gpt`)
         socketRef.current = ws
         ws.onopen = () => { reconnectState.setReconnect(false); setIsConnected(true) }
         ws.onclose = () => { setIsConnected(false); socketRef.current = null }
