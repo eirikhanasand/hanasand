@@ -80,7 +80,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
     return (
         <div className="grid gap-6">
             <Notify absolute className='px-8' color='bg-blue-500' background='bg-dark/40 outline outline-dark text-bright/80' message={message} />
-            <div className='outline outline-dark rounded-md p-2 space-y-2'>
+            <div className='rounded-md p-2 space-y-2'>
                 <h1 className="font-semibold text-xl text-bright/80">System Metrics</h1>
                 {!system ? (
                     <p className="text-sm text-gray-400">No system metrics available.</p>
@@ -112,7 +112,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                 )}
             </div>
 
-            <div className='outline outline-dark rounded-md p-2 space-y-2'>
+            <div className='rounded-md p-2 space-y-2'>
                 <h1 className="font-semibold text-xl text-bright/80">Docker Containers</h1>
                 <div className="grid md:grid-cols-3 gap-4">
                     {dockerContainers.map(container => (
@@ -133,7 +133,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                 </div>
             </div>
 
-            <div className='outline outline-dark rounded-md p-2 space-y-2'>
+            <div className='rounded-md p-2 space-y-2'>
                 <div className='flex justify-between items-center'>
                     <div className='flex gap-2 items-center'>
                         <h1 className="font-semibold text-xl text-bright/80">Virtual Machines</h1>
