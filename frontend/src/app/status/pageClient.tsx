@@ -25,10 +25,7 @@ type RequestLog = {
 
 type DashboardProps = {
     metrics: MetricSummary[]
-    blocklist: BlocklistEntry[]
-    logs: RequestLog[]
     topDomains: DomainTPS[]
-    topUAs: UAMetrics[]
     serviceStatus: ServiceStatus
 }
 
