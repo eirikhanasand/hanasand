@@ -6,6 +6,7 @@ import Link from 'next/link'
 
 export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) {
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
+    const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Unknown'
 
     return (
         <Link href={`/dashboard/vms/${vm.name}`} className='flex w-full gap-2 rounded-md p-2 hover:bg-bright/3 cursor-pointer items-center text-bright/80'>
@@ -15,7 +16,7 @@ export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; met
             <h1 className='min-w-25'>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory}</h1>
             <h1 className='w-full'>{smallDate(vm.created)}</h1>
             <h1 className='w-full'>{smallDate(vm.last_used)}</h1>
-            <h1 className='min-w-25'>{upperCaseFirstLetter(vm.status)}</h1>
+            <h1 className='min-w-25'>{status}</h1>
             <div className='w-full flex max-w-full flex-wrap gap-1'>
                 <Tag color='orange' text={formatDescription(vm.config_image_description)} />
                 <Tag color='blue' text={type} />

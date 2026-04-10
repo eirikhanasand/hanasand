@@ -54,10 +54,11 @@ function systemToMetricCards(system: SystemSnapshot): SystemMetric[] {
 export default function SystemDashboard({ system, dockerContainers, vms, vmMetrics }: SystemDashboardProps) {
     const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const runningVms = vms.filter((vm) => vm.status.toLowerCase() === 'running').length
-    const stoppedVms = vms.filter((vm) => vm.status.toLowerCase() === 'stopped').length
+    const normalizedVms = vms.filter((vm): vm is VM => Boolean(vm))
+    const runningVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'running').length
+    const stoppedVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'stopped').length
     const vmOverviewClass = "bg-bright/3 text-sm outline outline-dark rounded-md py-0.5 px-4 text-bright/80"
-    const idleVms = vms.length - runningVms - stoppedVms
+    const idleVms = normalizedVms.length - runningVms - stoppedVms
 
     const metricCards = system ? systemToMetricCards(system) : []
 
@@ -155,7 +156,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                     <h1 className='min-w-25'>Status</h1>
                     <h1 className='w-full'>Tags</h1>
                 </div>
-                {vms.map((vm) => {
+                {normalizedVms.map((vm) => {
                     const latestMetrics = vmMetrics
                         .filter((metric) => metric.name === vm.name)
                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
