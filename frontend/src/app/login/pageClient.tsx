@@ -78,7 +78,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         <section className='min-h-[90.5vh] w-full px-4 py-10 md:px-10 lg:px-24 grid place-items-center'>
             <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center'>
                 <div className='hidden gap-5 lg:grid'>
-                    <div className='glass-panel rounded-[2rem] p-8'>
+                    <div className='glass-panel rounded-4xl p-8'>
                         <div className='icon-tile bg-orange-500/15 text-orange-300'>
                             <Sparkles className='h-5 w-5' />
                         </div>
@@ -96,7 +96,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     </div>
                 </div>
 
-                <div className='glass-panel spawn grid w-full overflow-hidden rounded-[2rem] p-5 md:p-8'>
+                <div className='glass-panel spawn grid w-full overflow-hidden rounded-4xl p-5 md:p-8'>
                     <div className='grid gap-6'>
                         <div>
                             <p className='text-xs uppercase tracking-[0.35em] text-bright/35'>Secure login</p>

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Upload from '@/components/menu/uploadIcon'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { Eye, LinkIcon, Flame, ActivityIcon } from 'lucide-react'
+import { Eye, LinkIcon, Flame, ActivityIcon, Sparkles } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -20,6 +20,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const [isTest, setIsTest] = useState(serverPath.includes('/test'))
     const [isStatus, setIsStatus] = useState(serverPath.includes('/status'))
     const [isShare, setIsShare] = useState(serverPath.endsWith('/s') || serverPath.includes('/s/'))
+    const [isAI, setIsAI] = useState(serverPath.endsWith('/ai') || serverPath.includes('/ai/'))
     const path = usePathname()
 
     useEffect(() => {
@@ -29,6 +30,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
         const updatedIsTest = path.includes('/test')
         const updatedIsStatus = path.includes('/status')
         const updatedIsShare = path.endsWith('/s') || path.includes('/s/')
+        const updatedIsAI = path.endsWith('/ai') || path.includes('/ai/')
 
         if (updatedIsUpload !== isUpload) {
             setIsUpload(updatedIsUpload)
@@ -53,6 +55,10 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
         if (updatedIsStatus !== isStatus) {
             setIsStatus(updatedIsStatus)
         }
+
+        if (updatedIsAI !== isAI) {
+            setIsAI(updatedIsAI)
+        }
     }, [path])
 
     return (
@@ -73,13 +79,16 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <div className={baseStyles}>
                             <Eye />
                         </div>
-                        <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-[5px] h-[5px] absolute z-100 self-center`} />
+                        <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-1.25 h-1.25 absolute z-100 self-center`} />
                     </Link>
                     <Link href='/test' className={baseStyles}>
                         <Flame className={`group-hover:stroke-[#e25822] ${isTest && 'stroke-[#e25822]'}`} />
                     </Link>
                     <Link href='/status' className={baseStyles}>
                         <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
+                    </Link>
+                    <Link href='/ai' className={baseStyles}>
+                        <Sparkles className={`group-hover:stroke-orange-300 ${isAI && 'stroke-orange-300'}`} />
                     </Link>
                 </div>
                 <div className='hidden md:grid place-items-center w-full'>
