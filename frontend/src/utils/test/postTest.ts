@@ -1,4 +1,5 @@
 import config from '@/config'
+import { getCookie } from '@/utils/cookies/cookies'
 
 type PostTestProps = {
     url: string
@@ -11,9 +12,13 @@ export async function postTest({ url, timeout, stages }: PostTestProps): Promise
     const fetchTimeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
+        const id = getCookie('id')
         const response = await fetch(`${config.url.api}/test`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...(id ? { id } : {})
+            },
             body: JSON.stringify({ url, timeout, stages }),
             signal: controller.signal
         })

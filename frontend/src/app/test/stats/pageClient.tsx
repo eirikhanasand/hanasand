@@ -1,20 +1,47 @@
 'use client'
 
 import Notify from '@/components/notify/notify'
+import RecentScans from '@/components/test/recentScans'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import prettyDate from '@/utils/date/prettyDate'
 import { fetchTest } from '@/utils/test/fetchTest'
+import { fetchRecentTests } from '@/utils/test/fetchRecentTests'
+import prettyDate from '@/utils/date/prettyDate'
 import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
 import Link from 'next/link'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 
 export default function TestStatsPageClient() {
     const [query, setQuery] = useState('')
-    const [test, setTest] = useState<Test | null>()
+    const [test, setTest] = useState<Test | null>(null)
+    const [recentScans, setRecentScans] = useState<Test[]>([])
+    const [myScans, setMyScans] = useState<Test[]>([])
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const color = query.length > 0 
+    const color = query.length > 0
         ? 'bg-orange-500/80 cursor-pointer glow-orange-small outline outline-dark'
         : 'outline outline-dark cursor-not-allowed'
+
+    useEffect(() => {
+        let active = true
+
+        async function loadScans() {
+            const [recent, mine] = await Promise.all([
+                fetchRecentTests('recent'),
+                fetchRecentTests('mine')
+            ])
+
+            if (!active) {
+                return
+            }
+
+            setRecentScans(recent)
+            setMyScans(mine)
+        }
+
+        loadScans()
+        return () => {
+            active = false
+        }
+    }, [])
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
@@ -28,60 +55,53 @@ export default function TestStatsPageClient() {
             return setError('Please try again later.')
         }
 
-        if (result) {
-            setTest(result)
-        }
+        setTest(result)
     }
 
     return (
-        <div className='w-full h-full p-4 space-y-4 relative'>
-            <div className='h-full grid place-items-center'>
-                <div className='flex flex-col items-center gap-4'>
-                    <div className='flex gap-2'>
-                        <ChartColumn className='stroke-orange-500' />
-                        <h1 className='text-xl'>Test results</h1>
-                    </div>
-                    <form onSubmit={handleSubmit} className='grid gap-2'>
-                        <Notify message={error} />
-                        <input
-                            className='outline outline-dark w-full rounded-md px-2 py-1 z-10'
-                            placeholder='Test'
-                            onChange={(e) => setQuery(e.target.value)}
-                            value={query}
-                            required
-                        />
-                        <button
-                            type='submit'
-                            className={`${color} w-full rounded-lg px-2 py-1 text-gray-300`}
-                        >
-                            <h1>Search</h1>
-                        </button>
-                    </form>
-                    {test && (
-                        <div className='grid gap-2'>
-                            <div className='flex gap-2'>
-                                <Rocket />
-                                <h1>{JSON.stringify(test)}</h1>
-                            </div>
-                            <div className='flex gap-2'>
-                                <Globe />
-                                {/* <h1>{test.path}</h1> */}
-                            </div>
-                            <div className='flex gap-2'>
-                                <Watch />
-                                <h1>{prettyDate(new Date().toISOString())}</h1>
-                            </div>
-                            <div className='flex gap-2'>
-                                <Eye />
-                                <h1>{test.visits}</h1>
-                            </div>
-                        </div>
-                    )}
+        <div className='grid h-full w-full gap-4 p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]'>
+            <section className='grid gap-4 rounded-xl border border-white/10 bg-white/4 p-4'>
+                <div className='flex gap-2'>
+                    <ChartColumn className='stroke-orange-500' />
+                    <h1 className='text-xl'>Test Results</h1>
                 </div>
-                <Link href='/test' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                    <ArrowLeft className='group-hover:stroke-[#e25822]' />
-                </Link> 
-            </div>
+                <form onSubmit={handleSubmit} className='grid gap-2'>
+                    <Notify message={error} />
+                    <input
+                        className='outline outline-dark w-full rounded-md px-2 py-2 z-10'
+                        placeholder='Scan id'
+                        onChange={(e) => setQuery(e.target.value)}
+                        value={query}
+                        required
+                    />
+                    <button
+                        type='submit'
+                        className={`${color} w-full rounded-lg px-2 py-2 text-gray-300`}
+                    >
+                        Search
+                    </button>
+                </form>
+                {test && (
+                    <div className='grid gap-3 rounded-xl border border-white/10 bg-white/4 p-4 text-sm text-bright/80'>
+                        <div className='flex gap-2'><Rocket className='h-4 w-4' /><h1>{test.id}</h1></div>
+                        <div className='flex gap-2'><Globe className='h-4 w-4 shrink-0' /><h1 className='break-all'>{test.url}</h1></div>
+                        <div className='flex gap-2'><Watch className='h-4 w-4' /><h1>{prettyDate(test.created_at)}</h1></div>
+                        <div className='flex gap-2'><Eye className='h-4 w-4' /><h1>{test.visits}</h1></div>
+                        <Link href={`/test/${test.id}`} className='mt-2 rounded-lg border border-white/10 bg-white/6 px-3 py-2 text-center text-sm hover:bg-white/10'>
+                            Open Scan
+                        </Link>
+                    </div>
+                )}
+                <div className='mt-auto flex justify-end'>
+                    <Link href='/test' className='group rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                        <ArrowLeft className='group-hover:stroke-[#e25822]' />
+                    </Link>
+                </div>
+            </section>
+            <section className='grid gap-4'>
+                <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine />
+                <RecentScans title='Recent Scans' empty='No recent scans yet.' scans={recentScans} />
+            </section>
         </div>
     )
 }

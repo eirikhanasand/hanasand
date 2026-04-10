@@ -2,14 +2,18 @@ import puppeteer from 'puppeteer'
 import handleConsent from './handleConsent.ts'
 import sleep from './sleep.ts'
 
-export default async function openBrowserAndHandleConsent(query: string) {
+type OpenBrowserOptions = {
+    browserProfileDir?: string
+}
+
+export default async function openBrowserAndHandleConsent(query: string, options: OpenBrowserOptions = {}) {
     const browser = await puppeteer.launch({
         headless: true,
+        userDataDir: options.browserProfileDir,
         args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-blink-features=AutomationControlled'
-        ]
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage',
+        ],
     })
 
     const page = await browser.newPage()

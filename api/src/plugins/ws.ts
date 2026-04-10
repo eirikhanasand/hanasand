@@ -6,7 +6,7 @@ import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
 import followTest from '../handlers/test/follow.ts'
-import { gpt, handleGptMessage } from '#utils/ws/handleGptMessage.ts'
+import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 
 type PendingUpdates = { 
     content: string
@@ -68,8 +68,13 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             followTest(id)
 
             connection.on('message', (msg) => {
-                if ((msg as RawData & { type: string}).type === 'rerun') {
-                    followTest(id, true)
+                try {
+                    const parsed = JSON.parse(msg.toString()) as { type?: string }
+                    if (parsed.type === 'rerun') {
+                        followTest(id, true)
+                    }
+                } catch (error) {
+                    console.log(`Invalid test socket message for ${id}: ${error}`)
                 }
             })
 
@@ -83,11 +88,13 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             const id = (req.params as { id: string}).id
 
             registerClient(id, connection, gpt)
+            sendGptSnapshot(id, connection)
             connection.on('message', (message) => {
                 handleGptMessage(id, connection, message)
             })
 
             connection.on('close', () => {
+                unregisterGptSocket(id, connection)
                 removeClient(id, connection, gpt)
             })
         })

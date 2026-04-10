@@ -10,6 +10,7 @@ const args = process.argv.slice(2)
 const started = performance.now()
 const apiBase = process.env.PLAYWRIGHT_API_BASE || process.env.NEXT_PUBLIC_API || 'http://127.0.0.1:8080/api'
 const token = process.env.VM_API_TOKEN || ''
+const checkName = process.env.PLAYWRIGHT_STATUS_CHECK_NAME || 'Playwright auth'
 
 function postStatus(status, message) {
     if (!token) return Promise.resolve()
@@ -21,7 +22,7 @@ function postStatus(status, message) {
         },
         body: JSON.stringify({
             service: 'frontend',
-            check_name: 'Playwright auth',
+            check_name: checkName,
             status,
             latency_ms: Math.round(performance.now() - started),
             message,
@@ -35,6 +36,6 @@ const child = spawn('npx', ['playwright', 'test', ...args], {
 })
 
 child.on('exit', async code => {
-    await postStatus(code === 0 ? 'up' : 'down', code === 0 ? 'Playwright auth passed.' : `Playwright auth failed with exit code ${code}.`)
+    await postStatus(code === 0 ? 'up' : 'down', code === 0 ? `${checkName} passed.` : `${checkName} failed with exit code ${code}.`)
     process.exit(code ?? 1)
 })

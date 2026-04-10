@@ -1,5 +1,6 @@
 import config from '#constants'
 import { getModelState, updateModelState } from '#utils/modelState.ts'
+import runModelToolLoop from '#utils/tools/modelToolLoop.ts'
 
 const DEFAULT_MAX_TOKENS = 10000
 
@@ -151,115 +152,6 @@ function toPromptEvent(type: 'prompt_started' | 'prompt_delta' | 'prompt_complet
     })
 }
 
-async function parseChatStream(
-    body: ReadableStream<Uint8Array>,
-    request: GPT_PromptRequest,
-    send: (event: string) => void,
-) {
-    const reader = body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let content = ''
-    let completionId: string | null = null
-    const startedAt = Date.now()
-
-    send(toPromptEvent('prompt_started', {
-        conversationId: request.conversationId,
-        clientName: request.clientName || null,
-        metrics: getModelState(),
-    }))
-
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-            break
-        }
-
-        buffer += decoder.decode(value, { stream: true })
-        const events = buffer.split('\n\n')
-        buffer = events.pop() || ''
-
-        for (const event of events) {
-            const lines = event
-                .split('\n')
-                .map(line => line.trim())
-                .filter(Boolean)
-
-            for (const line of lines) {
-                if (!line.startsWith('data:')) {
-                    continue
-                }
-
-                const data = line.slice(5).trim()
-                if (!data || data === '[DONE]') {
-                    continue
-                }
-
-                const payload = JSON.parse(data) as {
-                    id?: string
-                    choices?: Array<{
-                        delta?: { content?: string }
-                        finish_reason?: string | null
-                    }>
-                    timings?: {
-                        cache_n?: number
-                        prompt_n?: number
-                        predicted_n?: number
-                        predicted_per_second?: number
-                    }
-                }
-
-                completionId = payload.id || completionId
-
-                const delta = payload.choices?.[0]?.delta?.content || ''
-                if (delta) {
-                    content += delta
-                }
-
-                const timings = payload.timings
-                if (timings) {
-                    updateModelState({
-                        status: 'generating',
-                        promptTokens: timings.prompt_n || getModelState().promptTokens,
-                        generatedTokens: timings.predicted_n || getModelState().generatedTokens,
-                        contextTokens: (timings.cache_n || 0) + (timings.prompt_n || 0) + (timings.predicted_n || 0),
-                        currentTokens: (timings.prompt_n || 0) + (timings.predicted_n || 0),
-                        tps: timings.predicted_per_second || getModelState().tps,
-                    })
-                } else if (delta) {
-                    const generatedTokens = getModelState().generatedTokens + 1
-                    const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001)
-                    updateModelState({
-                        status: 'generating',
-                        generatedTokens,
-                        currentTokens: getModelState().promptTokens + generatedTokens,
-                        contextTokens: getModelState().promptTokens + generatedTokens,
-                        tps: generatedTokens > 1
-                            ? generatedTokens / elapsedSeconds
-                            : getModelState().tps,
-                    })
-                }
-
-                if (delta || timings) {
-                    send(toPromptEvent('prompt_delta', {
-                        conversationId: request.conversationId,
-                        completionId,
-                        clientName: request.clientName || null,
-                        delta,
-                        content,
-                        metrics: getModelState(),
-                    }))
-                }
-            }
-        }
-    }
-
-    return {
-        completionId,
-        content,
-    }
-}
-
 export async function promptModel(request: GPT_PromptRequest, send: (event: string) => void) {
     const currentState = getModelState()
     if (currentState.status === 'preparing' || currentState.status === 'generating') {
@@ -286,30 +178,17 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
         lastError: null,
     })
 
+    send(toPromptEvent('prompt_started', {
+        conversationId: request.conversationId,
+        clientName: request.clientName || null,
+        metrics: getModelState(),
+    }))
+
     try {
-        const response = await fetch(modelUrl('/v1/chat/completions'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer no-key',
-            },
-            body: JSON.stringify({
-                model: 'hanasand',
-                messages: request.messages,
-                max_tokens: maxTokens,
-                temperature: request.temperature ?? 0.7,
-                stream: true,
-                timings_per_token: true,
-            }),
-        })
-
-        if (!response.ok || !response.body) {
-            throw new Error(`Model request failed with status ${response.status}`)
-        }
-
-        const streamed = await parseChatStream(response.body, request, send)
+        const content = await runModelToolLoop(request)
+        const completionId = `hanasand-${Date.now()}`
         const [generatedTokens, contextMax] = await Promise.all([
-            countTokens(streamed.content),
+            countTokens(content),
             fetchContextMaxTokens(),
         ])
 
@@ -325,15 +204,24 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
             tps: getModelState().tps,
         })
 
-        send(toPromptEvent('prompt_complete', {
+        send(toPromptEvent('prompt_delta', {
             conversationId: request.conversationId,
-            completionId: streamed.completionId,
+            completionId,
             clientName: request.clientName || null,
-            content: streamed.content,
+            delta: content,
+            content,
             metrics: getModelState(),
         }))
 
-        return streamed.content
+        send(toPromptEvent('prompt_complete', {
+            conversationId: request.conversationId,
+            completionId,
+            clientName: request.clientName || null,
+            content,
+            metrics: getModelState(),
+        }))
+
+        return content
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown model error'
         updateModelState({

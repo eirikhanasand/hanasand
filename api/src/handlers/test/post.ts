@@ -14,22 +14,20 @@ type Stage = {
 
 export default async function postTest(req: FastifyRequest, res: FastifyReply) {
     const { url, timeout, stages } = (req.body as BodyProps) ?? {}
+    const ownerId = req.headers.id as string | undefined
     if (!url) {
         return res.status(400).send({ error: 'No url provided.' })
     }
 
-    const existing = await run(
-        `SELECT id FROM load_tests WHERE url = $1 LIMIT 1`,
-        [url]
-    )
-
-    if (existing.rows.length > 0) {
-        return res.status(200).send({ id: existing.rows[0].id, existing: true })
-    }
-
     const fields: string[] = ['url']
-    const values: any[] = [url]
+    const values: (string | number | null | boolean | string[] | Date)[] = [url]
     const placeholders: string[] = ['$1']
+
+    if (ownerId) {
+        fields.push('owner_id')
+        values.push(ownerId)
+        placeholders.push(`$${values.length}`)
+    }
 
     if (timeout !== undefined) {
         fields.push('timeout')

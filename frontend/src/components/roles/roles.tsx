@@ -1,13 +1,22 @@
 import DashboardRole from './dashboardRole'
+import { Crown, Shield } from 'lucide-react'
 
 export default async function Roles({ roles }: { roles: Role[] }) {
     return (
-        <div className='grid w-full p-2 outline-1 outline-dark h-fit rounded-lg gap-2'>
-            <div className='flex justify-between'>
-                <h1 className='font-semibold text-lg self-center'>Roles</h1>
-                <h1 className='self-center text-gray-500'>Priority</h1>
+        <section className='grid w-full gap-3 rounded-xl border border-white/10 bg-white/4 p-4'>
+            <div className='flex items-center justify-between gap-4'>
+                <div className='flex items-center gap-2'>
+                    <Shield className='h-4 w-4 text-orange-300' />
+                    <h1 className='text-lg font-semibold text-bright'>Roles</h1>
+                </div>
+                <div className='flex items-center gap-2 text-xs font-medium text-bright/45'>
+                    <Crown className='h-3.5 w-3.5 text-amber-300' />
+                    Priority
+                </div>
             </div>
-            {(roles as Role[]).map((role) => <DashboardRole key={role.id} role={role} />)}
-        </div>
+            <div className='grid gap-2'>
+                {roles.map((role) => <DashboardRole key={role.id} role={role} />)}
+            </div>
+        </section>
     )
 }

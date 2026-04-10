@@ -8,7 +8,8 @@
     "start": "PORT=3001 next start",
     "lint": "next lint",
     "test:e2e": "node scripts/run-playwright-status.mjs",
-    "test:e2e:auth": "node scripts/run-playwright-status.mjs tests/auth.spec.ts"
+    "test:e2e:auth": "node scripts/run-playwright-status.mjs tests/auth.spec.ts",
+    "test:e2e:ai": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright AI workspace' node scripts/run-playwright-status.mjs tests/ai-workspace.spec.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",

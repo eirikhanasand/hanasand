@@ -9,6 +9,7 @@ LLAMA_DIR="$CURRENT_DIR/llama.cpp"
 LLAMA_BUILD_DIR="$LLAMA_DIR/build"
 MODELS_ROOT="$CURRENT_DIR/models"
 API_DIR="$CURRENT_DIR/api"
+MODULES_DIR="$CURRENT_DIR/modules"
 MODEL_API_ENTRY="$API_DIR/src/index.ts"
 MODEL_PORT="${MODEL_PORT:-8081}"
 BUILD_MARKER="$LLAMA_BUILD_DIR/.hanasand-build"
@@ -283,6 +284,16 @@ build_tensor_split() {
 }
 
 start_api() {
+  if [ -d "$MODULES_DIR" ]; then
+    cd "$MODULES_DIR" || exit 1
+
+    if [ -f package-lock.json ]; then
+      npm ci
+    else
+      npm install
+    fi
+  fi
+
   cd "$API_DIR" || exit 1
 
   if [ -f package-lock.json ]; then
@@ -291,7 +302,7 @@ start_api() {
     npm install
   fi
 
-  MODEL_API="http://127.0.0.1:$MODEL_PORT" node src/index.ts &
+  HANASAND_WEB_SEARCH=1 MODEL_API="http://127.0.0.1:$MODEL_PORT" node src/index.ts &
   NODE_PID=$!
 }
 

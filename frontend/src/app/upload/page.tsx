@@ -9,6 +9,8 @@ import Link from 'next/link'
 import { useState } from 'react'
 import copy from '@/utils/copy'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
+import { saveRecentUpload } from '@/utils/upload/storage'
+import { useEffect } from 'react'
 
 export default function Page() {
     const [url, setUrl] = useState('')
@@ -28,6 +30,12 @@ export default function Page() {
         setFile(null)
         setPreview(null)
     }
+
+    useEffect(() => {
+        if (isUploaded) {
+            saveRecentUpload(url)
+        }
+    }, [isUploaded, url])
 
     if (isUploaded) {
         return (

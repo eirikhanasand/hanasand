@@ -29,7 +29,18 @@ export default async function followTest(id: string, rerun?: boolean) {
     const start = new Date()
     const stages = test.stages.default ? defaultStages : test.stages
 
-    await run('UPDATE load_tests SET status = $1 WHERE id = $2', ['running', id])
+    await run(
+        `UPDATE load_tests
+         SET status = $1,
+             logs = $2,
+             errors = $3,
+             exit_code = NULL,
+             finished_at = NULL,
+             duration = NULL,
+             summary = '{}'::jsonb
+         WHERE id = $4`,
+        ['running', [], [], id]
+    )
 
     const k6 = spawn('k6', [
         'run',

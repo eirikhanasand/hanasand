@@ -124,3 +124,22 @@ type GPT_PromptRequest = {
     maxTokens?: number
     temperature?: number
 }
+
+type AIImportedRepoFile = {
+    path: string
+    name: string
+    content: string
+}
+
+type AIImportedRepo = {
+    id: string
+    name: string
+    fullName: string
+    branch: string
+    defaultBranch: string
+    sourcePath: string
+    sourceUrl: string
+    truncated: boolean
+    importedAt: string
+    files: AIImportedRepoFile[]
+}

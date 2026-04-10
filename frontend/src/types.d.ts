@@ -496,6 +496,7 @@ type GptSocketMessage = {
     type?: string
     participants?: number
     client?: GPT_Client
+    clients?: GPT_Client[]
     conversationId?: string
     clientName?: string | null
     delta?: string
@@ -538,19 +539,26 @@ type AIWorkspaceKind = 'share' | 'repo'
 
 type AIConversationMessage = {
     id: string
-    role: 'user' | 'assistant'
+    role: 'user' | 'assistant' | 'tool'
     content: string
     pending?: boolean
     error?: boolean
+    modelName?: string | null
+    metadata?: Record<string, unknown>
     createdAt: string
+    updatedAt?: string
 }
 
 type AIConversation = {
     id: string
     title: string
-    clientName: string | null
+    preferredModel: string | null
+    activeModel: string | null
+    modelStrategy: 'auto' | 'pinned'
     workspaceId: string | null
     workspaceKind: AIWorkspaceKind | null
+    shareIds: string[]
+    workspaceMeta: Record<string, unknown>
     messages: AIConversationMessage[]
     metrics: GPT_ModelMetrics
     createdAt: string
@@ -568,8 +576,11 @@ type AIImportedRepo = {
     name: string
     fullName: string
     branch: string
+    defaultBranch: string
+    sourcePath: string
     sourceUrl: string
     files: AIImportedRepoFile[]
+    truncated: boolean
     importedAt: string
 }
 

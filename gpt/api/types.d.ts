@@ -39,11 +39,12 @@ type GPT_ModelMetrics = {
     lastError: string | null
 }
 
-type GPT_ChatRole = 'system' | 'user' | 'assistant'
+type GPT_ChatRole = 'system' | 'user' | 'assistant' | 'tool'
 
 type GPT_ChatMessage = {
     role: GPT_ChatRole
     content: string
+    tool_call_id?: string
 }
 
 type GPT_PromptRequest = {

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS root (
 CREATE TABLE IF NOT EXISTS load_tests (
     id TEXT PRIMARY KEY DEFAULT substring(translate(encode(gen_random_bytes(4), 'base64'), '+/', 'AB') for 6),
     url TEXT NOT NULL,
+    owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     timeout INTEGER DEFAULT 1,
     stages JSONB NOT NULL DEFAULT '{"default": true}',
     status TEXT DEFAULT 'pending',
@@ -125,6 +126,9 @@ CREATE TABLE IF NOT EXISTS load_tests (
     finished_at TIMESTAMP,
     duration INTERVAL
 );
+
+CREATE INDEX IF NOT EXISTS idx_load_tests_created_at ON load_tests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_load_tests_owner_created_at ON load_tests(owner_id, created_at DESC);
 
 -- Certificates
 CREATE TABLE IF NOT EXISTS certificates (

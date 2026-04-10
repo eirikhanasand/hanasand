@@ -3,6 +3,7 @@ import { WebSocket as WS } from 'ws'
 
 export const gpt = new Map<string, Set<WS>>()
 export const gptSockets = new Map<WS, GPT_SocketState>()
+const gptClientRegistry = new Map<string, Map<string, GPT_Client & { lastSeen: string }>>()
 
 function defaultModelMetrics(): GPT_ModelMetrics {
     return {
@@ -45,6 +46,7 @@ export async function handleGptMessage(
                 }
 
                 const normalizedClient = normalizeClient(msg.client)
+                rememberClient(id, normalizedClient)
 
                 gptSockets.set(socket, {
                     role: 'producer',
@@ -70,6 +72,49 @@ export async function handleGptMessage(
     } catch (err) {
         console.error('Invalid WebSocket message:', err)
     }
+}
+
+function rememberClient(id: string, client: GPT_Client) {
+    const bucket = gptClientRegistry.get(id) || new Map<string, GPT_Client & { lastSeen: string }>()
+    bucket.set(client.name, {
+        ...client,
+        lastSeen: new Date().toISOString(),
+    })
+    gptClientRegistry.set(id, bucket)
+}
+
+export function listGptClients(id: string) {
+    const bucket = gptClientRegistry.get(id)
+    return bucket ? [...bucket.values()] : []
+}
+
+export function unregisterGptSocket(id: string, socket: WS) {
+    const state = gptSockets.get(socket)
+    gptSockets.delete(socket)
+    if (!state?.clientName) {
+        return
+    }
+
+    const bucket = gptClientRegistry.get(id)
+    if (!bucket) {
+        return
+    }
+
+    bucket.delete(state.clientName)
+    if (!bucket.size) {
+        gptClientRegistry.delete(id)
+    }
+}
+
+export function sendGptSnapshot(id: string, socket: WS) {
+    const clients = listGptClients(id)
+    const participants = gpt.get(id)?.size || 0
+    socket.send(JSON.stringify({
+        type: 'snapshot',
+        clients,
+        participants,
+        timestamp: new Date().toISOString(),
+    }))
 }
 
 function relayPromptRequest(id: string, requester: WS, request: GPT_PromptRequest) {

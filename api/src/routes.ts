@@ -15,6 +15,7 @@ import postArticle from './handlers/articles/post.ts'
 import putArticle from './handlers/articles/put.ts'
 import getTest from './handlers/test/get.ts'
 import postTest from './handlers/test/post.ts'
+import { getMyRecentTests, getRecentTests } from './handlers/test/list.ts'
 import restartHandler from './handlers/restart/getRestart.ts'
 import getRoles from './handlers/roles/getRoles.ts'
 import getRolesForUser from './handlers/roles/getRolesForUser.ts'
@@ -65,6 +66,12 @@ import httpRequestTool from './handlers/tools/httpRequest.ts'
 import aiTool from './handlers/tools/ai.ts'
 import { getLogs, getLogServices } from './handlers/logs/get.ts'
 import ingestLog from './handlers/logs/ingest.ts'
+import getAiWorkspace from './handlers/ai/getWorkspace.ts'
+import postAiConversation from './handlers/ai/postConversation.ts'
+import putAiConversation from './handlers/ai/putConversation.ts'
+import upsertAiMessage from './handlers/ai/upsertMessage.ts'
+import postAiRepository from './handlers/ai/postRepository.ts'
+import getAiModels from './handlers/ai/getModels.ts'
 
 /**
  * Defines the routes available in the API.
@@ -78,9 +85,9 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Auth handlers
     fastify.get('/auth/logout/:id', logoutHandler)
-    fastify.post('/auth/login/:id', loginHandler)
     fastify.get('/auth/token/:id', tokenHandler)
     fastify.get('/auth/sessions', getSessions)
+    fastify.post('/auth/login/:id', loginHandler)
     fastify.post('/auth/sessions/revoke', revokeSessions)
     fastify.delete('/auth/sessions/:token_id', revokeSession)
 
@@ -116,6 +123,8 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.delete('/article/:id', deleteArticle)
 
     // Test handlers
+    fastify.get('/tests/recent', getRecentTests)
+    fastify.get('/tests/mine', getMyRecentTests)
     fastify.get('/test/:id', getTest)
     fastify.get('/test/visits/:id', getVisits)
     fastify.post('/test', postTest)
@@ -141,7 +150,6 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Vms
     fastify.get('/vm/:id', getVM)
-    fastify.post('/vm/:id/:action', vmAction)
     fastify.get('/vm/details/:name', getVMDetails)
     fastify.get('/vms', getVM)
     fastify.get('/vms/stop', stopVms)
@@ -149,6 +157,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/vms/:user', getVM)
     fastify.get('/vms/access/:user', getAccessibleVMs)
     fastify.post('/vm', postVM)
+    fastify.post('/vm/:id/:action', vmAction)
     fastify.post('/vm/:id/stop', stopVms)
     fastify.post('/vm/details', postVMDetails)
     fastify.post('/vms/shutdown', shutdownVMs)
@@ -174,6 +183,14 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // Coding tools
     fastify.post('/tools/http/request', httpRequestTool)
     fastify.post('/tools/ai', aiTool)
+
+    // AI workspace
+    fastify.get('/ai/workspace', getAiWorkspace)
+    fastify.get('/ai/models', getAiModels)
+    fastify.post('/ai/conversations', postAiConversation)
+    fastify.put('/ai/conversations/:id', putAiConversation)
+    fastify.put('/ai/conversations/:id/messages', upsertAiMessage)
+    fastify.post('/ai/repositories', postAiRepository)
 
     // Logs
     fastify.get('/logs', getLogs)
