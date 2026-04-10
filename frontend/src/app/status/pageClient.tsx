@@ -72,7 +72,7 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
     return (
         <div className="grid gap-4 h-full">
             <section className='grid gap-4'>
-                <div className='glass-panel rounded-[2rem] p-5'>
+                <div className='glass-panel rounded-4xl p-5'>
                     <div className='flex flex-wrap items-center justify-between gap-4'>
                         <div>
                             <p className='text-xs uppercase tracking-[0.3em] text-orange-200/70'>Service health</p>
