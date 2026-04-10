@@ -16,6 +16,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     const { id, name, password, avatar } = req.body as GetUserBodyProps ?? {}
     const user = { id, name }
     const ip = req.ip
+    const userAgent = String(req.headers['user-agent'] || '')
 
     if (!id || !name || !password) {
         return res.status(400).send({ error: 'Missing fields' })
@@ -86,7 +87,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         const roleResponse = await run(roleQuery, [id])
         const roles = roleResponse.rows
 
-        const session = await login({ id, ip })
+        const session = await login({ id, ip, userAgent })
         if (!session) {
             const base = { ...user, message: 'User created', roles, error: 'Unable to login. Please try again later.' }
             const data = assignedRoot ? { ...base, assignedRoot } : base

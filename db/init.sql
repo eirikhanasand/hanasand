@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     password TEXT NOT NULL,
-    avatar TEXT NOT NULL
+    avatar TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    deactivated_at TIMESTAMPTZ,
+    deactivated_by TEXT
 );
 
 -- Token table
@@ -38,7 +41,22 @@ CREATE TABLE IF NOT EXISTS tokens (
     id TEXT NOT NULL,
     token TEXT NOT NULL,
     ip TEXT NOT NULL,
-    timestamp TIMESTAMPTZ DEFAULT NOW()
+    user_agent TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ,
+    revoked_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS login_events (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token_id INT,
+    ip TEXT NOT NULL,
+    user_agent TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Attempts table
@@ -212,6 +230,39 @@ CREATE TABLE IF NOT EXISTS vm_metrics (
     load_average_15 NUMERIC(6,2),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS service_monitor_results (
+    id BIGSERIAL PRIMARY KEY,
+    service TEXT NOT NULL,
+    check_name TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('up', 'degraded', 'down')),
+    latency_ms INT NOT NULL DEFAULT 0,
+    message TEXT,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS service_logs (
+    id BIGSERIAL PRIMARY KEY,
+    service TEXT NOT NULL,
+    host TEXT NOT NULL DEFAULT 'local',
+    level TEXT NOT NULL DEFAULT 'info',
+    message TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_monitor_results_checked_at ON service_monitor_results(checked_at);
+CREATE INDEX IF NOT EXISTS idx_service_monitor_results_service_check ON service_monitor_results(service, check_name, checked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT;
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS user_agent TEXT NOT NULL DEFAULT '';
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_by TEXT;
 
 -- Index on user-roles 
 CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);

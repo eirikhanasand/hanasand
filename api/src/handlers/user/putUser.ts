@@ -74,7 +74,7 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
                 return res.status(400).send({ error: 'User not found.' })
             }
 
-            const session = await login({ id, ip })
+            const session = await login({ id, ip, userAgent: String(req.headers['user-agent'] || '') })
             if (!session) {
                 return res.status(206).send({
                     message: 'Password updated, and you were logged out. Logging you back in was not possible due to an unknown error.',
@@ -119,7 +119,7 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
         }
 
         const updatedUser = response.rows[0]
-        const session = await login({ id: updatedUser.id, ip })
+        const session = await login({ id: updatedUser.id, ip, userAgent: String(req.headers['user-agent'] || '') })
 
         return res.status(200).send({
             ...updatedUser,

@@ -1,4 +1,5 @@
 import Certificates from '@/components/profile/certificates'
+import SessionsPanel from '@/components/profile/sessions'
 import VMs from '@/components/profile/vms'
 import getCertificates from '@/utils/certificates/getCertificates'
 import getVMs from '@/utils/vms/fetch/getVMs'
@@ -38,6 +39,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                     <VMs vms={vms} />
                     <Certificates certificates={certificates} />
                 </div>
+                <SessionsPanel isSelf={isSelf} />
             </div>
         </div>
     )

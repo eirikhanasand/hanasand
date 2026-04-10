@@ -4,6 +4,7 @@ import getBlocklist from '@/utils/traffic/getBlocklist'
 import getLogs from '@/utils/traffic/getLogs'
 import getDomains from '@/utils/traffic/getDomains'
 import getUAs from '@/utils/traffic/getUAs'
+import getStatus from '@/utils/status/getStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,7 @@ export default async function page() {
     const logs = await getLogs()
     const topDomainsUnparsed = await getDomains()
     const topUAsUnparsed = await getUAs()
+    const serviceStatus = await getStatus()
     const topDomains = Array.isArray(topDomainsUnparsed) ? topDomainsUnparsed : []
     const topUAs = Array.isArray(topUAsUnparsed) ? topUAsUnparsed : []
 
@@ -25,6 +27,7 @@ export default async function page() {
                 logs={logs} 
                 topDomains={topDomains}
                 topUAs={topUAs}
+                serviceStatus={serviceStatus}
             />
         </div>
     )

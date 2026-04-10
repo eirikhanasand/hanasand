@@ -1,5 +1,5 @@
 import parseCookie from '@/utils/cookies/parseCookie'
-import { SquareChartGantt } from 'lucide-react'
+import { FileWarning, SquareChartGantt } from 'lucide-react'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 
@@ -17,6 +17,12 @@ export default async function GreetingNav({ text, id }: { text: string, id: stri
                     <Link href='/dashboard/management' className='flex justify-between px-9 items-center gap-2'>
                         <SquareChartGantt className='w-5 h-5 group-hover:stroke-[#e25822]' />
                         <h1 className='font-semibold text-base self-center'>Management</h1>
+                    </Link>
+                </div>}
+                {isAdmin && <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2 group cursor-pointer'>
+                    <Link href='/dashboard/logs' className='flex justify-between px-9 items-center gap-2'>
+                        <FileWarning className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                        <h1 className='font-semibold text-base self-center'>Logs</h1>
                     </Link>
                 </div>}
                 <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2'>

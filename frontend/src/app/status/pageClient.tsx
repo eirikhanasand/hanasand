@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import getMetrics from '@/utils/traffic/getMetrics'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
 import useWS from '@/hooks/useWS'
+import { ServiceStatus } from '@/utils/status/getStatus'
+import { Activity, BadgeCheck, Clock3, ShieldAlert } from 'lucide-react'
 
 type MetricSummary = {
     value: string
@@ -27,9 +29,29 @@ type DashboardProps = {
     logs: RequestLog[]
     topDomains: DomainTPS[]
     topUAs: UAMetrics[]
+    serviceStatus: ServiceStatus
 }
 
-export default function StatusDashboard({ metrics: serverMetrics, topDomains }: DashboardProps) {
+function relativeTime(value: string) {
+    const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000))
+    if (seconds < 60) {
+        return `${seconds}s ago`
+    }
+
+    const minutes = Math.floor(seconds / 60)
+    const rest = seconds % 60
+    if (minutes < 5 && rest > 0) {
+        return `${minutes}m ${rest}s ago`
+    }
+
+    if (minutes < 60) {
+        return `${minutes}m ago`
+    }
+
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+export default function StatusDashboard({ metrics: serverMetrics, topDomains, serviceStatus }: DashboardProps) {
     const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
     const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id', replace: true })
 
@@ -41,9 +63,58 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains }: 
     }, [])
 
     const domainsSortedByTps = [...domains].sort((a, b) => b.tps - a.tps)
+    const statusTone = {
+        up: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-100',
+        degraded: 'border-amber-400/20 bg-amber-500/10 text-amber-100',
+        down: 'border-red-400/20 bg-red-500/10 text-red-100',
+    }
 
     return (
         <div className="grid gap-4 h-full">
+            <section className='grid gap-4'>
+                <div className='glass-panel rounded-[2rem] p-5'>
+                    <div className='flex flex-wrap items-center justify-between gap-4'>
+                        <div>
+                            <p className='text-xs uppercase tracking-[0.3em] text-orange-200/70'>Service health</p>
+                            <h2 className='mt-2 text-2xl font-semibold text-bright'>Hanasand is {serviceStatus.overall}</h2>
+                            <p className='mt-1 text-sm text-bright/45'>Synthetic signup, login, deletion and service probes run every minute.</p>
+                        </div>
+                        <div className={`rounded-full border px-4 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
+                            {serviceStatus.overall.toUpperCase()}
+                        </div>
+                    </div>
+                </div>
+
+                <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                    {serviceStatus.checks.map(check => {
+                        const Icon = check.status === 'up' ? BadgeCheck : check.status === 'degraded' ? ShieldAlert : Activity
+                        return (
+                            <div key={`${check.service}-${check.check_name}`} className='glass-card rounded-3xl p-5'>
+                                <div className='flex items-start justify-between gap-4'>
+                                    <div className={`icon-tile ${check.status === 'up' ? 'bg-emerald-500/12 text-emerald-300' : check.status === 'degraded' ? 'bg-amber-500/12 text-amber-300' : 'bg-red-500/12 text-red-300'}`}>
+                                        <Icon className='h-4 w-4' />
+                                    </div>
+                                    <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusTone[check.status]}`}>
+                                        {check.status}
+                                    </span>
+                                </div>
+                                <p className='mt-5 text-xs uppercase tracking-[0.22em] text-bright/35'>{check.service}</p>
+                                <h3 className='mt-2 text-lg font-semibold text-bright'>{check.check_name}</h3>
+                                <div className='mt-4 grid gap-2 text-sm text-bright/50'>
+                                    <span>30 day uptime: {check.uptime_30d}%</span>
+                                    <span>Latency: {check.latency_ms}ms</span>
+                                    <span className='flex items-center gap-1'><Clock3 className='h-3.5 w-3.5' /> Tested {relativeTime(check.checked_at)}</span>
+                                </div>
+                                {check.message && <p className='mt-3 rounded-xl bg-red-500/10 p-2 text-xs text-red-100'>{check.message}</p>}
+                            </div>
+                        )
+                    })}
+                    {!serviceStatus.checks.length && <div className='glass-card rounded-3xl p-5 text-sm text-bright/45'>
+                        No monitor samples yet. Run `npm run monitor` from the API folder once, then cron will keep it warm.
+                    </div>}
+                </div>
+            </section>
+
             {/* Metrics */}
             <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 md:overflow-hidden md:max-h-60">
                 {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer

@@ -1,15 +1,21 @@
 import pg from 'pg'
+import crypto from 'crypto'
 
 const apiBase = process.env.API_BASE || 'http://127.0.0.1:8080/api'
 const dbHost = process.env.DB_HOST || '127.0.0.1'
 const dbPort = Number(process.env.DB_PORT || 5432)
 const dbName = process.env.DB || 'hanasand'
 const dbUser = process.env.DB_USER || 'hanasand'
-const dbPassword = process.env.DB_PASSWORD || 'ultrastronghphanasandpassword'
+const dbPassword = process.env.DB_PASSWORD
 const vmToken = process.env.VM_API_TOKEN || ''
 const runId = `audit_${Date.now()}`
-const password = 'Aa11!!Aa11!!Bb22'
+const password = process.env.AUDIT_PASSWORD || `Aa11!!${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}Bb22!!`
 const { Pool } = pg
+
+if (!dbPassword) {
+    console.error('DB_PASSWORD is required.')
+    process.exit(1)
+}
 const pool = new Pool({
     host: dbHost,
     port: dbPort,
@@ -130,6 +136,7 @@ async function cleanup() {
     await pool.query('DELETE FROM vms WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM user_roles WHERE user_id = $1', [runId]).catch(() => {})
     await pool.query("DELETE FROM roles WHERE id LIKE 'role_audit_%'").catch(() => {})
+    await pool.query("DELETE FROM service_logs WHERE metadata->>'runId' = $1", [runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
 }
@@ -155,6 +162,7 @@ async function main() {
 
     await request('GET /', '/', { expect: body => typeof body === 'string' && body.includes('Hanasand API') })
     await request('GET /auth/token/:id', `/auth/token/${runId}`, { headers: authHeaders(), expect: body => expectObject(body) && Boolean(body.token) })
+    await request('GET /auth/sessions', '/auth/sessions', { headers: authHeaders(), expect: body => expectObject(body) && Array.isArray(body.sessions) })
     await request('GET /users', '/users', { headers: authHeaders(), expect: expectArray })
     await request('GET /user/:id', `/user/${runId}`, { expect: body => expectObject(body) && body.id === runId })
     await request('GET /user/full/:id', `/user/full/${runId}`, { headers: authHeaders(), expect: body => expectObject(body) && Array.isArray(body.roles) })
@@ -224,6 +232,22 @@ async function main() {
         body: { password },
         expect: expectObject,
     })
+    await request('POST /tools/http/request', '/tools/http/request', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: { method: 'GET', url: `${apiBase}/` },
+        expect: body => expectObject(body) && body.status === 200,
+    })
+    await request('POST /logs/ingest', '/logs/ingest', {
+        method: 'POST',
+        headers: vmHeaders(),
+        body: { service: 'audit', level: 'error', message: `audit log ${runId}`, metadata: { runId } },
+        expectStatus: 201,
+        expect: body => expectObject(body) && body.ok === true,
+    })
+    await request('GET /logs/services', '/logs/services', { headers: authHeaders(), expect: body => expectObject(body) && Array.isArray(body.services) })
+    await request('GET /logs?level=error', '/logs?level=error', { headers: authHeaders(), expect: body => expectObject(body) && Array.isArray(body.logs) })
+    await request('GET /status', '/status', { expect: body => expectObject(body) && Array.isArray(body.checks) })
 
     const vmName = `vm-${runId}`
     await request('POST /vm', '/vm', {

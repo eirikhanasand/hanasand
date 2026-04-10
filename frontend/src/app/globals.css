@@ -62,6 +62,12 @@ body {
   transition: background 0.4s, color 0.4s;
 }
 
+button:not(:disabled),
+[role="button"],
+[onclick] {
+  cursor: pointer;
+}
+
 .site-atmosphere {
   pointer-events: none;
   position: fixed;
@@ -74,11 +80,28 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.46;
+  opacity: 0.52;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: 64px 64px;
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.020) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.020) 1px, transparent 1px),
+    linear-gradient(rgba(255, 141, 55, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 141, 55, 0.018) 1px, transparent 1px);
+  background-position:
+    0 0,
+    0 0,
+    8px 8px,
+    8px 8px,
+    0 0,
+    0 0;
+  background-size:
+    64px 64px,
+    64px 64px,
+    16px 16px,
+    16px 16px,
+    256px 256px,
+    256px 256px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 78%);
 }
 

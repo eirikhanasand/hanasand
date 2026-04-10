@@ -148,8 +148,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 <UserPlus className='h-5 w-5' />
                             </div>
                             <p className='mt-5 text-xs uppercase tracking-[0.35em] text-bright/35'>Create access</p>
-                            <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Register account</h1>
-                            <p className='mt-2 text-sm text-bright/45'>Strong credentials and a clean token are issued immediately after registration.</p>
+                            <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Start building</h1>
+                            <p className='mt-2 text-sm text-bright/45'>Create a workspace for uploads, password checks, test runs and API experiments.</p>
                         </div>
 
                         {(internal && path) && <h1 className='grid w-full rounded-xl border border-red-400/20 bg-red-500/12 p-3 text-sm text-red-100'>
@@ -226,9 +226,9 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 </div>
             </div>
                 <div className='hidden gap-3 lg:grid'>
-                    <RegisterInfo icon={<Fingerprint className='h-4 w-4' />} label='Identity' value='Bearer token only' tone='orange' />
-                    <RegisterInfo icon={<KeyRound className='h-4 w-4' />} label='Password' value='16 chars, mixed entropy' tone='blue' />
-                    <RegisterInfo icon={<CheckCircle2 className='h-4 w-4' />} label='Session' value='Roles attached immediately' tone='emerald' />
+                    <RegisterInfo icon={<Fingerprint className='h-4 w-4' />} label='Upload' value='Share files quickly' tone='orange' />
+                    <RegisterInfo icon={<KeyRound className='h-4 w-4' />} label='Protect' value='Check password safety' tone='blue' />
+                    <RegisterInfo icon={<CheckCircle2 className='h-4 w-4' />} label='Build' value='Test APIs visually' tone='emerald' />
                 </div>
             </div>
         </section>

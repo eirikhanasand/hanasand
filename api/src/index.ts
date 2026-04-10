@@ -7,6 +7,8 @@ import cron from './utils/cron.ts'
 import ws from './plugins/ws.ts'
 import fp from '#utils/refresh/fp.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
+import ensureSchema from '#utils/db/ensureSchema.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 
 const fastify = Fastify({
     logger: true
@@ -25,9 +27,29 @@ fastify.register(fp)
 fastify.register(ws, { prefix: '/api' })
 fastify.register(apiRoutes, { prefix: '/api' })
 fastify.get('/', IndexHandler)
+fastify.addHook('onError', async (req, _res, error) => {
+    await recordLog({
+        level: 'error',
+        message: error.message,
+        metadata: {
+            method: req.method,
+            url: req.url,
+            stack: error.stack,
+        },
+    }).catch(logError => fastify.log.error(logError, 'Failed to persist request error log'))
+})
+
+process.on('unhandledRejection', reason => {
+    void recordLog({
+        level: 'fatal',
+        message: reason instanceof Error ? reason.message : String(reason),
+        metadata: { reason },
+    }).catch(error => fastify.log.error(error, 'Failed to persist unhandled rejection log'))
+})
 
 async function start() {
     try {
+        await ensureSchema()
         await fastify.listen({ port, host: '0.0.0.0' })
         void ensureRepositoryUpToDate().catch(error => {
             fastify.log.warn({ error }, 'Failed to warm articles repository')

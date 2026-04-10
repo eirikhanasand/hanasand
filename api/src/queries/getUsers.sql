@@ -2,6 +2,9 @@ SELECT
     u.id, 
     u.name, 
     u.avatar,
+    u.active,
+    u.deactivated_at,
+    u.deactivated_by,
     r.id AS highest_role_id,
     r.name AS highest_role_name,
     r.priority AS highest_role_priority

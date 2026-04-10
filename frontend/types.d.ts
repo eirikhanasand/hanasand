@@ -160,6 +160,9 @@ type User = {
     id: string
     name: string
     avatar: string
+    active?: boolean
+    deactivated_at?: string | null
+    deactivated_by?: string | null
 }
 
 type UserWithRole = User & HighestRole

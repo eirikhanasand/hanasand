@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "PORT=3001 next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "node scripts/run-playwright-status.mjs",
+    "test:e2e:auth": "node scripts/run-playwright-status.mjs tests/auth.spec.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",
@@ -33,7 +35,8 @@
     "eslint": "^10.1.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@playwright/test": "^1.51.1"
   },
   "overrides": {
     "@types/react": "19.2.14",

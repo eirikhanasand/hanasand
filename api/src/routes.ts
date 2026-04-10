@@ -57,6 +57,14 @@ import stopVms from './handlers/vms/stopVms.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDocker from './handlers/docker/getDocker.ts'
 import vmAction from './handlers/vms/action.ts'
+import getStatus from './handlers/status/get.ts'
+import ingestStatus from './handlers/status/ingest.ts'
+import deactivateUser from './handlers/user/deactivateUser.ts'
+import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sessions.ts'
+import httpRequestTool from './handlers/tools/httpRequest.ts'
+import aiTool from './handlers/tools/ai.ts'
+import { getLogs, getLogServices } from './handlers/logs/get.ts'
+import ingestLog from './handlers/logs/ingest.ts'
 
 /**
  * Defines the routes available in the API.
@@ -72,6 +80,9 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/auth/logout/:id', logoutHandler)
     fastify.post('/auth/login/:id', loginHandler)
     fastify.get('/auth/token/:id', tokenHandler)
+    fastify.get('/auth/sessions', getSessions)
+    fastify.post('/auth/sessions/revoke', revokeSessions)
+    fastify.delete('/auth/sessions/:token_id', revokeSession)
 
     // User handlers
     fastify.get('/users', getUsers)
@@ -79,6 +90,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/user/full/:id', authorizedUserHandler)
     fastify.post('/user', postUser)
     fastify.put('/user/:id', putUser)
+    fastify.put('/user/:id/active', deactivateUser)
     fastify.put('/user/self', putSelf)
     fastify.delete('/user/:id', deleteUser)
     fastify.delete('/user/self', deleteSelf)
@@ -152,7 +164,18 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Server metrics
     fastify.get('/metrics', getMetrics)
+    fastify.get('/status', getStatus)
+    fastify.post('/status/ingest', ingestStatus)
 
     // Docker stats
     fastify.get('/docker', getDocker)
+
+    // Coding tools
+    fastify.post('/tools/http/request', httpRequestTool)
+    fastify.post('/tools/ai', aiTool)
+
+    // Logs
+    fastify.get('/logs', getLogs)
+    fastify.get('/logs/services', getLogServices)
+    fastify.post('/logs/ingest', ingestLog)
 }
