@@ -1,14 +1,19 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
+import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 export default async function getVMMetrics(req: FastifyRequest, res: FastifyReply) {
     const { id, name } = req.params as { id?: string; name?: string }
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
 
     try {
         let result
 
         if (id) {
-            result = await run("SELECT * FROM vm_metrics WHERE name = $1", [id])
+            result = await run("SELECT * FROM vm_metrics WHERE name = $1 ORDER BY created_at DESC", [id])
         } else if (name) {
             result = await run("SELECT * FROM vm_metrics WHERE name = $1 ORDER BY created_at DESC", [name])
         } else {

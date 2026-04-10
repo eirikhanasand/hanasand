@@ -157,6 +157,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.delete('/vms', deleteVMs)
 
     // Vm metrics
+    fastify.get('/vm/metrics', getVMMetrics)
     fastify.get('/vm/metrics/:id', getVMMetrics)
     fastify.post('/vm/metrics', postVMMetrics)
     fastify.put('/vm/metrics/:id', putVMMetrics)

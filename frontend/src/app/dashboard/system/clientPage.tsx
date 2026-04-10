@@ -51,7 +51,7 @@ function systemToMetricCards(system: SystemSnapshot): SystemMetric[] {
     ]
 }
 
-export default function SystemDashboard({ system, dockerContainers, vms }: SystemDashboardProps) {
+export default function SystemDashboard({ system, dockerContainers, vms, vmMetrics }: SystemDashboardProps) {
     const router = useRouter()
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const runningVms = vms.filter((vm) => vm.status.toLowerCase() === 'running').length
@@ -155,7 +155,13 @@ export default function SystemDashboard({ system, dockerContainers, vms }: Syste
                     <h1 className='min-w-25'>Status</h1>
                     <h1 className='w-full'>Tags</h1>
                 </div>
-                {vms.map((vm) => <SystemDashboardVMListItem key={vm.name} vm={vm} />)}
+                {vms.map((vm) => {
+                    const latestMetrics = vmMetrics
+                        .filter((metric) => metric.name === vm.name)
+                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+
+                    return <SystemDashboardVMListItem key={vm.name} vm={vm} metrics={latestMetrics} />
+                })}
             </div>
         </div>
     )
