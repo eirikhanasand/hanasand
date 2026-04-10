@@ -145,76 +145,67 @@ function LumbermillSketch() {
 function FutureCabinSketch() {
     return (
         <svg className='future-cabin-sketch background-sketch' viewBox='0 0 430 190' aria-hidden='true'>
-            <path className='sketch-distant' d='M18 88 C58 64 96 75 133 58 C178 37 221 66 265 45 C311 22 353 50 414 21' />
-            <path className='sketch-distant' d='M22 114 C55 101 87 111 119 98 C159 82 195 101 235 88 C281 72 328 92 411 70' />
+            <path d='M228 109 C260 91 300 98 337 82 C374 66 399 69 423 55' />
+            <path d='M214 124 C256 102 303 115 346 94 C381 78 405 82 426 70' />
+            <path className='sketch-shade' d='M224 137 C267 119 310 129 352 110 C385 95 407 97 426 85' />
 
-            <path className='sketch-shade' d='M210 141 C248 126 298 133 341 119 C369 110 397 111 425 104' />
-            <path className='sketch-shade' d='M218 153 C263 139 305 150 350 136 C382 126 405 128 427 121' />
+            <path d='M267 114 L267 75 L340 55 L398 89 L398 114' />
+            <path d='M340 55 L340 101' />
+            <path d='M340 101 L398 114' />
+            <path d='M267 75 L340 55 L403 89' />
+            <path d='M251 77 L312 36 L414 88 L401 92 L341 69 L267 87 Z' />
+            <path d='M312 36 L341 69' />
+            <path d='M341 69 L414 88' />
+            <path d='M267 114 L340 101' />
+            <path className='sketch-shade' d='M275 84 L331 69' />
+            <path className='sketch-shade' d='M275 96 L331 82' />
+            <path className='sketch-shade' d='M275 108 L331 95' />
+            <path className='sketch-shade' d='M348 72 L390 94' />
+            <path className='sketch-shade' d='M348 86 L391 107' />
+            <path className='sketch-shade' d='M277 66 L266 75' />
+            <path className='sketch-shade' d='M296 51 L281 74' />
+            <path className='sketch-shade' d='M321 47 L302 68' />
+            <path className='sketch-shade' d='M351 64 L338 70' />
+            <path className='sketch-shade' d='M379 78 L365 83' />
 
-            <path d='M256 136 V82 L334 61 L394 92 V136' />
-            <path d='M334 65 V120' />
-            <path d='M334 120 L394 136' />
-            <path d='M256 82 L334 61 L400 92' />
-            <path d='M247 83 L307 41 L407 92' />
-            <path d='M307 41 L333 61' />
-            <path d='M256 136 L334 120' />
-            <path className='sketch-shade' d='M264 94 L326 80' />
-            <path className='sketch-shade' d='M264 107 L326 93' />
-            <path className='sketch-shade' d='M264 121 L326 107' />
-            <path className='sketch-shade' d='M342 76 L388 100' />
-            <path className='sketch-shade' d='M342 91 L389 115' />
-            <path className='sketch-shade' d='M342 107 L389 129' />
-            <path className='sketch-shade' d='M270 70 L254 83' />
-            <path className='sketch-shade' d='M292 56 L270 81' />
-            <path className='sketch-shade' d='M318 53 L296 74' />
-            <path className='sketch-shade' d='M343 70 L329 80' />
-            <path className='sketch-shade' d='M366 82 L353 90' />
+            <path d='M286 90 L320 81 L320 106 L286 113 Z' />
+            <path d='M292 95 L313 90 L313 104 L292 108 Z' />
+            <path className='sketch-shade' d='M303 86 V110' />
+            <path className='sketch-shade' d='M286 102 L320 95' />
+            <path className='sketch-distant' d='M291 101 C305 91 318 94 332 82 C347 70 359 76 374 62' />
+            <path className='sketch-distant' d='M291 110 C311 98 333 105 355 90 C372 78 384 82 402 69' />
 
-            <path d='M277 99 L315 90 L315 118 L277 126 Z' />
-            <path d='M284 104 L307 99 L307 115 L284 120 Z' />
-            <path className='sketch-shade' d='M296 95 V122' />
-            <path className='sketch-shade' d='M277 113 L315 105' />
-            <path className='sketch-distant' d='M281 113 C294 103 307 106 320 96 C335 85 348 90 363 77' />
-            <path className='sketch-distant' d='M281 122 C302 111 324 118 347 105 C364 95 378 98 398 85' />
+            <path d='M354 114 V90 L379 98 V114' />
+            <path d='M349 90 L377 82 L403 95' />
+            <path d='M379 98 L403 95 V114' />
+            <path d='M363 89 L363 80' />
+            <path d='M359 78 H367' />
+            <circle cx='363' cy='85' r='3' />
+            <path className='sketch-shade' d='M356 86 C360 78 366 78 371 86' />
+            <path className='sketch-shade' d='M353 101 L375 107' />
+            <path className='sketch-shade' d='M384 101 L398 97' />
 
-            <path d='M352 136 V107 L378 114 V136' />
-            <path d='M347 107 L376 99 L401 111' />
-            <path d='M378 114 L401 111 V136' />
-            <path d='M361 106 L361 96' />
-            <circle cx='361' cy='93' r='3' />
-            <path className='sketch-shade' d='M355 94 C359 88 364 88 368 94' />
-            <path className='sketch-shade' d='M351 118 L374 125' />
-            <path className='sketch-shade' d='M383 118 L394 114' />
+            <path d='M218 128 V78' />
+            <path d='M191 104 L218 59 L247 104' />
+            <path d='M197 119 L218 83 L242 119' />
+            <path d='M204 128 L218 105 L235 128' />
+            <path d='M410 121 V82' />
+            <path d='M388 101 L410 67 L429 101' />
+            <path d='M394 114 L410 90 L425 114' />
+            <path d='M178 134 V99' />
+            <path d='M161 116 L178 88 L195 116' />
+            <path d='M166 127 L178 108 L191 127' />
 
-            <path d='M218 137 V82' />
-            <path d='M190 109 L218 62 L248 109' />
-            <path d='M196 124 L218 86 L243 124' />
-            <path d='M203 137 L218 111 L236 137' />
-            <path className='sketch-shade' d='M208 78 L218 62 L230 78' />
-            <path className='sketch-shade' d='M201 99 L218 78 L239 99' />
-            <path className='sketch-shade' d='M198 116 L218 96 L242 116' />
-            <path d='M402 137 V92' />
-            <path d='M378 112 L402 74 L425 112' />
-            <path d='M384 126 L402 97 L420 126' />
-            <path d='M390 137 L402 119 L416 137' />
-            <path className='sketch-shade' d='M390 90 L402 74 L414 90' />
-            <path className='sketch-shade' d='M385 107 L402 88 L421 107' />
-            <path d='M177 139 V101' />
-            <path d='M158 118 L177 86 L196 118' />
-            <path d='M164 130 L177 108 L192 130' />
-
-            <path d='M28 162 C70 154 111 165 153 156 C194 147 222 157 254 150' />
-            <path d='M24 174 C69 166 116 178 160 168 C199 159 224 170 255 163' />
-            <path className='sketch-shade' d='M40 170 C78 164 118 173 158 165' />
-            <path className='sketch-shade' d='M52 181 C91 174 134 184 176 176' />
-            <path d='M207 143 C250 134 294 146 337 135 C369 127 397 130 424 122' />
-            <path d='M219 151 C263 142 306 153 350 140 C382 131 405 133 427 126' />
-            <path d='M250 146 H399' />
-            <path className='sketch-shade' d='M263 146 L273 152' />
-            <path className='sketch-shade' d='M292 146 L302 152' />
-            <path className='sketch-shade' d='M321 146 L331 152' />
-            <path className='sketch-shade' d='M350 146 L360 152' />
-            <path className='sketch-shade' d='M379 146 L389 152' />
+            <path d='M18 166 C68 156 120 170 168 160 C208 151 239 164 273 156' />
+            <path d='M10 181 C60 171 114 185 164 175 C204 166 233 178 270 171' />
+            <path className='sketch-shade' d='M36 173 C80 166 126 177 171 168' />
+            <path className='sketch-shade' d='M57 186 C100 179 143 188 188 181' />
+            <path d='M249 126 H404' />
+            <path className='sketch-shade' d='M264 126 L274 133' />
+            <path className='sketch-shade' d='M296 126 L306 133' />
+            <path className='sketch-shade' d='M328 126 L338 133' />
+            <path className='sketch-shade' d='M360 126 L370 133' />
+            <path className='sketch-shade' d='M392 126 L402 133' />
         </svg>
     )
 }
