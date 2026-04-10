@@ -10,6 +10,8 @@ services:
       dockerfile: ./Dockerfile
     env_file:
       .env
+    environment:
+      FRONTEND_INTERNAL_API: ${FRONTEND_INTERNAL_API:-http://api:8080/api}
     ports:
       - "3000:3000"
     healthcheck:

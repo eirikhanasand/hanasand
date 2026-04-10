@@ -1,8 +1,14 @@
 import packagejson from '../package.json'
 
+const publicApiUrl = process.env.NEXT_PUBLIC_API || 'https://api.hanasand.com/api'
+const internalApiUrl =
+    process.env.FRONTEND_INTERNAL_API ||
+    process.env.INTERNAL_API ||
+    publicApiUrl
+
 const config = {
     url: {
-        api: process.env.NEXT_PUBLIC_API || 'https://api.hanasand.com/api',
+        api: typeof window === 'undefined' ? internalApiUrl : publicApiUrl,
         api_ws: process.env.NEXT_PUBLIC_API_WS || 'wss://api.hanasand.com/api/ws',
         cdn_ws: process.env.NEXT_PUBLIC_CDN_WS || 'wss://cdn.hanasand.com/api/ws',
         cdn: process.env.NEXT_PUBLIC_CDN || 'https://cdn.hanasand.com/api',
