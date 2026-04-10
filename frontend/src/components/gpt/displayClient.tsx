@@ -26,7 +26,7 @@ export default function DisplayClient({
 
     return (
         <div
-            className='w-full rounded-xl bg-bright/3 p-4 text-left outline outline-dark transition-colors hover:bg-bright/4'
+            className='w-full rounded-xl bg-dark/35 p-4 text-left outline outline-dark transition-colors hover:bg-dark/50'
         >
             <div className='flex flex-col gap-4'>
                 <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
@@ -48,7 +48,7 @@ export default function DisplayClient({
                         <button
                             type='button'
                             onClick={() => setOpen(prev => !prev)}
-                            className='flex h-9 w-9 items-center justify-center rounded-full bg-login/10 text-login-200 outline outline-login/20'
+                            className='flex h-9 w-9 items-center justify-center rounded-full bg-[#fd8738]/12 text-[#fd8738] outline outline-[#fd8738]/20'
                         >
                             {open ? <ChevronUp className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
                         </button>
@@ -80,7 +80,7 @@ export default function DisplayClient({
 
 function Open({ client }: { client: GPT_Client }) {
     return (
-        <div className='grid gap-4 border-t border-login-100/10 pt-4 lg:grid-cols-3'>
+        <div className='grid gap-4 border-t border-dark/80 pt-4 lg:grid-cols-3'>
             <MetricSection
                 title='RAM'
                 icon={<MemoryStick className='h-4 w-4' />}
@@ -102,13 +102,13 @@ function Open({ client }: { client: GPT_Client }) {
 
 function MetricSection({ title, icon, items }: { title: string, icon: ReactNode, items: ReactNode[] }) {
     return (
-        <div className='rounded-xl border border-login-100/10 bg-login-50/5 p-4'>
-            <div className='mb-3 flex items-center gap-2 text-login-200'>
+        <div className='rounded-xl bg-dark/25 p-4 outline outline-dark'>
+            <div className='mb-3 flex items-center gap-2 text-bright/35'>
                 {icon}
                 <h4 className='text-sm font-semibold uppercase tracking-[0.18em]'>{title}</h4>
             </div>
             <div className='space-y-2'>
-                {items.length ? items : <p className='text-sm text-login-100'>No metrics reported.</p>}
+                {items.length ? items : <p className='text-sm text-bright/45'>No metrics reported.</p>}
             </div>
         </div>
     )
@@ -117,10 +117,10 @@ function MetricSection({ title, icon, items }: { title: string, icon: ReactNode,
 function StatPill({ label, value, icon }: { label: string, value: string, icon: ReactNode }) {
     return (
         <span
-            className='inline-flex items-center gap-2 rounded-full bg-login/10 px-3 py-1 text-sm font-semibold text-bright/90 outline outline-login/20'
+            className='inline-flex items-center gap-2 rounded-full bg-[#fd8738]/12 px-3 py-1 text-sm font-semibold text-bright/90 outline outline-[#fd8738]/20'
         >
             {icon}
-            <span className='text-[10px] uppercase tracking-[0.18em] text-login-200'>{label}</span>
+            <span className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{label}</span>
             <span>{value}</span>
         </span>
     )
@@ -133,11 +133,11 @@ function ModelStat({ title, value, highlight }: { title: string, value: string, 
             ? 'text-emerald-400'
             : highlight === 'preparing'
                 ? 'text-yellow-400'
-                : 'text-login-50'
+                : 'text-bright/90'
 
     return (
         <div className='rounded-xl bg-dark/20 px-3 py-2 outline outline-dark'>
-            <div className='text-[10px] uppercase tracking-[0.18em] text-login-200'>{title}</div>
+            <div className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{title}</div>
             <div className={`mt-1 text-sm font-semibold ${highlightClass}`}>{value}</div>
         </div>
     )

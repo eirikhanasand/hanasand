@@ -9,10 +9,10 @@ export default function GPT_Header({
 }) {
     return (
         <div className='grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(22rem,1fr)]'>
-            <div className='rounded-xl bg-bright/3 p-5 outline outline-dark'>
+            <div className='rounded-xl bg-dark/35 p-5 outline outline-dark'>
                 <div>
                     <div className='flex items-center gap-3'>
-                        <div className='rounded-full bg-login/10 p-3 text-login'>
+                        <div className='rounded-full bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
                             <Bot className='h-5 w-5' />
                         </div>
                         <div>
@@ -34,8 +34,8 @@ export default function GPT_Header({
 
 function GPT_HeaderCard({ label, value, icon }: { label: string, value: string, icon: React.ReactNode }) {
     return (
-        <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
-            <div className='flex items-center justify-between text-login-200'>
+        <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
+            <div className='flex items-center justify-between text-bright/35'>
                 <span className='text-xs font-medium uppercase tracking-[0.18em]'>{label}</span>
                 {icon}
             </div>
@@ -46,9 +46,9 @@ function GPT_HeaderCard({ label, value, icon }: { label: string, value: string, 
 
 function GPT_ConnectionCard({ isConnected }: { isConnected: boolean }) {
     return (
-        <div className='rounded-xl bg-bright/3 p-4 outline outline-dark'>
-            <div className='flex items-center justify-between text-login-200'>
-                <span className='text-xs font-medium uppercase tracking-[0.18em]'>Connection</span>
+        <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
+            <div className='flex items-center justify-between text-bright/35'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em]'>Socket</span>
                 {isConnected ? <Wifi className='h-4 w-4 text-emerald-400' /> : <WifiOff className='h-4 w-4 text-red-400' />}
             </div>
             <div

@@ -61,7 +61,7 @@ export default function TestClientPopup({
                 className='relative flex h-[min(85vh,54rem)] w-full max-w-5xl flex-col overflow-hidden
                     rounded-2xl bg-[#07111d] shadow-2xl outline outline-dark'
             >
-                <div className='absolute inset-x-0 top-0 h-1 bg-linear-to-r from-login via-login to-login/70' />
+                <div className='absolute inset-x-0 top-0 h-1 bg-linear-to-r from-[#fd8738]/60 via-[#fd8738] to-[#fd8738]/50' />
                 <div className='flex items-center justify-between border-b border-dark px-6 py-4'>
                     <div>
                         <h2 className='text-xl font-semibold text-bright/90'>Test client</h2>
@@ -72,7 +72,7 @@ export default function TestClientPopup({
                     <button
                         type='button'
                         onClick={onClose}
-                        className='rounded-lg p-2 text-login-200 transition-colors hover:bg-login/10 hover:text-bright/90'
+                        className='rounded-lg p-2 text-bright/35 transition-colors hover:bg-[#fd8738]/12 hover:text-[#fd8738]'
                     >
                         <X className='h-5 w-5' />
                     </button>
@@ -89,7 +89,7 @@ export default function TestClientPopup({
                                     <div>
                                         <div
                                             className='mx-auto flex h-12 w-12 items-center justify-center
-                                                rounded-full bg-login/10 text-login'
+                                                rounded-full bg-[#fd8738]/12 text-[#fd8738] outline outline-[#fd8738]/20'
                                         >
                                             <Bot className='h-6 w-6' />
                                         </div>
@@ -108,13 +108,13 @@ export default function TestClientPopup({
                                         key={message.id}
                                         className={`max-w-3xl rounded-2xl border px-4 py-3 ${
                                             message.role === 'user'
-                                                ? 'ml-auto border-login/20 bg-login/10 text-login-50'
+                                                ? 'ml-auto border-[#fd8738]/20 bg-[#fd8738]/12 text-bright/90'
                                                     : message.error
                                                         ? 'border-red-500/20 bg-red-500/10 text-red-100'
                                                     : 'bg-dark/20 text-bright/90 outline outline-dark'
                                         }`}
                                     >
-                                        <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-login-200'>
+                                        <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-bright/35'>
                                             {message.role}
                                         </div>
                                         <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6'>
@@ -137,7 +137,7 @@ export default function TestClientPopup({
                                         }
                                     }}
                                     placeholder='Ask the client something...'
-                                    className='min-h-28 w-full rounded-2xl bg-dark/20 px-4 py-3 text-sm text-bright/90 outline outline-dark transition-colors placeholder:text-bright/35 focus:outline-login/40'
+                                    className='min-h-28 w-full rounded-2xl bg-dark/20 px-4 py-3 text-sm text-bright/90 outline outline-dark transition-colors placeholder:text-bright/35 focus:outline-[#fd8738]/35'
                                 />
                                 <div className='flex justify-end'>
                                     <Button
@@ -176,8 +176,8 @@ function StatCard({ title, value, error = false }: { title: string, value: strin
                 error ? 'border-red-500/20 bg-red-500/10' : 'bg-dark/20 outline outline-dark'
             }`}
         >
-            <div className='text-[10px] uppercase tracking-[0.18em] text-login-200'>{title}</div>
-            <div className={`mt-2 text-sm font-semibold ${error ? 'text-red-100' : 'text-login-50'}`}>
+            <div className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{title}</div>
+            <div className={`mt-2 text-sm font-semibold ${error ? 'text-red-100' : 'text-bright/90'}`}>
                 {value}
             </div>
         </div>

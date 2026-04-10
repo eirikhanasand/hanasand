@@ -309,6 +309,7 @@ type OpenFile = {
 type SystemMetric = {
     name: string
     value: string | number
+    icon?: React.ReactNode
 }
 
 type SystemMemorySnapshot = {
@@ -531,6 +532,45 @@ type GPT_ModelMetrics = {
     tps: number
     lastUpdated: string | null
     lastError: string | null
+}
+
+type AIWorkspaceKind = 'share' | 'repo'
+
+type AIConversationMessage = {
+    id: string
+    role: 'user' | 'assistant'
+    content: string
+    pending?: boolean
+    error?: boolean
+    createdAt: string
+}
+
+type AIConversation = {
+    id: string
+    title: string
+    clientName: string | null
+    workspaceId: string | null
+    workspaceKind: AIWorkspaceKind | null
+    messages: AIConversationMessage[]
+    metrics: GPT_ModelMetrics
+    createdAt: string
+    updatedAt: string
+}
+
+type AIImportedRepoFile = {
+    path: string
+    name: string
+    content: string
+}
+
+type AIImportedRepo = {
+    id: string
+    name: string
+    fullName: string
+    branch: string
+    sourceUrl: string
+    files: AIImportedRepoFile[]
+    importedAt: string
 }
 
 type GPT_ModelStatus = 'idle' | 'preparing' | 'generating' | 'error'

@@ -1,6 +1,6 @@
 'use client'
 
-import { RefreshCcw, Cpu, HardDrive, StopCircle } from 'lucide-react'
+import { Activity, Cpu, FolderKanban, HardDrive, MemoryStick, RefreshCcw, ServerCog, StopCircle, Thermometer, Workflow } from 'lucide-react'
 import SystemDashboardVMListItem from '@/components/vms/systemDashboardVMListItem'
 import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
@@ -37,17 +37,18 @@ function formatLoad(load: number[] | undefined): string {
 function systemToMetricCards(system: SystemSnapshot): SystemMetric[] {
     const { load, memory, swap, disk, temperature, powerUsage, processes, os } = system
     return [
-        { name: 'Load average (1 / 5 / 15 min)', value: formatLoad(load) },
+        { name: 'Load average (1 / 5 / 15 min)', value: formatLoad(load), icon: <Activity className='h-4 w-4' /> },
         {
             name: 'Memory',
             value: `${memory.percent}% — ${formatBytes(memory.used)} / ${formatBytes(memory.total)}`,
+            icon: <MemoryStick className='h-4 w-4' />
         },
-        { name: 'Swap usage', value: String(swap).includes('%') ? String(swap) : `${swap}%` },
-        { name: 'Disk', value: disk },
-        { name: 'Temperature', value: temperature },
-        { name: 'Power usage', value: powerUsage },
-        { name: 'Processes', value: processes },
-        { name: 'OS', value: os },
+        { name: 'Swap usage', value: String(swap).includes('%') ? String(swap) : `${swap}%`, icon: <Workflow className='h-4 w-4' /> },
+        { name: 'Disk', value: disk, icon: <FolderKanban className='h-4 w-4' /> },
+        { name: 'Temperature', value: temperature, icon: <Thermometer className='h-4 w-4' /> },
+        { name: 'Power usage', value: powerUsage, icon: <Cpu className='h-4 w-4' /> },
+        { name: 'Processes', value: processes, icon: <ServerCog className='h-4 w-4' /> },
+        { name: 'OS', value: os, icon: <HardDrive className='h-4 w-4' /> },
     ]
 }
 
@@ -96,21 +97,30 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                     <>
                         <div className="grid md:grid-cols-3 gap-4">
                             {metricCards.map((metric) => (
-                                <div key={metric.name} className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2">
-                                    <h2 className="font-semibold text-lg">{metric.name}</h2>
+                                <div key={metric.name} className="rounded-2xl bg-dark/35 p-4 outline outline-dark flex flex-col gap-2">
+                                    <div className='flex items-center justify-between text-[#fd8738]'>
+                                        <h2 className="font-semibold text-lg text-bright/90">{metric.name}</h2>
+                                        {metric.icon}
+                                    </div>
                                     <span className="text-sm text-gray-300 wrap-break-word">{metric.value}</span>
                                 </div>
                             ))}
                         </div>
                         <div className="grid md:grid-cols-2 gap-4 pt-2">
-                            <div className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2 min-h-0">
-                                <h2 className="font-semibold text-lg">IPv4</h2>
+                            <div className="rounded-2xl bg-dark/35 p-4 outline outline-dark flex flex-col gap-2 min-h-0">
+                                <div className='flex items-center justify-between text-[#fd8738]'>
+                                    <h2 className="font-semibold text-lg text-bright/90">IPv4</h2>
+                                    <HardDrive className='h-4 w-4' />
+                                </div>
                                 <pre className="text-xs text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto font-mono">
                                     {system.ipv4?.length ? system.ipv4.join('\n') : '—'}
                                 </pre>
                             </div>
-                            <div className="rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2 min-h-0">
-                                <h2 className="font-semibold text-lg">IPv6</h2>
+                            <div className="rounded-2xl bg-dark/35 p-4 outline outline-dark flex flex-col gap-2 min-h-0">
+                                <div className='flex items-center justify-between text-[#fd8738]'>
+                                    <h2 className="font-semibold text-lg text-bright/90">IPv6</h2>
+                                    <HardDrive className='h-4 w-4' />
+                                </div>
                                 <pre className="text-xs text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto font-mono">
                                     {system.ipv6?.length ? system.ipv6.join('\n') : '—'}
                                 </pre>
