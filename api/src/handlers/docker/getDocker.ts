@@ -8,8 +8,14 @@ export default async function getDocker(this: FastifyInstance, req: FastifyReque
     }
 
     try {
-        const response = this.docker
-        return res.type('application/json').send(response)
+        const cached = JSON.parse(this.docker.toString())
+        const payload = cached?.data ?? cached
+
+        if (cached?.status && cached.status >= 400) {
+            return res.status(cached.status).send(payload)
+        }
+
+        return res.type('application/json').send(payload)
     } catch (error: any) {
         console.error('Error calling docker endpoint:', error)
         return res.status(500).send({ error: error.message })

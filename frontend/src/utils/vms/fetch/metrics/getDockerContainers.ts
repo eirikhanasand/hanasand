@@ -21,8 +21,14 @@ export default async function getDockerContainers({ id, token }: DockerContainer
             throw new Error(await response.text())
         }
 
-        const data: DockerContainer[] = await response.json()
-        return data
+        const data = await response.json()
+        const containers = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.data)
+                ? data.data
+                : []
+
+        return containers as DockerContainer[]
     } catch (error) {
         console.log(error)
         return []

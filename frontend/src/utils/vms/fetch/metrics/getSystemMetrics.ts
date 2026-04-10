@@ -21,7 +21,8 @@ export default async function getSystemMetrics({ id, token }: SystemMetricsProps
             throw new Error(await response.text())
         }
 
-        const data = (await response.json()) as SystemMetricsApiResponse
+        const raw = await response.json()
+        const data = (raw?.data ?? raw) as SystemMetricsApiResponse
         return data.system ?? null
     } catch (error) {
         console.log(error)

@@ -5,13 +5,16 @@ import getDocker from './queries/docker.ts'
 
 export default fp(async (fastify) => {
     async function refreshQueries() {
-        const stats = getStats()
-        const docker = getDocker()
+        const [stats, docker] = await Promise.all([
+            getStats(),
+            getDocker()
+        ])
+
         fastify.stats = Buffer.from(JSON.stringify(stats))
         fastify.docker = Buffer.from(JSON.stringify(docker))
         fastify.log.info('Cached queries refreshed')
     }
 
-    refreshQueries()
+    await refreshQueries()
     setInterval(refreshQueries, config.CACHE_TTL_HOT)
 })

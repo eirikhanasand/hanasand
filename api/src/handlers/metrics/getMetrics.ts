@@ -8,8 +8,14 @@ export default async function getMetrics(this: FastifyInstance, req: FastifyRequ
     }
 
     try {
-        const response = this.stats
-        return res.type('application/json').send(response)
+        const cached = JSON.parse(this.stats.toString())
+        const payload = cached?.data ?? cached
+
+        if (cached?.status && cached.status >= 400) {
+            return res.status(cached.status).send(payload)
+        }
+
+        return res.type('application/json').send(payload)
     } catch (error: any) {
         console.error('Error calling stats endpoint:', error)
         return res.status(500).send({ error: error.message })
