@@ -1,0 +1,26 @@
+{
+  "name": "hanasand-model-api",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "node src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "systeminformation": "^5.31.4",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
+  },
+  "imports": {
+    "#constants": "./src/constants.ts",
+    "#utils/*": "./src/utils/*"
+  }
+}
