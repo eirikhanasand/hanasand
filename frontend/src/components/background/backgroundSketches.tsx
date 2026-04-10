@@ -145,8 +145,6 @@ function LumbermillSketch() {
 function FutureCabinSketch() {
     return (
         <svg className='future-cabin-sketch background-sketch' viewBox='0 0 430 190' aria-hidden='true'>
-            <path d='M228 109 C260 91 300 98 337 82 C374 66 399 69 423 55' />
-            <path d='M214 124 C256 102 303 115 346 94 C381 78 405 82 426 70' />
             <path className='sketch-shade' d='M224 137 C267 119 310 129 352 110 C385 95 407 97 426 85' />
 
             <path d='M267 114 L267 75 L340 55 L398 89 L398 114' />
