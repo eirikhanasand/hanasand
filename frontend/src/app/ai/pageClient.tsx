@@ -26,7 +26,7 @@ export default function AIPageClient({
     })
 
     return (
-        <div className='h-full w-full overflow-hidden'>
+        <div className='h-[calc(100vh-4.5rem)] w-full overflow-hidden'>
             <div className='flex h-full flex-col px-4 pb-4 pt-4 md:px-6 lg:px-8'>
                 <div className='mb-4 flex shrink-0 items-center justify-between rounded-3xl bg-dark/45 px-5 py-4 outline outline-dark'>
                     <div className='flex min-w-0 items-center gap-4'>
@@ -34,7 +34,7 @@ export default function AIPageClient({
                             <Sparkles className='h-5 w-5' />
                         </div>
                         <div className='min-w-0'>
-                            <p className='text-[11px] uppercase tracking-[0.28em] text-bright/35'>Hanasand AI</p>
+                            <p className='text-[11px] uppercase tracking-[0.28em] text-bright/35'>Hanasand Codex</p>
                             <div className='mt-1 flex flex-wrap items-center gap-2'>
                                 <h1 className='text-2xl font-semibold text-bright/92'>Coding workspace</h1>
                                 <span className='rounded-full bg-dark/40 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/45 outline outline-dark'>
@@ -48,7 +48,7 @@ export default function AIPageClient({
                             <Bot className='h-4 w-4 text-[#fd8738]' />
                             {isAuthenticated ? `${initialShares.length} shares ready` : 'Sign in for private shares'}
                         </div>
-                        <Link href='/dashboard' className='inline-flex items-center gap-2 rounded-2xl bg-dark/30 px-3 py-2 text-bright/70 outline outline-dark transition-colors hover:text-[#fd8738]'>
+                        <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-2xl bg-dark/30 px-3 py-2 text-bright/70 outline outline-dark transition-colors hover:text-[#fd8738]'>
                             Full editor
                             <ChevronRight className='h-4 w-4' />
                         </Link>

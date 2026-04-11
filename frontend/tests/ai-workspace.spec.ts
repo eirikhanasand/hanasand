@@ -73,13 +73,12 @@ test('persisted AI workspace loads from the database into the app shell', async 
     ])
     const page = await context.newPage()
     await page.goto('/ai')
-    await page.waitForLoadState('networkidle')
 
-    await expect(page.getByText('Hanasand Codex')).toBeVisible()
+    await expect(page.getByText('Hanasand Codex', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Database chat' })).toBeVisible()
     await expect(page.getByText('Persist this coding plan.')).toBeVisible()
     await expect(page.getByText('Automatic model failover')).toBeVisible()
-    await expect(page.getByText('Attached shares')).toBeVisible()
+    await expect(page.getByText('Attached shares', { exact: true })).toBeVisible()
 
     await context.close()
 })

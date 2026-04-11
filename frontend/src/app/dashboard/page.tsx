@@ -11,13 +11,14 @@ export default async function Page() {
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
     const id = Cookies.get('id')?.value
+    const token = Cookies.get('access_token')?.value
 
-    if (!name || !id) {
+    if (!name || !id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
     const text = timeBasedGreeting({ name })
-    const vms = await getVMs(id)
+    const vms = await getVMs(id, token, id)
 
     return (
         <div className='h-full w-full'>

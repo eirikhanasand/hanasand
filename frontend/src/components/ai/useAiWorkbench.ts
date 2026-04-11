@@ -555,37 +555,45 @@ export default function useAiWorkbench({
 
         if (message.type === 'prompt_complete' || message.type === 'prompt_error') {
             setTimeout(() => {
-                void persistConversationTail(message.conversationId)
+                void persistAssistantMessageFromEvent(message)
             }, 0)
         }
     }
 
-    async function persistConversationTail(conversationId?: string) {
-        if (!conversationId) {
+    async function persistAssistantMessageFromEvent(message: GptSocketMessage) {
+        if (message.type !== 'prompt_complete' && message.type !== 'prompt_error') {
             return
         }
 
-        const conversation = conversationsRef.current.find((entry) => entry.id === conversationId)
+        if (!message.conversationId) {
+            return
+        }
+
+        const conversation = conversationsRef.current.find((entry) => entry.id === message.conversationId)
         if (!conversation) {
             return
         }
 
         const lastMessage = conversation.messages[conversation.messages.length - 1]
-        if (!lastMessage) {
+        if (!lastMessage || lastMessage.role !== 'assistant') {
             return
         }
 
-        if (lastMessage.role === 'assistant' && !lastMessage.pending) {
-            const cleaned = stripToolTags(lastMessage.content).trim()
-            const assistantMessage = {
-                ...lastMessage,
-                content: cleaned || lastMessage.content,
-                pending: false,
-            }
-            await persistMessage(conversationId, assistantMessage)
+        const nextContent = message.type === 'prompt_complete'
+            ? (message.content || lastMessage.content)
+            : (message.error || lastMessage.content || 'The model failed to answer this prompt.')
+
+        const assistantMessage: AIConversationMessage = {
+            ...lastMessage,
+            content: stripToolTags(nextContent).trim() || nextContent,
+            pending: false,
+            error: message.type === 'prompt_error',
+            modelName: message.clientName || lastMessage.modelName || conversation.activeModel,
+        }
+
+        await persistMessage(message.conversationId, assistantMessage)
+        if (message.type === 'prompt_complete') {
             await executeAssistantTools(conversation, assistantMessage)
-        } else {
-            await persistMessage(conversationId, lastMessage)
         }
     }
 
@@ -816,8 +824,9 @@ function buildSystemPrompt({
 }) {
     return [
         'You are Hanasand AI, an app-style coding assistant inside Hanasand.',
-        'Behave like a practical coding partner: be direct, calm, concise, and action-oriented.',
+        'Behave like Codex inside Hanasand: be direct, calm, concise, practical, and action-oriented.',
         'Prefer concrete next steps, patch-ready code, and careful reasoning over marketing language.',
+        'You have built-in access to advanced reasoning, local command execution, and live web search outside this prompt. Do not say you lack internet access, shell access, or current date awareness when those tools would help.',
         'If a preferred model is unavailable, continue the conversation seamlessly with the current connected model.',
         'When a user asks you to read or update an attached share, or to make an authenticated HTTP request for them, you may emit one or more tool tags on their own line.',
         'Supported tags:',

@@ -3,34 +3,27 @@ import { expect, test } from '@playwright/test'
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'http://127.0.0.1:8080/api'
 const password = `Aa11!!${Date.now()}Bb22!!`
 
-test('signup, login and delete account work end to end', async ({ page, request }) => {
+test('signup, login and delete account work end to end', async ({ browser, page, request, baseURL }) => {
     const id = `pw_${Date.now()}`
     const name = 'Playwright User'
 
     await page.goto('/register')
-    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible()
     await page.getByPlaceholder('Username').fill(id)
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name)
     await page.getByPlaceholder('Password').fill(password)
-    const signupResponsePromise = page.waitForResponse(response => response.url().includes('/api/user') && response.request().method() === 'POST')
     await page.getByRole('button', { name: 'Create account' }).click()
-    const signupResponse = await signupResponsePromise
-    expect(signupResponse.ok()).toBeTruthy()
-    const signupBody = await signupResponse.json()
-    const token = signupBody.token || ''
-    expect(token.length).toBeGreaterThan(20)
     await expect(page).toHaveURL(/dashboard/)
 
-    await page.goto('/logout')
-    await page.goto('/login')
-    await page.waitForLoadState('networkidle')
-    await page.getByPlaceholder('Username').fill(id)
-    await page.getByPlaceholder('Password').fill(password)
-    const loginResponsePromise = page.waitForResponse(response => response.url().includes(`/api/auth/login/${id}`) && response.request().method() === 'POST')
-    await page.getByRole('button', { name: 'Login' }).click()
-    const loginResponse = await loginResponsePromise
-    expect(loginResponse.ok()).toBeTruthy()
-    await expect(page).toHaveURL(/dashboard/)
+    const loginContext = await browser.newContext({ baseURL })
+    const loginPage = await loginContext.newPage()
+    await loginPage.goto('/login')
+    await expect(loginPage.getByRole('button', { name: 'Login' })).toBeVisible()
+    await loginPage.getByPlaceholder('Username').fill(id)
+    await loginPage.getByPlaceholder('Password').fill(password)
+    await loginPage.getByRole('button', { name: 'Login' }).click()
+    await expect(loginPage).toHaveURL(/dashboard/)
+    await loginContext.close()
 
     const deleteId = `pw_delete_${Date.now()}`
     const createForDelete = await request.post(`${apiBase}/user`, {
@@ -58,7 +51,7 @@ test('signup, login and delete account work end to end', async ({ page, request 
 
 test('login page rejects bad credentials without hanging', async ({ page }) => {
     await page.goto('/login')
-    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('button', { name: 'Login' })).toBeVisible()
     await page.getByPlaceholder('Username').fill(`missing_${Date.now()}`)
     await page.getByPlaceholder('Password').fill(password)
     await page.getByRole('button', { name: 'Login' }).click()

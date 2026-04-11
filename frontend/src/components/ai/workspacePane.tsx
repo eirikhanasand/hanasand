@@ -57,7 +57,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Workspace tools</p>
                         <h2 className='mt-1 text-base font-semibold text-bright/90'>Shares, repos, and direct actions</h2>
                         <p className='mt-2 text-sm leading-6 text-bright/45'>
-                            Attached shares are readable and writable by Hanasand AI. Imported repositories are synced into shares so the assistant can inspect code, edit files, and keep using the native editor flow.
+                            Attached shares are readable and writable by Hanasand Codex. Imported repositories are synced into shares so the assistant can inspect code, edit files, and keep using the native editor flow.
                         </p>
                     </div>
                 </div>
@@ -211,7 +211,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     <Share2 className='h-4 w-4 text-[#fd8738]' />
                 </div>
                 <pre className='mt-3 max-h-56 overflow-auto rounded-xl bg-black/30 p-3 text-xs leading-6 text-bright/72 outline outline-dark'>
-                    {selectedShareContent || 'Attach a share to preview the live content available to Hanasand AI.'}
+                    {selectedShareContent || 'Attach a share to preview the live content available to Hanasand Codex.'}
                 </pre>
             </section>
         </aside>

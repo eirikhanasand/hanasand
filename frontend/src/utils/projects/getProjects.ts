@@ -8,11 +8,12 @@ type GetProjectProps = {
 export default async function getProjects({ id, token }: GetProjectProps): Promise<Project[]> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
+    const normalizedToken = decodeURIComponent(token)
 
     try {
         const response = await fetch(`${config.url.cdn}/projects/user/${id}`, {
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${normalizedToken}`,
                 id
             },
             signal: controller.signal

@@ -2,10 +2,10 @@ import config from '@/config'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 import { getCookie } from '../../cookies/cookies'
 
-export default async function getVMs(id: string): Promise<VM[]> {
+export default async function getVMs(id: string, tokenOverride?: string, userIdOverride?: string): Promise<VM[]> {
     try {
-        const token = getCookie('access_token')
-        const userId = getCookie('id')
+        const token = decodeURIComponent(tokenOverride ?? getCookie('access_token') ?? '')
+        const userId = userIdOverride ?? getCookie('id')
         const response = await fetchWithRetry(`${config.url.api}/vms/${id}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,

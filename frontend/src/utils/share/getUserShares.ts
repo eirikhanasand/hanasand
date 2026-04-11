@@ -9,9 +9,10 @@ export async function getUserShares({ id, token }: GetUserSharesProps): Promise<
     try {
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
+        const normalizedToken = decodeURIComponent(token)
         const response = await fetch(`${config.url.cdn}/share/user/${id}`, { 
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${normalizedToken}`,
                 id
             },
             signal: controller.signal

@@ -10,10 +10,11 @@ export async function getAiWorkspace({
     if (!id || !token) {
         return { conversations: [], repositories: [] }
     }
+    const normalizedToken = decodeURIComponent(token)
 
     const response = await fetch(`${config.url.api}/ai/workspace`, {
         headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${normalizedToken}`,
             id,
         },
         cache: 'no-store',
