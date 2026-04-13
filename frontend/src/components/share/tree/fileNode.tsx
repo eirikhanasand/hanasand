@@ -112,7 +112,7 @@ export default function FileNode({
                 tree={tree}
                 setTree={setTree}
             />
-            <Link href={file.id} className={`flex items-center gap-2 px-2 py-1 ${isActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md cursor-pointer`}>
+            <Link href={`/s/${file.id}`} className={`flex items-center gap-2 px-2 py-1 ${isActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md cursor-pointer`}>
                 <File size={14} className='text-bright/80' />
                 <span className='text-sm text-bright/80'>{file.name}</span>
             </Link>

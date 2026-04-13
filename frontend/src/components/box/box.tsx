@@ -59,9 +59,9 @@ export default function Box({ box, setBox }: BoxProps) {
     }
 
     return (
-        <div className='absolute right-3 top-18 z-40 grid h-[min(42rem,78vh)] w-[min(72rem,calc(100vw-2rem))] grid-cols-1 gap-3 lg:grid-cols-[280px_minmax(0,1fr)]'>
+        <div className='absolute right-3 top-18 z-40 grid h-[min(36rem,72vh)] w-[min(60rem,calc(100vw-2rem))] grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]'>
             {sidebar && (
-                <aside className='grid h-full min-h-0 gap-3 rounded-xl border border-white/10 bg-bright/3 p-3 backdrop-blur-md'>
+                <aside className='grid h-full min-h-0 gap-2 rounded-xl border border-white/10 bg-bright/3 p-2.5 backdrop-blur-md'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
                             <h1 className='text-sm font-semibold text-bright'>History</h1>
@@ -78,7 +78,7 @@ export default function Box({ box, setBox }: BoxProps) {
                     />
                 </aside>
             )}
-            <section className='grid h-full min-h-0 gap-3 rounded-xl border border-white/10 bg-bright/3 p-3 backdrop-blur-md'>
+                <section className='grid h-full min-h-0 gap-2 rounded-xl border border-white/10 bg-bright/3 p-2.5 backdrop-blur-md'>
                 <div className='flex items-center justify-between gap-3'>
                     <div>
                         <h1 className='text-sm font-semibold text-bright'>HTTP Workbench</h1>

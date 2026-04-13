@@ -353,6 +353,7 @@ SERVER_ARGS=(
   --ctx-size "$CTX_SIZE"
   -t "$CPU_CORES"
   -ngl "$N_GPU_LAYERS"
+  --reasoning-budget -1
 )
 
 if [ "${#SERVER_EXTRA_ARGS[@]}" -gt 0 ]; then

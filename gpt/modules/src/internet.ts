@@ -1,23 +1,3 @@
-export type SearchWebOptions = {
-    query: string
-    limit?: number
-    visitTopResults?: number
-}
-
-export type SearchWebPage = {
-    title: string
-    url: string
-    excerpt: string
-}
-
-export type SearchWebResult = {
-    query: string
-    searchedUrl: string
-    results: Result[]
-    pages: SearchWebPage[]
-    markdown: string
-}
-
 const DEFAULT_HEADERS = {
     'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -47,7 +27,7 @@ function cleanText(input: string, maxLength: number) {
 }
 
 function parseDuckDuckGoResults(html: string, limit: number) {
-    const results: Result[] = []
+    const results: SearchWebItem[] = []
     const regex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
     let match: RegExpExecArray | null
 
@@ -140,7 +120,7 @@ async function fetchPage(url: string): Promise<SearchWebPage | null> {
     }
 }
 
-async function fetchTopPages(results: Result[], visitTopResults: number) {
+async function fetchTopPages(results: SearchWebItem[], visitTopResults: number) {
     const pages: SearchWebPage[] = []
 
     for (const result of results.slice(0, visitTopResults)) {

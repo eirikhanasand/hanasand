@@ -136,19 +136,19 @@ export default function NewRequest({
     return (
         <div className='grid h-full min-h-0 gap-3'>
             <form className='grid gap-3'>
-                <div className='grid gap-2 lg:grid-cols-[100px_minmax(0,1fr)_88px]'>
-                    <select value={method} onChange={(e) => setMethod(e.target.value)} className='cursor-pointer rounded-lg border border-white/10 bg-white/6 px-3 py-2 text-xs font-semibold text-bright outline-none'>
+                <div className='grid gap-2 lg:grid-cols-[88px_minmax(0,1fr)_78px]'>
+                    <select value={method} onChange={(e) => setMethod(e.target.value)} className='cursor-pointer rounded-lg border border-white/10 bg-white/6 px-2.5 py-1.5 text-[11px] font-semibold text-bright outline-none'>
                         {METHODS.map((item) => <option key={item} value={item} className='bg-background'>{item}</option>)}
                     </select>
                     <input
                         ref={inputRef}
-                        className='rounded-lg border border-white/10 bg-white/6 px-3 py-2 text-sm text-bright outline-none focus:border-orange-300/50'
+                        className='rounded-lg border border-white/10 bg-white/6 px-3 py-1.5 text-sm text-bright outline-none focus:border-orange-300/50'
                         placeholder='https://api.example.com/v1/users'
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
                         required
                     />
-                    <button onClick={send} disabled={loading} className='flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-orange-300 px-3 py-2 text-xs font-semibold text-background hover:bg-orange-200 disabled:cursor-not-allowed disabled:opacity-50'>
+                    <button onClick={send} disabled={loading} className='flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-orange-300 px-2.5 py-1.5 text-[11px] font-semibold text-background hover:bg-orange-200 disabled:cursor-not-allowed disabled:opacity-50'>
                         <Play className='h-3.5 w-3.5' />
                         {loading ? 'Sending' : 'Send'}
                     </button>
@@ -156,7 +156,7 @@ export default function NewRequest({
 
                 <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
                     {(['headers', 'body', 'ai', 'codex'] as const).map((item) => (
-                        <button key={item} type='button' onClick={() => setTab(item)} className={`cursor-pointer rounded-md px-3 py-1.5 capitalize ${tab === item ? 'bg-white/12 text-bright' : 'bg-white/5 hover:bg-white/8'}`}>
+                        <button key={item} type='button' onClick={() => setTab(item)} className={`cursor-pointer rounded-md px-2.5 py-1 text-[11px] capitalize ${tab === item ? 'bg-white/12 text-bright' : 'bg-white/5 hover:bg-white/8'}`}>
                             {item}
                         </button>
                     ))}
@@ -176,7 +176,7 @@ export default function NewRequest({
                                     </button>
                                 </div>
                             ))}
-                            <button type='button' onClick={() => setHeaders((prev) => [...prev, { key: '', value: '' }])} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-white/6 px-3 py-2 text-xs text-bright/70 hover:bg-white/10'>
+                            <button type='button' onClick={() => setHeaders((prev) => [...prev, { key: '', value: '' }])} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-white/6 px-3 py-1.5 text-[11px] text-bright/70 hover:bg-white/10'>
                                 <Plus className='h-3.5 w-3.5' />
                                 Add header
                             </button>
@@ -190,7 +190,7 @@ export default function NewRequest({
                     {tab === 'ai' && (
                         <div className='grid gap-3'>
                             <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} className='min-h-28 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-bright outline-none' />
-                            <button type='button' onClick={askAi} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-sky-400/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-400/25'>
+                            <button type='button' onClick={askAi} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-sky-400/15 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-400/25'>
                                 <Bot className='h-3.5 w-3.5' />
                                 Ask AI
                             </button>
@@ -208,7 +208,7 @@ export default function NewRequest({
                                 This stores a structured request draft for the upcoming Codex integration without depending on the in-progress component.
                             </p>
                             <textarea value={codexPrompt} onChange={(e) => setCodexPrompt(e.target.value)} className='min-h-28 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-bright outline-none' />
-                            <button type='button' onClick={queueForCodex} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-orange-300/15 px-3 py-2 text-xs font-semibold text-orange-100 hover:bg-orange-300/25'>
+                            <button type='button' onClick={queueForCodex} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-orange-300/15 px-3 py-1.5 text-[11px] font-semibold text-orange-100 hover:bg-orange-300/25'>
                                 <Sparkles className='h-3.5 w-3.5' />
                                 Prepare for Codex
                             </button>
@@ -222,7 +222,7 @@ export default function NewRequest({
                         <span>Status: <span className={response?.ok ? 'text-emerald-300' : 'text-red-300'}>{response?.status ? `${response.status} ${response.statusText || ''}` : response?.error ? 'Error' : 'Not sent'}</span></span>
                         {response?.elapsed_ms !== undefined && <span className='flex items-center gap-1 text-bright/60'><Clock3 className='h-3.5 w-3.5' /> {response.elapsed_ms} ms</span>}
                     </div>
-                    <pre className='max-h-104 min-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-4 text-xs text-bright/70'>
+                    <pre className='max-h-92 min-h-48 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-bright/70'>
                         {response ? response.error || response.body || JSON.stringify(response, null, 2) : 'Response will appear here.'}
                     </pre>
                 </section>

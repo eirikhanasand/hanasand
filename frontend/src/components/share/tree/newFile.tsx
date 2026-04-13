@@ -2,7 +2,7 @@ import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
 import postShare from '@/utils/share/post'
 import { File, Folder } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Dispatch, SetStateAction } from 'react'
 import NewFileWarning from './newFileWarning'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
@@ -29,7 +29,6 @@ export default function NewFile({
     setTree
 }: NewFileProps) {
     const router = useRouter()
-    const pathname = usePathname()
     let lowercaseTreeHasFile = false
     const { condition: blink, setCondition: setBlink } = useClearStateAfter({ timeout: 400 })
     const treeHasFile = tree.some((file) => {
@@ -71,9 +70,7 @@ export default function NewFile({
                 setIsCreatingNewFile(null)
                 setNewFileName('')
                 setTree(response.tree)
-                const pathParts = pathname.split('/').filter(Boolean)
-                const rootShareId = pathParts[1]
-                router.push(rootShareId ? `/s/${rootShareId}/${newFileId}` : newFileId)
+                router.push(`/s/${newFileId}`)
             }
         }
     }

@@ -1,27 +1,41 @@
 import config from '#constants'
-import { getModelState, updateModelState } from '#utils/modelState.ts'
+import runCommand from '#utils/tools/runCommand.ts'
 import searchWeb from '#utils/tools/searchWeb.ts'
 
 const TOOL_SYSTEM_PROMPT = [
-    'You are Hanasand, a local coding and research assistant.',
-    'You can use one external tool called search_web for current or web-dependent information.',
-    'When you need that tool, reply with only this XML block and nothing else:',
+    'You are Hanasand, a local coding assistant that should behave like Codex: concise, practical, markdown-friendly, and action oriented.',
+    'You have built-in access to advanced reasoning, live web search, and a sandboxed local command line.',
+    'Do not claim you lack internet access, current-date awareness, or shell access when those tools would help.',
+    'Use tools aggressively for anything current, verifiable, filesystem-related, package-related, or command-line oriented.',
+    'For questions about today, the current date, time, local environment, installed packages, git state, files, logs, or audits, prefer the command tool over guessing.',
+    'For recent news, release notes, web content, docs, and changing external facts, prefer the web search tool.',
+    'If the user explicitly asks you to search, browse, look something up online, or use your search functionality, you must use search_web.',
+    'When you need a tool, reply with only a single XML tool block and nothing else:',
     '<tool_call>{"name":"search_web","arguments":{"query":"...","limit":5,"visitTopResults":3}}</tool_call>',
-    'Use the tool when the user asks for recent information, live facts, release notes, web pages, or anything that could have changed.',
-    'After tool results arrive, use them actively in your answer and cite the relevant titles or URLs from the tool output.',
-    'If the tool is unnecessary, answer normally.',
+    '<tool_call>{"name":"run_command","arguments":{"command":"date","cwd":"/optional/path","timeoutMs":120000}}</tool_call>',
+    'After a tool result arrives, use it actively in the final answer and cite relevant URLs, commands, or file paths from the tool output.',
+    'Answer in Markdown unless the user explicitly wants plain text.',
 ].join('\n')
 
 const TOOL_CALL_PATTERN = /<tool_call>\s*([\s\S]+?)\s*<\/tool_call>/i
 
-type ToolCall = {
-    name: 'search_web'
-    arguments: {
-        query: string
-        limit?: number
-        visitTopResults?: number
+type ToolCall =
+    | {
+        name: 'search_web'
+        arguments: {
+            query: string
+            limit?: number
+            visitTopResults?: number
+        }
     }
-}
+    | {
+        name: 'run_command'
+        arguments: {
+            command: string
+            cwd?: string
+            timeoutMs?: number
+        }
+    }
 
 type ChatCompletionResponse = {
     id?: string
@@ -38,34 +52,16 @@ type ChatCompletionResponse = {
     }
 }
 
-function withToolSystemPrompt(messages: GPT_ChatMessage[]) {
-    const toolPrompt: GPT_ChatMessage = {
-        role: 'system',
-        content: TOOL_SYSTEM_PROMPT,
-    }
-
-    return [toolPrompt, ...messages]
+type ToolLoopResult = {
+    content: string
+    timings?: ChatCompletionResponse['timings']
 }
 
-function parseToolCall(content: string) {
-    const candidates = [
-        content.match(TOOL_CALL_PATTERN)?.[1],
-        extractBalancedJson(content, '"name":"search_web"'),
-        extractBalancedJson(content, '"name": "search_web"'),
-    ].filter((candidate): candidate is string => Boolean(candidate))
-
-    for (const candidate of candidates) {
-        try {
-            const parsed = JSON.parse(candidate.replace(/^<|>$/g, '').trim()) as ToolCall
-            if (parsed?.name === 'search_web' && parsed.arguments?.query) {
-                return parsed
-            }
-        } catch {
-            continue
-        }
-    }
-
-    return null
+function withToolSystemPrompt(messages: GPT_ChatMessage[]) {
+    return [{
+        role: 'system',
+        content: TOOL_SYSTEM_PROMPT,
+    } satisfies GPT_ChatMessage, ...messages]
 }
 
 function extractBalancedJson(content: string, marker: string) {
@@ -99,20 +95,67 @@ function extractBalancedJson(content: string, marker: string) {
     return null
 }
 
-function updateMetricsFromCompletion(response: ChatCompletionResponse) {
-    const timings = response.timings
-    if (!timings) {
-        return
+function parseToolCall(content: string): ToolCall | null {
+    const candidates = [
+        content.match(TOOL_CALL_PATTERN)?.[1],
+        extractBalancedJson(content, '"name":"search_web"'),
+        extractBalancedJson(content, '"name": "search_web"'),
+        extractBalancedJson(content, '"name":"run_command"'),
+        extractBalancedJson(content, '"name": "run_command"'),
+    ].filter((candidate): candidate is string => Boolean(candidate))
+
+    for (const candidate of candidates) {
+        try {
+            const parsed = JSON.parse(candidate.trim()) as ToolCall
+            if (parsed?.name === 'search_web' && parsed.arguments?.query) {
+                return parsed
+            }
+            if (parsed?.name === 'run_command' && parsed.arguments?.command) {
+                return parsed
+            }
+        } catch {
+            continue
+        }
     }
 
-    updateModelState({
-        status: 'generating',
-        promptTokens: timings.prompt_n || getModelState().promptTokens,
-        generatedTokens: timings.predicted_n || getModelState().generatedTokens,
-        contextTokens: (timings.cache_n || 0) + (timings.prompt_n || 0) + (timings.predicted_n || 0),
-        currentTokens: (timings.prompt_n || 0) + (timings.predicted_n || 0),
-        tps: timings.predicted_per_second || getModelState().tps,
-    })
+    const xmlName = content.match(/<name>\s*([^<]+?)\s*<\/name>/i)?.[1]?.trim()
+    if (xmlName === 'run_command') {
+        const command = content.match(/<command>\s*([\s\S]*?)\s*<\/command>/i)?.[1]?.trim()
+        const cwd = content.match(/<cwd>\s*([\s\S]*?)\s*<\/cwd>/i)?.[1]?.trim()
+        const timeoutRaw = content.match(/<timeoutMs>\s*(\d+)\s*<\/timeoutMs>/i)?.[1]
+        if (command) {
+            return {
+                name: 'run_command',
+                arguments: {
+                    command,
+                    cwd: cwd || undefined,
+                    timeoutMs: timeoutRaw ? Number(timeoutRaw) : undefined,
+                },
+            }
+        }
+    }
+
+    if (xmlName === 'search_web') {
+        const query = content.match(/<query>\s*([\s\S]*?)\s*<\/query>/i)?.[1]?.trim()
+        const limitRaw = content.match(/<limit>\s*(\d+)\s*<\/limit>/i)?.[1]
+        const visitTopResultsRaw = content.match(/<visitTopResults>\s*(\d+)\s*<\/visitTopResults>/i)?.[1]
+        if (query) {
+            return {
+                name: 'search_web',
+                arguments: {
+                    query,
+                    limit: limitRaw ? Number(limitRaw) : undefined,
+                    visitTopResults: visitTopResultsRaw ? Number(visitTopResultsRaw) : undefined,
+                },
+            }
+        }
+    }
+
+    return null
+}
+
+function latestUserMessage(messages: GPT_ChatMessage[]) {
+    return [...messages].reverse().find((message) => message.role === 'user')?.content || ''
 }
 
 async function createCompletion(
@@ -134,6 +177,10 @@ async function createCompletion(
             temperature,
             stream: false,
             timings_per_token: true,
+            reasoning_format: 'none',
+            chat_template_kwargs: {
+                enable_thinking: true,
+            },
         }),
     })
 
@@ -141,20 +188,56 @@ async function createCompletion(
         throw new Error(`Model request failed with status ${response.status}`)
     }
 
-    const payload = await response.json() as ChatCompletionResponse
-    updateMetricsFromCompletion(payload)
-    return payload
+    return await response.json() as ChatCompletionResponse
 }
 
 function getMessageContent(response: ChatCompletionResponse) {
     return response.choices?.[0]?.message?.content?.trim() || ''
 }
 
-export default async function runModelToolLoop(request: GPT_PromptRequest) {
-    const maxIterations = Math.max(0, config.web_search_max_iterations)
-    const workingMessages = config.web_search_enabled
-        ? withToolSystemPrompt(request.messages)
-        : [...request.messages]
+async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<GPT_ChatMessage> {
+    if (toolCall.name === 'search_web') {
+        const result = await searchWeb({
+            query: toolCall.arguments.query,
+            limit: toolCall.arguments.limit,
+            visitTopResults: toolCall.arguments.visitTopResults,
+        })
+
+        return {
+            role: 'tool',
+            tool_call_id: `search_web_${iteration + 1}`,
+            content: [
+                `Tool search_web executed for query: ${toolCall.arguments.query}`,
+                'Use this result actively and cite relevant URLs from it.',
+                result.markdown,
+            ].join('\n\n'),
+        }
+    }
+
+    const result = await runCommand({
+        command: toolCall.arguments.command,
+        cwd: toolCall.arguments.cwd,
+        timeoutMs: toolCall.arguments.timeoutMs,
+    })
+
+    return {
+        role: 'tool',
+        tool_call_id: `run_command_${iteration + 1}`,
+        content: [
+            `Tool run_command executed: ${result.command}`,
+            `Working directory: ${result.cwd}`,
+            `Exit code: ${result.exitCode ?? 'null'}`,
+            `Timed out: ${result.timedOut ? 'yes' : 'no'}`,
+            result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+            result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+        ].join('\n\n'),
+    }
+}
+
+export default async function runModelToolLoop(request: GPT_PromptRequest): Promise<ToolLoopResult> {
+    const maxIterations = Math.max(0, config.web_search_max_iterations + 2)
+    const workingMessages = withToolSystemPrompt(request.messages)
+    const executedToolCalls = new Set<string>()
 
     for (let iteration = 0; iteration <= maxIterations; iteration += 1) {
         const completion = await createCompletion(
@@ -164,32 +247,48 @@ export default async function runModelToolLoop(request: GPT_PromptRequest) {
             request.temperature ?? 0.7,
         )
         const content = getMessageContent(completion)
-        const toolCall = config.web_search_enabled ? parseToolCall(content) : null
-
-        if (!toolCall) {
-            return content
+        let toolCall = parseToolCall(content)
+        const explicitSearchRequested = /(search|browse|look up|lookup|online|web)/i.test(latestUserMessage(workingMessages))
+        const alreadyHasToolResult = workingMessages.some((message) => message.role === 'tool')
+        if (!alreadyHasToolResult && explicitSearchRequested && (!toolCall || toolCall.name !== 'search_web')) {
+            toolCall = {
+                name: 'search_web',
+                arguments: {
+                    query: latestUserMessage(workingMessages),
+                    limit: 5,
+                    visitTopResults: 3,
+                },
+            }
         }
 
-        const result = await searchWeb({
-            query: toolCall.arguments.query,
-            limit: toolCall.arguments.limit,
-            visitTopResults: toolCall.arguments.visitTopResults,
-        })
+        if (!toolCall) {
+            return {
+                content,
+                timings: completion.timings,
+            }
+        }
 
+        const toolKey = JSON.stringify(toolCall)
+        if (executedToolCalls.has(toolKey)) {
+            workingMessages.push({
+                role: 'system',
+                content: 'You already have the requested tool result. Do not call the same tool again. Write the final answer now using the existing tool output.',
+            })
+            continue
+        }
+
+        const toolMessage = await executeToolCall(toolCall, iteration)
+        executedToolCalls.add(toolKey)
         workingMessages.push({
             role: 'assistant',
             content,
         })
+        workingMessages.push(toolMessage)
         workingMessages.push({
-            role: 'tool',
-            tool_call_id: `search_web_${iteration + 1}`,
-            content: [
-                `Tool search_web executed for query: ${toolCall.arguments.query}`,
-                'Use this result actively. Prefer citing exact titles and URLs that appear below.',
-                result.markdown,
-            ].join('\n\n'),
+            role: 'system',
+            content: 'The tool has finished successfully. Use the tool result above and answer the user now. Do not request the same tool again unless the previous output was clearly insufficient.',
         })
     }
 
-    throw new Error('Tool loop exceeded the maximum number of web search iterations.')
+    throw new Error('Tool loop exceeded the maximum number of search/command iterations.')
 }

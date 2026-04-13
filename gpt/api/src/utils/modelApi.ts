@@ -152,6 +152,49 @@ function toPromptEvent(type: 'prompt_started' | 'prompt_delta' | 'prompt_complet
     })
 }
 
+function updateMetricsFromTimings(timings: {
+    cache_n?: number
+    prompt_n?: number
+    predicted_n?: number
+    predicted_per_second?: number
+} | undefined) {
+    if (!timings) {
+        return
+    }
+
+    updateModelState({
+        status: 'generating',
+        promptTokens: timings.prompt_n || getModelState().promptTokens,
+        generatedTokens: timings.predicted_n || getModelState().generatedTokens,
+        contextTokens: (timings.cache_n || 0) + (timings.prompt_n || 0) + (timings.predicted_n || 0),
+        currentTokens: (timings.prompt_n || 0) + (timings.predicted_n || 0),
+        tps: timings.predicted_per_second || getModelState().tps,
+    })
+}
+
+async function emitStreamedContent(
+    request: GPT_PromptRequest,
+    completionId: string,
+    content: string,
+    send: (event: string) => void,
+) {
+    let accumulated = ''
+    const chunks = content.match(/.{1,120}(\s|$)|.+$/g) || [content]
+
+    for (const chunk of chunks) {
+        accumulated += chunk
+        send(toPromptEvent('prompt_delta', {
+            conversationId: request.conversationId,
+            completionId,
+            clientName: request.clientName || null,
+            delta: chunk,
+            content: accumulated,
+            metrics: getModelState(),
+        }))
+        await new Promise((resolve) => setTimeout(resolve, 12))
+    }
+}
+
 export async function promptModel(request: GPT_PromptRequest, send: (event: string) => void) {
     const currentState = getModelState()
     if (currentState.status === 'preparing' || currentState.status === 'generating') {
@@ -185,8 +228,10 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
     }))
 
     try {
-        const content = await runModelToolLoop(request)
+        const result = await runModelToolLoop(request)
+        const content = result.content
         const completionId = `hanasand-${Date.now()}`
+        updateMetricsFromTimings(result.timings)
         const [generatedTokens, contextMax] = await Promise.all([
             countTokens(content),
             fetchContextMaxTokens(),
@@ -204,14 +249,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
             tps: getModelState().tps,
         })
 
-        send(toPromptEvent('prompt_delta', {
-            conversationId: request.conversationId,
-            completionId,
-            clientName: request.clientName || null,
-            delta: content,
-            content,
-            metrics: getModelState(),
-        }))
+        await emitStreamedContent(request, completionId, content, send)
 
         send(toPromptEvent('prompt_complete', {
             conversationId: request.conversationId,

@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import GPT_Page from './pageClient'
 
 export default async function Page() {
     const Cookies = await cookies()
@@ -11,5 +10,5 @@ export default async function Page() {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard/system/ai%26expired=true')
     }
 
-    return <GPT_Page />
+    return redirect('/ai')
 }

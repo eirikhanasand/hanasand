@@ -72,6 +72,7 @@ import putAiConversation from './handlers/ai/putConversation.ts'
 import upsertAiMessage from './handlers/ai/upsertMessage.ts'
 import postAiRepository from './handlers/ai/postRepository.ts'
 import getAiModels from './handlers/ai/getModels.ts'
+import importRepository from './handlers/ai/importRepository.ts'
 
 /**
  * Defines the routes available in the API.
@@ -187,6 +188,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // AI workspace
     fastify.get('/ai/workspace', getAiWorkspace)
     fastify.get('/ai/models', getAiModels)
+    fastify.post('/ai/import-repository', importRepository)
     fastify.post('/ai/conversations', postAiConversation)
     fastify.put('/ai/conversations/:id', putAiConversation)
     fastify.put('/ai/conversations/:id/messages', upsertAiMessage)

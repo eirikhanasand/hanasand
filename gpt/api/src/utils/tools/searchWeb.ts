@@ -4,6 +4,8 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import config from '#constants'
 
+const SANDBOX_EXECUTABLE = process.env.HANASAND_SANDBOX_EXEC || 'sandbox-exec'
+
 type SearchWebArgs = {
     query: string
     limit?: number
@@ -81,7 +83,7 @@ function runSearchProcess(
     const puppeteerCacheDir = path.join(os.homedir(), '.cache', 'puppeteer')
 
     return new Promise((resolve, reject) => {
-        const child = spawn('/usr/bin/sandbox-exec', [
+        const child = spawn(SANDBOX_EXECUTABLE, [
             '-f',
             profilePath,
             process.execPath,

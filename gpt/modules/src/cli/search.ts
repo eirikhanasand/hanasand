@@ -6,6 +6,15 @@ type SearchCliInput = {
     visitTopResults?: number
 }
 
+function isSearchCliInput(value: unknown): value is SearchCliInput {
+    if (!value || typeof value !== 'object') {
+        return false
+    }
+
+    const candidate = value as Record<string, unknown>
+    return typeof candidate.query === 'string'
+}
+
 async function readJsonFromStdin() {
     const chunks: string[] = []
 
@@ -18,7 +27,12 @@ async function readJsonFromStdin() {
         throw new Error('Missing JSON payload on stdin')
     }
 
-    return JSON.parse(raw) as SearchCliInput
+    const parsed = JSON.parse(raw) as unknown
+    if (!isSearchCliInput(parsed)) {
+        throw new Error('Invalid search payload')
+    }
+
+    return parsed
 }
 
 async function main() {

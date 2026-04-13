@@ -1,0 +1,84 @@
+import Image from 'next/image'
+import Link from 'next/link'
+import { ArrowUpRight, Bot, Layers3, ShieldCheck } from 'lucide-react'
+
+type Project = {
+    title: string
+    description: string
+    image: string
+    href: string
+    icon: React.ReactNode
+    label: string
+}
+
+const projects: Project[] = [
+    {
+        title: 'Library Safety Manager',
+        image: '/images/assets/abstract.jpg',
+        href: 'https://github.com/eirikhanasand/lsm',
+        icon: <ShieldCheck className='h-4 w-4 text-emerald-300' />,
+        label: 'Security',
+        description: 'Package safety checks for Artifactory flows, designed to catch malware risk before dependencies land in a build.'
+    },
+    {
+        title: 'Event Management App',
+        image: '/images/assets/art.jpg',
+        href: '/g',
+        icon: <Layers3 className='h-4 w-4 text-orange-300' />,
+        label: 'Mobile',
+        description: 'A React Native event-management product focused on planning, updates, and keeping activity visible while people move.'
+    },
+    {
+        title: 'Discord Ops Bot',
+        image: '/images/assets/city.jpg',
+        href: '/ai',
+        icon: <Bot className='h-4 w-4 text-sky-300' />,
+        label: 'Automation',
+        description: 'A long-running Discord system for organization workflows and infrastructure management with room to keep growing.'
+    }
+]
+
+export default function Featured() {
+    return (
+        <section className='grid gap-5 p-4 md:p-16'>
+            <div className='grid gap-2'>
+                <h1 className='text-foreground text-2xl font-semibold'>Featured Projects</h1>
+                <p className='max-w-2xl text-sm text-bright/55'>A few things that best capture the current direction of the work: security, tooling, and product systems that can keep evolving.</p>
+            </div>
+            <div className='grid gap-4 md:grid-cols-2'>
+                {projects.map((project, index) => (
+                    <ProjectCard key={project.title} project={project} featured={index === 0} />
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function ProjectCard({ project, featured }: { project: Project, featured: boolean }) {
+    return (
+        <Link
+            href={project.href}
+            target={project.href.startsWith('http') ? '_blank' : undefined}
+            rel={project.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+            className={`group grid overflow-hidden rounded-lg border border-white/10 bg-white/4 transition hover:bg-white/7 ${featured ? 'md:col-span-2 md:grid-cols-[1.15fr_0.85fr]' : ''}`}
+        >
+            <div className='relative min-h-64'>
+                <Image src={project.image} alt={project.title} fill className='object-cover' />
+                <div className='absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent' />
+            </div>
+            <div className='grid gap-4 p-5'>
+                <div className='flex items-center justify-between gap-3'>
+                    <div className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-bright/55'>
+                        {project.icon}
+                        {project.label}
+                    </div>
+                    <ArrowUpRight className='h-4 w-4 text-bright/35 transition group-hover:text-bright/80' />
+                </div>
+                <div className='grid gap-2'>
+                    <h2 className='text-lg font-semibold text-bright'>{project.title}</h2>
+                    <p className='text-sm leading-6 text-bright/65'>{project.description}</p>
+                </div>
+            </div>
+        </Link>
+    )
+}

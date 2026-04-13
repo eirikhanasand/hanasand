@@ -2,6 +2,13 @@ import run from '#db'
 import { spawn } from 'child_process'
 import broadcast from '#utils/ws/broadcast.ts'
 import { testClients } from '#ws'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const currentFile = fileURLToPath(import.meta.url)
+const handlersDir = path.dirname(currentFile)
+const apiSrcDir = path.resolve(handlersDir, '..', '..')
+const k6ScriptPath = path.join(apiSrcDir, 'utils', 'test', 'test.ts')
 
 const defaultStages = [
     { "duration": "5s", "target": 1 },
@@ -47,8 +54,10 @@ export default async function followTest(id: string, rerun?: boolean) {
         '--env', `URL=${test.url}`,
         '--env', `TIMEOUT=${test.timeout}`,
         '--env', `STAGES=${JSON.stringify(stages)}`,
-        'src/utils/test.ts'
-    ])
+        k6ScriptPath
+    ], {
+        cwd: apiSrcDir,
+    })
 
     k6.stdout.on('data', async (data) => {
         const message = data.toString()
