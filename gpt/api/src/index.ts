@@ -105,7 +105,7 @@ function connect() {
 
     const socketUrls = getSocketUrls(wsApi)
 
-    const attemptConnection = (index: number) => {
+    function attemptConnection(index: number) {
         const targetUrl = socketUrls[index]
         if (!targetUrl) {
             connecting = false
@@ -120,7 +120,7 @@ function connect() {
         let opened = false
         let retryScheduled = false
 
-        const scheduleRetry = () => {
+        function scheduleRetry() {
             if (retryScheduled) return
             retryScheduled = true
             connecting = false
@@ -128,7 +128,7 @@ function connect() {
             retryConnection()
         }
 
-        const tryNextUrl = () => {
+        function tryNextUrl() {
             if (index + 1 >= socketUrls.length) {
                 scheduleRetry()
                 return
