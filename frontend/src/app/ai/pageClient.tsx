@@ -34,7 +34,7 @@ export default function AIPageClient({
                             <Sparkles className='h-5 w-5' />
                         </div>
                         <div className='min-w-0'>
-                            <p className='text-[11px] uppercase tracking-[0.28em] text-bright/35'>Hanasand Codex</p>
+                            <p className='text-[11px] uppercase tracking-[0.28em] text-bright/35'>Hanasand</p>
                             <div className='mt-1 flex flex-wrap items-center gap-2'>
                                 <h1 className='text-2xl font-semibold text-bright/92'>Coding workspace</h1>
                                 <span className='rounded-full bg-dark/40 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/45 outline outline-dark'>

@@ -78,7 +78,7 @@ export default function ChatPane(props: ChatPaneProps) {
                             <span>{message.modelName || (message.role === 'tool' ? 'workspace tool' : 'assistant')}</span>
                         </div>
                         {message.role === 'user' ? (
-                            <div className='whitespace-pre-wrap break-words text-sm leading-6'>{message.content}</div>
+                            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6'>{message.content}</div>
                         ) : (
                             <MarkdownBlock content={message.content} />
                         )}
@@ -102,7 +102,7 @@ export default function ChatPane(props: ChatPaneProps) {
 
 function MarkdownBlock({ content }: { content: string }) {
     return (
-        <div className='prose prose-invert max-w-none break-words text-sm leading-6 prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-xl prose-pre:bg-black/30 prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#fd8738]'>
+        <div className='prose prose-invert max-w-none wrap-break-word text-sm leading-6 prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-xl prose-pre:bg-black/30 prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#fd8738]'>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
             </ReactMarkdown>
@@ -125,7 +125,7 @@ function EmptyState() {
             <div>
                 <div className='mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#fd8738]/12 text-[#fd8738] outline outline-[#fd8738]/20'><Bot className='h-6 w-6' /></div>
                 <h2 className='mt-4 text-lg font-semibold text-bright/90'>Start a coding conversation</h2>
-                <p className='mt-2 max-w-xl text-sm text-bright/45'>Attach a share or imported repository on the right, then ask Hanasand Codex to inspect files, run commands, search the web, or help you patch code.</p>
+                <p className='mt-2 max-w-xl text-sm text-bright/45'>Attach a share or imported repository on the right, then ask Hanasand AI to inspect files, run commands, search the web, or help you patch code.</p>
             </div>
         </div>
     )

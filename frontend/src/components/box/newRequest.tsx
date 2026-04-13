@@ -30,7 +30,7 @@ export default function NewRequest({
     const [loading, setLoading] = useState(false)
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
-    const [codexPrompt, setCodexPrompt] = useState('Turn this into a reusable Hanasand Codex task when the integration is ready.')
+    const [codexPrompt, setCodexPrompt] = useState('Turn this into a reusable Hanasand AI task when the integration is ready.')
     const [codexNotice, setCodexNotice] = useState('')
     const inputRef = useRef<HTMLInputElement | null>(null)
 
