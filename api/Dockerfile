@@ -1,8 +1,8 @@
-# Stage 1: Build stage
+# Build stage
 FROM grafana/k6:latest AS k6builder
 
-# Stage 2: Final image
-FROM node:alpine
+# Run image
+FROM oven/bun:alpine
 
 # Install dependencies
 RUN apk add --no-cache varnish git openssh-client
@@ -20,10 +20,10 @@ ENV NODE_ENV=production
 COPY ./default.vcl /etc/varnish/default.vcl
 
 # Copy package.json first for caching
-COPY ./package*.json ./
+COPY ./package.json ./bun.lock ./
 
 # Installs node dependencies
-RUN npm ci --omit=dev
+RUN bun install --frozen-lockfile
 
 # Copy the rest of the API source code
 COPY . .
