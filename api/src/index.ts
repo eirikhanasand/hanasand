@@ -9,6 +9,7 @@ import fp from '#utils/refresh/fp.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 
 const fastify = Fastify({
     logger: true
@@ -50,6 +51,9 @@ process.on('unhandledRejection', reason => {
 async function start() {
     try {
         await ensureSchema()
+        await provisionExistingMailAccounts().catch(error => {
+            fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
+        })
         await fastify.listen({ port, host: '0.0.0.0' })
         void ensureRepositoryUpToDate().catch(error => {
             fastify.log.warn({ error }, 'Failed to warm articles repository')

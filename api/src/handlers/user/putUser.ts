@@ -5,6 +5,7 @@ import checkPwned from '#utils/pwned/checkPwned.ts'
 import login from '#utils/auth/login.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
+import { syncMailPasswordForUser } from '#utils/mail/accounts.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -73,6 +74,9 @@ export default async function putUser(req: FastifyRequest, res: FastifyReply) {
             if (!response.rowCount) {
                 return res.status(400).send({ error: 'User not found.' })
             }
+            const userResult = await run('SELECT name FROM users WHERE id = $1', [id])
+            const displayName = String(userResult.rows[0]?.name || id)
+            await syncMailPasswordForUser(id, displayName, password)
 
             const session = await login({ id, ip, userAgent: String(req.headers['user-agent'] || '') })
             if (!session) {

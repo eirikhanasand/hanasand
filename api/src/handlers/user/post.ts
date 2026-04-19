@@ -4,6 +4,7 @@ import run from '#db'
 import checkPwned from '#utils/pwned/checkPwned.ts'
 import login from '#utils/auth/login.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
+import { ensureMailAccountForUser } from '#utils/mail/accounts.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -69,6 +70,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
 
         const userQuery = await loadSQL('assignUserRole.sql')
         await run(userQuery, [id])
+        await ensureMailAccountForUser(id, name, password)
 
         const rootResult = await run(`SELECT * FROM root`)
         if (rootResult.rows.length <= 1) {

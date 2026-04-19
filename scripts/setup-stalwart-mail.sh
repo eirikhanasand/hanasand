@@ -9,6 +9,7 @@ MAIL_ACCOUNT_PASSWORD="${MAIL_ACCOUNT_PASSWORD:?MAIL_ACCOUNT_PASSWORD must be se
 MAIL_HTTP_LOCAL_PORT="${MAIL_HTTP_LOCAL_PORT:-8081}"
 STALWART_CONTAINER="${STALWART_CONTAINER:-hanasand_mail}"
 STALWART_VOLUME_DIR="${STALWART_VOLUME_DIR:-/home/ubuntu/hanasand/mail/stalwart}"
+ENV_FILE="${ENV_FILE:-/home/ubuntu/hanasand/.env}"
 
 wait_for_http() {
     local attempts=0
@@ -61,6 +62,14 @@ ADMIN_PASSWORD="$(extract_admin_password)"
 if [ -z "${ADMIN_PASSWORD}" ]; then
     echo "Unable to determine the initial Stalwart admin password from container logs."
     exit 1
+fi
+
+if [ -f "${ENV_FILE}" ]; then
+    if grep -q '^MAIL_ADMIN_PASSWORD=' "${ENV_FILE}"; then
+        sed -i "s|^MAIL_ADMIN_PASSWORD=.*|MAIL_ADMIN_PASSWORD=${ADMIN_PASSWORD}|" "${ENV_FILE}"
+    else
+        printf '\nMAIL_ADMIN_PASSWORD=%s\n' "${ADMIN_PASSWORD}" >> "${ENV_FILE}"
+    fi
 fi
 
 if docker exec "${STALWART_CONTAINER}" sh -lc 'command -v stalwart-cli >/dev/null 2>&1'; then

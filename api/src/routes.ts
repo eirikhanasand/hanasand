@@ -73,6 +73,13 @@ import upsertAiMessage from './handlers/ai/upsertMessage.ts'
 import postAiRepository from './handlers/ai/postRepository.ts'
 import getAiModels from './handlers/ai/getModels.ts'
 import importRepository from './handlers/ai/importRepository.ts'
+import getMailOverview from './handlers/mail/getOverview.ts'
+import postSendMail from './handlers/mail/postSend.ts'
+import postMailAction from './handlers/mail/postAction.ts'
+import postMailbox from './handlers/mail/postMailbox.ts'
+import postMailFilter from './handlers/mail/postFilter.ts'
+import deleteMailFilter from './handlers/mail/deleteFilter.ts'
+import getMailBlob from './handlers/mail/getBlob.ts'
 
 /**
  * Defines the routes available in the API.
@@ -193,6 +200,15 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.put('/ai/conversations/:id', putAiConversation)
     fastify.put('/ai/conversations/:id/messages', upsertAiMessage)
     fastify.post('/ai/repositories', postAiRepository)
+
+    // Mail
+    fastify.get('/mail/overview', getMailOverview)
+    fastify.post('/mail/send', postSendMail)
+    fastify.post('/mail/mailboxes', postMailbox)
+    fastify.post('/mail/message/:id/action', postMailAction)
+    fastify.post('/mail/filters', postMailFilter)
+    fastify.delete('/mail/filters/:id', deleteMailFilter)
+    fastify.get('/mail/blob/:mailboxUser/:blobId/:name', getMailBlob)
 
     // Logs
     fastify.get('/logs', getLogs)

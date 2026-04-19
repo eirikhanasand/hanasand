@@ -34,13 +34,20 @@ services:
     build:
       context: ./api
       dockerfile: ./Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
     ports:
       - "${API_PORT:-8080}:8080"
     env_file:
       .env
+    environment:
+      MAIL_INTERNAL_URL: ${MAIL_INTERNAL_URL:-http://stalwart:8080}
+      MAIL_HOST: ${MAIL_HOST:-mail.hanasand.com}
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-hanasand.com}
+      MAIL_ADMIN_USERNAME: ${MAIL_ADMIN_USERNAME:-admin}
+      MAIL_ADMIN_PASSWORD: ${MAIL_ADMIN_PASSWORD:-}
+      MAIL_PRIVILEGED_USERS: ${MAIL_PRIVILEGED_USERS:-admin,administrator,eirik,eirikhanasand}
+      MAIL_IMAP_PORT: ${MAIL_IMAP_PORT:-993}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_MANAGESIEVE_PORT: ${MAIL_MANAGESIEVE_PORT:-4190}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
       interval: 5s
@@ -48,6 +55,11 @@ services:
     networks:
       - hanasandnet
       - pwnednet
+    depends_on:
+      postgres:
+        condition: service_healthy
+      stalwart:
+        condition: service_started
 
   postgres:
     image: postgres:15
