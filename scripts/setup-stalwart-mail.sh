@@ -10,6 +10,10 @@ MAIL_HTTP_LOCAL_PORT="${MAIL_HTTP_LOCAL_PORT:-8081}"
 STALWART_CONTAINER="${STALWART_CONTAINER:-hanasand_mail}"
 STALWART_VOLUME_DIR="${STALWART_VOLUME_DIR:-/home/ubuntu/hanasand/mail/stalwart}"
 ENV_FILE="${ENV_FILE:-/home/ubuntu/hanasand/.env}"
+MAIL_TLS_CERT_SOURCE="${MAIL_TLS_CERT_SOURCE:-/etc/letsencrypt/live/hanasand.com/fullchain.pem}"
+MAIL_TLS_KEY_SOURCE="${MAIL_TLS_KEY_SOURCE:-/etc/letsencrypt/live/hanasand.com/privkey.pem}"
+MAIL_TLS_CERT_TARGET="${MAIL_TLS_CERT_TARGET:-${STALWART_VOLUME_DIR}/certs/fullchain.pem}"
+MAIL_TLS_KEY_TARGET="${MAIL_TLS_KEY_TARGET:-${STALWART_VOLUME_DIR}/certs/privkey.pem}"
 
 wait_for_http() {
     local attempts=0
@@ -72,10 +76,24 @@ if [ -f "${ENV_FILE}" ]; then
     fi
 fi
 
+if [ -f "${MAIL_TLS_CERT_SOURCE}" ] && [ -f "${MAIL_TLS_KEY_SOURCE}" ]; then
+    mkdir -p "$(dirname "${MAIL_TLS_CERT_TARGET}")"
+    sudo cp "${MAIL_TLS_CERT_SOURCE}" "${MAIL_TLS_CERT_TARGET}"
+    sudo cp "${MAIL_TLS_KEY_SOURCE}" "${MAIL_TLS_KEY_TARGET}"
+    sudo chown "${USER}:${USER}" "${MAIL_TLS_CERT_TARGET}" "${MAIL_TLS_KEY_TARGET}"
+    chmod 600 "${MAIL_TLS_CERT_TARGET}" "${MAIL_TLS_KEY_TARGET}"
+fi
+
 if docker exec "${STALWART_CONTAINER}" sh -lc 'command -v stalwart-cli >/dev/null 2>&1'; then
     docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server add-config server.hostname ${MAIL_HOSTNAME}" >/dev/null || true
     docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server add-config http.url https://${MAIL_HOSTNAME}" >/dev/null || true
     docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server reload-config" >/dev/null || true
+    if [ -f "${MAIL_TLS_CERT_TARGET}" ] && [ -f "${MAIL_TLS_KEY_TARGET}" ]; then
+        docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server add-config certificate.default.cert '%{file:/opt/stalwart/certs/fullchain.pem}%'" >/dev/null || true
+        docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server add-config certificate.default.private-key '%{file:/opt/stalwart/certs/privkey.pem}%'" >/dev/null || true
+        docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server add-config certificate.default.default true" >/dev/null || true
+        docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} server reload-certificates" >/dev/null || true
+    fi
 fi
 
 ensure_principal "${MAIL_DOMAIN}" "domain" "$(jq -nc --arg name "${MAIL_DOMAIN}" '{type:"domain",quota:0,name:$name,description:"Hanasand mail domain",secrets:[],emails:[],urls:[],memberOf:[],roles:[],lists:[],members:[],enabledPermissions:[],disabledPermissions:[],externalMembers:[]}')"
