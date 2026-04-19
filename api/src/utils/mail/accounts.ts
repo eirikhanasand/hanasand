@@ -1,7 +1,7 @@
 import run from '#db'
 import { mailConfig } from './config.ts'
 import { decryptMailSecret, encryptMailSecret, generateMailSecret } from './crypto.ts'
-import { addressForUser } from './helpers.ts'
+import { addressForUser, mailboxLocalPartForUser } from './helpers.ts'
 import { createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
 
 type UserRow = {
@@ -39,15 +39,16 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
     await ensureDomainPrincipal()
     const existing = await getMailAccount(userId)
     const secret = preferredSecret || (existing ? decryptMailSecret(existing.mail_password_encrypted) : generateMailSecret())
+    const username = mailboxLocalPartForUser(userId)
     const address = addressForUser(userId)
     let principalId = existing?.principal_id || null
-    const principal = await findPrincipalByName(userId, 'individual')
+    const principal = await findPrincipalByName(username, 'individual')
 
     if (!principal) {
         principalId = await createPrincipal({
             type: 'individual',
             quota: 0,
-            name: userId,
+            name: username,
             description: displayName,
             secrets: [secret],
             emails: [address],
@@ -78,11 +79,11 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             mail_password_encrypted = EXCLUDED.mail_password_encrypted,
             principal_id = EXCLUDED.principal_id,
             updated_at = NOW()
-    `, [userId, userId, address, encryptMailSecret(secret), principalId])
+    `, [userId, username, address, encryptMailSecret(secret), principalId])
 
     return {
         userId,
-        username: userId,
+        username,
         address,
         password: secret,
         principalId,

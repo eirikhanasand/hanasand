@@ -1,8 +1,12 @@
 import type { MailAddress } from './types.ts'
 import { mailConfig } from './config.ts'
 
+export function mailboxLocalPartForUser(userId: string) {
+    return mailConfig.userAliases.get(userId) || userId
+}
+
 export function addressForUser(userId: string) {
-    return `${userId}@${mailConfig.domain}`
+    return `${mailboxLocalPartForUser(userId)}@${mailConfig.domain}`
 }
 
 export function formatAddressList(addresses: MailAddress[]) {
