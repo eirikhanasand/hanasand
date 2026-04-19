@@ -31,6 +31,12 @@ extract_admin_password() {
     docker logs "${STALWART_CONTAINER}" 2>&1 | sed -n "s/.*password '\([^']*\)'.*/\1/p" | tail -n 1
 }
 
+extract_admin_password_from_env() {
+    if [ -f "${ENV_FILE}" ]; then
+        sed -n 's/^MAIL_ADMIN_PASSWORD=//p' "${ENV_FILE}" | tail -n 1
+    fi
+}
+
 api() {
     local method="$1"
     local path="$2"
@@ -64,7 +70,11 @@ wait_for_http
 
 ADMIN_PASSWORD="$(extract_admin_password)"
 if [ -z "${ADMIN_PASSWORD}" ]; then
-    echo "Unable to determine the initial Stalwart admin password from container logs."
+    ADMIN_PASSWORD="$(extract_admin_password_from_env)"
+fi
+
+if [ -z "${ADMIN_PASSWORD}" ]; then
+    echo "Unable to determine the Stalwart admin password from container logs or ${ENV_FILE}."
     exit 1
 fi
 
