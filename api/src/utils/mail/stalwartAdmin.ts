@@ -1,6 +1,6 @@
 import { requireMailAdminConfig, mailConfig } from './config.ts'
 
-type AdminPatch =
+export type AdminPatch =
     | { action: 'set', field: string, value: unknown }
     | { action: 'addItem', field: string, value: unknown }
     | { action: 'removeItem', field: string, value: unknown }
@@ -11,6 +11,7 @@ export type PrincipalRecord = {
     type: string
     description?: string
     emails?: string[]
+    secrets?: string[]
     roles?: string[]
 }
 

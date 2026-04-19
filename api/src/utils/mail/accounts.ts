@@ -2,7 +2,7 @@ import run from '#db'
 import { mailConfig } from './config.ts'
 import { decryptMailSecret, encryptMailSecret, generateMailSecret } from './crypto.ts'
 import { addressForUser, mailboxLocalPartForUser } from './helpers.ts'
-import { createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
+import { type AdminPatch, createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
 
 type UserRow = {
     id: string
@@ -38,11 +38,15 @@ export async function provisionExistingMailAccounts() {
 export async function ensureMailAccountForUser(userId: string, displayName: string, preferredSecret?: string) {
     await ensureDomainPrincipal()
     const existing = await getMailAccount(userId)
-    const secret = preferredSecret || (existing ? decryptMailSecret(existing.mail_password_encrypted) : generateMailSecret())
     const username = mailboxLocalPartForUser(userId)
     const address = addressForUser(userId)
     let principalId = existing?.principal_id || null
     const principal = await findPrincipalByName(username, 'individual')
+    const inheritedSecret = principal?.secrets?.find(secret => !secret.startsWith('otpauth://')) || null
+    const secret = preferredSecret
+        || (existing ? decryptMailSecret(existing.mail_password_encrypted) : null)
+        || inheritedSecret
+        || generateMailSecret()
 
     if (!principal) {
         principalId = await createPrincipal({
@@ -63,11 +67,17 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
         })
     } else {
         principalId = principal.id
-        await patchPrincipal(principal.id, [
+        const patches: AdminPatch[] = [
             { action: 'set', field: 'description', value: displayName },
             { action: 'set', field: 'secrets', value: [secret] },
             { action: 'set', field: 'emails', value: [address] },
-        ])
+        ]
+
+        if (!preferredSecret && inheritedSecret && !existing) {
+            patches.splice(1, 1)
+        }
+
+        await patchPrincipal(principal.id, patches)
     }
 
     await run(`
