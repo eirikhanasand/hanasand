@@ -40,3 +40,6 @@ next-env.d.ts
 
 # gpts
 /gpt/models/*
+
+# mail runtime data
+/mail/stalwart/

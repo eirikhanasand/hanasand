@@ -1,5 +1,5 @@
 import parseCookie from '@/utils/cookies/parseCookie'
-import { FileWarning, SquareChartGantt } from 'lucide-react'
+import { FileWarning, Inbox, SquareChartGantt } from 'lucide-react'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 
@@ -23,6 +23,12 @@ export default async function GreetingNavButtons({ id }: { id: string }) {
                     <h1 className='font-semibold text-base self-center'>Logs</h1>
                 </Link>
             </div>}
+            <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
+                <Link href='/dashboard/mail' className='flex justify-between w-full items-center gap-2'>
+                    <Inbox className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <h1 className='font-semibold text-base self-center'>Mail</h1>
+                </Link>
+            </div>
             <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2'>
                 <Link href={`/profile/${id}`} className='flex justify-between w-full group cursor-pointer items-center'>
                     <div className='user-icon' />

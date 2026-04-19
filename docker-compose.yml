@@ -12,6 +12,11 @@ services:
       .env
     environment:
       FRONTEND_INTERNAL_API: ${FRONTEND_INTERNAL_API:-http://api:8080/api}
+      MAIL_JMAP_INTERNAL_URL: ${MAIL_JMAP_INTERNAL_URL:-http://stalwart:8080}
+      MAIL_PUBLIC_BASE_URL: ${MAIL_PUBLIC_BASE_URL:-https://mail.hanasand.com}
+      MAIL_INBOX_USERNAME: ${MAIL_INBOX_USERNAME:-eirik}
+      MAIL_INBOX_ADDRESS: ${MAIL_INBOX_ADDRESS:-eirik@hanasand.com}
+      MAIL_INBOX_PASSWORD: ${MAIL_INBOX_PASSWORD:-}
     ports:
       - "3000:3000"
     healthcheck:
@@ -63,6 +68,25 @@ services:
       test: ["CMD-SHELL", "pg_isready -U hanasand -d hanasand"]
       interval: 5s
       retries: 5
+    networks:
+      - hanasandnet
+
+  stalwart:
+    image: stalwartlabs/stalwart:latest
+    container_name: hanasand_mail
+    mem_limit: 1g
+    cpus: "2.0"
+    restart: always
+    volumes:
+      - ./mail/stalwart:/opt/stalwart
+    ports:
+      - "127.0.0.1:${MAIL_HTTP_LOCAL_PORT:-8081}:8080"
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "143:143"
+      - "993:993"
+      - "4190:4190"
     networks:
       - hanasandnet
 
