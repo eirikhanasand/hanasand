@@ -103,11 +103,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     return (
         <div className='grid gap-4 px-6 py-4 md:px-16 lg:px-32'>
-            <section className='mail-panel glass-panel relative overflow-hidden rounded-[2rem] p-6'>
+            <section className='mail-panel glass-panel relative overflow-hidden rounded-4xl p-6'>
                 <MailSketch />
                 <div className='relative z-10 flex flex-wrap items-start justify-between gap-4'>
                     <div>
-                        <p className='text-xs uppercase tracking-[0.3em] text-orange-200/70'>Private post office</p>
+                        <p className='text-xs uppercase tracking-[0.3em] text-orange-200/70'>Mail</p>
                         <h1 className='mt-2 text-3xl font-semibold tracking-[-0.05em] text-bright'>Mail</h1>
                         <p className='mt-2 max-w-2xl text-sm leading-7 text-bright/50'>
                             Letters, parcels, folders, rules, replies, forwarding, and outside client access in the same quiet room.
@@ -116,7 +116,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     <div className='flex flex-wrap items-center gap-2'>
                         {overview?.actor.canAccessAnyMailbox && (
                             <select
-                                className='mail-input min-w-[10rem]'
+                                className='mail-input min-w-40'
                                 value={overview.mailboxUser}
                                 onChange={(event) => void load({ mailboxUser: event.target.value, mailboxId: null, messageId: null })}
                             >
@@ -185,7 +185,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
 
                     {overview && (
-                        <div className='mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-sm text-bright/65'>
+                        <div className='mt-6 rounded-3xl border border-white/10 bg-white/3 p-4 text-sm text-bright/65'>
                             <p className='text-xs uppercase tracking-[0.24em] text-bright/35'>Client settings</p>
                             <p className='mt-3'>IMAP: `{overview.settings.imapHost}:{overview.settings.imapPort}`</p>
                             <p>SMTP: `{overview.settings.smtpHost}:{overview.settings.smtpPort}`</p>
@@ -196,7 +196,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </div>
                     )}
 
-                    <div className='mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-4'>
+                    <div className='mt-6 rounded-3xl border border-white/10 bg-white/3 p-4'>
                         <div className='flex items-center gap-2'>
                             <FolderInput className='h-4 w-4 text-orange-300' />
                             <h3 className='font-semibold text-bright'>Rules</h3>
@@ -254,7 +254,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
                         <div className='mt-4 grid gap-2'>
                             {(overview?.filters || []).map(rule => (
-                                <div key={rule.id} className='rounded-2xl border border-white/8 bg-white/[0.02] p-3 text-sm text-bright/65'>
+                                <div key={rule.id} className='rounded-2xl border border-white/8 bg-white/2 p-3 text-sm text-bright/65'>
                                     <div className='flex items-center justify-between gap-3'>
                                         <div>
                                             <p className='font-semibold text-bright'>{rule.name}</p>
@@ -346,10 +346,10 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 </div>
                             </div>
 
-                            <div className='mt-4 rounded-3xl border border-white/10 bg-white/[0.03] p-4'>
+                            <div className='mt-4 rounded-3xl border border-white/10 bg-white/3 p-4'>
                                 <div className='flex flex-wrap items-center gap-2'>
                                     <select
-                                        className='mail-input min-w-[14rem] flex-1'
+                                        className='mail-input min-w-56 flex-1'
                                         value={moveTargetMailboxId}
                                         onChange={event => setMoveTargetMailboxId(event.target.value)}
                                     >
@@ -392,7 +392,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
                             <div className='mt-5 grid gap-4'>
                                 {!!selectedMessage.attachments.length && (
-                                    <div className='rounded-3xl border border-white/10 bg-white/[0.03] p-4'>
+                                    <div className='rounded-3xl border border-white/10 bg-white/3 p-4'>
                                         <div className='flex items-center gap-2 text-sm font-semibold text-bright'>
                                             <Paperclip className='h-4 w-4 text-orange-300' />
                                             Attachments
@@ -406,12 +406,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 {selectedMessage.htmlBody ? (
                                     <iframe
                                         title='HTML mail'
-                                        className='min-h-[28rem] w-full rounded-3xl border border-white/10 bg-white'
+                                        className='min-h-112 w-full rounded-3xl border border-white/10 bg-white/3'
                                         sandbox='allow-popups allow-popups-to-escape-sandbox'
                                         srcDoc={renderedHtml}
                                     />
                                 ) : (
-                                    <article className='mail-body rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm leading-7 whitespace-pre-wrap text-bright/82'>
+                                    <article className='mail-body rounded-3xl border border-white/10 bg-white/3 p-5 text-sm leading-7 whitespace-pre-wrap text-bright/82'>
                                         {selectedMessage.textBody}
                                     </article>
                                 )}
@@ -464,9 +464,9 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
     }
 
     return (
-        <div className='fixed inset-0 z-[1200] grid place-items-center bg-black/55 p-4 backdrop-blur-sm'>
+        <div className='fixed inset-0 z-1200 grid place-items-center bg-black/55 p-4 backdrop-blur-sm'>
             <form
-                className='glass-panel w-full max-w-3xl rounded-[2rem] p-6'
+                className='glass-panel w-full max-w-3xl rounded-lg p-6'
                 onSubmit={async (event) => {
                     event.preventDefault()
                     setSubmitting(true)
@@ -490,8 +490,8 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     <input className='mail-input' placeholder='CC' value={state.cc} onChange={event => patch({ cc: event.target.value })} />
                     <input className='mail-input' placeholder='BCC' value={state.bcc} onChange={event => patch({ bcc: event.target.value })} />
                     <input className='mail-input' placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
-                    <textarea className='mail-input min-h-[14rem] resize-y' placeholder='Write your message...' value={state.body} onChange={event => patch({ body: event.target.value })} />
-                    <label className='rounded-2xl border border-dashed border-white/15 p-4 text-sm text-bright/55 hover:bg-white/[0.03]'>
+                    <textarea className='mail-input min-h-56 resize-y' placeholder='Write your message...' value={state.body} onChange={event => patch({ body: event.target.value })} />
+                    <label className='rounded-2xl border border-dashed border-white/15 p-4 text-sm text-bright/55 hover:bg-white/3'>
                         <span className='inline-flex items-center gap-2'><Paperclip className='h-4 w-4' /> Add attachments</span>
                         <input
                             type='file'
@@ -509,7 +509,7 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     {!!state.attachments.length && (
                         <div className='grid gap-2 md:grid-cols-2'>
                             {state.attachments.map((attachment, index) => (
-                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-bright/65'>
+                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/3 p-3 text-sm text-bright/65'>
                                     <div className='flex items-center justify-between gap-3'>
                                         <div>
                                             <p className='font-semibold text-bright'>{attachment.name}</p>
@@ -638,7 +638,7 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
     const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
     if (attachment.type.startsWith('image/')) {
         return (
-            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/[0.03] p-3'>
+            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-3'>
                 <img src={url} alt={attachment.name} className='h-48 w-full rounded-xl object-cover' />
                 <p className='mt-2 text-sm font-semibold text-bright'>{attachment.name}</p>
             </a>
@@ -647,8 +647,8 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
 
     if (attachment.type === 'application/pdf') {
         return (
-            <div className='rounded-2xl border border-white/10 bg-white/[0.03] p-3'>
-                <iframe title={attachment.name} src={url} className='h-64 w-full rounded-xl bg-white' />
+            <div className='rounded-2xl border border-white/10 bg-white/3 p-3'>
+                <iframe title={attachment.name} src={url} className='h-64 w-full rounded-xl bg-white/3' />
                 <a href={url} target='_blank' rel='noreferrer' className='mt-2 inline-flex items-center gap-2 text-sm font-semibold text-bright'>
                     {attachment.name} <ArrowRight className='h-4 w-4' />
                 </a>
@@ -657,7 +657,7 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
     }
 
     return (
-        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-bright/65'>
+        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-3 text-sm text-bright/65'>
             <p className='font-semibold text-bright'>{attachment.name}</p>
             <p className='mt-1 text-xs text-bright/40'>{attachment.type} • {prettyBytes(attachment.size)}</p>
         </a>
