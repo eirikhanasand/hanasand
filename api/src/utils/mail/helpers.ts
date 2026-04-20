@@ -9,6 +9,17 @@ export function addressForUser(userId: string) {
     return `${mailboxLocalPartForUser(userId)}@${mailConfig.domain}`
 }
 
+export function addressesForUser(userId: string) {
+    const addresses = new Set<string>([addressForUser(userId)])
+    if (userId === mailConfig.systemMailboxOwner) {
+        for (const localPart of mailConfig.systemAliasLocalParts) {
+            addresses.add(`${localPart}@${mailConfig.domain}`)
+        }
+    }
+
+    return [...addresses]
+}
+
 export function formatAddressList(addresses: MailAddress[]) {
     return addresses.map(address => address.name ? `${address.name} <${address.email}>` : address.email).join(', ')
 }

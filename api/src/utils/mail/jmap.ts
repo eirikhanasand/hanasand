@@ -192,7 +192,6 @@ export async function sendMessage(params: {
         bcc,
         replyTo,
         subject,
-        keywords: { '$draft': true },
         mailboxIds: sentMailboxId ? { [sentMailboxId]: true } : undefined,
         textBody: [{ partId: 'text', type: 'text/plain' }],
         bodyValues,

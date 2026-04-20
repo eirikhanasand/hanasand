@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
     Archive,
-    ArrowRight,
+    Clock3,
     CornerUpLeft,
     FolderInput,
     Forward,
@@ -11,9 +11,10 @@ import {
     Mail,
     MailPlus,
     Paperclip,
-    RefreshCw,
     Reply,
+    Search,
     Send,
+    Settings2,
     ShieldAlert,
     Star,
     Trash2,
@@ -28,7 +29,7 @@ import {
     sendMail,
     type DraftAttachment,
 } from '@/utils/mail/client'
-import type { MailAddress, MailAttachment, MailMessage, MailOverview } from '@/utils/mail/types'
+import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailOverview } from '@/utils/mail/types'
 
 type Props = {
     mailboxUser?: string | null
@@ -58,10 +59,18 @@ const emptyComposer: ComposerState = {
     attachments: [],
 }
 
+const POLL_INTERVAL_MS = 30_000
+const STALE_AFTER_MS = 5 * 60_000
+
+const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-medium text-bright/78 transition hover:border-white/18 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45'
+const iconButton = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-bright/72 transition hover:border-white/18 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45'
+const subtleInput = 'h-8 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-[12px] text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05]'
+
 export default function MailWorkspace({ mailboxUser }: Props) {
     const [overview, setOverview] = useState<MailOverview | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [backgroundIssue, setBackgroundIssue] = useState('')
     const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null)
     const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
     const [moveTargetMailboxId, setMoveTargetMailboxId] = useState('')
@@ -69,25 +78,52 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [creatingMailbox, setCreatingMailbox] = useState(false)
     const [creatingFilter, setCreatingFilter] = useState(false)
     const [movingMessage, setMovingMessage] = useState(false)
+    const [query, setQuery] = useState('')
+    const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
+    const [now, setNow] = useState(() => Date.now())
 
-    async function load(params: { mailboxId?: string | null, messageId?: string | null, mailboxUser?: string | null } = {}) {
+    async function load(params: {
+        mailboxId?: string | null
+        messageId?: string | null
+        mailboxUser?: string | null
+        silent?: boolean
+    } = {}) {
+        const silent = Boolean(params.silent)
+
         try {
-            setLoading(true)
-            setError('')
+            if (!silent) {
+                setLoading(true)
+                setError('')
+            }
+
             const next = await fetchMailOverview({
                 mailboxUser: params.mailboxUser ?? mailboxUser ?? undefined,
                 mailboxId: params.mailboxId ?? selectedMailboxId,
                 messageId: params.messageId ?? selectedMessageId,
             })
+
             setOverview(next)
             setSelectedMailboxId(next.selectedMailboxId)
-            const nextSelectedMessageId = next.selectedMessage?.id || next.messages[0]?.id || null
+            const nextSelectedMessageId = params.messageId
+                || next.selectedMessage?.id
+                || next.messages.find(message => message.id === selectedMessageId)?.id
+                || next.messages[0]?.id
+                || null
             setSelectedMessageId(nextSelectedMessageId)
             setMoveTargetMailboxId('')
+            setBackgroundIssue('')
+            setLastSuccessAt(Date.now())
         } catch (cause) {
-            setError(cause instanceof Error ? cause.message : 'Unable to load the mailbox.')
+            const message = cause instanceof Error ? cause.message : 'Unable to load the mailbox.'
+            if (silent) {
+                setBackgroundIssue(message)
+            } else {
+                setError(message)
+            }
         } finally {
-            setLoading(false)
+            if (!silent) {
+                setLoading(false)
+            }
         }
     }
 
@@ -95,328 +131,421 @@ export default function MailWorkspace({ mailboxUser }: Props) {
         void load({ mailboxUser })
     }, [mailboxUser])
 
-    const selectedMessage = overview?.selectedMessage || null
+    useEffect(() => {
+        const poll = window.setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                void load({ silent: true })
+            }
+            setNow(Date.now())
+        }, POLL_INTERVAL_MS)
+
+        const onVisibilityChange = () => {
+            setNow(Date.now())
+            if (document.visibilityState === 'visible') {
+                void load({ silent: true })
+            }
+        }
+
+        document.addEventListener('visibilitychange', onVisibilityChange)
+        return () => {
+            window.clearInterval(poll)
+            document.removeEventListener('visibilitychange', onVisibilityChange)
+        }
+    }, [mailboxUser, selectedMailboxId, selectedMessageId])
+
+    const filteredMessages = useMemo(() => {
+        const needle = query.trim().toLowerCase()
+        if (!needle) {
+            return overview?.messages || []
+        }
+
+        return (overview?.messages || []).filter(message => {
+            const haystack = [
+                message.subject,
+                message.preview,
+                message.from.map(from => from.name || from.email).join(' '),
+            ].join(' ').toLowerCase()
+            return haystack.includes(needle)
+        })
+    }, [overview?.messages, query])
+
+    const selectedMessage = useMemo(() => {
+        if (!overview) {
+            return null
+        }
+
+        if (overview.selectedMessage?.id === selectedMessageId) {
+            return overview.selectedMessage
+        }
+
+        return overview.selectedMessage
+    }, [overview, selectedMessageId])
+
     const renderedHtml = useMemo(
         () => selectedMessage ? withInlineAttachments(selectedMessage, overview?.mailboxUser || '') : '',
         [selectedMessage, overview?.mailboxUser]
     )
 
+    const showStaleWarning = Boolean(lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
+
     return (
-        <div className='grid gap-4 px-6 py-4 md:px-16 lg:px-32'>
-            <section className='mail-panel glass-panel relative overflow-hidden rounded-4xl p-6'>
-                <MailSketch />
-                <div className='relative z-10 flex flex-wrap items-start justify-between gap-4'>
-                    <div>
-                        <p className='text-xs uppercase tracking-[0.3em] text-orange-200/70'>Mail</p>
-                        <h1 className='mt-2 text-3xl font-semibold tracking-[-0.05em] text-bright'>Mail</h1>
-                        <p className='mt-2 max-w-2xl text-sm leading-7 text-bright/50'>
-                            Letters, parcels, folders, rules, replies, forwarding, and outside client access in the same quiet room.
-                        </p>
-                    </div>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        {overview?.actor.canAccessAnyMailbox && (
-                            <select
-                                className='mail-input min-w-40'
-                                value={overview.mailboxUser}
-                                onChange={(event) => void load({ mailboxUser: event.target.value, mailboxId: null, messageId: null })}
-                            >
-                                {overview.accessibleAccounts.map(account => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.id}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                        <button className='mail-button' onClick={() => setComposer({ ...emptyComposer, open: true })}>
-                            <MailPlus className='h-4 w-4' /> Compose
-                        </button>
-                        <button className='mail-button-secondary' onClick={() => void load()}>
-                            <RefreshCw className='h-4 w-4' /> Refresh
-                        </button>
-                    </div>
-                </div>
-            </section>
+        <div className='grid gap-3 px-4 py-4 md:px-8 lg:px-12'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
+                    <button
+                        className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20'
+                        onClick={() => setComposer({ ...emptyComposer, open: true })}
+                    >
+                        <MailPlus className='h-3.5 w-3.5' />
+                        Compose
+                    </button>
 
-            {error && <div className='glass-card rounded-3xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100'>{error}</div>}
-
-            <div className='grid gap-4 xl:grid-cols-[280px_minmax(280px,360px)_minmax(0,1fr)]'>
-                <aside className='glass-card rounded-3xl p-4'>
-                    <div className='flex items-center justify-between'>
-                        <h2 className='text-lg font-semibold text-bright'>Folders</h2>
-                        <button
-                            className='rounded-full border border-white/10 px-3 py-1 text-xs text-bright/60 hover:bg-white/6'
-                            onClick={async () => {
-                                const name = window.prompt('New mailbox name')
-                                if (!name?.trim()) {
-                                    return
-                                }
-
-                                setCreatingMailbox(true)
-                                try {
-                                    await createMailbox({ mailboxUser: overview?.mailboxUser, name: name.trim() })
-                                    await load()
-                                } catch (cause) {
-                                    setError(cause instanceof Error ? cause.message : 'Unable to create mailbox.')
-                                } finally {
-                                    setCreatingMailbox(false)
-                                }
-                            }}
-                            disabled={creatingMailbox}
+                    {overview?.actor.canAccessAnyMailbox && (
+                        <select
+                            className={`${subtleInput} min-w-36`}
+                            value={overview.mailboxUser}
+                            onChange={(event) => void load({ mailboxUser: event.target.value, mailboxId: null, messageId: null })}
                         >
-                            + Folder
-                        </button>
-                    </div>
-
-                    <div className='mt-4 grid gap-2'>
-                        {overview?.mailboxes.map(mailbox => (
-                            <button
-                                key={mailbox.id}
-                                className={`mailbox-item ${selectedMailboxId === mailbox.id ? 'mailbox-item-active' : ''}`}
-                                onClick={() => void load({ mailboxId: mailbox.id, messageId: null })}
-                            >
-                                <span className='flex items-center gap-2'>
-                                    {iconForMailbox(mailbox.role)}
-                                    {mailbox.name}
-                                </span>
-                                <span className='text-xs text-bright/40'>{mailbox.unreadEmails || 0}</span>
-                            </button>
-                        ))}
-                        {!overview?.mailboxes.length && !loading && <div className='text-sm text-bright/45'>No mailboxes yet.</div>}
-                    </div>
-
-                    {overview && (
-                        <div className='mt-6 rounded-3xl border border-white/10 bg-white/3 p-4 text-sm text-bright/65'>
-                            <p className='text-xs uppercase tracking-[0.24em] text-bright/35'>Client settings</p>
-                            <p className='mt-3'>IMAP: `{overview.settings.imapHost}:{overview.settings.imapPort}`</p>
-                            <p>SMTP: `{overview.settings.smtpHost}:{overview.settings.smtpPort}`</p>
-                            <p>ManageSieve: `{overview.settings.host}:{overview.settings.managesievePort}`</p>
-                            <p className='mt-2'>Username: `{overview.settings.username}`</p>
-                            <p>Address: `{overview.settings.address}`</p>
-                            <p>Password: `{overview.mailPassword}`</p>
-                        </div>
+                            {overview.accessibleAccounts.map(account => (
+                                <option key={account.id} value={account.id}>
+                                    {account.id}
+                                </option>
+                            ))}
+                        </select>
                     )}
 
-                    <div className='mt-6 rounded-3xl border border-white/10 bg-white/3 p-4'>
-                        <div className='flex items-center gap-2'>
-                            <FolderInput className='h-4 w-4 text-orange-300' />
-                            <h3 className='font-semibold text-bright'>Rules</h3>
-                        </div>
-                        <form
-                            className='mt-4 grid gap-2'
-                            onSubmit={async (event) => {
-                                event.preventDefault()
-                                if (!overview) {
-                                    return
-                                }
+                    <div className='relative min-w-52 flex-1 max-w-sm'>
+                        <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-bright/30' />
+                        <input
+                            value={query}
+                            onChange={event => setQuery(event.target.value)}
+                            placeholder='Search this mailbox'
+                            className={`${subtleInput} w-full pl-8`}
+                        />
+                    </div>
+                </div>
 
-                                const formData = new FormData(event.currentTarget)
-                                setCreatingFilter(true)
-                                try {
-                                    await createFilter({
-                                        mailboxUser: overview.mailboxUser,
-                                        name: String(formData.get('name') || 'Rule'),
-                                        criteria: {
-                                            field: String(formData.get('field') || 'subject') as 'from' | 'subject' | 'body' | 'senderDomain',
-                                            contains: String(formData.get('contains') || ''),
-                                        },
-                                        action: {
-                                            type: 'move',
-                                            mailboxName: String(formData.get('mailboxName') || 'Archive'),
-                                            markRead: Boolean(formData.get('markRead')),
-                                        },
-                                    })
-                                    event.currentTarget.reset()
-                                    await load()
-                                } catch (cause) {
-                                    setError(cause instanceof Error ? cause.message : 'Unable to save filter.')
-                                } finally {
-                                    setCreatingFilter(false)
-                                }
-                            }}
-                        >
-                            <input name='name' className='mail-input' placeholder='Archive invoices' required />
-                            <select name='field' className='mail-input'>
-                                <option value='subject'>Subject</option>
-                                <option value='from'>From</option>
-                                <option value='body'>Body</option>
-                                <option value='senderDomain'>Sender domain</option>
-                            </select>
-                            <input name='contains' className='mail-input' placeholder='contains...' required />
-                            <input name='mailboxName' className='mail-input' placeholder='target mailbox' required />
-                            <label className='flex items-center gap-2 text-sm text-bright/55'>
-                                <input type='checkbox' name='markRead' />
-                                mark as read after move
-                            </label>
-                            <button className='mail-button justify-center' disabled={creatingFilter}>
-                                <FolderInput className='h-4 w-4' /> Save filter
+                {showStaleWarning && (
+                    <div className='inline-flex items-center gap-1.5 text-[11px] text-red-200/85'>
+                        <Clock3 className='h-3.5 w-3.5' />
+                        Updated {formatRelativeTime(lastSuccessAt!)} ago
+                    </div>
+                )}
+            </div>
+
+            {error && (
+                <div className='rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-100'>
+                    {error}
+                </div>
+            )}
+
+            {showStaleWarning && backgroundIssue && (
+                <div className='rounded-2xl border border-red-400/20 bg-red-500/8 px-3 py-2 text-[11px] text-red-100/90'>
+                    Background sync paused. Last successful update was {formatRelativeTime(lastSuccessAt!)} ago.
+                </div>
+            )}
+
+            <div className='grid gap-3 xl:grid-cols-[220px_320px_minmax(0,1fr)]'>
+                <aside
+                    className='relative overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.045]
+                        p-3 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl'
+                >
+                    <MailSketch />
+                    <div className='relative z-10'>
+                        <div className='flex items-center justify-between pb-2'>
+                            <div>
+                                <p className='text-[10px] uppercase tracking-[0.28em] text-bright/35'>Folders</p>
+                                <p className='mt-1 text-[11px] text-bright/50'>{overview?.mailboxAddress || 'Mailbox'}</p>
+                            </div>
+                            <button
+                                className={iconButton}
+                                disabled={creatingMailbox}
+                                title='Create folder'
+                                onClick={async () => {
+                                    const name = window.prompt('New mailbox name')
+                                    if (!name?.trim()) {
+                                        return
+                                    }
+
+                                    setCreatingMailbox(true)
+                                    try {
+                                        await createMailbox({ mailboxUser: overview?.mailboxUser, name: name.trim() })
+                                        await load()
+                                    } catch (cause) {
+                                        setError(cause instanceof Error ? cause.message : 'Unable to create mailbox.')
+                                    } finally {
+                                        setCreatingMailbox(false)
+                                    }
+                                }}
+                            >
+                                <FolderInput className='h-3.5 w-3.5' />
                             </button>
-                        </form>
+                        </div>
 
-                        <div className='mt-4 grid gap-2'>
-                            {(overview?.filters || []).map(rule => (
-                                <div key={rule.id} className='rounded-2xl border border-white/8 bg-white/2 p-3 text-sm text-bright/65'>
-                                    <div className='flex items-center justify-between gap-3'>
-                                        <div>
-                                            <p className='font-semibold text-bright'>{rule.name}</p>
-                                            <p className='mt-1 text-xs text-bright/45'>
-                                                when `{rule.criteria.field}` contains `{rule.criteria.contains}` move to `{rule.action.mailboxName}`
-                                            </p>
-                                        </div>
-                                        <button
-                                            className='text-xs text-red-200/80 hover:text-red-100'
-                                            onClick={async () => {
-                                                try {
-                                                    await deleteFilter(rule.id, overview?.mailboxUser)
-                                                    await load()
-                                                } catch (cause) {
-                                                    setError(cause instanceof Error ? cause.message : 'Unable to delete filter.')
-                                                }
-                                            }}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
+                        <div className='grid gap-1.5'>
+                            {overview?.mailboxes.map(mailbox => (
+                                <button
+                                    key={mailbox.id}
+                                    onClick={() => {
+                                        setSelectedMailboxId(mailbox.id)
+                                        void load({ mailboxId: mailbox.id, messageId: null })
+                                    }}
+                                    className={`flex w-full items-center justify-between rounded-2xl border px-2.5 py-2 text-left text-[12px] transition ${
+                                        selectedMailboxId === mailbox.id
+                                            ? 'border-orange-300/30 bg-orange-300/10 text-bright'
+                                            : 'border-transparent text-bright/70 hover:border-white/10 hover:bg-white/[0.04] hover:text-bright'
+                                    }`}
+                                >
+                                    <span className='inline-flex items-center gap-2 truncate'>
+                                        {iconForMailbox(mailbox.role)}
+                                        <span className='truncate'>{mailbox.name}</span>
+                                    </span>
+                                    <span className='text-[10px] text-bright/35'>{mailbox.unreadEmails || 0}</span>
+                                </button>
                             ))}
                         </div>
+
+                        <details className='mt-3 rounded-2xl border border-white/8 bg-white/[0.025]'>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
+                                <span className='inline-flex items-center gap-1.5'><FolderInput className='h-3.5 w-3.5' /> Rules</span>
+                                <span className='text-bright/28'>{overview?.filters.length || 0}</span>
+                            </summary>
+                            <div className='border-t border-white/8 px-3 py-3'>
+                                <form
+                                    className='grid gap-2'
+                                    onSubmit={async (event) => {
+                                        event.preventDefault()
+                                        if (!overview) {
+                                            return
+                                        }
+
+                                        const formData = new FormData(event.currentTarget)
+                                        setCreatingFilter(true)
+                                        try {
+                                            await createFilter({
+                                                mailboxUser: overview.mailboxUser,
+                                                name: String(formData.get('name') || 'Rule'),
+                                                criteria: {
+                                                    field: String(formData.get('field') || 'subject') as 'from' | 'subject' | 'body' | 'senderDomain',
+                                                    contains: String(formData.get('contains') || ''),
+                                                },
+                                                action: {
+                                                    type: 'move',
+                                                    mailboxName: String(formData.get('mailboxName') || 'Archive'),
+                                                    markRead: Boolean(formData.get('markRead')),
+                                                },
+                                            })
+                                            event.currentTarget.reset()
+                                            await load()
+                                        } catch (cause) {
+                                            setError(cause instanceof Error ? cause.message : 'Unable to save filter.')
+                                        } finally {
+                                            setCreatingFilter(false)
+                                        }
+                                    }}
+                                >
+                                    <input name='name' required placeholder='Invoice filing' className={`${subtleInput} w-full`} />
+                                    <select name='field' className={`${subtleInput} w-full`}>
+                                        <option value='subject'>Subject</option>
+                                        <option value='from'>From</option>
+                                        <option value='body'>Body</option>
+                                        <option value='senderDomain'>Sender domain</option>
+                                    </select>
+                                    <input name='contains' required placeholder='contains...' className={`${subtleInput} w-full`} />
+                                    <input name='mailboxName' required placeholder='target folder' className={`${subtleInput} w-full`} />
+                                    <label className='inline-flex items-center gap-2 text-[11px] text-bright/52'>
+                                        <input type='checkbox' name='markRead' className='h-3.5 w-3.5 rounded border-white/15 bg-transparent' />
+                                        mark read after moving
+                                    </label>
+                                    <button className={`${toolbarButton} justify-center`} disabled={creatingFilter}>
+                                        Save rule
+                                    </button>
+                                </form>
+
+                                {!!overview?.filters.length && (
+                                    <div className='mt-2 grid gap-1.5'>
+                                        {overview.filters.map(rule => (
+                                            <div key={rule.id} className='rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'>
+                                                <div className='flex items-start justify-between gap-2'>
+                                                    <div className='min-w-0'>
+                                                        <p className='truncate text-[11px] font-medium text-bright/85'>{rule.name}</p>
+                                                        <p className='mt-1 text-[10px] leading-4 text-bright/42'>
+                                                            {rule.criteria.field} contains {rule.criteria.contains} → {rule.action.mailboxName}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        className='text-[10px] text-red-200/75 hover:text-red-100'
+                                                        onClick={async () => {
+                                                            try {
+                                                                await deleteFilter(rule.id, overview.mailboxUser)
+                                                                await load()
+                                                            } catch (cause) {
+                                                                setError(cause instanceof Error ? cause.message : 'Unable to delete filter.')
+                                                            }
+                                                        }}
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </details>
+
+                        <details className='mt-2 rounded-2xl border border-white/8 bg-white/[0.025]'>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
+                                <span className='inline-flex items-center gap-1.5'><Settings2 className='h-3.5 w-3.5' /> Client access</span>
+                                <span className='text-bright/28'>IMAP</span>
+                            </summary>
+                            {overview && (
+                                <div className='border-t border-white/8 px-3 py-3 text-[11px] leading-5 text-bright/56'>
+                                    <p>IMAP `{overview.settings.imapHost}:{overview.settings.imapPort}`</p>
+                                    <p>SMTP `{overview.settings.smtpHost}:{overview.settings.smtpPort}`</p>
+                                    <p>ManageSieve `{overview.settings.host}:{overview.settings.managesievePort}`</p>
+                                    <p className='mt-1'>Username `{overview.settings.username}`</p>
+                                    <p>Address `{overview.settings.address}`</p>
+                                    <p>Password `{overview.mailPassword}`</p>
+                                </div>
+                            )}
+                        </details>
                     </div>
                 </aside>
 
-                <section className='glass-card rounded-3xl p-4'>
-                    <div className='flex items-center justify-between'>
-                        <h2 className='text-lg font-semibold text-bright'>Messages</h2>
-                        {selectedMailboxId && <span className='text-xs text-bright/35'>{overview?.messages.length || 0} shown</span>}
+                <section
+                    className='rounded-[24px] border border-white/10 bg-white/[0.045] p-2.5
+                        shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl'
+                >
+                    <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-bright/30'>
+                        <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
+                        <span className='text-bright/15'>•</span>
+                        <span>{filteredMessages.length}</span>
                     </div>
 
-                    <div className='mt-4 grid gap-2'>
-                        {(overview?.messages || []).map(message => (
-                            <button
+                    <div className='grid gap-1.5'>
+                        {filteredMessages.map(message => (
+                            <MessageRow
                                 key={message.id}
-                                className={`message-row ${selectedMessageId === message.id ? 'message-row-active' : ''}`}
-                                onClick={() => void load({ messageId: message.id })}
-                            >
-                                <div className='flex items-center justify-between gap-2'>
-                                    <div className='flex items-center gap-2'>
-                                        {!message.isRead && <span className='h-2 w-2 rounded-full bg-orange-300' />}
-                                        <p className='line-clamp-1 font-semibold text-bright'>{message.subject}</p>
-                                    </div>
-                                    <span className='text-xs text-bright/35'>{formatDate(message.receivedAt)}</span>
-                                </div>
-                                <p className='mt-1 text-xs text-bright/45'>{message.from.map(from => from.name || from.email).join(', ')}</p>
-                                <div className='mt-2 flex items-center justify-between gap-3'>
-                                    <p className='line-clamp-2 text-sm text-bright/55'>{message.preview}</p>
-                                    {message.hasAttachment && <Paperclip className='h-4 w-4 shrink-0 text-bright/40' />}
-                                </div>
-                            </button>
+                                message={message}
+                                active={selectedMessageId === message.id}
+                                onClick={() => {
+                                    setSelectedMessageId(message.id)
+                                    void load({ messageId: message.id, silent: true })
+                                }}
+                            />
                         ))}
-                        {!overview?.messages.length && !loading && <div className='rounded-2xl border border-dashed border-white/10 p-5 text-sm text-bright/45'>This mailbox is empty right now.</div>}
+                        {!filteredMessages.length && !loading && (
+                            <div className='rounded-2xl border border-dashed border-white/10 px-3 py-4 text-[12px] text-bright/42'>
+                                {query ? 'Nothing in this mailbox matches the current search.' : 'This mailbox is quiet right now.'}
+                            </div>
+                        )}
                     </div>
                 </section>
 
-                <section className='glass-card rounded-3xl p-5'>
-                    {loading && <div className='text-sm text-bright/45'>Loading mailbox…</div>}
-                    {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 p-8 text-sm text-bright/45'>Choose a message to read it here.</div>}
-                    {!loading && selectedMessage && overview && (
-                        <>
-                            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-white/8 pb-4'>
-                                <div>
-                                    <p className='text-xs uppercase tracking-[0.25em] text-orange-200/70'>Selected letter</p>
-                                    <h2 className='mt-2 text-2xl font-semibold text-bright'>{selectedMessage.subject}</h2>
-                                    <div className='mt-3 grid gap-1 text-sm text-bright/55'>
-                                        <p>From: {selectedMessage.from.map(from => from.name ? `${from.name} <${from.email}>` : from.email).join(', ')}</p>
-                                        <p>To: {selectedMessage.to.map(to => to.name ? `${to.name} <${to.email}>` : to.email).join(', ')}</p>
-                                        {!!selectedMessage.cc.length && <p>CC: {selectedMessage.cc.map(to => to.name ? `${to.name} <${to.email}>` : to.email).join(', ')}</p>}
-                                        <p>Received: {formatDate(selectedMessage.receivedAt, true)}</p>
+                <section
+                    className='rounded-[24px] border border-white/10 bg-white/[0.045] p-3
+                        shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl'
+                >
+                    {loading && !overview && <div className='px-2 py-6 text-[12px] text-bright/42'>Loading mailbox…</div>}
+                    {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 px-4 py-8 text-[12px] text-bright/42'>Choose a message to read it here.</div>}
+                    {selectedMessage && overview && (
+                        <div className='grid gap-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-2 border-b border-white/8 pb-3'>
+                                <div className='min-w-0'>
+                                    <h2 className='truncate text-[18px] font-semibold tracking-[-0.03em] text-bright'>{selectedMessage.subject}</h2>
+                                    <div className='mt-1 grid gap-0.5 text-[11px] text-bright/52'>
+                                        <p>From {selectedMessage.from.map(formatMailboxAddress).join(', ')}</p>
+                                        <p>To {selectedMessage.to.map(formatMailboxAddress).join(', ')}</p>
+                                        {!!selectedMessage.cc.length && <p>CC {selectedMessage.cc.map(formatMailboxAddress).join(', ')}</p>}
+                                        <p>{formatDate(selectedMessage.receivedAt, true)}</p>
                                     </div>
                                 </div>
 
-                                <div className='flex flex-wrap gap-2'>
-                                    <ActionButton label='Reply' icon={<Reply className='h-4 w-4' />} onClick={() => setComposer(composeFromReply('reply', selectedMessage))} />
-                                    <ActionButton label='Reply all' icon={<CornerUpLeft className='h-4 w-4' />} onClick={() => setComposer(composeFromReply('replyAll', selectedMessage, overview.mailboxAddress))} />
-                                    <ActionButton label='Forward' icon={<Forward className='h-4 w-4' />} onClick={() => setComposer(composeFromReply('forward', selectedMessage))} />
-                                    <ActionButton label={selectedMessage.isFlagged ? 'Unstar' : 'Star'} icon={<Star className='h-4 w-4' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isFlagged ? 'unflag' : 'flag')} />
-                                    <ActionButton label='Archive' icon={<Archive className='h-4 w-4' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'archive')} />
-                                    {selectedMessage.isJunk ? (
-                                        <ActionButton label='Not spam' icon={<Inbox className='h-4 w-4' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'ham')} />
-                                    ) : (
-                                        <ActionButton label='Junk' icon={<ShieldAlert className='h-4 w-4' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'junk')} />
-                                    )}
-                                    <ActionButton label='Trash' icon={<Trash2 className='h-4 w-4' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'trash')} />
-                                    <ActionButton label={selectedMessage.isRead ? 'Unread' : 'Read'} icon={<Mail className='h-4 w-4' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isRead ? 'unread' : 'read')} />
-                                </div>
-                            </div>
-
-                            <div className='mt-4 rounded-3xl border border-white/10 bg-white/3 p-4'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <select
-                                        className='mail-input min-w-56 flex-1'
-                                        value={moveTargetMailboxId}
-                                        onChange={event => setMoveTargetMailboxId(event.target.value)}
-                                    >
-                                        <option value=''>Move to folder…</option>
-                                        {overview.mailboxes
-                                            .filter(mailbox => mailbox.id !== selectedMailboxId)
-                                            .map(mailbox => (
-                                                <option key={mailbox.id} value={mailbox.id}>
-                                                    {mailbox.name}
-                                                </option>
-                                            ))}
-                                    </select>
-                                    <button
-                                        className='mail-button-secondary'
-                                        disabled={!moveTargetMailboxId || movingMessage}
-                                        onClick={async () => {
-                                            if (!moveTargetMailboxId) {
-                                                return
-                                            }
-
-                                            setMovingMessage(true)
-                                            try {
-                                                await messageAction(selectedMessage.id, {
-                                                    mailboxUser: overview.mailboxUser,
-                                                    action: 'move',
-                                                    targetMailboxId: moveTargetMailboxId,
-                                                })
-                                                await load({ mailboxId: moveTargetMailboxId, messageId: null })
-                                            } catch (cause) {
-                                                setError(cause instanceof Error ? cause.message : 'Unable to move message.')
-                                            } finally {
-                                                setMovingMessage(false)
-                                            }
-                                        }}
-                                    >
-                                        <FolderInput className='h-4 w-4' /> Move
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className='mt-5 grid gap-4'>
-                                {!!selectedMessage.attachments.length && (
-                                    <div className='rounded-3xl border border-white/10 bg-white/3 p-4'>
-                                        <div className='flex items-center gap-2 text-sm font-semibold text-bright'>
-                                            <Paperclip className='h-4 w-4 text-orange-300' />
-                                            Attachments
-                                        </div>
-                                        <div className='mt-3 grid gap-3 md:grid-cols-2'>
-                                            {selectedMessage.attachments.map(attachment => <AttachmentPreview key={attachment.blobId} attachment={attachment} mailboxUser={overview.mailboxUser} />)}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {selectedMessage.htmlBody ? (
-                                    <iframe
-                                        title='HTML mail'
-                                        className='min-h-112 w-full rounded-3xl border border-white/10 bg-white/3'
-                                        sandbox='allow-popups allow-popups-to-escape-sandbox'
-                                        srcDoc={renderedHtml}
+                                <div className='flex flex-wrap items-center gap-1.5'>
+                                    <ActionIconButton label='Reply' icon={<Reply className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('reply', selectedMessage))} />
+                                    <ActionIconButton label='Reply all' icon={<CornerUpLeft className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('replyAll', selectedMessage, overview.mailboxAddress))} />
+                                    <ActionIconButton label='Forward' icon={<Forward className='h-3.5 w-3.5' />} onClick={() => setComposer(composeFromReply('forward', selectedMessage))} />
+                                    <ActionIconButton label={selectedMessage.isFlagged ? 'Unstar' : 'Star'} icon={<Star className='h-3.5 w-3.5' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isFlagged ? 'unflag' : 'flag')} />
+                                    <ActionIconButton label='Archive' icon={<Archive className='h-3.5 w-3.5' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'archive')} />
+                                    <ActionIconButton
+                                        label={selectedMessage.isJunk ? 'Not spam' : 'Spam'}
+                                        icon={selectedMessage.isJunk ? <Inbox className='h-3.5 w-3.5' /> : <ShieldAlert className='h-3.5 w-3.5' />}
+                                        onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isJunk ? 'ham' : 'junk')}
                                     />
-                                ) : (
-                                    <article className='mail-body rounded-3xl border border-white/10 bg-white/3 p-5 text-sm leading-7 whitespace-pre-wrap text-bright/82'>
-                                        {selectedMessage.textBody}
-                                    </article>
-                                )}
+                                    <ActionIconButton label='Trash' icon={<Trash2 className='h-3.5 w-3.5' />} onClick={() => void runAction(selectedMessage.id, overview, setError, load, 'trash')} />
+                                </div>
                             </div>
-                        </>
+
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <select
+                                    className={`${subtleInput} min-w-48 flex-1`}
+                                    value={moveTargetMailboxId}
+                                    onChange={event => setMoveTargetMailboxId(event.target.value)}
+                                >
+                                    <option value=''>Move to…</option>
+                                    {overview.mailboxes
+                                        .filter(mailbox => mailbox.id !== selectedMailboxId)
+                                        .map(mailbox => (
+                                            <option key={mailbox.id} value={mailbox.id}>
+                                                {mailbox.name}
+                                            </option>
+                                        ))}
+                                </select>
+                                <button
+                                    className={toolbarButton}
+                                    disabled={!moveTargetMailboxId || movingMessage}
+                                    onClick={async () => {
+                                        if (!moveTargetMailboxId) {
+                                            return
+                                        }
+
+                                        setMovingMessage(true)
+                                        try {
+                                            await messageAction(selectedMessage.id, {
+                                                mailboxUser: overview.mailboxUser,
+                                                action: 'move',
+                                                targetMailboxId: moveTargetMailboxId,
+                                            })
+                                            await load({ mailboxId: moveTargetMailboxId, messageId: null, silent: true })
+                                        } catch (cause) {
+                                            setError(cause instanceof Error ? cause.message : 'Unable to move message.')
+                                        } finally {
+                                            setMovingMessage(false)
+                                        }
+                                    }}
+                                >
+                                    Move
+                                </button>
+                                <button className={toolbarButton} onClick={() => void runAction(selectedMessage.id, overview, setError, load, selectedMessage.isRead ? 'unread' : 'read')}>
+                                    {selectedMessage.isRead ? 'Mark unread' : 'Mark read'}
+                                </button>
+                            </div>
+
+                            {!!selectedMessage.attachments.length && (
+                                <div className='rounded-2xl border border-white/10 bg-white/[0.03] p-3'>
+                                    <div className='mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-bright/34'>Attachments</div>
+                                    <div className='grid gap-2 lg:grid-cols-2'>
+                                        {selectedMessage.attachments.map(attachment => (
+                                            <AttachmentPreview key={attachment.blobId} attachment={attachment} mailboxUser={overview.mailboxUser} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedMessage.htmlBody ? (
+                                <iframe
+                                    title='HTML mail'
+                                    className='min-h-[32rem] w-full rounded-2xl border border-white/10 bg-white'
+                                    sandbox='allow-popups allow-popups-to-escape-sandbox'
+                                    srcDoc={renderedHtml}
+                                />
+                            ) : (
+                                <article className='min-h-[32rem] rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-bright/82'>
+                                    {selectedMessage.textBody}
+                                </article>
+                            )}
+                        </div>
                     )}
                 </section>
             </div>
@@ -427,7 +556,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     mailboxUser={overview.mailboxUser}
                     onChange={setComposer}
                     onClose={() => setComposer(emptyComposer)}
-                    onSubmit={async (next) => {
+                    onSubmit={async next => {
                         try {
                             await sendMail({
                                 mailboxUser: overview.mailboxUser,
@@ -439,7 +568,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 attachments: next.attachments,
                             })
                             setComposer(emptyComposer)
-                            await load()
+                            await load({ silent: true, mailboxId: selectedMailboxId, messageId: selectedMessageId })
                         } catch (cause) {
                             setError(cause instanceof Error ? cause.message : 'Unable to send mail.')
                         }
@@ -447,6 +576,36 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 />
             )}
         </div>
+    )
+}
+
+function MessageRow({ message, active, onClick }: {
+    message: MailMessageSummary
+    active: boolean
+    onClick: () => void
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
+                active
+                    ? 'border-orange-300/30 bg-orange-300/10'
+                    : 'border-transparent bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]'
+            }`}
+        >
+            <div className='flex items-center justify-between gap-2'>
+                <div className='flex min-w-0 items-center gap-2'>
+                    {!message.isRead && <span className='h-1.5 w-1.5 rounded-full bg-orange-300' />}
+                    <p className='truncate text-[12px] font-medium text-bright'>{message.subject}</p>
+                </div>
+                <span className='shrink-0 text-[10px] text-bright/32'>{formatDate(message.receivedAt)}</span>
+            </div>
+            <p className='mt-1 truncate text-[11px] text-bright/44'>{message.from.map(from => from.name || from.email).join(', ')}</p>
+            <div className='mt-1 flex items-center justify-between gap-2'>
+                <p className='line-clamp-2 text-[11px] leading-5 text-bright/54'>{message.preview}</p>
+                {message.hasAttachment && <Paperclip className='h-3.5 w-3.5 shrink-0 text-bright/34' />}
+            </div>
+        </button>
     )
 }
 
@@ -464,10 +623,11 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
     }
 
     return (
-        <div className='fixed inset-0 z-1200 grid place-items-center bg-black/55 p-4 backdrop-blur-sm'>
+        <div className='fixed inset-0 z-[1400] grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
             <form
-                className='glass-panel w-full max-w-3xl rounded-lg p-6'
-                onSubmit={async (event) => {
+                className='w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#0f120f]/92 p-4
+                    shadow-[0_30px_100px_rgba(0,0,0,0.36)] backdrop-blur-2xl'
+                onSubmit={async event => {
                     event.preventDefault()
                     setSubmitting(true)
                     try {
@@ -477,27 +637,36 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     }
                 }}
             >
-                <div className='flex items-center justify-between gap-4'>
+                <div className='flex items-center justify-between gap-3 border-b border-white/8 pb-3'>
                     <div>
-                        <p className='text-xs uppercase tracking-[0.25em] text-orange-200/70'>{state.mode}</p>
-                        <h3 className='mt-2 text-2xl font-semibold text-bright'>Compose mail</h3>
+                        <p className='text-[10px] uppercase tracking-[0.28em] text-bright/34'>{state.mode}</p>
+                        <h3 className='mt-1 text-[16px] font-semibold text-bright'>Compose</h3>
                     </div>
-                    <button type='button' className='rounded-full border border-white/10 px-4 py-2 text-sm text-bright/65 hover:bg-white/5' onClick={onClose}>Close</button>
+                    <button type='button' className={toolbarButton} onClick={onClose}>Close</button>
                 </div>
 
-                <div className='mt-5 grid gap-3'>
-                    <input className='mail-input' placeholder='To' value={state.to} onChange={event => patch({ to: event.target.value })} />
-                    <input className='mail-input' placeholder='CC' value={state.cc} onChange={event => patch({ cc: event.target.value })} />
-                    <input className='mail-input' placeholder='BCC' value={state.bcc} onChange={event => patch({ bcc: event.target.value })} />
-                    <input className='mail-input' placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
-                    <textarea className='mail-input min-h-56 resize-y' placeholder='Write your message...' value={state.body} onChange={event => patch({ body: event.target.value })} />
-                    <label className='rounded-2xl border border-dashed border-white/15 p-4 text-sm text-bright/55 hover:bg-white/3'>
-                        <span className='inline-flex items-center gap-2'><Paperclip className='h-4 w-4' /> Add attachments</span>
+                <div className='mt-3 grid gap-2'>
+                    <input className={`${subtleInput} w-full`} placeholder='To' value={state.to} onChange={event => patch({ to: event.target.value })} />
+                    <div className='grid gap-2 md:grid-cols-2'>
+                        <input className={`${subtleInput} w-full`} placeholder='CC' value={state.cc} onChange={event => patch({ cc: event.target.value })} />
+                        <input className={`${subtleInput} w-full`} placeholder='BCC' value={state.bcc} onChange={event => patch({ bcc: event.target.value })} />
+                    </div>
+                    <input className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
+                    <textarea
+                        className='min-h-[16rem] w-full rounded-[20px] border border-white/10 bg-white/[0.03] px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05]'
+                        placeholder='Write your message...'
+                        value={state.body}
+                        onChange={event => patch({ body: event.target.value })}
+                    />
+
+                    <label className='inline-flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-3 py-2 text-[11px] text-bright/56 hover:bg-white/[0.04]'>
+                        <Paperclip className='h-3.5 w-3.5' />
+                        Add attachments
                         <input
                             type='file'
                             multiple
                             className='hidden'
-                            onChange={async (event) => {
+                            onChange={async event => {
                                 const files = Array.from(event.target.files || [])
                                 const attachments = await Promise.all(files.map(fileToDraftAttachment))
                                 patch({ attachments: [...state.attachments, ...attachments] })
@@ -509,15 +678,15 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     {!!state.attachments.length && (
                         <div className='grid gap-2 md:grid-cols-2'>
                             {state.attachments.map((attachment, index) => (
-                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/3 p-3 text-sm text-bright/65'>
-                                    <div className='flex items-center justify-between gap-3'>
-                                        <div>
-                                            <p className='font-semibold text-bright'>{attachment.name}</p>
-                                            <p className='text-xs text-bright/40'>{prettyBytes(attachment.size)}</p>
+                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2'>
+                                    <div className='flex items-start justify-between gap-3'>
+                                        <div className='min-w-0'>
+                                            <p className='truncate text-[12px] font-medium text-bright'>{attachment.name}</p>
+                                            <p className='text-[10px] text-bright/34'>{prettyBytes(attachment.size)}</p>
                                         </div>
                                         <button
                                             type='button'
-                                            className='text-xs text-red-200/80 hover:text-red-100'
+                                            className='text-[10px] text-red-200/75 hover:text-red-100'
                                             onClick={() => patch({ attachments: state.attachments.filter((_, current) => current !== index) })}
                                         >
                                             Remove
@@ -529,11 +698,15 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     )}
                 </div>
 
-                <div className='mt-5 flex justify-end gap-2'>
-                    <button type='button' className='mail-button-secondary' onClick={onClose}>Cancel</button>
-                    <button type='submit' className='mail-button' disabled={submitting}>
-                        <Send className='h-4 w-4' /> {submitting ? 'Sending…' : `Send from ${mailboxUser}`}
-                    </button>
+                <div className='mt-4 flex items-center justify-between gap-3'>
+                    <p className='text-[11px] text-bright/36'>Sending as `{mailboxUser}`</p>
+                    <div className='flex items-center gap-2'>
+                        <button type='button' className={toolbarButton} onClick={onClose}>Cancel</button>
+                        <button type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
+                            <Send className='h-3.5 w-3.5' />
+                            {submitting ? 'Sending…' : 'Send'}
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -588,23 +761,23 @@ async function runAction(
     messageId: string,
     overview: MailOverview,
     setError: (value: string) => void,
-    load: (params?: { mailboxId?: string | null, messageId?: string | null, mailboxUser?: string | null }) => Promise<void>,
+    load: (params?: { mailboxId?: string | null, messageId?: string | null, mailboxUser?: string | null, silent?: boolean }) => Promise<void>,
     action: 'read' | 'unread' | 'flag' | 'unflag' | 'archive' | 'junk' | 'ham' | 'trash' | 'restore'
 ) {
     try {
         await messageAction(messageId, { mailboxUser: overview.mailboxUser, action })
-        await load()
+        await load({ silent: true })
     } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Unable to update message.')
     }
 }
 
 function iconForMailbox(role?: string) {
-    if (role === 'inbox') return <Inbox className='h-4 w-4 text-orange-300' />
-    if (role === 'archive') return <Archive className='h-4 w-4 text-emerald-300' />
-    if (role === 'junk') return <ShieldAlert className='h-4 w-4 text-red-300' />
-    if (role === 'trash') return <Trash2 className='h-4 w-4 text-red-200' />
-    return <Mail className='h-4 w-4 text-bright/45' />
+    if (role === 'inbox') return <Inbox className='h-3.5 w-3.5 text-orange-300' />
+    if (role === 'archive') return <Archive className='h-3.5 w-3.5 text-emerald-300' />
+    if (role === 'junk') return <ShieldAlert className='h-3.5 w-3.5 text-red-300' />
+    if (role === 'trash') return <Trash2 className='h-3.5 w-3.5 text-red-200' />
+    return <Mail className='h-3.5 w-3.5 text-bright/40' />
 }
 
 function formatDate(value: string, verbose = false) {
@@ -616,6 +789,25 @@ function formatDate(value: string, verbose = false) {
         dateStyle: verbose ? 'full' : 'medium',
         timeStyle: 'short',
     }).format(new Date(value))
+}
+
+function formatRelativeTime(value: number) {
+    const diffMinutes = Math.max(1, Math.floor((Date.now() - value) / 60_000))
+    if (diffMinutes < 60) {
+        return `${diffMinutes}m`
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60)
+    if (diffHours < 24) {
+        return `${diffHours}h`
+    }
+
+    const diffDays = Math.floor(diffHours / 24)
+    return `${diffDays}d`
+}
+
+function formatMailboxAddress(address: MailAddress) {
+    return address.name ? `${address.name} <${address.email}>` : address.email
 }
 
 function prettyBytes(size: number) {
@@ -638,28 +830,29 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
     const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
     if (attachment.type.startsWith('image/')) {
         return (
-            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-3'>
-                <img src={url} alt={attachment.name} className='h-48 w-full rounded-xl object-cover' />
-                <p className='mt-2 text-sm font-semibold text-bright'>{attachment.name}</p>
+            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 transition hover:bg-white/[0.05]'>
+                <img src={url} alt={attachment.name} className='h-36 w-full rounded-xl object-cover' />
+                <p className='mt-2 truncate text-[11px] font-medium text-bright'>{attachment.name}</p>
             </a>
         )
     }
 
     if (attachment.type === 'application/pdf') {
         return (
-            <div className='rounded-2xl border border-white/10 bg-white/3 p-3'>
-                <iframe title={attachment.name} src={url} className='h-64 w-full rounded-xl bg-white/3' />
-                <a href={url} target='_blank' rel='noreferrer' className='mt-2 inline-flex items-center gap-2 text-sm font-semibold text-bright'>
-                    {attachment.name} <ArrowRight className='h-4 w-4' />
+            <div className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5'>
+                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-white' />
+                <a href={url} target='_blank' rel='noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-bright'>
+                    {attachment.name}
+                    <Forward className='h-3.5 w-3.5' />
                 </a>
             </div>
         )
     }
 
     return (
-        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-3 text-sm text-bright/65'>
-            <p className='font-semibold text-bright'>{attachment.name}</p>
-            <p className='mt-1 text-xs text-bright/40'>{attachment.type} • {prettyBytes(attachment.size)}</p>
+        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 text-[11px] text-bright/62 transition hover:bg-white/[0.05]'>
+            <p className='truncate font-medium text-bright'>{attachment.name}</p>
+            <p className='mt-1 text-[10px] text-bright/36'>{attachment.type} • {prettyBytes(attachment.size)}</p>
         </a>
     )
 }
@@ -677,11 +870,10 @@ function withInlineAttachments(message: MailMessage, mailboxUser: string) {
     return html
 }
 
-function ActionButton({ label, icon, onClick }: { label: string, icon: ReactNode, onClick: () => void }) {
+function ActionIconButton({ label, icon, onClick }: { label: string, icon: ReactNode, onClick: () => void }) {
     return (
-        <button className='mail-button-secondary' onClick={onClick}>
+        <button title={label} aria-label={label} className={iconButton} onClick={onClick}>
             {icon}
-            {label}
         </button>
     )
 }
@@ -698,34 +890,17 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
 
 function MailSketch() {
     return (
-        <svg className='mail-sketch background-sketch' viewBox='0 0 430 190' aria-hidden='true'>
-            <path d='M31 154 L31 90 L112 63 L197 93 L197 154' />
-            <path d='M31 90 L112 44 L197 93' />
-            <path d='M112 44 L112 154' />
-            <path d='M62 154 V101 H92 V154' />
-            <path d='M128 154 V111 H180 V154' />
-            <path className='sketch-shade' d='M45 102 H108' />
-            <path className='sketch-shade' d='M45 117 H108' />
-            <path className='sketch-shade' d='M45 132 H108' />
-            <path className='sketch-shade' d='M120 104 H191' />
-            <path className='sketch-shade' d='M120 120 H191' />
-            <path className='sketch-shade' d='M120 138 H191' />
-            <path d='M225 147 L225 88 L282 62 L340 88 L340 147' />
-            <path d='M225 88 L282 36 L340 88' />
-            <path d='M250 147 V101 H316 V147' />
-            <path d='M260 111 H307' />
-            <path d='M260 123 H307' />
-            <path className='sketch-shade' d='M235 99 H331' />
-            <path className='sketch-shade' d='M235 114 H331' />
-            <path className='sketch-shade' d='M235 130 H331' />
-            <path d='M351 151 V100 L382 81 L414 100 V151' />
-            <path d='M360 151 V116 H373 V151' />
-            <path d='M389 151 V116 H402 V151' />
-            <path d='M355 100 H410' />
-            <path className='sketch-distant' d='M16 171 C67 162 102 178 153 167 C204 156 238 174 291 164 C331 156 366 168 419 160' />
-            <path className='sketch-shade' d='M223 64 C244 76 266 79 281 73 C297 67 310 68 329 79' />
-            <path className='sketch-shade' d='M31 74 C54 67 78 71 99 61' />
-            <path className='sketch-shade' d='M95 61 C122 69 145 74 170 80' />
+        <svg className='pointer-events-none absolute -right-6 bottom-2 h-auto w-44 rotate-[1.5deg] text-bright/8' viewBox='0 0 430 190' aria-hidden='true'>
+            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M31 154 L31 90 L112 63 L197 93 L197 154' />
+            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M31 90 L112 44 L197 93' />
+            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M112 44 L112 154' />
+            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M62 154 V101 H92 V154' />
+            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M128 154 V111 H180 V154' />
+            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M225 147 L225 88 L282 62 L340 88 L340 147' />
+            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M225 88 L282 36 L340 88' />
+            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M250 147 V101 H316 V147' />
+            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M351 151 V100 L382 81 L414 100 V151' />
+            <path fill='none' stroke='currentColor' strokeOpacity='0.55' strokeWidth='0.85' strokeLinecap='round' strokeLinejoin='round' d='M16 171 C67 162 102 178 153 167 C204 156 238 174 291 164 C331 156 366 168 419 160' />
         </svg>
     )
 }

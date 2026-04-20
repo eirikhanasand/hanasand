@@ -16,6 +16,11 @@ const mailUserAliases = new Map(
             return [userId, mailboxUser || userId]
         })
 )
+const systemMailboxOwner = process.env.MAIL_SYSTEM_MAILBOX_USER || 'eirikhanasand'
+const systemAliasLocalParts = (process.env.MAIL_SYSTEM_ALIASES || 'postmaster,abuse,hostmaster,tls-reports,noreply-dmarc')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
 
 export const mailConfig = {
     host: mailHost,
@@ -27,6 +32,8 @@ export const mailConfig = {
     smtpPort: Number(process.env.MAIL_SMTP_PORT || 587),
     managesievePort: Number(process.env.MAIL_MANAGESIEVE_PORT || 4190),
     encryptionKey: crypto.createHash('sha256').update(serviceKeySource).digest(),
+    systemMailboxOwner,
+    systemAliasLocalParts,
     userAliases: mailUserAliases,
     privilegedMailboxUsers: new Set(
         (process.env.MAIL_PRIVILEGED_USERS || 'admin,administrator,eirik,eirikhanasand')

@@ -1,7 +1,7 @@
 import run from '#db'
 import { mailConfig } from './config.ts'
 import { decryptMailSecret, encryptMailSecret, generateMailSecret } from './crypto.ts'
-import { addressForUser, mailboxLocalPartForUser } from './helpers.ts'
+import { addressForUser, addressesForUser, mailboxLocalPartForUser } from './helpers.ts'
 import { type AdminPatch, createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
 
 type UserRow = {
@@ -40,6 +40,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
     const existing = await getMailAccount(userId)
     const username = mailboxLocalPartForUser(userId)
     const address = addressForUser(userId)
+    const allAddresses = addressesForUser(userId)
     let principalId = existing?.principal_id || null
     const principal = await findPrincipalByName(username, 'individual')
     const inheritedSecret = principal?.secrets?.find(secret => !secret.startsWith('otpauth://')) || null
@@ -55,7 +56,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             name: username,
             description: displayName,
             secrets: [secret],
-            emails: [address],
+            emails: allAddresses,
             urls: [],
             memberOf: [],
             roles: ['user'],
@@ -70,7 +71,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
         const patches: AdminPatch[] = [
             { action: 'set', field: 'description', value: displayName },
             { action: 'set', field: 'secrets', value: [secret] },
-            { action: 'set', field: 'emails', value: [address] },
+            { action: 'set', field: 'emails', value: allAddresses },
         ]
 
         if (!preferredSecret && inheritedSecret && !existing) {

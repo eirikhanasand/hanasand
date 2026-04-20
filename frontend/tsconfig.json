@@ -33,11 +33,17 @@
       "@components/*": [
         "./src/components/*"
       ],
+      "@utils@/*": [
+        "./src/*"
+      ],
       "@parent/*": [
         "./*"
       ],
       "@styles/*": [
         "./src/styles/*"
+      ],
+      "uibee/*": [
+        "./src/uibee/*"
       ]
     }
   },
