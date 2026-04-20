@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import type { SeverityLevel } from '@/utils/monitoring/types'
+
+type SeverityLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown'
 
 export function Toggle<T extends string | boolean>(props: {
     value: T
