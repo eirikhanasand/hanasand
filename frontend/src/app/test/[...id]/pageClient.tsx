@@ -2,12 +2,11 @@
 
 import prettyDate from '@/utils/date/prettyDate'
 import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
-import { ActivityIcon, Bot, Bug, Fingerprint, Hourglass, LinkIcon, Logs, RefreshCw, Timer, Users, Watch, Wifi, WifiOff, Workflow } from 'lucide-react'
+import { ActivityIcon, Bug, Fingerprint, Hourglass, LinkIcon, Logs, RefreshCw, Timer, Users, Watch, Wifi, WifiOff, Workflow } from 'lucide-react'
 import Visits from '@/components/test/visits'
 import Content from '@/components/test/content'
 import { Dispatch, SetStateAction, useState } from 'react'
 import ConnectionStatus from '@/components/test/connectionStatus'
-import { saveCodexLoadTestDraft } from '@/utils/test/storage'
 
 type LeftSideProps = {
     test: Test
@@ -80,24 +79,11 @@ function LeftSide({
     onRerun
 }: LeftSideProps) {
     const ms = test.duration?.milliseconds
-    const [codexNotice, setCodexNotice] = useState('')
 
     function handleRerun() {
         if (!rerun) {
             onRerun()
         }
-    }
-
-    function handleCodex() {
-        saveCodexLoadTestDraft({
-            createdAt: new Date().toISOString(),
-            source: 'load-test',
-            url: test.url,
-            timeout: test.timeout,
-            stages: test.stages,
-            notes: `Rerun and analyze scan ${test.id}, then compare with previous results.`
-        })
-        setCodexNotice('Prepared for Hanasand AI.')
     }
 
     return (
@@ -169,14 +155,6 @@ function LeftSide({
                     <Bug />
                     <h1>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
                 </button>}
-                <button
-                    onClick={handleCodex}
-                    className='flex gap-2 rounded-lg p-2 w-full cursor-pointer bg-sky-400/10 outline-1 outline-sky-400/20 text-sky-100 hover:bg-sky-400/15'
-                >
-                    <Bot className='h-4 w-4' />
-                    <h1>Prepare for Codex</h1>
-                </button>
-                {codexNotice && <h1 className='px-2 text-xs text-emerald-300'>{codexNotice}</h1>}
             </div>
             <div className="mt-auto">
                 <button

@@ -8,7 +8,6 @@ type TerminalProps = {
 }
 
 export default function useTerminal({ share }: TerminalProps) {
-    const [reconnect, setReconnect] = useState(false)
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [log, setLog] = useState<Log[]>([])
@@ -17,18 +16,23 @@ export default function useTerminal({ share }: TerminalProps) {
     useEffect(() => {
         if (!share || !('id' in share)) return
 
+        setLog([])
+        setParticipants(1)
         const session = randomId(6)
         const userCookie = getCookie('id')
         const terminalUser = userCookie || 'default'
         const ws = new WebSocket(`${config.url.cdn_wss}/share/${share.alias}/shell/${terminalUser}/${session}`)
+        wsRef.current = ws
 
         ws.onopen = () => {
-            setReconnect(false)
             setIsConnected(true)
         }
 
         ws.onclose = () => {
             setIsConnected(false)
+            if (wsRef.current === ws) {
+                wsRef.current = null
+            }
         }
 
         ws.onerror = (error) => {
@@ -47,8 +51,12 @@ export default function useTerminal({ share }: TerminalProps) {
                 const msg = JSON.parse(data)
 
                 if (msg.type === 'update') {
-                    setParticipants(msg.participants)
-                    setLog((prev) => [...prev, msg])
+                    setParticipants(msg.participants || 1)
+                    setLog((prev) => [...prev, {
+                        content: msg.content,
+                        timestamp: msg.timestamp || new Date().toISOString(),
+                        type: 'stdout'
+                    }])
                 }
 
                 if (msg.type === 'join') {
@@ -60,13 +68,19 @@ export default function useTerminal({ share }: TerminalProps) {
         }
 
         return () => {
+            if (wsRef.current === ws) {
+                wsRef.current = null
+            }
             ws.close()
         }
-    }, [share, reconnect])
+    }, [share])
 
     function sendMessage(message: string) {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify(message))
+            wsRef.current.send(JSON.stringify({
+                type: 'terminalMessage',
+                content: message
+            }))
             return { status: true }
         } else {
             console.warn('WebSocket not connected.')

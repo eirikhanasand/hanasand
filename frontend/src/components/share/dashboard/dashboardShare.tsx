@@ -31,8 +31,11 @@ export default function DashboardShare({ share }: { share: Share }) {
 
     return (
         <div className='group'>
-            <div onClick={handleClick} className={`flex cursor-pointer justify-between p-2 ${keys['shift'] ? 'hover:bg-red-500' : 'hover:bg-dark'} rounded-lg hover:scale-[1.005]`}>
-                <h1 key={share.id}>{share.id}</h1>
+            <div onClick={handleClick} className={`flex cursor-pointer items-center justify-between rounded-xl px-3 py-3 transition-colors ${keys['shift'] ? 'hover:bg-red-500/30' : 'hover:bg-dark/70'}`}>
+                <div className='min-w-0'>
+                    <h1 key={share.id} className='truncate font-medium text-bright/88'>{share.alias || share.path || share.id}</h1>
+                    <p className='mt-1 truncate text-xs text-bright/35'>{share.id}</p>
+                </div>
                 {keys['shift'] && <Trash2 className='hidden group-hover:block w-5 h-5' />}
             </div>
             {deleted && <div className='absolute top-16 right-2 w-50 h-fit'>

@@ -29,11 +29,3 @@ export type RequestHistoryEntry = {
     elapsedMs?: number
     error?: string
 }
-
-export type CodexRequestDraft = {
-    createdAt: string
-    source: 'http-workbench'
-    request: RequestDraft
-    response?: ToolResponse | null
-    prompt: string
-}

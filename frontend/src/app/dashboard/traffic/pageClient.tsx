@@ -93,7 +93,7 @@ export default function TrafficDashboard({
             setShowBlockModal(false)
             setEditingBlock(null)
             setForm({})
-            getBlocklist()
+            setBlocklist(await getBlocklist())
         } catch (e) {
             console.error(e)
             setMessage('Failed to save blocklist entry')
@@ -108,7 +108,7 @@ export default function TrafficDashboard({
         try {
             await fetch(`${config.url.api}/blocklist/${id}`, { method: 'DELETE' })
             setMessage('Blocklist entry deleted')
-            getBlocklist()
+            setBlocklist(await getBlocklist())
         } catch (e) {
             console.error(e)
             setMessage('Failed to delete entry')

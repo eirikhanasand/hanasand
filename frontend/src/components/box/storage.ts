@@ -1,7 +1,6 @@
-import { CodexRequestDraft, RequestHistoryEntry } from './types'
+import { RequestHistoryEntry } from './types'
 
 export const REQUEST_HISTORY_STORAGE_KEY = 'hanasand.share.request-history.v1'
-export const CODEX_REQUEST_STORAGE_KEY = 'hanasand.share.codex-request.v1'
 
 export function loadRequestHistory(): RequestHistoryEntry[] {
     if (typeof window === 'undefined') {
@@ -31,12 +30,4 @@ export function saveRequestHistory(history: RequestHistoryEntry[]) {
     }
 
     window.localStorage.setItem(REQUEST_HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 30)))
-}
-
-export function saveCodexRequestDraft(draft: CodexRequestDraft) {
-    if (typeof window === 'undefined') {
-        return
-    }
-
-    window.localStorage.setItem(CODEX_REQUEST_STORAGE_KEY, JSON.stringify(draft))
 }

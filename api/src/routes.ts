@@ -64,7 +64,7 @@ import deactivateUser from './handlers/user/deactivateUser.ts'
 import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sessions.ts'
 import httpRequestTool from './handlers/tools/httpRequest.ts'
 import aiTool from './handlers/tools/ai.ts'
-import { getLogs, getLogServices } from './handlers/logs/get.ts'
+import { getLogs, getLogServices, getRealtimeLogs } from './handlers/logs/get.ts'
 import ingestLog from './handlers/logs/ingest.ts'
 import getAiWorkspace from './handlers/ai/getWorkspace.ts'
 import postAiConversation from './handlers/ai/postConversation.ts'
@@ -213,5 +213,6 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // Logs
     fastify.get('/logs', getLogs)
     fastify.get('/logs/services', getLogServices)
+    fastify.get('/logs/realtime', getRealtimeLogs)
     fastify.post('/logs/ingest', ingestLog)
 }

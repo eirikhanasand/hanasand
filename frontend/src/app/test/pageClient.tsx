@@ -7,15 +7,12 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import copy from '@/utils/copy'
 import { fetchRecentTests } from '@/utils/test/fetchRecentTests'
 import { postTest } from '@/utils/test/postTest'
-import { saveCodexLoadTestDraft } from '@/utils/test/storage'
-import { Bot, Copy, Sparkles } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [path, setPath] = useState('')
-    const [codexPrompt, setCodexPrompt] = useState('Run a load test for this site and summarize the performance profile.')
-    const [codexNotice, setCodexNotice] = useState('')
     const [recentScans, setRecentScans] = useState<Test[]>([])
     const [myScans, setMyScans] = useState<Test[]>([])
     const isValidLink =
@@ -69,21 +66,6 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         }
     }
 
-    function prepareCodexLoadTest() {
-        if (!isValidLink) {
-            return setCodexNotice('Add a valid URL first.')
-        }
-
-        saveCodexLoadTestDraft({
-            createdAt: new Date().toISOString(),
-            source: 'load-test',
-            url: path,
-            timeout: 1,
-            notes: codexPrompt
-        })
-        setCodexNotice('Prepared for Hanasand AI.')
-    }
-
     if (created) {
         return (
             <div onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex gap-2 cursor-pointer items-center bg-dark px-4 py-1 rounded-xl'>
@@ -94,50 +76,30 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
     }
 
     return (
-        <div className='grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]'>
-            <section className='grid gap-4 rounded-2xl border border-white/10 bg-white/4 p-5'>
+        <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]'>
+            <section className='grid gap-5 rounded-3xl border border-white/10 bg-white/4 p-6'>
                 <div>
                     <h2 className='text-xl font-semibold text-bright'>Load Test Launcher</h2>
-                    <p className='mt-1 text-sm text-bright/55'>Create a fresh scan every time, then revisit or rerun from its result page.</p>
+                    <p className='mt-2 max-w-2xl text-sm leading-6 text-bright/55'>Create a fresh scan every time, then revisit or rerun from its result page.</p>
                 </div>
-                <form onSubmit={handleSubmit} className='grid gap-3'>
+                <form onSubmit={handleSubmit} className='grid gap-4'>
                     <Notify message={error} />
                     <input
-                        className='outline outline-dark w-full rounded-lg px-3 py-2.5 focus:outline-hidden z-10'
+                        className='outline outline-dark z-10 w-full rounded-xl px-4 py-3 focus:outline-hidden'
                         placeholder='https://example.com'
                         onChange={(e) => setPath(e.target.value)}
                         value={path}
                         required
                     />
-                    <div className='flex flex-wrap gap-2'>
+                    <div className='flex flex-wrap gap-3'>
                         <button
                             type='submit'
-                            className={`${color} rounded-lg px-4 py-2 text-sm text-gray-300`}
+                            className={`${color} rounded-xl px-4 py-2.5 text-sm font-medium text-gray-300`}
                         >
                             Start Scan
                         </button>
-                        <button
-                            type='button'
-                            onClick={prepareCodexLoadTest}
-                            className='flex items-center gap-2 rounded-lg bg-sky-400/12 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-400/20'
-                        >
-                            <Bot className='h-4 w-4' />
-                            Prepare for Codex
-                        </button>
                     </div>
                 </form>
-                <div className='grid gap-3 rounded-xl border border-white/10 bg-white/4 p-4'>
-                    <div className='flex items-center gap-2 text-sm font-semibold text-bright'>
-                        <Sparkles className='h-4 w-4 text-orange-300' />
-                        Codex Load Test Handoff
-                    </div>
-                    <textarea
-                        value={codexPrompt}
-                        onChange={(e) => setCodexPrompt(e.target.value)}
-                        className='min-h-24 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-bright outline-none'
-                    />
-                    {codexNotice && <p className='text-xs text-emerald-300'>{codexNotice}</p>}
-                </div>
             </section>
             <section className='grid gap-4'>
                 <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine />

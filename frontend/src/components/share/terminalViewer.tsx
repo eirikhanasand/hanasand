@@ -12,11 +12,12 @@ export default function TerminalViewer({ open, share, text, isDone, sendMessage 
     const containerRef = useRef<HTMLPreElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
     const [input, setInput] = useState<string | null>(null)
-    const [lines, setLines] = useState<string[]>(text)
+    const [submittedLines, setSubmittedLines] = useState<string[]>([])
     const [hostname, setHostname] = useState('$')
     const [initialLeft, setInitialLeft] = useState(hostname.length * 8.65)
     const [caretPos, setCaretPos] = useState({ top: 0, left: initialLeft })
     const spaces = ' '.repeat(hostname.length)
+    const lines = [...text, ...submittedLines]
 
     const processed = useMemo(() => {
         const normalized: { type: string, content: string }[] = lines.map(item => {
@@ -62,9 +63,9 @@ export default function TerminalViewer({ open, share, text, isDone, sendMessage 
         if (e.key === 'Enter' && !e.shiftKey && input?.length) {
             e.preventDefault()
             const { message } = sendMessage(input)
-            setLines(prev => [...prev, `${hostname} ${input}`])
+            setSubmittedLines(prev => [...prev, `${hostname} ${input}`])
             if (message) {
-                setLines(prev => [...prev, `Error: ${message}`])
+                setSubmittedLines(prev => [...prev, `Error: ${message}`])
             }
 
             setInput('')
@@ -74,10 +75,6 @@ export default function TerminalViewer({ open, share, text, isDone, sendMessage 
     useEffect(() => {
         updateCaret()
     }, [input])
-
-    useEffect(() => {
-        setLines(prev => [...prev, ...text])
-    }, [text])
 
     useEffect(() => {
         function handleResize() {
@@ -93,7 +90,12 @@ export default function TerminalViewer({ open, share, text, isDone, sendMessage 
         handleResize()
         window.addEventListener('resize', handleResize)
         return () => window.removeEventListener('resize', handleResize)
-    }, [])
+    }, [share.alias])
+
+    useEffect(() => {
+        setSubmittedLines([])
+        setInput('')
+    }, [share.id])
 
     useEffect(() => {
         const el = containerRef.current

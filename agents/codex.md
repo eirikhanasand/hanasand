@@ -69,3 +69,10 @@
 - Pull on the server, apply the same DB credential alignment if the persistent Postgres volume still uses the previous password, then run `rebuild -d`.
 - After deployment, run the expanded audit in the deployed API container and smoke `/status` and `/dashboard/logs`.
 - Consider adding the same `/api/logs/ingest` contract to Cashflow or configuring Cashflow to post errors into Hanasand with a `service` name of `cashflow`.
+
+## Coordination Note
+- Parallel work tracked in `agents/codex2.md` now covers the new Hanasand monitoring parity pass:
+  - `/dashboard/overview`
+  - `/dashboard/vulnerabilities`
+  - richer `/dashboard/traffic` with live map integration
+- Avoid overlapping edits there unless explicitly merging the two passes.

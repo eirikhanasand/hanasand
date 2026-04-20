@@ -1,6 +1,6 @@
 'use client'
 
-import { Database, ExternalLink, FileCode2, FolderGit2, Globe, Link2, Lock, RefreshCcw, SearchCode, Share2 } from 'lucide-react'
+import { Database, ExternalLink, FileCode2, FolderGit2, Globe, Link2, Lock, RefreshCcw, Share2 } from 'lucide-react'
 
 type WorkspacePaneProps = {
     activeConversation: AIConversation | null
@@ -47,25 +47,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     const selectedFile = activeRepo?.files.find((file) => file.path === selectedRepoFilePath) || activeRepo?.files[0] || null
 
     return (
-        <aside className='flex min-h-0 flex-col gap-4 rounded-2xl bg-dark/35 p-4 outline outline-dark'>
-            <section className='rounded-2xl bg-dark/25 p-4 outline outline-dark'>
-                <div className='flex items-start gap-3'>
-                    <div className='rounded-2xl bg-[#fd8738]/12 p-2.5 text-[#fd8738] outline outline-[#fd8738]/20'>
-                        <SearchCode className='h-4 w-4' />
-                    </div>
-                    <div className='min-w-0'>
-                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Workspace tools</p>
-                        <h2 className='mt-1 text-base font-semibold text-bright/90'>Shares, repos, and direct actions</h2>
-                        <p className='mt-2 text-sm leading-6 text-bright/45'>
-                            Attached shares are readable and writable by Hanasand AI. Imported repositories are synced into shares so the assistant can inspect code, edit files, and keep using the native editor flow.
-                        </p>
-                    </div>
-                </div>
-                <div className='mt-4 grid gap-2 text-xs text-bright/40'>
-                    <StatusRow icon={<Share2 className='h-3.5 w-3.5' />} label={`${attachedShareIds.size} share${attachedShareIds.size === 1 ? '' : 's'} attached`} />
-                    <StatusRow icon={<FolderGit2 className='h-3.5 w-3.5' />} label={activeRepo ? `${activeRepo.fullName} active` : 'No repository focused'} />
-                    <StatusRow icon={<Globe className='h-3.5 w-3.5' />} label='Authenticated HTTP requests available through tools' />
-                </div>
+        <aside className='flex min-h-0 flex-col gap-3'>
+            <section className='grid gap-2 text-xs text-bright/40'>
+                <StatusRow icon={<Share2 className='h-3.5 w-3.5' />} label={`${attachedShareIds.size} share${attachedShareIds.size === 1 ? '' : 's'} attached`} />
+                <StatusRow icon={<FolderGit2 className='h-3.5 w-3.5' />} label={activeRepo ? `${activeRepo.fullName} active` : 'No repository focused'} />
+                <StatusRow icon={<Globe className='h-3.5 w-3.5' />} label='HTTP tools available for signed-in requests' />
             </section>
 
             <section className='rounded-2xl bg-dark/25 p-4 outline outline-dark'>
@@ -100,11 +86,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <div className='mb-3 flex items-center justify-between gap-3'>
                     <div>
                         <p className='text-[11px] uppercase tracking-[0.22em] text-bright/35'>Attached shares</p>
-                        <h3 className='mt-1 text-sm font-semibold text-bright/88'>Grant Codex direct workspace access</h3>
+                        <h3 className='mt-1 text-sm font-semibold text-bright/88'>Choose what the assistant can edit</h3>
                     </div>
                     <Database className='h-4 w-4 text-[#fd8738]' />
                 </div>
-                <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>
+                <div className='max-h-40 space-y-2 overflow-y-auto pr-1'>
                     {initialShares.length ? initialShares.map((share) => {
                         const isAttached = attachedShareIds.has(share.id)
                         return (
@@ -131,7 +117,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <div className='mb-3 flex items-center justify-between gap-3'>
                     <div>
                         <p className='text-[11px] uppercase tracking-[0.22em] text-bright/35'>Repository context</p>
-                        <h3 className='mt-1 text-sm font-semibold text-bright/88'>Focused file and import list</h3>
+                        <h3 className='mt-1 text-sm font-semibold text-bright/88'>Imported repos and focused file</h3>
                     </div>
                     <FileCode2 className='h-4 w-4 text-[#fd8738]' />
                 </div>
@@ -193,7 +179,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                     </div>
                                 </div>
                             ) : (
-                                <EmptyPanel text='Attach one of the imported repositories to let Codex work with a focused file tree.' />
+                                <EmptyPanel text='Attach one of the imported repositories to let Hanasand AI work with a focused file tree.' />
                             )}
                         </div>
                     </div>
@@ -206,7 +192,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <div className='flex items-center justify-between gap-3'>
                     <div>
                         <p className='text-[11px] uppercase tracking-[0.22em] text-bright/35'>Active share preview</p>
-                        <h3 className='mt-1 text-sm font-semibold text-bright/88'>What the assistant can edit directly</h3>
+                        <h3 className='mt-1 text-sm font-semibold text-bright/88'>Current editable content</h3>
                     </div>
                     <Share2 className='h-4 w-4 text-[#fd8738]' />
                 </div>

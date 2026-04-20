@@ -1,0 +1,27 @@
+import PageClient from './pageClient'
+import { refreshVulnerabilityData, runVulnerabilityScanAction } from './actions'
+import { getVulnerabilities } from '@/utils/monitoring/data'
+
+export const dynamic = 'force-dynamic'
+
+export default async function Page({
+    searchParams
+}: {
+    searchParams: Promise<{ [key: string]: string | undefined }>
+}) {
+    const filters = await searchParams
+    const search = typeof filters.q === 'string' ? filters.q : ''
+    const query = search.toLowerCase()
+    const data = await getVulnerabilities()
+
+    return (
+        <div className='px-8 py-4 md:px-16 lg:px-32'>
+            <PageClient
+                initialData={data}
+                initialQuery={query}
+                refreshAction={refreshVulnerabilityData}
+                runScanAction={runVulnerabilityScanAction}
+            />
+        </div>
+    )
+}

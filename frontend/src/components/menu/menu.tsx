@@ -62,7 +62,7 @@ export default function Menu() {
                         <div className={baseStyles}>
                             <Eye />
                         </div>
-                        <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-[5px] h-[5px] absolute z-100 self-center`} />
+                        <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-1.25 h-1.25 absolute z-100 self-center`} />
                     </div>
                     <h1 className='self-center font-semibold'>Check password</h1>
                 </Link>
@@ -79,7 +79,6 @@ export default function Menu() {
                     <h1 className='self-center font-semibold'>Status</h1>
                 </Link>
                 <Link href='/dashboard' onClick={toggleOpen} className='flex pl-2 pr-5'>
-                    <Dashboard serverToken={token} />
                     <Dashboard serverToken={token} />
                     {token && <h1 className='self-center font-semibold'>Dashboard</h1>}
                 </Link>

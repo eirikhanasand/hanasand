@@ -82,7 +82,7 @@ export default function Box({ box, setBox }: BoxProps) {
                 <div className='flex items-center justify-between gap-3'>
                     <div>
                         <h1 className='text-sm font-semibold text-bright'>HTTP Workbench</h1>
-                        <p className='text-xs text-bright/45'>Request, inspect, and hand off to Codex later</p>
+                        <p className='text-xs text-bright/45'>Request, inspect, and iterate from one place</p>
                     </div>
                     <div className='flex items-center gap-2'>
                         {!sidebar && (

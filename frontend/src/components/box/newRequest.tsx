@@ -1,10 +1,9 @@
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
-import { Bot, Clock3, Play, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Bot, Clock3, Play, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { saveCodexRequestDraft } from './storage'
-import { CodexRequestDraft, HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './types'
+import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './types'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -12,26 +11,22 @@ type NewRequestProps = {
     initialRequest: RequestDraft
     selectedRequestId?: string | null
     onRequestComplete: (entry: RequestHistoryEntry) => void
-    onSendToCodex?: (draft: CodexRequestDraft) => void
 }
 
 export default function NewRequest({
     initialRequest,
     selectedRequestId,
     onRequestComplete,
-    onSendToCodex
 }: NewRequestProps) {
     const [method, setMethod] = useState(initialRequest.method)
     const [url, setUrl] = useState(initialRequest.url)
     const [headers, setHeaders] = useState<HeaderRow[]>(initialRequest.headers.length ? initialRequest.headers : [{ key: '', value: '' }])
     const [body, setBody] = useState(initialRequest.body)
-    const [tab, setTab] = useState<'headers' | 'body' | 'ai' | 'codex'>('headers')
+    const [tab, setTab] = useState<'headers' | 'body' | 'ai'>('headers')
     const [response, setResponse] = useState<ToolResponse | null>(null)
     const [loading, setLoading] = useState(false)
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
-    const [codexPrompt, setCodexPrompt] = useState('Turn this into a reusable Hanasand AI task when the integration is ready.')
-    const [codexNotice, setCodexNotice] = useState('')
     const inputRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => {
@@ -41,7 +36,6 @@ export default function NewRequest({
         setBody(initialRequest.body)
         setResponse(null)
         setAiResponse('')
-        setCodexNotice('')
     }, [initialRequest, selectedRequestId])
 
     const usableHeaders = useMemo(
@@ -110,25 +104,6 @@ export default function NewRequest({
         setHeaders((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row))
     }
 
-    function queueForCodex() {
-        const draft: CodexRequestDraft = {
-            createdAt: new Date().toISOString(),
-            source: 'http-workbench',
-            prompt: codexPrompt,
-            request: {
-                method,
-                url,
-                headers,
-                body
-            },
-            response
-        }
-
-        saveCodexRequestDraft(draft)
-        onSendToCodex?.(draft)
-        setCodexNotice('Prepared for future Codex execution.')
-    }
-
     useEffect(() => {
         inputRef.current?.focus()
     }, [])
@@ -155,7 +130,7 @@ export default function NewRequest({
                 </div>
 
                 <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                    {(['headers', 'body', 'ai', 'codex'] as const).map((item) => (
+                    {(['headers', 'body', 'ai'] as const).map((item) => (
                         <button key={item} type='button' onClick={() => setTab(item)} className={`cursor-pointer rounded-md px-2.5 py-1 text-[11px] capitalize ${tab === item ? 'bg-white/12 text-bright' : 'bg-white/5 hover:bg-white/8'}`}>
                             {item}
                         </button>
@@ -195,24 +170,6 @@ export default function NewRequest({
                                 Ask AI
                             </button>
                             {aiResponse && <pre className='whitespace-pre-wrap rounded-xl bg-white/5 p-4 text-sm text-bright/70'>{aiResponse}</pre>}
-                        </div>
-                    )}
-
-                    {tab === 'codex' && (
-                        <div className='grid gap-3 rounded-xl border border-white/10 bg-white/4 p-4'>
-                            <div className='flex items-center gap-2 text-sm font-semibold text-bright'>
-                                <Sparkles className='h-4 w-4 text-orange-300' />
-                                Hanasand AI Handoff
-                            </div>
-                            <p className='text-sm text-bright/55'>
-                                This stores a structured request draft for the upcoming Codex integration without depending on the in-progress component.
-                            </p>
-                            <textarea value={codexPrompt} onChange={(e) => setCodexPrompt(e.target.value)} className='min-h-28 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-bright outline-none' />
-                            <button type='button' onClick={queueForCodex} className='flex w-fit cursor-pointer items-center gap-2 rounded-lg bg-orange-300/15 px-3 py-1.5 text-[11px] font-semibold text-orange-100 hover:bg-orange-300/25'>
-                                <Sparkles className='h-3.5 w-3.5' />
-                                Prepare for Codex
-                            </button>
-                            {codexNotice && <p className='text-xs text-emerald-300'>{codexNotice}</p>}
                         </div>
                     )}
                 </section>

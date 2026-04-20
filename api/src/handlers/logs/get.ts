@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
+import { isRuntimeLogSourceAvailable, listRuntimeLogs } from '#utils/docker/engine.ts'
 
 export async function getLogServices(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -37,4 +38,40 @@ export async function getLogs(req: FastifyRequest, res: FastifyReply) {
     `, [query.service || null, query.level || null, query.search || null, limit])
 
     return res.send({ logs: result.rows })
+}
+
+export async function getRealtimeLogs(req: FastifyRequest, res: FastifyReply) {
+    const { valid } = await tokenWrapper(req, res)
+    if (!valid) return res.status(401).send({ error: 'Unauthorized.' })
+    const role = await hasRole(req, res, 'system_admin')
+    if (!role.valid) return res.status(403).send({ error: 'Missing system_admin role.' })
+
+    const query = req.query as { service?: string, limit?: string, since?: string }
+    const limit = Math.min(Math.max(Number(query.limit || 300), 1), 1000)
+
+    try {
+        const runtime = await listRuntimeLogs({
+            service: query.service,
+            since: query.since,
+            limit,
+        })
+
+        return res.send({
+            logs: runtime.logs,
+            containers: runtime.containers,
+            runtime_available: runtime.available,
+            source: 'docker_engine',
+            generated_at: new Date().toISOString(),
+        })
+    } catch (error: any) {
+        return res.send({
+            logs: [],
+            containers: [],
+            runtime_available: false,
+            source: 'docker_engine',
+            unavailable_reason: error?.message || 'Failed to load runtime logs.',
+            docker_socket_available: isRuntimeLogSourceAvailable(),
+            generated_at: new Date().toISOString(),
+        })
+    }
 }

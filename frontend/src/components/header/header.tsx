@@ -1,7 +1,6 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
 import Upload from '@/components/menu/uploadIcon'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
@@ -11,55 +10,19 @@ import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
 import Menu from '@/components/menu/menu'
 import Link from 'next/link'
+import ViewModeToggle from './viewModeToggle'
 
 export default function Header({ token, path: serverPath }: { token: boolean, path: string }) {
     const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer hover:bg-[#6464641a]'
-    const [isUpload, setIsUpload] = useState(serverPath.includes('/upload'))
-    const [isLink, setIsLink] = useState(serverPath.endsWith('/g') || serverPath.includes('/g/'))
-    const [isPwned, setIsPwned] = useState(serverPath.includes('/pwned'))
-    const [isTest, setIsTest] = useState(serverPath.includes('/test'))
-    const [isStatus, setIsStatus] = useState(serverPath.includes('/status'))
-    const [isShare, setIsShare] = useState(serverPath.endsWith('/s') || serverPath.includes('/s/'))
-    const [isAI, setIsAI] = useState(serverPath.endsWith('/ai') || serverPath.includes('/ai/'))
-    const path = usePathname()
-
-    useEffect(() => {
-        const updatedIsUpload = path.includes('/upload')
-        const updatedIsLink = path.endsWith('/g') || path.includes('/g/')
-        const updatedIsPwned = path.includes('/pwned')
-        const updatedIsTest = path.includes('/test')
-        const updatedIsStatus = path.includes('/status')
-        const updatedIsShare = path.endsWith('/s') || path.includes('/s/')
-        const updatedIsAI = path.endsWith('/ai') || path.includes('/ai/')
-
-        if (updatedIsUpload !== isUpload) {
-            setIsUpload(updatedIsUpload)
-        }
-
-        if (updatedIsLink !== isLink) {
-            setIsLink(updatedIsLink)
-        }
-
-        if (updatedIsPwned !== isPwned) {
-            setIsPwned(updatedIsPwned)
-        }
-
-        if (updatedIsTest !== isTest) {
-            setIsTest(updatedIsTest)
-        }
-
-        if (updatedIsShare !== isShare) {
-            setIsShare(updatedIsShare)
-        }
-
-        if (updatedIsStatus !== isStatus) {
-            setIsStatus(updatedIsStatus)
-        }
-
-        if (updatedIsAI !== isAI) {
-            setIsAI(updatedIsAI)
-        }
-    }, [path])
+    const pathname = usePathname() || serverPath
+    const isUpload = pathname.includes('/upload')
+    const isLink = pathname.endsWith('/g') || pathname.includes('/g/')
+    const isPwned = pathname.includes('/pwned')
+    const isTest = pathname.includes('/test')
+    const isStatus = pathname.includes('/status')
+    const isShare = pathname.endsWith('/s') || pathname.includes('/s/')
+    const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
+    const isDashboard = pathname.startsWith('/dashboard')
 
     return (
         <header className={`fixed top-0 left-0 h-[6.5vh] z-1000 w-full max-h-[6.5vh] ${isShare ? 'p-2' : 'pt-4 px-8 md:px-16 lg:px-32'}`}>
@@ -97,6 +60,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     </Link>
                 </div>
                 <div className='flex justify-end items-center'>
+                    {token && isDashboard && <ViewModeToggle />}
                     <ThemeSwitch />
                     <Dashboard href='/dashboard' serverToken={token} />
                     <Logout baseStyles={baseStyles} serverToken={token} />

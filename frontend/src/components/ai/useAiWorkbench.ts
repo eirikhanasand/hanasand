@@ -28,11 +28,14 @@ export default function useAiWorkbench({
     isAuthenticated,
 }: UseAiWorkbenchProps) {
     const socketRef = useRef<WebSocket | null>(null)
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const shouldReconnectRef = useRef(true)
     const bootstrappedRef = useRef(false)
     const conversationsRef = useRef<AIConversation[]>(initialConversations)
     const [clients, setClients] = useState<GPT_Client[]>([])
     const [participants, setParticipants] = useState(0)
     const [isConnected, setIsConnected] = useState(false)
+    const [statusNotice, setStatusNotice] = useState<string | null>(null)
     const [conversations, setConversations] = useState<AIConversation[]>(initialConversations)
     const [activeConversationId, setActiveConversationId] = useState<string | null>(initialConversations[0]?.id || null)
     const [composer, setComposer] = useState('')
@@ -68,24 +71,44 @@ export default function useAiWorkbench({
     }, [conversations.length, isAuthenticated])
 
     useEffect(() => {
-        const ws = new WebSocket(`${config.url.api_client_wss}/client/ws/gpt`)
-        socketRef.current = ws
+        shouldReconnectRef.current = true
 
-        ws.onopen = () => setIsConnected(true)
-        ws.onclose = () => {
-            setIsConnected(false)
-            socketRef.current = null
-        }
-        ws.onerror = () => setIsConnected(false)
-        ws.onmessage = (event) => {
-            try {
-                handleSocketMessage(JSON.parse(event.data) as GptSocketMessage)
-            } catch (error) {
-                console.error('Invalid AI socket payload', error)
+        const connect = () => {
+            const ws = new WebSocket(`${config.url.api_client_wss}/client/ws/gpt`)
+            socketRef.current = ws
+
+            ws.onopen = () => {
+                setIsConnected(true)
+                setStatusNotice(null)
+            }
+            ws.onclose = () => {
+                setIsConnected(false)
+                socketRef.current = null
+                if (!shouldReconnectRef.current) {
+                    return
+                }
+                setStatusNotice('Connection lost. Reconnecting to the model pool...')
+                reconnectTimerRef.current = setTimeout(connect, 2000)
+            }
+            ws.onerror = () => setIsConnected(false)
+            ws.onmessage = (event) => {
+                try {
+                    handleSocketMessage(JSON.parse(event.data) as GptSocketMessage)
+                } catch (error) {
+                    console.error('Invalid AI socket payload', error)
+                }
             }
         }
 
-        return () => ws.close()
+        connect()
+
+        return () => {
+            shouldReconnectRef.current = false
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current)
+            }
+            socketRef.current?.close()
+        }
     }, [])
 
     const filteredConversations = useMemo(() => {
@@ -188,10 +211,17 @@ export default function useAiWorkbench({
             return
         }
 
-        await aiClientRequest('/ai/conversations', {
-            method: 'POST',
-            body: JSON.stringify(toConversationPayload(conversation)),
-        })
+        try {
+            const response = await aiClientRequest('/ai/conversations', {
+                method: 'POST',
+                body: JSON.stringify(toConversationPayload(conversation)),
+            })
+            if (!response.ok) {
+                throw new Error('Unable to create a new conversation.')
+            }
+        } catch (error) {
+            setStatusNotice(error instanceof Error ? error.message : 'Unable to create a new conversation.')
+        }
     }
 
     async function patchConversation(id: string, patch: Partial<AIConversation>) {
@@ -209,10 +239,17 @@ export default function useAiWorkbench({
             return
         }
 
-        await aiClientRequest(`/ai/conversations/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(toConversationPayload({ id, ...patch } as AIConversation)),
-        })
+        try {
+            const response = await aiClientRequest(`/ai/conversations/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(toConversationPayload({ id, ...patch } as AIConversation)),
+            })
+            if (!response.ok) {
+                throw new Error('Unable to save conversation changes.')
+            }
+        } catch (error) {
+            setStatusNotice(error instanceof Error ? error.message : 'Unable to save conversation changes.')
+        }
     }
 
     async function persistMessage(conversationId: string, message: AIConversationMessage) {
@@ -220,19 +257,26 @@ export default function useAiWorkbench({
             return
         }
 
-        await aiClientRequest(`/ai/conversations/${conversationId}/messages`, {
-            method: 'PUT',
-            body: JSON.stringify({
-                id: message.id,
-                role: message.role,
-                content: message.content,
-                pending: Boolean(message.pending),
-                error: Boolean(message.error),
-                modelName: message.modelName || null,
-                metadata: message.metadata || {},
-                createdAt: message.createdAt,
-            }),
-        })
+        try {
+            const response = await aiClientRequest(`/ai/conversations/${conversationId}/messages`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    id: message.id,
+                    role: message.role,
+                    content: message.content,
+                    pending: Boolean(message.pending),
+                    error: Boolean(message.error),
+                    modelName: message.modelName || null,
+                    metadata: message.metadata || {},
+                    createdAt: message.createdAt,
+                }),
+            })
+            if (!response.ok) {
+                throw new Error('Unable to persist the latest message.')
+            }
+        } catch (error) {
+            setStatusNotice(error instanceof Error ? error.message : 'Unable to persist the latest message.')
+        }
     }
 
     async function attachShare(shareId: string) {
@@ -716,6 +760,7 @@ export default function useAiWorkbench({
         importRepo,
         isAuthenticated,
         search,
+        statusNotice,
     }
 }
 
