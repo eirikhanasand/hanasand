@@ -69,6 +69,7 @@ import ingestLog from './handlers/logs/ingest.ts'
 import getAiWorkspace from './handlers/ai/getWorkspace.ts'
 import postAiConversation from './handlers/ai/postConversation.ts'
 import putAiConversation from './handlers/ai/putConversation.ts'
+import deleteAiConversation from './handlers/ai/deleteConversation.ts'
 import upsertAiMessage from './handlers/ai/upsertMessage.ts'
 import postAiRepository from './handlers/ai/postRepository.ts'
 import getAiModels from './handlers/ai/getModels.ts'
@@ -198,6 +199,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.post('/ai/import-repository', importRepository)
     fastify.post('/ai/conversations', postAiConversation)
     fastify.put('/ai/conversations/:id', putAiConversation)
+    fastify.delete('/ai/conversations/:id', deleteAiConversation)
     fastify.put('/ai/conversations/:id/messages', upsertAiMessage)
     fastify.post('/ai/repositories', postAiRepository)
 

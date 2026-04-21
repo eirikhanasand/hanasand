@@ -50,12 +50,16 @@ export default function AIPageClient({
                 <div className='grid min-h-0 flex-1 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]'>
                     <ChatSidebar
                         activeConversationId={ai.activeConversationId}
+                        archivedConversations={ai.archivedConversations}
                         conversations={ai.filteredConversations}
                         activeTool={activeTool}
                         isAuthenticated={ai.isAuthenticated}
                         search={ai.search}
                         setSearch={ai.setSearch}
+                        onArchiveConversation={ai.archiveConversation}
+                        onDeleteConversation={ai.deleteConversation}
                         onNewConversation={ai.createNewConversation}
+                        onRenameConversation={ai.renameConversation}
                         onSelectConversation={ai.selectConversation}
                         onToggleTool={setActiveTool}
                         toolPanel={activeTool === 'models' ? (
@@ -111,7 +115,7 @@ export default function AIPageClient({
                         {ai.statusNotice}
                     </div>
                 ) : null}
-                {!ai.filteredConversations.length ? (
+                {!ai.filteredConversations.length && !ai.archivedConversations.length ? (
                     <div className='mt-4 rounded-3xl bg-dark/35 p-5 outline outline-dark'>
                         <div className='flex flex-wrap items-start gap-4'>
                             <div className='max-w-4xl'>

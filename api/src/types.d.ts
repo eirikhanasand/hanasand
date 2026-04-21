@@ -131,6 +131,13 @@ type AIImportedRepoFile = {
     content: string
 }
 
+type AIRepositorySyncEvent = {
+    timestamp: string
+    status: 'ready' | 'syncing' | 'error'
+    source: 'import' | 'refresh' | 'sync'
+    message: string
+}
+
 type AIImportedRepo = {
     id: string
     name: string
@@ -139,6 +146,10 @@ type AIImportedRepo = {
     defaultBranch: string
     sourcePath: string
     sourceUrl: string
+    syncStatus: 'ready' | 'syncing' | 'error'
+    lastSyncedAt: string | null
+    lastSyncError: string | null
+    syncHistory: AIRepositorySyncEvent[]
     truncated: boolean
     importedAt: string
     files: AIImportedRepoFile[]

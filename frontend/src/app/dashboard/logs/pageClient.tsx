@@ -82,33 +82,31 @@ export default function LogsPageClient({
 
     return (
         <div className='grid gap-5'>
-            <section className='glass-panel rounded-[1.6rem] p-6'>
-                <div className='flex flex-wrap items-start justify-between gap-4'>
-                    <div className='max-w-3xl'>
-                        <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Operations</p>
-                        <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Logs</h1>
-                        <p className='mt-2 text-sm leading-6 text-bright/55'>
-                            Dashboard first, live container feed second, stored error records last. Runtime logs poll every few seconds so reruns and restarts actually show up without leaving the page.
-                        </p>
-                    </div>
-                    <div className='flex flex-wrap gap-2'>
-                        {[
-                            ['dashboard', 'Dashboard'],
-                            ['live', 'Live Feed'],
-                            ['stored', 'Stored Errors'],
-                        ].map(([key, label]) => (
-                            <button
-                                key={key}
-                                type='button'
-                                onClick={() => setView(key as 'dashboard' | 'live' | 'stored')}
-                                className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
-                                    view === key ? 'bg-orange-300 text-background' : 'bg-white/7 text-bright/65'
-                                }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
+            <section className='flex flex-wrap items-start justify-between gap-4'>
+                <div className='max-w-3xl'>
+                    <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Operations</p>
+                    <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Logs</h1>
+                    <p className='mt-2 text-sm leading-6 text-bright/55'>
+                        Dashboard first, live container feed second, stored error records last. Runtime logs poll every few seconds so reruns and restarts actually show up without leaving the page.
+                    </p>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    {[
+                        ['dashboard', 'Dashboard'],
+                        ['live', 'Live Feed'],
+                        ['stored', 'Stored Errors'],
+                    ].map(([key, label]) => (
+                        <button
+                            key={key}
+                            type='button'
+                            onClick={() => setView(key as 'dashboard' | 'live' | 'stored')}
+                            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
+                                view === key ? 'bg-orange-300 text-background' : 'bg-white/7 text-bright/65'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </section>
 
@@ -229,9 +227,14 @@ function LogFeedCard({
                         </div>
                         <p className='mt-3 text-xs text-bright/35'>{when(log.created_at)}</p>
                         {'metadata' in log && Object.keys(log.metadata || {}).length > 0 && (
-                            <pre className='mt-4 max-w-full overflow-auto whitespace-pre-wrap wrap-break-word rounded-2xl bg-black/35 p-4 text-xs text-bright/55'>
-                                {JSON.stringify(log.metadata, null, 2)}
-                            </pre>
+                            <details className='mt-4 rounded-2xl bg-black/28'>
+                                <summary className='cursor-pointer px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-bright/45'>
+                                    Request context
+                                </summary>
+                                <pre className='max-w-full overflow-auto whitespace-pre-wrap wrap-break-word border-t border-white/8 p-4 text-xs text-bright/55'>
+                                    {JSON.stringify(log.metadata, null, 2)}
+                                </pre>
+                            </details>
                         )}
                     </article>
                 ))}

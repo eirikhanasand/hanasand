@@ -23,6 +23,7 @@ export default async function putAiConversation(req: FastifyRequest, res: Fastif
         workspaceId,
         shareIds,
         workspaceMeta,
+        archivedAt,
     } = req.body as {
         title?: string
         preferredModel?: string | null
@@ -32,6 +33,7 @@ export default async function putAiConversation(req: FastifyRequest, res: Fastif
         workspaceId?: string | null
         shareIds?: string[]
         workspaceMeta?: Record<string, unknown>
+        archivedAt?: string | null
     } ?? {}
 
     await run(`
@@ -45,6 +47,7 @@ export default async function putAiConversation(req: FastifyRequest, res: Fastif
             workspace_id = CASE WHEN $11::boolean THEN $12 ELSE workspace_id END,
             share_ids = CASE WHEN $13::boolean THEN $14::text[] ELSE share_ids END,
             workspace_meta = CASE WHEN $15::boolean THEN $16::jsonb ELSE workspace_meta END,
+            archived_at = CASE WHEN $17::boolean THEN $18 ELSE archived_at END,
             updated_at = NOW()
         WHERE id = $1
           AND owner_id = $2
@@ -65,6 +68,8 @@ export default async function putAiConversation(req: FastifyRequest, res: Fastif
         shareIds ?? [],
         Object.prototype.hasOwnProperty.call(req.body || {}, 'workspaceMeta'),
         JSON.stringify(workspaceMeta || {}),
+        Object.prototype.hasOwnProperty.call(req.body || {}, 'archivedAt'),
+        archivedAt ?? null,
     ])
 
     const conversation = await getConversationForUser(id, userId)

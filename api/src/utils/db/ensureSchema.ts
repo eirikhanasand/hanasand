@@ -61,10 +61,12 @@ export default async function ensureSchema() {
             workspace_id TEXT,
             share_ids TEXT[] NOT NULL DEFAULT '{}'::text[],
             workspace_meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+            archived_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run(`ALTER TABLE ai_conversations ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`)
     await run(`
         CREATE TABLE IF NOT EXISTS ai_messages (
             id TEXT PRIMARY KEY,
@@ -89,12 +91,20 @@ export default async function ensureSchema() {
             default_branch TEXT NOT NULL DEFAULT 'main',
             source_path TEXT NOT NULL DEFAULT '',
             source_url TEXT NOT NULL,
+            sync_status TEXT NOT NULL DEFAULT 'ready',
+            last_synced_at TIMESTAMPTZ,
+            last_sync_error TEXT,
+            sync_history JSONB NOT NULL DEFAULT '[]'::jsonb,
             truncated BOOLEAN NOT NULL DEFAULT FALSE,
             imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
     await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS default_branch TEXT NOT NULL DEFAULT 'main'`)
     await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS source_path TEXT NOT NULL DEFAULT ''`)
+    await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS sync_status TEXT NOT NULL DEFAULT 'ready'`)
+    await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMPTZ`)
+    await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS last_sync_error TEXT`)
+    await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS sync_history JSONB NOT NULL DEFAULT '[]'::jsonb`)
     await run(`ALTER TABLE ai_imported_repositories ADD COLUMN IF NOT EXISTS truncated BOOLEAN NOT NULL DEFAULT FALSE`)
     await run(`
         CREATE TABLE IF NOT EXISTS ai_imported_repository_files (

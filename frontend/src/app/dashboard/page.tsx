@@ -4,6 +4,7 @@ import Shares from '@/components/share/dashboard/projects'
 import getVMs from '@/utils/vms/fetch/getVMs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 
 export default async function Page() {
     const Cookies = await cookies()
@@ -19,20 +20,18 @@ export default async function Page() {
     const vms = await getVMs(id, token, id)
 
     return (
-        <div className='grid gap-5 py-4 md:py-8'>
-            <section className='glass-panel rounded-[1.6rem] p-6'>
-                <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Welcome back</p>
-                <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>{text}</h1>
-                <p className='mt-2 max-w-2xl text-sm leading-6 text-bright/52'>
-                    Projects, shares, machines, mail, logs, and system metrics now live in one dashboard shell instead of each page trying to carry its own navigation.
-                </p>
-            </section>
+        <DashboardPage>
+            <DashboardHeader
+                eyebrow='Workspace'
+                title={text}
+                description='Projects, shares, machines, mail, logs, and system metrics all in the same place.'
+            />
             <div className='grid gap-3 md:grid-cols-2'>
                 <Projects />
                 <VMs vms={vms} />
                 <Shares />
             </div>
-        </div>
+        </DashboardPage>
     )
 }
 

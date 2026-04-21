@@ -13,6 +13,7 @@ export type AiConversationRow = {
     workspace_id: string | null
     share_ids: string[] | null
     workspace_meta: Record<string, unknown> | null
+    archived_at: string | null
     created_at: string
     updated_at: string
 }
@@ -92,6 +93,10 @@ export async function getWorkspaceBundle(ownerId: string) {
         default_branch: string
         source_path: string
         source_url: string
+        sync_status: 'ready' | 'syncing' | 'error'
+        last_synced_at: string | null
+        last_sync_error: string | null
+        sync_history: AIRepositorySyncEvent[] | null
         truncated: boolean
         imported_at: string
     }[]
@@ -128,6 +133,10 @@ export async function getWorkspaceBundle(ownerId: string) {
             defaultBranch: repository.default_branch,
             sourcePath: repository.source_path,
             sourceUrl: repository.source_url,
+            syncStatus: repository.sync_status || 'ready',
+            lastSyncedAt: repository.last_synced_at,
+            lastSyncError: repository.last_sync_error,
+            syncHistory: Array.isArray(repository.sync_history) ? repository.sync_history : [],
             truncated: repository.truncated,
             importedAt: repository.imported_at,
             files: filesByRepository.get(repository.id) || [],
@@ -146,6 +155,7 @@ export function toAiConversation(conversation: AiConversationRow, messages: AiMe
         workspaceKind: conversation.workspace_kind,
         shareIds: conversation.share_ids || [],
         workspaceMeta: conversation.workspace_meta || {},
+        archivedAt: conversation.archived_at,
         createdAt: conversation.created_at,
         updatedAt: conversation.updated_at,
         messages: messages.map((message) => ({

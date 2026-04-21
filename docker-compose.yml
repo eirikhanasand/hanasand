@@ -38,6 +38,8 @@ services:
       - "${API_PORT:-8080}:8080"
     env_file:
       .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       MAIL_INTERNAL_URL: ${MAIL_INTERNAL_URL:-http://stalwart:8080}
       MAIL_HOST: ${MAIL_HOST:-mail.hanasand.com}

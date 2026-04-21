@@ -1,4 +1,5 @@
 import run from '#db'
+import { mailConfig } from './config.ts'
 import { ensureMailbox, getMessage, listInboxMessagesForFiltering, moveMessage } from './jmap.ts'
 import { type MailRule } from './types.ts'
 
@@ -21,7 +22,18 @@ export async function deleteMailRule(userId: string, ruleId: string) {
     await run('DELETE FROM mail_filters WHERE user_id = $1 AND id = $2', [userId, ruleId])
 }
 
-export async function applyMailRules(params: { userId: string, username: string, password: string, inboxMailboxId: string }) {
+export async function applyMailRules(params: {
+    userId: string
+    username: string
+    password: string
+    inboxMailboxId: string
+    junkMailboxId?: string | null
+    mailboxAddress: string
+}) {
+    if (params.junkMailboxId) {
+        await promoteTrustedInternalMail(params)
+    }
+
     const rules = await listMailRules(params.userId)
     const activeRules = rules.filter(rule => rule.enabled && rule.criteria.contains.trim())
     if (!activeRules.length) {
@@ -55,6 +67,30 @@ export async function applyMailRules(params: { userId: string, username: string,
     }
 }
 
+async function promoteTrustedInternalMail(params: {
+    username: string
+    password: string
+    inboxMailboxId: string
+    junkMailboxId?: string | null
+    mailboxAddress: string
+}) {
+    if (!params.junkMailboxId) {
+        return
+    }
+
+    const junkMessages = await listInboxMessagesForFiltering(params.username, params.password, params.junkMailboxId)
+    for (const summary of junkMessages) {
+        const message = await getMessage(params.username, params.password, summary.id)
+        if (!message || !isTrustedInternalMail(message, params.mailboxAddress)) {
+            continue
+        }
+
+        await moveMessage(params.username, params.password, message.id, params.inboxMailboxId, {
+            '$junk': null,
+        })
+    }
+}
+
 function matchesRule(message: NonNullable<Awaited<ReturnType<typeof getMessage>>>, rule: MailRule) {
     const needle = rule.criteria.contains.toLowerCase().trim()
     if (!needle) {
@@ -78,4 +114,16 @@ function matchesRule(message: NonNullable<Awaited<ReturnType<typeof getMessage>>
     }
 
     return false
+}
+
+function isTrustedInternalMail(message: NonNullable<Awaited<ReturnType<typeof getMessage>>>, mailboxAddress: string) {
+    const ownAddress = mailboxAddress.toLowerCase()
+    const allRecipients = [...message.to, ...message.cc, ...message.bcc].map(address => address.email.toLowerCase())
+    const allSenders = message.from.map(address => address.email.toLowerCase())
+
+    if (!allRecipients.includes(ownAddress) || !allSenders.length) {
+        return false
+    }
+
+    return allSenders.every(address => address.endsWith(`@${mailConfig.domain}`))
 }

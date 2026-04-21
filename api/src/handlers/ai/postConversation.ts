@@ -18,6 +18,7 @@ export default async function postAiConversation(req: FastifyRequest, res: Fasti
         workspaceId = null,
         shareIds = [],
         workspaceMeta = {},
+        archivedAt = null,
     } = req.body as {
         id?: string
         title?: string
@@ -28,6 +29,7 @@ export default async function postAiConversation(req: FastifyRequest, res: Fasti
         workspaceId?: string | null
         shareIds?: string[]
         workspaceMeta?: Record<string, unknown>
+        archivedAt?: string | null
     } ?? {}
 
     const conversationId = id || crypto.randomUUID()
@@ -35,9 +37,9 @@ export default async function postAiConversation(req: FastifyRequest, res: Fasti
     await run(`
         INSERT INTO ai_conversations (
             id, owner_id, title, preferred_model, active_model, model_strategy,
-            workspace_kind, workspace_id, share_ids, workspace_meta
+            workspace_kind, workspace_id, share_ids, workspace_meta, archived_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10::jsonb)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10::jsonb, $11)
         ON CONFLICT (id)
         DO NOTHING
     `, [
@@ -51,6 +53,7 @@ export default async function postAiConversation(req: FastifyRequest, res: Fasti
         workspaceId,
         shareIds,
         JSON.stringify(workspaceMeta),
+        archivedAt,
     ])
 
     const conversation = await getConversationForUser(conversationId, userId)

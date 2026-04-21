@@ -561,6 +561,7 @@ type AIConversation = {
     workspaceMeta: Record<string, unknown>
     messages: AIConversationMessage[]
     metrics: GPT_ModelMetrics
+    archivedAt?: string | null
     createdAt: string
     updatedAt: string
 }
@@ -571,6 +572,13 @@ type AIImportedRepoFile = {
     content: string
 }
 
+type AIRepositorySyncEvent = {
+    timestamp: string
+    status: 'ready' | 'syncing' | 'error'
+    source: 'import' | 'refresh' | 'sync'
+    message: string
+}
+
 type AIImportedRepo = {
     id: string
     name: string
@@ -579,6 +587,10 @@ type AIImportedRepo = {
     defaultBranch: string
     sourcePath: string
     sourceUrl: string
+    syncStatus: 'ready' | 'syncing' | 'error'
+    lastSyncedAt: string | null
+    lastSyncError: string | null
+    syncHistory: AIRepositorySyncEvent[]
     files: AIImportedRepoFile[]
     truncated: boolean
     importedAt: string

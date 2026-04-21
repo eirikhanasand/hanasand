@@ -46,6 +46,8 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
             username: access.username,
             password: access.password,
             inboxMailboxId: inboxMailbox.id,
+            junkMailboxId: mailboxData.mailboxes.find(mailbox => mailbox.role === 'junk')?.id || null,
+            mailboxAddress: access.address,
         }).catch(error => req.log.warn({ error }, 'Failed to apply mail rules'))
 
         const refreshedMailboxData = await getMailboxList(access.username, access.password)
