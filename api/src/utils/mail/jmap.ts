@@ -148,7 +148,7 @@ export async function uploadAttachment(username: string, password: string, filen
     return response.json() as Promise<{ blobId: string, size: number, type: string }>
 }
 
-export async function sendMessage(params: {
+export async function storeSentMessage(params: {
     username: string
     password: string
     from: MailAddress
@@ -163,25 +163,9 @@ export async function sendMessage(params: {
 }) {
     const { username, password, from, to, cc = [], bcc = [], replyTo = [], subject, textBody, htmlBody, attachments = [] } = params
     const { session, accountId } = await getMailSession(username, password)
-    const identities = await jmapCall<{ list?: Array<{ id: string, email?: string, name?: string }> }>(username, password, session, [
-        ['Identity/get', { accountId }, 'identities']
-    ])
-
-    let identityId = identities.list?.find(identity => identity.email === from.email)?.id
-    if (!identityId) {
-        const createIdentityId = `identity-${Date.now()}`
-        const created = await jmapCall<{ created?: Record<string, { id: string }> }>(username, password, session, [
-            ['Identity/set', { accountId, create: { [createIdentityId]: { name: from.name || from.email, email: from.email, replyTo } } }, 'identity-create']
-        ])
-        identityId = created.created?.[createIdentityId]?.id
-    }
-
-    if (!identityId) {
-        throw new Error('Unable to prepare sending identity.')
-    }
 
     const sentMailboxId = await ensureMailbox(username, password, 'Sent', 'sent')
-    const draftId = `draft-${Date.now()}`
+    const createId = `sent-${Date.now()}`
     const bodyValues: Record<string, { value: string }> = {
         text: { value: normalizeMessageText(textBody || '') }
     }
@@ -192,6 +176,7 @@ export async function sendMessage(params: {
         bcc,
         replyTo,
         subject,
+        keywords: { '$seen': true },
         mailboxIds: sentMailboxId ? { [sentMailboxId]: true } : undefined,
         textBody: [{ partId: 'text', type: 'text/plain' }],
         bodyValues,
@@ -212,26 +197,14 @@ export async function sendMessage(params: {
         }))
     }
 
-    const rcptTo = [...to, ...cc, ...bcc].map(address => ({ email: address.email }))
-    await jmapCall(username, password, session, [
-        ['Email/set', { accountId, create: { [draftId]: create } }, 'email-create'],
-        ['EmailSubmission/set', {
-            accountId,
-            create: {
-                submit: {
-                    identityId,
-                    emailId: `#${draftId}`,
-                    envelope: {
-                        mailFrom: { email: from.email },
-                        rcptTo,
-                    },
-                    onSuccessDestroyEmail: [`#${draftId}`],
-                }
-            }
-        }, 'email-submit']
-    ], [CORE, MAIL, SUBMISSION])
+    const result = await jmapCall<{ created?: Record<string, { id: string }> }>(username, password, session, [
+        ['Email/set', { accountId, create: { [createId]: create } }, 'email-create']
+    ])
 
-    return { sentMailboxId }
+    return {
+        sentMailboxId,
+        sentMessageId: result.created?.[createId]?.id || null,
+    }
 }
 
 export async function downloadBlob(username: string, password: string, blobId: string, name: string) {

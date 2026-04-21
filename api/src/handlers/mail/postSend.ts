@@ -2,7 +2,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
 import { parseAddressInput } from '#utils/mail/helpers.ts'
-import { listMessages, sendMessage, uploadAttachment } from '#utils/mail/jmap.ts'
+import { storeSentMessage, uploadAttachment } from '#utils/mail/jmap.ts'
+import { sendMailViaSmtp } from '#utils/mail/smtp.ts'
 
 type AttachmentBody = {
     name: string
@@ -45,26 +46,42 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
                 size: uploaded.size,
                 type: uploaded.type || attachment.type,
                 name: attachment.name,
+                contentBase64: attachment.contentBase64,
             }
         }))
 
-        const sendResult = await sendMessage({
+        const to = parseAddressInput(body.to)
+        const cc = parseAddressInput(body.cc || '')
+        const bcc = parseAddressInput(body.bcc || '')
+        const replyTo = parseAddressInput(body.replyTo || '')
+
+        await sendMailViaSmtp({
             username: access.username,
             password: access.password,
             from: { email: access.address, name: access.targetUser },
-            to: parseAddressInput(body.to),
-            cc: parseAddressInput(body.cc || ''),
-            bcc: parseAddressInput(body.bcc || ''),
-            replyTo: parseAddressInput(body.replyTo || ''),
+            to,
+            cc,
+            bcc,
+            replyTo,
             subject: body.subject || '(No subject)',
             textBody: body.textBody,
             htmlBody: body.htmlBody,
             attachments,
         })
 
-        const sentMessages = sendResult.sentMailboxId
-            ? await listMessages(access.username, access.password, sendResult.sentMailboxId, 1).catch(() => [])
-            : []
+        const sendResult = await storeSentMessage({
+            username: access.username,
+            password: access.password,
+            from: { email: access.address, name: access.targetUser },
+            to,
+            cc,
+            bcc,
+            replyTo,
+            subject: body.subject || '(No subject)',
+            textBody: body.textBody,
+            htmlBody: body.htmlBody,
+            attachments,
+        })
 
         return res
             .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
@@ -73,7 +90,7 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
                 ok: true,
                 mailboxUser: access.targetUser,
                 sentMailboxId: sendResult.sentMailboxId,
-                sentMessageId: sentMessages[0]?.id || null,
+                sentMessageId: sendResult.sentMessageId,
             })
     } catch (error) {
         req.log.error(error)
