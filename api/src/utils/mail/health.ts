@@ -10,10 +10,11 @@ export async function getMailHealth(): Promise<MailHealth> {
     const checks: MailHealthCheck[] = []
     let queueDepth = 0
     let smtpBannerLatencyMs: number | null = null
+    const internalMailHost = new URL(mailConfig.internalUrl).hostname
 
-    const hostRecords = await safeResolveA(mailConfig.host)
+    const hostRecords = await resolvePublicDns(mailConfig.host, 'A')
     const primaryIp = hostRecords[0] || null
-    const reverseRecords = primaryIp ? await safeReverse(primaryIp) : []
+    const reverseRecords = primaryIp ? await resolvePublicDns(primaryIp, 'PTR') : []
     const ptrMatches = reverseRecords.some(value => normalizeDnsName(value) === normalizeDnsName(mailConfig.host))
 
     checks.push({
@@ -25,10 +26,10 @@ export async function getMailHealth(): Promise<MailHealth> {
             : 'No A record found for the mail host.',
     })
 
-    const spf = await safeResolveTxt(mailConfig.domain)
-    const dmarc = await safeResolveTxt(`_dmarc.${mailConfig.domain}`)
-    const mtaStsTxt = await safeResolveTxt(`_mta-sts.${mailConfig.domain}`)
-    const tlsRpt = await safeResolveTxt(`_smtp._tls.${mailConfig.domain}`)
+    const spf = await resolvePublicDns(mailConfig.domain, 'TXT')
+    const dmarc = await resolvePublicDns(`_dmarc.${mailConfig.domain}`, 'TXT')
+    const mtaStsTxt = await resolvePublicDns(`_mta-sts.${mailConfig.domain}`, 'TXT')
+    const tlsRpt = await resolvePublicDns(`_smtp._tls.${mailConfig.domain}`, 'TXT')
     const mtaStsPolicy = await safeFetchText(`https://mta-sts.${mailConfig.domain}/.well-known/mta-sts.txt`)
 
     checks.push({
@@ -56,7 +57,7 @@ export async function getMailHealth(): Promise<MailHealth> {
         detail: tlsRpt[0] || 'Missing TLS reporting TXT record.',
     })
 
-    smtpBannerLatencyMs = await measureSmtpBannerLatency(mailConfig.host, 25)
+    smtpBannerLatencyMs = await measureSmtpBannerLatency(internalMailHost, 25)
     checks.push({
         id: 'smtp-banner',
         label: 'SMTP banner',
@@ -64,7 +65,7 @@ export async function getMailHealth(): Promise<MailHealth> {
         detail: smtpBannerLatencyMs === null ? 'Unable to measure port 25 greeting.' : `${smtpBannerLatencyMs}ms`,
     })
 
-    const certificateInfo = await inspectImplicitTls(mailConfig.host, mailConfig.imapPort)
+    const certificateInfo = await inspectImplicitTls(internalMailHost, mailConfig.imapPort, mailConfig.host)
     checks.push({
         id: 'tls-cert',
         label: 'TLS certificate',
@@ -95,28 +96,46 @@ export async function getMailHealth(): Promise<MailHealth> {
     }
 }
 
-async function safeResolveA(hostname: string) {
+async function resolvePublicDns(name: string, type: 'A' | 'TXT' | 'PTR') {
     try {
-        return await dns.resolve4(hostname)
-    } catch {
-        return []
-    }
-}
+        const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`, {
+            signal: AbortSignal.timeout(10_000),
+        })
+        if (!response.ok) {
+            return []
+        }
 
-async function safeReverse(ip: string) {
-    try {
-        return await dns.reverse(ip)
-    } catch {
-        return []
-    }
-}
+        const payload = await response.json() as {
+            Answer?: Array<{ data?: string }>
+        }
 
-async function safeResolveTxt(hostname: string) {
-    try {
-        const records = await dns.resolveTxt(hostname)
-        return records.map(parts => parts.join(''))
+        return (payload.Answer || [])
+            .map(answer => (answer.data || '').replace(/^"|"$/g, ''))
+            .map(answer => answer.endsWith('.') ? answer.slice(0, -1) : answer)
+            .map(answer => answer.replace(/" "/g, ''))
     } catch {
-        return []
+        if (type === 'A') {
+            try {
+                return await dns.resolve4(name)
+            } catch {
+                return []
+            }
+        }
+
+        if (type === 'PTR') {
+            try {
+                return await dns.reverse(name)
+            } catch {
+                return []
+            }
+        }
+
+        try {
+            const records = await dns.resolveTxt(name)
+            return records.map(parts => parts.join(''))
+        } catch {
+            return []
+        }
     }
 }
 
@@ -166,12 +185,12 @@ function measureSmtpBannerLatency(host: string, port: number) {
     })
 }
 
-function inspectImplicitTls(host: string, port: number) {
+function inspectImplicitTls(host: string, port: number, servername: string) {
     return new Promise<{ status: 'healthy' | 'warning' | 'error', detail: string }>((resolve) => {
         const socket = tls.connect({
             host,
             port,
-            servername: host,
+            servername,
             rejectUnauthorized: true,
         }, () => {
             const certificate = socket.getPeerCertificate()
