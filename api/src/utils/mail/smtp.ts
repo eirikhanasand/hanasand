@@ -21,8 +21,9 @@ export async function sendMailViaSmtp(params: {
     htmlBody?: string
     attachments?: SmtpAttachment[]
 }) {
+    const smtpHost = getInternalSmtpHost()
     const transport = nodemailer.createTransport({
-        host: mailConfig.host,
+        host: smtpHost,
         port: mailConfig.smtpPort,
         secure: false,
         requireTLS: true,
@@ -54,4 +55,12 @@ export async function sendMailViaSmtp(params: {
 
 function formatAddress(address: MailAddress) {
     return address.name ? `${address.name} <${address.email}>` : address.email
+}
+
+function getInternalSmtpHost() {
+    try {
+        return new URL(mailConfig.internalUrl).hostname || mailConfig.host
+    } catch {
+        return mailConfig.host
+    }
 }
