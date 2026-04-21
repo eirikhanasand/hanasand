@@ -9,6 +9,7 @@
     "lint": "bun --bun next lint",
     "test:e2e": "bun scripts/run-playwright-status.mjs",
     "test:e2e:auth": "bun scripts/run-playwright-status.mjs tests/auth.spec.ts",
+    "test:e2e:mail": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright mail workspace' bun scripts/run-playwright-status.mjs tests/mail.spec.ts",
     "test:e2e:ai": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright AI workspace' bun scripts/run-playwright-status.mjs tests/ai-workspace.spec.ts"
   },
   "dependencies": {

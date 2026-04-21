@@ -23,7 +23,9 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
         const mailboxData = await getMailboxList(access.username, access.password)
         const inboxMailbox = mailboxData.mailboxes.find(mailbox => mailbox.role === 'inbox') || mailboxData.mailboxes[0]
         if (!inboxMailbox) {
-            return res.send({
+            return res
+                .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
+                .send({
                 actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
                 mailboxUser: access.targetUser,
                 mailboxAddress: access.address,
@@ -56,7 +58,9 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
         const selectedMessage = selectedMessageId ? await getMessage(access.username, access.password, selectedMessageId) : null
         const filters = await listMailRules(access.targetUser)
 
-        return res.send({
+        return res
+            .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
+            .send({
             actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
             mailboxUser: access.targetUser,
             mailboxAddress: access.address,

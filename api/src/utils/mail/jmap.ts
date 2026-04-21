@@ -230,6 +230,8 @@ export async function sendMessage(params: {
             }
         }, 'email-submit']
     ], [CORE, MAIL, SUBMISSION])
+
+    return { sentMailboxId }
 }
 
 export async function downloadBlob(username: string, password: string, blobId: string, name: string) {

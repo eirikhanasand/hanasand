@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
 import { parseAddressInput } from '#utils/mail/helpers.ts'
-import { sendMessage, uploadAttachment } from '#utils/mail/jmap.ts'
+import { listMessages, sendMessage, uploadAttachment } from '#utils/mail/jmap.ts'
 
 type AttachmentBody = {
     name: string
@@ -48,7 +48,7 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
             }
         }))
 
-        await sendMessage({
+        const sendResult = await sendMessage({
             username: access.username,
             password: access.password,
             from: { email: access.address, name: access.targetUser },
@@ -62,7 +62,19 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
             attachments,
         })
 
-        return res.status(201).send({ ok: true })
+        const sentMessages = sendResult.sentMailboxId
+            ? await listMessages(access.username, access.password, sendResult.sentMailboxId, 1).catch(() => [])
+            : []
+
+        return res
+            .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
+            .status(201)
+            .send({
+                ok: true,
+                mailboxUser: access.targetUser,
+                sentMailboxId: sendResult.sentMailboxId,
+                sentMessageId: sentMessages[0]?.id || null,
+            })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to send mail.' })

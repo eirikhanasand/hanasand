@@ -43,7 +43,10 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
         search.set('messageId', params.messageId)
     }
 
-    const response = await fetch(`${config.url.api}/mail/overview?${search.toString()}`, { headers })
+    const response = await fetch(`${config.url.api}/mail/overview?${search.toString()}`, {
+        headers,
+        cache: 'no-store',
+    })
     if (!response.ok) {
         throw new Error((await response.json()).error || 'Unable to load mail.')
     }
@@ -62,7 +65,12 @@ export async function sendMail(body: {
     htmlBody?: string
     attachments?: DraftAttachment[]
 }) {
-    return postJson('/mail/send', body)
+    return postJson('/mail/send', body) as Promise<{
+        ok: boolean
+        mailboxUser: string
+        sentMailboxId: string | null
+        sentMessageId: string | null
+    } | null>
 }
 
 export async function createMailbox(body: { mailboxUser?: string, name: string, parentId?: string | null }) {
@@ -115,6 +123,7 @@ async function postJson(path: string, body: Record<string, unknown>) {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        cache: 'no-store',
     })
 
     if (!response.ok) {

@@ -61,7 +61,7 @@ const emptyComposer: ComposerState = {
     attachments: [],
 }
 
-const POLL_INTERVAL_MS = 30_000
+const POLL_INTERVAL_MS = 10_000
 const STALE_AFTER_MS = 5 * 60_000
 
 const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-medium text-bright/78 transition hover:border-white/18 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45'
@@ -83,6 +83,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [query, setQuery] = useState('')
     const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
     const [now, setNow] = useState(() => Date.now())
+    const [activeMailboxUser, setActiveMailboxUser] = useState<string | null>(mailboxUser || null)
 
     async function load(params: {
         mailboxId?: string | null
@@ -99,12 +100,13 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             }
 
             const next = await fetchMailOverview({
-                mailboxUser: params.mailboxUser ?? mailboxUser ?? undefined,
+                mailboxUser: params.mailboxUser ?? activeMailboxUser ?? mailboxUser ?? undefined,
                 mailboxId: params.mailboxId ?? selectedMailboxId,
                 messageId: params.messageId ?? selectedMessageId,
             })
 
             setOverview(next)
+            setActiveMailboxUser(next.mailboxUser)
             setSelectedMailboxId(next.selectedMailboxId)
             const nextSelectedMessageId = params.messageId
                 || next.selectedMessage?.id
@@ -130,6 +132,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     }
 
     useEffect(() => {
+        setActiveMailboxUser(mailboxUser || null)
         void load({ mailboxUser })
     }, [mailboxUser])
 
@@ -153,7 +156,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             window.clearInterval(poll)
             document.removeEventListener('visibilitychange', onVisibilityChange)
         }
-    }, [mailboxUser, selectedMailboxId, selectedMessageId])
+    }, [activeMailboxUser, mailboxUser, selectedMailboxId, selectedMessageId])
 
     const filteredMessages = useMemo(() => {
         const needle = query.trim().toLowerCase()
@@ -195,6 +198,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <button
+                        data-testid='mail-compose-button'
                         className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20'
                         onClick={() => setComposer({ ...emptyComposer, open: true })}
                     >
@@ -204,9 +208,13 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
                     {overview?.actor.canAccessAnyMailbox && (
                         <select
+                            data-testid='mail-account-select'
                             className={`${subtleInput} min-w-36`}
                             value={overview.mailboxUser}
-                            onChange={(event) => void load({ mailboxUser: event.target.value, mailboxId: null, messageId: null })}
+                            onChange={(event) => {
+                                setActiveMailboxUser(event.target.value)
+                                void load({ mailboxUser: event.target.value, mailboxId: null, messageId: null })
+                            }}
                         >
                             {overview.accessibleAccounts.map(account => (
                                 <option key={account.id} value={account.id}>
@@ -288,6 +296,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             {overview?.mailboxes.map(mailbox => (
                                 <button
                                     key={mailbox.id}
+                                    data-testid={`mail-mailbox-${mailbox.role || mailbox.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                                     onClick={() => {
                                         setSelectedMailboxId(mailbox.id)
                                         void load({ mailboxId: mailbox.id, messageId: null })
@@ -612,7 +621,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     onClose={() => setComposer(emptyComposer)}
                     onSubmit={async next => {
                         try {
-                            await sendMail({
+                            const sendResult = await sendMail({
                                 mailboxUser: overview.mailboxUser,
                                 to: next.to,
                                 cc: next.cc,
@@ -622,7 +631,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 attachments: next.attachments,
                             })
                             setComposer(emptyComposer)
-                            await load({ silent: true, mailboxId: selectedMailboxId, messageId: selectedMessageId })
+                            await load({
+                                silent: true,
+                                mailboxUser: sendResult?.mailboxUser || overview.mailboxUser,
+                                mailboxId: sendResult?.sentMailboxId || selectedMailboxId,
+                                messageId: sendResult?.sentMessageId || null,
+                            })
                         } catch (cause) {
                             setError(cause instanceof Error ? cause.message : 'Unable to send mail.')
                         }
@@ -640,6 +654,7 @@ function MessageRow({ message, active, onClick }: {
 }) {
     return (
         <button
+            data-testid={`mail-message-${message.id}`}
             onClick={onClick}
             className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
                 active
@@ -679,6 +694,7 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
     return (
         <div className='fixed inset-0 z-[1400] grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
             <form
+                data-testid='mail-compose-form'
                 className='w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#0f120f]/92 p-4
                     shadow-[0_30px_100px_rgba(0,0,0,0.36)] backdrop-blur-2xl'
                 onSubmit={async event => {
@@ -700,13 +716,14 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                 </div>
 
                 <div className='mt-3 grid gap-2'>
-                    <input className={`${subtleInput} w-full`} placeholder='To' value={state.to} onChange={event => patch({ to: event.target.value })} />
+                    <input data-testid='mail-compose-to' className={`${subtleInput} w-full`} placeholder='To' value={state.to} onChange={event => patch({ to: event.target.value })} />
                     <div className='grid gap-2 md:grid-cols-2'>
                         <input className={`${subtleInput} w-full`} placeholder='CC' value={state.cc} onChange={event => patch({ cc: event.target.value })} />
                         <input className={`${subtleInput} w-full`} placeholder='BCC' value={state.bcc} onChange={event => patch({ bcc: event.target.value })} />
                     </div>
-                    <input className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
+                    <input data-testid='mail-compose-subject' className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
                     <textarea
+                        data-testid='mail-compose-body'
                         className='min-h-[16rem] w-full rounded-[20px] border border-white/10 bg-white/[0.03] px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05]'
                         placeholder='Write your message...'
                         value={state.body}
@@ -756,7 +773,7 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     <p className='text-[11px] text-bright/36'>Sending as `{mailboxUser}`</p>
                     <div className='flex items-center gap-2'>
                         <button type='button' className={toolbarButton} onClick={onClose}>Cancel</button>
-                        <button type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
+                        <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
                             <Send className='h-3.5 w-3.5' />
                             {submitting ? 'Sending…' : 'Send'}
                         </button>
