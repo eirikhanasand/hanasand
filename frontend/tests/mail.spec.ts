@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test, type APIRequestContext, type BrowserContext } from '@playwright/test'
 
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'http://127.0.0.1:8080/api'
 const password = `Aa11!!${Date.now()}Bb22!!`
@@ -11,8 +11,8 @@ test.describe('mail workspace', () => {
         const senderId = `pw_mail_sender_${runId}`
         const recipientId = `pw_mail_recipient_${runId}`
 
-        await createUser(request, senderId, 'Mail Sender')
-        await createUser(request, recipientId, 'Mail Recipient')
+        const senderAuth = await createUser(request, senderId, 'Mail Sender')
+        const recipientAuth = await createUser(request, recipientId, 'Mail Recipient')
 
         const senderContext = await browser.newContext({ baseURL })
         const recipientContext = await browser.newContext({ baseURL })
@@ -20,8 +20,8 @@ test.describe('mail workspace', () => {
         const recipientPage = await recipientContext.newPage()
 
         try {
-            await login(senderPage, senderId, password)
-            await login(recipientPage, recipientId, password)
+            await authenticateContext(senderContext, senderAuth)
+            await authenticateContext(recipientContext, recipientAuth)
 
             await senderPage.goto('/dashboard/mail')
             await recipientPage.goto('/dashboard/mail')
@@ -75,6 +75,13 @@ async function createUser(request: APIRequestContext, id: string, name: string) 
         data: { id, name, password },
     })
     expect(response.ok()).toBeTruthy()
+    return await response.json() as {
+        id: string
+        name: string
+        token: string
+        expires_at: string
+        roles?: string[]
+    }
 }
 
 async function deleteUser(request: APIRequestContext, id: string, secret: string) {
@@ -97,11 +104,18 @@ async function deleteUser(request: APIRequestContext, id: string, secret: string
     })
 }
 
-async function login(page: Page, id: string, secret: string) {
-    await page.goto('/login')
-    await expect(page.getByRole('button', { name: 'Login' })).toBeVisible()
-    await page.getByPlaceholder('Username').fill(id)
-    await page.getByPlaceholder('Password').fill(secret)
-    await page.getByRole('button', { name: 'Login' }).click()
-    await expect(page).toHaveURL(/dashboard/)
+async function authenticateContext(context: BrowserContext, auth: {
+    id: string
+    name: string
+    token: string
+    expires_at: string
+    roles?: string[]
+}) {
+    const expires = Math.floor(new Date(auth.expires_at).getTime() / 1000)
+    await context.addCookies([
+        { name: 'id', value: auth.id, domain: 'hanasand.com', path: '/', expires, httpOnly: false, secure: true, sameSite: 'Lax' },
+        { name: 'name', value: auth.name, domain: 'hanasand.com', path: '/', expires, httpOnly: false, secure: true, sameSite: 'Lax' },
+        { name: 'access_token', value: auth.token, domain: 'hanasand.com', path: '/', expires, httpOnly: false, secure: true, sameSite: 'Lax' },
+        { name: 'roles', value: JSON.stringify(auth.roles || []), domain: 'hanasand.com', path: '/', expires, httpOnly: false, secure: true, sameSite: 'Lax' },
+    ])
 }
