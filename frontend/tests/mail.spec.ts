@@ -52,7 +52,7 @@ test.describe('mail workspace', () => {
             await expect(bodyText(recipientPage, outboundBody)).toBeVisible({ timeout: 30_000 })
 
             const replyBody = `Reply from recipient ${runId}`
-            await recipientPage.getByRole('button', { name: 'Reply' }).click()
+            await recipientPage.getByRole('button', { name: 'Reply', exact: true }).click()
             await expect(composeForm(recipientPage)).toBeVisible()
             await bodyInput(recipientPage).fill(replyBody)
             await sendButton(recipientPage).click()
@@ -145,7 +145,7 @@ function bodyInput(page: Page) {
 }
 
 function sendButton(page: Page) {
-    return page.getByTestId('mail-compose-send').or(page.getByRole('button', { name: 'Send' }))
+    return page.getByTestId('mail-compose-send').or(page.getByRole('button', { name: 'Send', exact: true }))
 }
 
 function inboxButton(page: Page) {
