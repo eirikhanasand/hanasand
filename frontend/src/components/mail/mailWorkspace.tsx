@@ -10,6 +10,8 @@ import {
     Inbox,
     Mail,
     MailPlus,
+    PanelLeftClose,
+    PanelLeftOpen,
     Radar,
     Paperclip,
     Reply,
@@ -32,6 +34,7 @@ import {
     type DraftAttachment,
 } from '@/utils/mail/client'
 import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailOverview } from '@/utils/mail/types'
+import { DashboardHeader, DashboardPage, dashboardPanelClass } from '@/components/dashboard/ui'
 
 type Props = {
     mailboxUser?: string | null
@@ -78,8 +81,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [moveTargetMailboxId, setMoveTargetMailboxId] = useState('')
     const [composer, setComposer] = useState<ComposerState>(emptyComposer)
     const [creatingMailbox, setCreatingMailbox] = useState(false)
+    const [mailboxModalOpen, setMailboxModalOpen] = useState(false)
+    const [mailboxDraft, setMailboxDraft] = useState('')
     const [creatingFilter, setCreatingFilter] = useState(false)
     const [movingMessage, setMovingMessage] = useState(false)
+    const [sidebarCompact, setSidebarCompact] = useState(false)
     const [query, setQuery] = useState('')
     const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null)
     const [now, setNow] = useState(() => Date.now())
@@ -138,9 +144,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     useEffect(() => {
         const poll = window.setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                void load({ silent: true })
-            }
+            void load({ silent: true })
             setNow(Date.now())
         }, POLL_INTERVAL_MS)
 
@@ -187,14 +191,20 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     }, [overview, selectedMessageId])
 
     const renderedHtml = useMemo(
-        () => selectedMessage ? withInlineAttachments(selectedMessage, overview?.mailboxUser || '') : '',
+        () => selectedMessage ? buildMailFrameHtml(withInlineAttachments(selectedMessage, overview?.mailboxUser || '')) : '',
         [selectedMessage, overview?.mailboxUser]
     )
 
     const showStaleWarning = Boolean(lastSuccessAt && now - lastSuccessAt > STALE_AFTER_MS)
 
     return (
-        <div className='grid gap-3 px-4 py-4 md:px-8 lg:px-12'>
+        <DashboardPage>
+            <DashboardHeader
+                title='Mail'
+                description='One workspace for reading, triaging, and sending mail across available accounts.'
+                eyebrow='Communication'
+            />
+
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <button
@@ -255,41 +265,34 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
             )}
 
-            <div className='grid gap-3 xl:grid-cols-[220px_320px_minmax(0,1fr)]'>
+            <div className={`grid gap-3 ${sidebarCompact ? 'xl:grid-cols-[80px_320px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_320px_minmax(0,1fr)]'}`}>
                 <aside
-                    className='relative overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.045]
-                        p-3 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl'
+                    className={`${dashboardPanelClass} relative overflow-hidden p-3`}
                 >
                     <MailSketch />
                     <div className='relative z-10'>
                         <div className='flex items-center justify-between pb-2'>
-                            <div>
+                            <div className='min-w-0'>
                                 <p className='text-[10px] uppercase tracking-[0.28em] text-bright/35'>Folders</p>
-                                <p className='mt-1 text-[11px] text-bright/50'>{overview?.mailboxAddress || 'Mailbox'}</p>
+                                {!sidebarCompact && <p className='mt-1 truncate text-[11px] text-bright/50'>{overview?.mailboxAddress || 'Mailbox'}</p>}
                             </div>
-                            <button
-                                className={iconButton}
-                                disabled={creatingMailbox}
-                                title='Create folder'
-                                onClick={async () => {
-                                    const name = window.prompt('New mailbox name')
-                                    if (!name?.trim()) {
-                                        return
-                                    }
-
-                                    setCreatingMailbox(true)
-                                    try {
-                                        await createMailbox({ mailboxUser: overview?.mailboxUser, name: name.trim() })
-                                        await load()
-                                    } catch (cause) {
-                                        setError(cause instanceof Error ? cause.message : 'Unable to create mailbox.')
-                                    } finally {
-                                        setCreatingMailbox(false)
-                                    }
-                                }}
-                            >
-                                <FolderInput className='h-3.5 w-3.5' />
-                            </button>
+                            <div className='flex items-center gap-1'>
+                                <button
+                                    className={iconButton}
+                                    title={sidebarCompact ? 'Expand folders' : 'Collapse folders'}
+                                    onClick={() => setSidebarCompact(prev => !prev)}
+                                >
+                                    {sidebarCompact ? <PanelLeftOpen className='h-3.5 w-3.5' /> : <PanelLeftClose className='h-3.5 w-3.5' />}
+                                </button>
+                                <button
+                                    className={iconButton}
+                                    disabled={creatingMailbox}
+                                    title='Create folder'
+                                    onClick={() => setMailboxModalOpen(true)}
+                                >
+                                    <FolderInput className='h-3.5 w-3.5' />
+                                </button>
+                            </div>
                         </div>
 
                         <div className='grid gap-1.5'>
@@ -306,17 +309,18 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                             ? 'border-orange-300/30 bg-orange-300/10 text-bright'
                                             : 'border-transparent text-bright/70 hover:border-white/10 hover:bg-white/[0.04] hover:text-bright'
                                     }`}
+                                    title={mailbox.name}
                                 >
                                     <span className='inline-flex items-center gap-2 truncate'>
                                         {iconForMailbox(mailbox.role)}
-                                        <span className='truncate'>{mailbox.name}</span>
+                                        {!sidebarCompact && <span className='truncate'>{mailbox.name}</span>}
                                     </span>
-                                    <span className='text-[10px] text-bright/35'>{mailbox.unreadEmails || 0}</span>
+                                    {!sidebarCompact && <span className='text-[10px] text-bright/35'>{mailbox.unreadEmails || 0}</span>}
                                 </button>
                             ))}
                         </div>
 
-                        <details className='mt-3 rounded-2xl border border-white/8 bg-white/[0.025]'>
+                        <details className={`mt-3 rounded-2xl border border-white/8 bg-white/[0.025] ${sidebarCompact ? 'hidden' : ''}`}>
                             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
                                 <span className='inline-flex items-center gap-1.5'><FolderInput className='h-3.5 w-3.5' /> Rules</span>
                                 <span className='text-bright/28'>{overview?.filters.length || 0}</span>
@@ -405,7 +409,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
                         </details>
 
-                        <details className='mt-2 rounded-2xl border border-white/8 bg-white/[0.025]'>
+                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/[0.025] ${sidebarCompact ? 'hidden' : ''}`}>
                             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
                                 <span className='inline-flex items-center gap-1.5'><ShieldCheck className='h-3.5 w-3.5' /> Mail health</span>
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] ${
@@ -430,14 +434,14 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                             queue {overview.health.queueDepth} · banner {overview.health.smtpBannerLatencyMs ?? '—'}ms
                                         </span>
                                     </div>
-                                    <div className='mt-2 grid gap-1.5'>
+                                    <div className='mt-2 grid gap-1.5 min-w-0'>
                                         {overview.health.checks.map(check => (
                                             <div
                                                 key={check.id}
-                                                className='rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'
+                                                className='min-w-0 rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'
                                             >
                                                 <div className='flex items-center justify-between gap-2'>
-                                                    <p className='text-[11px] font-medium text-bright/84'>{check.label}</p>
+                                                    <p className='min-w-0 text-[11px] font-medium text-bright/84 break-words'>{check.label}</p>
                                                     <span className={`rounded-full px-2 py-0.5 text-[10px] ${
                                                         check.status === 'healthy'
                                                             ? 'bg-emerald-500/12 text-emerald-100'
@@ -449,7 +453,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                         {check.status}
                                                     </span>
                                                 </div>
-                                                <p className='mt-1 text-[10px] leading-4 text-bright/42'>{check.detail}</p>
+                                                <p className='mt-1 break-words text-[10px] leading-4 text-bright/42'>{check.detail}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -457,7 +461,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             )}
                         </details>
 
-                        <details className='mt-2 rounded-2xl border border-white/8 bg-white/[0.025]'>
+                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/[0.025] ${sidebarCompact ? 'hidden' : ''}`}>
                             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
                                 <span className='inline-flex items-center gap-1.5'><Settings2 className='h-3.5 w-3.5' /> Client access</span>
                                 <span className='text-bright/28'>IMAP</span>
@@ -477,8 +481,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </aside>
 
                 <section
-                    className='rounded-[24px] border border-white/10 bg-white/[0.045] p-2.5
-                        shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl'
+                    className={`${dashboardPanelClass} p-2.5`}
                 >
                     <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-bright/30'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
@@ -507,8 +510,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </section>
 
                 <section
-                    className='rounded-[24px] border border-white/10 bg-white/[0.045] p-3
-                        shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl'
+                    className={`${dashboardPanelClass} p-3`}
                 >
                     {loading && !overview && <div className='px-2 py-6 text-[12px] text-bright/42'>Loading mailbox…</div>}
                     {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 px-4 py-8 text-[12px] text-bright/42'>Choose a message to read it here.</div>}
@@ -599,7 +601,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
-                                    className='min-h-[32rem] w-full rounded-2xl border border-white/10 bg-white'
+                                    className='min-h-[32rem] w-full rounded-2xl border border-white/10 bg-[#0d100d]'
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}
                                 />
@@ -643,7 +645,54 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     }}
                 />
             )}
-        </div>
+            {mailboxModalOpen && overview && (
+                <div className='fixed inset-0 z-[1300] grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
+                    <div className='w-full max-w-md rounded-[24px] border border-white/10 bg-[#0f120f] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)]'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <div>
+                                <p className='text-[10px] uppercase tracking-[0.28em] text-bright/35'>Mailbox</p>
+                                <h3 className='mt-1 text-lg font-semibold text-bright'>Create folder</h3>
+                            </div>
+                            <button className={iconButton} onClick={() => { setMailboxModalOpen(false); setMailboxDraft('') }}>
+                                <Trash2 className='h-3.5 w-3.5 rotate-45' />
+                            </button>
+                        </div>
+                        <div className='mt-4 grid gap-3'>
+                            <input
+                                value={mailboxDraft}
+                                onChange={(event) => setMailboxDraft(event.target.value)}
+                                placeholder='Projects, Receipts, Alerts...'
+                                className='rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-bright outline-none placeholder:text-bright/28'
+                            />
+                            <div className='flex justify-end gap-2'>
+                                <button className={toolbarButton} onClick={() => { setMailboxModalOpen(false); setMailboxDraft('') }}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className='inline-flex items-center justify-center rounded-xl bg-orange-400/90 px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
+                                    disabled={!mailboxDraft.trim() || creatingMailbox}
+                                    onClick={async () => {
+                                        setCreatingMailbox(true)
+                                        try {
+                                            await createMailbox({ mailboxUser: overview.mailboxUser, name: mailboxDraft.trim() })
+                                            setMailboxModalOpen(false)
+                                            setMailboxDraft('')
+                                            await load()
+                                        } catch (cause) {
+                                            setError(cause instanceof Error ? cause.message : 'Unable to create mailbox.')
+                                        } finally {
+                                            setCreatingMailbox(false)
+                                        }
+                                    }}
+                                >
+                                    {creatingMailbox ? 'Creating...' : 'Create'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </DashboardPage>
     )
 }
 
@@ -887,6 +936,42 @@ function prettyBytes(size: number) {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function buildMailFrameHtml(html: string) {
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0d100d;
+      color: #edf2e7;
+      font-family: Manrope, Aptos, sans-serif;
+    }
+    body {
+      padding: 24px;
+      line-height: 1.65;
+    }
+    img, iframe, video {
+      max-width: 100%;
+      height: auto;
+      border-radius: 14px;
+    }
+    a { color: #f4a261; }
+    table { max-width: 100%; }
+    pre, code {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>${html}</body>
+</html>`
+}
+
 async function fileToDraftAttachment(file: File): Promise<DraftAttachment> {
     const buffer = await file.arrayBuffer()
     return {
@@ -911,7 +996,7 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
     if (attachment.type === 'application/pdf') {
         return (
             <div className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5'>
-                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-white' />
+                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-[#0d100d]' />
                 <a href={url} target='_blank' rel='noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-bright'>
                     {attachment.name}
                     <Forward className='h-3.5 w-3.5' />
