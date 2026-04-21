@@ -98,7 +98,8 @@ export async function getMailHealth(): Promise<MailHealth> {
 
 async function resolvePublicDns(name: string, type: 'A' | 'TXT' | 'PTR') {
     try {
-        const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`, {
+        const queryName = type === 'PTR' ? toPointerName(name) : name
+        const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(queryName)}&type=${type}`, {
             signal: AbortSignal.timeout(10_000),
         })
         if (!response.ok) {
@@ -137,6 +138,10 @@ async function resolvePublicDns(name: string, type: 'A' | 'TXT' | 'PTR') {
             return []
         }
     }
+}
+
+function toPointerName(ip: string) {
+    return `${ip.split('.').reverse().join('.')}.in-addr.arpa`
 }
 
 async function safeFetchText(url: string) {
