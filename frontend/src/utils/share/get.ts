@@ -1,4 +1,5 @@
 import config from '@/config'
+import getShareHeaders from './getHeaders'
 
 type GetShareProps = {
     id: string
@@ -11,10 +12,7 @@ export async function getShare({ id, token, userId }: GetShareProps): Promise<Sh
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.cdn}/share/${id}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                id: userId ?? ''
-            },
+            headers: getShareHeaders(token, userId),
             signal: controller.signal
         })
 

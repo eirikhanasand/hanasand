@@ -1,9 +1,10 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { LoaderCircle, Send } from 'lucide-react'
+import { Bot, LoaderCircle, Send, Zap } from 'lucide-react'
 
 type ChatPaneProps = {
     activeConversation: AIConversation | null
@@ -19,6 +20,9 @@ type ChatPaneProps = {
 export default function ChatPane(props: ChatPaneProps) {
     const { activeConversation, composer, isConnected, onComposerChange, onSend } = props
     const scrollRef = useRef<HTMLDivElement | null>(null)
+    const isThinking = Boolean(activeConversation?.messages.at(-1)?.pending)
+        || activeConversation?.metrics?.status === 'preparing'
+        || activeConversation?.metrics?.status === 'generating'
     const lastMessageKey = useMemo(() => {
         const lastMessage = activeConversation?.messages.at(-1)
         return `${lastMessage?.id || 'empty'}:${lastMessage?.content.length || 0}:${lastMessage?.pending ? 'pending' : 'done'}`
@@ -36,6 +40,8 @@ export default function ChatPane(props: ChatPaneProps) {
         })
     }, [lastMessageKey])
 
+    const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
+
     return (
         <section className='flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl bg-dark/35 outline outline-dark'>
             <div className='border-b border-dark px-5 py-4'>
@@ -49,6 +55,10 @@ export default function ChatPane(props: ChatPaneProps) {
                     <div className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${isConnected ? 'bg-emerald-500/10 text-emerald-400 outline outline-emerald-500/20' : 'bg-red-500/10 text-red-300 outline outline-red-500/20'}`}>
                             {isConnected ? 'Live' : 'Offline'}
                     </div>
+                </div>
+                <div className='mt-3 flex flex-wrap gap-2 text-xs text-bright/42'>
+                    <StatusPill icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Bot className='h-3.5 w-3.5' />} label={isThinking ? 'Thinking' : 'Ready'} />
+                    <StatusPill icon={<Zap className='h-3.5 w-3.5' />} label={`${Math.round(activeConversation?.metrics?.tps || 0)} TPS`} />
                 </div>
             </div>
             <div ref={scrollRef} className='min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5'>
@@ -77,8 +87,8 @@ export default function ChatPane(props: ChatPaneProps) {
                     <textarea value={composer} onChange={(event) => onComposerChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSend() } }} placeholder='Ask about your code, request a patch, inspect a repo, or describe the task you want done...' className='min-h-28 w-full resize-none bg-transparent text-sm text-bright/90 outline-none placeholder:text-bright/30' />
                     <div className='mt-3 flex items-center justify-between'>
                         <p className='text-xs text-bright/30'>Enter to send, Shift+Enter for newline</p>
-                        <button type='button' onClick={onSend} className='inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#fd8738] px-4 py-2 font-semibold text-black transition-opacity hover:opacity-90'>
-                            {activeConversation?.messages.at(-1)?.pending ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />} Send
+                        <button type='button' disabled={!composer.trim() || awaitingResponse || !isConnected} onClick={onSend} className='inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#fd8738] px-4 py-2 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
+                            {awaitingResponse ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />} Send
                         </button>
                     </div>
                 </div>
@@ -93,6 +103,15 @@ function MarkdownBlock({ content }: { content: string }) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
             </ReactMarkdown>
+        </div>
+    )
+}
+
+function StatusPill({ icon, label }: { icon: ReactNode, label: string }) {
+    return (
+        <div className='inline-flex items-center gap-2 rounded-full bg-dark/30 px-3 py-1.5 outline outline-dark'>
+            <span className='text-[#fd8738]'>{icon}</span>
+            <span>{label}</span>
         </div>
     )
 }

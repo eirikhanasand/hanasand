@@ -21,16 +21,18 @@ export default async function Page() {
     const text = timeBasedGreeting({ name })
 
     return (
-        <div className='h-full w-full'>
-            <div className='px-8 md:px-16 lg:px-32 py-4 md:py-8 grid gap-2 w-full'>
+        <div className='grid gap-5 py-4 md:py-8'>
+            <section>
+                <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Admin</p>
+                <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Management</h1>
                 <GreetingNav text={text} id={id} />
                 <GreetingNavButtons id={id} />
-                <div className='grid md:grid-cols-2 gap-2'>
-                    <DashboardArticles />
-                    <Thoughts />
-                    <Users roles={roles} />
-                    <Roles roles={roles} />
-                </div>
+            </section>
+            <div className='grid gap-3 xl:grid-cols-2'>
+                <DashboardArticles />
+                <Thoughts />
+                <Users roles={roles} />
+                <Roles roles={roles} />
             </div>
         </div>
     )

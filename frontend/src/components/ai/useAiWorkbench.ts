@@ -62,13 +62,13 @@ export default function useAiWorkbench({
     }, [conversations])
 
     useEffect(() => {
-        if (!isAuthenticated || bootstrappedRef.current || conversations.length) {
+        if (!isAuthenticated || bootstrappedRef.current || conversations.some((conversation) => !conversation.archivedAt)) {
             return
         }
 
         bootstrappedRef.current = true
         void createNewConversation()
-    }, [conversations.length, isAuthenticated])
+    }, [conversations, isAuthenticated])
 
     useEffect(() => {
         shouldReconnectRef.current = true
@@ -113,21 +113,55 @@ export default function useAiWorkbench({
 
     const filteredConversations = useMemo(() => {
         const query = search.trim().toLowerCase()
-        if (!query) {
-            return conversations
-        }
+        return conversations.filter((conversation) => {
+            if (conversation.archivedAt) {
+                return false
+            }
 
-        return conversations.filter((conversation) =>
-            conversation.title.toLowerCase().includes(query)
-            || conversation.messages.some((message) => message.content.toLowerCase().includes(query))
-            || (conversation.preferredModel || '').toLowerCase().includes(query)
-        )
+            if (!query) {
+                return true
+            }
+
+            return (
+                conversation.title.toLowerCase().includes(query)
+                || conversation.messages.some((message) => message.content.toLowerCase().includes(query))
+                || (conversation.preferredModel || '').toLowerCase().includes(query)
+            )
+        })
+    }, [conversations, search])
+
+    const archivedConversations = useMemo(() => {
+        const query = search.trim().toLowerCase()
+        return conversations.filter((conversation) => {
+            if (!conversation.archivedAt) {
+                return false
+            }
+
+            if (!query) {
+                return true
+            }
+
+            return (
+                conversation.title.toLowerCase().includes(query)
+                || conversation.messages.some((message) => message.content.toLowerCase().includes(query))
+                || (conversation.preferredModel || '').toLowerCase().includes(query)
+            )
+        })
     }, [conversations, search])
 
     const activeConversation = useMemo(
         () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
         [activeConversationId, conversations]
     )
+
+    useEffect(() => {
+        if (activeConversationId && conversations.some((conversation) => conversation.id === activeConversationId)) {
+            return
+        }
+
+        const nextConversation = conversations.find((conversation) => !conversation.archivedAt) || conversations[0] || null
+        setActiveConversationId(nextConversation?.id || null)
+    }, [activeConversationId, conversations])
 
     const selectedRepoFilePath = typeof activeConversation?.workspaceMeta?.selectedFilePath === 'string'
         ? activeConversation.workspaceMeta.selectedFilePath
@@ -202,10 +236,55 @@ export default function useAiWorkbench({
         return share.content
     }
 
+    function updateLocalConversation(id: string, patch: Partial<AIConversation>) {
+        setConversations((prev) => prev.map((conversation) => conversation.id === id
+            ? {
+                ...conversation,
+                ...patch,
+                title: typeof patch.title === 'string' && patch.title.trim() ? patch.title.trim() : conversation.title,
+                workspaceMeta: patch.workspaceMeta || conversation.workspaceMeta,
+                shareIds: patch.shareIds || conversation.shareIds,
+                updatedAt: new Date().toISOString(),
+            }
+            : conversation))
+    }
+
+    async function persistRepository(repo: AIImportedRepo) {
+        if (!isAuthenticated) {
+            return
+        }
+
+        const response = await aiClientRequest('/ai/repositories', {
+            method: 'POST',
+            body: JSON.stringify(repo),
+        })
+        if (!response.ok) {
+            throw new Error('Unable to save repository sync state.')
+        }
+    }
+
+    function upsertRepository(repo: AIImportedRepo) {
+        setImportedRepos((prev) => [repo, ...prev.filter((entry) => entry.id !== repo.id)])
+        setShares((prev) => [{
+            id: repo.id,
+            path: repo.fullName,
+            alias: repo.name,
+            content: '',
+            wordCount: 0,
+            estimatedMinutes: 0,
+            timestamp: repo.importedAt,
+            git: repo.sourceUrl,
+            locked: false,
+            owner: getCookie('id') || '',
+            parent: '',
+        }, ...prev.filter((entry) => entry.id !== repo.id)])
+    }
+
     async function createNewConversation() {
         const conversation = createConversation(clients[0]?.name || null)
         setConversations((prev) => [conversation, ...prev])
         setActiveConversationId(conversation.id)
+        setStatusNotice(null)
 
         if (!isAuthenticated) {
             return
@@ -225,21 +304,14 @@ export default function useAiWorkbench({
     }
 
     async function patchConversation(id: string, patch: Partial<AIConversation>) {
-        setConversations((prev) => prev.map((conversation) => conversation.id === id
-            ? {
-                ...conversation,
-                ...patch,
-                workspaceMeta: patch.workspaceMeta || conversation.workspaceMeta,
-                shareIds: patch.shareIds || conversation.shareIds,
-                updatedAt: new Date().toISOString(),
-            }
-            : conversation))
+        updateLocalConversation(id, patch)
 
         if (!isAuthenticated) {
             return
         }
 
         try {
+            setStatusNotice(null)
             const response = await aiClientRequest(`/ai/conversations/${id}`, {
                 method: 'PUT',
                 body: JSON.stringify(toConversationPayload({ id, ...patch } as AIConversation)),
@@ -249,6 +321,56 @@ export default function useAiWorkbench({
             }
         } catch (error) {
             setStatusNotice(error instanceof Error ? error.message : 'Unable to save conversation changes.')
+        }
+    }
+
+    async function renameConversation(id: string, title: string) {
+        const nextTitle = title.trim() || 'New chat'
+        await patchConversation(id, { title: nextTitle })
+    }
+
+    async function archiveConversation(id: string, archived: boolean) {
+        await patchConversation(id, { archivedAt: archived ? new Date().toISOString() : null })
+        if (archived && activeConversationId === id) {
+            const nextConversation = conversations.find((conversation) => conversation.id !== id && !conversation.archivedAt)
+            if (nextConversation) {
+                setActiveConversationId(nextConversation.id)
+            } else {
+                await createNewConversation()
+            }
+        }
+    }
+
+    async function deleteConversation(id: string) {
+        const existing = conversations.find((conversation) => conversation.id === id)
+        if (!existing) {
+            return
+        }
+
+        setConversations((prev) => prev.filter((conversation) => conversation.id !== id))
+        if (activeConversationId === id) {
+            const nextConversation = conversations.find((conversation) => conversation.id !== id && !conversation.archivedAt)
+                || conversations.find((conversation) => conversation.id !== id)
+                || null
+            setActiveConversationId(nextConversation?.id || null)
+        }
+
+        if (!isAuthenticated) {
+            return
+        }
+
+        try {
+            setStatusNotice(null)
+            const response = await aiClientRequest(`/ai/conversations/${id}`, {
+                method: 'DELETE',
+            })
+            if (!response.ok) {
+                throw new Error('Unable to delete the conversation.')
+            }
+        } catch (error) {
+            setConversations((prev) => [existing, ...prev])
+            setActiveConversationId(id)
+            setStatusNotice(error instanceof Error ? error.message : 'Unable to delete the conversation.')
         }
     }
 
@@ -330,7 +452,9 @@ export default function useAiWorkbench({
 
         setImportPending(true)
         setImportError(null)
+        let pendingRepo: AIImportedRepo | null = null
         try {
+            setStatusNotice(null)
             const imported = await importGitHubRepository(importInput)
             const existing = importedRepos.find((repo) =>
                 repo.fullName === imported.fullName
@@ -340,36 +464,51 @@ export default function useAiWorkbench({
             const repo = existing ? { ...imported, id: existing.id } : imported
             const token = getCookie('access_token')
             const userId = getCookie('id')
+            pendingRepo = withRepositorySync(repo, {
+                status: 'syncing',
+                source: existing ? 'refresh' : 'import',
+                message: existing ? 'Refreshing repository and syncing workspace...' : 'Importing repository and creating workspace...',
+            })
+            upsertRepository(pendingRepo)
+            await persistRepository(pendingRepo)
+
             if (existing) {
-                await syncRepositoryToShare({ repo, token, userId })
+                await syncRepositoryToShare({ repo: pendingRepo, token, userId })
             } else {
-                await importRepositoryToShare({ repo, token, userId })
+                await importRepositoryToShare({ repo: pendingRepo, token, userId })
             }
-            setImportedRepos((prev) => [repo, ...prev.filter((entry) => entry.id !== repo.id)])
-            setShares((prev) => [{
-                id: repo.id,
-                path: repo.fullName,
-                alias: repo.name,
-                content: '',
-                wordCount: 0,
-                estimatedMinutes: 0,
-                timestamp: repo.importedAt,
-                git: repo.sourceUrl,
-                locked: false,
-                owner: userId || '',
-                parent: '',
-            }, ...prev.filter((entry) => entry.id !== repo.id)])
+            const pendingRepoId = pendingRepo.id
+            setShareTrees((prev) => {
+                const next = { ...prev }
+                delete next[pendingRepoId]
+                return next
+            })
+            setShareFileContents((prev) => Object.fromEntries(
+                Object.entries(prev).filter(([key]) => !key.startsWith(`${pendingRepoId}:`))
+            ))
+            await hydrateShare(pendingRepoId)
+            const readyRepo = withRepositorySync(pendingRepo, {
+                status: 'ready',
+                source: existing ? 'refresh' : 'import',
+                message: existing ? 'Repository refresh complete.' : 'Repository imported into the editor workspace.',
+            })
+            upsertRepository(readyRepo)
             setImportInput('')
-
-            if (isAuthenticated) {
-                await aiClientRequest('/ai/repositories', {
-                    method: 'POST',
-                    body: JSON.stringify(repo),
-                })
-            }
-
-            await attachRepo(repo.id, repo)
+            await persistRepository(readyRepo)
+            setStatusNotice(existing ? 'Repository refreshed and synced into the editor workspace.' : 'Repository imported and ready in the editor workspace.')
+            await attachRepo(readyRepo.id, readyRepo)
         } catch (error) {
+            if (pendingRepo) {
+                const failedRepo = withRepositorySync(pendingRepo, {
+                    status: 'error',
+                    source: 'import',
+                    message: error instanceof Error ? error.message : 'Failed to import repository.',
+                })
+                upsertRepository(failedRepo)
+                try {
+                    await persistRepository(failedRepo)
+                } catch {}
+            }
             setImportError(error instanceof Error ? error.message : 'Failed to import repository.')
         } finally {
             setImportPending(false)
@@ -385,21 +524,48 @@ export default function useAiWorkbench({
         setSyncingRepoId(repoId)
         setImportError(null)
         try {
+            setStatusNotice(null)
+            const pendingRepo = withRepositorySync(existing, {
+                status: 'syncing',
+                source: 'refresh',
+                message: 'Refreshing repository from GitHub...',
+            })
+            upsertRepository(pendingRepo)
+            await persistRepository(pendingRepo)
             const refreshed = await importGitHubRepository(existing.sourceUrl, existing.id)
             const token = getCookie('access_token')
             const userId = getCookie('id')
             await syncRepositoryToShare({ repo: refreshed, token, userId })
-            setImportedRepos((prev) => [refreshed, ...prev.filter((entry) => entry.id !== repoId)])
-            if (isAuthenticated) {
-                await aiClientRequest('/ai/repositories', {
-                    method: 'POST',
-                    body: JSON.stringify(refreshed),
-                })
-            }
+            setShareTrees((prev) => {
+                const next = { ...prev }
+                delete next[repoId]
+                return next
+            })
+            setShareFileContents((prev) => Object.fromEntries(
+                Object.entries(prev).filter(([key]) => !key.startsWith(`${repoId}:`))
+            ))
+            await hydrateShare(repoId)
+            const readyRepo = withRepositorySync(refreshed, {
+                status: 'ready',
+                source: 'refresh',
+                message: 'Repository sync complete.',
+            })
+            upsertRepository(readyRepo)
+            await persistRepository(readyRepo)
+            setStatusNotice('Repository refresh complete.')
             if (activeConversation?.workspaceMeta?.repositoryId === repoId) {
-                await attachRepo(repoId, refreshed)
+                await attachRepo(repoId, readyRepo)
             }
         } catch (error) {
+            const failedRepo = withRepositorySync(existing, {
+                status: 'error',
+                source: 'refresh',
+                message: error instanceof Error ? error.message : 'Failed to refresh repository.',
+            })
+            upsertRepository(failedRepo)
+            try {
+                await persistRepository(failedRepo)
+            } catch {}
             setImportError(error instanceof Error ? error.message : 'Failed to refresh repository.')
         } finally {
             setSyncingRepoId(null)
@@ -441,6 +607,11 @@ export default function useAiWorkbench({
     async function sendPrompt() {
         const prompt = composer.trim()
         if (!prompt || !activeConversation) {
+            return
+        }
+
+        if (activeConversation.messages.at(-1)?.pending) {
+            setStatusNotice('Wait for the current response to finish before sending another prompt.')
             return
         }
 
@@ -732,11 +903,14 @@ export default function useAiWorkbench({
     return {
         activeConversation,
         activeConversationId,
+        archivedConversations,
+        archiveConversation,
         attachRepo,
         attachShare,
         clients,
         composer,
         createNewConversation,
+        deleteConversation,
         filteredConversations,
         importError,
         importInput,
@@ -759,6 +933,7 @@ export default function useAiWorkbench({
         syncingRepoId,
         importRepo,
         isAuthenticated,
+        renameConversation,
         search,
         statusNotice,
     }
@@ -778,8 +953,33 @@ function createConversation(clientName: string | null = null): AIConversation {
         workspaceMeta: {},
         messages: [],
         metrics: defaultModelMetrics(),
+        archivedAt: null,
         createdAt: timestamp,
         updatedAt: timestamp,
+    }
+}
+
+function withRepositorySync(
+    repo: AIImportedRepo,
+    update: {
+        status: 'ready' | 'syncing' | 'error'
+        source: 'import' | 'refresh' | 'sync'
+        message: string
+    },
+): AIImportedRepo {
+    const event: AIRepositorySyncEvent = {
+        timestamp: new Date().toISOString(),
+        status: update.status,
+        source: update.source,
+        message: update.message,
+    }
+
+    return {
+        ...repo,
+        syncStatus: update.status,
+        lastSyncedAt: update.status === 'ready' ? event.timestamp : repo.lastSyncedAt,
+        lastSyncError: update.status === 'error' ? update.message : null,
+        syncHistory: [event, ...(repo.syncHistory || [])].slice(0, 10),
     }
 }
 
@@ -871,7 +1071,7 @@ function buildSystemPrompt({
         'You are Hanasand AI, an app-style coding assistant inside Hanasand.',
         'Behave like Codex inside Hanasand: be direct, calm, concise, practical, and action-oriented.',
         'Prefer concrete next steps, patch-ready code, and careful reasoning over marketing language.',
-        'You have built-in access to advanced reasoning, local command execution, and live web search outside this prompt. Do not say you lack internet access, shell access, or current date awareness when those tools would help.',
+        'You have built-in access to advanced reasoning, repo-aware file inspection/editing tools, local command execution, and live web search outside this prompt. Think privately, inspect before editing, and do not say you lack internet access, shell access, repository access, or current date awareness when those tools would help.',
         'If a preferred model is unavailable, continue the conversation seamlessly with the current connected model.',
         'When a user asks you to read or update an attached share, or to make an authenticated HTTP request for them, you may emit one or more tool tags on their own line.',
         'Supported tags:',
@@ -895,6 +1095,7 @@ function toConversationPayload(conversation: Partial<AIConversation>) {
         workspaceId: conversation.workspaceId ?? null,
         shareIds: conversation.shareIds ?? [],
         workspaceMeta: conversation.workspaceMeta ?? {},
+        archivedAt: conversation.archivedAt ?? null,
     }
 }
 

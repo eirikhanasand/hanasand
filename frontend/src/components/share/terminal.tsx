@@ -26,7 +26,7 @@ export default function Terminal({
     const startY = useRef(0)
     const startHeight = useRef(0)
     const [isDone, setIsDone] = useState(false)
-    const { isConnected, participants, log, sendMessage } = useTerminal({ share })
+    const { isConnected, participants, log, sendMessage } = useTerminal({ share, open })
     const terminalLog = log.map((l) => l.content)
 
     function handleMouseDown(e: React.MouseEvent) {
@@ -143,7 +143,7 @@ export default function Terminal({
                     onMouseDown={handleMouseDown}
                     className="group absolute top-0 w-full h-2 cursor-row-resize hover:bg-light/10"
                 >
-                    <div className="mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[5px]" />
+                    <div className="mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-1.25" />
                 </div>
 
                 {/* Header bar */}

@@ -47,22 +47,30 @@ export default function NewRequest({
         e?.preventDefault()
         const token = getCookie('access_token')
         const id = getCookie('id')
-        if (!token || !id) {
-            setResponse({ error: 'You need to be logged in to use the API workbench.' })
-            return
-        }
 
         setLoading(true)
-        const result = await fetch(`${config.url.api}/tools/http/request`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                id,
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ method, url, headers: usableHeaders, body }),
-        })
-        const data = await result.json().catch(() => ({ error: 'Invalid response.' }))
+
+        let data: ToolResponse
+        if (token && id) {
+            const result = await fetch(`${config.url.api}/tools/http/request`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    id,
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ method, url, headers: usableHeaders, body }),
+            })
+            data = await result.json().catch(() => ({ error: 'Invalid response.' }))
+        } else {
+            data = await sendFromBrowser({
+                method,
+                url,
+                headers: usableHeaders,
+                body,
+            })
+        }
+
         setResponse(data)
         setLoading(false)
 
@@ -177,6 +185,9 @@ export default function NewRequest({
                 <section className='grid min-h-0 gap-3 rounded-xl border border-white/10 bg-white/5 p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3 text-xs font-semibold'>
                         <span>Status: <span className={response?.ok ? 'text-emerald-300' : 'text-red-300'}>{response?.status ? `${response.status} ${response.statusText || ''}` : response?.error ? 'Error' : 'Not sent'}</span></span>
+                        {!getCookie('access_token') && (
+                            <span className='text-[11px] text-bright/45'>Browser mode</span>
+                        )}
                         {response?.elapsed_ms !== undefined && <span className='flex items-center gap-1 text-bright/60'><Clock3 className='h-3.5 w-3.5' /> {response.elapsed_ms} ms</span>}
                     </div>
                     <pre className='max-h-92 min-h-48 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-bright/70'>
@@ -186,4 +197,42 @@ export default function NewRequest({
             </div>
         </div>
     )
+}
+
+async function sendFromBrowser({
+    method,
+    url,
+    headers,
+    body,
+}: {
+    method: string
+    url: string
+    headers: Record<string, string>
+    body: string
+}): Promise<ToolResponse> {
+    const normalizedMethod = method.toUpperCase()
+    const started = performance.now()
+
+    try {
+        const response = await fetch(url, {
+            method: normalizedMethod,
+            headers,
+            body: ['GET', 'HEAD'].includes(normalizedMethod) ? undefined : body,
+        })
+
+        const text = await response.text()
+        return {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            elapsed_ms: Math.round(performance.now() - started),
+            headers: Object.fromEntries(response.headers.entries()),
+            body: text,
+        }
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : String(error),
+            elapsed_ms: Math.round(performance.now() - started),
+        }
+    }
 }

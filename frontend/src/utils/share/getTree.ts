@@ -1,4 +1,5 @@
 import config from '@/config'
+import getShareHeaders from './getHeaders'
 
 type GetTreeProps = {
     id: string
@@ -12,10 +13,7 @@ export async function getTree({ id, token, userId }: GetTreeProps): Promise<Tree
 
     try {
         const response = await fetch(`${config.url.cdn}/share/tree/${id}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                id: userId ?? '',
-            },
+            headers: getShareHeaders(token, userId),
             signal: controller.signal
         })
 

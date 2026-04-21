@@ -1,6 +1,6 @@
 'use client'
 
-import { Info, Minus, Plus, X } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import VMRow from './vm'
 import getVMs from '@/utils/vms/fetch/getVMs'
@@ -28,7 +28,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     }, [])
 
     return (
-        <div className='grid h-fit w-full p-2 outline-1 outline-dark rounded-lg'>
+        <section className='grid h-fit w-full gap-2 rounded-xl border border-white/10 bg-white/4 p-4'>
             <div className='flex justify-between mb-1 items-center'>
                 <h1 className='font-semibold text-lg self-center'>Virtual Machines</h1>
                 <Tooltip
@@ -50,7 +50,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
             </div>
 
             {vms.length > 0 ? (
-                vms.map(vm => <VMRow update={update} key={vm.name} vm={vm} />)
+                <div className='grid gap-2'>
+                    {vms.map(vm => <VMRow update={update} key={vm.name} vm={vm} />)}
+                </div>
             ) : (
                 <div className='flex gap-1 text-sm text-almostbright'>
                     <span>No VMs found! Click</span>
@@ -58,6 +60,6 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     <span>to create your first project.</span>
                 </div>
             )}
-        </div>
+        </section>
     )
 }

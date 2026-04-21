@@ -13,5 +13,11 @@ export async function importGitHubRepository(input: string, existingId?: string)
         throw new Error(body?.error || 'Failed to import repository.')
     }
 
-    return body as AIImportedRepo
+    return {
+        ...body,
+        syncStatus: body?.syncStatus || 'syncing',
+        lastSyncedAt: body?.lastSyncedAt || null,
+        lastSyncError: body?.lastSyncError || null,
+        syncHistory: Array.isArray(body?.syncHistory) ? body.syncHistory : [],
+    } as AIImportedRepo
 }

@@ -19,7 +19,7 @@ export default async function page() {
     const topUAs = Array.isArray(topUAsUnparsed) ? topUAsUnparsed : []
 
     return (
-        <div className='h-full overflow-hidden py-4 px-8 md:px-16 lg:px-32 space-y-4'>
+        <div className='h-full overflow-hidden py-4 space-y-4'>
             <StatusDashboard 
                 metrics={metrics}
                 blocklist={blocklist}

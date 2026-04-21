@@ -72,13 +72,16 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
     return (
         <div className="grid gap-4 h-full">
             <section className='grid gap-4'>
-                <div className='flex justify-between'>
-                    <h1 className='font-semibold text-lg'>Status</h1>
+                <div className='flex flex-wrap items-start justify-between gap-4'>
+                    <div>
+                        <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Status</p>
+                        <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Service Status</h1>
+                        <p className='mt-2 text-sm text-bright/45'>Checked every minute.</p>
+                    </div>
                     <div className={`rounded-full border px-4 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
                         {serviceStatus.overall.toUpperCase()}
                     </div>
                 </div>
-                <p className='mt-1 text-sm text-bright/45'>Checked every minute.</p>
 
                 <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                     {serviceStatus.checks.map(check => {
@@ -116,12 +119,31 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
             </section>
 
             {/* Metrics */}
+            <section className='glass-card rounded-[1.4rem] p-5'>
+                <div className='flex items-center justify-between gap-4'>
+                    <div>
+                        <h2 className='text-lg font-semibold text-bright'>Most visited subdomains</h2>
+                        <p className='mt-1 text-sm text-bright/45'>Live request rate across the busiest domains.</p>
+                    </div>
+                </div>
+                <div className='mt-4 grid md:grid-cols-3 lg:grid-cols-5 gap-4 md:overflow-hidden md:max-h-60'>
+                    {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
+                        key={id}
+                        name={domain.name}
+                        tps={domain.tps} />
+                    )}
+                </div>
+            </section>
+
             <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 md:overflow-hidden md:max-h-60">
-                {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
-                    key={id}
-                    name={domain.name}
-                    tps={domain.tps} />
-                )}
+                {metrics.slice(0, 5).map((m, i) => (
+                    <div key={i} className='glass-card rounded-[1.4rem] p-4 text-sm'>
+                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
+                        <span className='mt-2 block text-xs text-almostbright'>Today: {m.hits_today}</span>
+                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
+                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+                    </div>
+                ))}
             </div>
 
             <h1 className='font-semibold text-lg'>Top endpoints</h1>

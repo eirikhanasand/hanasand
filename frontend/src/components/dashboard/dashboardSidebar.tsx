@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BrainCircuit, FileWarning, Inbox, LayoutDashboard, Network, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
+import { BrainCircuit, FileWarning, Inbox, LayoutDashboard, Network, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { getDashboardViewMode, type DashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -42,6 +42,7 @@ export default function DashboardSidebar({
         { href: '/dashboard/traffic', label: 'Traffic', icon: <Network className='h-4 w-4' /> },
         { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> },
         { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Sparkles className='h-4 w-4' /> },
+        { href: '/dashboard/vulnerabilities', label: 'Vulnerabilities', icon: <ScanSearch className='h-4 w-4' /> },
         { href: '/dashboard/articles', label: 'Articles', icon: <ScrollText className='h-4 w-4' /> },
         { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },

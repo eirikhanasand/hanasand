@@ -1,4 +1,5 @@
 import config from '@/config'
+import getShareHeaders from './getHeaders'
 
 type PostShareProps = {
     id: string
@@ -31,8 +32,7 @@ export default async function postShare({
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-                id: userId || ''
+                ...getShareHeaders(token, userId)
             },
             body: JSON.stringify({ id, includeTree, name, path, content, parent, type }),
             signal: controller.signal

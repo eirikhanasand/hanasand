@@ -4,10 +4,9 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "start": "node src/index.ts",
-    "debug": "node --inspect --trace-deprecation src/index.ts",
-    "audit": "node scripts/audit-hanasand-api.mjs",
-    "monitor": "node scripts/monitor-auth-and-services.mjs"
+    "start": "bun src/index.ts",
+    "audit": "bun scripts/audit-hanasand-api.mjs",
+    "monitor": "bun scripts/monitor-auth-and-services.mjs"
   },
   "author": "",
   "license": "ISC",

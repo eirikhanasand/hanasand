@@ -27,9 +27,9 @@ export default async function manageVM(id: string, action: 'start' | 'stop' | 'r
             throw new Error(data?.error || `Error running ${action} for VM ${id}.`)
         }
 
-        return data?.message || `${action} completed for ${id}.`
+        return data?.message || data?.status || `${action} completed for ${id}.`
     } catch (error) {
         console.log(error)
-        return `Failed to ${action} vm`
+        return error instanceof Error ? error.message : `Failed to ${action} vm.`
     }
 }

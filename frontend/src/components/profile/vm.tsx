@@ -36,34 +36,34 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                 onClick={handleClick}
                 className={`rounded-lg group ${keys['shift']
                         ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none'
-                        : 'hover:bg-dark'
-                    } cursor-pointer p-2 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
+                        : 'hover:bg-dark/45'
+                    } cursor-pointer border border-white/8 bg-black/10 p-3 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
             >
                 <div className='flex w-full items-center gap-2 h-full'>
-                    <div className='flex-1 overflow-auto grid gap-1'>
-                        <div className='flex gap-2 items-center justify-between'>
-                            <div className='flex gap-2 items-center'>
-                                <div className='flex gap-2 items-center min-w-fit'>
-                                    <h1 className='text-sm font-semibold text-bright/70'>{vm.name}</h1>
-                                    <h1 className='text-almostbright text-xs pt-1'>
+                    <div className='flex-1 min-w-0 grid gap-2'>
+                        <div className='flex flex-wrap gap-2 items-center justify-between'>
+                            <div className='flex min-w-0 gap-2 items-center'>
+                                <div className='flex min-w-0 flex-wrap gap-2 items-center'>
+                                    <h1 className='truncate text-sm font-semibold text-bright/70'>{vm.name}</h1>
+                                    <h1 className='truncate text-almostbright text-xs pt-1'>
                                         {vm.device_eth0_ipv4_address}
                                     </h1>
                                 </div>
                             </div>
-                            <div className='flex gap-1 items-center w-fit'>
+                            <div className='flex flex-wrap gap-1 items-center w-fit'>
                                 <Tag color='orange' text={formatDescription(vm.config_image_description)} />
                                 <Tag color='green' icon='cpu' text={vm.limits_cpu} />
                                 <Tag color='green' icon='ram' text={vm.limits_memory} />
                                 <Tag color='blue' text={type} />
                             </div>
                         </div>
-                        <div className='flex gap-1 text-almostbright/70 text-xs justify-between items-center'>
-                            <div className='flex gap-1 items-center'>
-                                <span>Owner: {vm.owner}</span>
+                        <div className='flex flex-wrap gap-2 text-almostbright/70 text-xs justify-between items-center'>
+                            <div className='flex min-w-0 flex-wrap gap-1 items-center'>
+                                <span>Owner: {vm.owner || 'Unknown'}</span>
                                 <span className='font-bold'>·</span>
                                 <span>Last used</span>
-                                <span>{prettyDate(vm.last_used)}.</span>
-                                <span>{vm.access_users.length}</span>
+                                <span>{prettyDate(vm.last_used)}</span>
+                                <span>{vm.access_users?.length || 0}</span>
                                 <span>editors.</span>
                             </div>
                             <div className='flex w-fit gap-1 items-center'>

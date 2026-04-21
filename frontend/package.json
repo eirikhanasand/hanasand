@@ -1,6 +1,6 @@
 {
   "name": "hanasand",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "private": true,
   "scripts": {
     "dev": "bun --bun next dev --turbopack",
@@ -13,7 +13,7 @@
     "test:e2e:ai": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright AI workspace' bun scripts/run-playwright-status.mjs tests/ai-workspace.spec.ts"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "^4.2.2",
+    "@tailwindcss/postcss": "^4.2.4",
     "dotenv": "^17.4.2",
     "formik": "^2.4.9",
     "highlight.js": "^11.11.1",
@@ -34,10 +34,10 @@
     "@types/node": "^25.6.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "eslint": "^10.2.0",
+    "eslint": "^10.2.1",
     "postcss": "^8.5.10",
-    "tailwindcss": "^4.2.2",
-    "typescript": "^6.0.2",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3",
     "@playwright/test": "^1.59.1"
   },
   "overrides": {

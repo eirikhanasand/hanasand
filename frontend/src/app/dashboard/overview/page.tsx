@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { Activity, Radar, ShieldAlert, Sparkles } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
+import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,71 +22,68 @@ export default async function Page() {
     ])
 
     return (
-        <div className='px-8 py-4 md:px-16 lg:px-32'>
-            <div className='grid gap-4'>
-                <div>
-                    <h1 className='text-2xl font-semibold text-bright'>Overview</h1>
-                    <p className='mt-2 text-sm text-bright/55'>
-                        Traffic, vulnerability load, and service health in one place.
-                    </p>
-                </div>
+        <DashboardPage>
+            <DashboardHeader
+                title='Operations Overview'
+                description='Traffic, vulnerability load, and service health in one place.'
+                eyebrow='Overview'
+            />
 
-                <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-                    <OverviewCard title='Requests Today' value={String(overview.requestsToday)} icon={<Activity className='h-4 w-4' />} />
-                    <OverviewCard title='Active Domains' value={String(overview.activeDomains)} icon={<Radar className='h-4 w-4' />} />
-                    <OverviewCard title='Critical Vulnerabilities' value={String(overview.criticalVulnerabilities)} icon={<ShieldAlert className='h-4 w-4' />} />
-                    <OverviewCard title='Scanned Images' value={String(overview.imagesScanned)} icon={<Sparkles className='h-4 w-4' />} />
-                </div>
+            <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
+                <OverviewCard title='Requests Today' value={String(overview.requestsToday)} icon={<Activity className='h-4 w-4' />} />
+                <OverviewCard title='Active Domains' value={String(overview.activeDomains)} icon={<Radar className='h-4 w-4' />} />
+                <OverviewCard title='Critical Vulnerabilities' value={String(overview.criticalVulnerabilities)} icon={<ShieldAlert className='h-4 w-4' />} />
+                <OverviewCard title='Scanned Images' value={String(overview.imagesScanned)} icon={<Sparkles className='h-4 w-4' />} />
+            </div>
 
-                <div className='grid gap-4 xl:grid-cols-[1.3fr_0.9fr]'>
-                    <section className='rounded-lg border border-white/10 bg-black/25 p-5'>
-                        <div className='flex items-center justify-between'>
-                            <h2 className='text-lg font-semibold text-bright'>Current Focus</h2>
-                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
-                                {overview.scanRunning ? 'Scanning' : 'Idle'}
-                            </span>
-                        </div>
-                        <div className='mt-4 grid gap-3 md:grid-cols-3'>
-                            <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />
-                            <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />
-                            <ActionLink href='/status' title='Status' body='Synthetic checks, latency, uptime, and current service state.' />
-                        </div>
-                    </section>
+            <div className='grid gap-4 xl:grid-cols-[1.3fr_0.9fr]'>
+                <DashboardPanel className='p-5'>
+                    <div className='flex items-center justify-between'>
+                        <h2 className='text-lg font-semibold text-bright'>Current Focus</h2>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
+                            {overview.scanRunning ? 'Scanning' : 'Idle'}
+                        </span>
+                    </div>
+                    <div className='mt-4 grid gap-3 md:grid-cols-3'>
+                        <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />
+                        <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />
+                        <ActionLink href='/status' title='Status' body='Synthetic checks, latency, uptime, and current service state.' />
+                    </div>
+                </DashboardPanel>
 
-                    <section className='rounded-lg border border-white/10 bg-black/25 p-5'>
-                        <h2 className='text-lg font-semibold text-bright'>Service Health</h2>
-                        <div className='mt-4 space-y-3'>
-                            {status.checks.slice(0, 6).map((check) => (
-                                <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-white/8 bg-white/3 px-3 py-2 text-sm'>
-                                    <div>
-                                        <div className='font-medium text-bright'>{check.check_name}</div>
-                                        <div className='text-bright/45'>{check.service}</div>
-                                    </div>
-                                    <div className='text-right'>
-                                        <div className='font-semibold text-bright'>{check.latency_ms}ms</div>
-                                        <div className={`text-xs ${check.status === 'up' ? 'text-emerald-300' : check.status === 'degraded' ? 'text-amber-300' : 'text-red-300'}`}>
-                                            {check.status}
-                                        </div>
+                <DashboardPanel className='p-5'>
+                    <h2 className='text-lg font-semibold text-bright'>Service Health</h2>
+                    <div className='mt-4 space-y-3'>
+                        {status.checks.slice(0, 6).map((check) => (
+                            <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-white/8 bg-white/3 px-3 py-2 text-sm'>
+                                <div>
+                                    <div className='font-medium text-bright'>{check.check_name}</div>
+                                    <div className='text-bright/45'>{check.service}</div>
+                                </div>
+                                <div className='text-right'>
+                                    <div className='font-semibold text-bright'>{check.latency_ms}ms</div>
+                                    <div className={`text-xs ${check.status === 'up' ? 'text-emerald-300' : check.status === 'degraded' ? 'text-amber-300' : 'text-red-300'}`}>
+                                        {check.status}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </section>
-                </div>
+                            </div>
+                        ))}
+                    </div>
+                </DashboardPanel>
             </div>
-        </div>
+        </DashboardPage>
     )
 }
 
 function OverviewCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
     return (
-        <div className='rounded-lg border border-white/10 bg-black/25 p-5'>
+        <DashboardPanel className='p-5'>
             <div className='flex items-center justify-between text-bright/60'>
                 <span className='text-sm'>{title}</span>
                 <span>{icon}</span>
             </div>
             <div className='mt-3 text-3xl font-semibold text-bright'>{value}</div>
-        </div>
+        </DashboardPanel>
     )
 }
 

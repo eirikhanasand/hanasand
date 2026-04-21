@@ -5,6 +5,7 @@ import getSystemMetrics from '@/utils/vms/fetch/metrics/getSystemMetrics'
 import getVMsMetrics from '@/utils/vms/fetch/metrics/getVMsMetrics'
 import { redirect } from 'next/navigation'
 import getVMList from '@/utils/vms/fetch/getVMList'
+import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 
 export default async function page() {
     const Cookies = await cookies()
@@ -23,13 +24,17 @@ export default async function page() {
     ])
 
     return (
-        <div className="h-full py-4 space-y-6">
+        <DashboardPage className='h-full'>
+            <DashboardHeader
+                title='System'
+                description='System metrics, Docker containers, and virtual machine state.'
+            />
             <SystemDashboard
                 system={system}
                 dockerContainers={dockerContainers}
                 vms={vms}
                 vmMetrics={vmMetrics}
             />
-        </div>
+        </DashboardPage>
     )
 }

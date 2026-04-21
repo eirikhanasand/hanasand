@@ -24,5 +24,17 @@ export async function getAiWorkspace({
         return { conversations: [], repositories: [] }
     }
 
-    return response.json()
+    const data = await response.json().catch(() => null)
+    return {
+        conversations: Array.isArray(data?.conversations) ? data.conversations : [],
+        repositories: Array.isArray(data?.repositories)
+            ? data.repositories.map((repository: AIImportedRepo) => ({
+                ...repository,
+                syncStatus: repository.syncStatus || 'ready',
+                lastSyncedAt: repository.lastSyncedAt || null,
+                lastSyncError: repository.lastSyncError || null,
+                syncHistory: Array.isArray(repository.syncHistory) ? repository.syncHistory : [],
+            }))
+            : [],
+    }
 }

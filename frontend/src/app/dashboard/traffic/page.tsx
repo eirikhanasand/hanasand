@@ -2,6 +2,7 @@ import DomainSelector from '@/components/monitoring/traffic/domainSelector'
 import LiveTrafficMapDashboard from '@/components/monitoring/traffic/liveMapDashboard'
 import TrafficDashboard from '@/components/monitoring/traffic/traffic'
 import { getTrafficDomains, getTrafficMetrics, getTrafficRecords } from '@/utils/monitoring/data'
+import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,11 +25,15 @@ export default async function Page({
     const trafficRecords = typeof records === 'string' ? null : records
 
     return (
-        <div className='px-8 py-4 md:px-16 lg:px-32'>
+        <DashboardPage>
+            <DashboardHeader
+                title='Traffic'
+                description='Live ingress, geographic flow, and recent request activity.'
+            />
             <div className='grid gap-4'>
-                <div className='flex justify-between'>
+                <DashboardPanel className='p-4'>
                     <DomainSelector domains={domainOptions} selectedDomain={selectedDomain} />
-                </div>
+                </DashboardPanel>
                 <LiveTrafficMapDashboard
                     initialMetrics={trafficMetrics}
                     initialRecords={trafficRecords?.result || []}
@@ -39,6 +44,6 @@ export default async function Page({
                     selectedDomain={selectedDomain}
                 />
             </div>
-        </div>
+        </DashboardPage>
     )
 }
