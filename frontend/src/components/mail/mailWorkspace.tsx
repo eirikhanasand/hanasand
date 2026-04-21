@@ -10,11 +10,13 @@ import {
     Inbox,
     Mail,
     MailPlus,
+    Radar,
     Paperclip,
     Reply,
     Search,
     Send,
     Settings2,
+    ShieldCheck,
     ShieldAlert,
     Star,
     Trash2,
@@ -392,6 +394,58 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     </div>
                                 )}
                             </div>
+                        </details>
+
+                        <details className='mt-2 rounded-2xl border border-white/8 bg-white/[0.025]'>
+                            <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
+                                <span className='inline-flex items-center gap-1.5'><ShieldCheck className='h-3.5 w-3.5' /> Mail health</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                                    overview?.health?.status === 'healthy'
+                                        ? 'bg-emerald-500/12 text-emerald-100'
+                                        : overview?.health?.status === 'warning'
+                                            ? 'bg-amber-500/12 text-amber-100'
+                                            : 'bg-red-500/12 text-red-100'
+                                }`}
+                                >
+                                    {overview?.health?.status || 'unknown'}
+                                </span>
+                            </summary>
+                            {overview?.health && (
+                                <div className='border-t border-white/8 px-3 py-3'>
+                                    <div className='flex items-center justify-between gap-2 text-[10px] text-bright/42'>
+                                        <span className='inline-flex items-center gap-1.5'>
+                                            <Radar className='h-3.5 w-3.5' />
+                                            checked {formatDate(overview.health.checkedAt)}
+                                        </span>
+                                        <span>
+                                            queue {overview.health.queueDepth} · banner {overview.health.smtpBannerLatencyMs ?? '—'}ms
+                                        </span>
+                                    </div>
+                                    <div className='mt-2 grid gap-1.5'>
+                                        {overview.health.checks.map(check => (
+                                            <div
+                                                key={check.id}
+                                                className='rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'
+                                            >
+                                                <div className='flex items-center justify-between gap-2'>
+                                                    <p className='text-[11px] font-medium text-bright/84'>{check.label}</p>
+                                                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                                                        check.status === 'healthy'
+                                                            ? 'bg-emerald-500/12 text-emerald-100'
+                                                            : check.status === 'warning'
+                                                                ? 'bg-amber-500/12 text-amber-100'
+                                                                : 'bg-red-500/12 text-red-100'
+                                                    }`}
+                                                    >
+                                                        {check.status}
+                                                    </span>
+                                                </div>
+                                                <p className='mt-1 text-[10px] leading-4 text-bright/42'>{check.detail}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </details>
 
                         <details className='mt-2 rounded-2xl border border-white/8 bg-white/[0.025]'>

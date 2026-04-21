@@ -69,6 +69,21 @@ export type MailRule = {
     updated_at: string
 }
 
+export type MailHealthCheck = {
+    id: string
+    label: string
+    status: 'healthy' | 'warning' | 'error'
+    detail: string
+}
+
+export type MailHealth = {
+    status: 'healthy' | 'warning' | 'error'
+    checkedAt: string
+    queueDepth: number
+    smtpBannerLatencyMs: number | null
+    checks: MailHealthCheck[]
+}
+
 export type MailOverview = {
     actor: {
         id: string
@@ -83,6 +98,7 @@ export type MailOverview = {
     messages: MailMessageSummary[]
     selectedMessage: MailMessage | null
     filters: MailRule[]
+    health: MailHealth | null
     settings: {
         host: string
         imapHost: string

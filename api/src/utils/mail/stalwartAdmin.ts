@@ -66,6 +66,11 @@ export async function fetchRecommendedDns(domain: string) {
     return response.json()
 }
 
+export async function fetchMailQueueSummary() {
+    const response = await adminFetch('/api/queue/messages')
+    return response.json() as Promise<{ data?: { items?: unknown[], total?: number, status?: boolean } }>
+}
+
 async function adminFetch(path: string, init: RequestInit = {}) {
     const config = requireMailAdminConfig()
     const headers = new Headers(init.headers)
