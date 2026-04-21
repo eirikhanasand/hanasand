@@ -38,6 +38,22 @@
 - Added dashboard shortcuts for:
   - Overview
   - Vulnerabilities
+- Completed a local hardening pass across `docs`, `idk`, and `pwned`:
+  - `personal/docs`
+    - pinned Docker base to `node:22-alpine`
+    - removed the live bind mount from production compose
+    - added a `/status` route and Docker healthcheck
+    - added in-memory JSON route caching in `src/index.ts`
+    - switched the runtime script to `node --experimental-transform-types src/index.ts`
+  - `personal/idk`
+    - removed secret leakage from `idk_frontend` by replacing shared `.env` injection with explicit frontend-only environment variables
+    - pinned API Docker base to `node:22-alpine`
+    - cleaned both Dockerfiles with `WORKDIR`, deterministic installs, and frontend image build-time `next build`
+    - added `/status` on the API and a Docker healthcheck for both frontend/backend
+    - tightened API CORS from `allow everything` to an allowlist based on local defaults plus optional `CORS_ORIGINS`
+    - updated the API start/debug scripts to the same TypeScript runtime mode used in local verification
+  - `personal/pwned`
+    - added a Docker healthcheck against `/api/passwords/status`
 
 ## Verification Completed
 - Frontend TypeScript passed:
@@ -46,7 +62,23 @@
   - `/dashboard/traffic` redirects to login
   - `/dashboard/vulnerabilities` redirects to login
   - `/dashboard/overview` redirects to login
-- `pwned` local verification from earlier in this pass remains green.
+- `pwned` local verification remains green in both modes:
+  - direct run on port `18250`
+    - `GET /` returned the endpoint listing
+    - `GET /api/passwords/status` returned `200`
+    - `POST /api/pwned` with `password` returned a valid count
+  - Docker run on port `8201`
+    - `GET /api/passwords/status` returned `200`
+    - `POST /api/pwned` with `password` returned a valid count
+- Local Docker verification completed:
+  - `docs` on `3002` returned `200` from `/status`
+  - `idk_backend` on `8601` returned `200` from `/status`
+  - `idk_frontend` on `8600` returned `200` from `/`
+  - local container health showed:
+    - `docs` healthy
+    - `idk_backend` healthy
+    - `idk_frontend` healthy
+    - `pwned` healthy
 
 ## In Progress
 - Additional Queenbee parity still pending:
@@ -55,7 +87,17 @@
   - service detail pages
   - related internal dashboard/system sections not yet mirrored
 - Runtime verification with authenticated admin/system access is still needed.
-- Remote server/app audit, deploy, and security sweep have not been started in this pass.
+- Remote server/app audit was started:
+  - inventoried server containers and mapped them to local repos
+  - confirmed deployed repo heads for `hanasand`, `cdn`, `pwned`, `docs`, `git`, `idk`, `name_pending`, `speedrun`, `nemo`, and `67`
+  - reviewed `docs`, `idk`, and `pwned` for obvious container/runtime issues
+- Remote staged deployment is only partially complete:
+  - verified `docs` and `idk` remote repos are effectively clean enough to sync targeted files
+  - verified remote `pwned` is dirty with uncommitted password-index work already present on the server, so avoid broad overwrite there
+  - synced the verified `docs` files to the remote repo
+  - remote `docker compose up -d --build` for `docs` repeatedly stalled inside remote BuildKit/buildx over SSH with almost no progress output
+  - remote `docs` was therefore left on the old container version and still returns `404` for `/status`
+  - remote `idk` and `pwned` deployment were intentionally not forced afterward to avoid repeating the same opaque failure mode without a cleaner rollout method
 
 ## Notes
 - User asked to remember the handoff at the end and update the agent markdown files.
@@ -69,3 +111,10 @@
   - `<2ms` endpoint goal
   - local/remote Docker app security review and staged deployments
   - secret rotation / rebuild / remote audit work from `codex.md`
+- Remote deploy blocker to resume from:
+  - server-side `docker compose build` for `docs` appears to hang inside BuildKit/buildx when triggered through SSH
+  - I killed the stuck remote/local deployment processes and did not leave an active rebuild running
+  - the next pass should retry server deployment with a more inspectable method, for example:
+    - disabling BuildKit for the remote compose build
+    - running plain `docker build` / `docker compose up` in separate SSH steps
+    - or capturing remote build logs with a wrapper that flushes incremental output reliably

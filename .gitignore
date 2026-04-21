@@ -1,5 +1,6 @@
 # dependencies
 node_modules/
+package-lock.json
 
 # testing
 /coverage
@@ -22,11 +23,6 @@ npm-debug.log*
 
 # local env files
 .env
-secret.json
-.secret.json
-.secret2.json
-.dev.json
-.prod.json
 
 # typescript
 *.tsbuildinfo
