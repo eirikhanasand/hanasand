@@ -12,9 +12,9 @@ export async function getMailHealth(): Promise<MailHealth> {
     let smtpBannerLatencyMs: number | null = null
     const internalMailHost = new URL(mailConfig.internalUrl).hostname
 
-    const hostRecords = await resolvePublicDns(mailConfig.host, 'A')
+    const hostRecords = await resolveDnsWithResolvers(mailConfig.host, 'A')
     const primaryIp = hostRecords[0] || null
-    const reverseRecords = primaryIp ? await resolvePublicDns(primaryIp, 'PTR') : []
+    const reverseRecords = primaryIp ? await resolveDnsWithResolvers(primaryIp, 'PTR') : []
     const ptrMatches = reverseRecords.some(value => normalizeDnsName(value) === normalizeDnsName(mailConfig.host))
 
     checks.push({
@@ -26,10 +26,10 @@ export async function getMailHealth(): Promise<MailHealth> {
             : 'No A record found for the mail host.',
     })
 
-    const spf = await resolvePublicDns(mailConfig.domain, 'TXT')
-    const dmarc = await resolvePublicDns(`_dmarc.${mailConfig.domain}`, 'TXT')
-    const mtaStsTxt = await resolvePublicDns(`_mta-sts.${mailConfig.domain}`, 'TXT')
-    const tlsRpt = await resolvePublicDns(`_smtp._tls.${mailConfig.domain}`, 'TXT')
+    const spf = await resolveTxtReliably(mailConfig.domain)
+    const dmarc = await resolveTxtReliably(`_dmarc.${mailConfig.domain}`)
+    const mtaStsTxt = await resolveTxtReliably(`_mta-sts.${mailConfig.domain}`)
+    const tlsRpt = await resolveTxtReliably(`_smtp._tls.${mailConfig.domain}`)
     const mtaStsPolicy = await safeFetchText(`https://mta-sts.${mailConfig.domain}/.well-known/mta-sts.txt`)
 
     checks.push({
@@ -96,52 +96,79 @@ export async function getMailHealth(): Promise<MailHealth> {
     }
 }
 
-async function resolvePublicDns(name: string, type: 'A' | 'TXT' | 'PTR') {
+async function resolveDnsWithResolvers(name: string, type: 'A' | 'PTR') {
+    const resolver = new dns.Resolver()
+    resolver.setServers(['1.1.1.1', '8.8.8.8'])
+
     try {
-        const queryName = type === 'PTR' ? toPointerName(name) : name
-        const response = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(queryName)}&type=${type}`, {
-            signal: AbortSignal.timeout(10_000),
-        })
-        if (!response.ok) {
-            return []
-        }
-
-        const payload = await response.json() as {
-            Answer?: Array<{ data?: string }>
-        }
-
-        return (payload.Answer || [])
-            .map(answer => (answer.data || '').replace(/^"|"$/g, ''))
-            .map(answer => answer.endsWith('.') ? answer.slice(0, -1) : answer)
-            .map(answer => answer.replace(/" "/g, ''))
-    } catch {
         if (type === 'A') {
-            try {
-                return await dns.resolve4(name)
-            } catch {
-                return []
-            }
+            return await resolver.resolve4(name)
         }
 
-        if (type === 'PTR') {
-            try {
-                return await dns.reverse(name)
-            } catch {
-                return []
-            }
-        }
-
-        try {
-            const records = await dns.resolveTxt(name)
-            return records.map(parts => parts.join(''))
-        } catch {
-            return []
-        }
+        return await resolver.reverse(name)
+    } catch {
+        return []
     }
 }
 
-function toPointerName(ip: string) {
-    return `${ip.split('.').reverse().join('.')}.in-addr.arpa`
+async function resolveTxtReliably(name: string) {
+    const authoritative = await resolveTxtFromAuthoritative(name)
+    if (authoritative.length) {
+        return authoritative
+    }
+
+    const publicResolvers = [
+        ['1.1.1.1', '8.8.8.8'],
+        ['9.9.9.9', '208.67.222.222'],
+    ]
+
+    for (const servers of publicResolvers) {
+        try {
+            const resolver = new dns.Resolver()
+            resolver.setServers(servers)
+            const records = await resolver.resolveTxt(name)
+            const values = records.map(parts => parts.join(''))
+            if (values.length) {
+                return values
+            }
+        } catch {
+            continue
+        }
+    }
+
+    return []
+}
+
+async function resolveTxtFromAuthoritative(name: string) {
+    const zone = extractZone(name)
+    try {
+        const nsRecords = await dns.resolveNs(zone)
+        for (const ns of nsRecords) {
+            try {
+                const addresses = await dns.resolve4(ns)
+                for (const address of addresses) {
+                    const resolver = new dns.Resolver()
+                    resolver.setServers([address])
+                    const records = await resolver.resolveTxt(name)
+                    const values = records.map(parts => parts.join(''))
+                    if (values.length) {
+                        return values
+                    }
+                }
+            } catch {
+                continue
+            }
+        }
+    } catch {
+        return []
+    }
+
+    return []
+}
+
+function extractZone(name: string) {
+    const parts = name.split('.')
+    return parts.slice(-2).join('.')
 }
 
 async function safeFetchText(url: string) {
