@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BrainCircuit, FileWarning, Inbox, LayoutDashboard, Network, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { getDashboardViewMode, type DashboardViewMode } from '@/utils/layout/viewMode'
+import { BrainCircuit, DatabaseBackup, FileWarning, Inbox, LayoutDashboard, Network, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
+import { useSyncExternalStore } from 'react'
+import { getDashboardViewMode } from '@/utils/layout/viewMode'
 
 type Item = {
     href: string
@@ -20,21 +20,18 @@ export default function DashboardSidebar({
     isAdmin: boolean
 }) {
     const pathname = usePathname()
-    const [mode, setMode] = useState<DashboardViewMode>('normal')
-
-    useEffect(() => {
-        setMode(getDashboardViewMode())
-
-        function handleModeChange(event: Event) {
-            const detail = (event as CustomEvent<DashboardViewMode>).detail
-            if (detail === 'compact' || detail === 'normal') {
-                setMode(detail)
+    const mode = useSyncExternalStore(
+        (onStoreChange) => {
+            function handleModeChange() {
+                onStoreChange()
             }
-        }
 
-        window.addEventListener('dashboard-view-mode', handleModeChange)
-        return () => window.removeEventListener('dashboard-view-mode', handleModeChange)
-    }, [])
+            window.addEventListener('dashboard-view-mode', handleModeChange)
+            return () => window.removeEventListener('dashboard-view-mode', handleModeChange)
+        },
+        () => getDashboardViewMode(),
+        () => 'normal'
+    )
 
     const items: Item[] = [
         { href: '/dashboard', label: 'Overview', icon: <LayoutDashboard className='h-4 w-4' /> },
@@ -50,6 +47,7 @@ export default function DashboardSidebar({
 
     if (isAdmin) {
         items.splice(4, 0, { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> })
+        items.splice(5, 0, { href: '/dashboard/backup', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> })
         items.push({ href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> })
     }
 
