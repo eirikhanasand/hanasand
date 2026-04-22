@@ -23,6 +23,7 @@ export async function requestService<T>(service: ServiceName, path: string, init
             ...init,
             headers: {
                 ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+                ...(service === 'internal' ? { 'User-Agent': 'hanasand_internal' } : {}),
                 ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...(id ? { id } : {}),
                 ...(init?.headers || {}),

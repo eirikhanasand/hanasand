@@ -131,6 +131,7 @@ export async function readRepoFile(args: ReadRepoFileArgs) {
 
 export async function writeRepoFile(args: WriteRepoFileArgs) {
     const filePath = ensureInsideRepo(args.path)
+    const previousContent = await readFile(filePath, 'utf8').catch(() => '')
     await mkdir(path.dirname(filePath), { recursive: true })
     await writeFile(filePath, args.content, 'utf8')
 
@@ -138,6 +139,8 @@ export async function writeRepoFile(args: WriteRepoFileArgs) {
         path: path.relative(config.repo_root, filePath),
         bytes: Buffer.byteLength(args.content, 'utf8'),
         lines: args.content.split('\n').length,
+        previousContent,
+        diff: buildUnifiedDiff(args.path, previousContent, args.content),
     }
 }
 
@@ -192,4 +195,35 @@ export async function grepRepo(args: GrepRepoArgs) {
         matches,
         truncated: matches.length >= limit,
     }
+}
+
+function buildUnifiedDiff(filePath: string, previousContent: string, nextContent: string) {
+    if (previousContent === nextContent) {
+        return `--- a/${filePath}\n+++ b/${filePath}\n@@\n<no changes>\n`
+    }
+
+    const previousLines = previousContent.split('\n')
+    const nextLines = nextContent.split('\n')
+    const maxLines = Math.max(previousLines.length, nextLines.length)
+    const diffLines = [`--- a/${filePath}`, `+++ b/${filePath}`, '@@']
+
+    for (let index = 0; index < maxLines; index += 1) {
+        const before = previousLines[index]
+        const after = nextLines[index]
+        if (before === after) {
+            if (typeof after === 'string') {
+                diffLines.push(` ${after}`)
+            }
+            continue
+        }
+
+        if (typeof before === 'string') {
+            diffLines.push(`-${before}`)
+        }
+        if (typeof after === 'string') {
+            diffLines.push(`+${after}`)
+        }
+    }
+
+    return diffLines.join('\n')
 }

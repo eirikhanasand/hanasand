@@ -28,7 +28,7 @@ export default async function Page() {
                 <GreetingNav text={text} id={id} />
                 <GreetingNavButtons id={id} />
             </section>
-            <div className='grid gap-3 xl:grid-cols-2'>
+            <div className='grid gap-3 xl:grid-cols-2 xl:items-start'>
                 <DashboardArticles />
                 <Thoughts />
                 <Users roles={roles} />

@@ -1,6 +1,6 @@
 {
   "name": "hanasand-api",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {

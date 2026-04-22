@@ -15,7 +15,6 @@ export default async function manageVM(id: string, action: 'start' | 'stop' | 'r
             headers: {
                 'Authorization': `Bearer ${token}`,
                 id: userId,
-                'Content-Type': 'application/json',
             },
             cache: 'no-store',
             timeoutMs: config.abortTimeout,

@@ -4,17 +4,17 @@ import InlineSeverityBadge from './inlineSeverityBadge'
 
 export default function ImageBreakdown({ image }: { image: ImageVulnerabilityReport }) {
     return (
-        <div className='rounded-xl border border-login-100/10 bg-login-50/5 p-4'>
-            <div className='text-xs font-medium uppercase tracking-[0.18em] text-login-200'>Dependency Breakdown</div>
+        <div className='rounded-xl border border-white/10 bg-white/5 p-4'>
+            <div className='text-xs font-medium uppercase tracking-[0.18em] text-white/60'>Dependency Breakdown</div>
             <div className='mt-4 flex flex-col gap-3'>
                 {image.groups.length ? image.groups.map((group) => (
                     <div
                         key={`${image.image}-${group.source}`}
-                        className='rounded-xl border border-login-100/10 bg-login-900/50 p-4'
+                        className='rounded-xl border border-white/10 bg-black/50 p-4'
                     >
                         <div>
-                            <div className='wrap-break-words font-medium text-login-50'>{group.source}</div>
-                            <div className='mt-1 text-sm text-login-200'>{group.total} findings</div>
+                            <div className='wrap-break-words font-medium text-white'>{group.source}</div>
+                            <div className='mt-1 text-sm text-white/60'>{group.total} findings</div>
                         </div>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {severityOrder.map((severity) => (
@@ -27,7 +27,7 @@ export default function ImageBreakdown({ image }: { image: ImageVulnerabilityRep
                         </div>
                     </div>
                 )) : (
-                    <div className='rounded-xl border border-login-100/10 bg-login-900/50 px-4 py-6 text-sm text-login-100'>
+                    <div className='rounded-xl border border-white/10 bg-black/50 px-4 py-6 text-sm text-white/80'>
                         No dependency grouping available for this image.
                     </div>
                 )}

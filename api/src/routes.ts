@@ -54,6 +54,7 @@ import postVMDetails from './handlers/vms/postVMDetails.ts'
 import deleteVMs from './handlers/vms/deleteVMs.ts'
 import shutdownVMs from './handlers/vms/shutdown.ts'
 import getVMDetails from './handlers/vms/getVMDetails.ts'
+import getVmConnection from './handlers/vms/getConnection.ts'
 import stopVms from './handlers/vms/stopVms.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDocker from './handlers/docker/getDocker.ts'
@@ -159,6 +160,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
 
     // Vms
     fastify.get('/vm/:id', getVM)
+    fastify.get('/vm/:id/connection', getVmConnection)
     fastify.get('/vm/details/:name', getVMDetails)
     fastify.get('/vms', getVM)
     fastify.get('/vms/stop', stopVms)

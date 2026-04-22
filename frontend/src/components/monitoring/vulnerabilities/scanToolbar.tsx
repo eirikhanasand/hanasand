@@ -24,24 +24,24 @@ export default function ScanToolbar(props: Props) {
     return (
         <div className='mt-4 flex gap-3 justify-between'>
             <div className='flex items-center gap-3 pr-px'>
-                <div className='text-sm text-login-200'>
+                <div className='text-sm text-white/60'>
                     Showing {props.sorting.images.length} of {props.data?.images.length || 0} images
                 </div>
-                <div className='inline-flex rounded-lg border border-login-100/10 bg-login-50/5 p-1 text-sm'>
+                <div className='inline-flex rounded-lg border border-white/10 bg-white/5 p-1 text-sm'>
                     {(['impact', 'alphabetical'] as const).map((mode) => (
                         <button
                             key={mode}
                             type='button'
                             onClick={() => props.sorting.setSortMode(mode)}
                             className={`rounded-md px-3 py-1.5 transition ${
-                                props.sorting.sortMode === mode ? 'bg-[#e25822] text-white' : 'text-login-200 hover:bg-login-50/10'
+                                props.sorting.sortMode === mode ? 'bg-[#e25822] text-white' : 'text-white/60 hover:bg-white/10'
                             }`}
                         >
                             {mode === 'impact' ? 'Impact' : 'A-Z'}
                         </button>
                     ))}
                 </div>
-                <div className='inline-flex rounded-lg border border-login-100/10 bg-login-50/5 p-1 text-sm'>
+                <div className='inline-flex rounded-lg border border-white/10 bg-white/5 p-1 text-sm'>
                     <button
                         type='button'
                         onClick={() => {
@@ -50,7 +50,7 @@ export default function ScanToolbar(props: Props) {
                             }
                         }}
                         className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
-                            !props.expansion.areAllExpanded ? 'bg-[#e25822] text-white' : 'text-login-200 hover:bg-login-50/10'
+                            !props.expansion.areAllExpanded ? 'bg-[#e25822] text-white' : 'text-white/60 hover:bg-white/10'
                         }`}
                     >
                         <Rows3 className='h-4.5 w-4.5' />
@@ -64,7 +64,7 @@ export default function ScanToolbar(props: Props) {
                             }
                         }}
                         className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
-                            props.expansion.areAllExpanded ? 'bg-[#e25822] text-white' : 'text-login-200 hover:bg-login-50/10'
+                            props.expansion.areAllExpanded ? 'bg-[#e25822] text-white' : 'text-white/60 hover:bg-white/10'
                         }`}
                     >
                         <LayoutGrid className='h-4.5 w-4.5' />

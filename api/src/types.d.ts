@@ -126,7 +126,7 @@ type GPT_PromptRequest = {
 }
 
 type AIArtifact = {
-    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link'
+    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link' | 'diff'
     title: string
     path?: string | null
     url?: string | null

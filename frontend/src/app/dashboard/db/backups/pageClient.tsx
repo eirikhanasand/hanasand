@@ -38,12 +38,22 @@ export default function DatabaseBackupsPageClient({ backups }: { backups: Backup
                         type='button'
                         onClick={handleRun}
                         disabled={isPending}
-                        className='inline-flex items-center gap-2 rounded-lg border border-login-100/10 bg-black/18 px-3 py-2 text-sm text-bright/75 transition hover:border-orange-300/35 hover:bg-orange-300/8 disabled:opacity-60'
+                        className={`
+                            inline-flex items-center gap-2 rounded-lg border
+                            border-white/5 bg-black/18 px-3 py-2 text-sm
+                            text-bright/75 transition hover:border-orange-300/35
+                            hover:bg-orange-300/8 disabled:opacity-60
+                        `}
                     >
                         <DatabaseBackup className='h-4 w-4' />
                         {isPending ? 'Running backup…' : 'Run backup now'}
                     </button>
-                    <Link href='/dashboard/db/restore' className='inline-flex items-center gap-2 rounded-lg border border-login-100/10 bg-black/18 px-3 py-2 text-sm text-bright/75 transition hover:border-orange-300/35 hover:bg-orange-300/8'>
+                    <Link href='/dashboard/db/restore' className={`
+                        inline-flex items-center gap-2 rounded-lg border
+                        border-white/5 bg-black/18 px-3 py-2 text-sm
+                        text-bright/75 transition hover:border-orange-300/35
+                        hover:bg-orange-300/8
+                    `}>
                         <RotateCcw className='h-4 w-4' />
                         Restore
                     </Link>
@@ -60,9 +70,15 @@ export default function DatabaseBackupsPageClient({ backups }: { backups: Backup
                                 <p className='mt-1 text-xs uppercase tracking-[0.18em] text-bright/35'>{backup.id}</p>
                             </div>
                             <div className='flex flex-wrap gap-2 text-xs'>
-                                <span className={`rounded-full px-3 py-1 ${backup.status.toLowerCase().includes('up') ? 'bg-emerald-500/14 text-emerald-100' : 'bg-red-500/14 text-red-100'}`}>{backup.status}</span>
-                                {backup.dbSize && <span className='rounded-full border border-login-100/10 bg-white/5 px-3 py-1 text-bright/62'>{backup.dbSize}</span>}
-                                {backup.totalStorage && <span className='rounded-full border border-login-100/10 bg-white/5 px-3 py-1 text-bright/62'>{backup.totalStorage}</span>}
+                                <span className={`rounded-full px-3 py-1 ${backup.status.toLowerCase().includes('up') ? 'bg-emerald-500/14 text-emerald-100' : 'bg-red-500/14 text-red-100'}`}>
+                                    {backup.status}
+                                </span>
+                                {backup.dbSize && <span className='rounded-full border border-white/10 bg-white/5 px-3 py-1 text-bright/62'>
+                                    {backup.dbSize}
+                                </span>}
+                                {backup.totalStorage && <span className='rounded-full border-white/10 bg-white/5 px-3 py-1 text-bright/62'>
+                                    {backup.totalStorage}
+                                </span>}
                             </div>
                         </div>
                         {backup.error && (
@@ -77,7 +93,10 @@ export default function DatabaseBackupsPageClient({ backups }: { backups: Backup
                                 <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Next backup</p>
                                 <p className='mt-2'>{formatSchedule(backup.nextBackup)}</p>
                             </div>
-                            <Link href={`/dashboard/db/restore?service=${encodeURIComponent(backup.name.replace(/_database$/, ''))}`} className='rounded-xl bg-black/18 p-4 transition hover:bg-black/24'>
+                            <Link 
+                                href={`/dashboard/db/restore?service=${encodeURIComponent(backup.name.replace(/_database$/, ''))}`} 
+                                className='rounded-xl bg-black/18 p-4 transition hover:bg-black/24'
+                            >
                                 <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Restore</p>
                                 <p className='mt-2 text-bright/78'>View backup files</p>
                             </Link>

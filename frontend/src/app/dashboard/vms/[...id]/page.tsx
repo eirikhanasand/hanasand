@@ -2,6 +2,7 @@ import getVM from '@/utils/vms/fetch/getVM'
 import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
 import VMClient from './clientPage'
 import getVMDetails from '@/utils/vms/fetch/metrics/getVMDetails'
+import getVMConnection from '@/utils/vms/fetch/getVMConnection'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
@@ -18,6 +19,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const vmResponse = await getVM(id, token, userId)
     const details = await getVMDetails(id, token, userId)
     const metrics = await getVMMetrics(id, token, userId)
+    const connection = await getVMConnection(id, token, userId)
     const vm = Array.isArray(vmResponse) && vmResponse.length ? vmResponse[0] : null
     if (!vm) {
         return null
@@ -25,7 +27,12 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <div className="h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6">
-            <VMClient vm={vm} details={details} metrics={metrics} />
+            <VMClient
+                vm={vm}
+                details={details}
+                metrics={metrics}
+                connection={connection}
+            />
         </div>
     )
 }

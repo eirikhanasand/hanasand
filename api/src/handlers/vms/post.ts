@@ -4,6 +4,7 @@ import { loadSQL } from '#utils/loadSQL.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
+import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const body = req.body as {
@@ -37,6 +38,13 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         if (!result.rows.length) {
             return res.status(409).send({ error: 'VM already exists' })
         }
+
+        await syncUserCertificatesToVm({
+            vmName: name,
+            userIds: [owner, created_by, ...(access_users ?? [])]
+        }).catch((error) => {
+            req.log.warn({ err: error, vmName: name }, 'Unable to synchronize user certificates to the VM after creation.')
+        })
 
         return res.status(201).send(result.rows[0])
     } catch (error) {

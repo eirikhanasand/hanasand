@@ -224,7 +224,7 @@ export default function useAiWorkbench({
         ? shareContents[activeWorkspaceId] || null
         : null
 
-    async function runTerminalCommandOnShare(shareId: string, command: string, timeoutMs = 20000) {
+    const runTerminalCommandOnShare = useCallback(async (shareId: string, command: string, timeoutMs = 20000) => {
         const share = shares.find((entry) => entry.id === shareId)
         if (!share?.alias) {
             return {
@@ -299,7 +299,7 @@ export default function useAiWorkbench({
                 } catch {}
             }
         })
-    }
+    }, [shares])
 
     useEffect(() => {
         hydrateShareRef.current = async (shareId: string) => {
@@ -736,7 +736,7 @@ export default function useAiWorkbench({
         })
     }
 
-    async function scaffoldStarter(template: 'nextjs_docker', projectName?: string | null, targetShareId?: string | null) {
+    const scaffoldStarter = useCallback(async (template: 'nextjs_docker', projectName?: string | null, targetShareId?: string | null) => {
         if (!activeConversation) {
             return
         }
@@ -801,7 +801,7 @@ export default function useAiWorkbench({
             setStatusNotice(message)
             throw new Error(message)
         }
-    }
+    }, [activeConversation, attachShare, selectShareFile])
 
     async function setPreferredModel(preferredModel: string | null) {
         if (!activeConversation) {
@@ -999,6 +999,37 @@ export default function useAiWorkbench({
                     }
                 }
 
+                if (message.type === 'prompt_tool' && message.toolId && message.toolLabel) {
+                    const messages = [...conversation.messages]
+                    const existingIndex = messages.findIndex((entry) => entry.role === 'tool' && entry.metadata?.toolId === message.toolId)
+                    const toolMessage: AIConversationMessage = {
+                        id: existingIndex >= 0 ? messages[existingIndex].id : `tool-${message.toolId}`,
+                        role: 'tool',
+                        content: message.toolDetail ? `${message.toolLabel}\n\n${message.toolDetail}` : message.toolLabel,
+                        createdAt: existingIndex >= 0 ? messages[existingIndex].createdAt : new Date().toISOString(),
+                        metadata: {
+                            toolId: message.toolId,
+                            toolState: message.toolState || 'running',
+                            agentTool: true,
+                        },
+                    }
+                    if (existingIndex >= 0) {
+                        messages[existingIndex] = {
+                            ...messages[existingIndex],
+                            ...toolMessage,
+                        }
+                    } else {
+                        messages.push(toolMessage)
+                    }
+
+                    return {
+                        ...conversation,
+                        updatedAt: new Date().toISOString(),
+                        messages,
+                        metrics: message.metrics || conversation.metrics,
+                    }
+                }
+
                 if (message.type === 'prompt_delta' || message.type === 'prompt_complete') {
                     const messages = [...conversation.messages]
                     const lastMessage = messages[messages.length - 1]
@@ -1181,7 +1212,7 @@ export default function useAiWorkbench({
 
             return { ok: false, message: `Tool failed: unsupported action ${toolCall.action}.` }
         }
-    }, [activeConversation])
+    }, [activeConversation, runTerminalCommandOnShare, scaffoldStarter])
 
     return {
         activeConversation,
@@ -1359,6 +1390,7 @@ function buildSystemPrompt({
         'Behave like Codex inside Hanasand: be direct, calm, concise, practical, and action-oriented.',
         'Prefer concrete next steps, patch-ready code, and careful reasoning over marketing language.',
         'You have built-in access to advanced reasoning, repo-aware file inspection/editing tools, local command execution, managed background processes, Playwright browser verification, and live web search outside this prompt. Think privately, inspect before editing, verify in-browser when building web apps, and do not say you lack internet access, shell access, repository access, browser access, or current date awareness when those tools would help.',
+        'If a capability is missing but can be added safely, improve your own workflow by creating reusable scripts, helpers, or tools rather than repeating the same manual sequence.',
         'If a preferred model is unavailable, continue the conversation seamlessly with the current connected model.',
         'When a user asks you to read or update an attached share, make an authenticated HTTP request, prepare a remote project, create a VM, or run a command in an attached share terminal, you may emit one or more tool tags on their own line.',
         'Supported tags:',

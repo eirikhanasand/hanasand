@@ -11,7 +11,7 @@ import copy from '@/utils/copy'
 import randomId from '@/utils/random/randomId'
 import { Copy, Eye, Highlighter, Info as InfoIcon, ListOrdered, Package, RefreshCw, X } from 'lucide-react'
 import Link from 'next/link'
-import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 import Box from '../box/box'
 
 type MetadataProps = {
@@ -51,7 +51,7 @@ export default function Metadata({
     setBox
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
-    const [id, setId] = useState(randomServerId)
+    const [id] = useState(() => randomServerId || randomId())
     const { condition: error, setCondition: setError } = useClearStateAfter()
     HideIfLittleSpace({ set: setShowMetadata })
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
@@ -59,11 +59,6 @@ export default function Metadata({
         timeout: 350,
         onClear: () => setDidCopy(false)
     })
-
-    useEffect(() => {
-        const random = randomId()
-        setId(random)
-    }, [])
 
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'

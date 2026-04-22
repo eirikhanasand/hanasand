@@ -3,6 +3,7 @@
 import { RefreshCcw } from 'lucide-react'
 import smallDate from '@/utils/date/smallDate'
 import VMDetails from '@/components/vms/vmDetails'
+import VMAccess from '@/components/vms/vmAccess'
 import VMHardware from '@/components/vms/vmHardware'
 import VMNetwork from '@/components/vms/vmNetwork'
 import VMOverview from '@/components/vms/vmOverview'
@@ -18,12 +19,14 @@ type VMClientProps = {
     vm: VM
     details: VMDetails | null
     metrics: VMMetrics[]
+    connection: VMConnectionDetails | null
 }
 
-export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics }: VMClientProps) {
+export default function VMClient({ vm: serverVM, details: serverDetails, metrics: serverMetrics, connection: serverConnection }: VMClientProps) {
     const [vm, setVM] = useState<VM>(serverVM)
     const [details, setDetails] = useState(serverDetails)
     const [metrics, setMetrics] = useState(serverMetrics)
+    const [connection] = useState(serverConnection)
     const router = useRouter()
     const boxStyle = 'outline outline-dark p-2 rounded-md w-full'
     const boxTitleStyle = 'text-lg font-semibold'
@@ -52,10 +55,6 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
         }
     }
 
-    async function handleRestartVM(vmId: string) {
-        await fetch(`/api/vm/${vmId}/restart`, { method: 'POST' })
-    }
-
     return (
         <div className="grid gap-2">
             <div className='flex w-full justify-between'>
@@ -75,6 +74,9 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                 <VMHardware boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} />
                 <VMNetwork boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
                 <VMDetails boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
+            </div>
+            <div className='flex w-full justify-between gap-2'>
+                <VMAccess boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} connection={connection} />
             </div>
             <div className='flex w-full justify-between gap-2'>
                 <VMMetrics boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} metrics={metrics} />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
     Archive,
     Clock3,
@@ -92,12 +92,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     const [now, setNow] = useState(() => Date.now())
     const [activeMailboxUser, setActiveMailboxUser] = useState<string | null>(mailboxUser || null)
 
-    async function load(params: {
+    const load = useCallback(async (params: {
         mailboxId?: string | null
         messageId?: string | null
         mailboxUser?: string | null
         silent?: boolean
-    } = {}) {
+    } = {}) => {
         const silent = Boolean(params.silent)
 
         try {
@@ -136,12 +136,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 setLoading(false)
             }
         }
-    }
+    }, [activeMailboxUser, mailboxUser, selectedMailboxId, selectedMessageId])
 
     useEffect(() => {
-        setActiveMailboxUser(mailboxUser || null)
-        void load({ mailboxUser })
-    }, [mailboxUser])
+        load({ mailboxUser, mailboxId: null, messageId: null })
+    }, [load, mailboxUser])
 
     useEffect(() => {
         const poll = window.setInterval(() => {
@@ -161,7 +160,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             window.clearInterval(poll)
             document.removeEventListener('visibilitychange', onVisibilityChange)
         }
-    }, [activeMailboxUser, mailboxUser, selectedMailboxId, selectedMessageId])
+    }, [load])
 
     const filteredMessages = useMemo(() => {
         const needle = query.trim().toLowerCase()
@@ -247,7 +246,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 {showStaleWarning && (
                     <div className='inline-flex items-center gap-1.5 text-[11px] text-red-200/85'>
                         <Clock3 className='h-3.5 w-3.5' />
-                        Updated {formatRelativeTime(lastSuccessAt!)} ago
+                        Updated {formatRelativeTime(lastSuccessAt!, now)} ago
                     </div>
                 )}
             </div>
@@ -260,7 +259,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
             {showStaleWarning && backgroundIssue && (
                 <div className='rounded-2xl border border-red-400/20 bg-red-500/8 px-3 py-2 text-[11px] text-red-100/90'>
-                    Background sync paused. Last successful update was {formatRelativeTime(lastSuccessAt!)} ago.
+                    Background sync paused. Last successful update was {formatRelativeTime(lastSuccessAt!, now)} ago.
                 </div>
             )}
 
@@ -613,6 +612,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             {composer.open && overview && (
                 <Composer
                     state={composer}
+                    now={now}
                     mailboxUser={overview.mailboxUser}
                     recentRecipients={overview.recentRecipients}
                     onChange={setComposer}
@@ -730,8 +730,9 @@ function MessageRow({ message, active, onClick }: {
     )
 }
 
-function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onSubmit }: {
+function Composer({ state, now, mailboxUser, recentRecipients, onChange, onClose, onSubmit }: {
     state: ComposerState
+    now: number
     mailboxUser: string
     recentRecipients: RecentMailRecipient[]
     onChange: (state: ComposerState) => void
@@ -778,6 +779,7 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
                         onFocus={() => setActiveRecipientField('to')}
                         onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'to' ? null : current), 120)}
                         suggestions={activeRecipientField === 'to' ? recentRecipients : []}
+                        now={now}
                     />
                     <div className='grid gap-2 md:grid-cols-2'>
                         <RecipientField
@@ -787,6 +789,7 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
                             onFocus={() => setActiveRecipientField('cc')}
                             onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'cc' ? null : current), 120)}
                             suggestions={activeRecipientField === 'cc' ? recentRecipients : []}
+                            now={now}
                         />
                         <RecipientField
                             placeholder='BCC'
@@ -795,6 +798,7 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
                             onFocus={() => setActiveRecipientField('bcc')}
                             onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'bcc' ? null : current), 120)}
                             suggestions={activeRecipientField === 'bcc' ? recentRecipients : []}
+                            now={now}
                         />
                     </div>
                     <input data-testid='mail-compose-subject' className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
@@ -862,6 +866,7 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
 
 function RecipientField({
     value,
+    now,
     onChange,
     onFocus,
     onBlur,
@@ -870,6 +875,7 @@ function RecipientField({
     testId,
 }: {
     value: string
+    now: number
     onChange: (value: string) => void
     onFocus: () => void
     onBlur: () => void
@@ -928,7 +934,9 @@ function RecipientField({
                                 <p className='truncate text-[12px] text-bright'>{recipient.name || recipient.email}</p>
                                 {recipient.name && <p className='truncate text-[10px] text-bright/40'>{recipient.email}</p>}
                             </div>
-                            <span className='shrink-0 text-[10px] text-bright/28'>{formatRelativeTime(new Date(recipient.lastUsedAt).getTime())}</span>
+                            <span className='shrink-0 text-[10px] text-bright/28'>
+                                {formatRelativeTime(new Date(recipient.lastUsedAt).getTime(), now)}
+                            </span>
                         </button>
                     ))}
                 </div>
@@ -1015,8 +1023,8 @@ function formatDate(value: string, verbose = false) {
     }).format(new Date(value))
 }
 
-function formatRelativeTime(value: number) {
-    const diffMinutes = Math.max(1, Math.floor((Date.now() - value) / 60_000))
+function formatRelativeTime(value: number, now: number) {
+    const diffMinutes = Math.max(1, Math.floor((now - value) / 60_000))
     if (diffMinutes < 60) {
         return `${diffMinutes}m`
     }

@@ -24,8 +24,26 @@ export default async function DatabasePage() {
                 title='Database'
                 actions={
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/db/backups' className='rounded-lg border border-login-100/10 bg-black/18 px-3 py-2 text-sm text-bright/75 transition hover:border-orange-300/35 hover:bg-orange-300/8'>Backups</Link>
-                        <Link href='/dashboard/db/restore' className='rounded-lg border border-login-100/10 bg-black/18 px-3 py-2 text-sm text-bright/75 transition hover:border-orange-300/35 hover:bg-orange-300/8'>Restore</Link>
+                        <Link 
+                            href='/dashboard/db/backups'
+                            className={`
+                                rounded-lg border border-white/10 bg-black/18
+                                px-3 py-2 text-sm text-bright/75 transition
+                                hover:border-orange-300/35 hover:bg-orange-300/8
+                            `}
+                        >
+                            Backups
+                        </Link>
+                        <Link
+                            href='/dashboard/db/restore'
+                            className={`
+                                rounded-lg border border-white/10 bg-black/18
+                                px-3 py-2 text-sm text-bright/75 transition
+                                hover:border-orange-300/35 hover:bg-orange-300/8
+                            `}
+                        >
+                            Restore
+                        </Link>
                     </div>
                 }
             />
@@ -64,7 +82,11 @@ export default async function DatabasePage() {
                         <p><span className='text-bright/40'>Database:</span> {longestQuery?.database || '—'}</p>
                         <p className='mt-2'><span className='text-bright/40'>State:</span> {longestQuery?.state || '—'}</p>
                         <p className='mt-2'><span className='text-bright/40'>Duration:</span> {formatTime(longestQuery?.durationSeconds)}</p>
-                        <pre className='mt-4 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word rounded-xl border border-login-100/10 bg-black/20 p-3 text-xs text-bright/62'>
+                        <pre className={`
+                            mt-4 max-h-48 overflow-auto whitespace-pre-wrap 
+                            wrap-break-word rounded-xl border border-white/5
+                            bg-black/20 p-3 text-xs text-bright/62
+                        `}>
                             {longestQuery?.query || 'No active query details available.'}
                         </pre>
                     </div>
@@ -82,9 +104,15 @@ export default async function DatabasePage() {
                                 </p>
                             </div>
                             <div className='flex flex-wrap gap-2 text-xs text-bright/55'>
-                                <span className='rounded-full border border-login-100/10 bg-white/5 px-3 py-1'>{cluster.databaseCount} databases</span>
-                                <span className='rounded-full border border-login-100/10 bg-white/5 px-3 py-1'>{cluster.activeQueries} active queries</span>
-                                <span className='rounded-full border border-login-100/10 bg-white/5 px-3 py-1'>{formatBytes(cluster.totalSizeBytes)}</span>
+                                <span className='rounded-full border border-white/5 bg-white/5 px-3 py-1'>
+                                    {cluster.databaseCount} databases
+                                </span>
+                                <span className='rounded-full border border-white/5 bg-white/5 px-3 py-1'>
+                                    {cluster.activeQueries} active queries
+                                </span>
+                                <span className='rounded-full border border-white/5 bg-white/5 px-3 py-1'>
+                                    {formatBytes(cluster.totalSizeBytes)}
+                                </span>
                             </div>
                         </div>
                         {cluster.error ? (

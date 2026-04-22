@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --panel: rgba(10, 23, 39, 0.82);
+  --line: rgba(148, 163, 184, 0.18);
+  --text: #f8fafc;
+  --muted: rgba(226, 232, 240, 0.72);
+  --accent: #f97316;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: linear-gradient(180deg, #08101c, #030712); color: var(--text); font-family: Georgia, serif; }
+.page-shell { min-height: 100vh; padding: 32px 20px; }
+.hero-card, .card { border: 1px solid var(--line); border-radius: 28px; background: var(--panel); backdrop-filter: blur(20px); }
+.hero-card { max-width: 900px; margin: 0 auto; padding: 32px; }
+.eyebrow { margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); font-size: 12px; }
+.hero-card h1 { margin: 0; font-size: clamp(2.5rem, 8vw, 5rem); line-height: 0.95; }
+.hero-copy { max-width: 42rem; color: var(--muted); line-height: 1.8; }
+.card-grid { display: grid; gap: 18px; max-width: 900px; margin: 24px auto 0; }
+.card { padding: 22px; }
+.card h2 { margin: 0 0 10px; font-size: 1.1rem; }
+.card p { margin: 0; color: var(--muted); line-height: 1.7; }
+@media (min-width: 820px) { .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

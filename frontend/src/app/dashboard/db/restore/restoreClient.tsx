@@ -68,7 +68,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         updateParam('service', value)
                     }}
                     placeholder='Filter by service'
-                    className='min-w-60 rounded-lg border border-login-100/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none'
+                    className='min-w-60 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none'
                 />
                 <input
                     type='date'
@@ -78,7 +78,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         setDateFilter(value)
                         updateParam('date', value)
                     }}
-                    className='rounded-lg border border-login-100/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none'
+                    className='rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none'
                 />
                 {message && <p className='text-sm text-bright/62'>{message}</p>}
             </div>
@@ -97,7 +97,13 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                                     type='button'
                                     onClick={() => handleRestore(backup)}
                                     disabled={isPending}
-                                    className='inline-flex items-center gap-2 rounded-lg border border-login-100/10 bg-black/18 px-3 py-2 text-sm text-bright/75 transition hover:border-orange-300/35 hover:bg-orange-300/8 disabled:opacity-60'
+                                    className={`
+                                        inline-flex items-center gap-2 rounded-lg
+                                        border border-white/10 bg-black/18
+                                        px-3 py-2 text-sm text-bright/75
+                                        transition hover:border-orange-300/35
+                                        hover:bg-orange-300/8 disabled:opacity-60
+                                    `}
                                 >
                                     <RotateCcw className='h-4 w-4' />
                                     {restoring === key ? 'Restoring…' : 'Restore'}

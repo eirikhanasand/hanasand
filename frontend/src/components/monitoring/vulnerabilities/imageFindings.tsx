@@ -19,12 +19,12 @@ export default function ImageFindings({ image }: { image: ImageVulnerabilityRepo
     }, [image.image])
 
     return (
-        <div className='rounded-xl border border-login-100/10 bg-login-50/5 p-4'>
+        <div className='rounded-xl border border-white/10 bg-white/5 p-4'>
             <div className='flex items-center justify-between gap-3'>
-                <span className='text-xs font-medium uppercase tracking-[0.18em] text-login-200'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em] text-white/60'>
                     Vulnerability Details
                 </span>
-                <span className='text-xs uppercase tracking-[0.18em] text-login-200'>
+                <span className='text-xs uppercase tracking-[0.18em] text-white/60'>
                     {image.vulnerabilities.length} findings
                 </span>
             </div>
@@ -35,7 +35,7 @@ export default function ImageFindings({ image }: { image: ImageVulnerabilityRepo
                         vulnerability={vulnerability}
                     />
                 )) : (
-                    <div className='rounded-xl border border-login-100/10 bg-login-900/50 px-4 py-6 text-sm text-login-100'>
+                    <div className='rounded-xl border border-white/10 bg-black/50 px-4 py-6 text-sm text-white/80'>
                         No per-vulnerability details are stored for this image yet. Run a new scan to populate them.
                     </div>
                 )}
@@ -64,8 +64,8 @@ function FindingPagination({
     totalResults: number
 }) {
     return (
-        <div className='flex items-center justify-between gap-3 rounded-xl border border-login-100/10 bg-login-900/50 px-4 py-3'>
-            <div className='text-sm text-login-200'>
+        <div className='flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/50 px-4 py-3'>
+            <div className='text-sm text-white/60'>
                 Page {page} of {totalPages} • {totalResults} findings
             </div>
             <div className='flex items-center gap-2'>
@@ -73,8 +73,8 @@ function FindingPagination({
                     type='button'
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     disabled={page === 1}
-                    className='rounded-full border border-login-100/10 bg-login-50/5 px-3 py-1.5
-                        text-sm text-login-50 disabled:cursor-not-allowed disabled:opacity-40'
+                    className='rounded-full border border-white/10 bg-white/5 px-3 py-1.5
+                        text-sm text-white disabled:cursor-not-allowed disabled:opacity-40'
                 >
                     Previous
                 </button>
@@ -82,8 +82,8 @@ function FindingPagination({
                     type='button'
                     onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                     disabled={page === totalPages}
-                    className='rounded-full border border-login-100/10 bg-login-50/5 px-3 py-1.5
-                        text-sm text-login-50 disabled:cursor-not-allowed disabled:opacity-40'
+                    className='rounded-full border border-white/10 bg-white/5 px-3 py-1.5
+                        text-sm text-white disabled:cursor-not-allowed disabled:opacity-40'
                 >
                     Next
                 </button>

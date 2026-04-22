@@ -13,8 +13,8 @@ export default function ImageSummaryInfo({ image }: { image: ImageVulnerabilityR
             </div>
             <div className='min-w-0 flex-1 overflow-hidden'>
                 <div className='flex items-center gap-3 overflow-hidden'>
-                    <h2 className='truncate font-semibold text-login-50 text-base'>{image.image}</h2>
-                    <span className='shrink-0 text-sm text-login-100'>
+                    <h2 className='truncate font-semibold text-white text-base'>{image.image}</h2>
+                    <span className='shrink-0 text-sm text-white/80'>
                         Scanned {new Date(image.scannedAt).toLocaleString('nb-NO')}
                     </span>
                 </div>

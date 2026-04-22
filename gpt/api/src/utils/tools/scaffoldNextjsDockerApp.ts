@@ -1,0 +1,217 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import config from '#constants'
+import runCommand from '#utils/tools/runCommand.ts'
+
+type ScaffoldNextjsDockerAppArgs = {
+    targetDir: string
+    appName?: string
+}
+
+function resolveTargetDir(targetDir: string) {
+    const absolutePath = path.resolve(config.repo_root, targetDir)
+    if (absolutePath !== config.repo_root && !absolutePath.startsWith(`${config.repo_root}${path.sep}`)) {
+        throw new Error('targetDir must stay inside the repository root.')
+    }
+    return absolutePath
+}
+
+async function writeTemplateFile(targetDir: string, relativePath: string, content: string) {
+    const filePath = path.join(targetDir, relativePath)
+    await mkdir(path.dirname(filePath), { recursive: true })
+    await writeFile(filePath, content, 'utf8')
+}
+
+export default async function scaffoldNextjsDockerApp(args: ScaffoldNextjsDockerAppArgs) {
+    const absolutePath = resolveTargetDir(args.targetDir.trim())
+    const relativePath = path.relative(config.repo_root, absolutePath)
+    const appName = args.appName || path.basename(relativePath)
+
+    await mkdir(absolutePath, { recursive: true })
+
+    await writeTemplateFile(absolutePath, 'package.json', JSON.stringify({
+        name: appName,
+        version: '0.1.0',
+        private: true,
+        scripts: {
+            dev: 'next dev --hostname 0.0.0.0 --port 3000',
+            build: 'next build',
+            start: 'next start --hostname 0.0.0.0 --port 3000',
+            lint: 'eslint .',
+        },
+        dependencies: {
+            next: '16.2.3',
+            react: '19.2.5',
+            'react-dom': '19.2.5',
+        },
+        devDependencies: {
+            '@eslint/eslintrc': '^3.3.1',
+            '@tailwindcss/postcss': '^4.1.14',
+            '@types/node': '^24.9.0',
+            '@types/react': '^19.2.2',
+            '@types/react-dom': '^19.2.2',
+            eslint: '^9.38.0',
+            'eslint-config-next': '^16.2.3',
+            postcss: '^8.5.6',
+            tailwindcss: '^4.1.14',
+            typescript: '^5.9.3',
+        },
+    }, null, 2) + '\n')
+
+    await writeTemplateFile(absolutePath, 'tsconfig.json', JSON.stringify({
+        compilerOptions: {
+            target: 'ES2017',
+            lib: ['dom', 'dom.iterable', 'esnext'],
+            allowJs: false,
+            skipLibCheck: true,
+            strict: true,
+            noEmit: true,
+            esModuleInterop: true,
+            module: 'esnext',
+            moduleResolution: 'bundler',
+            resolveJsonModule: true,
+            isolatedModules: true,
+            jsx: 'preserve',
+            incremental: true,
+            plugins: [{ name: 'next' }],
+        },
+        include: ['next-env.d.ts', '**/*.ts', '**/*.tsx', '.next/types/**/*.ts'],
+        exclude: ['node_modules'],
+    }, null, 2) + '\n')
+
+    await writeTemplateFile(absolutePath, 'next-env.d.ts', '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n\n// This file is managed by Next.js.\n')
+    await writeTemplateFile(absolutePath, 'next.config.ts', 'import type { NextConfig } from \'next\'\n\nconst nextConfig: NextConfig = {\n  output: \'standalone\',\n}\n\nexport default nextConfig\n')
+    await writeTemplateFile(absolutePath, 'postcss.config.mjs', 'export default {\n  plugins: {\n    "@tailwindcss/postcss": {},\n  },\n}\n')
+    await writeTemplateFile(absolutePath, 'eslint.config.mjs', 'import { FlatCompat } from "@eslint/eslintrc"\n\nconst compat = new FlatCompat({ baseDirectory: import.meta.dirname })\n\nexport default [\n  ...compat.extends("next/core-web-vitals", "next/typescript"),\n]\n')
+    await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\n.next\n.env\n')
+    await writeTemplateFile(absolutePath, '.dockerignore', 'node_modules\n.next\nnpm-debug.log\n.git\n')
+    await writeTemplateFile(absolutePath, 'Dockerfile', `FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]
+`)
+    await writeTemplateFile(absolutePath, 'docker-compose.yml', `services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "\${HOST_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+`)
+    await writeTemplateFile(absolutePath, 'src/app/layout.tsx', `import "./globals.css"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "${appName}",
+  description: "Dockerized Next.js starter generated by Hanasand AI",
+}
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}
+`)
+    await writeTemplateFile(absolutePath, 'src/app/page.tsx', `const cards = [
+  "Next.js App Router starter",
+  "Dockerfile + docker-compose ready",
+  "Prepared for browser verification and iteration",
+]
+
+export default function Home() {
+  return (
+    <main className="page-shell">
+      <section className="hero-card">
+        <p className="eyebrow">Hanasand AI starter</p>
+        <h1>${appName}</h1>
+        <p className="hero-copy">
+          A Dockerized Next.js app scaffolded for autonomous iteration, browser checks, and deployment testing.
+        </p>
+      </section>
+      <section className="card-grid">
+        {cards.map((card) => (
+          <article key={card} className="card">
+            <h2>{card}</h2>
+            <p>Extend this workspace with product logic, APIs, dashboards, and deployment steps.</p>
+          </article>
+        ))}
+      </section>
+    </main>
+  )
+}
+`)
+    await writeTemplateFile(absolutePath, 'src/app/globals.css', `@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --bg: #07111f;
+  --panel: rgba(10, 23, 39, 0.82);
+  --line: rgba(148, 163, 184, 0.18);
+  --text: #f8fafc;
+  --muted: rgba(226, 232, 240, 0.72);
+  --accent: #f97316;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: linear-gradient(180deg, #08101c, #030712); color: var(--text); font-family: Georgia, serif; }
+.page-shell { min-height: 100vh; padding: 32px 20px; }
+.hero-card, .card { border: 1px solid var(--line); border-radius: 28px; background: var(--panel); backdrop-filter: blur(20px); }
+.hero-card { max-width: 900px; margin: 0 auto; padding: 32px; }
+.eyebrow { margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--muted); font-size: 12px; }
+.hero-card h1 { margin: 0; font-size: clamp(2.5rem, 8vw, 5rem); line-height: 0.95; }
+.hero-copy { max-width: 42rem; color: var(--muted); line-height: 1.8; }
+.card-grid { display: grid; gap: 18px; max-width: 900px; margin: 24px auto 0; }
+.card { padding: 22px; }
+.card h2 { margin: 0 0 10px; font-size: 1.1rem; }
+.card p { margin: 0; color: var(--muted); line-height: 1.7; }
+@media (min-width: 820px) { .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+`)
+    await writeTemplateFile(absolutePath, 'public/.gitkeep', '')
+    await writeTemplateFile(absolutePath, 'README.md', `# ${appName}
+
+## Local
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+
+## Docker
+
+\`\`\`bash
+HOST_PORT=3200 docker compose up --build
+\`\`\`
+`)
+
+    const installResult = await runCommand({
+        command: 'npm install',
+        cwd: relativePath,
+        timeoutMs: 10 * 60 * 1000,
+    })
+
+    return {
+        ...installResult,
+        absolutePath,
+        appName,
+    }
+}

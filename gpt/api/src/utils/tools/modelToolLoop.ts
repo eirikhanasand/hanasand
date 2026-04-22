@@ -1,9 +1,12 @@
 import browserTask from '#utils/tools/browserTask.ts'
+import { composeDown, composeLogs, composeUp } from '#utils/tools/composeStack.ts'
 import config from '#constants'
 import generateNextjsMarketingSite from '#utils/tools/generateNextjsMarketingSite.ts'
 import { inspectManagedProcess, startManagedProcess, stopManagedProcess, waitForHttp } from '#utils/tools/managedProcess.ts'
 import { grepRepo, listRepoFiles, readRepoFile, writeRepoFile } from '#utils/tools/repoTools.ts'
 import runCommand from '#utils/tools/runCommand.ts'
+import scaffoldFastifyPostgresApp from '#utils/tools/scaffoldFastifyPostgresApp.ts'
+import scaffoldNextjsDockerApp from '#utils/tools/scaffoldNextjsDockerApp.ts'
 import scaffoldNextjsApp from '#utils/tools/scaffoldNextjsApp.ts'
 import searchWeb from '#utils/tools/searchWeb.ts'
 
@@ -15,6 +18,8 @@ const TOOL_SYSTEM_PROMPT = [
     'Use tools aggressively for anything current, verifiable, filesystem-related, package-related, or command-line oriented.',
     'Prefer list_files, grep_repo, and read_file before editing unfamiliar code. Prefer write_file for precise file creation or full-file rewrites.',
     'For app development, you can scaffold files, install packages, start dev servers, wait for HTTP readiness, inspect logs, and verify behavior in a browser.',
+    'When repeated or multi-step work would benefit future tasks, create a reusable script, helper, or tool in the repository instead of repeating the same manual steps.',
+    'Prefer durable improvements: if a missing capability blocks the task and can be implemented safely, add the capability, then use it.',
     'For questions about today, the current date, time, local environment, installed packages, git state, files, logs, or audits, prefer the command tool over guessing.',
     'For recent news, release notes, web content, docs, and changing external facts, prefer the web search tool.',
     'If the user explicitly asks you to search, browse, look something up online, or use your search functionality, you must use search_web.',
@@ -26,13 +31,19 @@ const TOOL_SYSTEM_PROMPT = [
     '<tool_call>{"name":"write_file","arguments":{"path":"notes/output.md","content":"..."}}</tool_call>',
     '<tool_call>{"name":"run_command","arguments":{"command":"date","cwd":"/optional/path","timeoutMs":120000}}</tool_call>',
     '<tool_call>{"name":"scaffold_nextjs_app","arguments":{"targetDir":"sandbox/my-app","packageManager":"npm"}}</tool_call>',
+    '<tool_call>{"name":"scaffold_nextjs_docker_app","arguments":{"targetDir":"sandbox/my-docker-app"}}</tool_call>',
+    '<tool_call>{"name":"scaffold_fastify_postgres_app","arguments":{"targetDir":"sandbox/my-api"}}</tool_call>',
     '<tool_call>{"name":"generate_nextjs_marketing_site","arguments":{"appDir":"sandbox/my-app","brandName":"Northstar Atelier","tagline":"Spaces that feel composed, calm, and enduring.","description":"Boutique architecture for private homes and hospitality environments.","primaryCtaLabel":"Book a Design Consult","secondaryCtaLabel":"View Case Studies","styleDirection":"Quiet luxury with tactile materials and editorial spacing."}}</tool_call>',
     '<tool_call>{"name":"start_process","arguments":{"command":"npm run dev -- --hostname 127.0.0.1 --port 3025","cwd":"sandbox/my-app","name":"next-dev"}}</tool_call>',
     '<tool_call>{"name":"inspect_process","arguments":{"id":"process-id","tailBytes":12000}}</tool_call>',
     '<tool_call>{"name":"stop_process","arguments":{"id":"process-id"}}</tool_call>',
+    '<tool_call>{"name":"compose_up","arguments":{"cwd":"sandbox/my-app","build":true}}</tool_call>',
+    '<tool_call>{"name":"compose_logs","arguments":{"cwd":"sandbox/my-app","tail":200}}</tool_call>',
+    '<tool_call>{"name":"compose_down","arguments":{"cwd":"sandbox/my-app"}}</tool_call>',
     '<tool_call>{"name":"wait_for_http","arguments":{"url":"http://127.0.0.1:3025","timeoutMs":120000,"expectText":"Welcome"}}</tool_call>',
     '<tool_call>{"name":"browser_task","arguments":{"url":"http://127.0.0.1:3025","captureScreenshot":true,"actions":[{"action":"wait_for_text","text":"Welcome"}]}}</tool_call>',
     'After a tool result arrives, use it actively in the final answer and cite relevant URLs, commands, or file paths from the tool output.',
+    'Clean up helper processes you started once verification is complete.',
     'Answer in Markdown unless the user explicitly wants plain text.',
 ].join('\n')
 
@@ -95,6 +106,20 @@ type ToolCall =
         }
     }
     | {
+        name: 'scaffold_nextjs_docker_app'
+        arguments: {
+            targetDir: string
+            appName?: string
+        }
+    }
+    | {
+        name: 'scaffold_fastify_postgres_app'
+        arguments: {
+            targetDir: string
+            appName?: string
+        }
+    }
+    | {
         name: 'generate_nextjs_marketing_site'
         arguments: {
             appDir: string
@@ -125,6 +150,32 @@ type ToolCall =
         name: 'stop_process'
         arguments: {
             id: string
+        }
+    }
+    | {
+        name: 'compose_up'
+        arguments: {
+            cwd: string
+            file?: string
+            projectName?: string
+            build?: boolean
+        }
+    }
+    | {
+        name: 'compose_logs'
+        arguments: {
+            cwd: string
+            file?: string
+            projectName?: string
+            tail?: number
+        }
+    }
+    | {
+        name: 'compose_down'
+        arguments: {
+            cwd: string
+            file?: string
+            projectName?: string
         }
     }
     | {
@@ -181,7 +232,17 @@ type ToolExecutionResult = {
     artifacts?: AIArtifact[]
 }
 
-export default async function runModelToolLoop(request: GPT_PromptRequest): Promise<ToolLoopResult> {
+type ToolProgressEmitter = (event: {
+    toolId: string
+    toolLabel: string
+    toolState: 'running' | 'completed' | 'error'
+    toolDetail?: string | null
+}) => void
+
+export default async function runModelToolLoop(
+    request: GPT_PromptRequest,
+    emitToolProgress?: ToolProgressEmitter,
+): Promise<ToolLoopResult> {
     const maxIterations = Math.max(8, config.web_search_max_iterations + 8)
     const iterationMaxTokens = Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
     const workingMessages = withToolSystemPrompt(request.messages)
@@ -210,7 +271,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
         }
         const preflightKey = JSON.stringify(preflightToolCall)
         if (!executedToolCalls.has(preflightKey)) {
-            const { message: toolMessage, artifacts } = await executeToolCall(preflightToolCall, -1)
+            const { message: toolMessage, artifacts } = await executeToolCall(preflightToolCall, -1, emitToolProgress)
             collectedArtifacts.push(...(artifacts || []))
             executedToolCalls.add(preflightKey)
             workingMessages.push({
@@ -239,7 +300,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
             }
             const siteToolKey = JSON.stringify(siteToolCall)
             if (!executedToolCalls.has(siteToolKey)) {
-                const { message: siteToolMessage, artifacts } = await executeToolCall(siteToolCall, -1)
+                const { message: siteToolMessage, artifacts } = await executeToolCall(siteToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(artifacts || []))
                 executedToolCalls.add(siteToolKey)
                 workingMessages.push({
@@ -266,7 +327,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
             }
             const startProcessKey = JSON.stringify(startProcessToolCall)
             if (!executedToolCalls.has(startProcessKey)) {
-                const { message: startMessage, artifacts: startArtifacts } = await executeToolCall(startProcessToolCall, -1)
+                const { message: startMessage, artifacts: startArtifacts } = await executeToolCall(startProcessToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(startArtifacts || []))
                 executedToolCalls.add(startProcessKey)
                 workingMessages.push({
@@ -285,7 +346,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
                     },
                 }
                 const waitKey = JSON.stringify(waitToolCall)
-                const { message: waitMessage, artifacts: waitArtifacts } = await executeToolCall(waitToolCall, -1)
+                const { message: waitMessage, artifacts: waitArtifacts } = await executeToolCall(waitToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(waitArtifacts || []))
                 executedToolCalls.add(waitKey)
                 workingMessages.push({
@@ -306,7 +367,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
                     },
                 }
                 const browserKey = JSON.stringify(browserToolCall)
-                const { message: browserMessage, artifacts: browserArtifacts } = await executeToolCall(browserToolCall, -1)
+                const { message: browserMessage, artifacts: browserArtifacts } = await executeToolCall(browserToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(browserArtifacts || []))
                 executedToolCalls.add(browserKey)
                 workingMessages.push({
@@ -321,7 +382,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
                         arguments: { id: processId },
                     }
                     const stopKey = JSON.stringify(stopToolCall)
-                    const { message: stopMessage, artifacts: stopArtifacts } = await executeToolCall(stopToolCall, -1)
+                    const { message: stopMessage, artifacts: stopArtifacts } = await executeToolCall(stopToolCall, -1, emitToolProgress)
                     collectedArtifacts.push(...(stopArtifacts || []))
                     executedToolCalls.add(stopKey)
                     workingMessages.push({
@@ -331,6 +392,64 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
                     workingMessages.push(stopMessage)
                 }
             }
+        }
+    }
+
+    if (isDockerizedNextJsTask(userMessage)) {
+        const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-docker-app'
+        const scaffoldToolCall: ToolCall = {
+            name: 'scaffold_nextjs_docker_app',
+            arguments: {
+                targetDir,
+            },
+        }
+        const scaffoldKey = JSON.stringify(scaffoldToolCall)
+        if (!executedToolCalls.has(scaffoldKey)) {
+            const { message: toolMessage, artifacts } = await executeToolCall(scaffoldToolCall, -1)
+            collectedArtifacts.push(...(artifacts || []))
+            executedToolCalls.add(scaffoldKey)
+            workingMessages.push({ role: 'assistant', content: `<tool_call>${scaffoldKey}</tool_call>` })
+            workingMessages.push(toolMessage)
+        }
+
+        if (/\bdocker compose\b|\bdockerize\b|run it|start it|verify it/i.test(userMessage)) {
+            await executeComposeVerificationFlow({
+                workingMessages,
+                executedToolCalls,
+                collectedArtifacts,
+                cwd: targetDir,
+                url: 'http://127.0.0.1:3000',
+                expectText: pathBaseName(targetDir),
+            })
+        }
+    }
+
+    if (isFastifyPostgresTask(userMessage)) {
+        const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-fastify-postgres-app'
+        const scaffoldToolCall: ToolCall = {
+            name: 'scaffold_fastify_postgres_app',
+            arguments: {
+                targetDir,
+            },
+        }
+        const scaffoldKey = JSON.stringify(scaffoldToolCall)
+        if (!executedToolCalls.has(scaffoldKey)) {
+            const { message: toolMessage, artifacts } = await executeToolCall(scaffoldToolCall, -1)
+            collectedArtifacts.push(...(artifacts || []))
+            executedToolCalls.add(scaffoldKey)
+            workingMessages.push({ role: 'assistant', content: `<tool_call>${scaffoldKey}</tool_call>` })
+            workingMessages.push(toolMessage)
+        }
+
+        if (/\bdocker compose\b|\bpostgres\b|run it|start it|verify it/i.test(userMessage)) {
+            await executeComposeVerificationFlow({
+                workingMessages,
+                executedToolCalls,
+                collectedArtifacts,
+                cwd: targetDir,
+                url: 'http://127.0.0.1:3001/health',
+                expectText: 'ok',
+            })
         }
     }
 
@@ -442,7 +561,7 @@ export default async function runModelToolLoop(request: GPT_PromptRequest): Prom
             continue
         }
 
-        const { message: toolMessage, artifacts } = await executeToolCall(toolCall, iteration)
+        const { message: toolMessage, artifacts } = await executeToolCall(toolCall, iteration, emitToolProgress)
         collectedArtifacts.push(...(artifacts || []))
         executedToolCalls.add(toolKey)
         workingMessages.push({
@@ -527,6 +646,10 @@ function parseToolCall(content: string): ToolCall | null {
         extractBalancedJson(content, '"name": "run_command"'),
         extractBalancedJson(content, '"name":"scaffold_nextjs_app"'),
         extractBalancedJson(content, '"name": "scaffold_nextjs_app"'),
+        extractBalancedJson(content, '"name":"scaffold_nextjs_docker_app"'),
+        extractBalancedJson(content, '"name": "scaffold_nextjs_docker_app"'),
+        extractBalancedJson(content, '"name":"scaffold_fastify_postgres_app"'),
+        extractBalancedJson(content, '"name": "scaffold_fastify_postgres_app"'),
         extractBalancedJson(content, '"name":"generate_nextjs_marketing_site"'),
         extractBalancedJson(content, '"name": "generate_nextjs_marketing_site"'),
         extractBalancedJson(content, '"name":"start_process"'),
@@ -535,6 +658,12 @@ function parseToolCall(content: string): ToolCall | null {
         extractBalancedJson(content, '"name": "inspect_process"'),
         extractBalancedJson(content, '"name":"stop_process"'),
         extractBalancedJson(content, '"name": "stop_process"'),
+        extractBalancedJson(content, '"name":"compose_up"'),
+        extractBalancedJson(content, '"name": "compose_up"'),
+        extractBalancedJson(content, '"name":"compose_logs"'),
+        extractBalancedJson(content, '"name": "compose_logs"'),
+        extractBalancedJson(content, '"name":"compose_down"'),
+        extractBalancedJson(content, '"name": "compose_down"'),
         extractBalancedJson(content, '"name":"wait_for_http"'),
         extractBalancedJson(content, '"name": "wait_for_http"'),
         extractBalancedJson(content, '"name":"browser_task"'),
@@ -565,6 +694,12 @@ function parseToolCall(content: string): ToolCall | null {
             if (parsed?.name === 'scaffold_nextjs_app' && parsed.arguments?.targetDir) {
                 return parsed
             }
+            if (parsed?.name === 'scaffold_nextjs_docker_app' && parsed.arguments?.targetDir) {
+                return parsed
+            }
+            if (parsed?.name === 'scaffold_fastify_postgres_app' && parsed.arguments?.targetDir) {
+                return parsed
+            }
             if (parsed?.name === 'generate_nextjs_marketing_site' && parsed.arguments?.appDir && parsed.arguments?.brandName && parsed.arguments?.tagline && parsed.arguments?.description) {
                 return parsed
             }
@@ -575,6 +710,15 @@ function parseToolCall(content: string): ToolCall | null {
                 return parsed
             }
             if (parsed?.name === 'stop_process' && parsed.arguments?.id) {
+                return parsed
+            }
+            if (parsed?.name === 'compose_up' && parsed.arguments?.cwd) {
+                return parsed
+            }
+            if (parsed?.name === 'compose_logs' && parsed.arguments?.cwd) {
+                return parsed
+            }
+            if (parsed?.name === 'compose_down' && parsed.arguments?.cwd) {
                 return parsed
             }
             if (parsed?.name === 'wait_for_http' && parsed.arguments?.url) {
@@ -697,6 +841,22 @@ function parseToolCall(content: string): ToolCall | null {
         }
     }
 
+    if (xmlName === 'scaffold_nextjs_docker_app') {
+        const targetDir = content.match(/<targetDir>\s*([\s\S]*?)\s*<\/targetDir>/i)?.[1]?.trim()
+        const appName = content.match(/<appName>\s*([\s\S]*?)\s*<\/appName>/i)?.[1]?.trim()
+        if (targetDir) {
+            return { name: 'scaffold_nextjs_docker_app', arguments: { targetDir, appName: appName || undefined } }
+        }
+    }
+
+    if (xmlName === 'scaffold_fastify_postgres_app') {
+        const targetDir = content.match(/<targetDir>\s*([\s\S]*?)\s*<\/targetDir>/i)?.[1]?.trim()
+        const appName = content.match(/<appName>\s*([\s\S]*?)\s*<\/appName>/i)?.[1]?.trim()
+        if (targetDir) {
+            return { name: 'scaffold_fastify_postgres_app', arguments: { targetDir, appName: appName || undefined } }
+        }
+    }
+
     if (xmlName === 'generate_nextjs_marketing_site') {
         const appDir = content.match(/<appDir>\s*([\s\S]*?)\s*<\/appDir>/i)?.[1]?.trim()
         const brandName = content.match(/<brandName>\s*([\s\S]*?)\s*<\/brandName>/i)?.[1]?.trim()
@@ -733,6 +893,35 @@ function parseToolCall(content: string): ToolCall | null {
         const id = content.match(/<id>\s*([\s\S]*?)\s*<\/id>/i)?.[1]?.trim()
         if (id) {
             return { name: 'stop_process', arguments: { id } }
+        }
+    }
+
+    if (xmlName === 'compose_up') {
+        const cwd = content.match(/<cwd>\s*([\s\S]*?)\s*<\/cwd>/i)?.[1]?.trim()
+        const file = content.match(/<file>\s*([\s\S]*?)\s*<\/file>/i)?.[1]?.trim()
+        const projectName = content.match(/<projectName>\s*([\s\S]*?)\s*<\/projectName>/i)?.[1]?.trim()
+        const buildRaw = content.match(/<build>\s*(true|false)\s*<\/build>/i)?.[1]
+        if (cwd) {
+            return { name: 'compose_up', arguments: { cwd, file: file || undefined, projectName: projectName || undefined, build: buildRaw ? buildRaw === 'true' : undefined } }
+        }
+    }
+
+    if (xmlName === 'compose_logs') {
+        const cwd = content.match(/<cwd>\s*([\s\S]*?)\s*<\/cwd>/i)?.[1]?.trim()
+        const file = content.match(/<file>\s*([\s\S]*?)\s*<\/file>/i)?.[1]?.trim()
+        const projectName = content.match(/<projectName>\s*([\s\S]*?)\s*<\/projectName>/i)?.[1]?.trim()
+        const tailRaw = content.match(/<tail>\s*(\d+)\s*<\/tail>/i)?.[1]
+        if (cwd) {
+            return { name: 'compose_logs', arguments: { cwd, file: file || undefined, projectName: projectName || undefined, tail: tailRaw ? Number(tailRaw) : undefined } }
+        }
+    }
+
+    if (xmlName === 'compose_down') {
+        const cwd = content.match(/<cwd>\s*([\s\S]*?)\s*<\/cwd>/i)?.[1]?.trim()
+        const file = content.match(/<file>\s*([\s\S]*?)\s*<\/file>/i)?.[1]?.trim()
+        const projectName = content.match(/<projectName>\s*([\s\S]*?)\s*<\/projectName>/i)?.[1]?.trim()
+        if (cwd) {
+            return { name: 'compose_down', arguments: { cwd, file: file || undefined, projectName: projectName || undefined } }
         }
     }
 
@@ -784,6 +973,22 @@ function extractTargetDirFromRequest(message: string) {
 function isNextJsBuildTask(message: string) {
     return /(next\.?js|app router|marketing site|website|landing page)/i.test(message)
         && /(build|create|scaffold|make)/i.test(message)
+}
+
+function isDockerizedNextJsTask(message: string) {
+    return /(next\.?js|app router)/i.test(message)
+        && /(docker|docker compose|dockerize)/i.test(message)
+}
+
+function isFastifyPostgresTask(message: string) {
+    return /(fastify|postgres|backend api|api service)/i.test(message)
+        && /(build|create|scaffold|make|docker|compose)/i.test(message)
+}
+
+function pathBaseName(targetDir: string) {
+    const trimmed = targetDir.replace(/\/+$/g, '')
+    const segments = trimmed.split('/').filter(Boolean)
+    return segments.at(-1) || targetDir
 }
 
 function looksLikeProposedPatch(content: string) {
@@ -842,15 +1047,48 @@ function getMessageContent(response: ChatCompletionResponse) {
     return response.choices?.[0]?.message?.content?.trim() || ''
 }
 
-async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<ToolExecutionResult> {
+function describeToolCall(toolCall: ToolCall) {
+    if (toolCall.name === 'read_file') return `Read file ${toolCall.arguments.path}`
+    if (toolCall.name === 'write_file') return `Updated file ${toolCall.arguments.path}`
+    if (toolCall.name === 'grep_repo') return `Searched code for "${toolCall.arguments.query}"`
+    if (toolCall.name === 'list_files') return `Listed project files${toolCall.arguments.path ? ` in ${toolCall.arguments.path}` : ''}`
+    if (toolCall.name === 'run_command') return `Ran command ${toolCall.arguments.command}`
+    if (toolCall.name === 'search_web') return `Searched the web for "${toolCall.arguments.query}"`
+    if (toolCall.name === 'scaffold_nextjs_app') return `Scaffolded Next.js app ${toolCall.arguments.targetDir}`
+    if (toolCall.name === 'generate_nextjs_marketing_site') return `Generated marketing site in ${toolCall.arguments.appDir}`
+    if (toolCall.name === 'start_process') return `Started process ${toolCall.arguments.name || toolCall.arguments.command}`
+    if (toolCall.name === 'inspect_process') return `Inspected process ${toolCall.arguments.id}`
+    if (toolCall.name === 'stop_process') return `Stopped process ${toolCall.arguments.id}`
+    if (toolCall.name === 'wait_for_http') return `Checked ${toolCall.arguments.url}`
+    if (toolCall.name === 'browser_task') return `Opened browser task for ${toolCall.arguments.url}`
+    return 'Executed tool'
+}
+
+async function executeToolCall(
+    toolCall: ToolCall,
+    iteration: number,
+    emitToolProgress?: ToolProgressEmitter,
+): Promise<ToolExecutionResult> {
     if (DEBUG_AGENT) {
         console.error(`[agent] tool_call iteration=${iteration} name=${toolCall.name}`)
     }
+    const toolId = `${toolCall.name}_${iteration + 1}_${Date.now()}`
+    emitToolProgress?.({
+        toolId,
+        toolLabel: describeToolCall(toolCall),
+        toolState: 'running',
+    })
     if (toolCall.name === 'search_web') {
         const result = await searchWeb({
             query: toolCall.arguments.query,
             limit: toolCall.arguments.limit,
             visitTopResults: toolCall.arguments.visitTopResults,
+        })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `Found ${result.results.length} result summaries.`,
         })
 
         return {
@@ -871,6 +1109,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
             path: toolCall.arguments.path,
             limit: toolCall.arguments.limit,
         })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `Listed ${result.files.length} files.`,
+        })
 
         return {
             message: {
@@ -890,6 +1134,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
             query: toolCall.arguments.query,
             path: toolCall.arguments.path,
             limit: toolCall.arguments.limit,
+        })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `Found ${result.matches.length} matching lines.`,
         })
 
         return {
@@ -913,6 +1163,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
             path: toolCall.arguments.path,
             startLine: toolCall.arguments.startLine,
             endLine: toolCall.arguments.endLine,
+        })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `${result.path} lines ${result.startLine}-${result.endLine}.`,
         })
 
         return {
@@ -940,6 +1196,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
             path: toolCall.arguments.path,
             content: toolCall.arguments.content,
         })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `${result.path} updated.`,
+        })
 
         return {
             message: {
@@ -957,12 +1219,24 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
                 path: result.path,
                 content: toolCall.arguments.content,
                 language: 'text',
+            }, {
+                kind: 'diff',
+                title: `Diff: ${result.path}`,
+                path: result.path,
+                content: result.diff,
+                language: 'diff',
             }],
         }
     }
 
     if (toolCall.name === 'start_process') {
         const result = await startManagedProcess(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `Started ${result.name} on PID ${result.pid}.`,
+        })
         return {
             message: {
                 role: 'tool',
@@ -987,6 +1261,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
 
     if (toolCall.name === 'scaffold_nextjs_app') {
         const result = await scaffoldNextjsApp(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `Scaffolded app in ${result.absolutePath}.`,
+        })
         return {
             message: {
                 role: 'tool',
@@ -1010,8 +1290,62 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
         }
     }
 
+    if (toolCall.name === 'scaffold_nextjs_docker_app') {
+        const result = await scaffoldNextjsDockerApp(toolCall.arguments)
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `scaffold_nextjs_docker_app_${iteration + 1}`,
+                content: [
+                    `Tool scaffold_nextjs_docker_app executed for target: ${toolCall.arguments.targetDir}`,
+                    `Absolute path: ${result.absolutePath}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: 'Dockerized Next.js app',
+                path: result.absolutePath,
+                content: result.stdout || result.stderr || result.absolutePath,
+                language: 'text',
+            }],
+        }
+    }
+
+    if (toolCall.name === 'scaffold_fastify_postgres_app') {
+        const result = await scaffoldFastifyPostgresApp(toolCall.arguments)
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `scaffold_fastify_postgres_app_${iteration + 1}`,
+                content: [
+                    `Tool scaffold_fastify_postgres_app executed for target: ${toolCall.arguments.targetDir}`,
+                    `Absolute path: ${result.absolutePath}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: 'Fastify + Postgres app',
+                path: result.absolutePath,
+                content: result.stdout || result.stderr || result.absolutePath,
+                language: 'text',
+            }],
+        }
+    }
+
     if (toolCall.name === 'generate_nextjs_marketing_site') {
         const result = await generateNextjsMarketingSite(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `Generated ${result.files.length} files.`,
+        })
         return {
             message: {
                 role: 'tool',
@@ -1032,6 +1366,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
 
     if (toolCall.name === 'inspect_process') {
         const result = await inspectManagedProcess(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `${result.name} is ${result.alive ? 'alive' : 'stopped'}.`,
+        })
         return {
             message: {
                 role: 'tool',
@@ -1056,6 +1396,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
 
     if (toolCall.name === 'stop_process') {
         const result = await stopManagedProcess(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: result.stopped ? 'Process stopped.' : 'Process was already stopped.',
+        })
         return {
             message: {
                 role: 'tool',
@@ -1068,8 +1414,77 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
         }
     }
 
+    if (toolCall.name === 'compose_up') {
+        const result = await composeUp(toolCall.arguments)
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `compose_up_${iteration + 1}`,
+                content: [
+                    `Tool compose_up executed in: ${toolCall.arguments.cwd}`,
+                    `Command: ${result.composeCommand}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'command',
+                title: 'docker compose up',
+                content: [result.composeCommand, result.stdout, result.stderr].filter(Boolean).join('\n\n'),
+                language: 'sh',
+            }],
+        }
+    }
+
+    if (toolCall.name === 'compose_logs') {
+        const result = await composeLogs(toolCall.arguments)
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `compose_logs_${iteration + 1}`,
+                content: [
+                    `Tool compose_logs executed in: ${toolCall.arguments.cwd}`,
+                    `Command: ${result.composeCommand}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'log',
+                title: 'docker compose logs',
+                content: result.stdout || result.stderr || '<empty>',
+                language: 'text',
+            }],
+        }
+    }
+
+    if (toolCall.name === 'compose_down') {
+        const result = await composeDown(toolCall.arguments)
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `compose_down_${iteration + 1}`,
+                content: [
+                    `Tool compose_down executed in: ${toolCall.arguments.cwd}`,
+                    `Command: ${result.composeCommand}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                ].join('\n\n'),
+            },
+        }
+    }
+
     if (toolCall.name === 'wait_for_http') {
         const result = await waitForHttp(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: result.ok ? 'completed' : 'error',
+            toolDetail: `${result.url} responded with ${result.status}.`,
+        })
         return {
             message: {
                 role: 'tool',
@@ -1094,6 +1509,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
 
     if (toolCall.name === 'browser_task') {
         const result = await browserTask(toolCall.arguments)
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: result.title || result.url,
+        })
         return {
             message: {
                 role: 'tool',
@@ -1136,6 +1557,12 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
         cwd: toolCall.arguments.cwd,
         timeoutMs: toolCall.arguments.timeoutMs,
     })
+    emitToolProgress?.({
+        toolId,
+        toolLabel: describeToolCall(toolCall),
+        toolState: result.exitCode === 0 ? 'completed' : 'error',
+        toolDetail: `Exit code ${result.exitCode ?? 'null'}.`,
+    })
 
     return {
         message: {
@@ -1160,5 +1587,64 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<T
             ].filter(Boolean).join('\n\n'),
             language: 'sh',
         }],
+    }
+}
+
+async function executeComposeVerificationFlow({
+    workingMessages,
+    executedToolCalls,
+    collectedArtifacts,
+    cwd,
+    url,
+    expectText,
+}: {
+    workingMessages: GPT_ChatMessage[]
+    executedToolCalls: Set<string>
+    collectedArtifacts: AIArtifact[]
+    cwd: string
+    url: string
+    expectText?: string
+}) {
+    const steps: ToolCall[] = [
+        {
+            name: 'compose_up',
+            arguments: {
+                cwd,
+                build: true,
+            },
+        },
+        {
+            name: 'wait_for_http',
+            arguments: {
+                url,
+                timeoutMs: 120000,
+                expectText,
+            },
+        },
+        {
+            name: 'compose_logs',
+            arguments: {
+                cwd,
+                tail: 120,
+            },
+        },
+        {
+            name: 'compose_down',
+            arguments: {
+                cwd,
+            },
+        },
+    ]
+
+    for (const toolCall of steps) {
+        const key = JSON.stringify(toolCall)
+        if (executedToolCalls.has(key)) {
+            continue
+        }
+        const { message, artifacts } = await executeToolCall(toolCall, -1)
+        executedToolCalls.add(key)
+        collectedArtifacts.push(...(artifacts || []))
+        workingMessages.push({ role: 'assistant', content: `<tool_call>${key}</tool_call>` })
+        workingMessages.push(message)
     }
 }

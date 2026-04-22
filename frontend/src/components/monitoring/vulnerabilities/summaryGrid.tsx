@@ -12,8 +12,8 @@ export default function SummaryGrid({
     return (
         <div className='flex flex-col gap-4 lg:flex-row lg:justify-between'>
             <div>
-                <h1 className='font-semibold text-lg text-login-50'>Vulnerabilities</h1>
-                <p className='mt-1 max-w-2xl text-sm text-login-100'>
+                <h1 className='font-semibold text-lg text-white'>Vulnerabilities</h1>
+                <p className='mt-1 max-w-2xl text-sm text-white/80'>
                     Docker Scout results across active images, with severity rollups and package-level findings.
                 </p>
             </div>

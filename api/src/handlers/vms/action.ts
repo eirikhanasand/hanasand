@@ -26,8 +26,7 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${encodeURIComponent(config.vm_api_token || '')}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'hanasand_api',
+                'User-Agent': 'hanasand_internal',
             },
         })
 

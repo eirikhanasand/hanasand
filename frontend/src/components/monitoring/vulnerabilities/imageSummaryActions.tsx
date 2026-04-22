@@ -33,8 +33,8 @@ export default function ImageSummaryActions({
                 aria-expanded={isExpanded}
                 aria-label={isExpanded ? `Collapse ${image.image}` : `Expand ${image.image}`}
                 className='flex h-11 w-11 shrink-0 items-center justify-center rounded-full
-                    border border-login-100/10 bg-login-50/5 text-login-100 transition
-                    hover:border-login-100/20 hover:bg-login-50/10'
+                    border border-white/10 bg-white/5 text-white/80 transition
+                    hover:border-white/20 hover:bg-white/10'
             >
                 <ChevronDown className={`h-5 w-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
             </button>

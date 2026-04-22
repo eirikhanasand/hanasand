@@ -45,7 +45,7 @@ type MarkdownProps = {
 
 marked.use({
     renderer: {
-        code(token) {
+        code(token: { lang?: string, text: string }) {
             const language = hljs.getLanguage(typeof token.lang === 'string'
                 ? token.lang : 'plaintext')
                 ? token.lang
@@ -56,16 +56,16 @@ marked.use({
             const className = 'inline-block rounded-lg overflow-auto whitespace-pre-wrap wrap-break-word w-full'
             return `<pre class='${className}'><code style='${style}' class='hljs ${language}'>${text}</code></pre>`
         },
-        image(token) {
+        image(token: { href: string, title?: string | null }) {
             const width = 'width=\'300\''
             return `<img src='${token.href}' alt='${token.title}' ${width} />`
         },
-        link(token) {
+        link(token: { href: string, title?: string | null, text: string }) {
             const style = 'text-blue-500 underline'
             const rel = 'noopener noreferrer'
             return `<a href='${token.href}' title='${token.title}' target='_blank' rel='${rel}' class='${style}'>${token.text}</a>`
         },
-        codespan(token) {
+        codespan(token: { text: string }) {
             return `<code class='break-all bg-extralight p-0.3 rounded-xs'>${token.text}</code>`
         },
         hr() {
@@ -236,7 +236,7 @@ export function Markdown({
         <div
             className={`markdown-preview ${displayEditor && 'pl-2 border-l-2 border-blue-500'} text-foreground h-full break-words ${className}`}
             onClick={handleDisplayEditor}
-            dangerouslySetInnerHTML={{ __html: marked(markdown) }}
+            dangerouslySetInnerHTML={{ __html: marked.parse(markdown) }}
         />
     )
 }

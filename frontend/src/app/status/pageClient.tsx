@@ -78,7 +78,7 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
                         <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Status</p>
                         <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Service Status</h1>
                     </div>
-                    <div className={`rounded-full border px-4 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
+                    <div className={`rounded-full border px-6 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
                         {serviceStatus.overall.toUpperCase()}
                     </div>
                 </div>
@@ -92,7 +92,7 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
                                     <div className={`icon-tile ${check.status === 'up' ? 'bg-emerald-500/12 text-emerald-300' : check.status === 'degraded' ? 'bg-amber-500/12 text-amber-300' : 'bg-red-500/12 text-red-300'}`}>
                                         <Icon className='h-4 w-4' />
                                     </div>
-                                    <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusTone[check.status]}`}>
+                                    <span className={`rounded-full text-xs font-semibold ${statusTone[check.status]}`}>
                                         {check.status === 'up'
                                             ? <CheckCircle className='w-4 h-4 stroke-green-500' />
                                             : check.status === 'degraded'
@@ -104,17 +104,17 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
                                 <p className='mt-5 text-xs uppercase tracking-[0.22em] text-bright/35'>{check.service}</p>
                                 <h3 className='mt-2 text-lg font-semibold text-bright'>{check.check_name}</h3>
                                 <div className='mt-4 grid gap-2 text-sm text-bright/55'>
-                                    <div className='flex items-center gap-2 rounded-xl border border-login-100/10 bg-black/18 px-3 py-2'>
+                                    <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
                                         <HeartPulse className='h-4 w-4 shrink-0 text-emerald-300' />
                                         <span className='text-bright/60'>Uptime</span>
                                         <span className='ml-auto font-medium text-bright'>{check.uptime_30d}%</span>
                                     </div>
-                                    <div className='flex items-center gap-2 rounded-xl border border-login-100/10 bg-black/18 px-3 py-2'>
+                                    <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
                                         <Timer className='h-4 w-4 shrink-0 text-sky-300' />
                                         <span className='text-bright/60'>Latency</span>
                                         <span className='ml-auto font-medium text-bright'>{check.latency_ms}ms</span>
                                     </div>
-                                    <div className='flex items-center gap-2 rounded-xl border border-login-100/10 bg-black/18 px-3 py-2'>
+                                    <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
                                         <Binoculars className='h-4 w-4 shrink-0 text-orange-300' />
                                         <span className='text-bright/60'>Last check</span>
                                         <span className='ml-auto text-right font-medium text-bright'>{relativeTime(check.checked_at)}</span>
@@ -130,37 +130,36 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
                 </div>
             </section>
 
-            {/* Metrics */}
-            <section className='glass-card rounded-[1.4rem] p-5'>
-                <div className='flex items-center justify-between gap-4'>
-                    <div>
-                        <h2 className='text-lg font-semibold text-bright'>Most visited subdomains</h2>
-                    </div>
+            {/* Live traffic */}
+            <div className='flex items-center justify-between gap-4'>
+                <div>
+                    <h2 className='text-lg font-semibold text-bright'>Live traffic</h2>
                 </div>
-                <div className='mt-4 grid gap-4 md:grid-cols-3 lg:grid-cols-5'>
-                    {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
-                        key={id}
-                        name={domain.name}
-                        tps={domain.tps} />
-                    )}
-                </div>
-            </section>
+            </div>
+            <div className='mt-4 grid gap-4 md:grid-cols-3 lg:grid-cols-5'>
+                {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
+                    key={id}
+                    name={domain.name}
+                    tps={domain.tps} />
+                )}
+            </div>
 
-            <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 md:overflow-hidden md:max-h-60">
-                {metrics.slice(0, 5).map((m, i) => (
-                    <div key={i} className='glass-card rounded-[1.4rem] p-4 text-sm'>
-                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
-                        <span className='mt-2 block text-xs text-almostbright'>Today: {m.hits_today}</span>
-                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
-                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+            {/* Metrics */}
+            <h1 className='font-semibold text-lg'>Most visited subdomains</h1>
+            <div className="grid md:grid-cols-5 gap-4">
+                {domains.map((d, i) => (
+                    <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
+                        <h2 className="font-semibold text-bright/90">{d.name}</h2>
+                        <span className='text-xs text-almostbright'>Live TPS: {d.tps.toFixed(2)}</span>
                     </div>
                 ))}
             </div>
 
+            {/* Top endpoints */}
             <h1 className='font-semibold text-lg'>Top endpoints</h1>
             <div className="grid md:grid-cols-5 gap-4">
                 {metrics.map((m, i) => (
-                    <div key={i} className='flex flex-col gap-1 rounded-2xl border border-login-100/10 bg-login-900/55 p-4 text-sm'>
+                    <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
                         <h2 className="font-semibold text-bright/90">{m.value}</h2>
                         <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
                         <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>

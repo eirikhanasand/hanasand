@@ -65,39 +65,6 @@ const CAPITAL_MARKERS: CapitalMarker[] = [
     { iso: 'ZA', label: 'Cape Town', coords: [-33.9249, 18.4241] },
 ]
 
-function project([lat, lon]: [number, number]): [number, number] {
-    return [(lon + 180) * (MAP_WIDTH / 360), (90 - lat) * (MAP_HEIGHT / 180)]
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max)
-}
-
-function normalizeIso(iso: string) {
-    return iso.toUpperCase()
-}
-
-function formatRelative(timestamp: number) {
-    const diffSeconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000))
-    if (diffSeconds < 60) return `${diffSeconds}s ago`
-    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
-    return `${Math.floor(diffSeconds / 3600)}h ago`
-}
-
-function haversineKilometers([lat1, lon1]: [number, number], [lat2, lon2]: [number, number]) {
-    const toRadians = (value: number) => (value * Math.PI) / 180
-    const dLat = toRadians(lat2 - lat1)
-    const dLon = toRadians(lon2 - lon1)
-    const a = (Math.sin(dLat / 2) ** 2)
-        + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * (Math.sin(dLon / 2) ** 2)
-    return Math.round(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
-}
-
-function getCountryFocusView(coords: [number, number]) {
-    const [x, y] = project(coords)
-    return clampViewBox({ x: x - 140, y: y - 80, width: 280, height: 160 })
-}
-
 export default function LiveTrafficMapDashboard({
     initialMetrics,
     initialRecords,
@@ -109,29 +76,11 @@ export default function LiveTrafficMapDashboard({
     const [isConnected, setIsConnected] = useState(false)
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
     const [pings, setPings] = useState<LivePing[]>([])
-    const [countries, setCountries] = useState<Record<string, TrafficCountryPoint>>({})
+    const [countries, setCountries] = useState<Record<string, TrafficCountryPoint>>(() => hydrateCountries(initialRecords))
     const [selectedCountry, setSelectedCountry] = useState<string>('NO')
+    const [now, setNow] = useState(() => Date.now())
     const dragRef = useRef<{ x: number, y: number, viewBox: ViewBox } | null>(null)
     const frameRef = useRef<number>(0)
-
-    useEffect(() => {
-        if (!initialRecords.length) return
-
-        const hydratedCountries = initialRecords.reduce<Record<string, TrafficCountryPoint>>((acc, record) => {
-            const iso = normalizeIso((record as TrafficRecord & { country_iso?: string }).country_iso || '')
-            if (!iso || iso === 'UNKNOWN' || !countryCentroids[iso]) return acc
-            const lastSeen = new Date(record.timestamp).getTime()
-            const current = acc[iso]
-            acc[iso] = {
-                iso,
-                count: (current?.count || 0) + 1,
-                lastSeen: Math.max(current?.lastSeen || 0, lastSeen),
-            }
-            return acc
-        }, {})
-
-        setCountries((prev) => Object.keys(prev).length ? prev : hydratedCountries)
-    }, [initialRecords])
 
     useEffect(() => {
         const es = new EventSource('/api/live-traffic')
@@ -176,10 +125,11 @@ export default function LiveTrafficMapDashboard({
 
     useEffect(() => {
         function tick() {
-            const now = Date.now()
-            setPings((prev) => prev.filter((ping) => now - ping.startTime < PING_LIFETIME_MS))
+            const nextNow = Date.now()
+            setNow(nextNow)
+            setPings((prev) => prev.filter((ping) => nextNow - ping.startTime < PING_LIFETIME_MS))
             setCountries((prev) => Object.fromEntries(
-                Object.entries(prev).filter(([, value]) => now - value.lastSeen < COUNTRY_EXPIRY_MS)
+                Object.entries(prev).filter(([, value]) => nextNow - value.lastSeen < COUNTRY_EXPIRY_MS)
             ))
             frameRef.current = requestAnimationFrame(tick)
         }
@@ -237,7 +187,7 @@ export default function LiveTrafficMapDashboard({
             <path
                 key={index}
                 d={d}
-                className='fill-login-100/5 stroke-login-100/10 stroke-[0.6] transition-colors hover:fill-login-100/8'
+                className='fill-white/5 stroke-white/10 stroke-[0.6] transition-colors hover:fill-white/8'
             />
         )
     }), [])
@@ -247,13 +197,13 @@ export default function LiveTrafficMapDashboard({
     return (
         <div className='grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_22rem]'>
             <section
-                className='flex min-h-168 flex-col rounded-2xl border border-login-100/10
-                    bg-login-900/60 shadow-[0_20px_60px_rgba(0,0,0,0.2)]'
+                className='flex min-h-168 flex-col rounded-2xl border border-white/10
+                    bg-black/60 shadow-[0_20px_60px_rgba(0,0,0,0.2)]'
             >
-                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-login-100/10 px-5 py-4'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4'>
                     <div>
-                        <h1 className='text-xl font-semibold text-login-50'>Live Traffic Map</h1>
-                        <p className='mt-1 text-sm text-login-100'>
+                        <h1 className='text-xl font-semibold text-white'>Live Traffic Map</h1>
+                        <p className='mt-1 text-sm text-white/80'>
                             Zoomable global view of recent request hotspots, live ingress pulses, and top traffic signals.
                         </p>
                     </div>
@@ -269,7 +219,7 @@ export default function LiveTrafficMapDashboard({
                     </div>
                 </div>
 
-                <div className='grid gap-3 border-b border-login-100/10 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4'>
+                <div className='grid gap-3 border-b border-white/10 px-5 py-4 sm:grid-cols-2 xl:grid-cols-4'>
                     <StatCard
                         icon={<Globe2 className='h-4 w-4' />}
                         label='Active Countries'
@@ -294,8 +244,8 @@ export default function LiveTrafficMapDashboard({
                             linear-gradient(180deg,rgba(11,15,23,0.95),rgba(6,8,14,1))]'
                     />
                     <div
-                        className='absolute left-4 top-4 z-20 rounded-full border border-login-100/10
-                            bg-login-950/80 px-3 py-1.5 text-xs text-login-200 backdrop-blur'
+                        className='absolute left-4 top-4 z-20 rounded-full border border-white/10
+                            bg-black/80 px-3 py-1.5 text-xs text-white/60 backdrop-blur'
                     >
                         <span className='inline-flex items-center gap-2'>
                             <Move className='h-3.5 w-3.5' />
@@ -304,7 +254,7 @@ export default function LiveTrafficMapDashboard({
                     </div>
                     <div
                         className='absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-full
-                            border border-login-100/10 bg-login-950/80 p-1 backdrop-blur'
+                            border border-white/10 bg-black/80 p-1 backdrop-blur'
                     >
                         <ZoomButton
                             label='−'
@@ -362,13 +312,13 @@ export default function LiveTrafficMapDashboard({
                                         cx={x}
                                         cy={y}
                                         r={selected ? 3.2 : 2.2}
-                                        className={selected ? 'fill-login-50' : 'fill-login-100/80'}
+                                        className={selected ? 'fill-white' : 'fill-white/80'}
                                     />
                                     <text
                                         x={x + 6}
                                         y={y - 6}
                                         className={`text-[9px] font-medium ${
-                                            selected ? 'fill-login-50' : 'fill-login-200/80'
+                                            selected ? 'fill-white' : 'fill-white/70'
                                         }`}
                                     >
                                         {marker.label}
@@ -393,20 +343,20 @@ export default function LiveTrafficMapDashboard({
                                     }}
                                     className='cursor-pointer'
                                 >
-                                    <circle cx={x} cy={y} r={radius + 8} className='fill-login/8' />
+                                    <circle cx={x} cy={y} r={radius + 8} className='fill-orange-300/8' />
                                     <circle
                                         cx={x}
                                         cy={y}
                                         r={radius}
                                         className={active
-                                            ? 'fill-login/30 stroke-login stroke-1'
-                                            : 'fill-amber-300/70 stroke-login-950/40 stroke-[1.5]'}
+                                            ? 'fill-orange-300/30 stroke-orange-300 stroke-1'
+                                            : 'fill-amber-300/70 stroke-black/40 stroke-[1.5]'}
                                     />
                                     <text
                                         x={x}
                                         y={y - radius - 5}
                                         textAnchor='middle'
-                                        className='fill-login-50/30 text-[10px] font-semibold'
+                                        className='fill-white/30 text-[10px] font-semibold'
                                     >
                                         {entry.iso}
                                     </text>
@@ -422,7 +372,7 @@ export default function LiveTrafficMapDashboard({
                             const dist = Math.sqrt((dx * dx) + (dy * dy))
                             const cx = (x1 + x2) / 2
                             const cy = (y1 + y2) / 2 - (dist * 0.35)
-                            const progress = (Date.now() - ping.startTime) / PING_LIFETIME_MS
+                            const progress = (now - ping.startTime) / PING_LIFETIME_MS
                             const inverse = 1 - progress
                             const px = (inverse * inverse * x1)
                                 + (2 * inverse * progress * cx)
@@ -435,15 +385,15 @@ export default function LiveTrafficMapDashboard({
                                 <g key={ping.id}>
                                     <path
                                         d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
-                                        className='fill-none stroke-login/15 stroke-[1.2]'
+                                        className='fill-none stroke-white/15 stroke-[1.2]'
                                     />
-                                    <circle cx={px} cy={py} r={2 + Math.min(4, ping.count)} className='fill-login blur-[1px]' />
+                                    <circle cx={px} cy={py} r={2 + Math.min(4, ping.count)} className='fill-white blur-[1px]' />
                                     <circle cx={px} cy={py} r='1.5' className='fill-white' />
                                 </g>
                             )
                         })}
 
-                        <circle cx={project(NORWAY)[0]} cy={project(NORWAY)[1]} r='7' className='fill-login/30 blur-sm' />
+                        <circle cx={project(NORWAY)[0]} cy={project(NORWAY)[1]} r='7' className='fill-white/30 blur-sm' />
                         <circle cx={project(NORWAY)[0]} cy={project(NORWAY)[1]} r='3.5' className='fill-white' />
                     </svg>
                 </div>
@@ -454,36 +404,36 @@ export default function LiveTrafficMapDashboard({
                     title={selectedCountry === 'NO' ? 'Local Focus' : `Country Focus · ${selectedCountry}`}
                     icon={<Search className='h-4 w-4 stroke-blue-400' />}
                 >
-                    <div className='space-y-2 text-sm text-login-100'>
+                    <div className='space-y-2 text-sm text-white/80'>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-login-100/10
-                                bg-login-900/60 px-3 py-2'
+                            className='flex items-center justify-between rounded-xl border border-white/10
+                                bg-black/60 px-3 py-2'
                         >
                             <span>Requests observed</span>
-                            <span className='font-semibold text-login-50'>{selectedPoint?.count || 0}</span>
+                            <span className='font-semibold text-white'>{selectedPoint?.count || 0}</span>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-login-100/10
-                                bg-login-900/60 px-3 py-2'
+                            className='flex items-center justify-between rounded-xl border border-white/10
+                                bg-black/60 px-3 py-2'
                         >
                             <span>Last seen</span>
-                            <span className='font-semibold text-login-50'>
-                                {selectedPoint ? formatRelative(selectedPoint.lastSeen) : 'No recent activity'}
+                            <span className='font-semibold text-white'>
+                                {selectedPoint ? formatRelative(selectedPoint.lastSeen, now) : 'No recent activity'}
                             </span>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-login-100/10
-                                bg-login-900/60 px-3 py-2'
+                            className='flex items-center justify-between rounded-xl border border-white/10
+                                bg-black/60 px-3 py-2'
                         >
                             <span>Live share</span>
-                            <span className='font-semibold text-login-50'>{selectedShare ? `${selectedShare}%` : '—'}</span>
+                            <span className='font-semibold text-white'>{selectedShare ? `${selectedShare}%` : '—'}</span>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-login-100/10
-                                bg-login-900/60 px-3 py-2'
+                            className='flex items-center justify-between rounded-xl border border-white/10
+                                bg-black/60 px-3 py-2'
                         >
                             <span>Hotspot rank</span>
-                            <span className='font-semibold text-login-50'>{selectedRank || '—'}</span>
+                            <span className='font-semibold text-white'>{selectedRank || '—'}</span>
                         </div>
                         <div className='grid gap-2 sm:grid-cols-2'>
                             <div
@@ -493,7 +443,7 @@ export default function LiveTrafficMapDashboard({
                                     <MapPinned className='h-4 w-4' />
                                     <span className='text-xs font-medium uppercase tracking-[0.18em]'>Capital</span>
                                 </div>
-                                <div className='text-sm font-semibold text-login-50'>{selectedCapital?.label || 'Unknown'}</div>
+                                <div className='text-sm font-semibold text-white'>{selectedCapital?.label || 'Unknown'}</div>
                             </div>
                             <div
                                 className='rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-3'
@@ -502,17 +452,17 @@ export default function LiveTrafficMapDashboard({
                                     <Route className='h-4 w-4' />
                                     <span className='text-xs font-medium uppercase tracking-[0.18em]'>Oslo Distance</span>
                                 </div>
-                                <div className='text-sm font-semibold text-login-50'>
+                                <div className='text-sm font-semibold text-white'>
                                     {selectedCoords ? `${haversineKilometers(selectedCoords, NORWAY)} km` : '—'}
                                 </div>
                             </div>
                         </div>
                         <div
-                            className='flex items-center justify-between rounded-xl border border-login-100/10
-                                bg-login-900/60 px-3 py-2'
+                            className='flex items-center justify-between rounded-xl border border-white/10
+                                bg-black/60 px-3 py-2'
                         >
                             <span>Recent requests listed</span>
-                            <span className='font-semibold text-login-50'>{selectedRecords.length}</span>
+                            <span className='font-semibold text-white'>{selectedRecords.length}</span>
                         </div>
                     </div>
                 </InsightCard>
@@ -530,16 +480,16 @@ export default function LiveTrafficMapDashboard({
                                 }}
                                 className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition ${
                                     selectedCountry === entry.iso
-                                        ? 'border-login/30 bg-login/10 text-login-50'
-                                        : 'border-login-100/10 bg-login-900/60 text-login-100 '
-                                            + 'hover:border-login-100/20 hover:bg-login-50/5'
+                                        ? 'border-orange-300/30 bg-orange-300/10 text-white'
+                                        : 'border-white/10 bg-black/60 text-white/80 '
+                                            + 'hover:border-white/20 hover:bg-white/5'
                                 }`}
                             >
                                 <div>
                                     <div className='font-medium'>{entry.iso}</div>
-                                    <div className='text-xs text-login-200'>Updated {formatRelative(entry.lastSeen)}</div>
+                                    <div className='text-xs text-white/60'>Updated {formatRelative(entry.lastSeen, now)}</div>
                                 </div>
-                                <div className='rounded-full bg-login-50/8 px-2.5 py-1 text-xs font-semibold'>{entry.count}</div>
+                                <div className='rounded-full bg-white/8 px-2.5 py-1 text-xs font-semibold'>{entry.count}</div>
                             </button>
                         )) : (
                             <EmptyCopy text='Country activity will populate as soon as live traffic arrives.' />
@@ -547,7 +497,7 @@ export default function LiveTrafficMapDashboard({
                     </div>
                 </InsightCard>
 
-                <InsightCard title='Traffic Signals' icon={<Activity className='h-4 w-4 stroke-login' />}>
+                <InsightCard title='Traffic Signals' icon={<Activity className='h-4 w-4 stroke-orange-300' />}>
                     <SignalGroup title='Top Paths' entries={initialMetrics?.top_paths || []} valueLabel='requests' />
                     <SignalGroup title='Methods' entries={initialMetrics?.top_methods || []} valueLabel='requests' />
                     <SignalGroup title='Statuses' entries={initialMetrics?.top_status_codes || []} valueLabel='hits' />
@@ -556,14 +506,14 @@ export default function LiveTrafficMapDashboard({
                 <InsightCard title='Recent Requests' icon={<Clock3 className='h-4 w-4 stroke-green-500' />}>
                     <div className='space-y-2'>
                         {initialRecords.length ? selectedRecords.map((record) => (
-                            <div key={record.id} className='rounded-xl border border-login-100/10 bg-login-900/60 p-3'>
+                            <div key={record.id} className='rounded-xl border border-white/10 bg-black/60 p-3'>
                                 <div className='flex items-center justify-between gap-3'>
-                                    <span className='text-sm font-medium text-login-50'>{record.method} {record.path}</span>
+                                    <span className='text-sm font-medium text-white'>{record.method} {record.path}</span>
                                     <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusClasses(record.status)}`}>
                                         {record.status}
                                     </span>
                                 </div>
-                                <div className='mt-2 flex items-center justify-between text-xs text-login-200'>
+                                <div className='mt-2 flex items-center justify-between text-xs text-white/60'>
                                     <span className='truncate'>{record.domain}</span>
                                     <span>{record.request_time}ms</span>
                                 </div>
@@ -576,6 +526,54 @@ export default function LiveTrafficMapDashboard({
             </aside>
         </div>
     )
+}
+
+function project([lat, lon]: [number, number]): [number, number] {
+    return [(lon + 180) * (MAP_WIDTH / 360), (90 - lat) * (MAP_HEIGHT / 180)]
+}
+
+function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max)
+}
+
+function normalizeIso(iso: string) {
+    return iso.toUpperCase()
+}
+
+function formatRelative(timestamp: number, now: number) {
+    const diffSeconds = Math.max(0, Math.round((now - timestamp) / 1000))
+    if (diffSeconds < 60) return `${diffSeconds}s ago`
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
+    return `${Math.floor(diffSeconds / 3600)}h ago`
+}
+
+function haversineKilometers([lat1, lon1]: [number, number], [lat2, lon2]: [number, number]) {
+    const toRadians = (value: number) => (value * Math.PI) / 180
+    const dLat = toRadians(lat2 - lat1)
+    const dLon = toRadians(lon2 - lon1)
+    const a = (Math.sin(dLat / 2) ** 2)
+        + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * (Math.sin(dLon / 2) ** 2)
+    return Math.round(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
+}
+
+function getCountryFocusView(coords: [number, number]) {
+    const [x, y] = project(coords)
+    return clampViewBox({ x: x - 140, y: y - 80, width: 280, height: 160 })
+}
+
+function hydrateCountries(records: TrafficRecord[]) {
+    return records.reduce<Record<string, TrafficCountryPoint>>((acc, record) => {
+        const iso = normalizeIso((record as TrafficRecord & { country_iso?: string }).country_iso || '')
+        if (!iso || iso === 'UNKNOWN' || !countryCentroids[iso]) return acc
+        const lastSeen = new Date(record.timestamp).getTime()
+        const current = acc[iso]
+        acc[iso] = {
+            iso,
+            count: (current?.count || 0) + 1,
+            lastSeen: Math.max(current?.lastSeen || 0, lastSeen),
+        }
+        return acc
+    }, {})
 }
 
 function applyTrafficBatch(
@@ -638,22 +636,22 @@ function zoomViewBox(current: ViewBox, factor: number, centerX: number, centerY:
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
     return (
-        <div className='rounded-xl border border-login-100/10 bg-login-900/60 p-4'>
-            <div className='flex items-center justify-between text-login-200'>
+        <div className='rounded-xl border border-white/10 bg-black/60 p-4'>
+            <div className='flex items-center justify-between text-white/60'>
                 <span className='text-[11px] font-medium uppercase tracking-[0.18em]'>{label}</span>
-                <div className='rounded-full border border-login-100/10 bg-login-50/5 p-2'>{icon}</div>
+                <div className='rounded-full border border-white/10 bg-white/5 p-2'>{icon}</div>
             </div>
-            <div className='mt-3 text-2xl font-semibold text-login-50'>{value}</div>
+            <div className='mt-3 text-2xl font-semibold text-white'>{value}</div>
         </div>
     )
 }
 
 function InsightCard({ children, icon, title }: { children: React.ReactNode, icon: React.ReactNode, title: string }) {
     return (
-        <section className='rounded-2xl border border-login-100/10 bg-login-900/60 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]'>
+        <section className='rounded-2xl border border-white/10 bg-black/60 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]'>
             <div className='mb-3 flex items-center gap-3'>
-                <div className='rounded-full border border-login-100/10 bg-login-50/5 p-2 text-login-100'>{icon}</div>
-                <h2 className='font-semibold text-login-50'>{title}</h2>
+                <div className='rounded-full border border-white/10 bg-white/5 p-2 text-white/80'>{icon}</div>
+                <h2 className='font-semibold text-white'>{title}</h2>
             </div>
             {children}
         </section>
@@ -671,12 +669,12 @@ function SignalGroup({
 }) {
     return (
         <div className='mb-4 last:mb-0'>
-            <div className='mb-2 text-xs font-medium uppercase tracking-[0.18em] text-login-200'>{title}</div>
+            <div className='mb-2 text-xs font-medium uppercase tracking-[0.18em] text-white/60'>{title}</div>
             <div className='space-y-2'>
                 {entries.length ? entries.slice(0, 4).map((entry) => (
-                    <div key={entry.key} className='rounded-xl border border-login-100/10 bg-login-900/60 px-3 py-2'>
-                        <div className='truncate text-sm font-medium text-login-50'>{entry.key}</div>
-                        <div className='mt-1 text-xs text-login-200'>{entry.count} {valueLabel}</div>
+                    <div key={entry.key} className='rounded-xl border border-white/10 bg-black/60 px-3 py-2'>
+                        <div className='truncate text-sm font-medium text-white'>{entry.key}</div>
+                        <div className='mt-1 text-xs text-white/60'>{entry.count} {valueLabel}</div>
                     </div>
                 )) : <EmptyCopy text={`No ${title.toLowerCase()} available yet.`} />}
             </div>
@@ -686,7 +684,7 @@ function SignalGroup({
 
 function EmptyCopy({ text }: { text: string }) {
     return (
-        <div className='rounded-xl border border-dashed border-login-100/10 bg-login-900/40 px-3 py-4 text-sm text-login-200'>
+        <div className='rounded-xl border border-dashed border-white/10 bg-black/40 px-3 py-4 text-sm text-white/60'>
             {text}
         </div>
     )
@@ -697,8 +695,8 @@ function ZoomButton({ label, onClick, wide = false }: { label: string, onClick: 
         <button
             type='button'
             onClick={onClick}
-            className={`rounded-full border border-login-100/10 bg-login-50/5 px-3 py-1.5
-                text-sm text-login-50 transition hover:border-login-100/20 hover:bg-login-50/10
+            className={`rounded-full border border-white/10 bg-white/5 px-3 py-1.5
+                text-sm text-white transition hover:border-white/20 hover:bg-white/10
                 ${wide ? 'min-w-18' : 'min-w-10'}`}
         >
             {label}

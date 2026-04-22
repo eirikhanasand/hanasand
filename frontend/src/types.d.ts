@@ -504,6 +504,10 @@ type GptSocketMessage = {
     error?: string
     metrics?: GPT_ModelMetrics
     artifacts?: AIArtifact[]
+    toolId?: string
+    toolLabel?: string
+    toolState?: 'running' | 'completed' | 'error'
+    toolDetail?: string | null
 }
 
 type GPT_ChatMessage = {
@@ -551,7 +555,7 @@ type AIConversationMessage = {
 }
 
 type AIArtifact = {
-    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link'
+    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link' | 'diff'
     title: string
     path?: string | null
     url?: string | null
@@ -654,4 +658,13 @@ type GPT_ModelMetrics = {
     tps: number
     lastUpdated: string | null
     lastError: string | null
+}
+
+type VMConnectionDetails = {
+    vmName: string
+    vmIp: string
+    username: string
+    sshCommand: string | null
+    certificateCount: number
+    certificates: Certificate[]
 }

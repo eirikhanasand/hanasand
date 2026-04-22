@@ -295,7 +295,7 @@ function buildNextjsDockerTemplate(projectName?: string | null) {
             },
             {
                 path: 'docker-compose.yml',
-                content: `services:\n  web:\n    build:\n      context: .\n      dockerfile: Dockerfile\n    ports:\n      - "3000:3000"\n    environment:\n      NODE_ENV: production\n    restart: unless-stopped\n`,
+                content: `services:\n  web:\n    build:\n      context: .\n      dockerfile: Dockerfile\n    ports:\n      - "\${HOST_PORT:-3000}:3000"\n    environment:\n      NODE_ENV: production\n    restart: unless-stopped\n`,
             },
             {
                 path: 'app/layout.tsx',
@@ -315,7 +315,7 @@ function buildNextjsDockerTemplate(projectName?: string | null) {
             },
             {
                 path: 'README.md',
-                content: `# ${titleCase(rootName)}\n\nScaffolded by Hanasand AI as a browser-native coding workspace.\n\n## Quick start\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nOpen [http://localhost:3000](http://localhost:3000).\n\n## Docker\n\n\`\`\`bash\ndocker compose up --build\n\`\`\`\n\n## What is included\n\n- Next.js App Router with TypeScript\n- Production-ready standalone Dockerfile\n- \`docker-compose.yml\` for local orchestration\n- A polished landing page starter for further iteration\n`,
+                content: `# ${titleCase(rootName)}\n\nScaffolded by Hanasand AI as a browser-native coding workspace.\n\n## Quick start\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\nOpen [http://localhost:3000](http://localhost:3000).\n\n## Docker\n\n\`\`\`bash\nHOST_PORT=3200 docker compose up --build\n\`\`\`\n\n## What is included\n\n- Next.js App Router with TypeScript\n- Production-ready standalone Dockerfile\n- \`docker-compose.yml\` for local orchestration\n- A polished landing page starter for further iteration\n`,
             },
         ] satisfies WorkspaceTemplateFile[],
     }

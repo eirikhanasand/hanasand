@@ -1,5 +1,5 @@
 import { Menu, X } from 'lucide-react'
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react'
+import { Dispatch, SetStateAction, useMemo, useState } from 'react'
 import RecentRequests from './recentRequests'
 import NewRequest from './newRequest'
 import { loadScopedRequestHistory, saveScopedRequestHistory } from './storage'
@@ -20,18 +20,15 @@ const EMPTY_DRAFT: RequestDraft = {
 
 export default function Box({ box, setBox, share }: BoxProps) {
     const [sidebar, setSidebar] = useState(true)
-    const [recentRequests, setRecentRequests] = useState<RequestHistoryEntry[]>([])
-    const [selectedRequest, setSelectedRequest] = useState<RequestHistoryEntry | null>(null)
-
-    useEffect(() => {
-        if (!box) {
-            return
-        }
-
-        const history = loadScopedRequestHistory(share?.alias || share?.id || null)
-        setRecentRequests(history)
-        setSelectedRequest(history[0] ?? null)
-    }, [box, share?.alias, share?.id])
+    const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null)
+    const recentRequests = useMemo(
+        () => (box ? loadScopedRequestHistory(share?.alias || share?.id || null) : []),
+        [box, share?.alias, share?.id]
+    )
+    const selectedRequest = useMemo(
+        () => recentRequests.find((request) => request.id === selectedRequestId) || recentRequests[0] || null,
+        [recentRequests, selectedRequestId]
+    )
 
     const requestDraft = useMemo<RequestDraft>(() => {
         if (!selectedRequest) {
@@ -47,12 +44,9 @@ export default function Box({ box, setBox, share }: BoxProps) {
     }, [selectedRequest])
 
     function handleHistoryUpdate(entry: RequestHistoryEntry) {
-        setRecentRequests((prev) => {
-            const next = [entry, ...prev.filter((item) => item.id !== entry.id && !(item.method === entry.method && item.url === entry.url && item.body === entry.body))]
-            saveScopedRequestHistory(next, share?.alias || share?.id || null)
-            return next
-        })
-        setSelectedRequest(entry)
+        const next = [entry, ...recentRequests.filter((item) => item.id !== entry.id && !(item.method === entry.method && item.url === entry.url && item.body === entry.body))]
+        saveScopedRequestHistory(next, share?.alias || share?.id || null)
+        setSelectedRequestId(entry.id)
     }
 
     if (!box) {
@@ -74,8 +68,8 @@ export default function Box({ box, setBox, share }: BoxProps) {
                     </div>
                     <RecentRequests
                         recentRequests={recentRequests}
-                        activeRequestId={selectedRequest?.id ?? null}
-                        onSelect={setSelectedRequest}
+                        activeRequestId={selectedRequestId ?? selectedRequest?.id ?? null}
+                        onSelect={(request) => setSelectedRequestId(request.id)}
                     />
                 </aside>
             )}
@@ -103,6 +97,7 @@ export default function Box({ box, setBox, share }: BoxProps) {
                     initialRequest={requestDraft}
                     selectedRequestId={selectedRequest?.id ?? null}
                     onRequestComplete={handleHistoryUpdate}
+                    share={share}
                 />
             </section>
         </div>

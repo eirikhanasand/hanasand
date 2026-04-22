@@ -144,7 +144,10 @@ async function renderChatPrompt(messages: GPT_ChatMessage[]) {
     }
 }
 
-function toPromptEvent(type: 'prompt_started' | 'prompt_delta' | 'prompt_complete' | 'prompt_error', payload: Record<string, unknown>) {
+function toPromptEvent(
+    type: 'prompt_started' | 'prompt_delta' | 'prompt_complete' | 'prompt_error' | 'prompt_tool',
+    payload: Record<string, unknown>,
+) {
     return JSON.stringify({
         type,
         timestamp: new Date().toISOString(),
@@ -228,7 +231,17 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
     }))
 
     try {
-        const result = await runModelToolLoop(request)
+        const result = await runModelToolLoop(request, (toolEvent) => {
+            send(toPromptEvent('prompt_tool', {
+                conversationId: request.conversationId,
+                clientName: request.clientName || null,
+                toolId: toolEvent.toolId,
+                toolLabel: toolEvent.toolLabel,
+                toolState: toolEvent.toolState,
+                toolDetail: toolEvent.toolDetail || null,
+                metrics: getModelState(),
+            }))
+        })
         const content = result.content
         const completionId = `hanasand-${Date.now()}`
         updateMetricsFromTimings(result.timings)

@@ -60,6 +60,7 @@ export async function handleGptMessage(
                 return
 
             case 'prompt_started':
+            case 'prompt_tool':
             case 'prompt_delta':
             case 'prompt_complete':
             case 'prompt_error':
