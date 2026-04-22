@@ -48,6 +48,7 @@ export default async function Page() {
                         <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />
                         <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />
                         <ActionLink href='/status' title='Status' body='Synthetic checks, latency, uptime, and current service state.' />
+                        <ActionLink href='/dashboard/backup' title='Backup' body='Critical state locations, restore order, and resilience notes.' />
                     </div>
                 </DashboardPanel>
 

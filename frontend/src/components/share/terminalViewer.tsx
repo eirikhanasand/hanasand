@@ -1,150 +1,148 @@
-import { useEffect, useRef, useMemo, useState, KeyboardEvent } from 'react'
+import { FitAddon } from '@xterm/addon-fit'
+import { Terminal } from '@xterm/xterm'
+import { useEffect, useRef } from 'react'
 
 type TerminalViewerProps = {
     open: boolean
     share: Share
-    text: string[]
+    chunks: string[]
     isDone?: boolean
-    sendMessage: (message: string) => { status: boolean, message?: string }
+    sendInput: (message: string) => { status: boolean, message?: string }
+    sendResize: (cols: number, rows: number) => void
 }
 
-export default function TerminalViewer({ open, share, text, isDone, sendMessage }: TerminalViewerProps) {
-    const containerRef = useRef<HTMLPreElement>(null)
-    const inputRef = useRef<HTMLTextAreaElement>(null)
-    const [input, setInput] = useState<string | null>(null)
-    const [submittedLines, setSubmittedLines] = useState<string[]>([])
-    const [hostname, setHostname] = useState('$')
-    const [initialLeft, setInitialLeft] = useState(hostname.length * 8.65)
-    const [caretPos, setCaretPos] = useState({ top: 0, left: initialLeft })
-    const spaces = ' '.repeat(hostname.length)
-    const lines = [...text, ...submittedLines]
+export default function TerminalViewer({ open, share, chunks, sendInput, sendResize }: TerminalViewerProps) {
+    const containerRef = useRef<HTMLDivElement>(null)
+    const terminalRef = useRef<Terminal | null>(null)
+    const fitAddonRef = useRef<FitAddon | null>(null)
+    const renderedChunkCountRef = useRef(0)
+    const resizeObserverRef = useRef<ResizeObserver | null>(null)
 
-    const processed = useMemo(() => {
-        const normalized: { type: string, content: string }[] = lines.map(item => {
-            if (typeof item === 'string') {
-                try {
-                    const parsed = JSON.parse(item)
-                    return parsed
-                } catch {
-                    return { type: 'log', content: item }
-                }
-            }
-
-            return item
-        })
-
-        return normalized
-    }, [lines])
-
-    function updateCaret() {
-        const textarea = inputRef.current
-        if (!textarea) {
+    useEffect(() => {
+        if (!containerRef.current || terminalRef.current) {
             return
         }
 
-        const selectionStart = textarea.selectionStart
-        const textBeforeCursor = textarea.value.slice(0, selectionStart)
-        const lines = textBeforeCursor.split('\n')
-        const line = lines[lines.length - 1]
-        const fontSize = 16
-        const lineHeight = 20
-
-        setCaretPos({
-            top: (lines.length - 1) * lineHeight,
-            left: (lines.length === 1 ? ((line.length * (fontSize * 0.54) || initialLeft)) : line.length * (fontSize * 0.54))
+        const term = new Terminal({
+            cursorBlink: true,
+            convertEol: false,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
+            fontSize: 14,
+            lineHeight: 1.35,
+            theme: {
+                background: '#11130f',
+                foreground: '#edf1e9',
+                cursor: '#9de18f',
+                selectionBackground: 'rgba(157, 225, 143, 0.24)'
+            }
         })
-    }
 
-    function handleContainerClick() {
-        inputRef.current?.focus()
-    }
+        const fitAddon = new FitAddon()
+        term.loadAddon(fitAddon)
+        term.open(containerRef.current)
 
-    function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-        if (e.key === 'Enter' && !e.shiftKey && input?.length) {
-            e.preventDefault()
-            const { message } = sendMessage(input)
-            setSubmittedLines(prev => [...prev, `${hostname} ${input}`])
-            if (message) {
-                setSubmittedLines(prev => [...prev, `Error: ${message}`])
+        terminalRef.current = term
+        fitAddonRef.current = fitAddon
+        ;(window as Window & {
+            __shareTerminal?: Terminal
+            __shareTerminalSendInput?: (content: string) => void
+        }).__shareTerminal = term
+        ;(window as Window & {
+            __shareTerminal?: Terminal
+            __shareTerminalSendInput?: (content: string) => void
+        }).__shareTerminalSendInput = (content: string) => {
+            sendInput(content)
+        }
+
+        const syncSize = () => {
+            if (!fitAddonRef.current || !terminalRef.current) {
+                return
             }
 
-            setInput('')
-        }
-    }
-
-    useEffect(() => {
-        updateCaret()
-    }, [input])
-
-    useEffect(() => {
-        function handleResize() {
-            const updatedWidth = window.matchMedia('(min-width: 768px)').matches
-            const updatedHostname = updatedWidth ? `${share.alias}@${share.alias}$` : '$'
-            const updatedLeft = updatedHostname.length * 8.65
-            setHostname(updatedHostname)
-            setInitialLeft(updatedLeft)
-            setCaretPos(prev => ({ ...prev, left: updatedLeft }))
-            return updatedWidth
+            fitAddonRef.current.fit()
+            sendResize(terminalRef.current.cols, terminalRef.current.rows)
         }
 
-        handleResize()
-        window.addEventListener('resize', handleResize)
-        return () => window.removeEventListener('resize', handleResize)
-    }, [share.alias])
+        const inputDisposable = term.onData((data) => {
+            sendInput(data)
+        })
+
+        const focusTimeout = window.setTimeout(() => {
+            syncSize()
+            term.focus()
+        }, 50)
+
+        resizeObserverRef.current = new ResizeObserver(() => {
+            syncSize()
+        })
+        resizeObserverRef.current.observe(containerRef.current)
+
+        return () => {
+            window.clearTimeout(focusTimeout)
+            resizeObserverRef.current?.disconnect()
+            resizeObserverRef.current = null
+            inputDisposable.dispose()
+            term.dispose()
+            terminalRef.current = null
+            fitAddonRef.current = null
+            delete (window as Window & {
+                __shareTerminal?: Terminal
+                __shareTerminalSendInput?: (content: string) => void
+            }).__shareTerminal
+            delete (window as Window & {
+                __shareTerminal?: Terminal
+                __shareTerminalSendInput?: (content: string) => void
+            }).__shareTerminalSendInput
+        }
+    }, [sendInput, sendResize])
 
     useEffect(() => {
-        setSubmittedLines([])
-        setInput('')
+        if (!terminalRef.current) {
+            return
+        }
+
+        terminalRef.current.reset()
+        renderedChunkCountRef.current = 0
     }, [share.id])
 
     useEffect(() => {
-        const el = containerRef.current
-        if (!el) {
+        if (!terminalRef.current) {
             return
         }
 
-        const shouldScroll = el.scrollTop + el.clientHeight >= el.scrollHeight - (isDone ? 1000 : 200)
-        if (shouldScroll) {
-            el.scrollTop = el.scrollHeight
-        }
-    }, [processed, isDone])
+        const nextChunks = chunks.slice(renderedChunkCountRef.current)
+        nextChunks.forEach((chunk) => {
+            try {
+                const parsed = JSON.parse(chunk) as { content?: string }
+                terminalRef.current?.write(parsed.content || '')
+            } catch {
+                terminalRef.current?.write(chunk)
+            }
+        })
+        renderedChunkCountRef.current = chunks.length
+    }, [chunks, share.id])
 
     useEffect(() => {
-        // Focuses 200 ms after being opened to ensure the transition is complete
-        if (open) {
-            setTimeout(() => {
-                inputRef.current?.focus()
-            }, 200)
+        if (!open || !terminalRef.current) {
+            return
         }
-    }, [open])
+
+        const timeout = window.setTimeout(() => {
+            fitAddonRef.current?.fit()
+            terminalRef.current?.focus()
+            sendResize(terminalRef.current?.cols || 80, terminalRef.current?.rows || 24)
+        }, 200)
+
+        return () => window.clearTimeout(timeout)
+    }, [open, sendResize])
 
     return (
-        <div onClick={handleContainerClick} className='h-full flex flex-col'>
-            {processed.length > 0 && <pre
-                ref={containerRef}
-                className={`rounded-md h-fit overflow-auto text-gray-300/50`}
-            >
-                {processed.map((line, index) => <h1 key={index}>{line.content}</h1>)}
-            </pre>}
-            <div className={`flex justify-center items-center mt-1 gap-2 ${!processed.length ? 'h-full' : 'h-fit'} relative`}>
-                <h1 className='h-full absolute top-0 left-0 text-green-500'>{hostname}</h1>
-                <textarea
-                    ref={inputRef}
-                    value={spaces + (input || '')}
-                    onChange={(e) => setInput(e.target.value.slice(hostname.length))}
-                    className='w-full h-full outline-none caret-transparent resize-none'
-                    onKeyDown={handleKeyDown}
-                />
-                <div className='bg-green-400 absolute pointer-events-none'
-                    style={{
-                        top: caretPos.top,
-                        left: caretPos.left,
-                        width: 8,
-                        height: 20,
-                        animation: 'blink 1s step-start infinite',
-                    }}
-                />
-            </div>
-        </div>
+        <div
+            ref={containerRef}
+            onClick={() => terminalRef.current?.focus()}
+            className='h-full w-full rounded-md bg-[#11130f] px-2 py-1'
+            data-share-terminal={share.alias}
+            data-testid="share-terminal-xterm"
+        />
     )
 }

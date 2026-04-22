@@ -1,12 +1,12 @@
 {
   "name": "hanasand",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "private": true,
   "scripts": {
     "dev": "bun --bun next dev --turbopack",
     "build": "bun --bun next build",
     "start": "PORT=3001 bun --bun next start",
-    "lint": "bun --bun next lint",
+    "lint": "eslint .",
     "test:e2e": "bun scripts/run-playwright-status.mjs",
     "test:e2e:auth": "bun scripts/run-playwright-status.mjs tests/auth.spec.ts",
     "test:e2e:mail": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright mail workspace' bun scripts/run-playwright-status.mjs tests/mail.spec.ts",
@@ -14,7 +14,10 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.4",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "dotenv": "^17.4.2",
+    "eslint-config-next": "^16.2.4",
     "formik": "^2.4.9",
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.8.0",
@@ -31,14 +34,14 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^25.6.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "eslint": "^10.2.1",
+    "eslint": "^9.39.1",
     "postcss": "^8.5.10",
     "tailwindcss": "^4.2.4",
-    "typescript": "^6.0.3",
-    "@playwright/test": "^1.59.1"
+    "typescript": "^6.0.3"
   },
   "overrides": {
     "@types/react": "19.2.14",

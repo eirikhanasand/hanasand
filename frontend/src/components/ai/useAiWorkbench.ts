@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import { getShare } from '@/utils/share/get'
@@ -32,6 +32,12 @@ export default function useAiWorkbench({
     const shouldReconnectRef = useRef(true)
     const bootstrappedRef = useRef(false)
     const conversationsRef = useRef<AIConversation[]>(initialConversations)
+    const createNewConversationRef = useRef<() => Promise<void>>(async () => {})
+    const hydrateShareRef = useRef<(shareId: string) => Promise<Share | null>>(async () => null)
+    const hydrateShareFileRef = useRef<(rootId: string, filePath: string) => Promise<string | null>>(async () => null)
+    const handleSocketMessageRef = useRef<(message: GptSocketMessage) => void>(() => {})
+    const executeAssistantToolsRef = useRef<(conversation: AIConversation, message: AIConversationMessage) => Promise<void>>(async () => {})
+    const runToolCallRef = useRef<(conversation: AIConversation, toolCall: AiToolCall) => Promise<{ ok: boolean, message: string }>>(async () => ({ ok: false, message: 'Tool unavailable.' }))
     const [clients, setClients] = useState<GPT_Client[]>([])
     const [participants, setParticipants] = useState(0)
     const [isConnected, setIsConnected] = useState(false)
@@ -51,15 +57,37 @@ export default function useAiWorkbench({
     const [shareFileContents, setShareFileContents] = useState<Record<string, string>>({})
 
     useEffect(() => {
-        setConversations(initialConversations)
-        setImportedRepos(initialRepositories)
-        setShares(initialShares)
-        setActiveConversationId((prev) => prev || initialConversations[0]?.id || null)
-    }, [initialConversations, initialRepositories, initialShares])
-
-    useEffect(() => {
         conversationsRef.current = conversations
     }, [conversations])
+
+    function createNewConversation() {
+        return createNewConversationRef.current()
+    }
+
+    useEffect(() => {
+        createNewConversationRef.current = async () => {
+            const conversation = createConversation(clients[0]?.name || null)
+            setConversations((prev) => [conversation, ...prev])
+            setActiveConversationId(conversation.id)
+            setStatusNotice(null)
+
+            if (!isAuthenticated) {
+                return
+            }
+
+            try {
+                const response = await aiClientRequest('/ai/conversations', {
+                    method: 'POST',
+                    body: JSON.stringify(toConversationPayload(conversation)),
+                })
+                if (!response.ok) {
+                    throw new Error('Unable to create a new conversation.')
+                }
+            } catch (error) {
+                setStatusNotice(error instanceof Error ? error.message : 'Unable to create a new conversation.')
+            }
+        }
+    }, [clients, isAuthenticated])
 
     useEffect(() => {
         if (!isAuthenticated || bootstrappedRef.current || conversations.some((conversation) => !conversation.archivedAt)) {
@@ -67,7 +95,11 @@ export default function useAiWorkbench({
         }
 
         bootstrappedRef.current = true
-        void createNewConversation()
+        const timer = setTimeout(() => {
+            void createNewConversationRef.current()
+        }, 0)
+
+        return () => clearTimeout(timer)
     }, [conversations, isAuthenticated])
 
     useEffect(() => {
@@ -93,7 +125,7 @@ export default function useAiWorkbench({
             ws.onerror = () => setIsConnected(false)
             ws.onmessage = (event) => {
                 try {
-                    handleSocketMessage(JSON.parse(event.data) as GptSocketMessage)
+                    handleSocketMessageRef.current(JSON.parse(event.data) as GptSocketMessage)
                 } catch (error) {
                     console.error('Invalid AI socket payload', error)
                 }
@@ -149,19 +181,18 @@ export default function useAiWorkbench({
         })
     }, [conversations, search])
 
-    const activeConversation = useMemo(
-        () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
-        [activeConversationId, conversations]
-    )
-
-    useEffect(() => {
+    const resolvedActiveConversationId = useMemo(() => {
         if (activeConversationId && conversations.some((conversation) => conversation.id === activeConversationId)) {
-            return
+            return activeConversationId
         }
 
-        const nextConversation = conversations.find((conversation) => !conversation.archivedAt) || conversations[0] || null
-        setActiveConversationId(nextConversation?.id || null)
+        return conversations.find((conversation) => !conversation.archivedAt)?.id || conversations[0]?.id || null
     }, [activeConversationId, conversations])
+
+    const activeConversation = useMemo(
+        () => conversations.find((conversation) => conversation.id === resolvedActiveConversationId) || null,
+        [resolvedActiveConversationId, conversations]
+    )
 
     const selectedRepoFilePath = typeof activeConversation?.workspaceMeta?.selectedFilePath === 'string'
         ? activeConversation.workspaceMeta.selectedFilePath
@@ -171,70 +202,83 @@ export default function useAiWorkbench({
         : null
 
     useEffect(() => {
+        hydrateShareRef.current = async (shareId: string) => {
+            const token = getCookie('access_token') || undefined
+            const userId = getCookie('id') || undefined
+            const share = await getShare({ id: shareId, token, userId })
+            if (typeof share === 'string') {
+                return null
+            }
+
+            setShareContents((prev) => ({ ...prev, [shareId]: share.content }))
+            const tree = await getTree({ id: shareId, token, userId })
+            if (tree) {
+                setShareTrees((prev) => ({ ...prev, [shareId]: tree }))
+            }
+            return share
+        }
+    }, [])
+
+    useEffect(() => {
+        hydrateShareFileRef.current = async (rootId: string, filePath: string) => {
+            const token = getCookie('access_token') || undefined
+            const userId = getCookie('id') || undefined
+            const rootTree = shareTrees[rootId] || await getTree({ id: rootId, token, userId })
+            if (!rootTree) {
+                return null
+            }
+
+            setShareTrees((prev) => ({ ...prev, [rootId]: rootTree }))
+            const fileId = findTreeFileId(rootTree, filePath)
+            if (!fileId) {
+                return null
+            }
+
+            const share = await getShare({ id: fileId, token, userId })
+            if (typeof share === 'string') {
+                return null
+            }
+
+            const key = `${rootId}:${filePath}`
+            setShareFileContents((prev) => ({ ...prev, [key]: share.content }))
+            return share.content
+        }
+    }, [shareTrees])
+
+    useEffect(() => {
         if (!activeConversation?.shareIds?.length) {
             return
         }
 
-        for (const shareId of activeConversation.shareIds) {
-            if (!shareContents[shareId]) {
-                void hydrateShare(shareId)
+        const timer = setTimeout(() => {
+            for (const shareId of activeConversation.shareIds) {
+                if (!shareContents[shareId]) {
+                    void hydrateShareRef.current(shareId)
+                }
             }
-        }
+        }, 0)
+
+        return () => clearTimeout(timer)
     }, [activeConversation, shareContents])
 
     useEffect(() => {
         const selectedPath = typeof activeConversation?.workspaceMeta?.selectedFilePath === 'string'
             ? activeConversation.workspaceMeta.selectedFilePath
             : null
-        if (!activeConversation?.workspaceId || !selectedPath) {
+        const workspaceId = activeConversation?.workspaceId
+        if (!workspaceId || !selectedPath) {
             return
         }
 
-        const key = `${activeConversation.workspaceId}:${selectedPath}`
-        if (!shareFileContents[key]) {
-            void hydrateShareFile(activeConversation.workspaceId, selectedPath)
-        }
+        const key = `${workspaceId}:${selectedPath}`
+        const timer = setTimeout(() => {
+            if (!shareFileContents[key]) {
+                void hydrateShareFileRef.current(workspaceId, selectedPath)
+            }
+        }, 0)
+
+        return () => clearTimeout(timer)
     }, [activeConversation, shareFileContents])
-
-    async function hydrateShare(shareId: string) {
-        const token = getCookie('access_token') || undefined
-        const userId = getCookie('id') || undefined
-        const share = await getShare({ id: shareId, token, userId })
-        if (typeof share === 'string') {
-            return null
-        }
-
-        setShareContents((prev) => ({ ...prev, [shareId]: share.content }))
-        const tree = await getTree({ id: shareId, token, userId })
-        if (tree) {
-            setShareTrees((prev) => ({ ...prev, [shareId]: tree }))
-        }
-        return share
-    }
-
-    async function hydrateShareFile(rootId: string, filePath: string) {
-        const token = getCookie('access_token') || undefined
-        const userId = getCookie('id') || undefined
-        const rootTree = shareTrees[rootId] || await getTree({ id: rootId, token, userId })
-        if (!rootTree) {
-            return null
-        }
-
-        setShareTrees((prev) => ({ ...prev, [rootId]: rootTree }))
-        const fileId = findTreeFileId(rootTree, filePath)
-        if (!fileId) {
-            return null
-        }
-
-        const share = await getShare({ id: fileId, token, userId })
-        if (typeof share === 'string') {
-            return null
-        }
-
-        const key = `${rootId}:${filePath}`
-        setShareFileContents((prev) => ({ ...prev, [key]: share.content }))
-        return share.content
-    }
 
     function updateLocalConversation(id: string, patch: Partial<AIConversation>) {
         setConversations((prev) => prev.map((conversation) => conversation.id === id
@@ -280,29 +324,6 @@ export default function useAiWorkbench({
         }, ...prev.filter((entry) => entry.id !== repo.id)])
     }
 
-    async function createNewConversation() {
-        const conversation = createConversation(clients[0]?.name || null)
-        setConversations((prev) => [conversation, ...prev])
-        setActiveConversationId(conversation.id)
-        setStatusNotice(null)
-
-        if (!isAuthenticated) {
-            return
-        }
-
-        try {
-            const response = await aiClientRequest('/ai/conversations', {
-                method: 'POST',
-                body: JSON.stringify(toConversationPayload(conversation)),
-            })
-            if (!response.ok) {
-                throw new Error('Unable to create a new conversation.')
-            }
-        } catch (error) {
-            setStatusNotice(error instanceof Error ? error.message : 'Unable to create a new conversation.')
-        }
-    }
-
     async function patchConversation(id: string, patch: Partial<AIConversation>) {
         updateLocalConversation(id, patch)
 
@@ -331,7 +352,7 @@ export default function useAiWorkbench({
 
     async function archiveConversation(id: string, archived: boolean) {
         await patchConversation(id, { archivedAt: archived ? new Date().toISOString() : null })
-        if (archived && activeConversationId === id) {
+        if (archived && resolvedActiveConversationId === id) {
             const nextConversation = conversations.find((conversation) => conversation.id !== id && !conversation.archivedAt)
             if (nextConversation) {
                 setActiveConversationId(nextConversation.id)
@@ -348,7 +369,7 @@ export default function useAiWorkbench({
         }
 
         setConversations((prev) => prev.filter((conversation) => conversation.id !== id))
-        if (activeConversationId === id) {
+        if (resolvedActiveConversationId === id) {
             const nextConversation = conversations.find((conversation) => conversation.id !== id && !conversation.archivedAt)
                 || conversations.find((conversation) => conversation.id !== id)
                 || null
@@ -374,7 +395,7 @@ export default function useAiWorkbench({
         }
     }
 
-    async function persistMessage(conversationId: string, message: AIConversationMessage) {
+    const persistMessage = useCallback(async (conversationId: string, message: AIConversationMessage) => {
         if (!isAuthenticated) {
             return
         }
@@ -399,7 +420,7 @@ export default function useAiWorkbench({
         } catch (error) {
             setStatusNotice(error instanceof Error ? error.message : 'Unable to persist the latest message.')
         }
-    }
+    }, [isAuthenticated])
 
     async function attachShare(shareId: string) {
         if (!activeConversation) {
@@ -412,9 +433,9 @@ export default function useAiWorkbench({
             workspaceKind: 'share',
             shareIds: nextShareIds,
         })
-        await hydrateShare(shareId)
+        await hydrateShareRef.current(shareId)
         if (typeof activeConversation.workspaceMeta?.selectedFilePath === 'string') {
-            await hydrateShareFile(shareId, activeConversation.workspaceMeta.selectedFilePath)
+            await hydrateShareFileRef.current(shareId, activeConversation.workspaceMeta.selectedFilePath)
         }
     }
 
@@ -439,9 +460,9 @@ export default function useAiWorkbench({
                 selectedFilePath: repo.files[0]?.path || '',
             },
         })
-        await hydrateShare(shareId)
+        await hydrateShareRef.current(shareId)
         if (repo.files[0]?.path) {
-            await hydrateShareFile(shareId, repo.files[0].path)
+            await hydrateShareFileRef.current(shareId, repo.files[0].path)
         }
     }
 
@@ -486,7 +507,7 @@ export default function useAiWorkbench({
             setShareFileContents((prev) => Object.fromEntries(
                 Object.entries(prev).filter(([key]) => !key.startsWith(`${pendingRepoId}:`))
             ))
-            await hydrateShare(pendingRepoId)
+            await hydrateShareRef.current(pendingRepoId)
             const readyRepo = withRepositorySync(pendingRepo, {
                 status: 'ready',
                 source: existing ? 'refresh' : 'import',
@@ -544,7 +565,7 @@ export default function useAiWorkbench({
             setShareFileContents((prev) => Object.fromEntries(
                 Object.entries(prev).filter(([key]) => !key.startsWith(`${repoId}:`))
             ))
-            await hydrateShare(repoId)
+            await hydrateShareRef.current(repoId)
             const readyRepo = withRepositorySync(refreshed, {
                 status: 'ready',
                 source: 'refresh',
@@ -577,7 +598,7 @@ export default function useAiWorkbench({
             return
         }
 
-        await hydrateShareFile(activeConversation.workspaceId, path)
+        await hydrateShareFileRef.current(activeConversation.workspaceId, path)
         await patchConversation(activeConversation.id, {
             workspaceMeta: {
                 ...activeConversation.workspaceMeta,
@@ -692,90 +713,7 @@ export default function useAiWorkbench({
         }))
     }
 
-    function handleSocketMessage(message: GptSocketMessage) {
-        if (message.type === 'join') {
-            setParticipants(message.participants || 0)
-            return
-        }
-
-        if (message.type === 'snapshot') {
-            const normalized = (message.clients || []).map(normalizeClient)
-            setParticipants(message.participants || normalized.length)
-            setClients(normalized)
-            return
-        }
-
-        if (message.type === 'update' && message.client) {
-            const normalizedClient = normalizeClient(message.client)
-            setParticipants(message.participants || 0)
-            setClients((prev) => {
-                const existing = prev.find((client) => client.name === normalizedClient.name)
-                return existing
-                    ? prev.map((client) => client.name === normalizedClient.name ? normalizedClient : client)
-                    : [...prev, normalizedClient]
-            })
-            setConversations((prev) => prev.map((conversation) => (
-                conversation.activeModel === normalizedClient.name || conversation.preferredModel === normalizedClient.name
-                    ? { ...conversation, metrics: normalizedClient.model }
-                    : conversation
-            )))
-            return
-        }
-
-        if (!message.conversationId) {
-            return
-        }
-
-        setConversations((prev) => prev.map((conversation) => {
-            if (conversation.id !== message.conversationId) {
-                return conversation
-            }
-
-            if (message.type === 'prompt_started') {
-                return {
-                    ...conversation,
-                    activeModel: message.clientName || conversation.activeModel,
-                    updatedAt: new Date().toISOString(),
-                    metrics: message.metrics || conversation.metrics,
-                }
-            }
-
-            if (message.type === 'prompt_delta' || message.type === 'prompt_complete') {
-                const messages = [...conversation.messages]
-                const lastMessage = messages[messages.length - 1]
-                if (lastMessage?.role === 'assistant') {
-                    messages[messages.length - 1] = {
-                        ...lastMessage,
-                        modelName: message.clientName || lastMessage.modelName || conversation.activeModel,
-                        content: message.content || `${lastMessage.content}${message.delta || ''}`,
-                        pending: message.type === 'prompt_delta',
-                    }
-                }
-
-                return {
-                    ...conversation,
-                    updatedAt: new Date().toISOString(),
-                    activeModel: message.clientName || conversation.activeModel,
-                    metrics: message.metrics || conversation.metrics,
-                    messages,
-                }
-            }
-
-            if (message.type === 'prompt_error') {
-                return appendError(conversation, message.error || 'The model failed to answer this prompt.', message.metrics, message.clientName || conversation.activeModel)
-            }
-
-            return conversation
-        }))
-
-        if (message.type === 'prompt_complete' || message.type === 'prompt_error') {
-            setTimeout(() => {
-                void persistAssistantMessageFromEvent(message)
-            }, 0)
-        }
-    }
-
-    async function persistAssistantMessageFromEvent(message: GptSocketMessage) {
+    const persistAssistantMessageFromEvent = useCallback(async (message: GptSocketMessage) => {
         if (message.type !== 'prompt_complete' && message.type !== 'prompt_error') {
             return
         }
@@ -808,101 +746,190 @@ export default function useAiWorkbench({
 
         await persistMessage(message.conversationId, assistantMessage)
         if (message.type === 'prompt_complete') {
-            await executeAssistantTools(conversation, assistantMessage)
+            await executeAssistantToolsRef.current(conversation, assistantMessage)
         }
-    }
+    }, [persistMessage])
 
-    async function executeAssistantTools(conversation: AIConversation, message: AIConversationMessage) {
-        const toolCalls = parseToolCalls(message.content)
-        if (!toolCalls.length) {
-            return
-        }
-
-        for (const toolCall of toolCalls) {
-            const result = await runToolCall(conversation, toolCall)
-            const toolMessage: AIConversationMessage = {
-                id: crypto.randomUUID(),
-                role: 'tool',
-                content: result.message,
-                error: !result.ok,
-                createdAt: new Date().toISOString(),
-                metadata: { tool: toolCall.action },
+    useEffect(() => {
+        handleSocketMessageRef.current = (message: GptSocketMessage) => {
+            if (message.type === 'join') {
+                setParticipants(message.participants || 0)
+                return
             }
 
-            setConversations((prev) => prev.map((entry) => entry.id === conversation.id
-                ? {
-                    ...entry,
-                    updatedAt: new Date().toISOString(),
-                    messages: [...entry.messages, toolMessage],
+            if (message.type === 'snapshot') {
+                const normalized = (message.clients || []).map(normalizeClient)
+                setParticipants(message.participants || normalized.length)
+                setClients(normalized)
+                return
+            }
+
+            if (message.type === 'update' && message.client) {
+                const normalizedClient = normalizeClient(message.client)
+                setParticipants(message.participants || 0)
+                setClients((prev) => {
+                    const existing = prev.find((client) => client.name === normalizedClient.name)
+                    return existing
+                        ? prev.map((client) => client.name === normalizedClient.name ? normalizedClient : client)
+                        : [...prev, normalizedClient]
+                })
+                setConversations((prev) => prev.map((conversation) => (
+                    conversation.activeModel === normalizedClient.name || conversation.preferredModel === normalizedClient.name
+                        ? { ...conversation, metrics: normalizedClient.model }
+                        : conversation
+                )))
+                return
+            }
+
+            if (!message.conversationId) {
+                return
+            }
+
+            setConversations((prev) => prev.map((conversation) => {
+                if (conversation.id !== message.conversationId) {
+                    return conversation
                 }
-                : entry))
-            await persistMessage(conversation.id, toolMessage)
-        }
-    }
 
-    async function runToolCall(conversation: AIConversation, toolCall: AiToolCall) {
-        if (toolCall.action === 'read_share') {
-            const shareId = toolCall.shareId || conversation.workspaceId || conversation.shareIds[0]
-            if (!shareId) {
-                return { ok: false, message: 'Tool failed: no share is attached to this conversation.' }
-            }
+                if (message.type === 'prompt_started') {
+                    return {
+                        ...conversation,
+                        activeModel: message.clientName || conversation.activeModel,
+                        updatedAt: new Date().toISOString(),
+                        metrics: message.metrics || conversation.metrics,
+                    }
+                }
 
-            const share = await hydrateShare(shareId)
-            if (!share) {
-                return { ok: false, message: `Tool failed: unable to read share ${shareId}.` }
-            }
+                if (message.type === 'prompt_delta' || message.type === 'prompt_complete') {
+                    const messages = [...conversation.messages]
+                    const lastMessage = messages[messages.length - 1]
+                    if (lastMessage?.role === 'assistant') {
+                        messages[messages.length - 1] = {
+                            ...lastMessage,
+                            modelName: message.clientName || lastMessage.modelName || conversation.activeModel,
+                            content: message.content || `${lastMessage.content}${message.delta || ''}`,
+                            pending: message.type === 'prompt_delta',
+                        }
+                    }
 
-            return {
-                ok: true,
-                message: `Read share ${shareId}.\n\n${share.content.slice(0, 12000)}`,
-            }
-        }
+                    return {
+                        ...conversation,
+                        updatedAt: new Date().toISOString(),
+                        activeModel: message.clientName || conversation.activeModel,
+                        metrics: message.metrics || conversation.metrics,
+                        messages,
+                    }
+                }
 
-        if (toolCall.action === 'update_share') {
-            const shareId = toolCall.shareId || conversation.workspaceId || conversation.shareIds[0]
-            if (!shareId || !toolCall.content) {
-                return { ok: false, message: 'Tool failed: update_share requires a target share and content.' }
-            }
+                if (message.type === 'prompt_error') {
+                    return appendError(conversation, message.error || 'The model failed to answer this prompt.', message.metrics, message.clientName || conversation.activeModel)
+                }
 
-            const updated = await updateShare(shareId, {
-                content: toolCall.content,
-                path: toolCall.path,
-            })
-            if (!updated) {
-                return { ok: false, message: `Tool failed: unable to update share ${shareId}.` }
-            }
+                return conversation
+            }))
 
-            setShareContents((prev) => ({ ...prev, [shareId]: updated.content }))
-            return {
-                ok: true,
-                message: `Updated share ${shareId}${toolCall.path ? ` at ${toolCall.path}` : ''}.`,
-            }
-        }
-
-        if (toolCall.action === 'http_request' && toolCall.url) {
-            const response = await aiClientRequest('/tools/http/request', {
-                method: 'POST',
-                body: JSON.stringify({
-                    url: toolCall.url,
-                    method: toolCall.method || 'GET',
-                    headers: toolCall.headers || {},
-                    body: toolCall.body,
-                }),
-            })
-
-            const body = await response.text()
-            return {
-                ok: response.ok,
-                message: `HTTP ${toolCall.method || 'GET'} ${toolCall.url}\nStatus: ${response.status}\n\n${body.slice(0, 12000)}`,
+            if (message.type === 'prompt_complete' || message.type === 'prompt_error') {
+                setTimeout(() => {
+                    void persistAssistantMessageFromEvent(message)
+                }, 0)
             }
         }
+    }, [persistAssistantMessageFromEvent])
 
-        return { ok: false, message: `Tool failed: unsupported action ${toolCall.action}.` }
-    }
+    useEffect(() => {
+        executeAssistantToolsRef.current = async (conversation: AIConversation, message: AIConversationMessage) => {
+            const toolCalls = parseToolCalls(message.content)
+            if (!toolCalls.length) {
+                return
+            }
+
+            for (const toolCall of toolCalls) {
+                const result = await runToolCallRef.current(conversation, toolCall)
+                const toolMessage: AIConversationMessage = {
+                    id: crypto.randomUUID(),
+                    role: 'tool',
+                    content: result.message,
+                    error: !result.ok,
+                    createdAt: new Date().toISOString(),
+                    metadata: { tool: toolCall.action },
+                }
+
+                setConversations((prev) => prev.map((entry) => entry.id === conversation.id
+                    ? {
+                        ...entry,
+                        updatedAt: new Date().toISOString(),
+                        messages: [...entry.messages, toolMessage],
+                    }
+                    : entry))
+                await persistMessage(conversation.id, toolMessage)
+            }
+        }
+    }, [persistMessage])
+
+    useEffect(() => {
+        runToolCallRef.current = async (conversation: AIConversation, toolCall: AiToolCall) => {
+            if (toolCall.action === 'read_share') {
+                const shareId = toolCall.shareId || conversation.workspaceId || conversation.shareIds[0]
+                if (!shareId) {
+                    return { ok: false, message: 'Tool failed: no share is attached to this conversation.' }
+                }
+
+                const share = await hydrateShareRef.current(shareId)
+                if (!share) {
+                    return { ok: false, message: `Tool failed: unable to read share ${shareId}.` }
+                }
+
+                return {
+                    ok: true,
+                    message: `Read share ${shareId}.\n\n${share.content.slice(0, 12000)}`,
+                }
+            }
+
+            if (toolCall.action === 'update_share') {
+                const shareId = toolCall.shareId || conversation.workspaceId || conversation.shareIds[0]
+                if (!shareId || !toolCall.content) {
+                    return { ok: false, message: 'Tool failed: update_share requires a target share and content.' }
+                }
+
+                const updated = await updateShare(shareId, {
+                    content: toolCall.content,
+                    path: toolCall.path,
+                })
+                if (!updated) {
+                    return { ok: false, message: `Tool failed: unable to update share ${shareId}.` }
+                }
+
+                setShareContents((prev) => ({ ...prev, [shareId]: updated.content }))
+                return {
+                    ok: true,
+                    message: `Updated share ${shareId}${toolCall.path ? ` at ${toolCall.path}` : ''}.`,
+                }
+            }
+
+            if (toolCall.action === 'http_request' && toolCall.url) {
+                const response = await aiClientRequest('/tools/http/request', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        url: toolCall.url,
+                        method: toolCall.method || 'GET',
+                        headers: toolCall.headers || {},
+                        body: toolCall.body,
+                    }),
+                })
+
+                const body = await response.text()
+                return {
+                    ok: response.ok,
+                    message: `HTTP ${toolCall.method || 'GET'} ${toolCall.url}\nStatus: ${response.status}\n\n${body.slice(0, 12000)}`,
+                }
+            }
+
+            return { ok: false, message: `Tool failed: unsupported action ${toolCall.action}.` }
+        }
+    }, [])
 
     return {
         activeConversation,
-        activeConversationId,
+        activeConversationId: resolvedActiveConversationId,
         archivedConversations,
         archiveConversation,
         attachRepo,
@@ -1071,7 +1098,7 @@ function buildSystemPrompt({
         'You are Hanasand AI, an app-style coding assistant inside Hanasand.',
         'Behave like Codex inside Hanasand: be direct, calm, concise, practical, and action-oriented.',
         'Prefer concrete next steps, patch-ready code, and careful reasoning over marketing language.',
-        'You have built-in access to advanced reasoning, repo-aware file inspection/editing tools, local command execution, and live web search outside this prompt. Think privately, inspect before editing, and do not say you lack internet access, shell access, repository access, or current date awareness when those tools would help.',
+        'You have built-in access to advanced reasoning, repo-aware file inspection/editing tools, local command execution, managed background processes, Playwright browser verification, and live web search outside this prompt. Think privately, inspect before editing, verify in-browser when building web apps, and do not say you lack internet access, shell access, repository access, browser access, or current date awareness when those tools would help.',
         'If a preferred model is unavailable, continue the conversation seamlessly with the current connected model.',
         'When a user asks you to read or update an attached share, or to make an authenticated HTTP request for them, you may emit one or more tool tags on their own line.',
         'Supported tags:',

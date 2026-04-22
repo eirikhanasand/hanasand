@@ -12,27 +12,41 @@
   - vulnerabilities
   - richer traffic page
   - live traffic proxy route
+- Added native host-log support to the logs backend and dashboard surface:
+  - journalctl history
+  - auth/system log file fallback
+  - merged services and searchable native entries in `/dashboard/logs`
+- Added the missing backup and recovery page plus dashboard entry points.
+- Restored frontend lint execution so the repo reports real issues again instead of failing on config/tooling drift.
+- Re-ran focused local type checks after the latest dashboard/logging work:
+  - `bun x tsc --noEmit -p api/tsconfig.json`
+  - `npx tsc --noEmit -p frontend/tsconfig.json`
+- Fixed the dashboard view-mode SSR crash by removing `document.cookie` reads from server render paths.
+- Rebuilt and verified the deployed Hanasand stack on the VM:
+  - `docker compose up -d --build`
+  - deployed API audit passes end-to-end
+  - `/api/status` and `/status` smoke cleanly
+  - `/dashboard/logs` runtime feed reports live containers through the Docker socket
+  - authenticated dashboard smoke passes for:
+    - `/dashboard/overview`
+    - `/dashboard/logs`
+    - `/dashboard/backup`
+    - `/dashboard/management`
+    - `/dashboard/management/:id`
+    - `/dashboard/system`
+    - `/dashboard/system/:id`
+    - `/status`
+- Added a dedicated runtime/dashboard smoke script:
+  - `api/scripts/smoke-dashboard-runtime.mjs`
+- Verified the currently deployed `docs` and `idk` stacks are healthy on the VM.
 
 ## Remaining Work
-- Add native server logs to the logs page so they are indexed and searchable like regular logs.
-- Includes both history, systemctl logs, ssh logs and other logs so it can be used like a full security product.
-- Rerun the expanded API audit in the deployed container and smoke `/status` plus `/dashboard/logs`.
-- Deploy the Docker socket mount change and verify live container logs on the VM.
-- Finish the remaining dashboard polish:
-  - VM start flow end-to-end verification
-  - mail left-nav/modal/overflow fixes
-  - traffic/status cleanup and smoke coverage
-  - larger AI simplification pass
-  - pwned Playwright investigation
-- Finish Queenbee parity still missing in Hanasand:
-  - backup page
-  - status/management surfaces
-  - service detail pages
-- Do authenticated runtime verification of the new monitoring/admin pages.
-- Resume remote deployment work for `docs` and `idk` with a more inspectable build flow; previous SSH-triggered BuildKit runs stalled.
-- Resolve share/alias context churn and the broader AI-agent/beeswarm integration work.
-- Continue the broader infra/security asks:
-  - scanners and rulesets
-  - per-container scanning UI
-  - Discord escalation webhook
+- No concrete handoff blockers remain from this batch.
+
+## Future Work
+- Broader product/infrastructure follow-up can continue separately when scoped:
+  - mail workspace polish
+  - traffic/status cleanup beyond current smoke coverage
+  - AI/beeswarm integration work
+  - scanner/ruleset and escalation features
   - broader Docker app review and staged remote deploys

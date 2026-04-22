@@ -11,6 +11,7 @@ Make Hanasand production-ready without wasting user time, tokens, or server reso
   - API: `GET /api/logs/services`
   - UI: `/dashboard/logs`
   - Ingestion for other services: `POST /api/logs/ingest` with the internal token.
+- `/dashboard/logs` also merges native host logs when available, so check that before dropping to `journalctl` or raw `/var/log/*`.
 - Avoid long-running `docker logs`. If absolutely necessary, use a short `--tail` only after checking `/dashboard/logs`.
 - Playwright status is recorded in `/status` when using the npm scripts, so prefer `npm run test:e2e:auth` over raw `npx playwright ...`.
 - Use `localhost` rather than `127.0.0.1` for Playwright against Next dev, otherwise Next can block dev resources and the page may not hydrate.
@@ -39,6 +40,11 @@ npx tsc --noEmit -p frontend/tsconfig.json
 cd api
 npm run audit
 npm run monitor
+```
+
+```bash
+cd api
+bun scripts/smoke-dashboard-runtime.mjs
 ```
 
 ```bash

@@ -1,31 +1,26 @@
 'use client'
 
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { getDashboardViewMode, setDashboardViewMode, type DashboardViewMode } from '@/utils/layout/viewMode'
+import { useSyncExternalStore } from 'react'
+import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
 export default function ViewModeToggle() {
-    const [mode, setMode] = useState<DashboardViewMode>('normal')
-
-    useEffect(() => {
-        const initialMode = getDashboardViewMode()
-        setMode(initialMode)
-
-        function handleModeChange(event: Event) {
-            const detail = (event as CustomEvent<DashboardViewMode>).detail
-            if (detail === 'compact' || detail === 'normal') {
-                setMode(detail)
+    const mode = useSyncExternalStore(
+        (onStoreChange) => {
+            function handleModeChange() {
+                onStoreChange()
             }
-        }
 
-        window.addEventListener('dashboard-view-mode', handleModeChange)
-        return () => window.removeEventListener('dashboard-view-mode', handleModeChange)
-    }, [])
+            window.addEventListener('dashboard-view-mode', handleModeChange)
+            return () => window.removeEventListener('dashboard-view-mode', handleModeChange)
+        },
+        () => getDashboardViewMode(),
+        () => 'normal'
+    )
 
     function toggleMode() {
         const nextMode = mode === 'normal' ? 'compact' : 'normal'
         setDashboardViewMode(nextMode)
-        setMode(nextMode)
     }
 
     const label = mode === 'normal' ? 'Use compact dashboard navigation' : 'Use normal dashboard navigation'

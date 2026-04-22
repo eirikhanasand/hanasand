@@ -317,7 +317,10 @@ async function main() {
         expectStatus: 201,
         expect: body => expectObject(body) && body.name === vmName,
     })
-    await request('GET /vm/metrics/:id', `/vm/metrics/${vmName}`, { expect: expectArray })
+    await request('GET /vm/metrics/:id', `/vm/metrics/${vmName}`, {
+        headers: authHeaders(),
+        expect: expectArray,
+    })
     await request('PUT /vm/metrics/:id', `/vm/metrics/${metric.body.id}`, {
         method: 'PUT',
         headers: authHeaders(),

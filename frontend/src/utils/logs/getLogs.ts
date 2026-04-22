@@ -1,13 +1,14 @@
 import config from '@/config'
 
 export type ServiceLog = {
-    id: number
+    id: number | string
     service: string
     host: string
     level: 'debug' | 'info' | 'warn' | 'error' | 'fatal'
     message: string
     metadata: Record<string, unknown>
     created_at: string
+    source?: 'stored' | 'native'
 }
 
 export type LogService = {
@@ -18,19 +19,22 @@ export type LogService = {
 
 export type RuntimeLog = {
     id: string
-    container_id: string
+    container_id?: string
     service: string
-    image: string
+    image?: string
+    host?: string
     level: 'debug' | 'info' | 'warn' | 'error' | 'fatal'
     message: string
+    metadata?: Record<string, unknown>
     created_at: string
-    source: 'runtime'
+    source: 'runtime' | 'native'
 }
 
 export type LogRealtimeResponse = {
     logs: RuntimeLog[]
     containers: DockerContainer[]
     runtime_available: boolean
+    native_available?: boolean
     generated_at: string
     unavailable_reason?: string
 }
@@ -90,6 +94,7 @@ export async function getRealtimeLogs({ token, id, service }: { token?: string, 
         logs: Array.isArray(body.logs) ? body.logs as RuntimeLog[] : [],
         containers: Array.isArray(body.containers) ? body.containers as DockerContainer[] : [],
         runtime_available: Boolean(body.runtime_available),
+        native_available: Boolean(body.native_available),
         generated_at: typeof body.generated_at === 'string' ? body.generated_at : new Date().toISOString(),
         unavailable_reason: typeof body.unavailable_reason === 'string' ? body.unavailable_reason : undefined,
     } satisfies LogRealtimeResponse

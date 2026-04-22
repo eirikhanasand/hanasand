@@ -1,7 +1,7 @@
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type TerminalProps = {
     share: Share | null
@@ -11,19 +11,24 @@ type TerminalProps = {
 export default function useTerminal({ share, open }: TerminalProps) {
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
-    const [log, setLog] = useState<Log[]>([])
+    const [chunks, setChunks] = useState<string[]>([])
     const wsRef = useRef<WebSocket | null>(null)
     const queuedMessagesRef = useRef<string[]>([])
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const shareId = share && 'id' in share ? share.id : null
+    const shareAlias = share?.alias || null
+    const sessionKey = open && shareId && shareAlias ? `${shareId}:${shareAlias}` : null
+    const activeSessionRef = useRef<string | null>(sessionKey)
 
     useEffect(() => {
-        if (!open || !share || !('id' in share) || !share.alias) {
-            setIsConnected(false)
+        activeSessionRef.current = sessionKey
+    }, [sessionKey])
+
+    useEffect(() => {
+        if (!sessionKey || !shareAlias) {
             return
         }
 
-        setLog([])
-        setParticipants(1)
         queuedMessagesRef.current = []
         let disposed = false
 
@@ -48,12 +53,6 @@ export default function useTerminal({ share, open }: TerminalProps) {
                 return
             }
 
-            const shareAlias = share?.alias
-            if (!shareAlias) {
-                setIsConnected(false)
-                return
-            }
-
             const session = randomId(6)
             const userCookie = getCookie('id')
             const terminalUser = userCookie || 'default'
@@ -62,6 +61,11 @@ export default function useTerminal({ share, open }: TerminalProps) {
 
             ws.onopen = () => {
                 clearReconnect()
+                if (activeSessionRef.current !== sessionKey) {
+                    return
+                }
+                setChunks([])
+                setParticipants(1)
                 setIsConnected(true)
                 flushQueue(ws)
             }
@@ -71,7 +75,9 @@ export default function useTerminal({ share, open }: TerminalProps) {
                     wsRef.current = null
                 }
 
-                setIsConnected(false)
+                if (activeSessionRef.current === sessionKey) {
+                    setIsConnected(false)
+                }
                 if (!disposed) {
                     reconnectTimeoutRef.current = setTimeout(() => {
                         connect()
@@ -81,7 +87,9 @@ export default function useTerminal({ share, open }: TerminalProps) {
 
             ws.onerror = (error) => {
                 console.log('WebSocket error:', error)
-                setIsConnected(false)
+                if (activeSessionRef.current === sessionKey) {
+                    setIsConnected(false)
+                }
             }
 
             ws.onmessage = async (event) => {
@@ -95,15 +103,19 @@ export default function useTerminal({ share, open }: TerminalProps) {
                     const msg = JSON.parse(data)
 
                     if (msg.type === 'update') {
+                        if (activeSessionRef.current !== sessionKey) {
+                            return
+                        }
                         setParticipants(msg.participants || 1)
-                        setLog((prev) => [...prev, {
-                            content: msg.content,
-                            timestamp: msg.timestamp || new Date().toISOString(),
-                            type: msg.content?.includes('"type":"stderr"') ? 'stderr' : 'stdout'
-                        }])
+                        if (typeof msg.content === 'string') {
+                            setChunks((prev) => [...prev, msg.content])
+                        }
                     }
 
                     if (msg.type === 'join') {
+                        if (activeSessionRef.current !== sessionKey) {
+                            return
+                        }
                         setParticipants(msg.participants || 1)
                     }
                 } catch (error) {
@@ -117,7 +129,6 @@ export default function useTerminal({ share, open }: TerminalProps) {
         return () => {
             disposed = true
             clearReconnect()
-            setIsConnected(false)
             queuedMessagesRef.current = []
 
             if (wsRef.current) {
@@ -126,15 +137,15 @@ export default function useTerminal({ share, open }: TerminalProps) {
                 current.close()
             }
         }
-    }, [open, share?.alias, share?.id])
+    }, [sessionKey, shareAlias])
 
-    function sendMessage(message: string) {
-        if (!open || !share || !('id' in share)) {
+    const sendInput = useCallback((message: string) => {
+        if (!sessionKey) {
             return { status: false, message: 'Terminal is closed' }
         }
 
         const payload = JSON.stringify({
-            type: 'terminalMessage',
+            type: 'terminalInput',
             content: message
         })
 
@@ -145,7 +156,31 @@ export default function useTerminal({ share, open }: TerminalProps) {
 
         queuedMessagesRef.current.push(payload)
         return { status: true }
-    }
+    }, [sessionKey])
 
-    return { isConnected, participants, log, sendMessage }
+    const sendResize = useCallback((cols: number, rows: number) => {
+        if (!sessionKey) {
+            return
+        }
+
+        const payload = JSON.stringify({
+            type: 'resize',
+            cols,
+            rows
+        })
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(payload)
+            return
+        }
+
+        queuedMessagesRef.current.push(payload)
+    }, [sessionKey])
+    const view = useMemo(() => ({
+        isConnected: sessionKey ? isConnected : false,
+        participants: sessionKey ? participants : 1,
+        chunks: sessionKey ? chunks : [],
+    }), [chunks, isConnected, participants, sessionKey])
+
+    return { ...view, sendInput, sendResize }
 }

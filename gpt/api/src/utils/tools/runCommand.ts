@@ -95,6 +95,7 @@ async function runCommandProcess(
     timeoutMs: number,
     tempDir: string,
     profilePath: string,
+    npmCacheDir: string,
 ): Promise<RunCommandResult> {
     return await new Promise((resolve, reject) => {
         const child = spawn(SANDBOX_EXECUTABLE, [
@@ -109,8 +110,9 @@ async function runCommandProcess(
                 ...process.env,
                 HOME: tempDir,
                 TMPDIR: tempDir,
-                npm_config_cache: path.join(tempDir, 'npm-cache'),
-                npm_config_tmp: path.join(tempDir, 'npm-tmp'),
+                npm_config_cache: npmCacheDir,
+                npm_config_userconfig: path.join(tempDir, '.npmrc'),
+                npm_config_prefix: path.join(tempDir, 'npm-prefix'),
             },
             stdio: ['ignore', 'pipe', 'pipe'],
         })
@@ -156,12 +158,12 @@ export default async function runCommand(args: RunCommandArgs): Promise<RunComma
     const timeoutMs = Math.max(1000, Math.min(args.timeoutMs ?? config.command_timeout_ms, 10 * 60 * 1000))
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'hanasand-command-'))
     const profilePath = path.join(tempDir, 'sandbox.sb')
+    const npmCacheDir = path.join(config.repo_root, '.hanasand', 'npm-cache')
 
     try {
-        await mkdir(path.join(tempDir, 'npm-cache'), { recursive: true })
-        await mkdir(path.join(tempDir, 'npm-tmp'), { recursive: true })
+        await mkdir(npmCacheDir, { recursive: true })
         await writeFile(profilePath, buildSandboxProfile(tempDir), 'utf8')
-        return await runCommandProcess(args, cwd, timeoutMs, tempDir, profilePath)
+        return await runCommandProcess(args, cwd, timeoutMs, tempDir, profilePath, npmCacheDir)
     } finally {
         await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
     }

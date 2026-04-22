@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, Dispatch, SetStateAction } from 'react'
+import { type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Eye, Wifi, WifiOff } from 'lucide-react'
 import TerminalViewer from './terminalViewer'
 import useTerminal from '@/hooks/useTerminal'
@@ -26,30 +26,34 @@ export default function Terminal({
     const startY = useRef(0)
     const startHeight = useRef(0)
     const [isDone, setIsDone] = useState(false)
-    const { isConnected, participants, log, sendMessage } = useTerminal({ share, open })
-    const terminalLog = log.map((l) => l.content)
+    const { isConnected, participants, chunks, sendInput, sendResize } = useTerminal({ share, open })
+    const lastOpenRef = useRef(open)
 
-    function handleMouseDown(e: React.MouseEvent) {
+    function handleMouseDown(e: ReactMouseEvent) {
         setIsDragging(true)
         startY.current = e.clientY
         startHeight.current = height
         document.body.style.userSelect = 'none'
     }
 
-    function handleMouseMove(e: MouseEvent) {
+    const handleMouseMove: (e: MouseEvent) => void = useCallback((e: MouseEvent) => {
         if (!isDragging) return
 
         const delta = startY.current - e.clientY
         const newHeight = Math.min(Math.max(startHeight.current + delta, 0), window.innerHeight * 0.9)
         setHeight(newHeight)
-    }
+    }, [isDragging])
 
-    function handleMouseUp() {
+    const handleMouseUp: () => void = useCallback(() => {
         setIsDragging(false)
         document.body.style.userSelect = ''
-    }
+        if (startHeight.current > 0 && height < 50) {
+            setOpen(false)
+            setHeight(0)
+        }
+    }, [height, setOpen])
 
-    function handleChange() {
+    const handleChange = useCallback(() => {
         if (open) {
             setOpen(false)
             setHeight(0)
@@ -57,7 +61,7 @@ export default function Terminal({
             setOpen(true)
             setHeight(180)
         }
-    }
+    }, [open, setOpen])
 
     useEffect(() => {
         if (isDragging) {
@@ -75,20 +79,16 @@ export default function Terminal({
             document.removeEventListener('mousemove', handleMouseMove)
             document.removeEventListener('mouseup', handleMouseUp)
         }
-    }, [isDragging])
+    }, [handleMouseMove, handleMouseUp, isDragging])
 
     useEffect(() => {
-        setTimeout(() => {
+        const timeout = window.setTimeout(() => {
             setIsDone(true)
         }, 1000)
+        return () => window.clearTimeout(timeout)
     }, [])
 
     useEffect(() => {
-        if (!isDragging && height < 50) {
-            setOpen(false)
-            setHeight(0)
-        }
-
         return () => {
             if (open) {
                 setCookie('shareTerminalHeight', String(height))
@@ -96,20 +96,33 @@ export default function Terminal({
                 removeCookie('shareTerminalHeight')
             }
         }
-    }, [triggerChange, height, isDragging, setOpen])
+    }, [height, open])
 
     useEffect(() => {
-        if (triggerChange === 'close') {
-            setOpen(false)
-            setTriggerChange(false)
+        if (!triggerChange) {
             return
         }
 
-        if (triggerChange) {
+        const frame = window.setTimeout(() => {
+            if (triggerChange === 'close') {
+                setOpen(false)
+                setTriggerChange(false)
+                return
+            }
+
             handleChange()
             setTriggerChange(false)
+        }, 0)
+
+        return () => window.clearTimeout(frame)
+    }, [handleChange, setOpen, setTriggerChange, triggerChange])
+
+    useEffect(() => {
+        if (open && !lastOpenRef.current && shareTerminalHeight > 0) {
+            setHeight(shareTerminalHeight)
         }
-    }, [triggerChange, setTriggerChange])
+        lastOpenRef.current = open
+    }, [open, shareTerminalHeight])
 
     return (
         <>
@@ -124,6 +137,7 @@ export default function Terminal({
             {!open && (
                 <div
                     onClick={handleChange}
+                    data-testid="share-terminal-toggle"
                     className="fixed bottom-2 left-1/2 -translate-x-1/2 bg-dark/40 hover:bg-dark px-8 py-1 rounded-md cursor-pointer transition-all border border-light/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.4)] backdrop-blur-md z-100"
                 >
                     <div className="mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[2.5px]" />
@@ -132,6 +146,7 @@ export default function Terminal({
 
             {/* Console container */}
             <div
+                data-testid="share-terminal-panel"
                 className={`fixed left-0 w-full bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
                 style={{
                     bottom: 0,
@@ -171,8 +186,9 @@ export default function Terminal({
                     {share && <TerminalViewer
                         open={open}
                         share={share} 
-                        sendMessage={sendMessage} 
-                        text={terminalLog} 
+                        sendInput={sendInput}
+                        sendResize={sendResize}
+                        chunks={chunks}
                         isDone={isDone}
                     />}
                 </div>

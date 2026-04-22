@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, Activity, Database, Server, TerminalSquare } from 'lucide-react'
+import { AlertTriangle, Activity, Database, Server, ShieldAlert, TerminalSquare } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import config from '@/config'
 import type { LogRealtimeResponse, RuntimeLog, ServiceLog, LogService } from '@/utils/logs/getLogs'
@@ -63,22 +63,22 @@ export default function LogsPageClient({
         }
     }, [id, token, serviceFilter])
 
-    const runtimeServices = useMemo(
-        () => (realtime.containers || []).map((container) => container.name).filter(Boolean),
-        [realtime.containers]
-    )
-    const allServices = useMemo(
-        () => Array.from(new Set([...services.map((service) => service.service), ...runtimeServices])).sort(),
-        [runtimeServices, services]
-    )
     const liveLogs = useMemo(
         () => serviceFilter === 'all'
             ? realtime.logs || []
             : (realtime.logs || []).filter((log) => log.service === serviceFilter),
         [realtime.logs, serviceFilter]
     )
+    const runtimeServices = useMemo(
+        () => (realtime.logs || []).map((log) => log.service).filter(Boolean),
+        [realtime.logs]
+    )
+    const nativeLiveCount = liveLogs.filter((log) => log.source === 'native').length
+    const allServices = useMemo(
+        () => Array.from(new Set([...services.map((service) => service.service), ...runtimeServices])).sort(),
+        [runtimeServices, services]
+    )
     const recentErrorCount = liveLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
-    const totalStoredEntries = services.reduce((sum, service) => sum + service.entries, 0)
 
     return (
         <div className='grid gap-5'>
@@ -87,7 +87,7 @@ export default function LogsPageClient({
                     <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Operations</p>
                     <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Logs</h1>
                     <p className='mt-2 text-sm leading-6 text-bright/55'>
-                        Dashboard first, live container feed second, stored error records last. Runtime logs poll every few seconds so reruns and restarts actually show up without leaving the page.
+                        Dashboard first, live runtime and host feed second, stored and searchable error records last. Runtime logs poll every few seconds so reruns, restarts, auth noise, and host-level events show up without leaving the page.
                     </p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
@@ -114,7 +114,7 @@ export default function LogsPageClient({
                 <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
                 <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
                 <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
-                <SummaryCard icon={<Database className='h-4 w-4' />} label='Stored entries' value={String(totalStoredEntries)} note='Persisted in DB' />
+                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Native host logs' value={String(nativeLiveCount)} note='Journal and auth' />
             </section>
 
             <section className='glass-card rounded-[1.4rem] p-4'>
@@ -133,6 +133,11 @@ export default function LogsPageClient({
                     {!realtime.runtime_available && (
                         <p className='text-sm text-amber-200/80'>
                             Live runtime source unavailable{realtime.unavailable_reason ? `: ${realtime.unavailable_reason}` : '.'}
+                        </p>
+                    )}
+                    {realtime.native_available === false && (
+                        <p className='text-sm text-amber-200/80'>
+                            Native host logs unavailable.
                         </p>
                     )}
                 </div>
@@ -156,7 +161,7 @@ export default function LogsPageClient({
                                 ))}
                             </div>
                         </div>
-                        <LogFeedCard title='Latest stored errors' icon={<AlertTriangle className='h-4 w-4 text-orange-300' />} logs={storedLogs.slice(0, 8)} empty='No stored logs found.' />
+                        <LogFeedCard title='Stored + native errors' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs.slice(0, 8)} empty='No stored logs found.' />
                     </section>
                 </section>
             )}
@@ -166,7 +171,7 @@ export default function LogsPageClient({
             )}
 
             {view === 'stored' && (
-                <LogFeedCard title='Stored error records' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs} empty='No stored logs found.' tall />
+                <LogFeedCard title='Stored and searchable error records' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs} empty='No stored logs found.' tall />
             )}
         </div>
     )
@@ -212,6 +217,7 @@ function LogFeedCard({
                                 <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>
                                     {log.service}
                                     {'host' in log && log.host ? ` · ${log.host}` : ''}
+                                    {'source' in log && log.source ? ` · ${log.source}` : ''}
                                 </p>
                                 <h3 className='mt-2 wrap-break-word text-sm font-semibold text-bright'>{log.message}</h3>
                             </div>
