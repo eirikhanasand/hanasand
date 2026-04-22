@@ -143,4 +143,17 @@ export default async function ensureSchema() {
         )
     `)
     await run(`CREATE INDEX IF NOT EXISTS idx_mail_filters_user_priority ON mail_filters(user_id, priority ASC, id ASC)`)
+    await run(`
+        CREATE TABLE IF NOT EXISTS mail_recent_recipients (
+            owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            mailbox_user TEXT NOT NULL,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT '',
+            use_count INT NOT NULL DEFAULT 1,
+            last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (owner_user_id, mailbox_user, email)
+        )
+    `)
+    await run(`CREATE INDEX IF NOT EXISTS idx_mail_recent_recipients_lookup ON mail_recent_recipients(owner_user_id, mailbox_user, last_used_at DESC)`)
 }

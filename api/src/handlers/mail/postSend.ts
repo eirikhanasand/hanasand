@@ -3,6 +3,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
 import { parseAddressInput } from '#utils/mail/helpers.ts'
 import { storeSentMessage, uploadAttachment } from '#utils/mail/jmap.ts'
+import { rememberRecentRecipients } from '#utils/mail/recentRecipients.ts'
 import { sendMailViaSmtp } from '#utils/mail/smtp.ts'
 
 type AttachmentBody = {
@@ -82,6 +83,8 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
             htmlBody: body.htmlBody,
             attachments,
         })
+
+        await rememberRecentRecipients(id, access.targetUser, [...to, ...cc, ...bcc])
 
         return res
             .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')

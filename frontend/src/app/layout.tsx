@@ -20,9 +20,9 @@ export default async function layout({ children }: { children: ReactNode }) {
             <body className='h-full w-full max-h-screen max-w-screen overflow-hidden'>
                 <div className='site-atmosphere' />
                 <Header token={token} path={path} />
-                <div className={`relative z-10 ${isShare ? 'mt-[7.5vh] h-[92.5vh]' : 'mt-[9.5vh] h-[90.5vh]'} w-full overflow-auto`}>
+                <div className={`relative z-10 ${isShare ? 'mt-[7.5vh] h-[92.5vh]' : 'mt-[8.25vh] h-[91.75vh] md:mt-[9.5vh] md:h-[90.5vh]'} w-full overflow-auto`}>
                     <BackgroundSketches />
-                    <main className={`w-full ${isShare ? '' : 'pt-5 md:pt-0'} min-h-[90.5vh]`}>
+                    <main className={`w-full ${isShare ? '' : 'pt-3 md:pt-0'} min-h-[90.5vh]`}>
                         {children}
                     </main>
                     <Footer />

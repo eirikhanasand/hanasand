@@ -5,6 +5,7 @@ import { applyMailRules, listMailRules } from '#utils/mail/filters.ts'
 import { getMailHealth } from '#utils/mail/health.ts'
 import { getMailboxList, getMessage, listMessages } from '#utils/mail/jmap.ts'
 import { mailConfig } from '#utils/mail/config.ts'
+import { listRecentRecipients } from '#utils/mail/recentRecipients.ts'
 
 export default async function getMailOverview(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
@@ -16,6 +17,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
         const query = req.query as { mailboxUser?: string, mailboxId?: string, messageId?: string }
         const access = await getMailAccess(id, query.mailboxUser)
         const accessibleAccounts = await listAccessibleMailAccounts(id)
+        const recentRecipients = await listRecentRecipients(id, access.targetUser)
         const health = await getMailHealth().catch(error => {
             req.log.warn({ error }, 'Failed to collect mail health checks')
             return null
@@ -36,6 +38,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
                 messages: [],
                 selectedMessage: null,
                 filters: [],
+                recentRecipients,
                 health,
                 settings: settingsFor(access),
             })
@@ -73,6 +76,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
             messages,
             selectedMessage,
             filters,
+            recentRecipients,
             health,
             settings: settingsFor(access),
         })

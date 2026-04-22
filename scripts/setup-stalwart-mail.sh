@@ -111,6 +111,10 @@ ensure_principal "${MAIL_ACCOUNT}" "individual" "$(jq -nc --arg name "${MAIL_ACC
 
 api POST '/api/dkim' "$(jq -nc --arg domain "${MAIL_DOMAIN}" '{id:null,algorithm:"Ed25519",domain:$domain,selector:null}')" >/dev/null || true
 
+if docker exec "${STALWART_CONTAINER}" sh -lc 'command -v stalwart-cli >/dev/null 2>&1'; then
+    docker exec "${STALWART_CONTAINER}" sh -lc "stalwart-cli -u http://127.0.0.1:8080 -c admin:${ADMIN_PASSWORD} dkim create rsa ${MAIL_DOMAIN} rsa-${MAIL_DOMAIN} 202604r" >/dev/null || true
+fi
+
 echo
 echo "DNS records suggested by Stalwart for ${MAIL_DOMAIN}:"
 api GET "/api/dns/records/${MAIL_DOMAIN}" | jq -r '.data[] | "\(.type)\t\(.name)\t\(.content // .value // "")"'

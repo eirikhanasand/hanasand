@@ -33,8 +33,8 @@ import {
     sendMail,
     type DraftAttachment,
 } from '@/utils/mail/client'
-import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailOverview } from '@/utils/mail/types'
-import { DashboardHeader, DashboardPage, dashboardPanelClass } from '@/components/dashboard/ui'
+import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailOverview, RecentMailRecipient } from '@/utils/mail/types'
+import { DashboardPage, dashboardPanelClass } from '@/components/dashboard/ui'
 
 type Props = {
     mailboxUser?: string | null
@@ -199,14 +199,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     return (
         <DashboardPage>
-            <DashboardHeader
-                title='Mail'
-                description='One workspace for reading, triaging, and sending mail across available accounts.'
-                eyebrow='Communication'
-            />
-
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div className='flex flex-wrap items-center justify-between gap-2 rounded-[1.4rem] border border-white/8 bg-white/[0.025] px-3 py-2.5 sm:px-4'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
+                    <div className='mr-1 hidden min-w-0 sm:block'>
+                        <p className='text-[10px] uppercase tracking-[0.28em] text-bright/30'>Mail</p>
+                        <p className='truncate text-[11px] text-bright/46'>{overview?.mailboxAddress || 'Communication'}</p>
+                    </div>
                     <button
                         data-testid='mail-compose-button'
                         className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20'
@@ -234,7 +232,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                         </select>
                     )}
 
-                    <div className='relative min-w-52 flex-1 max-w-sm'>
+                    <div className='relative min-w-0 flex-1 sm:min-w-52 sm:max-w-sm'>
                         <Search className='pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-bright/30' />
                         <input
                             value={query}
@@ -265,7 +263,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
             )}
 
-            <div className={`grid gap-3 ${sidebarCompact ? 'xl:grid-cols-[80px_320px_minmax(0,1fr)]' : 'xl:grid-cols-[220px_320px_minmax(0,1fr)]'}`}>
+            <div className={`grid gap-3 ${sidebarCompact ? '2xl:grid-cols-[80px_320px_minmax(0,1fr)]' : '2xl:grid-cols-[220px_320px_minmax(0,1fr)]'} xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]`}>
                 <aside
                     className={`${dashboardPanelClass} relative overflow-hidden p-3`}
                 >
@@ -480,9 +478,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                 </aside>
 
-                <section
-                    className={`${dashboardPanelClass} p-2.5`}
-                >
+                <section className={`${dashboardPanelClass} order-3 p-2.5 xl:order-2`}>
                     <div className='flex items-center gap-2 px-1 pb-2 text-[10px] uppercase tracking-[0.24em] text-bright/30'>
                         <span>{overview?.mailboxes.find(mailbox => mailbox.id === selectedMailboxId)?.name || 'Mailbox'}</span>
                         <span className='text-bright/15'>•</span>
@@ -509,9 +505,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                 </section>
 
-                <section
-                    className={`${dashboardPanelClass} p-3`}
-                >
+                <section className={`${dashboardPanelClass} order-2 p-3 xl:order-3`}>
                     {loading && !overview && <div className='px-2 py-6 text-[12px] text-bright/42'>Loading mailbox…</div>}
                     {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 px-4 py-8 text-[12px] text-bright/42'>Choose a message to read it here.</div>}
                     {selectedMessage && overview && (
@@ -619,6 +613,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 <Composer
                     state={composer}
                     mailboxUser={overview.mailboxUser}
+                    recentRecipients={overview.recentRecipients}
                     onChange={setComposer}
                     onClose={() => setComposer(emptyComposer)}
                     onSubmit={async next => {
@@ -727,14 +722,16 @@ function MessageRow({ message, active, onClick }: {
     )
 }
 
-function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
+function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onSubmit }: {
     state: ComposerState
     mailboxUser: string
+    recentRecipients: RecentMailRecipient[]
     onChange: (state: ComposerState) => void
     onClose: () => void
     onSubmit: (state: ComposerState) => Promise<void>
 }) {
     const [submitting, setSubmitting] = useState(false)
+    const [activeRecipientField, setActiveRecipientField] = useState<'to' | 'cc' | 'bcc' | null>('to')
 
     function patch(values: Partial<ComposerState>) {
         onChange({ ...state, ...values })
@@ -744,7 +741,7 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
         <div className='fixed inset-0 z-[1400] grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
             <form
                 data-testid='mail-compose-form'
-                className='w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#0f120f]/92 p-4
+                className='w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#0f120f]/92 p-3 sm:p-4
                     shadow-[0_30px_100px_rgba(0,0,0,0.36)] backdrop-blur-2xl'
                 onSubmit={async event => {
                     event.preventDefault()
@@ -765,15 +762,37 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                 </div>
 
                 <div className='mt-3 grid gap-2'>
-                    <input data-testid='mail-compose-to' className={`${subtleInput} w-full`} placeholder='To' value={state.to} onChange={event => patch({ to: event.target.value })} />
+                        <RecipientField
+                            testId='mail-compose-to'
+                            placeholder='To'
+                            value={state.to}
+                            onChange={(value) => patch({ to: value })}
+                            onFocus={() => setActiveRecipientField('to')}
+                            onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'to' ? null : current), 120)}
+                            suggestions={activeRecipientField === 'to' ? recentRecipients : []}
+                        />
                     <div className='grid gap-2 md:grid-cols-2'>
-                        <input className={`${subtleInput} w-full`} placeholder='CC' value={state.cc} onChange={event => patch({ cc: event.target.value })} />
-                        <input className={`${subtleInput} w-full`} placeholder='BCC' value={state.bcc} onChange={event => patch({ bcc: event.target.value })} />
+                        <RecipientField
+                            placeholder='CC'
+                            value={state.cc}
+                            onChange={(value) => patch({ cc: value })}
+                            onFocus={() => setActiveRecipientField('cc')}
+                            onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'cc' ? null : current), 120)}
+                            suggestions={activeRecipientField === 'cc' ? recentRecipients : []}
+                        />
+                        <RecipientField
+                            placeholder='BCC'
+                            value={state.bcc}
+                            onChange={(value) => patch({ bcc: value })}
+                            onFocus={() => setActiveRecipientField('bcc')}
+                            onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'bcc' ? null : current), 120)}
+                            suggestions={activeRecipientField === 'bcc' ? recentRecipients : []}
+                        />
                     </div>
                     <input data-testid='mail-compose-subject' className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
                     <textarea
                         data-testid='mail-compose-body'
-                        className='min-h-[16rem] w-full rounded-[20px] border border-white/10 bg-white/[0.03] px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05]'
+                        className='min-h-[14rem] w-full rounded-[20px] border border-white/10 bg-white/[0.03] px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05] sm:min-h-[16rem]'
                         placeholder='Write your message...'
                         value={state.body}
                         onChange={event => patch({ body: event.target.value })}
@@ -829,6 +848,83 @@ function Composer({ state, mailboxUser, onChange, onClose, onSubmit }: {
                     </div>
                 </div>
             </form>
+        </div>
+    )
+}
+
+function RecipientField({
+    value,
+    onChange,
+    onFocus,
+    onBlur,
+    suggestions,
+    placeholder,
+    testId,
+}: {
+    value: string
+    onChange: (value: string) => void
+    onFocus: () => void
+    onBlur: () => void
+    suggestions: RecentMailRecipient[]
+    placeholder: string
+    testId?: string
+}) {
+    const currentToken = value.split(',').at(-1)?.trim().toLowerCase() || ''
+    const visibleSuggestions = suggestions
+        .filter(recipient => {
+            if (!currentToken) {
+                return true
+            }
+
+            const label = `${recipient.name || ''} ${recipient.email}`.toLowerCase()
+            return label.includes(currentToken)
+        })
+        .slice(0, 6)
+
+    function applySuggestion(recipient: RecentMailRecipient) {
+        const parts = value.split(',').map(part => part.trim()).filter(Boolean)
+        const label = recipient.name ? `${recipient.name} <${recipient.email}>` : recipient.email
+
+        if (value.includes(',')) {
+            parts[parts.length - 1] = label
+            onChange(`${parts.join(', ')}${parts.length ? ', ' : ''}`)
+            return
+        }
+
+        onChange(label)
+    }
+
+    return (
+        <div className='relative'>
+            <input
+                data-testid={testId}
+                className={`${subtleInput} w-full`}
+                placeholder={placeholder}
+                value={value}
+                onFocus={onFocus}
+                onBlur={onBlur}
+                onChange={event => onChange(event.target.value)}
+            />
+            {!!visibleSuggestions.length && (
+                <div className='absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 rounded-2xl border border-white/10 bg-[#101310]/96 p-1 shadow-[0_22px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl'>
+                    {visibleSuggestions.map(recipient => (
+                        <button
+                            key={recipient.email}
+                            type='button'
+                            data-testid={`mail-recipient-suggestion-${recipient.email.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                            className='flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/[0.05]'
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={() => applySuggestion(recipient)}
+                        >
+                            <div className='min-w-0'>
+                                <p className='truncate text-[12px] text-bright'>{recipient.name || recipient.email}</p>
+                                {recipient.name && <p className='truncate text-[10px] text-bright/40'>{recipient.email}</p>}
+                            </div>
+                            <span className='shrink-0 text-[10px] text-bright/28'>{formatRelativeTime(new Date(recipient.lastUsedAt).getTime())}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

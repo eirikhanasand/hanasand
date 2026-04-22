@@ -84,6 +84,13 @@ export type MailHealth = {
     checks: MailHealthCheck[]
 }
 
+export type RecentMailRecipient = {
+    email: string
+    name?: string
+    useCount: number
+    lastUsedAt: string
+}
+
 export type MailOverview = {
     actor: {
         id: string
@@ -98,6 +105,7 @@ export type MailOverview = {
     messages: MailMessageSummary[]
     selectedMessage: MailMessage | null
     filters: MailRule[]
+    recentRecipients: RecentMailRecipient[]
     health: MailHealth | null
     settings: {
         host: string

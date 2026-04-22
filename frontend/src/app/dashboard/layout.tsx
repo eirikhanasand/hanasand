@@ -17,8 +17,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }
 
     return (
-        <div className='px-6 pb-8 md:px-10 lg:px-14'>
-            <div className='grid gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start'>
+        <div className='px-3 pb-6 sm:px-5 md:px-10 md:pb-8 lg:px-14'>
+            <div className='grid gap-3 sm:gap-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start lg:gap-5'>
                 <DashboardSidebar id={id} isAdmin={isAdmin} />
                 <div className='min-w-0'>{children}</div>
             </div>

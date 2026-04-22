@@ -9,12 +9,12 @@ export default function Footer() {
     const isShare = pathname.includes('/s')
 
     return (
-        <footer className={`${isShare && 'hidden'} w-full h-fit grid place-items-center py-2 pb-8 px-8 md:px-16 lg:px-32`}>
-            <section className='w-full md:h-15 grid md:grid-cols-4 pb-8 gap-8 md:gap-0 md:py-0 place-items-center outline outline-dark rounded-lg p-2'>
+        <footer className={`${isShare && 'hidden'} w-full h-fit grid place-items-center px-3 pb-6 pt-2 sm:px-5 md:px-16 md:pb-8 lg:px-32`}>
+            <section className='w-full grid gap-3 rounded-xl outline outline-dark p-3 text-center text-sm md:h-15 md:grid-cols-4 md:gap-0 md:py-0 md:place-items-center md:text-left'>
                 <h1>© hanasand.com · 2024 - {new Date().getFullYear()}</h1>
                 <Link href='/contact'>Contact</Link>
                 <Link href='/quotes'>Quotes</Link>
-                <h1>v{config.version}</h1>
+                <h1 className='md:w-full md:text-right'>v{config.version}</h1>
             </section>
         </footer>
     )

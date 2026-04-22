@@ -45,6 +45,15 @@ test.describe('mail workspace', () => {
             await expect(subjectText(senderPage, outboundSubject)).toBeVisible({ timeout: 30_000 })
             await expect(bodyText(senderPage, outboundBody)).toBeVisible({ timeout: 30_000 })
 
+            const senderReloadedContext = await browser.newContext({ baseURL })
+            const senderReloadedPage = await senderReloadedContext.newPage()
+            await authenticateContext(senderReloadedContext, senderAuth)
+            await senderReloadedPage.goto('/dashboard/mail')
+            await composeButton(senderReloadedPage).click()
+            await toInput(senderReloadedPage).fill(recipientId.slice(0, 4))
+            await expect(senderReloadedPage.getByTestId(`mail-recipient-suggestion-${recipientId}-hanasand-com`)).toBeVisible({ timeout: 30_000 })
+            await senderReloadedContext.close()
+
             await recipientPage.bringToFront()
             await recipientPage.waitForTimeout(1000)
             await expect(subjectText(recipientPage, outboundSubject)).toBeVisible({ timeout: 45_000 })

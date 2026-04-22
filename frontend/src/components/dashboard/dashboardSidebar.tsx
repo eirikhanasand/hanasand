@@ -56,7 +56,7 @@ export default function DashboardSidebar({
     const compact = mode === 'compact'
 
     return (
-        <aside className={`dashboard-sidebar-sticky glass-panel h-fit rounded-[1.4rem] p-3 ${compact ? 'lg:w-19' : 'lg:w-62'}`}>
+        <aside className={`dashboard-sidebar-sticky glass-panel h-fit rounded-[1.4rem] p-2.5 sm:p-3 ${compact ? 'lg:w-19' : 'lg:w-62'}`}>
             <div className={`mb-3 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2'}`}>
                 {compact ? (
                     <LayoutDashboard className='h-4 w-4 text-orange-300' />
@@ -71,7 +71,7 @@ export default function DashboardSidebar({
                 )}
             </div>
 
-            <nav className='grid gap-1.5'>
+            <nav className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1 lg:gap-1.5'>
                 {items.map((item) => {
                     const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
 
@@ -80,7 +80,7 @@ export default function DashboardSidebar({
                             key={item.href}
                             href={item.href}
                             title={item.label}
-                            className={`flex min-h-11 items-center rounded-xl border px-3 transition ${
+                            className={`flex min-h-10 items-center rounded-xl border px-3 transition ${
                                 compact ? 'justify-center' : 'gap-3'
                             } ${
                                 active

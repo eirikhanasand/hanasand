@@ -33,16 +33,16 @@ export default function Menu() {
 
     if (!open) {
         return (
-            <div onClick={() => setOpen(prev => !prev)} className='grid md:hidden group rounded-lg hover:bg-[#6464641a] h-12 w-12 place-items-center cursor-pointer'>
+            <div onClick={() => setOpen(prev => !prev)} className='grid md:hidden group rounded-lg hover:bg-[#6464641a] h-11 w-11 place-items-center cursor-pointer'>
                 <MenuIcon />
             </div>
         )
     }
 
     return (
-        <div className='grid md:hidden z-105 group rounded-lg hover:bg-[#6464641a] h-12 w-12 place-items-center'>
+        <div className='grid md:hidden z-105 group rounded-lg hover:bg-[#6464641a] h-11 w-11 place-items-center'>
             <X onClick={toggleOpen} />
-            <div onClick={(e) => e.preventDefault()} className='absolute bg-bright/1 backdrop-blur-lg outline outline-dark w-fit h-fit right-8 top-20 rounded-lg z-105'>
+            <div onClick={(e) => e.preventDefault()} className='absolute right-3 top-16 z-105 h-fit w-[min(18rem,calc(100vw-1.5rem))] rounded-xl bg-bright/1 backdrop-blur-lg outline outline-dark sm:right-5 sm:top-18'>
                 <Link href='/upload' onClick={toggleOpen} className='flex pl-2 pr-5'>
                     <Upload baseStyles={baseStyles} isUpload={isUpload} />
                     <h1 className='self-center font-semibold'>Upload</h1>
