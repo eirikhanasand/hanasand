@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { chromium } from 'playwright'
+import { chromium } from '@playwright/test'
 
 const input = await readStdin()
 const payload = JSON.parse(input)

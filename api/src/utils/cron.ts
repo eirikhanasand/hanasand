@@ -3,16 +3,22 @@ import invalidateOldTokens from './auth/invalidateOldTokens.ts'
 import invalidateOldAttempts from './auth/invalidateOldAttempts.ts'
 import runSyntheticMonitor from './status/monitor.ts'
 import { provisionExistingMailAccounts } from './mail/accounts.ts'
+import { mailConfig } from './mail/config.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
         try {
-            await Promise.all([
+            const jobs = [
                 invalidateOldTokens(),
                 invalidateOldAttempts(),
                 runSyntheticMonitor(),
-                provisionExistingMailAccounts(),
-            ])
+            ]
+
+            if (mailConfig.adminPassword) {
+                jobs.push(provisionExistingMailAccounts())
+            }
+
+            await Promise.all(jobs)
         } catch (error) {
             console.error('Failed to run cleanup cron', error)
         }

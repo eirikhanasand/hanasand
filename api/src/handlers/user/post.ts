@@ -70,7 +70,11 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
 
         const userQuery = await loadSQL('assignUserRole.sql')
         await run(userQuery, [id])
-        await ensureMailAccountForUser(id, name, password)
+        if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
+            await ensureMailAccountForUser(id, name, password).catch(error => {
+                req.log.warn({ error, userId: id }, 'Failed to provision mail account during signup')
+            })
+        }
 
         const rootResult = await run(`SELECT * FROM root`)
         if (rootResult.rows.length <= 1) {

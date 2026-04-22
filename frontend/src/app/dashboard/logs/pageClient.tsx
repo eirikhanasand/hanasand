@@ -26,6 +26,7 @@ export default function LogsPageClient({
 }: LogsPageClientProps) {
     const [view, setView] = useState<'dashboard' | 'live' | 'stored'>('dashboard')
     const [serviceFilter, setServiceFilter] = useState<string>('all')
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({})
     const [storedLogs] = useState(initialStoredLogs)
     const [services] = useState(initialServices)
     const [realtime, setRealtime] = useState(initialRealtime)
@@ -80,15 +81,16 @@ export default function LogsPageClient({
     )
     const recentErrorCount = liveLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
 
+    function toggleLog(id: string | number) {
+        setExpanded((current) => ({ ...current, [String(id)]: !current[String(id)] }))
+    }
+
     return (
         <div className='grid gap-5'>
             <section className='flex flex-wrap items-start justify-between gap-4'>
                 <div className='max-w-3xl'>
                     <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Operations</p>
                     <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Logs</h1>
-                    <p className='mt-2 text-sm leading-6 text-bright/55'>
-                        Dashboard first, live runtime and host feed second, stored and searchable error records last. Runtime logs poll every few seconds so reruns, restarts, auth noise, and host-level events show up without leaving the page.
-                    </p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {[
@@ -145,7 +147,7 @@ export default function LogsPageClient({
 
             {view === 'dashboard' && (
                 <section className='grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]'>
-                    <LogFeedCard title='Live across running apps' icon={<TerminalSquare className='h-4 w-4 text-emerald-300' />} logs={liveLogs.slice(0, 14)} empty='No runtime logs available yet.' />
+                    <LogFeedCard title='Live across running apps' icon={<TerminalSquare className='h-4 w-4 text-emerald-300' />} logs={liveLogs.slice(0, 14)} empty='No runtime logs available yet.' expanded={expanded} onToggle={toggleLog} />
                     <section className='grid gap-4'>
                         <div className='glass-card rounded-[1.4rem] p-5'>
                             <h2 className='text-sm font-semibold text-bright'>Most active stored services</h2>
@@ -161,17 +163,17 @@ export default function LogsPageClient({
                                 ))}
                             </div>
                         </div>
-                        <LogFeedCard title='Stored + native errors' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs.slice(0, 8)} empty='No stored logs found.' />
+                        <LogFeedCard title='Stored + native errors' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs.slice(0, 8)} empty='No stored logs found.' expanded={expanded} onToggle={toggleLog} />
                     </section>
                 </section>
             )}
 
             {view === 'live' && (
-                <LogFeedCard title='Realtime runtime feed' icon={<TerminalSquare className='h-4 w-4 text-emerald-300' />} logs={liveLogs} empty='No runtime logs available yet.' tall />
+                <LogFeedCard title='Realtime runtime feed' icon={<TerminalSquare className='h-4 w-4 text-emerald-300' />} logs={liveLogs} empty='No runtime logs available yet.' tall expanded={expanded} onToggle={toggleLog} />
             )}
 
             {view === 'stored' && (
-                <LogFeedCard title='Stored and searchable error records' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs} empty='No stored logs found.' tall />
+                <LogFeedCard title='Stored and searchable error records' icon={<Database className='h-4 w-4 text-orange-300' />} logs={storedLogs} empty='No stored logs found.' tall expanded={expanded} onToggle={toggleLog} />
             )}
         </div>
     )
@@ -196,12 +198,16 @@ function LogFeedCard({
     logs,
     empty,
     tall = false,
+    expanded,
+    onToggle,
 }: {
     title: string
     icon: React.ReactNode
     logs: Array<ServiceLog | RuntimeLog>
     empty: string
     tall?: boolean
+    expanded: Record<string, boolean>
+    onToggle: (id: string | number) => void
 }) {
     return (
         <section className='glass-card rounded-[1.4rem] p-5'>
@@ -210,40 +216,55 @@ function LogFeedCard({
                 <h2 className='font-semibold'>{title}</h2>
             </div>
             <div className={`grid gap-3 ${tall ? '' : 'max-h-168 overflow-auto'}`}>
-                {logs.map((log) => (
-                    <article key={log.id} className='min-w-0 rounded-2xl bg-black/22 p-4'>
-                        <div className='flex flex-wrap items-start justify-between gap-3'>
-                            <div className='min-w-0 flex-1'>
-                                <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>
-                                    {log.service}
-                                    {'host' in log && log.host ? ` · ${log.host}` : ''}
-                                    {'source' in log && log.source ? ` · ${log.source}` : ''}
-                                </p>
-                                <h3 className='mt-2 wrap-break-word text-sm font-semibold text-bright'>{log.message}</h3>
+                {logs.map((log) => {
+                    const key = String(log.id)
+                    const isOpen = expanded[key] ?? true
+                    const hasMetadata = 'metadata' in log && Object.keys(log.metadata || {}).length > 0
+
+                    return (
+                        <article key={log.id} className='min-w-0 rounded-2xl bg-black/22 p-4'>
+                            <div className='flex flex-wrap items-start justify-between gap-3'>
+                                <button
+                                    type='button'
+                                    onClick={() => onToggle(log.id)}
+                                    className='min-w-0 flex-1 text-left'
+                                >
+                                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>
+                                        {log.service}
+                                        {'host' in log && log.host ? ` · ${log.host}` : ''}
+                                        {'source' in log && log.source ? ` · ${log.source}` : ''}
+                                    </p>
+                                    <pre className='mt-2 whitespace-pre-wrap wrap-break-word text-sm font-semibold text-bright'>{log.message}</pre>
+                                    {hasMetadata && (
+                                        <p className='mt-2 text-xs text-bright/42'>
+                                            Click for request context and raw details.
+                                        </p>
+                                    )}
+                                </button>
+                                <span className={`rounded-full px-2.5 py-1 text-[0.7rem] font-semibold ${
+                                    log.level === 'error' || log.level === 'fatal'
+                                        ? 'bg-red-500/16 text-red-100'
+                                        : log.level === 'warn'
+                                            ? 'bg-amber-500/16 text-amber-100'
+                                            : 'bg-white/10 text-bright/70'
+                                }`}>
+                                    {log.level}
+                                </span>
                             </div>
-                            <span className={`rounded-full px-2.5 py-1 text-[0.7rem] font-semibold ${
-                                log.level === 'error' || log.level === 'fatal'
-                                    ? 'bg-red-500/16 text-red-100'
-                                    : log.level === 'warn'
-                                        ? 'bg-amber-500/16 text-amber-100'
-                                        : 'bg-white/10 text-bright/70'
-                            }`}>
-                                {log.level}
-                            </span>
-                        </div>
-                        <p className='mt-3 text-xs text-bright/35'>{when(log.created_at)}</p>
-                        {'metadata' in log && Object.keys(log.metadata || {}).length > 0 && (
-                            <details className='mt-4 rounded-2xl bg-black/28'>
-                                <summary className='cursor-pointer px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-bright/45'>
-                                    Request context
-                                </summary>
-                                <pre className='max-w-full overflow-auto whitespace-pre-wrap wrap-break-word border-t border-white/8 p-4 text-xs text-bright/55'>
-                                    {JSON.stringify(log.metadata, null, 2)}
-                                </pre>
-                            </details>
-                        )}
-                    </article>
-                ))}
+                            <p className='mt-3 text-xs text-bright/35'>{when(log.created_at)}</p>
+                            {isOpen && hasMetadata && (
+                                <div className='mt-4 rounded-2xl bg-black/28'>
+                                    <div className='border-b border-white/8 px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-bright/45'>
+                                        Request context
+                                    </div>
+                                    <pre className='max-w-full overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs text-bright/55'>
+                                        {JSON.stringify(log.metadata, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+                        </article>
+                    )
+                })}
                 {!logs.length && (
                     <div className='grid min-h-48 place-content-center rounded-2xl border border-dashed border-white/10 text-center text-bright/45'>
                         {empty}

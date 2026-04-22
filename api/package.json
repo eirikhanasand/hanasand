@@ -1,12 +1,15 @@
 {
   "name": "hanasand-api",
-  "version": "1.4.0",
+  "version": "1.6.4",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "start": "bun src/index.ts",
+    "start:local": "PORT=${PORT:-8080} bun src/index.ts",
     "audit": "bun scripts/audit-hanasand-api.mjs",
-    "monitor": "bun scripts/monitor-auth-and-services.mjs"
+    "monitor": "bun scripts/monitor-auth-and-services.mjs",
+    "smoke:local": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} FRONTEND_BASE=${FRONTEND_BASE:-http://127.0.0.1:3000} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-dashboard-runtime.mjs",
+    "smoke:docker": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} FRONTEND_BASE=${FRONTEND_BASE:-http://127.0.0.1:3000} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-dashboard-runtime.mjs"
   },
   "author": "",
   "license": "ISC",
@@ -17,19 +20,20 @@
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
+    "fastify-plugin": "^5.1.0",
     "gray-matter": "^4.0.3",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.10",
+    "nodemailer": "^8.0.5",
     "pg": "^8.20.0",
     "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "@types/nodemailer": "^7.0.3",
+    "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "imports": {
     "#utils/*": "./src/utils/*",

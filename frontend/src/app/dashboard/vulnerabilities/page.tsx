@@ -1,3 +1,4 @@
+import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import PageClient from './pageClient'
 import { refreshVulnerabilityData, runVulnerabilityScanAction } from './actions'
 import { getVulnerabilities } from '@/utils/monitoring/data'
@@ -15,13 +16,18 @@ export default async function Page({
     const data = await getVulnerabilities()
 
     return (
-        <div className='px-8 py-4 md:px-16 lg:px-32'>
+        <DashboardPage>
+            <DashboardHeader
+                title='Vulnerabilities'
+                eyebrow='Security'
+                description='Docker Scout findings across the running image set.'
+            />
             <PageClient
                 initialData={data}
                 initialQuery={query}
                 refreshAction={refreshVulnerabilityData}
                 runScanAction={runVulnerabilityScanAction}
             />
-        </div>
+        </DashboardPage>
     )
 }

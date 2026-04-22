@@ -35,6 +35,7 @@ import {
 } from '@/utils/mail/client'
 import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailOverview, RecentMailRecipient } from '@/utils/mail/types'
 import { DashboardPage, dashboardPanelClass } from '@/components/dashboard/ui'
+import Image from 'next/image'
 
 type Props = {
     mailboxUser?: string | null
@@ -199,7 +200,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
 
     return (
         <DashboardPage>
-            <div className='flex flex-wrap items-center justify-between gap-2 rounded-[1.4rem] border border-white/8 bg-white/[0.025] px-3 py-2.5 sm:px-4'>
+            <div className='flex flex-wrap items-center justify-between gap-2 rounded-[1.4rem] border border-white/8 bg-white/2.5 px-3 py-2.5 sm:px-4'>
                 <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                     <div className='mr-1 hidden min-w-0 sm:block'>
                         <p className='text-[10px] uppercase tracking-[0.28em] text-bright/30'>Mail</p>
@@ -305,7 +306,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     className={`flex w-full items-center justify-between rounded-2xl border px-2.5 py-2 text-left text-[12px] transition ${
                                         selectedMailboxId === mailbox.id
                                             ? 'border-orange-300/30 bg-orange-300/10 text-bright'
-                                            : 'border-transparent text-bright/70 hover:border-white/10 hover:bg-white/[0.04] hover:text-bright'
+                                            : 'border-transparent text-bright/70 hover:border-white/10 hover:bg-white/4 hover:text-bright'
                                     }`}
                                     title={mailbox.name}
                                 >
@@ -318,7 +319,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             ))}
                         </div>
 
-                        <details className={`mt-3 rounded-2xl border border-white/8 bg-white/[0.025] ${sidebarCompact ? 'hidden' : ''}`}>
+                        <details className={`mt-3 rounded-2xl border border-white/8 bg-white/2.5 ${sidebarCompact ? 'hidden' : ''}`}>
                             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
                                 <span className='inline-flex items-center gap-1.5'><FolderInput className='h-3.5 w-3.5' /> Rules</span>
                                 <span className='text-bright/28'>{overview?.filters.length || 0}</span>
@@ -407,7 +408,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
                         </details>
 
-                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/[0.025] ${sidebarCompact ? 'hidden' : ''}`}>
+                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/2.5 ${sidebarCompact ? 'hidden' : ''}`}>
                             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
                                 <span className='inline-flex items-center gap-1.5'><ShieldCheck className='h-3.5 w-3.5' /> Mail health</span>
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] ${
@@ -439,7 +440,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                 className='min-w-0 rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'
                                             >
                                                 <div className='flex items-center justify-between gap-2'>
-                                                    <p className='min-w-0 text-[11px] font-medium text-bright/84 break-words'>{check.label}</p>
+                                                    <p className='min-w-0 text-[11px] font-medium text-bright/84 wrap-break-word'>{check.label}</p>
                                                     <span className={`rounded-full px-2 py-0.5 text-[10px] ${
                                                         check.status === 'healthy'
                                                             ? 'bg-emerald-500/12 text-emerald-100'
@@ -451,7 +452,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                         {check.status}
                                                     </span>
                                                 </div>
-                                                <p className='mt-1 break-words text-[10px] leading-4 text-bright/42'>{check.detail}</p>
+                                                <p className='mt-1 wrap-break-word text-[10px] leading-4 text-bright/42'>{check.detail}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -459,7 +460,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             )}
                         </details>
 
-                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/[0.025] ${sidebarCompact ? 'hidden' : ''}`}>
+                        <details className={`mt-2 rounded-2xl border border-white/8 bg-white/2.5 ${sidebarCompact ? 'hidden' : ''}`}>
                             <summary className='flex cursor-pointer list-none items-center justify-between px-3 py-2 text-[11px] font-medium text-bright/68'>
                                 <span className='inline-flex items-center gap-1.5'><Settings2 className='h-3.5 w-3.5' /> Client access</span>
                                 <span className='text-bright/28'>IMAP</span>
@@ -582,7 +583,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             </div>
 
                             {!!selectedMessage.attachments.length && (
-                                <div className='rounded-2xl border border-white/10 bg-white/[0.03] p-3'>
+                                <div className='rounded-2xl border border-white/10 bg-white/3 p-3'>
                                     <div className='mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-bright/34'>Attachments</div>
                                     <div className='grid gap-2 lg:grid-cols-2'>
                                         {selectedMessage.attachments.map(attachment => (
@@ -595,12 +596,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             {selectedMessage.htmlBody ? (
                                 <iframe
                                     title='HTML mail'
-                                    className='min-h-[32rem] w-full rounded-2xl border border-white/10 bg-[#0d100d]'
+                                    className='min-h-128 w-full rounded-2xl border border-white/10 bg-[#0d100d]'
                                     sandbox='allow-popups allow-popups-to-escape-sandbox'
                                     srcDoc={renderedHtml}
                                 />
                             ) : (
-                                <article className='min-h-[32rem] rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-bright/82'>
+                                <article className='min-h-128 rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-[13px] leading-6 whitespace-pre-wrap text-bright/82'>
                                     {selectedMessage.textBody}
                                 </article>
                             )}
@@ -641,8 +642,8 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 />
             )}
             {mailboxModalOpen && overview && (
-                <div className='fixed inset-0 z-[1300] grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
-                    <div className='w-full max-w-md rounded-[24px] border border-white/10 bg-[#0f120f] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)]'>
+                <div className='fixed inset-0 z-1300 grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
+                    <div className='w-full max-w-md rounded-3xl border border-white/10 bg-[#0f120f] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.32)]'>
                         <div className='flex items-center justify-between gap-3'>
                             <div>
                                 <p className='text-[10px] uppercase tracking-[0.28em] text-bright/35'>Mailbox</p>
@@ -657,7 +658,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                 value={mailboxDraft}
                                 onChange={(event) => setMailboxDraft(event.target.value)}
                                 placeholder='Projects, Receipts, Alerts...'
-                                className='rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-bright outline-none placeholder:text-bright/28'
+                                className='rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-sm text-bright outline-none placeholder:text-bright/28'
                             />
                             <div className='flex justify-end gap-2'>
                                 <button className={toolbarButton} onClick={() => { setMailboxModalOpen(false); setMailboxDraft('') }}>
@@ -696,6 +697,8 @@ function MessageRow({ message, active, onClick }: {
     active: boolean
     onClick: () => void
 }) {
+    const senderLine = message.from.map(from => from.name || from.email).join(', ')
+
     return (
         <button
             data-testid={`mail-message-${message.id}`}
@@ -703,20 +706,25 @@ function MessageRow({ message, active, onClick }: {
             className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
                 active
                     ? 'border-orange-300/30 bg-orange-300/10'
-                    : 'border-transparent bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]'
+                    : 'border-transparent bg-white/2 hover:border-white/10 hover:bg-white/4'
             }`}
         >
-            <div className='flex items-center justify-between gap-2'>
-                <div className='flex min-w-0 items-center gap-2'>
-                    {!message.isRead && <span className='h-1.5 w-1.5 rounded-full bg-orange-300' />}
-                    <p className='truncate text-[12px] font-medium text-bright'>{message.subject}</p>
+            <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0 flex-1'>
+                    <div className='flex min-w-0 items-center gap-2'>
+                        {!message.isRead && <span className='h-1.5 w-1.5 rounded-full bg-orange-300' />}
+                        <p className='truncate text-[12px] font-medium text-bright'>{message.subject}</p>
+                    </div>
+                    <div className='mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-bright/44'>
+                        <span className='truncate'>{senderLine}</span>
+                        {message.preview ? <span className='shrink-0 text-bright/24'>•</span> : null}
+                        {message.preview ? <span className='truncate text-bright/54'>{message.preview}</span> : null}
+                    </div>
                 </div>
-                <span className='shrink-0 text-[10px] text-bright/32'>{formatDate(message.receivedAt)}</span>
-            </div>
-            <p className='mt-1 truncate text-[11px] text-bright/44'>{message.from.map(from => from.name || from.email).join(', ')}</p>
-            <div className='mt-1 flex items-center justify-between gap-2'>
-                <p className='line-clamp-2 text-[11px] leading-5 text-bright/54'>{message.preview}</p>
-                {message.hasAttachment && <Paperclip className='h-3.5 w-3.5 shrink-0 text-bright/34' />}
+                <div className='flex shrink-0 items-center gap-2 pt-0.5'>
+                    {message.hasAttachment && <Paperclip className='h-3.5 w-3.5 text-bright/34' />}
+                    <span className='text-[10px] text-bright/32'>{formatDate(message.receivedAt)}</span>
+                </div>
             </div>
         </button>
     )
@@ -738,7 +746,7 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
     }
 
     return (
-        <div className='fixed inset-0 z-[1400] grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
+        <div className='fixed inset-0 z-1400 grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
             <form
                 data-testid='mail-compose-form'
                 className='w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#0f120f]/92 p-3 sm:p-4
@@ -762,15 +770,15 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
                 </div>
 
                 <div className='mt-3 grid gap-2'>
-                        <RecipientField
-                            testId='mail-compose-to'
-                            placeholder='To'
-                            value={state.to}
-                            onChange={(value) => patch({ to: value })}
-                            onFocus={() => setActiveRecipientField('to')}
-                            onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'to' ? null : current), 120)}
-                            suggestions={activeRecipientField === 'to' ? recentRecipients : []}
-                        />
+                    <RecipientField
+                        testId='mail-compose-to'
+                        placeholder='To'
+                        value={state.to}
+                        onChange={(value) => patch({ to: value })}
+                        onFocus={() => setActiveRecipientField('to')}
+                        onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'to' ? null : current), 120)}
+                        suggestions={activeRecipientField === 'to' ? recentRecipients : []}
+                    />
                     <div className='grid gap-2 md:grid-cols-2'>
                         <RecipientField
                             placeholder='CC'
@@ -792,13 +800,13 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
                     <input data-testid='mail-compose-subject' className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
                     <textarea
                         data-testid='mail-compose-body'
-                        className='min-h-[14rem] w-full rounded-[20px] border border-white/10 bg-white/[0.03] px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05] sm:min-h-[16rem]'
+                        className='min-h-56 w-full rounded-[20px] border border-white/10 bg-white/3 px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/5 sm:min-h-64'
                         placeholder='Write your message...'
                         value={state.body}
                         onChange={event => patch({ body: event.target.value })}
                     />
 
-                    <label className='inline-flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-3 py-2 text-[11px] text-bright/56 hover:bg-white/[0.04]'>
+                    <label className='inline-flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/2 px-3 py-2 text-[11px] text-bright/56 hover:bg-white/4'>
                         <Paperclip className='h-3.5 w-3.5' />
                         Add attachments
                         <input
@@ -817,7 +825,7 @@ function Composer({ state, mailboxUser, recentRecipients, onChange, onClose, onS
                     {!!state.attachments.length && (
                         <div className='grid gap-2 md:grid-cols-2'>
                             {state.attachments.map((attachment, index) => (
-                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2'>
+                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/3 px-3 py-2'>
                                     <div className='flex items-start justify-between gap-3'>
                                         <div className='min-w-0'>
                                             <p className='truncate text-[12px] font-medium text-bright'>{attachment.name}</p>
@@ -912,7 +920,7 @@ function RecipientField({
                             key={recipient.email}
                             type='button'
                             data-testid={`mail-recipient-suggestion-${recipient.email.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                            className='flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/[0.05]'
+                            className='flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/5'
                             onMouseDown={event => event.preventDefault()}
                             onClick={() => applySuggestion(recipient)}
                         >
@@ -1082,8 +1090,8 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
     const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
     if (attachment.type.startsWith('image/')) {
         return (
-            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 transition hover:bg-white/[0.05]'>
-                <img src={url} alt={attachment.name} className='h-36 w-full rounded-xl object-cover' />
+            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-2.5 transition hover:bg-white/5'>
+                <Image src={url} alt={attachment.name} className='h-36 w-full rounded-xl object-cover' />
                 <p className='mt-2 truncate text-[11px] font-medium text-bright'>{attachment.name}</p>
             </a>
         )
@@ -1091,7 +1099,7 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
 
     if (attachment.type === 'application/pdf') {
         return (
-            <div className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5'>
+            <div className='rounded-2xl border border-white/10 bg-white/3 p-2.5'>
                 <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-[#0d100d]' />
                 <a href={url} target='_blank' rel='noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-bright'>
                     {attachment.name}
@@ -1102,7 +1110,7 @@ function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttach
     }
 
     return (
-        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 text-[11px] text-bright/62 transition hover:bg-white/[0.05]'>
+        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-2.5 text-[11px] text-bright/62 transition hover:bg-white/5'>
             <p className='truncate font-medium text-bright'>{attachment.name}</p>
             <p className='mt-1 text-[10px] text-bright/36'>{attachment.type} • {prettyBytes(attachment.size)}</p>
         </a>

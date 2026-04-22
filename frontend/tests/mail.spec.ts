@@ -21,8 +21,8 @@ test.describe('mail workspace', () => {
         const recipientPage = await recipientContext.newPage()
 
         try {
-            await authenticateContext(senderContext, senderAuth)
-            await authenticateContext(recipientContext, recipientAuth)
+            await authenticateContext(senderContext, senderAuth, baseURL || 'http://127.0.0.1:3000')
+            await authenticateContext(recipientContext, recipientAuth, baseURL || 'http://127.0.0.1:3000')
 
             await senderPage.goto('/dashboard/mail')
             await recipientPage.goto('/dashboard/mail')
@@ -47,7 +47,7 @@ test.describe('mail workspace', () => {
 
             const senderReloadedContext = await browser.newContext({ baseURL })
             const senderReloadedPage = await senderReloadedContext.newPage()
-            await authenticateContext(senderReloadedContext, senderAuth)
+            await authenticateContext(senderReloadedContext, senderAuth, baseURL || 'http://127.0.0.1:3000')
             await senderReloadedPage.goto('/dashboard/mail')
             await composeButton(senderReloadedPage).click()
             await toInput(senderReloadedPage).fill(recipientId.slice(0, 4))
@@ -122,14 +122,15 @@ async function authenticateContext(context: BrowserContext, auth: {
     token: string
     expires_at: string
     roles?: string[]
-}) {
+}, baseURL: string) {
     const expires = Math.floor(new Date(auth.expires_at).getTime() / 1000)
-    const cookieUrl = 'https://hanasand.com'
+    const cookieUrl = new URL(baseURL).origin
+    const secure = cookieUrl.startsWith('https://')
     await context.addCookies([
-        { name: 'id', value: encodeURIComponent(auth.id), url: cookieUrl, expires, httpOnly: false, secure: true, sameSite: 'Lax' },
-        { name: 'name', value: encodeURIComponent(auth.name), url: cookieUrl, expires, httpOnly: false, secure: true, sameSite: 'Lax' },
-        { name: 'access_token', value: encodeURIComponent(auth.token), url: cookieUrl, expires, httpOnly: false, secure: true, sameSite: 'Lax' },
-        { name: 'roles', value: encodeURIComponent(JSON.stringify(auth.roles || [])), url: cookieUrl, expires, httpOnly: false, secure: true, sameSite: 'Lax' },
+        { name: 'id', value: encodeURIComponent(auth.id), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
+        { name: 'name', value: encodeURIComponent(auth.name), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
+        { name: 'access_token', value: encodeURIComponent(auth.token), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
+        { name: 'roles', value: encodeURIComponent(JSON.stringify(auth.roles || [])), url: cookieUrl, expires, httpOnly: false, secure, sameSite: 'Lax' },
     ])
 }
 

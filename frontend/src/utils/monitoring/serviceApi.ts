@@ -11,7 +11,9 @@ function getBaseUrl(service: ServiceName) {
 
 export async function requestService<T>(service: ServiceName, path: string, init?: RequestInit): Promise<T | string> {
     const cookieStore = await cookies()
-    const token = cookieStore.get('access_token')?.value || ''
+    const rawToken = cookieStore.get('access_token')?.value || ''
+    const token = rawToken ? safeDecode(rawToken) : ''
+    const id = cookieStore.get('id')?.value || ''
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)
@@ -21,7 +23,8 @@ export async function requestService<T>(service: ServiceName, path: string, init
             ...init,
             headers: {
                 ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-                Authorization: `Bearer ${token}`,
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...(id ? { id } : {}),
                 ...(init?.headers || {}),
             },
             cache: 'no-store',
@@ -43,5 +46,13 @@ export async function requestService<T>(service: ServiceName, path: string, init
     } catch (error) {
         clearTimeout(timeout)
         return error instanceof Error ? `Error: ${error.message}` : 'Error: Unknown error'
+    }
+}
+
+function safeDecode(value: string) {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
     }
 }

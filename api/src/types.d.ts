@@ -125,6 +125,16 @@ type GPT_PromptRequest = {
     temperature?: number
 }
 
+type AIArtifact = {
+    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link'
+    title: string
+    path?: string | null
+    url?: string | null
+    content?: string | null
+    language?: string | null
+    dataUrl?: string | null
+}
+
 type AIImportedRepoFile = {
     path: string
     name: string

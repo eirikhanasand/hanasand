@@ -51,13 +51,17 @@ process.on('unhandledRejection', reason => {
 async function start() {
     try {
         await ensureSchema()
-        await provisionExistingMailAccounts().catch(error => {
-            fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
-        })
+        if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
+            await provisionExistingMailAccounts().catch(error => {
+                fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
+            })
+        }
         await fastify.listen({ port, host: '0.0.0.0' })
-        void ensureRepositoryUpToDate().catch(error => {
-            fastify.log.warn({ error }, 'Failed to warm articles repository')
-        })
+        if (process.env.SKIP_REPOSITORY_SYNC !== '1') {
+            void ensureRepositoryUpToDate().catch(error => {
+                fastify.log.warn({ error }, 'Failed to warm articles repository')
+            })
+        }
     } catch (error) {
         fastify.log.error(error)
         process.exit(1)

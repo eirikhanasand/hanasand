@@ -25,7 +25,6 @@ export function DashboardPage({ children, className = '' }: DashboardPageProps) 
 
 export function DashboardHeader({
     title,
-    description,
     eyebrow = 'Dashboard',
     actions,
 }: DashboardHeaderProps) {
@@ -35,7 +34,6 @@ export function DashboardHeader({
                 <div className='min-w-0'>
                     <p className='text-[11px] uppercase tracking-[0.28em] text-bright/35'>{eyebrow}</p>
                     <h1 className='mt-1.5 text-[1.35rem] font-semibold tracking-[-0.04em] text-bright sm:text-2xl md:text-3xl'>{title}</h1>
-                    {description && <p className='mt-1.5 max-w-3xl text-[13px] leading-6 text-bright/52 sm:text-sm'>{description}</p>}
                 </div>
                 {actions && <div className='shrink-0'>{actions}</div>}
             </div>

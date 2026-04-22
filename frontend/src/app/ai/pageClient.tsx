@@ -14,11 +14,13 @@ export default function AIPageClient({
     initialRepositories,
     initialShares,
     isAuthenticated,
+    compact = false,
 }: {
     initialConversations: AIConversation[]
     initialRepositories: AIImportedRepo[]
     initialShares: Share[]
     isAuthenticated: boolean
+    compact?: boolean
 }) {
     const ai = useAiWorkbench({
         initialConversations,
@@ -29,9 +31,9 @@ export default function AIPageClient({
     const [activeTool, setActiveTool] = useState<'search' | 'workspace' | 'models' | null>(null)
 
     return (
-        <div className='h-[calc(100vh-4.5rem)] w-full overflow-hidden'>
-            <div className='flex h-full flex-col px-4 pb-4 pt-4 md:px-6 lg:px-8'>
-                <div className='mb-3 flex shrink-0 items-center justify-between rounded-2xl bg-dark/35 px-4 py-3 outline outline-dark'>
+        <div className={`${compact ? 'h-screen' : 'h-[calc(100vh-4.5rem)]'} w-full overflow-hidden`}>
+            <div className={`flex h-full flex-col ${compact ? 'px-3 pb-3 pt-3' : 'px-4 pb-4 pt-4 md:px-6 lg:px-8'}`}>
+                {!compact ? <div className='mb-3 flex shrink-0 items-center justify-between rounded-2xl bg-dark/35 px-4 py-3 outline outline-dark'>
                     <div className='flex min-w-0 items-center gap-3'>
                         <div className='rounded-xl bg-[#fd8738]/12 p-2.5 text-[#fd8738] outline outline-[#fd8738]/20'>
                             <Bot className='h-4 w-4' />
@@ -41,14 +43,20 @@ export default function AIPageClient({
                             <h1 className='mt-1 text-lg font-semibold text-bright/92'>Coding workspace</h1>
                         </div>
                     </div>
-                    <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-xl bg-dark/30 px-3 py-2 text-sm text-bright/70 outline outline-dark transition-colors hover:text-[#fd8738]'>
-                        Full editor
-                        <ChevronRight className='h-4 w-4' />
-                    </Link>
-                </div>
+                    <div className='flex items-center gap-2'>
+                        <Link href='/ai/window' target='_blank' className='inline-flex items-center gap-2 rounded-xl bg-dark/30 px-3 py-2 text-sm text-bright/70 outline outline-dark transition-colors hover:text-[#fd8738]'>
+                            Local window
+                            <ChevronRight className='h-4 w-4' />
+                        </Link>
+                        <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-xl bg-dark/30 px-3 py-2 text-sm text-bright/70 outline outline-dark transition-colors hover:text-[#fd8738]'>
+                            Full editor
+                            <ChevronRight className='h-4 w-4' />
+                        </Link>
+                    </div>
+                </div> : null}
 
-                <div className='grid min-h-0 flex-1 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]'>
-                    <ChatSidebar
+                <div className={`grid min-h-0 flex-1 gap-4 ${compact ? 'grid-cols-1' : 'xl:grid-cols-[18rem_minmax(0,1fr)]'}`}>
+                    {!compact ? <ChatSidebar
                         activeConversationId={ai.activeConversationId}
                         archivedConversations={ai.archivedConversations}
                         conversations={ai.filteredConversations}
@@ -88,17 +96,21 @@ export default function AIPageClient({
                                 importPending={ai.importPending}
                                 initialShares={ai.initialShares}
                                 syncingRepoId={ai.syncingRepoId}
+                                activeShareTree={ai.activeShareTree}
                                 selectedRepoFilePath={ai.selectedRepoFilePath}
+                                selectedShareFileContent={ai.selectedShareFileContent}
                                 selectedShareContent={ai.selectedShareContent}
                                 onAttachRepo={ai.attachRepo}
                                 onAttachShare={ai.attachShare}
                                 onImportInputChange={ai.setImportInput}
                                 onImportRepo={ai.importRepo}
                                 onRefreshRepo={ai.refreshRepo}
+                                onScaffoldStarter={ai.scaffoldStarter}
                                 onSelectRepoFile={ai.selectRepoFile}
+                                onSelectShareFile={ai.selectShareFile}
                             />
                         )}
-                    />
+                    /> : null}
                     <ChatPane
                         activeConversation={ai.activeConversation}
                         clients={ai.clients}
@@ -115,7 +127,7 @@ export default function AIPageClient({
                         {ai.statusNotice}
                     </div>
                 ) : null}
-                {!ai.filteredConversations.length && !ai.archivedConversations.length ? (
+                {!compact && !ai.filteredConversations.length && !ai.archivedConversations.length ? (
                     <div className='mt-4 rounded-3xl bg-dark/35 p-5 outline outline-dark'>
                         <div className='flex flex-wrap items-start gap-4'>
                             <div className='max-w-4xl'>

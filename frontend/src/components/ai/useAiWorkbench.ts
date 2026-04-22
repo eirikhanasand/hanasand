@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
+import randomId from '@/utils/random/randomId'
 import { getShare } from '@/utils/share/get'
 import { getTree } from '@/utils/share/getTree'
 import { updateShare } from '@/utils/share/put'
+import postVM from '@/utils/vms/fetch/postVM'
 import defaultModelMetrics from '@/components/gpt/defaultModelMetrics'
 import normalizeClient from '@/components/gpt/normalizeClient'
 import { aiClientRequest } from '@/utils/ai/client'
 import { importRepositoryToShare } from '@/utils/ai/importRepositoryToShare'
+import { scaffoldNextjsDockerWorkspace } from '@/utils/ai/scaffoldWorkspace'
 import { syncRepositoryToShare } from '@/utils/ai/syncRepositoryToShare'
 import { importGitHubRepository } from './github'
 import { findTreeFileId, listTreePaths } from './shareTree'
@@ -19,6 +22,21 @@ type UseAiWorkbenchProps = {
     initialRepositories: AIImportedRepo[]
     initialShares: Share[]
     isAuthenticated: boolean
+}
+
+type AiToolCall = {
+    action: 'read_share' | 'update_share' | 'http_request' | 'scaffold_nextjs_docker' | 'create_vm' | 'create_project' | 'run_terminal_command'
+    shareId?: string
+    path?: string
+    content?: string
+    url?: string
+    method?: string
+    headers?: Record<string, string>
+    body?: string
+    projectName?: string
+    vmName?: string
+    command?: string
+    timeoutMs?: number
 }
 
 export default function useAiWorkbench({
@@ -197,9 +215,91 @@ export default function useAiWorkbench({
     const selectedRepoFilePath = typeof activeConversation?.workspaceMeta?.selectedFilePath === 'string'
         ? activeConversation.workspaceMeta.selectedFilePath
         : null
-    const selectedShareContent = activeConversation?.workspaceId
-        ? shareContents[activeConversation.workspaceId] || null
+    const activeWorkspaceId = activeConversation?.workspaceId || null
+    const activeShareTree = activeWorkspaceId ? shareTrees[activeWorkspaceId] || null : null
+    const selectedShareFileContent = activeWorkspaceId && selectedRepoFilePath
+        ? shareFileContents[`${activeWorkspaceId}:${selectedRepoFilePath}`] || null
         : null
+    const selectedShareContent = activeWorkspaceId
+        ? shareContents[activeWorkspaceId] || null
+        : null
+
+    async function runTerminalCommandOnShare(shareId: string, command: string, timeoutMs = 20000) {
+        const share = shares.find((entry) => entry.id === shareId)
+        if (!share?.alias) {
+            return {
+                ok: false,
+                output: `Share ${shareId} is not available for terminal access yet.`,
+            }
+        }
+
+        const session = randomId(6)
+        const userId = getCookie('id') || 'default'
+
+        return await new Promise<{ ok: boolean, output: string }>((resolve) => {
+            const ws = new WebSocket(`${config.url.cdn_wss}/share/${share.alias}/shell/${userId}/${session}`)
+            const chunks: string[] = []
+            let settled = false
+            let inactivityTimer: number | null = null
+            const hardTimeout: number = window.setTimeout(
+                () => finish(false, `Timed out after ${timeoutMs}ms.\n\n${chunks.join('')}`),
+                timeoutMs
+            )
+
+            function clearTimers() {
+                clearTimeout(hardTimeout)
+                if (inactivityTimer) {
+                    clearTimeout(inactivityTimer)
+                }
+            }
+
+            function finish(ok: boolean, output: string) {
+                if (settled) {
+                    return
+                }
+
+                settled = true
+                clearTimers()
+                try {
+                    ws.close()
+                } catch {}
+                resolve({ ok, output: output.trim() || '<no output>' })
+            }
+
+            function armInactivityTimer() {
+                if (inactivityTimer) {
+                    clearTimeout(inactivityTimer)
+                }
+                inactivityTimer = window.setTimeout(() => {
+                    finish(true, chunks.join(''))
+                }, 1200)
+            }
+
+            ws.onerror = () => finish(false, `Unable to connect to the terminal for share ${share.alias}.`)
+            ws.onclose = () => {
+                if (!settled) {
+                    finish(true, chunks.join(''))
+                }
+            }
+            ws.onopen = () => {
+                ws.send(JSON.stringify({
+                    type: 'terminalInput',
+                    content: `${command}${command.endsWith('\n') ? '' : '\n'}`,
+                }))
+                armInactivityTimer()
+            }
+            ws.onmessage = async (event) => {
+                try {
+                    const raw = event.data instanceof Blob ? await event.data.text() : String(event.data)
+                    const payload = JSON.parse(raw) as { type?: string, content?: string }
+                    if (payload.type === 'update' && typeof payload.content === 'string') {
+                        chunks.push(payload.content)
+                        armInactivityTimer()
+                    }
+                } catch {}
+            }
+        })
+    }
 
     useEffect(() => {
         hydrateShareRef.current = async (shareId: string) => {
@@ -428,14 +528,29 @@ export default function useAiWorkbench({
         }
 
         const nextShareIds = Array.from(new Set([shareId, ...(activeConversation.shareIds || [])]))
+        const share = await hydrateShareRef.current(shareId)
+        const token = getCookie('access_token') || undefined
+        const userId = getCookie('id') || undefined
+        const tree = shareTrees[shareId] || await getTree({ id: shareId, token, userId })
+        if (tree) {
+            setShareTrees((prev) => ({ ...prev, [shareId]: tree }))
+        }
+        const treePaths = listTreePaths(tree || null)
+        const selectedFilePath = treePaths[0] || ''
         await patchConversation(activeConversation.id, {
             workspaceId: shareId,
             workspaceKind: 'share',
             shareIds: nextShareIds,
+            workspaceMeta: {
+                ...activeConversation.workspaceMeta,
+                selectedFilePath,
+            },
         })
-        await hydrateShareRef.current(shareId)
-        if (typeof activeConversation.workspaceMeta?.selectedFilePath === 'string') {
-            await hydrateShareFileRef.current(shareId, activeConversation.workspaceMeta.selectedFilePath)
+        if (selectedFilePath) {
+            await hydrateShareFileRef.current(shareId, selectedFilePath)
+        }
+        if (share) {
+            setShareContents((prev) => ({ ...prev, [shareId]: share.content }))
         }
     }
 
@@ -607,6 +722,87 @@ export default function useAiWorkbench({
         })
     }
 
+    async function selectShareFile(path: string) {
+        if (!activeConversation || !activeConversation.workspaceId) {
+            return
+        }
+
+        await hydrateShareFileRef.current(activeConversation.workspaceId, path)
+        await patchConversation(activeConversation.id, {
+            workspaceMeta: {
+                ...activeConversation.workspaceMeta,
+                selectedFilePath: path,
+            },
+        })
+    }
+
+    async function scaffoldStarter(template: 'nextjs_docker', projectName?: string | null, targetShareId?: string | null) {
+        if (!activeConversation) {
+            return
+        }
+
+        if (template !== 'nextjs_docker') {
+            setStatusNotice(`Unsupported starter template: ${template}`)
+            return
+        }
+
+        const token = getCookie('access_token')
+        const userId = getCookie('id')
+        if (!token || !userId) {
+            setStatusNotice('Sign in to scaffold a workspace.')
+            return
+        }
+
+        try {
+            setStatusNotice('Scaffolding a Next.js + Docker workspace...')
+            const scaffold = await scaffoldNextjsDockerWorkspace({
+                projectName,
+                shareId: targetShareId || (activeConversation.workspaceKind === 'share' ? activeConversation.workspaceId : null),
+                token,
+                userId,
+            })
+
+            setShares((prev) => {
+                const existing = prev.find((share) => share.id === scaffold.rootId)
+                const nextShare: Share = existing ? {
+                    ...existing,
+                    path: scaffold.rootPath,
+                    alias: scaffold.rootName,
+                    content: existing.content || '',
+                } : {
+                    id: scaffold.rootId,
+                    path: scaffold.rootPath,
+                    alias: scaffold.rootName,
+                    content: '',
+                    wordCount: 0,
+                    estimatedMinutes: 0,
+                    timestamp: new Date().toISOString(),
+                    git: null,
+                    locked: false,
+                    owner: userId,
+                    parent: '',
+                }
+
+                return [nextShare, ...prev.filter((share) => share.id !== scaffold.rootId)]
+            })
+            setShareTrees((prev) => {
+                const next = { ...prev }
+                delete next[scaffold.rootId]
+                return next
+            })
+            setShareFileContents((prev) => Object.fromEntries(
+                Object.entries(prev).filter(([key]) => !key.startsWith(`${scaffold.rootId}:`))
+            ))
+            await attachShare(scaffold.rootId)
+            await selectShareFile(scaffold.selectedFilePath)
+            setStatusNotice(`Next.js + Docker workspace ready: ${scaffold.rootName}. Created ${scaffold.fileCount} files.`)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to scaffold the Next.js workspace.'
+            setStatusNotice(message)
+            throw new Error(message)
+        }
+    }
+
     async function setPreferredModel(preferredModel: string | null) {
         if (!activeConversation) {
             return
@@ -742,6 +938,10 @@ export default function useAiWorkbench({
             pending: false,
             error: message.type === 'prompt_error',
             modelName: message.clientName || lastMessage.modelName || conversation.activeModel,
+            metadata: {
+                ...(lastMessage.metadata || {}),
+                artifacts: message.artifacts || (lastMessage.metadata?.artifacts as AIArtifact[] | undefined) || [],
+            },
         }
 
         await persistMessage(message.conversationId, assistantMessage)
@@ -808,6 +1008,10 @@ export default function useAiWorkbench({
                             modelName: message.clientName || lastMessage.modelName || conversation.activeModel,
                             content: message.content || `${lastMessage.content}${message.delta || ''}`,
                             pending: message.type === 'prompt_delta',
+                            metadata: {
+                                ...(lastMessage.metadata || {}),
+                                artifacts: message.artifacts || (lastMessage.metadata?.artifacts as AIArtifact[] | undefined) || [],
+                            },
                         }
                     }
 
@@ -923,9 +1127,61 @@ export default function useAiWorkbench({
                 }
             }
 
+            if (toolCall.action === 'scaffold_nextjs_docker') {
+                const projectName = toolCall.projectName || conversation.title || 'hanasand-next-docker'
+                await scaffoldStarter('nextjs_docker', projectName, toolCall.shareId || conversation.workspaceId || null)
+                const workspaceName = projectName.trim() || 'hanasand-next-docker'
+                return {
+                    ok: true,
+                    message: `Scaffolded a Next.js + Docker workspace for ${workspaceName}. The workspace is attached and ready for follow-up edits.`,
+                }
+            }
+
+            if (toolCall.action === 'create_vm') {
+                const vmName = slugify(toolCall.vmName || toolCall.projectName || conversation.title || 'hanasand-project')
+                const result = await postVM({ name: vmName })
+                return {
+                    ok: result.status < 400 || result.status === 409,
+                    message: result.message,
+                }
+            }
+
+            if (toolCall.action === 'create_project') {
+                const projectName = toolCall.projectName || conversation.title || 'hanasand-project'
+                const vmName = slugify(toolCall.vmName || projectName)
+                const result = await postVM({ name: vmName })
+                if (result.status >= 400 && result.status !== 409) {
+                    return { ok: false, message: result.message }
+                }
+
+                await scaffoldStarter('nextjs_docker', projectName, toolCall.shareId || conversation.workspaceId || null)
+                return {
+                    ok: true,
+                    message: `Created project workspace for ${projectName} and prepared VM ${vmName}. ${result.message}`,
+                }
+            }
+
+            if (toolCall.action === 'run_terminal_command') {
+                const shareId = toolCall.shareId || conversation.workspaceId || conversation.shareIds[0]
+                if (!shareId || !toolCall.command) {
+                    return { ok: false, message: 'Tool failed: run_terminal_command requires a target share and command.' }
+                }
+
+                const terminalResult = await runTerminalCommandOnShare(shareId, toolCall.command, toolCall.timeoutMs)
+                return {
+                    ok: terminalResult.ok,
+                    message: [
+                        `Ran terminal command on share ${shareId}.`,
+                        `Command: ${toolCall.command}`,
+                        'Output:',
+                        terminalResult.output,
+                    ].join('\n\n'),
+                }
+            }
+
             return { ok: false, message: `Tool failed: unsupported action ${toolCall.action}.` }
         }
-    }, [])
+    }, [activeConversation])
 
     return {
         activeConversation,
@@ -947,10 +1203,14 @@ export default function useAiWorkbench({
         isConnected,
         participants,
         refreshRepo,
+        activeShareTree,
         selectedRepoFilePath,
         selectedShareContent,
+        selectedShareFileContent,
+        scaffoldStarter,
         selectConversation: setActiveConversationId,
         selectRepoFile,
+        selectShareFile,
         sendPrompt,
         setComposer,
         setImportInput,
@@ -1100,12 +1360,17 @@ function buildSystemPrompt({
         'Prefer concrete next steps, patch-ready code, and careful reasoning over marketing language.',
         'You have built-in access to advanced reasoning, repo-aware file inspection/editing tools, local command execution, managed background processes, Playwright browser verification, and live web search outside this prompt. Think privately, inspect before editing, verify in-browser when building web apps, and do not say you lack internet access, shell access, repository access, browser access, or current date awareness when those tools would help.',
         'If a preferred model is unavailable, continue the conversation seamlessly with the current connected model.',
-        'When a user asks you to read or update an attached share, or to make an authenticated HTTP request for them, you may emit one or more tool tags on their own line.',
+        'When a user asks you to read or update an attached share, make an authenticated HTTP request, prepare a remote project, create a VM, or run a command in an attached share terminal, you may emit one or more tool tags on their own line.',
         'Supported tags:',
         '<hanasand-tool>{"action":"read_share","shareId":"optional"}</hanasand-tool>',
         '<hanasand-tool>{"action":"update_share","shareId":"optional","path":"optional","content":"new file content"}</hanasand-tool>',
         '<hanasand-tool>{"action":"http_request","url":"https://...","method":"GET","headers":{"Accept":"application/json"},"body":"optional"}</hanasand-tool>',
+        '<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"optional","shareId":"optional"}</hanasand-tool>',
+        '<hanasand-tool>{"action":"create_vm","vmName":"northstar-admin"}</hanasand-tool>',
+        '<hanasand-tool>{"action":"create_project","projectName":"Northstar Admin","vmName":"northstar-admin","shareId":"optional"}</hanasand-tool>',
+        '<hanasand-tool>{"action":"run_terminal_command","shareId":"optional","command":"pwd && ls","timeoutMs":20000}</hanasand-tool>',
         'Only emit a tool tag when the user clearly asked for the action. Keep normal explanation outside the tag.',
+        'Use scaffold_nextjs_docker or create_project when the user asks for a production-style starter, Dockerized Next.js app, or a full workspace you can keep extending from the browser.',
         `Conversation strategy: ${conversation.modelStrategy}. Preferred model: ${conversation.preferredModel || 'auto'}.`,
         workspaceContext ? `Workspace context:\n${workspaceContext}` : 'No workspace is attached yet.',
     ].join('\n\n')
@@ -1126,17 +1391,6 @@ function toConversationPayload(conversation: Partial<AIConversation>) {
     }
 }
 
-type AiToolCall = {
-    action: 'read_share' | 'update_share' | 'http_request'
-    shareId?: string
-    path?: string
-    content?: string
-    url?: string
-    method?: string
-    headers?: Record<string, string>
-    body?: string
-}
-
 function parseToolCalls(content: string): AiToolCall[] {
     const matches = [...content.matchAll(/<hanasand-tool>([\s\S]*?)<\/hanasand-tool>/g)]
     const results: AiToolCall[] = []
@@ -1155,4 +1409,12 @@ function parseToolCalls(content: string): AiToolCall[] {
 
 function stripToolTags(content: string) {
     return content.replace(/<hanasand-tool>[\s\S]*?<\/hanasand-tool>/g, '').replace(/\n{3,}/g, '\n\n')
+}
+
+function slugify(value: string) {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48) || `vm-${randomId(6).toLowerCase()}`
 }

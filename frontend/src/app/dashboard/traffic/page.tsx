@@ -17,7 +17,7 @@ export default async function Page({
     const [domains, metrics, records] = await Promise.all([
         getTrafficDomains(),
         getTrafficMetrics(selectedDomain),
-        getTrafficRecords(selectedDomain, 24, 1),
+        getTrafficRecords(selectedDomain, 250, 1),
     ])
 
     const domainOptions = typeof domains === 'object' && 'domains' in domains ? domains.domains : []

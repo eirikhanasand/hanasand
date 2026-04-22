@@ -3,6 +3,7 @@ import Tag from '../tags/tag'
 import smallDate from '@/utils/date/smallDate'
 import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
 import Link from 'next/link'
+import RestartButtons from './restartButtons'
 
 export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) {
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
@@ -11,7 +12,7 @@ export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; met
     const ipAddress = vm.device_eth0_ipv4_address || 'No IPv4'
 
     return (
-        <Link href={`/dashboard/vms/${vm.name}`} className='flex w-full gap-2 rounded-md p-2 hover:bg-bright/3 cursor-pointer items-center text-bright/80'>
+        <Link href={`/dashboard/vms/${vm.name}`} className='group flex w-full gap-2 rounded-md p-2 hover:bg-bright/3 cursor-pointer items-center text-bright/80'>
             <h1 className='w-full'>{vm.name}</h1>
             <h1 className='w-full'>{vm.owner}</h1>
             <h1 className='min-w-25'>{metrics ? `${metrics.cpu_usage_percent}%` : vm.limits_cpu}</h1>
@@ -25,6 +26,9 @@ export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; met
                 <Tag color='blue' icon='pencil' text={String(accessUserCount)} />
                 <Tag color='green' icon='refresh' text={vm.last_checked ? smallDate(vm.last_checked) : 'Unknown'} />
                 <Tag color='blue' text={ipAddress} />
+            </div>
+            <div className='flex min-w-24 justify-end'>
+                <RestartButtons vm={vm} />
             </div>
         </Link>
     )

@@ -196,6 +196,7 @@ export default function LiveTrafficMapDashboard({
     const selectedCoords = selectedCountry ? countryCentroids[selectedCountry] : null
     const selectedCapital = CAPITAL_MARKERS.find((marker) => marker.iso === selectedCountry)
     const totalTrackedRequests = countryEntries.reduce((sum, item) => sum + item.count, 0)
+    const trackedRequestsValue = totalTrackedRequests || Number(initialMetrics?.total_requests || 0)
     const selectedRank = countryEntries.findIndex((entry) => entry.iso === selectedCountry) + 1
     const selectedShare = selectedPoint && totalTrackedRequests
         ? Math.round((selectedPoint.count / totalTrackedRequests) * 100)
@@ -236,7 +237,7 @@ export default function LiveTrafficMapDashboard({
             <path
                 key={index}
                 d={d}
-                className='fill-white/5 stroke-white/10 stroke-[0.6] transition-colors hover:fill-white/8'
+                className='fill-login-100/5 stroke-login-100/10 stroke-[0.6] transition-colors hover:fill-login-100/8'
             />
         )
     }), [])
@@ -277,13 +278,13 @@ export default function LiveTrafficMapDashboard({
                     <StatCard
                         icon={<Activity className='h-4 w-4' />}
                         label='Tracked Requests'
-                        value={String(countryEntries.reduce((sum, item) => sum + item.count, 0))}
+                        value={String(trackedRequestsValue)}
                     />
                     <StatCard icon={<Zap className='h-4 w-4' />} label='Top Country' value={countryEntries[0]?.iso || '—'} />
                     <StatCard
                         icon={<Clock3 className='h-4 w-4' />}
                         label='Avg Request Time'
-                        value={initialMetrics ? `${Math.round(initialMetrics.avg_request_time || 0)}ms` : '—'}
+                        value={initialMetrics?.avg_request_time ? `${Math.round(initialMetrics.avg_request_time)}ms` : '—'}
                     />
                 </div>
 

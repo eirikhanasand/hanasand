@@ -2,12 +2,13 @@ import { Menu, X } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react'
 import RecentRequests from './recentRequests'
 import NewRequest from './newRequest'
-import { loadRequestHistory, saveRequestHistory } from './storage'
+import { loadScopedRequestHistory, saveScopedRequestHistory } from './storage'
 import { RequestDraft, RequestHistoryEntry } from './types'
 
 type BoxProps = {
     box: boolean
     setBox: Dispatch<SetStateAction<boolean>>
+    share: Share | null
 }
 
 const EMPTY_DRAFT: RequestDraft = {
@@ -17,7 +18,7 @@ const EMPTY_DRAFT: RequestDraft = {
     body: ''
 }
 
-export default function Box({ box, setBox }: BoxProps) {
+export default function Box({ box, setBox, share }: BoxProps) {
     const [sidebar, setSidebar] = useState(true)
     const [recentRequests, setRecentRequests] = useState<RequestHistoryEntry[]>([])
     const [selectedRequest, setSelectedRequest] = useState<RequestHistoryEntry | null>(null)
@@ -27,10 +28,10 @@ export default function Box({ box, setBox }: BoxProps) {
             return
         }
 
-        const history = loadRequestHistory()
+        const history = loadScopedRequestHistory(share?.alias || share?.id || null)
         setRecentRequests(history)
         setSelectedRequest(history[0] ?? null)
-    }, [box])
+    }, [box, share?.alias, share?.id])
 
     const requestDraft = useMemo<RequestDraft>(() => {
         if (!selectedRequest) {
@@ -48,7 +49,7 @@ export default function Box({ box, setBox }: BoxProps) {
     function handleHistoryUpdate(entry: RequestHistoryEntry) {
         setRecentRequests((prev) => {
             const next = [entry, ...prev.filter((item) => item.id !== entry.id && !(item.method === entry.method && item.url === entry.url && item.body === entry.body))]
-            saveRequestHistory(next)
+            saveScopedRequestHistory(next, share?.alias || share?.id || null)
             return next
         })
         setSelectedRequest(entry)
@@ -59,9 +60,9 @@ export default function Box({ box, setBox }: BoxProps) {
     }
 
     return (
-        <div className='absolute right-3 top-18 z-40 grid h-[min(36rem,72vh)] w-[min(60rem,calc(100vw-2rem))] grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]'>
+        <div className='absolute right-3 top-18 z-40 grid w-[min(72rem,calc(100vw-2rem))] grid-cols-1 items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]'>
             {sidebar && (
-                <aside className='grid h-full min-h-0 gap-2 rounded-xl border border-white/10 bg-bright/3 p-2.5 backdrop-blur-md'>
+                <aside className='grid min-h-0 gap-2 self-start rounded-xl border border-white/10 bg-bright/3 p-2.5 backdrop-blur-md lg:h-[min(36rem,72vh)]'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
                             <h1 className='text-sm font-semibold text-bright'>History</h1>
@@ -78,7 +79,10 @@ export default function Box({ box, setBox }: BoxProps) {
                     />
                 </aside>
             )}
-                <section className='grid h-full min-h-0 gap-2 rounded-xl border border-white/10 bg-bright/3 p-2.5 backdrop-blur-md'>
+            <section className={`
+                grid min-h-0 gap-2 self-start rounded-xl border border-white/10
+                bg-bright/3 p-2.5 backdrop-blur-md lg:h-[min(36rem,72vh)]
+            `}>
                 <div className='flex items-center justify-between gap-3'>
                     <div>
                         <h1 className='text-sm font-semibold text-bright'>HTTP Workbench</h1>

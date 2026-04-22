@@ -153,6 +153,8 @@ type ToolCall =
         }
     }
 
+type BrowserTaskAction = NonNullable<Extract<ToolCall, { name: 'browser_task' }>['arguments']['actions']>[number]
+
 type ChatCompletionResponse = {
     id?: string
     choices?: Array<{
@@ -171,6 +173,290 @@ type ChatCompletionResponse = {
 type ToolLoopResult = {
     content: string
     timings?: ChatCompletionResponse['timings']
+    artifacts?: AIArtifact[]
+}
+
+type ToolExecutionResult = {
+    message: GPT_ChatMessage
+    artifacts?: AIArtifact[]
+}
+
+export default async function runModelToolLoop(request: GPT_PromptRequest): Promise<ToolLoopResult> {
+    const maxIterations = Math.max(8, config.web_search_max_iterations + 8)
+    const iterationMaxTokens = Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
+    const workingMessages = withToolSystemPrompt(request.messages)
+    const executedToolCalls = new Set<string>()
+    const collectedArtifacts: AIArtifact[] = []
+    const userMessage = latestUserMessage(workingMessages)
+
+    if (isAutonomousRepoTask(userMessage)) {
+        workingMessages.push({
+            role: 'system',
+            content: 'This looks like a multi-step repository task. Inspect the repo with list_files, grep_repo, read_file, or run_command before proposing a fix. After making changes, verify the result before answering.',
+        })
+    }
+
+    if (isNextJsBuildTask(userMessage)) {
+        if (DEBUG_AGENT) {
+            console.error('[agent] preflight nextjs build detected')
+        }
+        const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-app'
+        const preflightToolCall: ToolCall = {
+            name: 'scaffold_nextjs_app',
+            arguments: {
+                targetDir,
+                packageManager: 'npm',
+            },
+        }
+        const preflightKey = JSON.stringify(preflightToolCall)
+        if (!executedToolCalls.has(preflightKey)) {
+            const { message: toolMessage, artifacts } = await executeToolCall(preflightToolCall, -1)
+            collectedArtifacts.push(...(artifacts || []))
+            executedToolCalls.add(preflightKey)
+            workingMessages.push({
+                role: 'assistant',
+                content: `<tool_call>${preflightKey}</tool_call>`,
+            })
+            workingMessages.push(toolMessage)
+            workingMessages.push({
+                role: 'system',
+                content: 'The Next.js app has been scaffolded. Continue by editing files, starting the dev server, verifying the app in the browser, and fixing any issues before answering.',
+            })
+        }
+
+        if (/(marketing site|website|landing page|boutique architecture studio)/i.test(userMessage)) {
+            const siteToolCall: ToolCall = {
+                name: 'generate_nextjs_marketing_site',
+                arguments: {
+                    appDir: targetDir,
+                    brandName: extractBrandName(userMessage),
+                    tagline: 'Spaces that feel composed, calm, and enduring.',
+                    description: 'Boutique architecture for private homes and hospitality environments, shaped with tactile materials and editorial restraint.',
+                    primaryCtaLabel: 'Book a Design Consult',
+                    secondaryCtaLabel: 'View Case Studies',
+                    styleDirection: 'Quiet luxury with tactile materials, warm neutrals, and editorial spacing.',
+                },
+            }
+            const siteToolKey = JSON.stringify(siteToolCall)
+            if (!executedToolCalls.has(siteToolKey)) {
+                const { message: siteToolMessage, artifacts } = await executeToolCall(siteToolCall, -1)
+                collectedArtifacts.push(...(artifacts || []))
+                executedToolCalls.add(siteToolKey)
+                workingMessages.push({
+                    role: 'assistant',
+                    content: `<tool_call>${siteToolKey}</tool_call>`,
+                })
+                workingMessages.push(siteToolMessage)
+                workingMessages.push({
+                    role: 'system',
+                    content: 'The initial marketing site has been generated. Continue by starting the app, verifying it in the browser, and fixing any issues before answering.',
+                })
+            }
+        }
+
+        const localUrl = extractLocalUrl(userMessage)
+        if (localUrl) {
+            const startProcessToolCall: ToolCall = {
+                name: 'start_process',
+                arguments: {
+                    command: `npm run dev -- --hostname 127.0.0.1 --port ${new URL(localUrl).port}`,
+                    cwd: targetDir,
+                    name: 'next-dev',
+                },
+            }
+            const startProcessKey = JSON.stringify(startProcessToolCall)
+            if (!executedToolCalls.has(startProcessKey)) {
+                const { message: startMessage, artifacts: startArtifacts } = await executeToolCall(startProcessToolCall, -1)
+                collectedArtifacts.push(...(startArtifacts || []))
+                executedToolCalls.add(startProcessKey)
+                workingMessages.push({
+                    role: 'assistant',
+                    content: `<tool_call>${startProcessKey}</tool_call>`,
+                })
+                workingMessages.push(startMessage)
+
+                const processId = startMessage.content.match(/Process id:\s*([a-f0-9-]+)/i)?.[1]
+                const waitToolCall: ToolCall = {
+                    name: 'wait_for_http',
+                    arguments: {
+                        url: localUrl,
+                        timeoutMs: 120000,
+                        expectText: extractBrandName(userMessage),
+                    },
+                }
+                const waitKey = JSON.stringify(waitToolCall)
+                const { message: waitMessage, artifacts: waitArtifacts } = await executeToolCall(waitToolCall, -1)
+                collectedArtifacts.push(...(waitArtifacts || []))
+                executedToolCalls.add(waitKey)
+                workingMessages.push({
+                    role: 'assistant',
+                    content: `<tool_call>${waitKey}</tool_call>`,
+                })
+                workingMessages.push(waitMessage)
+
+                const browserToolCall: ToolCall = {
+                    name: 'browser_task',
+                    arguments: {
+                        url: localUrl,
+                        captureScreenshot: true,
+                        actions: [
+                            { action: 'wait_for_text', text: extractBrandName(userMessage) },
+                            { action: 'wait_for_text', text: 'Book a Design Consult' },
+                        ],
+                    },
+                }
+                const browserKey = JSON.stringify(browserToolCall)
+                const { message: browserMessage, artifacts: browserArtifacts } = await executeToolCall(browserToolCall, -1)
+                collectedArtifacts.push(...(browserArtifacts || []))
+                executedToolCalls.add(browserKey)
+                workingMessages.push({
+                    role: 'assistant',
+                    content: `<tool_call>${browserKey}</tool_call>`,
+                })
+                workingMessages.push(browserMessage)
+
+                if (processId) {
+                    const stopToolCall: ToolCall = {
+                        name: 'stop_process',
+                        arguments: { id: processId },
+                    }
+                    const stopKey = JSON.stringify(stopToolCall)
+                    const { message: stopMessage, artifacts: stopArtifacts } = await executeToolCall(stopToolCall, -1)
+                    collectedArtifacts.push(...(stopArtifacts || []))
+                    executedToolCalls.add(stopKey)
+                    workingMessages.push({
+                        role: 'assistant',
+                        content: `<tool_call>${stopKey}</tool_call>`,
+                    })
+                    workingMessages.push(stopMessage)
+                }
+            }
+        }
+    }
+
+    for (let iteration = 0; iteration <= maxIterations; iteration += 1) {
+        const completion = await createCompletion(
+            config.model_api,
+            workingMessages,
+            iterationMaxTokens,
+            request.temperature ?? 0.7,
+        )
+        const content = getMessageContent(completion)
+        if (DEBUG_AGENT) {
+            console.error(`[agent] iteration=${iteration} completion_length=${content.length}`)
+        }
+        let toolCall = parseToolCall(content)
+        const explicitSearchRequested = /(search|browse|look up|lookup|online|web)/i.test(userMessage)
+        const alreadyHasToolResult = workingMessages.some((message) => message.role === 'tool')
+        if (!alreadyHasToolResult && !toolCall && isNextJsBuildTask(userMessage)) {
+            const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-app'
+            const hasScaffoldedApp = workingMessages.some((message) => message.role === 'tool' && message.content.includes('Tool scaffold_nextjs_app executed'))
+            const hasGeneratedSite = workingMessages.some((message) => message.role === 'tool' && message.content.includes('Tool generate_nextjs_marketing_site executed'))
+            if (!hasScaffoldedApp) {
+                toolCall = {
+                    name: 'scaffold_nextjs_app',
+                    arguments: {
+                        targetDir,
+                        packageManager: 'npm',
+                    },
+                }
+            } else if (!hasGeneratedSite) {
+                toolCall = {
+                    name: 'generate_nextjs_marketing_site',
+                    arguments: {
+                        appDir: targetDir,
+                        brandName: extractBrandName(userMessage),
+                        tagline: 'Spaces that feel composed, calm, and enduring.',
+                        description: 'Boutique architecture for private homes and hospitality environments, shaped with tactile materials and editorial restraint.',
+                        primaryCtaLabel: 'Book a Design Consult',
+                        secondaryCtaLabel: 'View Case Studies',
+                        styleDirection: 'Quiet luxury with tactile materials, warm neutrals, and editorial spacing.',
+                    },
+                }
+            }
+        }
+
+        if (!alreadyHasToolResult && explicitSearchRequested && (!toolCall || toolCall.name !== 'search_web')) {
+            toolCall = {
+                name: 'search_web',
+                arguments: {
+                    query: latestUserMessage(workingMessages),
+                    limit: 5,
+                    visitTopResults: 3,
+                },
+            }
+        }
+
+        const explicitBrowserRequested = /\bbrowser[_ -]?task\b|use (?:the )?browser tool|capture a screenshot|verify .* in the browser/i.test(userMessage)
+        if (!alreadyHasToolResult && explicitBrowserRequested && (!toolCall || toolCall.name !== 'browser_task')) {
+            const url = extractAnyUrl(userMessage)
+            if (url) {
+                toolCall = {
+                    name: 'browser_task',
+                    arguments: {
+                        url,
+                        captureScreenshot: true,
+                    },
+                }
+            }
+        }
+
+        if (!toolCall) {
+            const toolContents = workingMessages.filter((message) => message.role === 'tool').map((message) => message.content)
+            const hasWrittenFiles = toolContents.some((content) =>
+                content.includes('Tool write_file executed')
+                || content.includes('Tool generate_nextjs_marketing_site executed')
+                || content.includes('Tool scaffold_nextjs_app executed')
+            )
+            const hasStartedProcess = toolContents.some((content) => content.includes('Tool start_process executed'))
+            const hasBrowserVerification = toolContents.some((content) => content.includes('Tool browser_task executed'))
+            if (isAutonomousRepoTask(userMessage) && looksLikeProposedPatch(content) && !hasWrittenFiles) {
+                workingMessages.push({
+                    role: 'system',
+                    content: 'Do not stop at a proposal. Apply the changes to the repository using write_file or run_command, then continue.',
+                })
+                continue
+            }
+
+            if (/(website|landing page|next\.?js|app router)/i.test(userMessage) && (!hasWrittenFiles || !hasStartedProcess || !hasBrowserVerification)) {
+                workingMessages.push({
+                    role: 'system',
+                    content: 'This web-app task is not complete until you have written the files, started the app, verified it in the browser, and fixed any issues you found. Continue using tools now.',
+                })
+                continue
+            }
+
+            return {
+                content,
+                timings: completion.timings,
+                artifacts: collectedArtifacts,
+            }
+        }
+
+        const toolKey = JSON.stringify(toolCall)
+        if (executedToolCalls.has(toolKey)) {
+            workingMessages.push({
+                role: 'system',
+                content: 'You already have the requested tool result. Do not call the same tool again. Write the final answer now using the existing tool output.',
+            })
+            continue
+        }
+
+        const { message: toolMessage, artifacts } = await executeToolCall(toolCall, iteration)
+        collectedArtifacts.push(...(artifacts || []))
+        executedToolCalls.add(toolKey)
+        workingMessages.push({
+            role: 'assistant',
+            content,
+        })
+        workingMessages.push(toolMessage)
+        workingMessages.push({
+            role: 'system',
+            content: 'The tool has finished successfully. Use the tool result above and answer the user now. Do not request the same tool again unless the previous output was clearly insufficient.',
+        })
+    }
+
+    throw new Error('Tool loop exceeded the maximum number of search/command iterations.')
 }
 
 function withToolSystemPrompt(messages: GPT_ChatMessage[]) {
@@ -209,6 +495,19 @@ function extractBalancedJson(content: string, marker: string) {
     }
 
     return null
+}
+
+function parseXmlJson<T>(content: string, tagName: string): T | null {
+    const raw = content.match(new RegExp(`<${tagName}>\\s*([\\s\\S]*?)\\s*<\\/${tagName}>`, 'i'))?.[1]?.trim()
+    if (!raw) {
+        return null
+    }
+
+    try {
+        return JSON.parse(raw) as T
+    } catch {
+        return null
+    }
 }
 
 function parseToolCall(content: string): ToolCall | null {
@@ -448,8 +747,21 @@ function parseToolCall(content: string): ToolCall | null {
 
     if (xmlName === 'browser_task') {
         const url = content.match(/<url>\s*([\s\S]*?)\s*<\/url>/i)?.[1]?.trim()
+        const goal = content.match(/<goal>\s*([\s\S]*?)\s*<\/goal>/i)?.[1]?.trim()
+        const timeoutMsRaw = content.match(/<timeoutMs>\s*(\d+)\s*<\/timeoutMs>/i)?.[1]
+        const captureScreenshotRaw = content.match(/<captureScreenshot>\s*(true|false)\s*<\/captureScreenshot>/i)?.[1]
+        const actions = parseXmlJson<BrowserTaskAction[]>(content, 'actions')
         if (url) {
-            return { name: 'browser_task', arguments: { url } }
+            return {
+                name: 'browser_task',
+                arguments: {
+                    url,
+                    goal: goal || undefined,
+                    timeoutMs: timeoutMsRaw ? Number(timeoutMsRaw) : undefined,
+                    captureScreenshot: captureScreenshotRaw ? captureScreenshotRaw === 'true' : undefined,
+                    actions: Array.isArray(actions) ? actions : undefined,
+                },
+            }
         }
     }
 
@@ -486,6 +798,11 @@ function extractBrandName(message: string) {
 function extractLocalUrl(message: string) {
     const match = message.match(/https?:\/\/127\.0\.0\.1:(\d+)/i)
     return match ? `http://127.0.0.1:${match[1]}` : null
+}
+
+function extractAnyUrl(message: string) {
+    const match = message.match(/https?:\/\/[^\s)]+/i)
+    return match?.[0]?.replace(/[.,;:!?]+$/g, '') || null
 }
 
 async function createCompletion(
@@ -525,7 +842,7 @@ function getMessageContent(response: ChatCompletionResponse) {
     return response.choices?.[0]?.message?.content?.trim() || ''
 }
 
-async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<GPT_ChatMessage> {
+async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<ToolExecutionResult> {
     if (DEBUG_AGENT) {
         console.error(`[agent] tool_call iteration=${iteration} name=${toolCall.name}`)
     }
@@ -537,13 +854,15 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<G
         })
 
         return {
-            role: 'tool',
-            tool_call_id: `search_web_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `search_web_${iteration + 1}`,
+                content: [
                 `Tool search_web executed for query: ${toolCall.arguments.query}`,
                 'Use this result actively and cite relevant URLs from it.',
                 result.markdown,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
         }
     }
 
@@ -554,13 +873,15 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<G
         })
 
         return {
-            role: 'tool',
-            tool_call_id: `list_files_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `list_files_${iteration + 1}`,
+                content: [
                 `Tool list_files executed for path: ${result.root}`,
                 `Truncated: ${result.truncated ? 'yes' : 'no'}`,
                 result.files.length ? result.files.join('\n') : '<no files found>',
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
         }
     }
 
@@ -572,16 +893,18 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<G
         })
 
         return {
-            role: 'tool',
-            tool_call_id: `grep_repo_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `grep_repo_${iteration + 1}`,
+                content: [
                 `Tool grep_repo executed for query: ${result.query}`,
                 `Root: ${result.root}`,
                 `Truncated: ${result.truncated ? 'yes' : 'no'}`,
                 result.matches.length
                     ? result.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
                     : '<no matches found>',
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
         }
     }
 
@@ -593,13 +916,22 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<G
         })
 
         return {
-            role: 'tool',
-            tool_call_id: `read_file_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `read_file_${iteration + 1}`,
+                content: [
                 `Tool read_file executed for path: ${result.path}`,
                 `Lines: ${result.startLine}-${result.endLine} of ${result.totalLines}`,
                 result.content,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: result.path,
+                path: result.path,
+                content: result.content,
+                language: 'text',
+            }],
         }
     }
 
@@ -610,117 +942,192 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<G
         })
 
         return {
-            role: 'tool',
-            tool_call_id: `write_file_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `write_file_${iteration + 1}`,
+                content: [
                 `Tool write_file executed for path: ${result.path}`,
                 `Bytes written: ${result.bytes}`,
                 `Lines written: ${result.lines}`,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: result.path,
+                path: result.path,
+                content: toolCall.arguments.content,
+                language: 'text',
+            }],
         }
     }
 
     if (toolCall.name === 'start_process') {
         const result = await startManagedProcess(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `start_process_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `start_process_${iteration + 1}`,
+                content: [
                 `Tool start_process executed: ${result.name}`,
                 `Process id: ${result.id}`,
                 `PID: ${result.pid}`,
                 `Working directory: ${result.cwd}`,
                 `Command: ${result.command}`,
                 `Alive: ${result.alive ? 'yes' : 'no'}`,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'command',
+                title: `Process: ${result.name}`,
+                content: `${result.command}\n\ncwd: ${result.cwd}\npid: ${result.pid}`,
+                language: 'sh',
+            }],
         }
     }
 
     if (toolCall.name === 'scaffold_nextjs_app') {
         const result = await scaffoldNextjsApp(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `scaffold_nextjs_app_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `scaffold_nextjs_app_${iteration + 1}`,
+                content: [
                 `Tool scaffold_nextjs_app executed for target: ${toolCall.arguments.targetDir}`,
                 `Package manager: ${result.packageManager}`,
                 `Absolute path: ${result.absolutePath}`,
                 `Exit code: ${result.exitCode ?? 'null'}`,
                 result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
                 result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: `Scaffolded app`,
+                path: result.absolutePath,
+                content: result.stdout || result.stderr || result.absolutePath,
+                language: 'text',
+            }],
         }
     }
 
     if (toolCall.name === 'generate_nextjs_marketing_site') {
         const result = await generateNextjsMarketingSite(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `generate_nextjs_marketing_site_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `generate_nextjs_marketing_site_${iteration + 1}`,
+                content: [
                 `Tool generate_nextjs_marketing_site executed for app: ${result.appDir}`,
                 `Brand: ${result.brandName}`,
                 `Files:\n${result.files.join('\n')}`,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: result.files.map((file) => ({
+                kind: 'file' as const,
+                title: file,
+                path: file,
+            })),
         }
     }
 
     if (toolCall.name === 'inspect_process') {
         const result = await inspectManagedProcess(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `inspect_process_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `inspect_process_${iteration + 1}`,
+                content: [
                 `Tool inspect_process executed for id: ${result.id}`,
                 `Alive: ${result.alive ? 'yes' : 'no'}`,
                 `PID: ${result.pid}`,
                 `Working directory: ${result.cwd}`,
                 `Command: ${result.command}`,
                 result.logTail ? `LOG:\n${result.logTail}` : 'LOG:\n<empty>',
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: result.logTail ? [{
+                kind: 'log',
+                title: `Process log: ${result.name}`,
+                content: result.logTail,
+                language: 'text',
+            }] : [],
         }
     }
 
     if (toolCall.name === 'stop_process') {
         const result = await stopManagedProcess(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `stop_process_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `stop_process_${iteration + 1}`,
+                content: [
                 `Tool stop_process executed for id: ${result.id}`,
                 `Stopped: ${result.stopped ? 'yes' : 'no'}`,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
         }
     }
 
     if (toolCall.name === 'wait_for_http') {
         const result = await waitForHttp(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `wait_for_http_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `wait_for_http_${iteration + 1}`,
+                content: [
                 `Tool wait_for_http executed for URL: ${result.url}`,
                 `Reachable: ${result.ok ? 'yes' : 'no'}`,
                 `Status: ${result.status}`,
                 'error' in result && result.error ? `Error: ${result.error}` : null,
                 'excerpt' in result && result.excerpt ? `Excerpt:\n${result.excerpt}` : null,
-            ].filter(Boolean).join('\n\n'),
+                ].filter(Boolean).join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'http',
+                title: result.url,
+                url: result.url,
+                content: 'excerpt' in result ? result.excerpt || null : result.error || null,
+                language: 'html',
+            }],
         }
     }
 
     if (toolCall.name === 'browser_task') {
         const result = await browserTask(toolCall.arguments)
         return {
-            role: 'tool',
-            tool_call_id: `browser_task_${iteration + 1}`,
-            content: [
+            message: {
+                role: 'tool',
+                tool_call_id: `browser_task_${iteration + 1}`,
+                content: [
                 `Tool browser_task executed for URL: ${result.url}`,
                 `Title: ${result.title}`,
                 `Screenshot: ${result.screenshotPath || '<none>'}`,
                 result.pageErrors.length ? `Page errors:\n${result.pageErrors.join('\n')}` : 'Page errors:\n<none>',
                 result.consoleMessages.length ? `Console:\n${result.consoleMessages.join('\n')}` : 'Console:\n<none>',
                 `Text excerpt:\n${result.textExcerpt}`,
-            ].join('\n\n'),
+                ].join('\n\n'),
+            },
+            artifacts: [
+                ...(result.screenshotDataUrl ? [{
+                    kind: 'screenshot' as const,
+                    title: result.title || result.url,
+                    path: result.screenshotPath,
+                    url: result.url,
+                    dataUrl: result.screenshotDataUrl,
+                }] : []),
+                ...(result.consoleMessages.length ? [{
+                    kind: 'log' as const,
+                    title: `Browser console`,
+                    content: result.consoleMessages.join('\n'),
+                    language: 'text',
+                }] : []),
+                ...(result.pageErrors.length ? [{
+                    kind: 'log' as const,
+                    title: `Browser page errors`,
+                    content: result.pageErrors.join('\n'),
+                    language: 'text',
+                }] : []),
+            ],
         }
     }
 
@@ -731,270 +1138,27 @@ async function executeToolCall(toolCall: ToolCall, iteration: number): Promise<G
     })
 
     return {
-        role: 'tool',
-        tool_call_id: `run_command_${iteration + 1}`,
-        content: [
+        message: {
+            role: 'tool',
+            tool_call_id: `run_command_${iteration + 1}`,
+            content: [
             `Tool run_command executed: ${result.command}`,
             `Working directory: ${result.cwd}`,
             `Exit code: ${result.exitCode ?? 'null'}`,
             `Timed out: ${result.timedOut ? 'yes' : 'no'}`,
             result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
             result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
-        ].join('\n\n'),
+            ].join('\n\n'),
+        },
+        artifacts: [{
+            kind: 'command',
+            title: result.command,
+            content: [
+                `$ ${result.command}`,
+                result.stdout || '',
+                result.stderr ? `stderr:\n${result.stderr}` : '',
+            ].filter(Boolean).join('\n\n'),
+            language: 'sh',
+        }],
     }
-}
-
-export default async function runModelToolLoop(request: GPT_PromptRequest): Promise<ToolLoopResult> {
-    const maxIterations = Math.max(8, config.web_search_max_iterations + 8)
-    const iterationMaxTokens = Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
-    const workingMessages = withToolSystemPrompt(request.messages)
-    const executedToolCalls = new Set<string>()
-    const userMessage = latestUserMessage(workingMessages)
-
-    if (isAutonomousRepoTask(userMessage)) {
-        workingMessages.push({
-            role: 'system',
-            content: 'This looks like a multi-step repository task. Inspect the repo with list_files, grep_repo, read_file, or run_command before proposing a fix. After making changes, verify the result before answering.',
-        })
-    }
-
-    if (isNextJsBuildTask(userMessage)) {
-        if (DEBUG_AGENT) {
-            console.error('[agent] preflight nextjs build detected')
-        }
-        const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-app'
-        const preflightToolCall: ToolCall = {
-            name: 'scaffold_nextjs_app',
-            arguments: {
-                targetDir,
-                packageManager: 'npm',
-            },
-        }
-        const preflightKey = JSON.stringify(preflightToolCall)
-        if (!executedToolCalls.has(preflightKey)) {
-            const toolMessage = await executeToolCall(preflightToolCall, -1)
-            executedToolCalls.add(preflightKey)
-            workingMessages.push({
-                role: 'assistant',
-                content: `<tool_call>${preflightKey}</tool_call>`,
-            })
-            workingMessages.push(toolMessage)
-            workingMessages.push({
-                role: 'system',
-                content: 'The Next.js app has been scaffolded. Continue by editing files, starting the dev server, verifying the app in the browser, and fixing any issues before answering.',
-            })
-        }
-
-        if (/(marketing site|website|landing page|boutique architecture studio)/i.test(userMessage)) {
-            const siteToolCall: ToolCall = {
-                name: 'generate_nextjs_marketing_site',
-                arguments: {
-                    appDir: targetDir,
-                    brandName: extractBrandName(userMessage),
-                    tagline: 'Spaces that feel composed, calm, and enduring.',
-                    description: 'Boutique architecture for private homes and hospitality environments, shaped with tactile materials and editorial restraint.',
-                    primaryCtaLabel: 'Book a Design Consult',
-                    secondaryCtaLabel: 'View Case Studies',
-                    styleDirection: 'Quiet luxury with tactile materials, warm neutrals, and editorial spacing.',
-                },
-            }
-            const siteToolKey = JSON.stringify(siteToolCall)
-            if (!executedToolCalls.has(siteToolKey)) {
-                const siteToolMessage = await executeToolCall(siteToolCall, -1)
-                executedToolCalls.add(siteToolKey)
-                workingMessages.push({
-                    role: 'assistant',
-                    content: `<tool_call>${siteToolKey}</tool_call>`,
-                })
-                workingMessages.push(siteToolMessage)
-                workingMessages.push({
-                    role: 'system',
-                    content: 'The initial marketing site has been generated. Continue by starting the app, verifying it in the browser, and fixing any issues before answering.',
-                })
-            }
-        }
-
-        const localUrl = extractLocalUrl(userMessage)
-        if (localUrl) {
-            const startProcessToolCall: ToolCall = {
-                name: 'start_process',
-                arguments: {
-                    command: `npm run dev -- --hostname 127.0.0.1 --port ${new URL(localUrl).port}`,
-                    cwd: targetDir,
-                    name: 'next-dev',
-                },
-            }
-            const startProcessKey = JSON.stringify(startProcessToolCall)
-            if (!executedToolCalls.has(startProcessKey)) {
-                const startMessage = await executeToolCall(startProcessToolCall, -1)
-                executedToolCalls.add(startProcessKey)
-                workingMessages.push({
-                    role: 'assistant',
-                    content: `<tool_call>${startProcessKey}</tool_call>`,
-                })
-                workingMessages.push(startMessage)
-
-                const processId = startMessage.content.match(/Process id:\s*([a-f0-9-]+)/i)?.[1]
-                const waitToolCall: ToolCall = {
-                    name: 'wait_for_http',
-                    arguments: {
-                        url: localUrl,
-                        timeoutMs: 120000,
-                        expectText: extractBrandName(userMessage),
-                    },
-                }
-                const waitKey = JSON.stringify(waitToolCall)
-                const waitMessage = await executeToolCall(waitToolCall, -1)
-                executedToolCalls.add(waitKey)
-                workingMessages.push({
-                    role: 'assistant',
-                    content: `<tool_call>${waitKey}</tool_call>`,
-                })
-                workingMessages.push(waitMessage)
-
-                const browserToolCall: ToolCall = {
-                    name: 'browser_task',
-                    arguments: {
-                        url: localUrl,
-                        captureScreenshot: true,
-                        actions: [
-                            { action: 'wait_for_text', text: extractBrandName(userMessage) },
-                            { action: 'wait_for_text', text: 'Book a Design Consult' },
-                        ],
-                    },
-                }
-                const browserKey = JSON.stringify(browserToolCall)
-                const browserMessage = await executeToolCall(browserToolCall, -1)
-                executedToolCalls.add(browserKey)
-                workingMessages.push({
-                    role: 'assistant',
-                    content: `<tool_call>${browserKey}</tool_call>`,
-                })
-                workingMessages.push(browserMessage)
-
-                if (processId) {
-                    const stopToolCall: ToolCall = {
-                        name: 'stop_process',
-                        arguments: { id: processId },
-                    }
-                    const stopKey = JSON.stringify(stopToolCall)
-                    const stopMessage = await executeToolCall(stopToolCall, -1)
-                    executedToolCalls.add(stopKey)
-                    workingMessages.push({
-                        role: 'assistant',
-                        content: `<tool_call>${stopKey}</tool_call>`,
-                    })
-                    workingMessages.push(stopMessage)
-                }
-            }
-        }
-    }
-
-    for (let iteration = 0; iteration <= maxIterations; iteration += 1) {
-        const completion = await createCompletion(
-            config.model_api,
-            workingMessages,
-            iterationMaxTokens,
-            request.temperature ?? 0.7,
-        )
-        const content = getMessageContent(completion)
-        if (DEBUG_AGENT) {
-            console.error(`[agent] iteration=${iteration} completion_length=${content.length}`)
-        }
-        let toolCall = parseToolCall(content)
-        const explicitSearchRequested = /(search|browse|look up|lookup|online|web)/i.test(userMessage)
-        const alreadyHasToolResult = workingMessages.some((message) => message.role === 'tool')
-        if (!alreadyHasToolResult && !toolCall && isNextJsBuildTask(userMessage)) {
-            const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-app'
-            const hasScaffoldedApp = workingMessages.some((message) => message.role === 'tool' && message.content.includes('Tool scaffold_nextjs_app executed'))
-            const hasGeneratedSite = workingMessages.some((message) => message.role === 'tool' && message.content.includes('Tool generate_nextjs_marketing_site executed'))
-            if (!hasScaffoldedApp) {
-                toolCall = {
-                    name: 'scaffold_nextjs_app',
-                    arguments: {
-                        targetDir,
-                        packageManager: 'npm',
-                    },
-                }
-            } else if (!hasGeneratedSite) {
-                toolCall = {
-                    name: 'generate_nextjs_marketing_site',
-                    arguments: {
-                        appDir: targetDir,
-                        brandName: extractBrandName(userMessage),
-                        tagline: 'Spaces that feel composed, calm, and enduring.',
-                        description: 'Boutique architecture for private homes and hospitality environments, shaped with tactile materials and editorial restraint.',
-                        primaryCtaLabel: 'Book a Design Consult',
-                        secondaryCtaLabel: 'View Case Studies',
-                        styleDirection: 'Quiet luxury with tactile materials, warm neutrals, and editorial spacing.',
-                    },
-                }
-            }
-        }
-
-        if (!alreadyHasToolResult && explicitSearchRequested && (!toolCall || toolCall.name !== 'search_web')) {
-            toolCall = {
-                name: 'search_web',
-                arguments: {
-                    query: latestUserMessage(workingMessages),
-                    limit: 5,
-                    visitTopResults: 3,
-                },
-            }
-        }
-
-        if (!toolCall) {
-            const toolContents = workingMessages.filter((message) => message.role === 'tool').map((message) => message.content)
-            const hasWrittenFiles = toolContents.some((content) =>
-                content.includes('Tool write_file executed')
-                || content.includes('Tool generate_nextjs_marketing_site executed')
-                || content.includes('Tool scaffold_nextjs_app executed')
-            )
-            const hasStartedProcess = toolContents.some((content) => content.includes('Tool start_process executed'))
-            const hasBrowserVerification = toolContents.some((content) => content.includes('Tool browser_task executed'))
-            if (isAutonomousRepoTask(userMessage) && looksLikeProposedPatch(content) && !hasWrittenFiles) {
-                workingMessages.push({
-                    role: 'system',
-                    content: 'Do not stop at a proposal. Apply the changes to the repository using write_file or run_command, then continue.',
-                })
-                continue
-            }
-
-            if (/(website|landing page|next\.?js|app router)/i.test(userMessage) && (!hasWrittenFiles || !hasStartedProcess || !hasBrowserVerification)) {
-                workingMessages.push({
-                    role: 'system',
-                    content: 'This web-app task is not complete until you have written the files, started the app, verified it in the browser, and fixed any issues you found. Continue using tools now.',
-                })
-                continue
-            }
-
-            return {
-                content,
-                timings: completion.timings,
-            }
-        }
-
-        const toolKey = JSON.stringify(toolCall)
-        if (executedToolCalls.has(toolKey)) {
-            workingMessages.push({
-                role: 'system',
-                content: 'You already have the requested tool result. Do not call the same tool again. Write the final answer now using the existing tool output.',
-            })
-            continue
-        }
-
-        const toolMessage = await executeToolCall(toolCall, iteration)
-        executedToolCalls.add(toolKey)
-        workingMessages.push({
-            role: 'assistant',
-            content,
-        })
-        workingMessages.push(toolMessage)
-        workingMessages.push({
-            role: 'system',
-            content: 'The tool has finished successfully. Use the tool result above and answer the user now. Do not request the same tool again unless the previous output was clearly insufficient.',
-        })
-    }
-
-    throw new Error('Tool loop exceeded the maximum number of search/command iterations.')
 }

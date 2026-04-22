@@ -53,8 +53,8 @@ export default function RequestsOverTimeChart({ data }: { data: { key: string, c
         <svg viewBox={`0 0 ${width} ${height}`} className='w-full h-auto overflow-visible'>
             <defs>
                 <linearGradient id='chartGradient' x1='0' y1='0' x2='0' y2='1'>
-                    <stop offset='0%' stopColor='#3b82f6' stopOpacity='0.2' />
-                    <stop offset='100%' stopColor='#3b82f6' stopOpacity='0' />
+                    <stop offset='0%' stopColor='#fdba74' stopOpacity='0.28' />
+                    <stop offset='100%' stopColor='#fdba74' stopOpacity='0' />
                 </linearGradient>
             </defs>
 
@@ -76,14 +76,14 @@ export default function RequestsOverTimeChart({ data }: { data: { key: string, c
             <polyline
                 points={points}
                 fill='none'
-                stroke='#3b82f6'
+                stroke='#fdba74'
                 strokeWidth={2}
                 strokeLinecap='round'
                 strokeLinejoin='round'
             />
 
             {data.length < 30 && data.map((d, i) => (
-                <circle key={i} cx={xScale(i)} cy={yScale(d.count)} r={3} fill='#3b82f6' />
+                <circle key={i} cx={xScale(i)} cy={yScale(d.count)} r={3} fill='#fdba74' />
             ))}
 
             {yTicks.map((tick, i) => (

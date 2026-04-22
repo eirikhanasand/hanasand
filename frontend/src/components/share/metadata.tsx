@@ -120,7 +120,7 @@ export default function Metadata({
                 <Notify message={error} />
                 <Info share={share} isConnected={isConnected} participants={participants} />
                 <WordControl clickedWord={clickedWord} />
-                <Box box={box} setBox={setBox} />
+                <Box box={box} setBox={setBox} share={share} />
             </div>
         </div>
     )

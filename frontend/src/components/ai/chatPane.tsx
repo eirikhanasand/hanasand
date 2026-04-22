@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Bot, LoaderCircle, Send, Zap } from 'lucide-react'
+import Image from 'next/image'
 
 type ChatPaneProps = {
     activeConversation: AIConversation | null
@@ -53,7 +54,7 @@ export default function ChatPane(props: ChatPaneProps) {
                         </p>
                     </div>
                     <div className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${isConnected ? 'bg-emerald-500/10 text-emerald-400 outline outline-emerald-500/20' : 'bg-red-500/10 text-red-300 outline outline-red-500/20'}`}>
-                            {isConnected ? 'Live' : 'Offline'}
+                        {isConnected ? 'Live' : 'Offline'}
                     </div>
                 </div>
                 <div className='mt-3 flex flex-wrap gap-2 text-xs text-bright/42'>
@@ -79,6 +80,7 @@ export default function ChatPane(props: ChatPaneProps) {
                         ) : (
                             <MarkdownBlock content={message.content} />
                         )}
+                        <ArtifactList artifacts={Array.isArray(message.metadata?.artifacts) ? message.metadata.artifacts as AIArtifact[] : []} />
                     </div>
                 ))}
             </div>
@@ -112,6 +114,34 @@ function StatusPill({ icon, label }: { icon: ReactNode, label: string }) {
         <div className='inline-flex items-center gap-2 rounded-full bg-dark/30 px-3 py-1.5 outline outline-dark'>
             <span className='text-[#fd8738]'>{icon}</span>
             <span>{label}</span>
+        </div>
+    )
+}
+
+function ArtifactList({ artifacts }: { artifacts: AIArtifact[] }) {
+    if (!artifacts.length) {
+        return null
+    }
+
+    return (
+        <div className='mt-3 grid gap-3 border-t border-dark/80 pt-3'>
+            {artifacts.map((artifact, index) => (
+                <div key={`${artifact.kind}-${artifact.title}-${index}`} className='rounded-xl bg-black/20 p-3 outline outline-dark'>
+                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-bright/38'>{artifact.kind}</div>
+                    <div className='text-sm font-medium text-bright/88'>{artifact.title}</div>
+                    {artifact.url ? (
+                        <a href={artifact.url} target='_blank' rel='noreferrer' className='mt-2 inline-flex text-xs text-[#fd8738] hover:underline'>
+                            {artifact.url}
+                        </a>
+                    ) : null}
+                    {artifact.dataUrl ? (
+                        <Image src={artifact.dataUrl} alt={artifact.title} className='mt-3 max-h-72 w-full rounded-lg object-contain outline outline-dark' />
+                    ) : null}
+                    {artifact.content ? (
+                        <pre className='mt-3 max-h-72 overflow-auto rounded-lg bg-black/25 p-3 text-xs leading-5 text-bright/78'>{artifact.content}</pre>
+                    ) : null}
+                </div>
+            ))}
         </div>
     )
 }

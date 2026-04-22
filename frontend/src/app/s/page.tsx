@@ -1,7 +1,5 @@
-import generateRandomId from '@/utils/id/random'
-import { redirect } from 'next/navigation'
+import ShareEntryClient from './pageClient'
 
-export default function ShareRedirectPage() {
-    const randomId = generateRandomId()
-    redirect(`/s/${randomId}`)
+export default function ShareEntryPage() {
+    return <ShareEntryClient />
 }

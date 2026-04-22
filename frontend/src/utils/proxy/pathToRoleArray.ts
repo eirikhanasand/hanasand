@@ -3,7 +3,9 @@ const pathToRoleArray = [
     { path: '/dashboard/thought', role: 'content_admin' },
     { path: '/dashboard/traffic', role: 'system_admin' },
     { path: '/dashboard/logs', role: 'system_admin' },
-    { path: '/dashboard/system', role: 'system_admin' }
+    { path: '/dashboard/system', role: 'system_admin' },
+    { path: '/dashboard/vulnerabilities', role: 'system_admin' },
+    { path: '/dashboard/backup', role: 'system_admin' }
 ]
 
 export default pathToRoleArray

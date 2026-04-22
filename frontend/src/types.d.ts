@@ -108,7 +108,7 @@ type Share = {
     wordCount: number
     estimatedMinutes: number
     timestamp: string
-    git: string
+    git: string | null
     locked: boolean
     owner: string
     parent: string
@@ -503,6 +503,7 @@ type GptSocketMessage = {
     content?: string
     error?: string
     metrics?: GPT_ModelMetrics
+    artifacts?: AIArtifact[]
 }
 
 type GPT_ChatMessage = {
@@ -547,6 +548,16 @@ type AIConversationMessage = {
     metadata?: Record<string, unknown>
     createdAt: string
     updatedAt?: string
+}
+
+type AIArtifact = {
+    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link'
+    title: string
+    path?: string | null
+    url?: string | null
+    content?: string | null
+    language?: string | null
+    dataUrl?: string | null
 }
 
 type AIConversation = {

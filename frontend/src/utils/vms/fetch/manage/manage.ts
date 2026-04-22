@@ -4,13 +4,13 @@ import { getCookie } from '@/utils/cookies/cookies'
 
 export default async function manageVM(id: string, action: 'start' | 'stop' | 'restart'): Promise<string | null> {
     try {
-        const token = getCookie('access_token')
+        const token = safeDecode(getCookie('access_token') || '')
         const userId = getCookie('id')
         if (!token || !userId) {
             return 'Please log in to manage VMs.'
         }
 
-        const response = await fetchWithRetry(`${config.url.api}/vm/${id}/${action}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/${encodeURIComponent(id)}/${action}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -31,5 +31,13 @@ export default async function manageVM(id: string, action: 'start' | 'stop' | 'r
     } catch (error) {
         console.log(error)
         return error instanceof Error ? error.message : `Failed to ${action} vm.`
+    }
+}
+
+function safeDecode(value: string) {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
     }
 }

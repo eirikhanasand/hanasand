@@ -8,6 +8,12 @@ export type ToolResponse = {
     headers?: Record<string, string>
     body?: string
     error?: string
+    request?: {
+        method: string
+        url: string
+        headers: Record<string, string>
+        body: string
+    }
 }
 
 export type RequestDraft = {
@@ -28,4 +34,5 @@ export type RequestHistoryEntry = {
     statusText?: string
     elapsedMs?: number
     error?: string
+    requestSource?: 'browser' | 'vm'
 }

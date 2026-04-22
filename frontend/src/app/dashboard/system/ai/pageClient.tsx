@@ -14,7 +14,7 @@ export default function GPT_Page() {
     return (
         <>
             <div className='h-full w-full overflow-y-auto'>
-                <div className='mx-auto flex w-full max-w-480 flex-col gap-4 px-8 pb-4 pt-6 md:px-16 md:pt-8 lg:px-32'>
+                <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
                     <div className='flex items-center justify-between gap-4'>
                         <div>
                             <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>System</p>

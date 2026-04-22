@@ -30,7 +30,7 @@ function postStatus(status, message) {
     }).catch(() => {})
 }
 
-const child = spawn('npx', ['playwright', 'test', ...args], {
+const child = spawn('bunx', ['playwright', 'test', ...args], {
     stdio: 'inherit',
     env: process.env,
 })

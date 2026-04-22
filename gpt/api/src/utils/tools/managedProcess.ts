@@ -50,6 +50,31 @@ async function resolveCwd(cwd?: string) {
     }
 }
 
+async function hasSandboxExecutable() {
+    if (!SANDBOX_EXECUTABLE.trim()) {
+        return false
+    }
+
+    try {
+        if (path.isAbsolute(SANDBOX_EXECUTABLE)) {
+            await access(SANDBOX_EXECUTABLE)
+            return true
+        }
+
+        const pathEntries = (process.env.PATH || '').split(path.delimiter).filter(Boolean)
+        for (const entry of pathEntries) {
+            try {
+                await access(path.join(entry, SANDBOX_EXECUTABLE))
+                return true
+            } catch {}
+        }
+    } catch {
+        return false
+    }
+
+    return false
+}
+
 function literalPath(value: string) {
     return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
@@ -133,13 +158,12 @@ export async function startManagedProcess(args: StartManagedProcessArgs) {
     const fd = openSync(logPath, 'a')
     const npmCacheDir = path.join(config.repo_root, '.hanasand', 'npm-cache')
     await mkdir(npmCacheDir, { recursive: true })
-    const child = spawn(SANDBOX_EXECUTABLE, [
-        '-f',
-        profilePath,
-        '/bin/zsh',
-        '-lc',
-        args.command,
-    ], {
+    const sandboxEnabled = await hasSandboxExecutable()
+    const command = sandboxEnabled
+        ? [SANDBOX_EXECUTABLE, '-f', profilePath, '/bin/zsh', '-lc', args.command]
+        : ['/bin/zsh', '-lc', args.command]
+
+    const child = spawn(command[0], command.slice(1), {
         cwd,
         detached: true,
         env: {

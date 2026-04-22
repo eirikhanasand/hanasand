@@ -16,6 +16,8 @@ BUILD_MARKER="$LLAMA_BUILD_DIR/.hanasand-build"
 
 OS_NAME="$(uname -s)"
 CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)"
+LLAMA_BATCH_SIZE="${LLAMA_BATCH_SIZE:-2048}"
+LLAMA_UBATCH_SIZE="${LLAMA_UBATCH_SIZE:-512}"
 N_GPU_LAYERS=0
 NODE_PID=""
 SERVER_PID=""
@@ -175,28 +177,44 @@ select_backend() {
 }
 
 select_model() {
-  CTX_SIZE=16384
+  CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
 
-  if [ "$OS_NAME" != "Darwin" ] && [ "$TOTAL_RAM_GB" -ge 200 ] && [ "$NVIDIA_GPU_COUNT" -ge 2 ]; then
+  if [ -n "${MODEL_NAME_OVERRIDE:-}" ] && [ -n "${MODEL_REPO_OVERRIDE:-}" ] && [ -n "${MODEL_FILE_OVERRIDE:-}" ]; then
+    MODEL_NAME="$MODEL_NAME_OVERRIDE"
+    MODEL_REPO="$MODEL_REPO_OVERRIDE"
+    MODEL_FILE="$MODEL_FILE_OVERRIDE"
+    CTX_SIZE="${LLAMA_CTX_SIZE:-24576}"
+  elif [ "$OS_NAME" = "Darwin" ] && [ "$TOTAL_RAM_GB" -ge 64 ]; then
+    MODEL_NAME="qwen2.5-coder-32b"
+    MODEL_REPO="bartowski/Qwen2.5-Coder-32B-Instruct-GGUF"
+    MODEL_FILE="Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf"
+    CTX_SIZE="${LLAMA_CTX_SIZE:-24576}"
+    if [ -z "${LLAMA_BATCH_SIZE:-}" ] || [ "$LLAMA_BATCH_SIZE" = "2048" ]; then
+      LLAMA_BATCH_SIZE=1024
+    fi
+    if [ -z "${LLAMA_UBATCH_SIZE:-}" ] || [ "$LLAMA_UBATCH_SIZE" = "512" ]; then
+      LLAMA_UBATCH_SIZE=256
+    fi
+  elif [ "$OS_NAME" != "Darwin" ] && [ "$TOTAL_RAM_GB" -ge 200 ] && [ "$NVIDIA_GPU_COUNT" -ge 2 ]; then
     MODEL_NAME="qwen3-coder-next"
     MODEL_REPO="bartowski/Qwen_Qwen3-Coder-Next-GGUF"
     MODEL_FILE="Qwen3-Coder-Next-Q4_K_M.gguf"
-    CTX_SIZE=32768
+    CTX_SIZE="${LLAMA_CTX_SIZE:-32768}"
   elif [ "$TOTAL_RAM_GB" -ge 96 ]; then
     MODEL_NAME="qwen2.5-coder-32b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-32B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf"
-    CTX_SIZE=16384
+    CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
   elif [ "$TOTAL_RAM_GB" -ge 40 ]; then
     MODEL_NAME="qwen2.5-coder-14b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-14B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf"
-    CTX_SIZE=24576
+    CTX_SIZE="${LLAMA_CTX_SIZE:-24576}"
   else
     MODEL_NAME="qwen2.5-coder-7b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-7B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
-    CTX_SIZE=16384
+    CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
   fi
 
   MODEL_DIR="$MODELS_ROOT/$MODEL_NAME"
@@ -352,8 +370,12 @@ SERVER_ARGS=(
   --port "$MODEL_PORT"
   --ctx-size "$CTX_SIZE"
   -t "$CPU_CORES"
+  -tb "${LLAMA_THREADS_BATCH:-$CPU_CORES}"
+  -b "$LLAMA_BATCH_SIZE"
+  -ub "$LLAMA_UBATCH_SIZE"
   -ngl "$N_GPU_LAYERS"
   --reasoning-budget -1
+  --mlock
 )
 
 if [ "${#SERVER_EXTRA_ARGS[@]}" -gt 0 ]; then

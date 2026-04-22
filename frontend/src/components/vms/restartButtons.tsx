@@ -4,10 +4,11 @@ import { Play, RefreshCcw, StopCircle } from 'lucide-react'
 import { useState } from 'react'
 import Notify from '../notify/notify'
 
-export default function RestartButtons({ vm }: { vm: VM }) {
+export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, forceVisible?: boolean }) {
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const [loading, setLoading] = useState(false)
-    const isRunning = vm.status.toLowerCase() !== 'stopped'
+    const status = (vm.status || '').toLowerCase()
+    const isRunning = status !== '' && status !== 'stopped'
 
     async function handleClick(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         e.preventDefault()
@@ -36,7 +37,7 @@ export default function RestartButtons({ vm }: { vm: VM }) {
     }
 
     return (
-        <div onClick={handleClick} className="hidden group-hover:flex gap-2 h-full rounded-md group cursor-pointer">
+        <div onClick={handleClick} className={`${forceVisible ? 'flex' : 'hidden group-hover:flex'} gap-2 h-full rounded-md group cursor-pointer`}>
             {!isRunning && <button onClick={handleStart} disabled={loading} className="text-green-400 group-hover:cursor-pointer hover:bg-bright/3 px-3 rounded-md">
                 <Play className='w-5 h-5' />
             </button>}

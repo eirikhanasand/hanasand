@@ -144,12 +144,14 @@ async function main() {
     const pageResults = []
     for (const path of pages) {
         const result = await pageRequest(path, cookieHeader)
+        const expectedRedirect = path === '/dashboard/backup' ? '/dashboard/db' : null
         pageResults.push({
             path,
             status: result.response.status,
             redirected: result.response.status >= 300 && result.response.status < 400,
             location: result.response.headers.get('location'),
             looksLikeHtml: result.text.includes('<!DOCTYPE html>'),
+            expectedRedirect,
         })
     }
 
@@ -160,7 +162,13 @@ async function main() {
         page_results: pageResults,
     }, null, 2))
 
-    const failedPage = pageResults.find((page) => page.status !== 200 || !page.looksLikeHtml)
+    const failedPage = pageResults.find((page) => {
+        if (page.expectedRedirect) {
+            return page.status !== 307 || page.location !== page.expectedRedirect
+        }
+
+        return page.status !== 200 || !page.looksLikeHtml
+    })
     if (!runtimeAvailable) {
         throw new Error('Runtime log source is unavailable.')
     }

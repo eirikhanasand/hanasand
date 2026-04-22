@@ -76,9 +76,8 @@ test('persisted AI workspace loads from the database into the app shell', async 
 
     await expect(page.getByText('Hanasand AI', { exact: true })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Database chat' })).toBeVisible()
-    await expect(page.getByText('Persist this coding plan.')).toBeVisible()
-    await expect(page.getByText('Automatic model failover')).toBeVisible()
-    await expect(page.getByText('Attached shares', { exact: true })).toBeVisible()
+    await expect(page.getByText('Persist this coding plan.', { exact: true }).last()).toBeVisible()
+    await expect(page.getByPlaceholder('Ask about your code, request a patch, inspect a repo, or describe the task you want done...')).toBeVisible()
 
     await context.close()
 })

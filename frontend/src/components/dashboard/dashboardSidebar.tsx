@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BrainCircuit, DatabaseBackup, FileWarning, Inbox, LayoutDashboard, Network, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
+import { BrainCircuit, Database, DatabaseBackup, FileWarning, Inbox, LayoutDashboard, Network, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -47,7 +47,8 @@ export default function DashboardSidebar({
 
     if (isAdmin) {
         items.splice(4, 0, { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> })
-        items.splice(5, 0, { href: '/dashboard/backup', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> })
+        items.splice(5, 0, { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> })
+        items.splice(6, 0, { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> })
         items.push({ href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> })
     }
 

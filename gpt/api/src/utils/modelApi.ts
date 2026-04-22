@@ -256,6 +256,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
             completionId,
             clientName: request.clientName || null,
             content,
+            artifacts: result.artifacts || [],
             metrics: getModelState(),
         }))
 

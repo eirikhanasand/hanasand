@@ -47,6 +47,16 @@ type GPT_ChatMessage = {
     tool_call_id?: string
 }
 
+type AIArtifact = {
+    kind: 'screenshot' | 'log' | 'command' | 'http' | 'file' | 'link'
+    title: string
+    path?: string | null
+    url?: string | null
+    content?: string | null
+    language?: string | null
+    dataUrl?: string | null
+}
+
 type GPT_PromptRequest = {
     type: 'prompt_request'
     conversationId: string
