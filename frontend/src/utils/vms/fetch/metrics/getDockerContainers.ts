@@ -26,6 +26,8 @@ export default async function getDockerContainers({ id, token }: DockerContainer
             ? data
             : Array.isArray(data?.data)
                 ? data.data
+                : Array.isArray(data?.containers)
+                    ? data.containers
                 : []
 
         return containers as DockerContainer[]

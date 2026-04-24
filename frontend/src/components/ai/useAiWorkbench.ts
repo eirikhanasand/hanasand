@@ -22,6 +22,7 @@ type UseAiWorkbenchProps = {
     initialRepositories: AIImportedRepo[]
     initialShares: Share[]
     isAuthenticated: boolean
+    initialConversationId?: string | null
 }
 
 type AiToolCall = {
@@ -44,6 +45,7 @@ export default function useAiWorkbench({
     initialRepositories,
     initialShares,
     isAuthenticated,
+    initialConversationId = null,
 }: UseAiWorkbenchProps) {
     const socketRef = useRef<WebSocket | null>(null)
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -61,7 +63,7 @@ export default function useAiWorkbench({
     const [isConnected, setIsConnected] = useState(false)
     const [statusNotice, setStatusNotice] = useState<string | null>(null)
     const [conversations, setConversations] = useState<AIConversation[]>(initialConversations)
-    const [activeConversationId, setActiveConversationId] = useState<string | null>(initialConversations[0]?.id || null)
+    const [activeConversationId, setActiveConversationId] = useState<string | null>(initialConversationId || initialConversations[0]?.id || null)
     const [composer, setComposer] = useState('')
     const [search, setSearch] = useState('')
     const [importInput, setImportInput] = useState('')
@@ -424,7 +426,7 @@ export default function useAiWorkbench({
         }, ...prev.filter((entry) => entry.id !== repo.id)])
     }
 
-    async function patchConversation(id: string, patch: Partial<AIConversation>) {
+    const patchConversation = useCallback(async (id: string, patch: Partial<AIConversation>) => {
         updateLocalConversation(id, patch)
 
         if (!isAuthenticated) {
@@ -443,7 +445,7 @@ export default function useAiWorkbench({
         } catch (error) {
             setStatusNotice(error instanceof Error ? error.message : 'Unable to save conversation changes.')
         }
-    }
+    }, [isAuthenticated])
 
     async function renameConversation(id: string, title: string) {
         const nextTitle = title.trim() || 'New chat'
@@ -522,7 +524,7 @@ export default function useAiWorkbench({
         }
     }, [isAuthenticated])
 
-    async function attachShare(shareId: string) {
+    const attachShare = useCallback(async (shareId: string) => {
         if (!activeConversation) {
             return
         }
@@ -552,9 +554,9 @@ export default function useAiWorkbench({
         if (share) {
             setShareContents((prev) => ({ ...prev, [shareId]: share.content }))
         }
-    }
+    }, [activeConversation, patchConversation, shareTrees])
 
-    async function attachRepo(repoId: string, importedRepo?: AIImportedRepo) {
+    const attachRepo = useCallback(async (repoId: string, importedRepo?: AIImportedRepo) => {
         const repo = importedRepo || importedRepos.find((item) => item.id === repoId)
         if (!repo || !activeConversation) {
             return
@@ -579,7 +581,7 @@ export default function useAiWorkbench({
         if (repo.files[0]?.path) {
             await hydrateShareFileRef.current(shareId, repo.files[0].path)
         }
-    }
+    }, [activeConversation, importedRepos, patchConversation])
 
     async function importRepo() {
         if (!importInput.trim()) {
@@ -708,7 +710,7 @@ export default function useAiWorkbench({
         }
     }
 
-    async function selectRepoFile(path: string) {
+    const selectRepoFile = useCallback(async (path: string) => {
         if (!activeConversation || typeof activeConversation.workspaceMeta?.repositoryId !== 'string' || !activeConversation.workspaceId) {
             return
         }
@@ -720,9 +722,9 @@ export default function useAiWorkbench({
                 selectedFilePath: path,
             },
         })
-    }
+    }, [activeConversation, patchConversation])
 
-    async function selectShareFile(path: string) {
+    const selectShareFile = useCallback(async (path: string) => {
         if (!activeConversation || !activeConversation.workspaceId) {
             return
         }
@@ -734,7 +736,7 @@ export default function useAiWorkbench({
                 selectedFilePath: path,
             },
         })
-    }
+    }, [activeConversation, patchConversation])
 
     const scaffoldStarter = useCallback(async (template: 'nextjs_docker', projectName?: string | null, targetShareId?: string | null) => {
         if (!activeConversation) {
@@ -1078,7 +1080,8 @@ export default function useAiWorkbench({
             }
 
             for (const toolCall of toolCalls) {
-                const result = await runToolCallRef.current(conversation, toolCall)
+                const latestConversation = conversationsRef.current.find((entry) => entry.id === conversation.id) || conversation
+                const result = await runToolCallRef.current(latestConversation, toolCall)
                 const toolMessage: AIConversationMessage = {
                     id: crypto.randomUUID(),
                     role: 'tool',

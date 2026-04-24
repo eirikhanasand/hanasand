@@ -153,7 +153,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
 
             <div className='rounded-md p-2 space-y-2'>
                 <div className='flex justify-between items-center'>
-                    <div className='flex gap-2 items-center'>
+                    <div className='flex flex-wrap gap-2 items-center'>
                         <h1 className="font-semibold text-xl text-bright/80">Virtual Machines</h1>
                         <h1 className={vmOverviewClass}>{runningVms} Running</h1>
                         <h1 className={vmOverviewClass}>{idleVms} Idle</h1>
@@ -164,23 +164,28 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                         <h1 className="text-sm">Stop all</h1>
                     </div>
                 </div>
-                <div className='flex w-full gap-2 p-2 rounded-md bg-bright/3 font-semibold text-bright/80'>
-                    <h1 className='w-full'>Name</h1>
-                    <h1 className='w-full'>Owner</h1>
-                    <h1 className='min-w-25'>CPU</h1>
-                    <h1 className='min-w-25'>Memory</h1>
-                    <h1 className='w-full'>Created at</h1>
-                    <h1 className='w-full'>Last used</h1>
-                    <h1 className='min-w-25'>Status</h1>
-                    <h1 className='w-full'>Tags</h1>
-                </div>
-                {normalizedVms.map((vm) => {
-                    const latestMetrics = normalizedMetrics
-                        .filter((metric) => metric.name === vm.name)
-                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                <div className='overflow-x-auto'>
+                    <div className='min-w-[74rem]'>
+                        <div className='grid items-center gap-2 rounded-md bg-bright/3 p-2 font-semibold text-bright/80 lg:grid-cols-[minmax(14rem,1.3fr)_minmax(10rem,1fr)_7rem_10rem_minmax(9rem,0.95fr)_minmax(9rem,0.95fr)_7rem_minmax(16rem,1.4fr)_6.5rem]'>
+                            <h1>Name</h1>
+                            <h1>Owner</h1>
+                            <h1>CPU</h1>
+                            <h1>Memory</h1>
+                            <h1>Created at</h1>
+                            <h1>Last used</h1>
+                            <h1>Status</h1>
+                            <h1>Tags</h1>
+                            <h1 className='text-right'>Actions</h1>
+                        </div>
+                        {normalizedVms.map((vm) => {
+                            const latestMetrics = normalizedMetrics
+                                .filter((metric) => metric.name === vm.name)
+                                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 
-                    return <SystemDashboardVMListItem key={vm.name} vm={vm} metrics={latestMetrics} />
-                })}
+                            return <SystemDashboardVMListItem key={vm.name} vm={vm} metrics={latestMetrics} />
+                        })}
+                    </div>
+                </div>
             </div>
         </div>
     )

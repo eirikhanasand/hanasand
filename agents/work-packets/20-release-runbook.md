@@ -1,6 +1,6 @@
 ---
-claimed_by:
-status: unclaimed
+claimed_by: local-14b
+status: drafted
 last_updated: 2026-04-22
 ---
 
@@ -29,3 +29,8 @@ There are now enough interacting systems that future work will slow down without
 ## Acceptance criteria
 - A future agent can get productive quickly by following the runbook.
 - The runbook reflects reality rather than aspiration.
+
+## Progress notes
+- 2026-04-22 - Claimed by codex for a focused runbook pass that should avoid the active frontend `/status` workstream.
+- 2026-04-22 - Local 14B model produced a first draft note at `/Users/eirikhanasand/Desktop/personal/hanasand/agents/local-model-notes/packet-20-release-runbook.local-model.md`.
+- 2026-04-22 - A follow-up agent should refine the draft against the actual packet list and current repository paths before marking this packet complete.

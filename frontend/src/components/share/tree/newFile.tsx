@@ -27,15 +27,10 @@ export default function NewFile({
     tree,
     setTree
 }: NewFileProps) {
-    let lowercaseTreeHasFile = false
     const { condition: blink, setCondition: setBlink } = useClearStateAfter({ timeout: 400 })
-    const treeHasFile = tree.some((file) => {
-        if (file.name.toLowerCase() === newFileName.toLowerCase()) {
-            lowercaseTreeHasFile = true
-        }
-
-        return file.name === newFileName
-    })
+    const normalizedNewFileName = newFileName.toLowerCase()
+    const lowercaseTreeHasFile = tree.some((entry) => entry.name.toLowerCase() === normalizedNewFileName)
+    const treeHasFile = tree.some((entry) => entry.name === newFileName)
 
     const outline = treeHasFile 
         ? `outline outline-red-500 rounded-md ${blink && 'bg-red-500/20'}`

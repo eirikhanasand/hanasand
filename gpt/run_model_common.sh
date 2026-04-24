@@ -221,6 +221,35 @@ select_model() {
   MODEL_PATH="$MODEL_DIR/$MODEL_FILE"
 }
 
+find_best_available_model() {
+  local candidate_name="$1"
+  local candidate_file="$2"
+  local candidate_path="$MODELS_ROOT/$candidate_name/$candidate_file"
+
+  if [ -f "$candidate_path" ]; then
+    echo "$candidate_name|$candidate_file"
+    return
+  fi
+
+  local fallbacks=(
+    "qwen2.5-coder-14b|Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf"
+    "qwen2.5-coder-7b|Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
+  )
+
+  local fallback
+  for fallback in "${fallbacks[@]}"; do
+    local fallback_name="${fallback%%|*}"
+    local fallback_file="${fallback##*|}"
+    local fallback_path="$MODELS_ROOT/$fallback_name/$fallback_file"
+    if [ -f "$fallback_path" ]; then
+      echo "$fallback"
+      return
+    fi
+  done
+
+  echo "$candidate_name|$candidate_file"
+}
+
 binary_matches_host_arch() {
   local binary_path="$1"
   [ -x "$binary_path" ] || return 1
@@ -266,6 +295,24 @@ build_llama_cpp() {
 }
 
 download_model() {
+  if [ "${GPT_REQUIRE_SELECTED_MODEL:-0}" != "1" ]; then
+    local selected
+    selected="$(find_best_available_model "$MODEL_NAME" "$MODEL_FILE")"
+    local available_name="${selected%%|*}"
+    local available_file="${selected##*|}"
+
+    if [ "$available_name" != "$MODEL_NAME" ] || [ "$available_file" != "$MODEL_FILE" ]; then
+      echo "Preferred model $MODEL_NAME/$MODEL_FILE is not fully available locally."
+      echo "Falling back to local model $available_name/$available_file so the agent can start immediately."
+      MODEL_NAME="$available_name"
+      MODEL_FILE="$available_file"
+      MODEL_DIR="$MODELS_ROOT/$MODEL_NAME"
+      MODEL_PATH="$MODEL_DIR/$MODEL_FILE"
+    fi
+  else
+    echo "Requiring the selected model without local fallback: $MODEL_NAME/$MODEL_FILE"
+  fi
+
   mkdir -p "$MODEL_DIR"
 
   if [ -f "$MODEL_PATH" ]; then

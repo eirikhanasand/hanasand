@@ -1,6 +1,6 @@
 ---
-claimed_by:
-status: unclaimed
+claimed_by: codex
+status: completed
 last_updated: 2026-04-22
 ---
 
@@ -30,3 +30,10 @@ The agent should be able to verify APIs, not just webpages. Stronger HTTP toolin
 - API verification is easier than using a raw command.
 - Responses are readable and useful in artifacts or messages.
 - The improvement directly helps autonomous backend tasks.
+
+## Completed in this pass
+- Added a new structured `http_request` tool to the local model tool loop.
+- Added support for method, headers, body, timeout, expected status, expected text, and expected JSON key assertions.
+- Added concise JSON summaries and body excerpts for agent-readable API verification.
+- Updated the compose verification flow so it can do both basic readiness checks and richer HTTP assertions.
+- Recorded implementation notes in `/Users/eirikhanasand/Desktop/personal/hanasand/agents/work-results/packet-10-http-and-api-tool-expansion.md`.

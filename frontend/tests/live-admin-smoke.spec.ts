@@ -40,6 +40,9 @@ test.describe('live admin smoke', () => {
             await expect(page.locator('main').getByRole('heading', { name: 'Vulnerabilities' }).first()).toBeVisible()
             await expect(page.getByText('Failed to load vulnerability report')).toHaveCount(0)
             await expect(page.getByText(/401 Unauthorized/i)).toHaveCount(0)
+            await expect(page.getByText('Showing 0 of 0 images')).toHaveCount(0)
+            await expect(page.getByText('No matches found')).toHaveCount(0)
+            await expect(page.getByText(/unknown flag: --format/i)).toHaveCount(0)
 
             await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
             await expect(page).toHaveURL(/\/dashboard\/management/)

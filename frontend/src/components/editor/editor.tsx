@@ -1,6 +1,6 @@
 'use client'
 
-import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
+import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import '@styles/github.css'
@@ -87,11 +87,15 @@ export default function Editor({
     editing,
     setEditing
 }: EditorProps) {
-    const [markdown, setMarkdown] = useState(content.join('\n'))
+    const initialMarkdown = useMemo(() => content.join('\n'), [content])
+    const [draftMarkdown, setDraftMarkdown] = useState(initialMarkdown)
     const [displayEditor, setDisplayEditor] = useState(false)
     const [hideSave, setHideSave] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
-    const edited = content.join('\n') !== markdown
+    const markdown = customSaveLogic
+        ? initialMarkdown
+        : (displayEditor || draftMarkdown !== initialMarkdown ? draftMarkdown : initialMarkdown)
+    const edited = initialMarkdown !== markdown
 
     function handleMarkdownChange(event: ChangeEvent<HTMLTextAreaElement>) {
         if (customSaveLogic && onChange) {
@@ -100,9 +104,8 @@ export default function Editor({
             }
 
             onChange(event.target.value)
-            setMarkdown(event.target.value)
         } else {
-            setMarkdown(event.target.value)
+            setDraftMarkdown(event.target.value)
         }
 
         setDisplayEditor(true)
@@ -125,8 +128,14 @@ export default function Editor({
         textarea.style.height = `${textarea.scrollHeight}px`
     }
 
-    function handleDisplayEditor(force?: boolean) {
-        setDisplayEditor(force ?? !displayEditor)
+    function handleDisplayEditor(next?: boolean | ((prev: boolean) => boolean)) {
+        setDisplayEditor((prev) => {
+            if (typeof next === 'function') {
+                return next(prev)
+            }
+
+            return next ?? !prev
+        })
         setHideSave(false)
         if (textareaRef.current) {
             autoResize(textareaRef.current)
@@ -141,22 +150,10 @@ export default function Editor({
     }, [markdown, displayEditor, textareaRef.current])
 
     useEffect(() => {
-        setMarkdown(content.join('\n'))
-    }, [content])
-
-    useEffect(() => {
         if (typeof setEditing !== 'undefined') {
             setEditing(displayEditor)
         }
     }, [displayEditor, setEditing])
-
-    useEffect(() => {
-        if (!editing) {
-            setDisplayEditor(false)
-            handleDisplayEditor(false)
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editing])
 
     return <EditorWithoutLogic
         className={className}
@@ -164,9 +161,8 @@ export default function Editor({
         markdown={markdown}
         handleMarkdownChange={handleMarkdownChange}
         handleSave={handleSave}
-        displayEditor={displayEditor}
-        // @ts-expect-error This is intended to make sure its called instead of passed as a function
-        handleDisplayEditor={() => handleDisplayEditor((prev: boolean) => !prev)}
+        displayEditor={editing ? displayEditor : false}
+        handleDisplayEditor={() => handleDisplayEditor((prev) => !prev)}
         hideSaveButton={hideSaveButton}
         hideSave={hideSave}
         textareaRef={textareaRef}

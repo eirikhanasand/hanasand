@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import getMetrics from '@/utils/traffic/getMetrics'
+import getMetrics, { type TrafficSummaryMetric } from '@/utils/traffic/getMetrics'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
 import useWS from '@/hooks/useWS'
 import { ServiceStatus } from '@/utils/status/getStatus'
@@ -15,17 +15,9 @@ type MetricSummary = {
     hits_total: number
 }
 
-type RequestLog = {
-    metric: 'ip' | 'user_agent' | 'path'
-    value: string
-    path: string
-    hits: number
-    last_seen: string
-    created_at: string
-}
-
 type DashboardProps = {
     metrics: MetricSummary[]
+    domainMetrics: TrafficSummaryMetric[]
     blocklist: BlocklistEntry[]
     logs: RequestLog[]
     topDomains: DomainTPS[]
@@ -52,14 +44,17 @@ function relativeTime(value: string) {
     return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-export default function StatusDashboard({ metrics: serverMetrics, topDomains, serviceStatus }: DashboardProps) {
+export default function StatusDashboard({ metrics: serverMetrics, domainMetrics: serverDomainMetrics, topDomains, serviceStatus }: DashboardProps) {
     const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
+    const [domainMetrics, setDomainMetrics] = useState<TrafficSummaryMetric[]>(serverDomainMetrics)
     const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id', replace: true })
 
     useEffect(() => {
         (async () => {
             const updatedMetrics = await getMetrics()
+            const updatedDomainMetrics = await getMetrics('domain')
             setMetrics(updatedMetrics)
+            setDomainMetrics(updatedDomainMetrics)
         })()
     }, [])
 
@@ -147,10 +142,13 @@ export default function StatusDashboard({ metrics: serverMetrics, topDomains, se
             {/* Metrics */}
             <h1 className='font-semibold text-lg'>Most visited subdomains</h1>
             <div className="grid md:grid-cols-5 gap-4">
-                {domains.map((d, i) => (
+                {domainMetrics.map((d, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
-                        <h2 className="font-semibold text-bright/90">{d.name}</h2>
-                        <span className='text-xs text-almostbright'>Live TPS: {d.tps.toFixed(2)}</span>
+                        <h2 className="font-semibold text-bright/90">{d.value}</h2>
+                        <span className='text-xs text-almostbright'>Hourly: {d.hits_hour ?? 0}</span>
+                        <span className='text-xs text-almostbright'>Daily: {d.hits_today}</span>
+                        <span className='text-xs text-almostbright'>Weekly: {d.hits_last_week}</span>
+                        <span className='text-xs text-almostbright'>Total: {d.hits_total}</span>
                     </div>
                 ))}
             </div>

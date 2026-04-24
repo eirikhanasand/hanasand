@@ -18,6 +18,7 @@ export default async function AIWindowPage() {
             initialShares={initialShares}
             isAuthenticated={Boolean(id && token)}
             compact
+            mode='workspace'
         />
     )
 }

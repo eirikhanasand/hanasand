@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function page() {
     const metrics = await getMetrics()
+    const domainMetrics = await getMetrics('domain')
     const blocklist = await getBlocklist()
     const logs = await getLogs()
     const cdnDomains = await getDomains()
@@ -33,6 +34,7 @@ export default async function page() {
         <div className='h-full overflow-hidden px-8 py-4 md:px-16 lg:px-32'>
             <StatusDashboard
                 metrics={metrics}
+                domainMetrics={domainMetrics}
                 blocklist={blocklist}
                 logs={logs}
                 topDomains={topDomains}

@@ -139,7 +139,11 @@ export default function MailWorkspace({ mailboxUser }: Props) {
     }, [activeMailboxUser, mailboxUser, selectedMailboxId, selectedMessageId])
 
     useEffect(() => {
-        load({ mailboxUser, mailboxId: null, messageId: null })
+        const timer = window.setTimeout(() => {
+            void load({ mailboxUser, mailboxId: null, messageId: null })
+        }, 0)
+
+        return () => window.clearTimeout(timer)
     }, [load, mailboxUser])
 
     useEffect(() => {

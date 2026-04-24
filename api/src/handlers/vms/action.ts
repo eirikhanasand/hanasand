@@ -2,6 +2,7 @@ import config from '#constants'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import sanitize from '#utils/sanitize.ts'
+import run from '#db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 const allowedActions = new Set(['start', 'stop', 'restart'])
@@ -36,6 +37,17 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
         if (!internalRes.ok) {
             return res.status(internalRes.status).send(payload)
         }
+
+        const nextStatus = action === 'stop' ? 'stopped' : 'running'
+        await run(`
+            UPDATE vm_details
+            SET status = $2,
+                volatile_last_state_power = UPPER($2),
+                last_checked = NOW()
+            WHERE name = $1
+        `, [id, nextStatus]).catch((error) => {
+            req.log.warn({ err: error, id, action }, 'Unable to update cached VM status after action.')
+        })
 
         return res.send(payload)
     } catch (error) {

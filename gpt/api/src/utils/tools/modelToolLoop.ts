@@ -2,6 +2,7 @@ import browserTask from '#utils/tools/browserTask.ts'
 import { composeDown, composeLogs, composeUp } from '#utils/tools/composeStack.ts'
 import config from '#constants'
 import generateNextjsMarketingSite from '#utils/tools/generateNextjsMarketingSite.ts'
+import httpRequest from '#utils/tools/httpRequest.ts'
 import { inspectManagedProcess, startManagedProcess, stopManagedProcess, waitForHttp } from '#utils/tools/managedProcess.ts'
 import { grepRepo, listRepoFiles, readRepoFile, writeRepoFile } from '#utils/tools/repoTools.ts'
 import runCommand from '#utils/tools/runCommand.ts'
@@ -41,6 +42,7 @@ const TOOL_SYSTEM_PROMPT = [
     '<tool_call>{"name":"compose_logs","arguments":{"cwd":"sandbox/my-app","tail":200}}</tool_call>',
     '<tool_call>{"name":"compose_down","arguments":{"cwd":"sandbox/my-app"}}</tool_call>',
     '<tool_call>{"name":"wait_for_http","arguments":{"url":"http://127.0.0.1:3025","timeoutMs":120000,"expectText":"Welcome"}}</tool_call>',
+    '<tool_call>{"name":"http_request","arguments":{"url":"http://127.0.0.1:3001/health","method":"GET","expectStatus":200,"expectJsonKey":"ok"}}</tool_call>',
     '<tool_call>{"name":"browser_task","arguments":{"url":"http://127.0.0.1:3025","captureScreenshot":true,"actions":[{"action":"wait_for_text","text":"Welcome"}]}}</tool_call>',
     'After a tool result arrives, use it actively in the final answer and cite relevant URLs, commands, or file paths from the tool output.',
     'Clean up helper processes you started once verification is complete.',
@@ -187,6 +189,19 @@ type ToolCall =
         }
     }
     | {
+        name: 'http_request'
+        arguments: {
+            url: string
+            method?: string
+            headers?: Record<string, string>
+            body?: string
+            timeoutMs?: number
+            expectStatus?: number
+            expectText?: string
+            expectJsonKey?: string
+        }
+    }
+    | {
         name: 'browser_task'
         arguments: {
             url: string
@@ -249,6 +264,7 @@ export default async function runModelToolLoop(
     const executedToolCalls = new Set<string>()
     const collectedArtifacts: AIArtifact[] = []
     const userMessage = latestUserMessage(workingMessages)
+    const prefersBrowserWorkspace = isBrowserWorkspaceRequest(request.messages)
 
     if (isAutonomousRepoTask(userMessage)) {
         workingMessages.push({
@@ -257,7 +273,7 @@ export default async function runModelToolLoop(
         })
     }
 
-    if (isNextJsBuildTask(userMessage)) {
+    if (isNextJsBuildTask(userMessage) && !prefersBrowserWorkspace) {
         if (DEBUG_AGENT) {
             console.error('[agent] preflight nextjs build detected')
         }
@@ -395,7 +411,7 @@ export default async function runModelToolLoop(
         }
     }
 
-    if (isDockerizedNextJsTask(userMessage)) {
+    if (isDockerizedNextJsTask(userMessage) && !prefersBrowserWorkspace) {
         const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-docker-app'
         const scaffoldToolCall: ToolCall = {
             name: 'scaffold_nextjs_docker_app',
@@ -467,7 +483,7 @@ export default async function runModelToolLoop(
         let toolCall = parseToolCall(content)
         const explicitSearchRequested = /(search|browse|look up|lookup|online|web)/i.test(userMessage)
         const alreadyHasToolResult = workingMessages.some((message) => message.role === 'tool')
-        if (!alreadyHasToolResult && !toolCall && isNextJsBuildTask(userMessage)) {
+        if (!alreadyHasToolResult && !toolCall && isNextJsBuildTask(userMessage) && !prefersBrowserWorkspace) {
             const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-nextjs-app'
             const hasScaffoldedApp = workingMessages.some((message) => message.role === 'tool' && message.content.includes('Tool scaffold_nextjs_app executed'))
             const hasGeneratedSite = workingMessages.some((message) => message.role === 'tool' && message.content.includes('Tool generate_nextjs_marketing_site executed'))
@@ -666,6 +682,8 @@ function parseToolCall(content: string): ToolCall | null {
         extractBalancedJson(content, '"name": "compose_down"'),
         extractBalancedJson(content, '"name":"wait_for_http"'),
         extractBalancedJson(content, '"name": "wait_for_http"'),
+        extractBalancedJson(content, '"name":"http_request"'),
+        extractBalancedJson(content, '"name": "http_request"'),
         extractBalancedJson(content, '"name":"browser_task"'),
         extractBalancedJson(content, '"name": "browser_task"'),
     ].filter((candidate): candidate is string => Boolean(candidate))
@@ -722,6 +740,9 @@ function parseToolCall(content: string): ToolCall | null {
                 return parsed
             }
             if (parsed?.name === 'wait_for_http' && parsed.arguments?.url) {
+                return parsed
+            }
+            if (parsed?.name === 'http_request' && parsed.arguments?.url) {
                 return parsed
             }
             if (parsed?.name === 'browser_task' && parsed.arguments?.url) {
@@ -934,6 +955,32 @@ function parseToolCall(content: string): ToolCall | null {
         }
     }
 
+    if (xmlName === 'http_request') {
+        const url = content.match(/<url>\s*([\s\S]*?)\s*<\/url>/i)?.[1]?.trim()
+        const method = content.match(/<method>\s*([\s\S]*?)\s*<\/method>/i)?.[1]?.trim()
+        const body = content.match(/<body>\s*([\s\S]*?)\s*<\/body>/i)?.[1]
+        const timeoutMsRaw = content.match(/<timeoutMs>\s*(\d+)\s*<\/timeoutMs>/i)?.[1]
+        const expectStatusRaw = content.match(/<expectStatus>\s*(\d+)\s*<\/expectStatus>/i)?.[1]
+        const expectText = content.match(/<expectText>\s*([\s\S]*?)\s*<\/expectText>/i)?.[1]?.trim()
+        const expectJsonKey = content.match(/<expectJsonKey>\s*([\s\S]*?)\s*<\/expectJsonKey>/i)?.[1]?.trim()
+        const headers = parseXmlJson<Record<string, string>>(content, 'headers')
+        if (url) {
+            return {
+                name: 'http_request',
+                arguments: {
+                    url,
+                    method: method || undefined,
+                    headers: headers && typeof headers === 'object' ? headers : undefined,
+                    body: body || undefined,
+                    timeoutMs: timeoutMsRaw ? Number(timeoutMsRaw) : undefined,
+                    expectStatus: expectStatusRaw ? Number(expectStatusRaw) : undefined,
+                    expectText: expectText || undefined,
+                    expectJsonKey: expectJsonKey || undefined,
+                },
+            }
+        }
+    }
+
     if (xmlName === 'browser_task') {
         const url = content.match(/<url>\s*([\s\S]*?)\s*<\/url>/i)?.[1]?.trim()
         const goal = content.match(/<goal>\s*([\s\S]*?)\s*<\/goal>/i)?.[1]?.trim()
@@ -959,6 +1006,17 @@ function parseToolCall(content: string): ToolCall | null {
 
 function latestUserMessage(messages: GPT_ChatMessage[]) {
     return [...messages].reverse().find((message) => message.role === 'user')?.content || ''
+}
+
+function isBrowserWorkspaceRequest(messages: GPT_ChatMessage[]) {
+    return messages.some((message) =>
+        message.role === 'system'
+        && typeof message.content === 'string'
+        && (
+            message.content.includes('You are Hanasand AI, an app-style coding assistant inside Hanasand.')
+            || message.content.includes('<hanasand-tool>')
+        )
+    )
 }
 
 function isAutonomousRepoTask(message: string) {
@@ -1060,6 +1118,7 @@ function describeToolCall(toolCall: ToolCall) {
     if (toolCall.name === 'inspect_process') return `Inspected process ${toolCall.arguments.id}`
     if (toolCall.name === 'stop_process') return `Stopped process ${toolCall.arguments.id}`
     if (toolCall.name === 'wait_for_http') return `Checked ${toolCall.arguments.url}`
+    if (toolCall.name === 'http_request') return `Requested ${toolCall.arguments.method || 'GET'} ${toolCall.arguments.url}`
     if (toolCall.name === 'browser_task') return `Opened browser task for ${toolCall.arguments.url}`
     return 'Executed tool'
 }
@@ -1507,6 +1566,42 @@ async function executeToolCall(
         }
     }
 
+    if (toolCall.name === 'http_request') {
+        const result = await httpRequest(toolCall.arguments)
+        const assertionSummary = result.assertions.length
+            ? result.assertions.map((assertion) => `${assertion.passed ? 'PASS' : 'FAIL'} ${assertion.name}: ${assertion.detail}`).join('\n')
+            : '<none>'
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: result.ok ? 'completed' : 'error',
+            toolDetail: `${result.method} ${result.url} -> ${result.status}`,
+        })
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `http_request_${iteration + 1}`,
+                content: [
+                    `Tool http_request executed: ${result.method} ${result.url}`,
+                    `OK: ${result.ok ? 'yes' : 'no'}`,
+                    `Status: ${result.status} ${result.statusText}`,
+                    `Elapsed: ${result.elapsedMs}ms`,
+                    result.contentType ? `Content-Type: ${result.contentType}` : null,
+                    `Assertions:\n${assertionSummary}`,
+                    result.jsonSummary ? `JSON summary:\n${result.jsonSummary}` : null,
+                    result.excerpt ? `Body excerpt:\n${result.excerpt}` : null,
+                ].filter(Boolean).join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'http',
+                title: `${result.method} ${result.url}`,
+                url: result.url,
+                content: result.excerpt,
+                language: result.contentType?.includes('json') ? 'json' : 'text',
+            }],
+        }
+    }
+
     if (toolCall.name === 'browser_task') {
         const result = await browserTask(toolCall.arguments)
         emitToolProgress?.({
@@ -1618,6 +1713,15 @@ async function executeComposeVerificationFlow({
             arguments: {
                 url,
                 timeoutMs: 120000,
+                expectText,
+            },
+        },
+        {
+            name: 'http_request',
+            arguments: {
+                url,
+                method: 'GET',
+                expectStatus: 200,
                 expectText,
             },
         },

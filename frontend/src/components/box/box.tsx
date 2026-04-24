@@ -94,6 +94,7 @@ export default function Box({ box, setBox, share }: BoxProps) {
                     </div>
                 </div>
                 <NewRequest
+                    key={selectedRequest?.id ?? 'new-request'}
                     initialRequest={requestDraft}
                     selectedRequestId={selectedRequest?.id ?? null}
                     onRequestComplete={handleHistoryUpdate}

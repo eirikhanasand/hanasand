@@ -3,7 +3,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { isRuntimeLogSourceAvailable, listRuntimeLogs } from '#utils/docker/engine.ts'
-import { listNativeLogs, listNativeLogServices } from '#utils/logs/native.ts'
+import { isNativeLogSourceAvailable, listNativeLogs, listNativeLogServices } from '#utils/logs/native.ts'
 
 export async function getLogServices(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -77,6 +77,7 @@ export async function getRealtimeLogs(req: FastifyRequest, res: FastifyReply) {
 
     const query = req.query as { service?: string, limit?: string, since?: string }
     const limit = Math.min(Math.max(Number(query.limit || 300), 1), 1000)
+    const nativeAvailable = isNativeLogSourceAvailable()
 
     try {
         const [runtime, nativeLogs] = await Promise.all([
@@ -97,7 +98,7 @@ export async function getRealtimeLogs(req: FastifyRequest, res: FastifyReply) {
                 .slice(0, limit),
             containers: runtime.containers,
             runtime_available: runtime.available,
-            native_available: nativeLogs.length > 0,
+            native_available: nativeAvailable,
             source: 'docker_engine',
             generated_at: new Date().toISOString(),
         })
@@ -111,7 +112,7 @@ export async function getRealtimeLogs(req: FastifyRequest, res: FastifyReply) {
             logs: nativeLogs,
             containers: [],
             runtime_available: false,
-            native_available: nativeLogs.length > 0,
+            native_available: nativeAvailable,
             source: 'docker_engine',
             unavailable_reason: error?.message || 'Failed to load runtime logs.',
             docker_socket_available: isRuntimeLogSourceAvailable(),

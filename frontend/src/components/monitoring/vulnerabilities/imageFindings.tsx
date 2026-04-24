@@ -1,22 +1,33 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ImageVulnerabilityReport } from '@/utils/monitoring/types'
 import VulnerabilityCard from './vulnerabilityCard'
 
 const PAGE_SIZE = 3
 
 export default function ImageFindings({ image }: { image: ImageVulnerabilityReport }) {
-    const [page, setPage] = useState(1)
+    const [pagesByImage, setPagesByImage] = useState<Record<string, number>>({})
     const totalPages = Math.max(1, Math.ceil(image.vulnerabilities.length / PAGE_SIZE))
+    const page = Math.min(totalPages, pagesByImage[image.image] ?? 1)
     const visibleFindings = useMemo(() => {
         const startIndex = (page - 1) * PAGE_SIZE
         return image.vulnerabilities.slice(startIndex, startIndex + PAGE_SIZE)
     }, [image.vulnerabilities, page])
 
-    useEffect(() => {
-        setPage(1)
-    }, [image.image])
+    function setPage(nextPage: React.SetStateAction<number>) {
+        setPagesByImage((prev) => {
+            const currentPage = prev[image.image] ?? 1
+            const resolvedPage = typeof nextPage === 'function'
+                ? nextPage(currentPage)
+                : nextPage
+
+            return {
+                ...prev,
+                [image.image]: Math.min(totalPages, Math.max(1, resolvedPage)),
+            }
+        })
+    }
 
     return (
         <div className='rounded-xl border border-white/10 bg-white/5 p-4'>
@@ -59,7 +70,7 @@ function FindingPagination({
     totalResults,
 }: {
     page: number
-    setPage: React.Dispatch<React.SetStateAction<number>>
+    setPage: (nextPage: React.SetStateAction<number>) => void
     totalPages: number
     totalResults: number
 }) {

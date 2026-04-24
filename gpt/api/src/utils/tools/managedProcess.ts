@@ -6,6 +6,8 @@ import { spawn } from 'node:child_process'
 import config from '#constants'
 
 const SANDBOX_EXECUTABLE = process.env.HANASAND_SANDBOX_EXEC || 'sandbox-exec'
+const SANDBOX_APPLY_ERROR = 'sandbox-exec: sandbox_apply: Operation not permitted'
+let sandboxUsable: boolean | null = null
 
 type StartManagedProcessArgs = {
     command: string
@@ -51,6 +53,10 @@ async function resolveCwd(cwd?: string) {
 }
 
 async function hasSandboxExecutable() {
+    if (process.env.HANASAND_DISABLE_SANDBOX_EXEC === '1') {
+        return false
+    }
+
     if (!SANDBOX_EXECUTABLE.trim()) {
         return false
     }
@@ -73,6 +79,45 @@ async function hasSandboxExecutable() {
     }
 
     return false
+}
+
+async function canUseSandbox(tempDir: string, profilePath: string) {
+    if (sandboxUsable !== null) {
+        return sandboxUsable
+    }
+
+    if (!(await hasSandboxExecutable())) {
+        sandboxUsable = false
+        return sandboxUsable
+    }
+
+    sandboxUsable = await new Promise<boolean>((resolve) => {
+        const probe = spawn(SANDBOX_EXECUTABLE, ['-f', profilePath, '/bin/zsh', '-lc', 'exit 0'], {
+            cwd: config.repo_root,
+            env: {
+                ...process.env,
+                HOME: tempDir,
+                TMPDIR: tempDir,
+            },
+            stdio: ['ignore', 'pipe', 'pipe'],
+        })
+
+        let stderr = ''
+        probe.stderr.on('data', (chunk) => {
+            stderr += chunk.toString()
+        })
+        probe.on('error', () => resolve(false))
+        probe.on('close', (code) => {
+            if (code === 0) {
+                resolve(true)
+                return
+            }
+
+            resolve(!stderr.includes(SANDBOX_APPLY_ERROR))
+        })
+    })
+
+    return sandboxUsable
 }
 
 function literalPath(value: string) {
@@ -158,7 +203,7 @@ export async function startManagedProcess(args: StartManagedProcessArgs) {
     const fd = openSync(logPath, 'a')
     const npmCacheDir = path.join(config.repo_root, '.hanasand', 'npm-cache')
     await mkdir(npmCacheDir, { recursive: true })
-    const sandboxEnabled = await hasSandboxExecutable()
+    const sandboxEnabled = await canUseSandbox(tempDir, profilePath)
     const command = sandboxEnabled
         ? [SANDBOX_EXECUTABLE, '-f', profilePath, '/bin/zsh', '-lc', args.command]
         : ['/bin/zsh', '-lc', args.command]

@@ -10,5 +10,5 @@ npm run dev
 ## Docker
 
 ```bash
-docker compose up --build
+HOST_PORT=3200 docker compose up --build
 ```

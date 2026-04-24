@@ -1,15 +1,20 @@
 import { cookies } from 'next/headers'
-import AIPageClient from './pageClient'
+import AIPageClient from '../pageClient'
 import { getUserShares } from '@/utils/share/getUserShares'
 import { getAiWorkspace } from '@/utils/ai/getWorkspace'
 
-export default async function page() {
+export default async function AIConversationPage({
+    params,
+}: {
+    params: Promise<{ id: string }>
+}) {
     const Cookies = await cookies()
     const id = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
     const shares = id && token ? await getUserShares({ id, token }) : []
     const initialShares = Array.isArray(shares) ? shares : []
     const workspace = await getAiWorkspace({ id, token })
+    const conversationId = (await params).id
 
     return (
         <AIPageClient
@@ -17,7 +22,8 @@ export default async function page() {
             initialRepositories={workspace.repositories}
             initialShares={initialShares}
             isAuthenticated={Boolean(id && token)}
-            mode='landing'
+            initialConversationId={conversationId}
+            mode='workspace'
         />
     )
 }

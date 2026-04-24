@@ -25,8 +25,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <div className='h-full'>
-            <div className='px-8 md:px-16 lg:px-32 py-8 grid gap-2'>
-                <div className='flex w-full rounded-lg justify-between items-center'>
+            <div className='grid gap-3 px-4 py-6 sm:px-6 md:px-10 lg:px-16 xl:px-24'>
+                <div className='flex w-full flex-col gap-3 rounded-lg sm:flex-row sm:items-center sm:justify-between'>
                     <h1 className='text-xl font-semibold flex-1'>@{name}</h1>
                     <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2'>
                         <Link href='/dashboard' className='flex justify-between px-6 group cursor-pointer gap-2'>
@@ -35,7 +35,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                         </Link>
                     </div>
                 </div>
-                <div className='grid md:grid-cols-2 gap-2'>
+                <div className='grid gap-3 lg:grid-cols-2'>
                     <VMs vms={vms} />
                     <Certificates certificates={certificates} />
                 </div>

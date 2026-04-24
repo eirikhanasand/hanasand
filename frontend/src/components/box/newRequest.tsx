@@ -35,16 +35,6 @@ export default function NewRequest({
     const [aiResponse, setAiResponse] = useState('')
     const inputRef = useRef<HTMLInputElement | null>(null)
 
-    useEffect(() => {
-        setMethod(initialRequest.method)
-        setUrl(initialRequest.url)
-        setHeaders(initialRequest.headers.length ? initialRequest.headers : [{ key: '', value: '' }])
-        setBody(initialRequest.body)
-        setResponse(null)
-        setResponseTab('response')
-        setAiResponse('')
-    }, [initialRequest, selectedRequestId])
-
     const usableHeaders = useMemo(
         () => Object.fromEntries(headers.filter((row) => row.key.trim()).map((row) => [row.key.trim(), row.value])),
         [headers]

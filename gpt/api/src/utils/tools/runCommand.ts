@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import config from '#constants'
 
 const SANDBOX_EXECUTABLE = process.env.HANASAND_SANDBOX_EXEC || 'sandbox-exec'
+const SANDBOX_APPLY_ERROR = 'sandbox-exec: sandbox_apply: Operation not permitted'
 
 type RunCommandArgs = {
     command: string
@@ -94,17 +95,16 @@ async function runCommandProcess(
     cwd: string,
     timeoutMs: number,
     tempDir: string,
-    profilePath: string,
+    profilePath: string | null,
     npmCacheDir: string,
+    useSandbox: boolean,
 ): Promise<RunCommandResult> {
     return await new Promise((resolve, reject) => {
-        const child = spawn(SANDBOX_EXECUTABLE, [
-            '-f',
-            profilePath,
-            '/bin/zsh',
-            '-lc',
-            payload.command,
-        ], {
+        const command = useSandbox
+            ? [SANDBOX_EXECUTABLE, '-f', profilePath || '', '/bin/zsh', '-lc', payload.command]
+            : ['/bin/zsh', '-lc', payload.command]
+
+        const child = spawn(command[0], command.slice(1), {
             cwd,
             env: {
                 ...process.env,
@@ -153,6 +153,35 @@ async function runCommandProcess(
     })
 }
 
+function shouldBypassSandbox(result: RunCommandResult) {
+    return result.exitCode === 71 && result.stderr.includes(SANDBOX_APPLY_ERROR)
+}
+
+async function hasSandboxExecutable() {
+    if (!SANDBOX_EXECUTABLE.trim()) {
+        return false
+    }
+
+    try {
+        if (path.isAbsolute(SANDBOX_EXECUTABLE)) {
+            await access(SANDBOX_EXECUTABLE)
+            return true
+        }
+
+        const pathEntries = (process.env.PATH || '').split(path.delimiter).filter(Boolean)
+        for (const entry of pathEntries) {
+            try {
+                await access(path.join(entry, SANDBOX_EXECUTABLE))
+                return true
+            } catch {}
+        }
+    } catch {
+        return false
+    }
+
+    return false
+}
+
 export default async function runCommand(args: RunCommandArgs): Promise<RunCommandResult> {
     const cwd = await resolveCwd(args.cwd)
     const timeoutMs = Math.max(1000, Math.min(args.timeoutMs ?? config.command_timeout_ms, 10 * 60 * 1000))
@@ -162,8 +191,18 @@ export default async function runCommand(args: RunCommandArgs): Promise<RunComma
 
     try {
         await mkdir(npmCacheDir, { recursive: true })
-        await writeFile(profilePath, buildSandboxProfile(tempDir), 'utf8')
-        return await runCommandProcess(args, cwd, timeoutMs, tempDir, profilePath, npmCacheDir)
+        const sandboxAvailable = process.env.HANASAND_DISABLE_SANDBOX_EXEC === '1'
+            ? false
+            : await hasSandboxExecutable()
+        if (sandboxAvailable) {
+            await writeFile(profilePath, buildSandboxProfile(tempDir), 'utf8')
+            const sandboxed = await runCommandProcess(args, cwd, timeoutMs, tempDir, profilePath, npmCacheDir, true)
+            if (!shouldBypassSandbox(sandboxed)) {
+                return sandboxed
+            }
+        }
+
+        return await runCommandProcess(args, cwd, timeoutMs, tempDir, null, npmCacheDir, false)
     } finally {
         await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
     }

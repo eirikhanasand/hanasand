@@ -113,6 +113,37 @@ function parseLogLine(line: string, container: RuntimeContainer): RuntimeLogEntr
     const trimmed = line.trim()
     if (!trimmed) return null
 
+    try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>
+        const structuredMessage = typeof parsed.log === 'string'
+            ? parsed.log.trim()
+            : typeof parsed.message === 'string'
+                ? parsed.message.trim()
+                : typeof parsed.msg === 'string'
+                    ? parsed.msg.trim()
+                    : ''
+        const structuredTimestamp = typeof parsed.time === 'string'
+            ? parsed.time
+            : typeof parsed.timestamp === 'string'
+                ? parsed.timestamp
+                : null
+
+        if (structuredMessage) {
+            return {
+                id: `${container.id}:${structuredTimestamp || 'json'}:${structuredMessage.slice(0, 32)}`,
+                container_id: container.id,
+                service: container.name,
+                image: container.image,
+                level: detectLevel(structuredMessage),
+                message: structuredMessage,
+                created_at: structuredTimestamp || new Date().toISOString(),
+                source: 'runtime',
+            }
+        }
+    } catch {
+        // Non-JSON container logs fall through to text parsing.
+    }
+
     const match = trimmed.match(/^(\d{4}-\d{2}-\d{2}T[^\s]+)\s+(.*)$/)
     const createdAt = match?.[1] || new Date().toISOString()
     const message = (match?.[2] || trimmed).trim()

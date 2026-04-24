@@ -1,6 +1,6 @@
 ---
-claimed_by: codex
-status: in_progress
+claimed_by:
+status: active
 last_updated: 2026-04-22
 ---
 
@@ -31,3 +31,12 @@ Current guidance:
 - Follow-up smoke: scaffolded `sandbox/agent-nextjs-docker-smoke`, ran `npm install`, `npm run build`, `HOST_PORT=3200 docker compose up --build -d`, fetched `http://127.0.0.1:3200`, collected compose logs, and cleaned down successfully.
 - Important finding: the first Dockerized Next.js scaffold hard-coded host port `3000`; templates were updated to use `HOST_PORT` so future smoke runs do not fail on busy machines.
 - Important finding: the local tool helper's command sandbox currently fails with `sandbox-exec: sandbox_apply: Operation not permitted` in this environment, even though direct `npm install` works. Future work should harden or bypass that path safely.
+
+### 2026-04-22 - codex
+- Claimed packet `20-release-runbook.md` for a low-collision documentation pass.
+- Intentionally avoiding the active frontend `/status` and dashboard-related workstream while this claim is active.
+- Added a launcher fallback in `gpt/run_model_common.sh` so the runtime prefers a complete local model (14B or 7B) instead of stalling on the incomplete 32B target.
+- Added a structured `http_request` tool in `gpt/api/src/utils/tools/httpRequest.ts` and wired it into `gpt/api/src/utils/tools/modelToolLoop.ts`.
+- Marked packet `10-http-and-api-tool-expansion.md` as completed and wrote notes to `agents/work-results/packet-10-http-and-api-tool-expansion.md`.
+- Ran the local 14B model and captured its packet 20 draft output at `agents/local-model-notes/packet-20-release-runbook.local-model.md`.
+- Local-model caveat: direct `curl` to the llama server works, but the in-process `bun` prompt path still fails to open the localhost socket in this environment.

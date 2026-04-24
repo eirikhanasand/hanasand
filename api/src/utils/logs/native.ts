@@ -23,6 +23,14 @@ const NATIVE_LOG_FILES = [
     { service: 'system', path: '/var/log/messages' },
 ] as const
 
+export function isNativeLogSourceAvailable() {
+    return NATIVE_LOG_FILES.some((file) => existsSync(file.path))
+        || existsSync('/bin/journalctl')
+        || existsSync('/usr/bin/journalctl')
+        || existsSync('/run/log/journal')
+        || existsSync('/var/log/journal')
+}
+
 function detectLevel(message: string, priority?: string | number | null): NativeLogEntry['level'] {
     const numericPriority = typeof priority === 'number'
         ? priority
