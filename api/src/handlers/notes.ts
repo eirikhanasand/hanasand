@@ -1,12 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-
-type NoteBody = {
-    title?: string
-    content?: string
-    source?: string
-}
+import { buildNoteUpdateFields, type NoteBody } from '#utils/notes.ts'
 
 function clean(value: unknown) {
     return typeof value === 'string' ? value.trim() : ''
@@ -106,30 +101,13 @@ export async function putNote(req: FastifyRequest<{ Params: { id: string }, Body
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const title = clean(req.body?.title)
-    const content = clean(req.body?.content)
-    const source = clean(req.body?.source)
+    const updateFields = buildNoteUpdateFields(req.body)
 
-    if (!title && !content && !source) {
+    if (!updateFields) {
         return res.status(400).send({ error: 'No fields to update.' })
     }
 
-    const fields: string[] = []
-    const values: string[] = []
-
-    if (title) {
-        values.push(title)
-        fields.push(`title = $${values.length}`)
-    }
-    if (content) {
-        values.push(content)
-        fields.push(`content = $${values.length}`)
-    }
-    if (source) {
-        values.push(source)
-        fields.push(`source = $${values.length}`)
-    }
-
+    const { fields, values } = updateFields
     values.push(req.params.id, userId)
 
     try {
