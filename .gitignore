@@ -48,6 +48,7 @@ next-env.d.ts
 /agents/work-packet-branches/
 /agents/work-packets/
 /agents/work-results/
+.hanasand-runner/
 
 # mail runtime data
 /mail/stalwart/
