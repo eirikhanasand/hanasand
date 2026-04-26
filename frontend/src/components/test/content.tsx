@@ -70,6 +70,8 @@ export default function Content({
                             ...prev,
                             status: 'done',
                             exit_code: msg.data.code,
+                            summary: msg.data.summary || prev.summary,
+                            duration: msg.data.durationMs ? { milliseconds: msg.data.durationMs } : prev.duration,
                         }))
                     }
                 } else {
