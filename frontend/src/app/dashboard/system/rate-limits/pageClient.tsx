@@ -113,6 +113,10 @@ export default function RateLimitsPageClient({
         () => routes.map((route) => `${route.method} ${route.route}`),
         [routes]
     )
+    const overrideValidation = useMemo(
+        () => validateOverrideSet(settings.overrides),
+        [settings.overrides]
+    )
     const routeCount = routes.length
     const overrideCount = settings.overrides.filter((override) => override.enabled).length
 
@@ -121,6 +125,11 @@ export default function RateLimitsPageClient({
         const id = getCookie('id')
         if (!token || !id) {
             setMessage('You need to sign in again before saving rate-limit settings.')
+            return
+        }
+
+        if (!overrideValidation.valid) {
+            setMessage(overrideValidation.message)
             return
         }
 
@@ -443,7 +452,7 @@ export default function RateLimitsPageClient({
                         <button
                             type='button'
                             onClick={saveSettings}
-                            disabled={saving}
+                            disabled={saving || !overrideValidation.valid}
                             className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
                         >
                             <Save className='h-4 w-4' />
@@ -552,6 +561,11 @@ export default function RateLimitsPageClient({
                         <EmptyState message='No overrides yet. The defaults above already cover every API endpoint.' />
                     )}
                 </div>
+                {!overrideValidation.valid ? (
+                    <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                        {overrideValidation.message}
+                    </div>
+                ) : null}
             </DashboardPanel>
 
             <DashboardPanel className='p-4 sm:p-5'>
@@ -834,6 +848,32 @@ function validateScopeSet(scopes: ApiKeyScopeRule[]) {
             return {
                 valid: false,
                 message: `Duplicate scope detected for ${scope.method} ${scope.route}. Remove or change one of them before saving.`,
+            }
+        }
+        seen.add(key)
+    }
+
+    return {
+        valid: true,
+        message: '',
+    }
+}
+
+function validateOverrideSet(overrides: RateLimitOverride[]) {
+    const seen = new Set<string>()
+    for (const override of overrides) {
+        if (!override.route.startsWith('/api')) {
+            return {
+                valid: false,
+                message: `Override routes must stay under /api. Fix ${override.method} ${override.route} before saving.`,
+            }
+        }
+
+        const key = `${override.scope}:${override.method}:${override.route}`
+        if (seen.has(key)) {
+            return {
+                valid: false,
+                message: `Duplicate override detected for ${override.scope} ${override.method} ${override.route}. Remove or change one of them before saving.`,
             }
         }
         seen.add(key)

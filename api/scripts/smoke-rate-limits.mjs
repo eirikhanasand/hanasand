@@ -141,6 +141,36 @@ async function main() {
     expect(Array.isArray(settings.body?.routes) && settings.body.routes.some((route) => route.route === '/api/status'), 'Rate-limit route catalog is missing /api/status.', settings.body)
     expect(Array.isArray(settings.body?.tierPresets) && settings.body.tierPresets.some((preset) => preset.id === 'starter'), 'Rate-limit tier presets are missing from settings.', settings.body)
 
+    const invalidSettings = await request('/rate-limit/settings', {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({
+            enabled: true,
+            defaults: settings.body.settings.defaults,
+            overrides: [
+                {
+                    id: 'dup_override_one',
+                    enabled: true,
+                    scope: 'anonymous',
+                    method: 'GET',
+                    route: '/api/status',
+                    windowMs: 60_000,
+                    maxRequests: 10,
+                },
+                {
+                    id: 'dup_override_two',
+                    enabled: true,
+                    scope: 'anonymous',
+                    method: 'GET',
+                    route: '/api/status',
+                    windowMs: 60_000,
+                    maxRequests: 15,
+                },
+            ],
+        }),
+    })
+    expect(invalidSettings.response.status === 400, 'Duplicate rate-limit overrides should be rejected.', invalidSettings.body)
+
     const invalidKey = await request('/rate-limit/keys', {
         method: 'POST',
         headers: authHeaders(),

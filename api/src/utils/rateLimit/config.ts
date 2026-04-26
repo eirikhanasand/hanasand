@@ -26,6 +26,12 @@ const DEFAULT_SETTINGS: Omit<RateLimitSettings, 'updatedAt' | 'updatedBy'> = {
 let cachedSettings: RateLimitSettings | null = null
 let cachedAt = 0
 
+type RateLimitSettingsValidationResult = {
+    valid: boolean
+    settings: RateLimitSettings
+    error: string | null
+}
+
 export async function getRateLimitSettings({ fresh = false }: { fresh?: boolean } = {}): Promise<RateLimitSettings> {
     if (!fresh && cachedSettings && Date.now() - cachedAt < CACHE_TTL_MS) {
         return cachedSettings
@@ -79,6 +85,44 @@ export async function saveRateLimitSettings(input: unknown, updatedBy: string): 
     cachedSettings = saved
     cachedAt = Date.now()
     return saved
+}
+
+export function validateRateLimitSettingsInput(
+    input: unknown,
+    meta: { updatedAt?: string | null, updatedBy?: string | null } = {}
+): RateLimitSettingsValidationResult {
+    const settings = normalizeSettings(input, {
+        updatedAt: meta.updatedAt || null,
+        updatedBy: meta.updatedBy || null,
+    })
+
+    const seen = new Set<string>()
+    for (const override of settings.overrides) {
+        if (!override.route.startsWith('/api')) {
+            return {
+                valid: false,
+                settings,
+                error: `Override route must stay inside the API namespace: ${override.method} ${override.route}.`,
+            }
+        }
+
+        const key = `${override.scope}:${override.method}:${override.route}`
+        if (seen.has(key)) {
+            return {
+                valid: false,
+                settings,
+                error: `Duplicate override detected for ${override.scope} ${override.method} ${override.route}.`,
+            }
+        }
+
+        seen.add(key)
+    }
+
+    return {
+        valid: true,
+        settings,
+        error: null,
+    }
 }
 
 export function registerRateLimitRoute(route: RateLimitRoute) {
