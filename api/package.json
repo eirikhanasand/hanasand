@@ -11,7 +11,7 @@
     "audit": "bun scripts/audit-hanasand-api.mjs",
     "monitor": "bun scripts/monitor-auth-and-services.mjs",
     "smoke:ai-runtime-contract": "bun scripts/validate-ai-runtime-contract.ts",
-    "smoke:rate-limits": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-rate-limits.mjs",
+    "smoke:rate-limits": "bun scripts/smoke-rate-limits.mjs",
     "smoke:local": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} FRONTEND_BASE=${FRONTEND_BASE:-http://127.0.0.1:3000} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-dashboard-runtime.mjs",
     "smoke:docker": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} FRONTEND_BASE=${FRONTEND_BASE:-http://127.0.0.1:3000} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-dashboard-runtime.mjs",
     "smoke:ai-collaboration": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-ai-collaboration.mjs",

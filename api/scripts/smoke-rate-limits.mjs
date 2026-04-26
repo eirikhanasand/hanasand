@@ -1,9 +1,12 @@
 import crypto from 'crypto'
+import fs from 'fs'
 import pg from 'pg'
 
-const apiBase = process.env.API_BASE || 'http://127.0.0.1:8080/api'
-const dbHost = process.env.DB_HOST || '127.0.0.1'
-const dbPort = Number(process.env.DB_PORT || 5432)
+const insideDocker = fs.existsSync('/.dockerenv')
+const apiBase = process.env.API_BASE || (insideDocker ? 'http://127.0.0.1:8081/api' : 'http://127.0.0.1:8080/api')
+const frontendBase = process.env.FRONTEND_BASE || (insideDocker ? 'http://frontend:3000' : 'http://127.0.0.1:3000')
+const dbHost = process.env.DB_HOST || (insideDocker ? 'hanasand_database' : '127.0.0.1')
+const dbPort = Number(process.env.DB_PORT || (insideDocker ? 5432 : 8503))
 const dbName = process.env.DB || 'hanasand'
 const dbUser = process.env.DB_USER || 'hanasand'
 const dbPassword = process.env.DB_PASSWORD
@@ -73,6 +76,18 @@ async function request(path, init = {}) {
     return { response, body }
 }
 
+async function pageRequest(path, cookieHeader) {
+    const response = await fetch(`${frontendBase}${path}`, {
+        headers: {
+            Cookie: cookieHeader,
+        },
+        redirect: 'manual',
+    })
+
+    const text = await response.text()
+    return { response, text }
+}
+
 async function cleanup() {
     if (createdKeyId) {
         await pool.query('DELETE FROM api_key_scopes WHERE api_key_id = $1', [createdKeyId]).catch(() => {})
@@ -103,6 +118,16 @@ async function seedAdminUser() {
     })
     expect(Boolean(login.body?.token), 'Failed to log in rate-limit smoke user.', login.body)
     token = login.body.token
+
+    const cookieHeader = [
+        `access_token=${token}`,
+        `id=${runId}`,
+    ].join('; ')
+    const dashboard = await pageRequest('/dashboard/system/rate-limits', cookieHeader)
+    expect(dashboard.response.status === 200, 'Rate-limit dashboard page did not render for authenticated admin.', {
+        status: dashboard.response.status,
+    })
+    expect(dashboard.text.includes('Rate limits and API keys'), 'Rate-limit dashboard copy is missing from the rendered page.', dashboard.text.slice(0, 1200))
 }
 
 async function main() {
@@ -163,6 +188,7 @@ async function main() {
     expect(burstStatuses.filter((status) => status === 429).length >= 1, 'Burst traffic should trigger at least one 429.', burst.map((entry) => ({ status: entry.response.status, body: entry.body })))
 
     console.log(JSON.stringify({
+        insideDocker,
         routeCount: settings.body.routes.length,
         issuedKeyId: createdKeyId,
         burstStatuses,
