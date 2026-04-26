@@ -197,8 +197,40 @@ type Updates = {
     content?: string
 }
 
+type LoadTestTimePoint = {
+    time: string | number
+}
+
+type LoadTestRpsPoint = LoadTestTimePoint & {
+    value: number
+}
+
+type LoadTestLatencyPoint = LoadTestTimePoint & {
+    p50?: number
+    p95?: number
+}
+
+type LoadTestErrorPoint = LoadTestTimePoint & {
+    count: number
+}
+
+type LoadTestSummary = {
+    requests?: number
+    failureRate?: number
+    duration?: {
+        p50?: number
+        p95?: number
+        avg?: number
+        min?: number
+        max?: number
+    }
+    rps?: LoadTestRpsPoint[]
+    latency?: LoadTestLatencyPoint[]
+    errors?: LoadTestErrorPoint[]
+}
+
 type Test = {
-    id: number
+    id: string
     url: string
     timeout: number
     stages: object & { default: boolean }
@@ -210,8 +242,11 @@ type Test = {
     finished_at: string
     exit_code: number
     visits: number
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    summary: any
+    summary: LoadTestSummary
+    latest_run_summary?: LoadTestSummary
+    previous_run_summary?: LoadTestSummary
+    latest_run_number?: number
+    p95_delta_ms?: number | null
 }
 
 type FileItemBase = {
