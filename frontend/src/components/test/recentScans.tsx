@@ -59,31 +59,33 @@ export default function RecentScans({ title, empty, scans, mine = false, classNa
 
 function ScanStats({ scan }: { scan: Test }) {
     const summary = (scan.latest_run_summary || scan.summary || {}) as {
+        requests?: number
         duration?: { p95?: number }
         failureRate?: number
     }
+    const hasRequests = typeof summary.requests === 'number' && summary.requests > 0
     const p95 = summary.duration?.p95
     const failureRate = typeof summary.failureRate === 'number' ? summary.failureRate * 100 : null
     const delta = scan.p95_delta_ms
 
-    if (typeof p95 !== 'number' && typeof failureRate !== 'number' && typeof delta !== 'number') {
+    if (!hasRequests && typeof delta !== 'number') {
         return null
     }
 
     return (
         <div className='mt-2 flex min-w-0 flex-wrap gap-2 text-[11px] text-bright/55'>
-            {typeof p95 === 'number' && (
+            {hasRequests && typeof p95 === 'number' && p95 > 0 && (
                 <span className='inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-1'>
                     <Timer className='h-3 w-3' />
                     p95 {Math.round(p95)}ms
                 </span>
             )}
-            {typeof failureRate === 'number' && (
+            {hasRequests && typeof failureRate === 'number' && (
                 <span className='rounded-md bg-white/5 px-2 py-1'>
                     fail {failureRate.toFixed(1)}%
                 </span>
             )}
-            {typeof delta === 'number' && (
+            {hasRequests && typeof delta === 'number' && Math.abs(delta) > 0 && (
                 <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${delta >= 0 ? 'bg-green-400/10 text-green-300' : 'bg-red-400/10 text-red-300'}`}>
                     {delta >= 0 ? <TrendingUp className='h-3 w-3' /> : <TrendingDown className='h-3 w-3' />}
                     {delta >= 0 ? 'faster' : 'slower'} {Math.abs(Math.round(delta))}ms
