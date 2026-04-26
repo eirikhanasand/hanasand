@@ -97,6 +97,7 @@ function publicBaseURL() {
 }
 
 export async function getAppUpdate(req: FastifyRequest<{ Querystring: AppQuery }>, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
     const platform = normalizePlatform(req.query.platform)
     const installedVersion = req.query.version || '0.0.0'
     const update = await configuredUpdate()
@@ -120,6 +121,7 @@ export async function getAppUpdate(req: FastifyRequest<{ Querystring: AppQuery }
 }
 
 export async function getTauriAppUpdate(req: FastifyRequest<{ Params: TauriUpdateParams }>, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
     const target = req.params.target || 'darwin-aarch64'
     const installedVersion = req.params.version || '0.0.0'
     const update = await configuredUpdate()
@@ -167,6 +169,7 @@ async function sendAppUpdatePackage(res: FastifyReply, platform: string) {
 
     const filename = path.basename(file.absolute)
     res.header('Content-Type', 'application/octet-stream')
+    res.header('Cache-Control', 'no-store')
     res.header('Content-Length', String(file.size))
     res.header('Content-Disposition', `attachment; filename="${filename}"`)
     res.header('X-Hanasand-App-Platform', platform)

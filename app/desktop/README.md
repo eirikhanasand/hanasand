@@ -27,11 +27,11 @@ HANASAND_APP_VERSION=0.1.2 app/desktop/scripts/package-update.sh
 ```
 
 The script builds a release `.app`, signs it ad-hoc unless `HANASAND_CODESIGN_IDENTITY` is set, and writes `dist/Hanasand-<version>-macos.zip` plus `dist/manifest.json`.
-Deploy the zip to the API host and set:
+The API auto-discovers updates from the update directory, so deploy the zip and manifest together:
 
 ```sh
-HANASAND_APP_UPDATE_FILE=/srv/hanasand/app-updates/Hanasand-<version>-macos.zip
-HANASAND_APP_VERSION=<version>
+cp dist/Hanasand-<version>-macos.zip dist/latest-macos.zip
+rsync -az dist/latest-macos.zip dist/manifest.json ubuntu@hanasand:/srv/hanasand/app-updates/
 ```
 
 ## Run the macOS Update Runner

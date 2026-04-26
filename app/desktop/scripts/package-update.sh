@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${HANASAND_APP_VERSION:-$(git -C "$ROOT_DIR/../.." rev-parse --short HEAD)}"
+CHANNEL="${HANASAND_APP_CHANNEL:-stable}"
+RELEASED_AT="${HANASAND_APP_RELEASED_AT:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
+RELEASE_NOTES="${HANASAND_APP_RELEASE_NOTES:-Desktop app update from commit $(git -C "$ROOT_DIR/../.." rev-parse --short HEAD).}"
 DIST_DIR="${ROOT_DIR}/dist"
 BUILD_DIR="${ROOT_DIR}/.build/release"
 APP_DIR="${DIST_DIR}/Hanasand.app"
@@ -57,15 +60,32 @@ fi
 SHA256="$(shasum -a 256 "$PACKAGE_PATH" | awk '{print $1}')"
 SIZE="$(stat -f%z "$PACKAGE_PATH")"
 
-cat > "${DIST_DIR}/manifest.json" <<JSON
-{
-  "app": "hanasand-desktop",
-  "platform": "macos",
-  "version": "${VERSION}",
-  "package": "$(basename "$PACKAGE_PATH")",
-  "sha256": "${SHA256}",
-  "size": ${SIZE}
+VERSION="${VERSION}" \
+PACKAGE_NAME="$(basename "$PACKAGE_PATH")" \
+SHA256="${SHA256}" \
+SIZE="${SIZE}" \
+DIST_DIR="${DIST_DIR}" \
+CHANNEL="${CHANNEL}" \
+RELEASED_AT="${RELEASED_AT}" \
+RELEASE_NOTES="${RELEASE_NOTES}" \
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+manifest = {
+    "app": "hanasand-desktop",
+    "platform": "macos",
+    "version": os.environ["VERSION"],
+    "package": os.environ["PACKAGE_NAME"],
+    "sha256": os.environ["SHA256"],
+    "size": int(os.environ["SIZE"]),
+    "channel": os.environ["CHANNEL"],
+    "released_at": os.environ["RELEASED_AT"],
+    "notes": os.environ["RELEASE_NOTES"],
 }
-JSON
+
+Path(os.environ.get("DIST_DIR", "dist")).joinpath("manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+PY
 
 printf '%s\n' "$PACKAGE_PATH"
