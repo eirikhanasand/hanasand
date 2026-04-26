@@ -1,5 +1,6 @@
 'use client'
 
+import type { Dispatch, SetStateAction } from 'react'
 import { useMemo, useState } from 'react'
 import { Copy, Plus, Save, Trash2 } from 'lucide-react'
 import config from '@/config'
@@ -103,6 +104,10 @@ export default function RateLimitsPageClient({
         [activeTierPresets]
     )
     const draftTierPreset = tierPresetMap[draft.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]
+    const draftScopeValidation = useMemo(
+        () => validateScopeSet(draft.scopes),
+        [draft.scopes]
+    )
 
     const routeOptions = useMemo(
         () => routes.map((route) => `${route.method} ${route.route}`),
@@ -159,6 +164,11 @@ export default function RateLimitsPageClient({
             return
         }
 
+        if (!draftScopeValidation.valid) {
+            setKeyMessage(draftScopeValidation.message)
+            return
+        }
+
         setSaving(true)
         setKeyMessage(null)
         setIssuedSecret(null)
@@ -204,6 +214,12 @@ export default function RateLimitsPageClient({
         const id = getCookie('id')
         if (!token || !id) {
             setKeyMessage('You need to sign in again before updating API keys.')
+            return
+        }
+
+        const validation = validateScopeSet(apiKey.scopes)
+        if (!validation.valid) {
+            setKeyMessage(validation.message)
             return
         }
 
@@ -608,12 +624,17 @@ export default function RateLimitsPageClient({
                             <EmptyState message='No key scopes yet. Add at least one scoped route before issuing the token.' />
                         )}
                     </div>
+                    {!draftScopeValidation.valid ? (
+                        <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                            {draftScopeValidation.message}
+                        </div>
+                    ) : null}
 
                     <div className='mt-4 flex flex-wrap items-center gap-3'>
                         <button
                             type='button'
                             onClick={createKey}
-                            disabled={saving}
+                            disabled={saving || !draftScopeValidation.valid}
                             className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
                         >
                             <Save className='h-4 w-4' />
@@ -634,99 +655,21 @@ export default function RateLimitsPageClient({
 
                 <div className='mt-4 grid gap-4'>
                     {apiKeys.length ? apiKeys.map((apiKey) => (
-                        <div key={apiKey.id} className='rounded-2xl border border-white/10 bg-black/15 p-4'>
-                            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                                <div>
-                                    <div className='flex flex-wrap items-center gap-2'>
-                                        <h3 className='text-base font-semibold text-bright/90'>{apiKey.name}</h3>
-                                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/50'>
-                                            {(tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]).label}
-                                        </span>
-                                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/50'>{apiKey.keyPrefix}</span>
-                                    </div>
-                                    <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description provided.'}</p>
-                                    <div className='mt-2 flex flex-wrap gap-3 text-xs text-bright/45'>
-                                        <span>Owner `{apiKey.ownerId}`</span>
-                                        <span>Created {new Date(apiKey.createdAt).toLocaleString()}</span>
-                                        <span>Last used {apiKey.lastUsedAt ? new Date(apiKey.lastUsedAt).toLocaleString() : 'never'}</span>
-                                    </div>
-                                </div>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
-                                        <input
-                                            type='checkbox'
-                                            checked={apiKey.enabled}
-                                            onChange={(event) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, enabled: event.target.checked } : entry))}
-                                            className='h-4 w-4 accent-[#fd8738]'
-                                        />
-                                        Enabled
-                                    </label>
-                                    <button
-                                        type='button'
-                                        onClick={() => updateKey(apiKey)}
-                                        className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14'
-                                    >
-                                        <Save className='h-4 w-4' />
-                                        Save key
-                                    </button>
-                                    <button
-                                        type='button'
-                                        onClick={() => deleteKey(apiKey.id)}
-                                        className='inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-100 transition-colors hover:bg-red-500/14'
-                                    >
-                                        <Trash2 className='h-4 w-4' />
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                                <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
-                                <SelectField
-                                    label='Tier'
-                                    value={apiKey.tier}
-                                    options={tierPresetIds}
-                                    onChange={(value) => applyKeyTierPreset(apiKey.id, value)}
-                                />
-                                <TextField label='Owner user ID' value={apiKey.ownerId} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))} />
-                                <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
-                            </div>
-                            <div className='mt-3'>
-                                <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
-                            </div>
-                            <div className='mt-3 text-xs text-bright/54'>
-                                {(tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]).description} Changing the tier reapplies the preset budget to every scope on this key. You can still fine-tune any endpoint budget afterwards.
-                            </div>
-
-                            <div className='mt-4 flex items-center justify-between gap-3'>
-                                <h4 className='text-sm font-medium text-bright/84'>Scopes</h4>
-                                <button
-                                    type='button'
-                                    onClick={() => addScopeToKey(apiKey.id)}
-                                    className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
-                                >
-                                    <Plus className='h-4 w-4' />
-                                    Add scope
-                                </button>
-                            </div>
-                            <div className='mt-3 grid gap-3'>
-                                {apiKey.scopes.length ? apiKey.scopes.map((scope, index) => (
-                                    <ApiKeyScopeEditor
-                                        key={scope.id}
-                                        scope={scope}
-                                        routeOptions={routeOptions}
-                                        title={`Scope ${index + 1}`}
-                                        onChange={(nextScope) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? {
-                                            ...entry,
-                                            scopes: entry.scopes.map((currentScope) => currentScope.id === nextScope.id ? nextScope : currentScope),
-                                        } : entry))}
-                                        onRemove={() => removeKeyScope(apiKey.id, scope.id)}
-                                    />
-                                )) : (
-                                    <EmptyState message='This key has no endpoint scopes yet.' />
-                                )}
-                            </div>
-                        </div>
+                        <ApiKeyCard
+                            key={apiKey.id}
+                            apiKey={apiKey}
+                            tierPresetMap={tierPresetMap}
+                            fallbackTierPresets={fallbackTierPresets}
+                            routeOptions={routeOptions}
+                            tierPresetIds={tierPresetIds}
+                            saving={saving}
+                            setApiKeys={setApiKeys}
+                            applyKeyTierPreset={applyKeyTierPreset}
+                            updateKey={updateKey}
+                            deleteKey={deleteKey}
+                            addScopeToKey={addScopeToKey}
+                            removeKeyScope={removeKeyScope}
+                        />
                     )) : (
                         <EmptyState message='No API keys issued yet.' />
                     )}
@@ -738,6 +681,168 @@ export default function RateLimitsPageClient({
             </datalist>
         </div>
     )
+}
+
+function ApiKeyCard({
+    apiKey,
+    tierPresetMap,
+    fallbackTierPresets,
+    routeOptions,
+    tierPresetIds,
+    saving,
+    setApiKeys,
+    applyKeyTierPreset,
+    updateKey,
+    deleteKey,
+    addScopeToKey,
+    removeKeyScope,
+}: {
+    apiKey: ApiKeySummary
+    tierPresetMap: Record<string, ApiKeyTierDefinition>
+    fallbackTierPresets: ApiKeyTierDefinition[]
+    routeOptions: string[]
+    tierPresetIds: string[]
+    saving: boolean
+    setApiKeys: Dispatch<SetStateAction<ApiKeySummary[]>>
+    applyKeyTierPreset: (keyId: string, tier: string) => void
+    updateKey: (apiKey: ApiKeySummary) => Promise<void>
+    deleteKey: (idToDelete: string) => Promise<void>
+    addScopeToKey: (keyId: string) => void
+    removeKeyScope: (keyId: string, scopeId: string) => void
+}) {
+    const scopeValidation = useMemo(
+        () => validateScopeSet(apiKey.scopes),
+        [apiKey.scopes]
+    )
+    const tierPreset = tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]
+
+    return (
+        <div className='rounded-2xl border border-white/10 bg-black/15 p-4'>
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                <div>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <h3 className='text-base font-semibold text-bright/90'>{apiKey.name}</h3>
+                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/50'>
+                            {tierPreset.label}
+                        </span>
+                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/50'>{apiKey.keyPrefix}</span>
+                    </div>
+                    <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description provided.'}</p>
+                    <div className='mt-2 flex flex-wrap gap-3 text-xs text-bright/45'>
+                        <span>Owner `{apiKey.ownerId}`</span>
+                        <span>Created {new Date(apiKey.createdAt).toLocaleString()}</span>
+                        <span>Last used {apiKey.lastUsedAt ? new Date(apiKey.lastUsedAt).toLocaleString() : 'never'}</span>
+                    </div>
+                </div>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                        <input
+                            type='checkbox'
+                            checked={apiKey.enabled}
+                            onChange={(event) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, enabled: event.target.checked } : entry))}
+                            className='h-4 w-4 accent-[#fd8738]'
+                        />
+                        Enabled
+                    </label>
+                    <button
+                        type='button'
+                        onClick={() => updateKey(apiKey)}
+                        disabled={saving || !scopeValidation.valid}
+                        className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                    >
+                        <Save className='h-4 w-4' />
+                        Save key
+                    </button>
+                    <button
+                        type='button'
+                        onClick={() => deleteKey(apiKey.id)}
+                        className='inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-100 transition-colors hover:bg-red-500/14'
+                    >
+                        <Trash2 className='h-4 w-4' />
+                        Delete
+                    </button>
+                </div>
+            </div>
+
+            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
+                <SelectField
+                    label='Tier'
+                    value={apiKey.tier}
+                    options={tierPresetIds}
+                    onChange={(value) => applyKeyTierPreset(apiKey.id, value)}
+                />
+                <TextField label='Owner user ID' value={apiKey.ownerId} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))} />
+                <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
+            </div>
+            <div className='mt-3'>
+                <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
+            </div>
+            <div className='mt-3 text-xs text-bright/54'>
+                {tierPreset.description} Changing the tier reapplies the preset budget to every scope on this key. You can still fine-tune any endpoint budget afterwards.
+            </div>
+
+            <div className='mt-4 flex items-center justify-between gap-3'>
+                <h4 className='text-sm font-medium text-bright/84'>Scopes</h4>
+                <button
+                    type='button'
+                    onClick={() => addScopeToKey(apiKey.id)}
+                    className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                >
+                    <Plus className='h-4 w-4' />
+                    Add scope
+                </button>
+            </div>
+            <div className='mt-3 grid gap-3'>
+                {apiKey.scopes.length ? apiKey.scopes.map((scope, index) => (
+                    <ApiKeyScopeEditor
+                        key={scope.id}
+                        scope={scope}
+                        routeOptions={routeOptions}
+                        title={`Scope ${index + 1}`}
+                        onChange={(nextScope) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? {
+                            ...entry,
+                            scopes: entry.scopes.map((currentScope) => currentScope.id === nextScope.id ? nextScope : currentScope),
+                        } : entry))}
+                        onRemove={() => removeKeyScope(apiKey.id, scope.id)}
+                    />
+                )) : (
+                    <EmptyState message='This key has no endpoint scopes yet.' />
+                )}
+            </div>
+            {!scopeValidation.valid ? (
+                <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                    {scopeValidation.message}
+                </div>
+            ) : null}
+        </div>
+    )
+}
+
+function validateScopeSet(scopes: ApiKeyScopeRule[]) {
+    if (!scopes.length) {
+        return {
+            valid: false,
+            message: 'Add at least one scoped endpoint before issuing or saving this token.',
+        }
+    }
+
+    const seen = new Set<string>()
+    for (const scope of scopes) {
+        const key = `${scope.method}:${scope.route}`
+        if (seen.has(key)) {
+            return {
+                valid: false,
+                message: `Duplicate scope detected for ${scope.method} ${scope.route}. Remove or change one of them before saving.`,
+            }
+        }
+        seen.add(key)
+    }
+
+    return {
+        valid: true,
+        message: '',
+    }
 }
 
 function ApiKeyScopeEditor({
