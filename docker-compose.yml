@@ -40,6 +40,7 @@ services:
       .env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - app_updates:/srv/hanasand/app-updates
     environment:
       MAIL_INTERNAL_URL: ${MAIL_INTERNAL_URL:-http://stalwart:8080}
       MAIL_HOST: ${MAIL_HOST:-mail.hanasand.com}
@@ -109,6 +110,7 @@ services:
 
 volumes:
   postgres_data:
+  app_updates:
 
 networks:
   pwnednet:

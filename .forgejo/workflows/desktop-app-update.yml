@@ -27,13 +27,22 @@ jobs:
           HANASAND_APP_UPDATE_PATH: ${{ secrets.HANASAND_APP_UPDATE_PATH }}
         run: |
           set -euo pipefail
-          test -n "$HANASAND_APP_UPDATE_HOST"
-          test -n "$HANASAND_APP_UPDATE_USER"
+          HOST="${HANASAND_APP_UPDATE_HOST:-hanasand}"
+          USER="${HANASAND_APP_UPDATE_USER:-ubuntu}"
           UPDATE_PATH="${HANASAND_APP_UPDATE_PATH:-/srv/hanasand/app-updates}"
           PACKAGE="$(ls app/desktop/dist/Hanasand-*-macos.zip | tail -n 1)"
-          rsync -az "$PACKAGE" "app/desktop/dist/manifest.json" "${HANASAND_APP_UPDATE_USER}@${HANASAND_APP_UPDATE_HOST}:${UPDATE_PATH}/"
+          cp "$PACKAGE" app/desktop/dist/latest-macos.zip
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest_path = Path("app/desktop/dist/manifest.json")
+          manifest = json.loads(manifest_path.read_text())
+          manifest["package"] = "latest-macos.zip"
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+          rsync -az app/desktop/dist/latest-macos.zip app/desktop/dist/manifest.json "${USER}@${HOST}:${UPDATE_PATH}/"
 
       - name: Print deployment hints
         run: |
           cat app/desktop/dist/manifest.json
-          echo "Set HANASAND_APP_UPDATE_FILE to the uploaded zip path and HANASAND_APP_VERSION to ${HANASAND_APP_VERSION} on the API container."
+          echo "The API auto-discovers manifest.json from HANASAND_APP_UPDATE_DIR."

@@ -6,6 +6,16 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 
 const currentApiBase = process.env.HANASAND_APP_API_BASE || 'https://hanasand.com/api'
 const defaultVersion = '0.1.1'
+const defaultUpdateDirectory = '/srv/hanasand/app-updates'
+
+type DesktopUpdateManifest = {
+    version?: string
+    package?: string
+    notes?: string
+    channel?: string
+    released_at?: string
+    releasedAt?: string
+}
 
 type AppQuery = {
     platform?: string
@@ -25,12 +35,31 @@ type TauriDownloadParams = {
     name: string
 }
 
-function updateFilePath() {
-    return process.env.HANASAND_APP_UPDATE_FILE || ''
+function updateDirectory() {
+    return process.env.HANASAND_APP_UPDATE_DIR || defaultUpdateDirectory
 }
 
-function latestVersion() {
-    return process.env.HANASAND_APP_VERSION || defaultVersion
+async function readUpdateManifest() {
+    const manifestPath = path.join(updateDirectory(), 'manifest.json')
+    const data = await readFile(manifestPath, 'utf8')
+    return JSON.parse(data) as DesktopUpdateManifest
+}
+
+async function configuredUpdate() {
+    const manifest = await readUpdateManifest().catch(() => null)
+    const manifestPackage = manifest?.package
+        ? path.resolve(updateDirectory(), manifest.package)
+        : ''
+    const filePath = process.env.HANASAND_APP_UPDATE_FILE || manifestPackage
+    const file = await fileMetadata(filePath).catch(() => null)
+
+    return {
+        file,
+        version: process.env.HANASAND_APP_VERSION || manifest?.version || defaultVersion,
+        channel: process.env.HANASAND_APP_CHANNEL || manifest?.channel || 'stable',
+        releasedAt: process.env.HANASAND_APP_RELEASED_AT || manifest?.released_at || manifest?.releasedAt || new Date().toISOString(),
+        notes: process.env.HANASAND_APP_RELEASE_NOTES || manifest?.notes || 'Desktop app update from the Hanasand API.',
+    }
 }
 
 function normalizePlatform(platform?: string) {
@@ -70,8 +99,9 @@ function publicBaseURL() {
 export async function getAppUpdate(req: FastifyRequest<{ Querystring: AppQuery }>, res: FastifyReply) {
     const platform = normalizePlatform(req.query.platform)
     const installedVersion = req.query.version || '0.0.0'
-    const version = latestVersion()
-    const file = await fileMetadata(updateFilePath()).catch(() => null)
+    const update = await configuredUpdate()
+    const version = update.version
+    const file = update.file
     const updateAvailable = Boolean(file) && compareVersions(version, installedVersion) > 0
 
     return res.send({
@@ -80,9 +110,9 @@ export async function getAppUpdate(req: FastifyRequest<{ Querystring: AppQuery }
         installed_version: installedVersion,
         latest_version: version,
         update_available: updateAvailable,
-        channel: process.env.HANASAND_APP_CHANNEL || 'stable',
-        released_at: process.env.HANASAND_APP_RELEASED_AT || new Date().toISOString(),
-        notes: process.env.HANASAND_APP_RELEASE_NOTES || 'Desktop app update from the Hanasand API.',
+        channel: update.channel,
+        released_at: update.releasedAt,
+        notes: update.notes,
         download_url: `${publicBaseURL()}/app/download?platform=${encodeURIComponent(platform)}`,
         package_size: file?.size || null,
         sha256: file?.sha256 || null,
@@ -92,8 +122,9 @@ export async function getAppUpdate(req: FastifyRequest<{ Querystring: AppQuery }
 export async function getTauriAppUpdate(req: FastifyRequest<{ Params: TauriUpdateParams }>, res: FastifyReply) {
     const target = req.params.target || 'darwin-aarch64'
     const installedVersion = req.params.version || '0.0.0'
-    const version = latestVersion()
-    const file = await fileMetadata(updateFilePath()).catch(() => null)
+    const update = await configuredUpdate()
+    const version = update.version
+    const file = update.file
 
     if (!file || compareVersions(version, installedVersion) <= 0) {
         return res.status(204).send()
@@ -102,8 +133,8 @@ export async function getTauriAppUpdate(req: FastifyRequest<{ Params: TauriUpdat
     const artifactName = path.basename(file.absolute)
     return res.send({
         version,
-        notes: process.env.HANASAND_APP_RELEASE_NOTES || 'Desktop app update from the Hanasand API.',
-        pub_date: process.env.HANASAND_APP_RELEASED_AT || new Date().toISOString(),
+        notes: update.notes,
+        pub_date: update.releasedAt,
         platforms: {
             [target]: {
                 signature: process.env.HANASAND_APP_UPDATE_SIGNATURE || '',
@@ -124,12 +155,13 @@ export async function downloadNamedAppUpdate(req: FastifyRequest<{ Params: Tauri
 }
 
 async function sendAppUpdatePackage(res: FastifyReply, platform: string) {
-    const file = await fileMetadata(updateFilePath()).catch(() => null)
+    const update = await configuredUpdate()
+    const file = update.file
 
     if (!file) {
         return res.status(404).send({
             error: 'No app update package is configured.',
-            hint: 'Set HANASAND_APP_UPDATE_FILE to a readable dmg, zip, or pkg before serving downloads.',
+            hint: `Upload manifest.json and the package to ${updateDirectory()}, or set HANASAND_APP_UPDATE_FILE to a readable dmg, zip, or pkg.`,
         })
     }
 
@@ -138,7 +170,7 @@ async function sendAppUpdatePackage(res: FastifyReply, platform: string) {
     res.header('Content-Length', String(file.size))
     res.header('Content-Disposition', `attachment; filename="${filename}"`)
     res.header('X-Hanasand-App-Platform', platform)
-    res.header('X-Hanasand-App-Version', latestVersion())
+    res.header('X-Hanasand-App-Version', update.version)
     res.header('X-Hanasand-App-Sha256', file.sha256)
 
     return res.send(createReadStream(file.absolute))
