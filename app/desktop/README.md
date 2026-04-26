@@ -34,6 +34,16 @@ HANASAND_APP_UPDATE_FILE=/srv/hanasand/app-updates/Hanasand-<version>-macos.zip
 HANASAND_APP_VERSION=<version>
 ```
 
+## Run the macOS Update Runner
+
+The Forgejo workflow needs a macOS runner because SwiftUI apps cannot be built in the Linux git container. To avoid an always-on remote execution agent, run the macOS runner in the foreground only when publishing desktop updates:
+
+```sh
+app/desktop/scripts/run-macos-runner-once.sh
+```
+
+The script builds the Forgejo runner locally if needed, registers it with `macos` and `macos-arm64` labels, and runs it until you stop it with `Ctrl-C`.
+
 ## Embedded Agent Endpoints
 
 - `GET /health`
