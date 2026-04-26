@@ -76,7 +76,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
     }
 
     return (
-        <div className='grid w-full min-w-0 max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]'>
+        <div className='grid w-full min-w-0 max-w-6xl items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]'>
             <section className='grid min-w-0 gap-5 rounded-2xl border border-white/10 bg-white/4 p-5 sm:p-6'>
                 <div>
                     <h2 className='text-xl font-semibold text-bright'>Load Test Launcher</h2>

@@ -59,7 +59,7 @@ export default function TestStatsPageClient() {
     }
 
     return (
-        <div className='grid w-full min-w-0 gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'>
+        <div className='grid w-full min-w-0 items-start gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'>
             <section className='grid min-w-0 gap-4 rounded-xl border border-white/10 bg-white/4 p-4'>
                 <div className='flex gap-2'>
                     <ChartColumn className='stroke-orange-500' />
