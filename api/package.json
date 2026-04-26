@@ -18,6 +18,7 @@
     "smoke:ai-quotas": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-ai-quotas.mjs",
     "smoke:ai-stack-contracts": "bun scripts/smoke-ai-stack-contracts.ts",
     "smoke:ai-deploy-defaults": "bun scripts/smoke-ai-deploy-defaults.ts",
+    "smoke:app-update": "bun scripts/smoke-app-update.ts",
     "smoke:vm-targets": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-vm-agent-targets.mjs",
     "smoke:vm-request-bridge": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-vm-request-bridge.mjs",
     "smoke:ai-deployments": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-ai-deployments.mjs"

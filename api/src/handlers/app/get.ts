@@ -17,6 +17,16 @@ type DesktopUpdateManifest = {
     releasedAt?: string
 }
 
+type TauriUpdateManifest = {
+    version?: string
+    notes?: string
+    pub_date?: string
+    platforms?: Record<string, {
+        signature?: string
+        url?: string
+    }>
+}
+
 type AppQuery = {
     platform?: string
     version?: string
@@ -45,20 +55,55 @@ async function readUpdateManifest() {
     return JSON.parse(data) as DesktopUpdateManifest
 }
 
+async function readTauriUpdateManifest() {
+    const manifestPath = path.join(updateDirectory(), 'latest.json')
+    const data = await readFile(manifestPath, 'utf8')
+    return JSON.parse(data) as TauriUpdateManifest
+}
+
 async function configuredUpdate() {
-    const manifest = await readUpdateManifest().catch(() => null)
+    const [manifest, tauriManifest] = await Promise.all([
+        readUpdateManifest().catch(() => null),
+        readTauriUpdateManifest().catch(() => null),
+    ])
     const manifestPackage = manifest?.package
         ? path.resolve(updateDirectory(), manifest.package)
         : ''
-    const filePath = process.env.HANASAND_APP_UPDATE_FILE || manifestPackage
+    const tauriPackage = firstTauriPackagePath(tauriManifest)
+    const filePath = process.env.HANASAND_APP_UPDATE_FILE || manifestPackage || tauriPackage
     const file = await fileMetadata(filePath).catch(() => null)
+    const version = process.env.HANASAND_APP_VERSION || manifest?.version || tauriManifest?.version || defaultVersion
 
     return {
         file,
-        version: process.env.HANASAND_APP_VERSION || manifest?.version || defaultVersion,
+        version,
         channel: process.env.HANASAND_APP_CHANNEL || manifest?.channel || 'stable',
-        releasedAt: process.env.HANASAND_APP_RELEASED_AT || manifest?.released_at || manifest?.releasedAt || new Date().toISOString(),
-        notes: process.env.HANASAND_APP_RELEASE_NOTES || manifest?.notes || 'Desktop app update from the Hanasand API.',
+        releasedAt: process.env.HANASAND_APP_RELEASED_AT || manifest?.released_at || manifest?.releasedAt || tauriManifest?.pub_date || new Date().toISOString(),
+        notes: process.env.HANASAND_APP_RELEASE_NOTES || manifest?.notes || tauriManifest?.notes || 'Desktop app update from the Hanasand API.',
+        tauriManifest,
+    }
+}
+
+function firstTauriPackagePath(manifest: TauriUpdateManifest | null) {
+    const platforms = manifest?.platforms
+    if (!platforms) return ''
+
+    for (const platform of Object.values(platforms)) {
+        const packageName = packageNameFromURL(platform.url)
+        if (packageName) {
+            return path.resolve(updateDirectory(), packageName)
+        }
+    }
+
+    return ''
+}
+
+function packageNameFromURL(rawURL?: string) {
+    if (!rawURL) return ''
+    try {
+        return path.basename(new URL(rawURL).pathname)
+    } catch {
+        return path.basename(rawURL)
     }
 }
 
@@ -133,17 +178,24 @@ export async function getTauriAppUpdate(req: FastifyRequest<{ Params: TauriUpdat
     }
 
     const artifactName = path.basename(file.absolute)
+    const platformManifest = update.tauriManifest?.platforms?.[target] || firstTauriPlatform(update.tauriManifest)
     return res.send({
         version,
         notes: update.notes,
         pub_date: update.releasedAt,
         platforms: {
             [target]: {
-                signature: process.env.HANASAND_APP_UPDATE_SIGNATURE || '',
+                signature: process.env.HANASAND_APP_UPDATE_SIGNATURE || platformManifest?.signature || '',
                 url: `${publicBaseURL()}/app/download/${encodeURIComponent(artifactName)}`,
             },
         },
     })
+}
+
+function firstTauriPlatform(manifest?: TauriUpdateManifest | null) {
+    const platforms = manifest?.platforms
+    if (!platforms) return null
+    return Object.values(platforms)[0] || null
 }
 
 export async function downloadAppUpdate(req: FastifyRequest<{ Querystring: AppDownloadQuery }>, res: FastifyReply) {
@@ -152,8 +204,7 @@ export async function downloadAppUpdate(req: FastifyRequest<{ Querystring: AppDo
 }
 
 export async function downloadNamedAppUpdate(req: FastifyRequest<{ Params: TauriDownloadParams }>, res: FastifyReply) {
-    void req
-    return sendAppUpdatePackage(res, 'macos')
+    return sendNamedAppUpdatePackage(res, req.params.name)
 }
 
 async function sendAppUpdatePackage(res: FastifyReply, platform: string) {
@@ -173,6 +224,29 @@ async function sendAppUpdatePackage(res: FastifyReply, platform: string) {
     res.header('Content-Length', String(file.size))
     res.header('Content-Disposition', `attachment; filename="${filename}"`)
     res.header('X-Hanasand-App-Platform', platform)
+    res.header('X-Hanasand-App-Version', update.version)
+    res.header('X-Hanasand-App-Sha256', file.sha256)
+
+    return res.send(createReadStream(file.absolute))
+}
+
+async function sendNamedAppUpdatePackage(res: FastifyReply, name: string) {
+    const safeName = path.basename(name || '')
+    if (!safeName || safeName !== name) {
+        return res.status(400).send({ error: 'Invalid app update package name.' })
+    }
+
+    const file = await fileMetadata(path.resolve(updateDirectory(), safeName)).catch(() => null)
+    if (!file) {
+        return res.status(404).send({ error: 'App update package was not found.' })
+    }
+
+    const update = await configuredUpdate()
+    res.header('Content-Type', 'application/octet-stream')
+    res.header('Cache-Control', 'no-store')
+    res.header('Content-Length', String(file.size))
+    res.header('Content-Disposition', `attachment; filename="${safeName}"`)
+    res.header('X-Hanasand-App-Platform', 'macos')
     res.header('X-Hanasand-App-Version', update.version)
     res.header('X-Hanasand-App-Sha256', file.sha256)
 
