@@ -6,6 +6,7 @@ type QueryProps = {
 }
 
 export async function getRecentTests(req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
     const { limit } = (req.query as QueryProps) ?? {}
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
     const result = await run(
@@ -17,6 +18,7 @@ export async function getRecentTests(req: FastifyRequest, res: FastifyReply) {
 }
 
 export async function getMyRecentTests(req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
     const ownerId = req.headers.id as string | undefined
     const { limit } = (req.query as QueryProps) ?? {}
     if (!ownerId) {

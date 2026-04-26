@@ -13,6 +13,7 @@ type Stage = {
 }
 
 export default async function postTest(req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
     const { url, timeout, stages } = (req.body as BodyProps) ?? {}
     const ownerId = req.headers.id as string | undefined
     if (!url) {

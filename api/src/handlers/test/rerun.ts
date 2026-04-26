@@ -3,6 +3,7 @@ import run from '#db'
 import followTest from './follow.ts'
 
 export default async function rerunTest(req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store')
     const { id } = (req.params as { id: string }) ?? {}
     if (!id) {
         return res.status(400).send({ error: 'Missing test id.' })
