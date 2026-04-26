@@ -94,6 +94,8 @@ import postMailbox from './handlers/mail/postMailbox.ts'
 import postMailFilter from './handlers/mail/postFilter.ts'
 import deleteMailFilter from './handlers/mail/deleteFilter.ts'
 import getMailBlob from './handlers/mail/getBlob.ts'
+import { deleteNote, getNote, getNotes, postNote, putNote } from './handlers/notes.ts'
+import { downloadAppUpdate, downloadNamedAppUpdate, getAppUpdate, getTauriAppUpdate } from './handlers/app/get.ts'
 
 /**
  * Defines the routes available in the API.
@@ -106,6 +108,12 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Index handler
     fastify.get('/', indexHandler)
+
+    // Desktop app update feed
+    fastify.get('/app', getAppUpdate)
+    fastify.get('/app/:target/:version', getTauriAppUpdate)
+    fastify.get('/app/download', downloadAppUpdate)
+    fastify.get('/app/download/:name', downloadNamedAppUpdate)
 
     // Auth handlers
     fastify.get('/auth/logout/:id', logoutHandler)
@@ -164,6 +172,13 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/thought/title', postThoughtByTitle)
     fastify.put('/thought/:id', putThought)
     fastify.delete('/thought/:id', deleteThought)
+
+    // Notes
+    fastify.get('/notes', getNotes)
+    fastify.get('/notes/:id', getNote)
+    fastify.post('/notes', postNote)
+    fastify.put('/notes/:id', putNote)
+    fastify.delete('/notes/:id', deleteNote)
 
     // Certificates
     fastify.get('/certificates/:id', getCertificate)

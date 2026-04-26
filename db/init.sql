@@ -103,6 +103,18 @@ CREATE TABLE IF NOT EXISTS thoughts (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT 'Untitled',
+    content TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'api',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_owner_updated_at ON notes(owner_id, updated_at DESC, created_at DESC);
+
 -- Root table
 CREATE TABLE IF NOT EXISTS root (
     id TEXT PRIMARY KEY,
