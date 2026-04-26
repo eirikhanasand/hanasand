@@ -15,7 +15,7 @@ export default function useMovable({ setHide, side }: MovableProps) {
     const [hasMoved, setHasMoved] = useState(false)
     const dragStart = useRef({ x: 0, y: 0 })
 
-    function handleMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    function handleMouseDown(e: { clientX: number, clientY: number }) {
         setDragging(true)
         dragStart.current = {
             x: e.clientX - position.x,

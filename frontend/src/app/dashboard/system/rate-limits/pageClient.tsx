@@ -7,12 +7,45 @@ import { getCookie } from '@/utils/cookies/cookies'
 import { DashboardPanel } from '@/components/dashboard/ui'
 
 const scopeOrder: RateLimitScope[] = ['anonymous', 'authenticated', 'internal']
+const tierPresetOrder = ['starter', 'growth', 'business', 'internal', 'custom'] as const
 const periodFields: Array<{ key: keyof ApiKeyPeriodLimits, label: string }> = [
     { key: 'perSecond', label: 'Per second' },
     { key: 'perMinute', label: 'Per minute' },
     { key: 'perHour', label: 'Per hour' },
     { key: 'perDay', label: 'Per day' },
 ]
+const tierPresets: Record<string, ApiKeyPeriodLimits> = {
+    starter: {
+        perSecond: 2,
+        perMinute: 60,
+        perHour: 1_000,
+        perDay: 10_000,
+    },
+    growth: {
+        perSecond: 8,
+        perMinute: 240,
+        perHour: 6_000,
+        perDay: 60_000,
+    },
+    business: {
+        perSecond: 20,
+        perMinute: 600,
+        perHour: 24_000,
+        perDay: 250_000,
+    },
+    internal: {
+        perSecond: 60,
+        perMinute: 3_000,
+        perHour: 120_000,
+        perDay: 1_000_000,
+    },
+    custom: {
+        perSecond: 5,
+        perMinute: 60,
+        perHour: 1_000,
+        perDay: 10_000,
+    },
+}
 
 const fallbackSettings: RateLimitSettings = {
     enabled: true,
@@ -67,6 +100,8 @@ export default function RateLimitsPageClient({
         () => routes.map((route) => `${route.method} ${route.route}`),
         [routes]
     )
+    const routeCount = routes.length
+    const overrideCount = settings.overrides.filter((override) => override.enabled).length
 
     async function saveSettings() {
         const token = getCookie('access_token')
@@ -273,6 +308,7 @@ export default function RateLimitsPageClient({
 
     function addScopeToDraft() {
         const firstRoute = routes[0]
+        const limits = createPresetLimits(draft.tier)
         setDraft((prev) => ({
             ...prev,
             scopes: [
@@ -282,12 +318,7 @@ export default function RateLimitsPageClient({
                     enabled: true,
                     method: firstRoute?.method || 'GET',
                     route: firstRoute?.route || '/api/',
-                    limits: {
-                        perSecond: 5,
-                        perMinute: 60,
-                        perHour: 1_000,
-                        perDay: 10_000,
-                    },
+                    limits,
                 },
             ],
         }))
@@ -304,12 +335,7 @@ export default function RateLimitsPageClient({
                     enabled: true,
                     method: firstRoute?.method || 'GET',
                     route: firstRoute?.route || '/api/',
-                    limits: {
-                        perSecond: 5,
-                        perMinute: 60,
-                        perHour: 1_000,
-                        perDay: 10_000,
-                    },
+                    limits: createPresetLimits(entry.tier),
                 },
             ],
         } : entry))
@@ -329,27 +355,66 @@ export default function RateLimitsPageClient({
         } : entry))
     }
 
+    function applyDraftTierPreset(tier: string) {
+        setDraft((prev) => ({
+            ...prev,
+            tier,
+            scopes: prev.scopes.map((scope) => ({
+                ...scope,
+                limits: createPresetLimits(tier),
+            })),
+        }))
+    }
+
+    function applyKeyTierPreset(keyId: string, tier: string) {
+        setApiKeys((prev) => prev.map((entry) => entry.id === keyId ? {
+            ...entry,
+            tier,
+            scopes: entry.scopes.map((scope) => ({
+                ...scope,
+                limits: createPresetLimits(tier),
+            })),
+        } : entry))
+    }
+
     return (
         <div className='grid gap-4'>
             <DashboardPanel className='p-4 sm:p-5'>
-                <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
+                <div className='grid gap-4 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:items-start'>
                     <div className='max-w-3xl'>
-                        <p className='text-sm text-bright/72'>
-                            API pressure control now lives in one place: global route limits for every endpoint, plus tiered API keys with route scopes and per-second, per-minute, per-hour, and per-day budgets.
+                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>System</p>
+                        <h1 className='mt-1 text-xl font-semibold tracking-[-0.04em] text-bright/94'>Rate limits and API keys</h1>
+                        <p className='mt-2 text-sm leading-6 text-bright/72'>
+                            Global API pressure, route overrides, and scoped tiered tokens now live in the same surface. Each token can be narrowed to exact endpoints and tuned independently per second, minute, hour, and day.
                         </p>
-                        <p className='mt-2 text-xs text-bright/42'>
-                            These controls live in the API layer, not nginx or Lua, so edits are picked up by the Hanasand API process itself rather than relying on a separate proxy reload path.
+                        <p className='mt-2 text-xs leading-5 text-bright/42'>
+                            Enforcement happens in the Hanasand API process itself, not via nginx or Lua. Saving here updates the shared settings store and the in-process cache, so behavior changes without a proxy reload.
                         </p>
                     </div>
-                    <div className='flex flex-wrap items-center gap-2'>
+                    <div className='grid gap-2 sm:grid-cols-2'>
+                        <StatChip label='Routes' value={String(routeCount)} />
+                        <StatChip label='Active overrides' value={String(overrideCount)} />
+                        <StatChip label='Issued keys' value={String(apiKeys.length)} />
+                        <StatChip label='Runtime' value={settings.enabled ? 'Enforced' : 'Paused'} />
+                    </div>
+                </div>
+                <div className='mt-4 flex flex-wrap items-center gap-2'>
+                    <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                        <input
+                            type='checkbox'
+                            checked={settings.enabled}
+                            onChange={(event) => setSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
+                            className='h-4 w-4 accent-[#fd8738]'
+                        />
+                        Enabled
+                    </label>
+                    <div className='rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-xs text-bright/55'>
+                        Global updates are immediate in-process and fall through the shared settings store on the next refresh window.
+                    </div>
+                    <div className='flex flex-wrap items-center gap-2 sm:ml-auto'>
                         <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
-                            <input
-                                type='checkbox'
-                                checked={settings.enabled}
-                                onChange={(event) => setSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
-                                className='h-4 w-4 accent-[#fd8738]'
-                            />
-                            Enabled
+                            <span className='text-xs text-bright/52'>Updated</span>
+                            <span>{settings.updatedAt ? new Date(settings.updatedAt).toLocaleString() : 'never'}</span>
                         </label>
                         <button
                             type='button'
@@ -363,8 +428,7 @@ export default function RateLimitsPageClient({
                     </div>
                 </div>
                 <div className='mt-3 flex flex-wrap items-center gap-3 text-xs text-bright/48'>
-                    <span>Updated {settings.updatedAt ? new Date(settings.updatedAt).toLocaleString() : 'never'}</span>
-                    {settings.updatedBy ? <span>by `{settings.updatedBy}`</span> : null}
+                    {settings.updatedBy ? <span>saved by `{settings.updatedBy}`</span> : null}
                     {message ? <span className='text-[#fdc89c]'>{message}</span> : null}
                 </div>
             </DashboardPanel>
@@ -482,7 +546,12 @@ export default function RateLimitsPageClient({
                     <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                         <TextField label='Owner user ID' value={draft.ownerId} onChange={(value) => setDraft((prev) => ({ ...prev, ownerId: value }))} />
                         <TextField label='Key name' value={draft.name} onChange={(value) => setDraft((prev) => ({ ...prev, name: value }))} />
-                        <TextField label='Tier' value={draft.tier} onChange={(value) => setDraft((prev) => ({ ...prev, tier: value }))} />
+                        <SelectField
+                            label='Tier'
+                            value={draft.tier}
+                            options={[...tierPresetOrder]}
+                            onChange={(value) => applyDraftTierPreset(value)}
+                        />
                         <TextField label='Expires at (ISO)' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
                     </div>
                     <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
@@ -496,6 +565,10 @@ export default function RateLimitsPageClient({
                             />
                             Enabled
                         </label>
+                    </div>
+                    <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-bright/54'>
+                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 uppercase tracking-[0.18em] text-bright/48'>Preset</span>
+                        <span>New scopes inherit the selected tier, and changing tier reapplies that preset across the draft key.</span>
                     </div>
 
                     <div className='mt-4 flex items-center justify-between gap-3'>
@@ -598,12 +671,20 @@ export default function RateLimitsPageClient({
 
                             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                                 <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
-                                <TextField label='Tier' value={apiKey.tier} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, tier: value } : entry))} />
+                                <SelectField
+                                    label='Tier'
+                                    value={apiKey.tier}
+                                    options={[...tierPresetOrder]}
+                                    onChange={(value) => applyKeyTierPreset(apiKey.id, value)}
+                                />
                                 <TextField label='Owner user ID' value={apiKey.ownerId} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))} />
                                 <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
                             </div>
                             <div className='mt-3'>
                                 <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
+                            </div>
+                            <div className='mt-3 text-xs text-bright/54'>
+                                Changing the tier reapplies the preset budget to every scope on this key. You can still fine-tune any endpoint budget afterwards.
                             </div>
 
                             <div className='mt-4 flex items-center justify-between gap-3'>
@@ -706,6 +787,21 @@ function ApiKeyScopeEditor({
                     />
                 ))}
             </div>
+        </div>
+    )
+}
+
+function StatChip({
+    label,
+    value,
+}: {
+    label: string
+    value: string
+}) {
+    return (
+        <div className='rounded-2xl border border-white/10 bg-black/15 px-3 py-3'>
+            <p className='text-[10px] uppercase tracking-[0.22em] text-bright/38'>{label}</p>
+            <p className='mt-1 text-base font-semibold text-bright/88'>{value}</p>
         </div>
     )
 }
@@ -824,4 +920,14 @@ function EmptyState({ message }: { message: string }) {
             {message}
         </div>
     )
+}
+
+function createPresetLimits(tier: string): ApiKeyPeriodLimits {
+    const preset = tierPresets[tier] || tierPresets.custom
+    return {
+        perSecond: preset.perSecond,
+        perMinute: preset.perMinute,
+        perHour: preset.perHour,
+        perDay: preset.perDay,
+    }
 }

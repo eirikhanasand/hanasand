@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import config from '@/config'
-import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
+import { DashboardPage } from '@/components/dashboard/ui'
 import RateLimitsPageClient from './pageClient'
 
 export default async function RateLimitsPage() {
@@ -33,11 +33,6 @@ export default async function RateLimitsPage() {
 
     return (
         <DashboardPage className='h-full'>
-            <DashboardHeader
-                title='Rate Limits'
-                eyebrow='System'
-                description='Tune global API pressure controls without redeploying the stack.'
-            />
             <RateLimitsPageClient
                 initialSettings={payload?.settings && typeof payload.settings === 'object' ? payload.settings as RateLimitSettings : null}
                 routes={Array.isArray(payload?.routes) ? payload.routes as RateLimitRoute[] : []}
