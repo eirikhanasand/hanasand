@@ -1,6 +1,66 @@
 import { createHash, randomBytes, randomUUID } from 'crypto'
 import run from '#db'
 
+export const API_KEY_TIER_ORDER: ApiKeyTierPreset[] = ['starter', 'growth', 'business', 'internal', 'custom']
+
+const API_KEY_TIER_PRESETS: Record<ApiKeyTierPreset, ApiKeyTierDefinition> = {
+    starter: {
+        id: 'starter',
+        label: 'Starter',
+        description: 'Low-volume external integrations.',
+        defaultLimits: {
+            perSecond: 2,
+            perMinute: 60,
+            perHour: 1_000,
+            perDay: 10_000,
+        },
+    },
+    growth: {
+        id: 'growth',
+        label: 'Growth',
+        description: 'Steady third-party traffic with moderate burst room.',
+        defaultLimits: {
+            perSecond: 8,
+            perMinute: 240,
+            perHour: 6_000,
+            perDay: 60_000,
+        },
+    },
+    business: {
+        id: 'business',
+        label: 'Business',
+        description: 'Higher-throughput production integrations.',
+        defaultLimits: {
+            perSecond: 20,
+            perMinute: 600,
+            perHour: 24_000,
+            perDay: 250_000,
+        },
+    },
+    internal: {
+        id: 'internal',
+        label: 'Internal',
+        description: 'Trusted internal automations and operations.',
+        defaultLimits: {
+            perSecond: 60,
+            perMinute: 3_000,
+            perHour: 120_000,
+            perDay: 1_000_000,
+        },
+    },
+    custom: {
+        id: 'custom',
+        label: 'Custom',
+        description: 'Manually tuned per-endpoint limits.',
+        defaultLimits: {
+            perSecond: 5,
+            perMinute: 60,
+            perHour: 1_000,
+            perDay: 10_000,
+        },
+    },
+}
+
 type ApiKeyRow = {
     id: string
     owner_id: string
@@ -58,10 +118,49 @@ export async function listApiKeys() {
     return (keysResult.rows as ApiKeyRow[]).map((row) => toApiKeySummary(row, scopesByKey.get(row.id) || []))
 }
 
+export function listApiKeyTierPresets() {
+    return API_KEY_TIER_ORDER.map((id) => API_KEY_TIER_PRESETS[id])
+}
+
+export function normalizeApiKeyTier(value: unknown): ApiKeyTierPreset {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+    return API_KEY_TIER_ORDER.find((tier) => tier === normalized) || 'custom'
+}
+
+export function validateApiKeyScopes(scopes: unknown) {
+    const normalizedScopes = normalizeScopeInputs(scopes)
+    if (!normalizedScopes.length) {
+        return {
+            valid: false,
+            scopes: [] as ApiKeyScopeRule[],
+            error: 'At least one API key scope is required.',
+        }
+    }
+
+    const seen = new Set<string>()
+    for (const scope of normalizedScopes) {
+        const key = `${scope.method}:${scope.route}`
+        if (seen.has(key)) {
+            return {
+                valid: false,
+                scopes: normalizedScopes,
+                error: `Duplicate API key scope for ${scope.method} ${scope.route}.`,
+            }
+        }
+        seen.add(key)
+    }
+
+    return {
+        valid: true,
+        scopes: normalizedScopes,
+        error: null,
+    }
+}
+
 export async function createApiKey(input: {
     ownerId: string
     name: string
-    tier: string
+    tier: ApiKeyTierPreset | string
     description?: string | null
     enabled?: boolean
     expiresAt?: string | null
@@ -82,7 +181,7 @@ export async function createApiKey(input: {
         id,
         input.ownerId,
         input.name.trim(),
-        input.tier.trim() || 'custom',
+        normalizeApiKeyTier(input.tier),
         input.description?.trim() || null,
         input.enabled !== false,
         keyPrefix,
@@ -102,7 +201,7 @@ export async function createApiKey(input: {
 export async function updateApiKey(id: string, input: {
     ownerId: string
     name: string
-    tier: string
+    tier: ApiKeyTierPreset | string
     description?: string | null
     enabled?: boolean
     expiresAt?: string | null
@@ -123,7 +222,7 @@ export async function updateApiKey(id: string, input: {
         id,
         input.ownerId,
         input.name.trim(),
-        input.tier.trim() || 'custom',
+        normalizeApiKeyTier(input.tier),
         input.description?.trim() || null,
         input.enabled !== false,
         input.expiresAt || null,

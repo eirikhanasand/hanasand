@@ -139,6 +139,34 @@ async function main() {
     })
     expect(settings.response.status === 200, 'Failed to fetch rate-limit settings.', settings.body)
     expect(Array.isArray(settings.body?.routes) && settings.body.routes.some((route) => route.route === '/api/status'), 'Rate-limit route catalog is missing /api/status.', settings.body)
+    expect(Array.isArray(settings.body?.tierPresets) && settings.body.tierPresets.some((preset) => preset.id === 'starter'), 'Rate-limit tier presets are missing from settings.', settings.body)
+
+    const invalidKey = await request('/rate-limit/keys', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+            ownerId: runId,
+            name: 'Invalid duplicate scope key',
+            tier: 'starter',
+            scopes: [
+                {
+                    id: 'dup_one',
+                    enabled: true,
+                    method: 'GET',
+                    route: '/api/status',
+                    limits: { perSecond: 2, perMinute: 5, perHour: 20, perDay: 100 },
+                },
+                {
+                    id: 'dup_two',
+                    enabled: true,
+                    method: 'GET',
+                    route: '/api/status',
+                    limits: { perSecond: 2, perMinute: 5, perHour: 20, perDay: 100 },
+                },
+            ],
+        }),
+    })
+    expect(invalidKey.response.status === 400, 'Duplicate API key scopes should be rejected.', invalidKey.body)
 
     const key = await request('/rate-limit/keys', {
         method: 'POST',

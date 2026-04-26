@@ -36,6 +36,7 @@ export default async function RateLimitsPage() {
             <RateLimitsPageClient
                 initialSettings={payload?.settings && typeof payload.settings === 'object' ? payload.settings as RateLimitSettings : null}
                 routes={Array.isArray(payload?.routes) ? payload.routes as RateLimitRoute[] : []}
+                tierPresets={Array.isArray(payload?.tierPresets) ? payload.tierPresets as ApiKeyTierDefinition[] : []}
                 initialApiKeys={Array.isArray(apiKeysPayload?.apiKeys) ? apiKeysPayload.apiKeys as ApiKeySummary[] : []}
             />
         </DashboardPage>

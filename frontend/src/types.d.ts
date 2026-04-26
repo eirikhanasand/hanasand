@@ -175,6 +175,16 @@ type Thought = {
     updated_at: string
 }
 
+type Note = {
+    id: string
+    title: string
+    content: string
+    source: string
+    owner_id: string
+    created_at: string
+    updated_at: string
+}
+
 type MinimalRole = {
     user_id: string
     role_id: string
@@ -776,6 +786,15 @@ type ApiKeyPeriodLimits = {
     perDay: number | null
 }
 
+type ApiKeyTierPreset = 'starter' | 'growth' | 'business' | 'internal' | 'custom'
+
+type ApiKeyTierDefinition = {
+    id: ApiKeyTierPreset
+    label: string
+    description: string
+    defaultLimits: ApiKeyPeriodLimits
+}
+
 type ApiKeyScopeRule = {
     id: string
     enabled: boolean
@@ -788,7 +807,7 @@ type ApiKeySummary = {
     id: string
     ownerId: string
     name: string
-    tier: string
+    tier: ApiKeyTierPreset | string
     description: string | null
     enabled: boolean
     keyPrefix: string

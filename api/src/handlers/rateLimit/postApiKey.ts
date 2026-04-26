@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
-import { createApiKey } from '#utils/auth/apiKeys.ts'
+import { createApiKey, normalizeApiKeyTier, validateApiKeyScopes } from '#utils/auth/apiKeys.ts'
 
 export default async function postApiKeyHandler(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
@@ -21,14 +21,19 @@ export default async function postApiKeyHandler(req: FastifyRequest, res: Fastif
         return res.status(400).send({ error: 'Missing ownerId or name.' })
     }
 
+    const scopeValidation = validateApiKeyScopes(body.scopes)
+    if (!scopeValidation.valid) {
+        return res.status(400).send({ error: scopeValidation.error || 'Invalid API key scopes.' })
+    }
+
     const created = await createApiKey({
         ownerId: body.ownerId,
         name: body.name,
-        tier: typeof body.tier === 'string' ? body.tier : 'custom',
+        tier: normalizeApiKeyTier(body.tier),
         description: body.description || null,
         enabled: body.enabled !== false,
         expiresAt: body.expiresAt || null,
-        scopes: Array.isArray(body.scopes) ? body.scopes : [],
+        scopes: scopeValidation.scopes,
     })
 
     return res.status(201).send(created)

@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { getRateLimitSettings, listRateLimitRoutes } from '#utils/rateLimit/config.ts'
+import { listApiKeyTierPresets } from '#utils/auth/apiKeys.ts'
 
 export default async function getRateLimitSettingsHandler(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store')
@@ -20,5 +21,6 @@ export default async function getRateLimitSettingsHandler(req: FastifyRequest, r
     return res.send({
         settings,
         routes: listRateLimitRoutes(),
+        tierPresets: listApiKeyTierPresets(),
     })
 }

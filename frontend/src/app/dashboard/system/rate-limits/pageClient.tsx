@@ -7,45 +7,44 @@ import { getCookie } from '@/utils/cookies/cookies'
 import { DashboardPanel } from '@/components/dashboard/ui'
 
 const scopeOrder: RateLimitScope[] = ['anonymous', 'authenticated', 'internal']
-const tierPresetOrder = ['starter', 'growth', 'business', 'internal', 'custom'] as const
 const periodFields: Array<{ key: keyof ApiKeyPeriodLimits, label: string }> = [
     { key: 'perSecond', label: 'Per second' },
     { key: 'perMinute', label: 'Per minute' },
     { key: 'perHour', label: 'Per hour' },
     { key: 'perDay', label: 'Per day' },
 ]
-const tierPresets: Record<string, ApiKeyPeriodLimits> = {
-    starter: {
-        perSecond: 2,
-        perMinute: 60,
-        perHour: 1_000,
-        perDay: 10_000,
+const fallbackTierPresets: ApiKeyTierDefinition[] = [
+    {
+        id: 'starter',
+        label: 'Starter',
+        description: 'Low-volume external integrations.',
+        defaultLimits: { perSecond: 2, perMinute: 60, perHour: 1_000, perDay: 10_000 },
     },
-    growth: {
-        perSecond: 8,
-        perMinute: 240,
-        perHour: 6_000,
-        perDay: 60_000,
+    {
+        id: 'growth',
+        label: 'Growth',
+        description: 'Steady third-party traffic with moderate burst room.',
+        defaultLimits: { perSecond: 8, perMinute: 240, perHour: 6_000, perDay: 60_000 },
     },
-    business: {
-        perSecond: 20,
-        perMinute: 600,
-        perHour: 24_000,
-        perDay: 250_000,
+    {
+        id: 'business',
+        label: 'Business',
+        description: 'Higher-throughput production integrations.',
+        defaultLimits: { perSecond: 20, perMinute: 600, perHour: 24_000, perDay: 250_000 },
     },
-    internal: {
-        perSecond: 60,
-        perMinute: 3_000,
-        perHour: 120_000,
-        perDay: 1_000_000,
+    {
+        id: 'internal',
+        label: 'Internal',
+        description: 'Trusted internal automations and operations.',
+        defaultLimits: { perSecond: 60, perMinute: 3_000, perHour: 120_000, perDay: 1_000_000 },
     },
-    custom: {
-        perSecond: 5,
-        perMinute: 60,
-        perHour: 1_000,
-        perDay: 10_000,
+    {
+        id: 'custom',
+        label: 'Custom',
+        description: 'Manually tuned per-endpoint limits.',
+        defaultLimits: { perSecond: 5, perMinute: 60, perHour: 1_000, perDay: 10_000 },
     },
-}
+]
 
 const fallbackSettings: RateLimitSettings = {
     enabled: true,
@@ -82,10 +81,12 @@ const emptyDraft: DraftApiKey = {
 export default function RateLimitsPageClient({
     initialSettings,
     routes,
+    tierPresets,
     initialApiKeys,
 }: {
     initialSettings: RateLimitSettings | null
     routes: RateLimitRoute[]
+    tierPresets: ApiKeyTierDefinition[]
     initialApiKeys: ApiKeySummary[]
 }) {
     const [settings, setSettings] = useState<RateLimitSettings>(initialSettings || fallbackSettings)
@@ -95,6 +96,13 @@ export default function RateLimitsPageClient({
     const [message, setMessage] = useState<string | null>(null)
     const [keyMessage, setKeyMessage] = useState<string | null>(null)
     const [issuedSecret, setIssuedSecret] = useState<string | null>(null)
+    const activeTierPresets = tierPresets.length ? tierPresets : fallbackTierPresets
+    const tierPresetIds = activeTierPresets.map((preset) => preset.id)
+    const tierPresetMap = useMemo(
+        () => Object.fromEntries(activeTierPresets.map((preset) => [preset.id, preset])),
+        [activeTierPresets]
+    )
+    const draftTierPreset = tierPresetMap[draft.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]
 
     const routeOptions = useMemo(
         () => routes.map((route) => `${route.method} ${route.route}`),
@@ -308,7 +316,7 @@ export default function RateLimitsPageClient({
 
     function addScopeToDraft() {
         const firstRoute = routes[0]
-        const limits = createPresetLimits(draft.tier)
+        const limits = createPresetLimits(draft.tier, tierPresetMap)
         setDraft((prev) => ({
             ...prev,
             scopes: [
@@ -335,7 +343,7 @@ export default function RateLimitsPageClient({
                     enabled: true,
                     method: firstRoute?.method || 'GET',
                     route: firstRoute?.route || '/api/',
-                    limits: createPresetLimits(entry.tier),
+                    limits: createPresetLimits(entry.tier, tierPresetMap),
                 },
             ],
         } : entry))
@@ -361,7 +369,7 @@ export default function RateLimitsPageClient({
             tier,
             scopes: prev.scopes.map((scope) => ({
                 ...scope,
-                limits: createPresetLimits(tier),
+                limits: createPresetLimits(tier, tierPresetMap),
             })),
         }))
     }
@@ -372,7 +380,7 @@ export default function RateLimitsPageClient({
             tier,
             scopes: entry.scopes.map((scope) => ({
                 ...scope,
-                limits: createPresetLimits(tier),
+                limits: createPresetLimits(tier, tierPresetMap),
             })),
         } : entry))
     }
@@ -549,7 +557,7 @@ export default function RateLimitsPageClient({
                         <SelectField
                             label='Tier'
                             value={draft.tier}
-                            options={[...tierPresetOrder]}
+                            options={tierPresetIds}
                             onChange={(value) => applyDraftTierPreset(value)}
                         />
                         <TextField label='Expires at (ISO)' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
@@ -568,6 +576,7 @@ export default function RateLimitsPageClient({
                     </div>
                     <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-bright/54'>
                         <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 uppercase tracking-[0.18em] text-bright/48'>Preset</span>
+                        <span>{draftTierPreset.label}: {draftTierPreset.description}</span>
                         <span>New scopes inherit the selected tier, and changing tier reapplies that preset across the draft key.</span>
                     </div>
 
@@ -630,7 +639,9 @@ export default function RateLimitsPageClient({
                                 <div>
                                     <div className='flex flex-wrap items-center gap-2'>
                                         <h3 className='text-base font-semibold text-bright/90'>{apiKey.name}</h3>
-                                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/50'>{apiKey.tier}</span>
+                                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/50'>
+                                            {(tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]).label}
+                                        </span>
                                         <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/50'>{apiKey.keyPrefix}</span>
                                     </div>
                                     <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description provided.'}</p>
@@ -674,7 +685,7 @@ export default function RateLimitsPageClient({
                                 <SelectField
                                     label='Tier'
                                     value={apiKey.tier}
-                                    options={[...tierPresetOrder]}
+                                    options={tierPresetIds}
                                     onChange={(value) => applyKeyTierPreset(apiKey.id, value)}
                                 />
                                 <TextField label='Owner user ID' value={apiKey.ownerId} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))} />
@@ -684,7 +695,7 @@ export default function RateLimitsPageClient({
                                 <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
                             </div>
                             <div className='mt-3 text-xs text-bright/54'>
-                                Changing the tier reapplies the preset budget to every scope on this key. You can still fine-tune any endpoint budget afterwards.
+                                {(tierPresetMap[apiKey.tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]).description} Changing the tier reapplies the preset budget to every scope on this key. You can still fine-tune any endpoint budget afterwards.
                             </div>
 
                             <div className='mt-4 flex items-center justify-between gap-3'>
@@ -922,12 +933,15 @@ function EmptyState({ message }: { message: string }) {
     )
 }
 
-function createPresetLimits(tier: string): ApiKeyPeriodLimits {
-    const preset = tierPresets[tier] || tierPresets.custom
+function createPresetLimits(
+    tier: string,
+    tierPresetMap: Record<string, ApiKeyTierDefinition>
+): ApiKeyPeriodLimits {
+    const preset = tierPresetMap[tier] || tierPresetMap.custom || fallbackTierPresets[fallbackTierPresets.length - 1]
     return {
-        perSecond: preset.perSecond,
-        perMinute: preset.perMinute,
-        perHour: preset.perHour,
-        perDay: preset.perDay,
+        perSecond: preset.defaultLimits.perSecond,
+        perMinute: preset.defaultLimits.perMinute,
+        perHour: preset.defaultLimits.perHour,
+        perDay: preset.defaultLimits.perDay,
     }
 }

@@ -448,6 +448,15 @@ type ApiKeyPeriodLimits = {
     perDay: number | null
 }
 
+type ApiKeyTierPreset = 'starter' | 'growth' | 'business' | 'internal' | 'custom'
+
+type ApiKeyTierDefinition = {
+    id: ApiKeyTierPreset
+    label: string
+    description: string
+    defaultLimits: ApiKeyPeriodLimits
+}
+
 type ApiKeyScopeRule = {
     id: string
     enabled: boolean
@@ -460,7 +469,7 @@ type ApiKeySummary = {
     id: string
     ownerId: string
     name: string
-    tier: string
+    tier: ApiKeyTierPreset | string
     description: string | null
     enabled: boolean
     keyPrefix: string
