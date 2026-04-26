@@ -13,22 +13,22 @@ export default async function Page({
     const id = Array.isArray(params.id) ? params.id[0] : params.id
 
     return (
-        <div className='grid min-h-[90.5vh] w-full place-items-center px-4 py-6 sm:px-6 md:px-10 lg:px-16'>
-            <div className='grid w-full max-w-6xl spawn rounded-lg overflow-hidden outline outline-dark'>
-                <div className='relative grid w-full gap-6 outline outline-dark p-4 sm:p-6'>
+        <div className='h-[90.5vh] w-full overflow-hidden px-3 py-3 sm:px-5 md:px-8 lg:px-12'>
+            <div className='h-full w-full spawn overflow-hidden rounded-lg outline outline-dark'>
+                <div className='relative grid h-full min-h-0 w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 outline outline-dark p-4 sm:p-5'>
                     {pathDidNotExist && (
                         <div className='absolute top-2 w-full px-2'>
                             <h1 className='p-2 rounded-lg'>The test &apos;{id}&apos; does not exist yet! Feel free to create it 😃</h1>
                         </div>
                     )}
-                    <div className={!pathDidNotExist ? 'grid place-items-center' : ''}>
-                        <div className='flex flex-col items-center gap-4'>
-                            <div className='flex gap-2'>
-                                <Flame className='stroke-[#e25822]' />
-                                <h1 className='text-xl'>{created ? 'Created test' : 'Create test'}</h1>
-                            </div>
-                            <LinkPageClient serverId={id} created={created} />
+                    <div className='grid place-items-center'>
+                        <div className='flex gap-2'>
+                            <Flame className='stroke-[#e25822]' />
+                            <h1 className='text-xl'>{created ? 'Created test' : 'Create test'}</h1>
                         </div>
+                    </div>
+                    <div className='h-full min-h-0'>
+                        <LinkPageClient serverId={id} created={created} />
                     </div>
                     {created && <Link href='/test' className='absolute bottom-4 right-16 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                         <ArrowLeft />

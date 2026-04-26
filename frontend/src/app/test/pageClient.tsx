@@ -14,7 +14,6 @@ import { FormEvent, useEffect, useState } from 'react'
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [path, setPath] = useState('')
     const [recentScans, setRecentScans] = useState<Test[]>([])
-    const [myScans, setMyScans] = useState<Test[]>([])
     const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
@@ -31,17 +30,13 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         let active = true
 
         async function loadScans() {
-            const [recent, mine] = await Promise.all([
-                fetchRecentTests('recent'),
-                fetchRecentTests('mine')
-            ])
+            const recent = await fetchRecentTests('recent')
 
             if (!active) {
                 return
             }
 
             setRecentScans(recent)
-            setMyScans(mine)
         }
 
         loadScans()
@@ -76,8 +71,8 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
     }
 
     return (
-        <div className='grid w-full min-w-0 max-w-6xl items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]'>
-            <section className='grid min-w-0 gap-5 rounded-2xl border border-white/10 bg-white/4 p-5 sm:p-6'>
+        <div className='grid h-full w-full min-w-0 grid-rows-[minmax(0,0.46fr)_minmax(0,0.54fr)] items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,32rem)] lg:grid-rows-1 xl:grid-cols-[minmax(0,1fr)_minmax(28rem,36rem)]'>
+            <section className='grid min-h-0 min-w-0 content-center gap-5 rounded-2xl border border-white/10 bg-white/4 p-5 sm:p-6'>
                 <div>
                     <h2 className='text-xl font-semibold text-bright'>Load Test Launcher</h2>
                     <p className='mt-2 max-w-2xl text-sm leading-6 text-bright/55'>Create a fresh scan every time, then revisit or rerun from its result page.</p>
@@ -101,9 +96,8 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                     </div>
                 </form>
             </section>
-            <section className='grid min-w-0 gap-4'>
-                <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine />
-                <RecentScans title='Recent Scans' empty='No scans recorded yet.' scans={recentScans} />
+            <section className='min-h-0 min-w-0'>
+                <RecentScans title='Recent Scans' empty='No scans recorded yet.' scans={recentScans} className='h-full' />
             </section>
         </div>
     )

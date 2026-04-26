@@ -59,8 +59,8 @@ export default function TestStatsPageClient() {
     }
 
     return (
-        <div className='grid w-full min-w-0 items-start gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'>
-            <section className='grid min-w-0 gap-4 rounded-xl border border-white/10 bg-white/4 p-4'>
+        <div className='grid h-full w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] items-stretch gap-4 overflow-hidden p-4 md:p-5 lg:grid-cols-[minmax(24rem,0.74fr)_minmax(0,1.26fr)] lg:grid-rows-1 xl:grid-cols-[minmax(26rem,0.66fr)_minmax(0,1.34fr)]'>
+            <section className='grid min-h-0 min-w-0 content-start gap-4 rounded-xl border border-white/10 bg-white/4 p-4'>
                 <div className='flex gap-2'>
                     <ChartColumn className='stroke-orange-500' />
                     <h1 className='text-xl'>Test Results</h1>
@@ -98,8 +98,8 @@ export default function TestStatsPageClient() {
                     </Link>
                 </div>
             </section>
-            <section className='grid min-w-0 gap-4'>
-                <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine />
+            <section className='grid min-h-0 min-w-0 grid-cols-1 gap-4 lg:grid-cols-2'>
+                <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine className='hidden lg:grid' />
                 <RecentScans title='Recent Scans' empty='No recent scans yet.' scans={recentScans} />
             </section>
         </div>

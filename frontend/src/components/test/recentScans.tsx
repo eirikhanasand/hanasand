@@ -9,11 +9,13 @@ type RecentScansProps = {
     empty: string
     scans: Test[]
     mine?: boolean
+    className?: string
+    listClassName?: string
 }
 
-export default function RecentScans({ title, empty, scans, mine = false }: RecentScansProps) {
+export default function RecentScans({ title, empty, scans, mine = false, className = '', listClassName = '' }: RecentScansProps) {
     return (
-        <section className='grid min-w-0 gap-3 rounded-xl border border-white/10 bg-white/4 p-4'>
+        <section className={`grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-white/10 bg-white/4 p-4 ${className}`}>
             <div className='flex items-center justify-between gap-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-bright'>{title}</h2>
@@ -21,12 +23,12 @@ export default function RecentScans({ title, empty, scans, mine = false }: Recen
                 </div>
             </div>
             {!scans.length && (
-                <div className='grid min-h-28 place-items-center rounded-lg border border-dashed border-white/10 text-sm text-bright/45'>
+                <div className='grid h-full min-h-0 place-items-center rounded-lg border border-dashed border-white/10 text-sm text-bright/45'>
                     {empty}
                 </div>
             )}
             {scans.length > 0 && (
-                <div className='grid gap-2'>
+                <div className={`grid min-h-0 gap-2 overflow-y-auto pr-1 ${listClassName}`}>
                     {scans.map((scan) => (
                         <Link
                             key={scan.id}
