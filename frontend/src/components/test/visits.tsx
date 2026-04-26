@@ -19,7 +19,7 @@ export default function Visits({ id, serverVisits }: { id: number, serverVisits:
     return (
         <div className='flex min-w-0 gap-2 rounded-lg p-2 hover:bg-dark'>
             <Eye className='h-5 w-5 shrink-0' />
-            <h1 className='min-w-0 break-words'>{visits}</h1>
+            <h1 className='min-w-0 wrap-break-word'>{visits}</h1>
         </div>
     )
 }

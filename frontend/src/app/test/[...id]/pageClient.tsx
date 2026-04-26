@@ -123,14 +123,14 @@ function LeftSide({
                     className='flex w-full min-w-0 gap-2 rounded-lg p-2 text-left hover:bg-dark'
                 >
                     <Logs className='h-5 w-5 shrink-0' />
-                    <h1 className='min-w-0 break-words'>{showLogs ? 'Hide' : 'Show'} ({test.logs.length}) logs</h1>
+                    <h1 className='min-w-0 wrap-break-word'>{showLogs ? 'Hide' : 'Show'} ({test.logs.length}) logs</h1>
                 </button>}
                 {test.errors.length > 0 && <button
                     onClick={() => setShowErrors(prev => !prev)}
                     className='flex w-full min-w-0 gap-2 rounded-lg bg-red-500/10 p-2 text-left text-red-500 outline-1 outline-red-500/20 hover:bg-red-500/20'
                 >
                     <Bug className='h-5 w-5 shrink-0' />
-                    <h1 className='min-w-0 break-words'>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
+                    <h1 className='min-w-0 wrap-break-word'>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
                 </button>}
             </div>
             <div className='mt-auto'>
@@ -153,7 +153,7 @@ function MetaRow({ icon, value }: { icon: ReactNode, value: ReactNode }) {
     return (
         <div className='flex min-w-0 gap-2 rounded-lg p-2 hover:bg-dark'>
             <span className='grid h-6 w-6 shrink-0 place-items-center [&>svg]:h-5 [&>svg]:w-5'>{icon}</span>
-            <h1 className='min-w-0 flex-1 break-words leading-6'>{value}</h1>
+            <h1 className='min-w-0 flex-1 wrap-break-word leading-6'>{value}</h1>
         </div>
     )
 }

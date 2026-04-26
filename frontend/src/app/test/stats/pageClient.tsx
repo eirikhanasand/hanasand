@@ -83,10 +83,10 @@ export default function TestStatsPageClient() {
                 </form>
                 {test && (
                     <div className='grid min-w-0 gap-3 rounded-xl border border-white/10 bg-white/4 p-4 text-sm text-bright/80'>
-                        <div className='flex min-w-0 gap-2'><Rocket className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-words'>{test.id}</h1></div>
+                        <div className='flex min-w-0 gap-2'><Rocket className='h-4 w-4 shrink-0' /><h1 className='min-w-0 wrap-break-word'>{test.id}</h1></div>
                         <div className='flex min-w-0 gap-2'><Globe className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-all'>{test.url}</h1></div>
-                        <div className='flex min-w-0 gap-2'><Watch className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-words'>{prettyDate(test.created_at)}</h1></div>
-                        <div className='flex min-w-0 gap-2'><Eye className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-words'>{test.visits}</h1></div>
+                        <div className='flex min-w-0 gap-2'><Watch className='h-4 w-4 shrink-0' /><h1 className='min-w-0 wrap-break-word'>{prettyDate(test.created_at)}</h1></div>
+                        <div className='flex min-w-0 gap-2'><Eye className='h-4 w-4 shrink-0' /><h1 className='min-w-0 wrap-break-word'>{test.visits}</h1></div>
                         <Link href={`/test/${test.id}`} className='mt-2 rounded-lg border border-white/10 bg-white/6 px-3 py-2 text-center text-sm hover:bg-white/10'>
                             Open Scan
                         </Link>
