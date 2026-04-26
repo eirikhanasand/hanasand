@@ -10,7 +10,7 @@ export default async function getUserCertificates(req: FastifyRequest, res: Fast
     }
 
     if (!id) {
-        return res.status(400).send({ error: "No user ID provided" })
+        return res.status(400).send({ error: 'No user ID provided' })
     }
 
     try {

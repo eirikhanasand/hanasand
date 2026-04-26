@@ -6,9 +6,17 @@ import { FolderPlus, ServerCog } from 'lucide-react'
 import randomId from '@/utils/random/randomId'
 import postShare from '@/utils/share/post'
 import postVM from '@/utils/vms/fetch/postVM'
+import getAgentTarget from '@/utils/vms/fetch/getAgentTarget'
+import syncAgentTargetAccess from '@/utils/vms/fetch/syncAgentTargetAccess'
 import { getCookie } from '@/utils/cookies/cookies'
 
-export default function ShareEntryClient() {
+type EntryMode = 'share' | 'project'
+
+export default function ShareEntryClient({
+    initialMode,
+}: {
+    initialMode: EntryMode
+}) {
     const router = useRouter()
     const [projectName, setProjectName] = useState('hanasand-project')
     const [status, setStatus] = useState<string | null>(null)
@@ -58,7 +66,25 @@ export default function ShareEntryClient() {
                 throw new Error(vmResult.message)
             }
 
-            setStatus(`Project ready. Workspace ${shareId}, VM ${vmName}.`)
+            setStatus('Synchronizing VM access...')
+            const syncResult = await syncAgentTargetAccess(vmName, 'current_user')
+            if (syncResult.status >= 400 || !syncResult.body?.ok) {
+                throw new Error(syncResult.message)
+            }
+
+            setStatus('Verifying VM target...')
+            const targetResult = await getAgentTarget(vmName)
+            if (targetResult.status >= 400 || !targetResult.target) {
+                throw new Error(targetResult.message)
+            }
+
+            const readiness = targetResult.target.capabilities.canConnect
+                ? targetResult.target.network.sshHost
+                    ? `SSH ready at ${targetResult.target.network.sshHost}`
+                    : 'SSH-capable and waiting for network details'
+                : 'created and waiting for the VM to become connectable'
+
+            setStatus(`Project ready. Workspace ${shareId}, VM ${vmName}, ${readiness}.`)
             router.push(`/s/${shareId}`)
         } catch (error) {
             setStatus(error instanceof Error ? error.message : 'Unable to create the project.')
@@ -69,23 +95,45 @@ export default function ShareEntryClient() {
 
     return (
         <div className='mx-auto flex min-h-[calc(100vh-4.5rem)] w-full max-w-6xl items-center justify-center px-4 py-10 md:px-8'>
+            <div className='fixed left-1/2 top-[5.25rem] z-10 flex -translate-x-1/2 items-center gap-2 rounded-full bg-dark/75 px-2 py-2 text-sm text-bright/78 outline outline-dark backdrop-blur'>
+                <button
+                    type='button'
+                    onClick={() => router.replace('/s?mode=share')}
+                    className={`rounded-full px-4 py-2 transition-colors ${initialMode === 'share' ? 'bg-[#fd8738] text-black' : 'hover:bg-dark/60'}`}
+                >
+                    Share flow
+                </button>
+                <button
+                    type='button'
+                    onClick={() => router.replace('/s?mode=project')}
+                    className={`rounded-full px-4 py-2 transition-colors ${initialMode === 'project' ? 'bg-[#fd8738] text-black' : 'hover:bg-dark/60'}`}
+                >
+                    Project flow
+                </button>
+            </div>
             <div className='grid w-full gap-4 lg:grid-cols-2'>
-                <button type='button' disabled={Boolean(pending)} onClick={() => void createShare()} className='rounded-3xl bg-dark/35 p-6 text-left outline outline-dark transition-colors hover:bg-dark/45 disabled:opacity-60'>
+                <button type='button' disabled={Boolean(pending)} onClick={() => void createShare()} className={`rounded-3xl p-6 text-left outline transition-colors disabled:opacity-60 ${initialMode === 'share' ? 'bg-[#fd8738]/10 outline-[#fd8738]/25' : 'bg-dark/35 outline-dark hover:bg-dark/45'}`}>
                     <div className='inline-flex rounded-2xl bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
                         <FolderPlus className='h-5 w-5' />
                     </div>
                     <h1 className='mt-5 text-2xl font-semibold text-bright/92'>Create a share</h1>
                     <p className='mt-3 max-w-xl text-sm leading-6 text-bright/45'>
-                        Start with a lightweight editor workspace right away. This is the fastest path when you just want to write or inspect files.
+                        Open a lightweight editor workspace.
+                    </p>
+                    <p className='mt-4 text-xs uppercase tracking-[0.24em] text-bright/32'>
+                        Local workspace, no VM required
                     </p>
                 </button>
-                <div className='rounded-3xl bg-dark/35 p-6 outline outline-dark'>
+                <div className={`rounded-3xl p-6 outline ${initialMode === 'project' ? 'bg-[#fd8738]/10 outline-[#fd8738]/25' : 'bg-dark/35 outline-dark'}`}>
                     <div className='inline-flex rounded-2xl bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
                         <ServerCog className='h-5 w-5' />
                     </div>
                     <h1 className='mt-5 text-2xl font-semibold text-bright/92'>Create a project</h1>
                     <p className='mt-3 text-sm leading-6 text-bright/45'>
-                        Create a workspace plus a VM-backed project identity so the AI can keep building remotely instead of only on this machine.
+                        Create a share with VM access.
+                    </p>
+                    <p className='mt-4 text-xs uppercase tracking-[0.24em] text-bright/32'>
+                        Share, sync access, verify, open
                     </p>
                     <input
                         value={projectName}

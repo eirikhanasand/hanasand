@@ -41,7 +41,6 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
     const username = mailboxLocalPartForUser(userId)
     const address = addressForUser(userId)
     const allAddresses = addressesForUser(userId)
-    let principalId = existing?.principal_id || null
     const principal = await findPrincipalByName(username, 'individual')
     const inheritedSecret = principal?.secrets?.find(secret => !secret.startsWith('otpauth://')) || null
     const secret = preferredSecret
@@ -49,8 +48,8 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
         || inheritedSecret
         || generateMailSecret()
 
-    if (!principal) {
-        principalId = await createPrincipal({
+    const principalId = !principal
+        ? await createPrincipal({
             type: 'individual',
             quota: 0,
             name: username,
@@ -66,8 +65,9 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             disabledPermissions: [],
             externalMembers: [],
         })
-    } else {
-        principalId = principal.id
+        : principal.id
+
+    if (principal) {
         const patches: AdminPatch[] = [
             { action: 'set', field: 'description', value: displayName },
             { action: 'set', field: 'secrets', value: [secret] },
@@ -89,7 +89,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             mail_address = EXCLUDED.mail_address,
             mail_password_encrypted = EXCLUDED.mail_password_encrypted,
             principal_id = EXCLUDED.principal_id,
-            updated_at = NOW()
+        updated_at = NOW()
     `, [userId, username, address, encryptMailSecret(secret), principalId])
 
     return {

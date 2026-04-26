@@ -29,7 +29,7 @@ export default async function fetchArticles<T extends boolean>(
         return data
     } catch (error) {
         console.log(error)
-        // @ts-expect-error The type is inferred based on recent, but doesnt 
+        // @ts-expect-error The type is inferred based on recent, but doesnt
         // directly extend true, leading TypeScript to raise an error
         return (recent ? { recent: [], articles: [] } : [])
     }

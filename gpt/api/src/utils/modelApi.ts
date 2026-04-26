@@ -1,5 +1,6 @@
+import { writeModelOverheadSample } from '#utils/modelOverhead.ts'
 import config from '#constants'
-import { getModelState, updateModelState } from '#utils/modelState.ts'
+import { getModelState, resetModelState, updateModelState } from '#utils/modelState.ts'
 import runModelToolLoop from '#utils/tools/modelToolLoop.ts'
 
 const DEFAULT_MAX_TOKENS = 10000
@@ -72,8 +73,17 @@ export async function syncModelRuntimeMetrics() {
     const requestedMaxTokens = slot.params?.max_tokens ?? getModelState().maxTokens
     const maxTokens = requestedMaxTokens && requestedMaxTokens > 0 ? requestedMaxTokens : DEFAULT_MAX_TOKENS
 
+    if (!slot.is_processing) {
+        resetModelState()
+        updateModelState({
+            maxTokens,
+            contextMaxTokens,
+        })
+        return getModelState()
+    }
+
     updateModelState({
-        status: slot.is_processing ? (generatedTokens > 0 ? 'generating' : 'preparing') : getModelState().status,
+        status: generatedTokens > 0 ? 'generating' : 'preparing',
         generatedTokens: Math.max(generatedTokens, getModelState().generatedTokens),
         maxTokens,
         contextMaxTokens,
@@ -199,17 +209,27 @@ async function emitStreamedContent(
 }
 
 export async function promptModel(request: GPT_PromptRequest, send: (event: string) => void) {
+    const startedAt = Date.now()
     const currentState = getModelState()
     if (currentState.status === 'preparing' || currentState.status === 'generating') {
         throw new Error('Model is already handling another prompt.')
     }
 
     const maxTokens = request.maxTokens && request.maxTokens > 0 ? request.maxTokens : DEFAULT_MAX_TOKENS
+    const renderStartedAt = Date.now()
     const promptSource = await renderChatPrompt(request.messages)
+    const renderPromptMs = Date.now() - renderStartedAt
+
+    const tokenizeStartedAt = Date.now()
+    const promptTokensPromise = countTokens(promptSource)
+    const contextStartedAt = Date.now()
+    const contextMaxTokensPromise = fetchContextMaxTokens()
     const [promptTokens, contextMaxTokens] = await Promise.all([
-        countTokens(promptSource),
-        fetchContextMaxTokens(),
+        promptTokensPromise,
+        contextMaxTokensPromise,
     ])
+    const tokenizePromptMs = Date.now() - tokenizeStartedAt
+    const fetchContextMs = Date.now() - contextStartedAt
 
     updateModelState({
         conversationId: request.conversationId,
@@ -231,6 +251,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
     }))
 
     try {
+        const toolLoopStartedAt = Date.now()
         const result = await runModelToolLoop(request, (toolEvent) => {
             send(toPromptEvent('prompt_tool', {
                 conversationId: request.conversationId,
@@ -242,13 +263,20 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
                 metrics: getModelState(),
             }))
         })
+        const toolLoopMs = Date.now() - toolLoopStartedAt
         const content = result.content
         const completionId = `hanasand-${Date.now()}`
         updateMetricsFromTimings(result.timings)
+        const outputTokenizeStartedAt = Date.now()
+        const generatedTokensPromise = countTokens(content)
+        const outputContextStartedAt = Date.now()
+        const contextMaxPromise = fetchContextMaxTokens()
         const [generatedTokens, contextMax] = await Promise.all([
-            countTokens(content),
-            fetchContextMaxTokens(),
+            generatedTokensPromise,
+            contextMaxPromise,
         ])
+        const tokenizeOutputMs = Date.now() - outputTokenizeStartedAt
+        const syncOutputContextMs = Date.now() - outputContextStartedAt
 
         const finalPromptTokens = getModelState().promptTokens || promptTokens
         const finalGeneratedTokens = Math.max(generatedTokens, getModelState().generatedTokens)
@@ -262,7 +290,42 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
             tps: getModelState().tps,
         })
 
+        const emitStartedAt = Date.now()
         await emitStreamedContent(request, completionId, content, send)
+        const streamEmitMs = Date.now() - emitStartedAt
+        const totalMs = Date.now() - startedAt
+        const persistedOverhead = await writeModelOverheadSample({
+            sampleId: `${request.conversationId}:${Date.now()}`,
+            sampleSource: 'runtime_prompt_loop',
+            profileTag: process.env.HANASAND_MODEL_PROFILE || process.env.MODEL_NAME_OVERRIDE || null,
+            recordedAt: new Date().toISOString(),
+            conversationId: request.conversationId,
+            clientName: request.clientName || null,
+            modelApi: config.model_api,
+            promptMessages: request.messages.length,
+            maxTokens,
+            promptTokens: finalPromptTokens,
+            generatedTokens: finalGeneratedTokens,
+            contextMaxTokens: contextMax || contextMaxTokens,
+            tps: getModelState().tps,
+            stages: {
+                renderPromptMs,
+                tokenizePromptMs,
+                fetchContextMs,
+                toolLoopMs,
+                tokenizeOutputMs,
+                syncOutputContextMs,
+                streamEmitMs,
+                totalMs,
+            },
+            loop: result.overhead,
+            llama: {
+                cache_n: result.timings?.cache_n || 0,
+                prompt_n: result.timings?.prompt_n || 0,
+                predicted_n: result.timings?.predicted_n || 0,
+                predicted_per_second: result.timings?.predicted_per_second || 0,
+            },
+        })
 
         send(toPromptEvent('prompt_complete', {
             conversationId: request.conversationId,
@@ -270,6 +333,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
             clientName: request.clientName || null,
             content,
             artifacts: result.artifacts || [],
+            overhead: persistedOverhead.sample,
             metrics: getModelState(),
         }))
 

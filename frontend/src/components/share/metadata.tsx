@@ -54,8 +54,8 @@ export default function Metadata({
     const [id] = useState(() => randomServerId || randomId())
     const { condition: error, setCondition: setError } = useClearStateAfter()
     HideIfLittleSpace({ set: setShowMetadata })
-    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
-        initialState: false, 
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
+        initialState: false,
         timeout: 350,
         onClear: () => setDidCopy(false)
     })

@@ -1,6 +1,15 @@
+import type { Metadata } from 'next'
 import { ArrowLeft, ChartColumn, LinkIcon } from 'lucide-react'
 import LinkPageClient from './pageClient'
 import Link from 'next/link'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Links',
+    description: 'Create and manage shortcut links on Hanasand.',
+    path: '/g',
+    keywords: ['links', 'shortcuts', 'hanasand'],
+})
 
 export default async function Page({
     searchParams,
@@ -13,7 +22,7 @@ export default async function Page({
     const id = Array.isArray(params.id) ? params.id[0] : params.id
 
     return (
-        <div className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-[15rem] md:px-40 lg:px-100 grid gap-2 place-items-center'>
+        <div className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-40 lg:px-100 grid gap-2 place-items-center'>
             <div className='grid w-full spawn rounded-lg overflow-hidden outline outline-dark'>
                 <div className='w-full h-full p-4 space-y-4 relative'>
                     {pathDidNotExist && (
@@ -35,7 +44,7 @@ export default async function Page({
                     </Link> }
                     <Link href='/g/stats' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                         <ChartColumn className='group-hover:stroke-blue-500' />
-                    </Link> 
+                    </Link>
                 </div>
             </div>
         </div>

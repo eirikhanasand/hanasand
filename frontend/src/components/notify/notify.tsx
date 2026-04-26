@@ -1,4 +1,4 @@
-type NotifyProps = { 
+type NotifyProps = {
     message: string | boolean | null
     color?: string
     fullWidth?: boolean

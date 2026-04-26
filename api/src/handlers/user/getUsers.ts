@@ -5,10 +5,10 @@ import { loadSQL } from '#utils/loadSQL.ts'
 
 /**
  * Fetches all users and their highest role.
- * 
+ *
  * @param req Incoming Fastify Request
  * @param res Outgoing Fastify Response
- * 
+ *
  * @returns Fastify Response
  */
 export default async function getUsers(req: FastifyRequest, res: FastifyReply) {
@@ -21,7 +21,7 @@ export default async function getUsers(req: FastifyRequest, res: FastifyReply) {
         const usersQuery = await loadSQL('getUsers.sql')
         const usersResult = await run(usersQuery)
         if (!usersResult.rows.length) {
-            return res.status(404).send({ error: `There are no users.` })
+            return res.status(404).send({ error: 'There are no users.' })
         }
 
         return res.send(usersResult.rows)

@@ -91,16 +91,16 @@ function LeftSide({
             <div className='overflow-auto flex-1'>
                 <div className='flex justify-between items-center gap-5'>
                     <h1 className='text-lg font-semibold'>Metadata</h1>
-                    <div className="flex items-center gap-2">
+                    <div className='flex items-center gap-2'>
                         {isConnected ? (
-                            <div className="flex items-center gap-1 text-green-400">
-                                <Wifi className="w-4 h-4" />
-                                <span className="text-sm">Connected</span>
+                            <div className='flex items-center gap-1 text-green-400'>
+                                <Wifi className='w-4 h-4' />
+                                <span className='text-sm'>Connected</span>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-1 text-red-500">
-                                <WifiOff className="w-4 h-4" />
-                                <span className="text-sm">Disconnected</span>
+                            <div className='flex items-center gap-1 text-red-500'>
+                                <WifiOff className='w-4 h-4' />
+                                <span className='text-sm'>Disconnected</span>
                             </div>
                         )}
                     </div>
@@ -156,7 +156,7 @@ function LeftSide({
                     <h1>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
                 </button>}
             </div>
-            <div className="mt-auto">
+            <div className='mt-auto'>
                 <button
                     onClick={handleRerun}
                     className={`group flex gap-2 rounded-lg p-2 w-full ${rerun

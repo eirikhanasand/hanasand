@@ -16,6 +16,6 @@ export default async function getVMNames(req: FastifyRequest, res: FastifyReply)
         return res.send(result.rows.map((vm) => vm.name))
     } catch (error) {
         console.log(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

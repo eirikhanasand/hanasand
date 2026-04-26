@@ -57,6 +57,6 @@ export default async function stopVms(req: FastifyRequest, res: FastifyReply) {
         })
     } catch (error) {
         console.error(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

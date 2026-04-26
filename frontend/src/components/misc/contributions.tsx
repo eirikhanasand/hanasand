@@ -32,7 +32,7 @@ function Weeks() {
 
         return numbers
     }
-    
+
     for (let i = 0; i < 52; i++) {
         data.push(<Week data={get7Numbers()} />)
     }
@@ -42,7 +42,7 @@ function Weeks() {
 
 function Week({data}: {data: number[]}) {
     const cells = []
-    const cell = 'w-[10px] h-[10px] rounded-sm'
+    const cell = 'h-2.5 w-2.5 rounded-sm'
 
     function getCellColor(value: number): string {
         if (value < 4000) return 'bg-gray-800'

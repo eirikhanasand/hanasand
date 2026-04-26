@@ -47,7 +47,7 @@ export default function Page() {
                             key={upload.url}
                             href={upload.url}
                             target='_blank'
-                            rel='noreferrer'
+                            rel='noopener noreferrer'
                             className='grid gap-3 rounded-xl border border-white/10 bg-white/4 p-3 transition hover:bg-white/7'
                         >
                             <div className='aspect-4/3 overflow-hidden rounded-lg bg-black/20'>

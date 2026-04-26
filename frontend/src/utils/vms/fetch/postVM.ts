@@ -17,9 +17,9 @@ export default async function postVM(vm: Partial<VM>): Promise<{ status: number,
 
         const response = await fetchWithRetry(`${config.url.api}/vm`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`, 
+                'Authorization': `Bearer ${token}`,
                 id
             },
             body: JSON.stringify({ ...vm }),

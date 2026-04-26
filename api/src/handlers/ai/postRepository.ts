@@ -16,9 +16,10 @@ export default async function postAiRepository(req: FastifyRequest, res: Fastify
     await run(`
         INSERT INTO ai_imported_repositories (
             id, owner_id, name, full_name, branch, default_branch, source_path, source_url,
-            sync_status, last_synced_at, last_sync_error, sync_history, truncated, imported_at
+            auth_mode, auth_hint, sync_status, last_synced_at, last_sync_error, sync_history,
+            stack_type, stack_reason, truncated, imported_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18)
         ON CONFLICT (id)
         DO UPDATE SET
             name = EXCLUDED.name,
@@ -27,10 +28,14 @@ export default async function postAiRepository(req: FastifyRequest, res: Fastify
             default_branch = EXCLUDED.default_branch,
             source_path = EXCLUDED.source_path,
             source_url = EXCLUDED.source_url,
+            auth_mode = EXCLUDED.auth_mode,
+            auth_hint = EXCLUDED.auth_hint,
             sync_status = EXCLUDED.sync_status,
             last_synced_at = EXCLUDED.last_synced_at,
             last_sync_error = EXCLUDED.last_sync_error,
             sync_history = EXCLUDED.sync_history,
+            stack_type = EXCLUDED.stack_type,
+            stack_reason = EXCLUDED.stack_reason,
             truncated = EXCLUDED.truncated,
             imported_at = EXCLUDED.imported_at
     `, [
@@ -42,15 +47,19 @@ export default async function postAiRepository(req: FastifyRequest, res: Fastify
         repo.defaultBranch || repo.branch,
         repo.sourcePath || '',
         repo.sourceUrl,
+        repo.authMode || 'public',
+        repo.authHint || null,
         repo.syncStatus || 'ready',
         repo.lastSyncedAt,
         repo.lastSyncError,
         JSON.stringify(Array.isArray(repo.syncHistory) ? repo.syncHistory.slice(0, 12) : []),
+        repo.stackType || 'unknown',
+        repo.stackReason || null,
         Boolean(repo.truncated),
         repo.importedAt,
     ])
 
-    await run(`DELETE FROM ai_imported_repository_files WHERE repository_id = $1`, [repo.id])
+    await run('DELETE FROM ai_imported_repository_files WHERE repository_id = $1', [repo.id])
 
     for (const file of repo.files) {
         await run(`

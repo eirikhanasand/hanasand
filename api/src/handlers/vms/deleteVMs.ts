@@ -9,7 +9,7 @@ export default async function deleteVMs(req: FastifyRequest, res: FastifyReply) 
     }
 
     if (!vms) {
-        return res.status(400).send({ error: "Missing vms to delete." })
+        return res.status(400).send({ error: 'Missing vms to delete.' })
     }
 
     try {
@@ -17,6 +17,6 @@ export default async function deleteVMs(req: FastifyRequest, res: FastifyReply) 
         return res.status(200).send(result.rows)
     } catch (error) {
         console.log(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

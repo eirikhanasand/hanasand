@@ -1,69 +1,34 @@
 'use client'
 
 import { countryCentroids } from '@/utils/monitoring/geo'
+import {
+    applyTrafficBatch,
+    CAPITAL_MARKERS,
+    clampViewBox,
+    COUNTRY_EXPIRY_MS,
+    formatRelative,
+    getCountryFocusView,
+    haversineKilometers,
+    hydrateCountries,
+    INITIAL_VIEWBOX,
+    type LivePing,
+    MAP_HEIGHT,
+    MAP_WIDTH,
+    NORWAY,
+    PING_LIFETIME_MS,
+    project,
+    type TrafficBatch,
+    type TrafficCountryPoint,
+    type ViewBox,
+    zoomViewBox,
+} from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
 import { Activity, Clock3, Globe2, MapPinned, Move, Route, Search, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { EmptyCopy, InsightCard, SignalGroup, StatCard, ZoomButton } from './liveMapPrimitives'
 import statusClasses from './statusClasses'
 
-import type { TrafficMetric, TrafficMetrics, TrafficRecord } from '@/utils/monitoring/types'
-
-type TrafficBatch = {
-    iso: string
-    count: number
-    timestamp: string
-}
-
-type TrafficCountryPoint = {
-    iso: string
-    count: number
-    lastSeen: number
-}
-
-type LivePing = {
-    id: number
-    start: [number, number]
-    end: [number, number]
-    startTime: number
-    count: number
-}
-
-type ViewBox = {
-    x: number
-    y: number
-    width: number
-    height: number
-}
-
-type CapitalMarker = {
-    label: string
-    iso: string
-    coords: [number, number]
-}
-
-const MAP_WIDTH = 1000
-const MAP_HEIGHT = 500
-const NORWAY: [number, number] = countryCentroids.NO || [62, 10]
-const INITIAL_VIEWBOX: ViewBox = { x: 0, y: 0, width: MAP_WIDTH, height: MAP_HEIGHT }
-const COUNTRY_EXPIRY_MS = 5 * 60 * 1000
-const PING_LIFETIME_MS = 2200
-const CAPITAL_MARKERS: CapitalMarker[] = [
-    { iso: 'NO', label: 'Oslo', coords: [59.9139, 10.7522] },
-    { iso: 'GB', label: 'London', coords: [51.5072, -0.1276] },
-    { iso: 'FR', label: 'Paris', coords: [48.8566, 2.3522] },
-    { iso: 'DE', label: 'Berlin', coords: [52.52, 13.405] },
-    { iso: 'ES', label: 'Madrid', coords: [40.4168, -3.7038] },
-    { iso: 'IT', label: 'Rome', coords: [41.9028, 12.4964] },
-    { iso: 'US', label: 'Washington', coords: [38.9072, -77.0369] },
-    { iso: 'CA', label: 'Ottawa', coords: [45.4215, -75.6972] },
-    { iso: 'BR', label: 'Brasilia', coords: [-15.7939, -47.8828] },
-    { iso: 'AR', label: 'Buenos Aires', coords: [-34.6037, -58.3816] },
-    { iso: 'JP', label: 'Tokyo', coords: [35.6762, 139.6503] },
-    { iso: 'CN', label: 'Beijing', coords: [39.9042, 116.4074] },
-    { iso: 'IN', label: 'New Delhi', coords: [28.6139, 77.209] },
-    { iso: 'AU', label: 'Canberra', coords: [-35.2809, 149.13] },
-    { iso: 'ZA', label: 'Cape Town', coords: [-33.9249, 18.4241] },
-]
+import type { TrafficMetrics, TrafficRecord } from '@/utils/monitoring/types'
 
 export default function LiveTrafficMapDashboard({
     initialMetrics,
@@ -525,181 +490,5 @@ export default function LiveTrafficMapDashboard({
                 </InsightCard>
             </aside>
         </div>
-    )
-}
-
-function project([lat, lon]: [number, number]): [number, number] {
-    return [(lon + 180) * (MAP_WIDTH / 360), (90 - lat) * (MAP_HEIGHT / 180)]
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max)
-}
-
-function normalizeIso(iso: string) {
-    return iso.toUpperCase()
-}
-
-function formatRelative(timestamp: number, now: number) {
-    const diffSeconds = Math.max(0, Math.round((now - timestamp) / 1000))
-    if (diffSeconds < 60) return `${diffSeconds}s ago`
-    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
-    return `${Math.floor(diffSeconds / 3600)}h ago`
-}
-
-function haversineKilometers([lat1, lon1]: [number, number], [lat2, lon2]: [number, number]) {
-    const toRadians = (value: number) => (value * Math.PI) / 180
-    const dLat = toRadians(lat2 - lat1)
-    const dLon = toRadians(lon2 - lon1)
-    const a = (Math.sin(dLat / 2) ** 2)
-        + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * (Math.sin(dLon / 2) ** 2)
-    return Math.round(6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
-}
-
-function getCountryFocusView(coords: [number, number]) {
-    const [x, y] = project(coords)
-    return clampViewBox({ x: x - 140, y: y - 80, width: 280, height: 160 })
-}
-
-function hydrateCountries(records: TrafficRecord[]) {
-    return records.reduce<Record<string, TrafficCountryPoint>>((acc, record) => {
-        const iso = normalizeIso((record as TrafficRecord & { country_iso?: string }).country_iso || '')
-        if (!iso || iso === 'UNKNOWN' || !countryCentroids[iso]) return acc
-        const lastSeen = new Date(record.timestamp).getTime()
-        const current = acc[iso]
-        acc[iso] = {
-            iso,
-            count: (current?.count || 0) + 1,
-            lastSeen: Math.max(current?.lastSeen || 0, lastSeen),
-        }
-        return acc
-    }, {})
-}
-
-function applyTrafficBatch(
-    batch: TrafficBatch[],
-    setCountries: React.Dispatch<React.SetStateAction<Record<string, TrafficCountryPoint>>>,
-    setPings: React.Dispatch<React.SetStateAction<LivePing[]>>
-) {
-    const now = Date.now()
-
-    setCountries((prev) => {
-        const next = { ...prev }
-        batch.forEach((item) => {
-            const iso = normalizeIso(item.iso)
-            const current = next[iso]
-            next[iso] = {
-                iso,
-                count: (current?.count || 0) + item.count,
-                lastSeen: now,
-            }
-        })
-        return next
-    })
-
-    setPings((prev) => [
-        ...prev,
-        ...batch.flatMap((item) => {
-            const iso = normalizeIso(item.iso)
-            const start = countryCentroids[iso]
-            if (!start || iso === 'NO') return []
-            return [{ id: Math.random(), start, end: NORWAY, startTime: now, count: item.count }]
-        })
-    ])
-}
-
-function clampViewBox(next: ViewBox) {
-    const width = clamp(next.width, MAP_WIDTH * 0.2, MAP_WIDTH)
-    const height = clamp(next.height, MAP_HEIGHT * 0.2, MAP_HEIGHT)
-
-    return {
-        width,
-        height,
-        x: clamp(next.x, 0, MAP_WIDTH - width),
-        y: clamp(next.y, 0, MAP_HEIGHT - height),
-    }
-}
-
-function zoomViewBox(current: ViewBox, factor: number, centerX: number, centerY: number) {
-    const width = clamp(current.width * factor, MAP_WIDTH * 0.2, MAP_WIDTH)
-    const height = clamp(current.height * factor, MAP_HEIGHT * 0.2, MAP_HEIGHT)
-    const offsetX = (centerX - current.x) / current.width
-    const offsetY = (centerY - current.y) / current.height
-
-    return clampViewBox({
-        width,
-        height,
-        x: centerX - (width * offsetX),
-        y: centerY - (height * offsetY),
-    })
-}
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
-    return (
-        <div className='rounded-xl border border-white/10 bg-black/60 p-4'>
-            <div className='flex items-center justify-between text-white/60'>
-                <span className='text-[11px] font-medium uppercase tracking-[0.18em]'>{label}</span>
-                <div className='rounded-full border border-white/10 bg-white/5 p-2'>{icon}</div>
-            </div>
-            <div className='mt-3 text-2xl font-semibold text-white'>{value}</div>
-        </div>
-    )
-}
-
-function InsightCard({ children, icon, title }: { children: React.ReactNode, icon: React.ReactNode, title: string }) {
-    return (
-        <section className='rounded-2xl border border-white/10 bg-black/60 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]'>
-            <div className='mb-3 flex items-center gap-3'>
-                <div className='rounded-full border border-white/10 bg-white/5 p-2 text-white/80'>{icon}</div>
-                <h2 className='font-semibold text-white'>{title}</h2>
-            </div>
-            {children}
-        </section>
-    )
-}
-
-function SignalGroup({
-    entries,
-    title,
-    valueLabel,
-}: {
-    entries: TrafficMetric[]
-    title: string
-    valueLabel: string
-}) {
-    return (
-        <div className='mb-4 last:mb-0'>
-            <div className='mb-2 text-xs font-medium uppercase tracking-[0.18em] text-white/60'>{title}</div>
-            <div className='space-y-2'>
-                {entries.length ? entries.slice(0, 4).map((entry) => (
-                    <div key={entry.key} className='rounded-xl border border-white/10 bg-black/60 px-3 py-2'>
-                        <div className='truncate text-sm font-medium text-white'>{entry.key}</div>
-                        <div className='mt-1 text-xs text-white/60'>{entry.count} {valueLabel}</div>
-                    </div>
-                )) : <EmptyCopy text={`No ${title.toLowerCase()} available yet.`} />}
-            </div>
-        </div>
-    )
-}
-
-function EmptyCopy({ text }: { text: string }) {
-    return (
-        <div className='rounded-xl border border-dashed border-white/10 bg-black/40 px-3 py-4 text-sm text-white/60'>
-            {text}
-        </div>
-    )
-}
-
-function ZoomButton({ label, onClick, wide = false }: { label: string, onClick: () => void, wide?: boolean }) {
-    return (
-        <button
-            type='button'
-            onClick={onClick}
-            className={`rounded-full border border-white/10 bg-white/5 px-3 py-1.5
-                text-sm text-white transition hover:border-white/20 hover:bg-white/10
-                ${wide ? 'min-w-18' : 'min-w-10'}`}
-        >
-            {label}
-        </button>
     )
 }

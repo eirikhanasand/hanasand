@@ -3,7 +3,12 @@ import { WebSocket as WS } from 'ws'
 
 export const gpt = new Map<string, Set<WS>>()
 export const gptSockets = new Map<WS, GPT_SocketState>()
-const gptClientRegistry = new Map<string, Map<string, GPT_Client & { lastSeen: string }>>()
+type RegisteredGptClient = GPT_Client & {
+    lastSeen: string
+    socket: WS
+}
+
+const gptClientRegistry = new Map<string, Map<string, RegisteredGptClient>>()
 
 function defaultModelMetrics(): GPT_ModelMetrics {
     return {
@@ -40,13 +45,13 @@ export async function handleGptMessage(
         const msg = JSON.parse(rawMessage.toString()) as { type?: string, client?: GPT_Client }
 
         switch (msg.type) {
-            case 'update':
+            case 'update': {
                 if (!msg.client) {
                     return
                 }
 
                 const normalizedClient = normalizeClient(msg.client)
-                rememberClient(id, normalizedClient)
+                rememberClient(id, socket, normalizedClient)
 
                 gptSockets.set(socket, {
                     role: 'producer',
@@ -54,6 +59,7 @@ export async function handleGptMessage(
                 })
                 broadcastUpdate(id, socket, normalizedClient)
                 return
+            }
 
             case 'prompt_request':
                 relayPromptRequest(id, socket, msg as GPT_PromptRequest)
@@ -75,18 +81,22 @@ export async function handleGptMessage(
     }
 }
 
-function rememberClient(id: string, client: GPT_Client) {
-    const bucket = gptClientRegistry.get(id) || new Map<string, GPT_Client & { lastSeen: string }>()
+function rememberClient(id: string, socket: WS, client: GPT_Client) {
+    const bucket = gptClientRegistry.get(id) || new Map<string, RegisteredGptClient>()
     bucket.set(client.name, {
         ...client,
         lastSeen: new Date().toISOString(),
+        socket,
     })
     gptClientRegistry.set(id, bucket)
 }
 
 export function listGptClients(id: string) {
     const bucket = gptClientRegistry.get(id)
-    return bucket ? [...bucket.values()] : []
+    return bucket ? [...bucket.values()].map(({ socket, ...client }) => {
+        void socket
+        return client
+    }) : []
 }
 
 export function unregisterGptSocket(id: string, socket: WS) {
@@ -98,6 +108,11 @@ export function unregisterGptSocket(id: string, socket: WS) {
 
     const bucket = gptClientRegistry.get(id)
     if (!bucket) {
+        return
+    }
+
+    const entry = bucket.get(state.clientName)
+    if (!entry || entry.socket !== socket) {
         return
     }
 

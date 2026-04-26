@@ -9,7 +9,7 @@ export default async function shutdownVMs(req: FastifyRequest, res: FastifyReply
     }
 
     if (!vms || !Array.isArray(vms) || vms.length === 0) {
-        return res.status(400).send({ error: "Missing required 'vms' array" })
+        return res.status(400).send({ error: 'Missing required \'vms\' array' })
     }
 
     try {
@@ -25,6 +25,6 @@ export default async function shutdownVMs(req: FastifyRequest, res: FastifyReply
         return res.status(201).send(result.rows)
     } catch (error) {
         console.error(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

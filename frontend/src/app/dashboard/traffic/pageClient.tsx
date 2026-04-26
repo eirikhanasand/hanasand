@@ -124,11 +124,11 @@ export default function TrafficDashboard({
     const domainsSortedByTps = [...domains].sort((a, b) => b.tps - a.tps)
 
     return (
-        <div className="grid gap-4 h-full">
-            <Notify message={message} background="bg-dark" />
+        <div className='grid gap-4 h-full'>
+            <Notify message={message} background='bg-dark' />
 
             {/* Metrics */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 overflow-hidden md:max-h-60">
+            <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-5 overflow-hidden md:max-h-60'>
                 {domainsSortedByTps.map((domain, id) => <TrafficSpeedometer
                     key={id}
                     name={domain.name}
@@ -137,10 +137,10 @@ export default function TrafficDashboard({
             </div>
 
             <h1 className='font-semibold text-lg'>Top endpoints</h1>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-5'>
                 {metrics.map((m, i) => (
                     <div key={i} className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'>
-                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
+                        <h2 className='font-semibold text-bright/90'>{m.value}</h2>
                         <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
                         <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
                         <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
@@ -149,17 +149,17 @@ export default function TrafficDashboard({
             </div>
 
             <h1 className='font-semibold text-lg'>Top IPs</h1>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-5'>
                 {IPs.map((ipMetric, i) => (
                     <div
                         key={i}
                         className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
                     >
-                        <h2 className="font-semibold text-bright/90">{ipMetric.ip}</h2>
+                        <h2 className='font-semibold text-bright/90'>{ipMetric.ip}</h2>
                         <span className='text-xs text-almostbright'>
                             Most Common User Agent: {ipMetric.most_common_user_agent ?? 'N/A'}
                         </span>
-                        <div className="mt-2">
+                        <div className='mt-2'>
                             <h3 className='font-semibold text-xs'>Top Paths:</h3>
                             <ul className='text-xs text-almostbright list-disc list-inside'>
                                 {ipMetric.top_paths.map((path, idx) => (
@@ -172,15 +172,15 @@ export default function TrafficDashboard({
             </div>
 
             <h1 className='font-semibold text-lg'>Top user agents</h1>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-5'>
                 {UAs.map((ua, i) => (
                     <div
                         key={i}
                         className='max-h-[62vh] gap-1 flex flex-col rounded-xl p-4 backdrop-blur-md outline outline-dark overflow-y-auto text-sm'
                     >
-                        <h2 className="font-semibold text-bright/90 text-xs break-all">{ua.user_agent}</h2>
+                        <h2 className='font-semibold text-bright/90 text-xs break-all'>{ua.user_agent}</h2>
                         <span className='text-xs text-almostbright'>Most Common IP: {ua.most_common_ip ?? 'N/A'}</span>
-                        <div className="mt-2">
+                        <div className='mt-2'>
                             <h3 className='font-semibold text-xs'>Top Paths:</h3>
                             <ul className='text-xs text-almostbright list-disc list-inside'>
                                 {ua.top_paths.map((path, idx) => (
@@ -194,22 +194,22 @@ export default function TrafficDashboard({
 
             <h1 className='hidden md:block font-semibold text-lg'>Blocklist</h1>
             <h1 className='block md:hidden font-semibold text-lg'>Blocklist & Live traffic</h1>
-            <div className="grid h-full gap-4 xl:grid-cols-2">
+            <div className='grid h-full gap-4 xl:grid-cols-2'>
                 {/* Blocklist */}
                 <div className={commonListStyle}>
-                    <div className="flex justify-between items-center">
-                        <h1 className="font-semibold">Blocklist</h1>
+                    <div className='flex justify-between items-center'>
+                        <h1 className='font-semibold'>Blocklist</h1>
                         <button
-                            className="flex items-center gap-1 px-2 py-1 bg-green-500/30 rounded-lg hover:bg-green-500/50 cursor-pointer"
+                            className='flex items-center gap-1 px-2 py-1 bg-green-500/30 rounded-lg hover:bg-green-500/50 cursor-pointer'
                             onClick={() => setShowBlockModal(true)}
                         >
-                            <Plus className="w-4 h-4" /> Add
+                            <Plus className='w-4 h-4' /> Add
                         </button>
                     </div>
                     <div className='h-full overflow-x-auto'>
-                        <table className="min-w-[28rem] w-full text-left text-sm">
+                        <table className='min-w-[28rem] w-full text-left text-sm'>
                             <thead>
-                                <tr className="border-b border-white/20">
+                                <tr className='border-b border-white/20'>
                                     <th>Metric</th>
                                     <th>Value</th>
                                     <th />
@@ -218,14 +218,14 @@ export default function TrafficDashboard({
                             </thead>
                             <tbody>
                                 {blocklist.map((entry, id) => (
-                                    <tr key={id} className="border-b border-white/10 group text-bright/80">
+                                    <tr key={id} className='border-b border-white/10 group text-bright/80'>
                                         <td>{entry.type}</td>
                                         <td>{entry.value}</td>
-                                        {<td className="flex gap-2 w-full justify-end">
-                                            <button onClick={() => editBlock(entry)} className="hidden group-hover:block hover:text-yellow-400 cursor-pointer">
+                                        {<td className='flex gap-2 w-full justify-end'>
+                                            <button onClick={() => editBlock(entry)} className='hidden group-hover:block hover:text-yellow-400 cursor-pointer'>
                                                 <Pencil className='w-4 h-4' />
                                             </button>
-                                            <button onClick={() => handleDeleteBlock(entry.id)} className="hidden group-hover:block hover:text-red-500 cursor-pointer">
+                                            <button onClick={() => handleDeleteBlock(entry.id)} className='hidden group-hover:block hover:text-red-500 cursor-pointer'>
                                                 <X className='w-5 h-5' />
                                             </button>
                                             <div className='block group-hover:hidden w-5' />
@@ -240,29 +240,29 @@ export default function TrafficDashboard({
 
                 {/* Recent Activity */}
                 <div className={commonListStyle}>
-                    <h1 className="font-semibold">Recent Activity</h1>
+                    <h1 className='font-semibold'>Recent Activity</h1>
                     <div className='overflow-x-auto'>
-                        <table className="min-w-[42rem] w-full text-left text-sm overflow-hidden">
-                        <thead className='w-full'>
-                            <tr className="border-b border-white/20">
-                                <th>Metric</th>
-                                <th>Value</th>
-                                <th>Path</th>
-                                <th>Hits</th>
-                                <th>Last Seen</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {logs.map((log, i) => (
-                                <tr key={i} className="border-b border-white/10 text-bright/80">
-                                    <td>{log.metric}</td>
-                                    <td>{log.value}</td>
-                                    <td>{log.path}</td>
-                                    <td>{log.hits}</td>
-                                    <td className='min-w-fit'>{prettyDate(log.last_seen)}</td>
+                        <table className='min-w-[42rem] w-full text-left text-sm overflow-hidden'>
+                            <thead className='w-full'>
+                                <tr className='border-b border-white/20'>
+                                    <th>Metric</th>
+                                    <th>Value</th>
+                                    <th>Path</th>
+                                    <th>Hits</th>
+                                    <th>Last Seen</th>
                                 </tr>
-                            ))}
-                        </tbody>
+                            </thead>
+                            <tbody>
+                                {logs.map((log, i) => (
+                                    <tr key={i} className='border-b border-white/10 text-bright/80'>
+                                        <td>{log.metric}</td>
+                                        <td>{log.value}</td>
+                                        <td>{log.path}</td>
+                                        <td>{log.hits}</td>
+                                        <td className='min-w-fit'>{prettyDate(log.last_seen)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -272,42 +272,42 @@ export default function TrafficDashboard({
             {showBlockModal && (
                 <div
                     onClick={() => setShowBlockModal(false)}
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm grid place-items-center z-30"
+                    className='fixed inset-0 bg-black/60 backdrop-blur-sm grid place-items-center z-30'
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className="bg-dark rounded-2xl p-6 w-96 border border-white/20"
+                        className='bg-dark rounded-2xl p-6 w-96 border border-white/20'
                     >
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="font-semibold">{editingBlock ? 'Edit Blocklist' : 'Add Blocklist'}</h2>
-                            <button onClick={() => setShowBlockModal(false)} className="w-6 h-6 grid place-items-center hover:bg-white/10 rounded-full"><X /></button>
+                        <div className='flex justify-between items-center mb-4'>
+                            <h2 className='font-semibold'>{editingBlock ? 'Edit Blocklist' : 'Add Blocklist'}</h2>
+                            <button onClick={() => setShowBlockModal(false)} className='w-6 h-6 grid place-items-center hover:bg-white/10 rounded-full'><X /></button>
                         </div>
-                        <form className="flex flex-col gap-3" onSubmit={handleBlockSubmit}>
-                            <label className="flex flex-col text-sm">
+                        <form className='flex flex-col gap-3' onSubmit={handleBlockSubmit}>
+                            <label className='flex flex-col text-sm'>
                                 Metric
-                                <select name="metric" value={form.type || ''} onChange={handleChange} required className="p-2 rounded-lg bg-dark border border-white/20">
-                                    <option value="">Select metric</option>
-                                    <option value="ip">IP</option>
-                                    <option value="user_agent">User Agent</option>
+                                <select name='metric' value={form.type || ''} onChange={handleChange} required className='p-2 rounded-lg bg-dark border border-white/20'>
+                                    <option value=''>Select metric</option>
+                                    <option value='ip'>IP</option>
+                                    <option value='user_agent'>User Agent</option>
                                 </select>
                             </label>
 
-                            <label className="flex flex-col text-sm">
+                            <label className='flex flex-col text-sm'>
                                 Value
-                                <input name="value" value={form.value || ''} onChange={handleChange} required className="p-2 rounded-lg bg-dark border border-white/20" />
+                                <input name='value' value={form.value || ''} onChange={handleChange} required className='p-2 rounded-lg bg-dark border border-white/20' />
                             </label>
 
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" name="is_vpn" checked={form.is_vpn || false} onChange={handleChange} /> VPN
+                            <label className='flex items-center gap-2 text-sm'>
+                                <input type='checkbox' name='is_vpn' checked={form.is_vpn || false} onChange={handleChange} /> VPN
                             </label>
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" name="is_proxy" checked={form.is_proxy || false} onChange={handleChange} /> Proxy
+                            <label className='flex items-center gap-2 text-sm'>
+                                <input type='checkbox' name='is_proxy' checked={form.is_proxy || false} onChange={handleChange} /> Proxy
                             </label>
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" name="is_tor" checked={form.is_tor || false} onChange={handleChange} /> Tor
+                            <label className='flex items-center gap-2 text-sm'>
+                                <input type='checkbox' name='is_tor' checked={form.is_tor || false} onChange={handleChange} /> Tor
                             </label>
 
-                            <button type="submit" className="px-4 py-1 bg-green-500 rounded-lg hover:bg-green-600">
+                            <button type='submit' className='px-4 py-1 bg-green-500 rounded-lg hover:bg-green-600'>
                                 {editingBlock ? 'Update' : 'Create'}
                             </button>
                         </form>

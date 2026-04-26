@@ -6,14 +6,14 @@ import copy from '@/utils/copy'
 import { postLink } from '@/utils/links/post'
 import { Copy } from 'lucide-react'
 import { redirect } from 'next/navigation'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useState } from 'react'
 
 export default function LinkPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const [id, setId] = useState('')
     const [path, setPath] = useState('')
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
-        initialState: false, 
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
+        initialState: false,
         timeout: 350,
         onClear: () => setDidCopy(false)
     })

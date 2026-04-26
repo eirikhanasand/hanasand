@@ -84,7 +84,7 @@ export default function LinkStatsPageClient() {
                 </div>
                 <Link href='/g' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                     <ArrowLeft className='group-hover:stroke-blue-500' />
-                </Link> 
+                </Link>
             </div>
         </div>
     )

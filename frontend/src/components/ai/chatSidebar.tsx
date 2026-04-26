@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Archive, ArchiveRestore, FolderGit2, MessageSquarePlus, Pencil, Search, SquareArrowOutUpRight, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, MessageSquarePlus, Pencil, Search, SquareArrowOutUpRight, Trash2 } from 'lucide-react'
 
 type ChatSidebarProps = {
     activeConversation: AIConversation | null

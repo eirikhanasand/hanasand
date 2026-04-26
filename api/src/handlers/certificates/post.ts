@@ -20,7 +20,7 @@ export default async function postCertificate(req: FastifyRequest, res: FastifyR
     } ?? {}
 
     if (!id || !public_key || !name || !owner || !created_by) {
-        return res.status(400).send({ error: "Missing required fields." })
+        return res.status(400).send({ error: 'Missing required fields.' })
     }
 
     try {

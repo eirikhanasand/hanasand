@@ -12,6 +12,7 @@ RUN bun install
 
 # Copies contents
 COPY . .
+RUN bun run lint
 
 # Stars the application
 CMD bun start

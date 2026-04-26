@@ -17,8 +17,8 @@ type NewFileProps = {
     setTree: Dispatch<SetStateAction<Tree | null>>
 }
 
-export default function NewFile({ 
-    isCreatingNewFile, 
+export default function NewFile({
+    isCreatingNewFile,
     display,
     newFileName,
     setNewFileName,
@@ -32,7 +32,7 @@ export default function NewFile({
     const lowercaseTreeHasFile = tree.some((entry) => entry.name.toLowerCase() === normalizedNewFileName)
     const treeHasFile = tree.some((entry) => entry.name === newFileName)
 
-    const outline = treeHasFile 
+    const outline = treeHasFile
         ? `outline outline-red-500 rounded-md ${blink && 'bg-red-500/20'}`
         : lowercaseTreeHasFile
             ? 'outline outline-yellow-500 rounded-md'
@@ -57,7 +57,7 @@ export default function NewFile({
                 token,
                 userId: id
             })
-            
+
             if (response && ('tree' in response)) {
                 setIsCreatingNewFile(null)
                 setNewFileName('')
@@ -65,11 +65,11 @@ export default function NewFile({
             }
         }
     }
-    
+
     if (!isCreatingNewFile || !display) {
         return <></>
     }
-    
+
     return (
         <div className={`flex items-center gap-2 px-2 py-1 hover:bg-light/70 ${outline} rounded-md cursor-pointer relative`}>
             {isCreatingNewFile === 'folder'

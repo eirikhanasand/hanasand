@@ -28,7 +28,7 @@ export default async function postRole(req: FastifyRequest, res: FastifyReply) {
 
     try {
         const result = await run(
-            `INSERT INTO roles (id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
+            'INSERT INTO roles (id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
             [id, name, description || null, created_by]
         )
 

@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { getConversationForUser, requireAiUser, toAiConversation } from './shared.ts'
+import { recordAiUsageEvent } from '#utils/ai/usage.ts'
 
 export default async function postAiConversation(req: FastifyRequest, res: FastifyReply) {
     const userId = await requireAiUser(req, res)
@@ -60,6 +61,20 @@ export default async function postAiConversation(req: FastifyRequest, res: Fasti
     if (!conversation) {
         return res.status(404).send({ error: 'Conversation not found.' })
     }
+
+    await recordAiUsageEvent({
+        ownerId: userId,
+        actorId: userId,
+        conversationId,
+        workspaceKind,
+        workspaceId,
+        kind: 'conversation_created',
+        metadata: {
+            modelStrategy,
+            workspaceKind,
+            shareCount: shareIds.length,
+        },
+    })
 
     return res.status(201).send(toAiConversation(conversation))
 }

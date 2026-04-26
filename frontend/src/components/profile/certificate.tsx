@@ -73,9 +73,9 @@ export default function Certificate({ certificate, update }: { certificate: Cert
                                     }
                                 >
                                     <div className='p-px'>
-                                        <div className="p-1 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-md flex gap-1 items-center px-4">
-                                            <Info className="h-3 w-3 stroke-blue-400" />
-                                            <span className="text-bright/70 text-[0.7rem]">Managed</span>
+                                        <div className='p-1 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-md flex gap-1 items-center px-4'>
+                                            <Info className='h-3 w-3 stroke-blue-400' />
+                                            <span className='text-bright/70 text-[0.7rem]'>Managed</span>
                                         </div>
                                     </div>
                                 </Tooltip>

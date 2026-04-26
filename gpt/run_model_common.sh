@@ -11,8 +11,11 @@ MODELS_ROOT="$CURRENT_DIR/models"
 API_DIR="$CURRENT_DIR/api"
 MODULES_DIR="$CURRENT_DIR/modules"
 MODEL_API_ENTRY="$API_DIR/src/index.ts"
-MODEL_PORT="${MODEL_PORT:-8081}"
+MODEL_PORT="${MODEL_PORT:-18081}"
 BUILD_MARKER="$LLAMA_BUILD_DIR/.hanasand-build"
+MODEL_PROFILE="${HANASAND_MODEL_PROFILE:-default}"
+MODEL_SELECTION_ONLY="${HANASAND_MODEL_SELECTION_ONLY:-0}"
+MODEL_SELECTION_ARTIFACT="$CURRENT_DIR/runtime/self-improvement/model-selection-latest.json"
 
 OS_NAME="$(uname -s)"
 CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)"
@@ -24,7 +27,7 @@ SERVER_PID=""
 HF_CMD=""
 
 if [ "$OS_NAME" = "Darwin" ]; then
-  TOTAL_RAM_BYTES="$(sysctl -n hw.memsize)"
+  TOTAL_RAM_BYTES="$(sysctl -n hw.memsize 2>/dev/null || echo $((64 * 1024 * 1024 * 1024)))"
 else
   TOTAL_RAM_BYTES="$(awk '/MemTotal/ {print int($2 * 1024)}' /proc/meminfo)"
 fi
@@ -178,17 +181,32 @@ select_backend() {
 
 select_model() {
   CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
+  MODEL_PROFILE_NOTE="default selection"
 
   if [ -n "${MODEL_NAME_OVERRIDE:-}" ] && [ -n "${MODEL_REPO_OVERRIDE:-}" ] && [ -n "${MODEL_FILE_OVERRIDE:-}" ]; then
     MODEL_NAME="$MODEL_NAME_OVERRIDE"
     MODEL_REPO="$MODEL_REPO_OVERRIDE"
     MODEL_FILE="$MODEL_FILE_OVERRIDE"
     CTX_SIZE="${LLAMA_CTX_SIZE:-24576}"
+    MODEL_PROFILE_NOTE="explicit override"
+  elif [ "$OS_NAME" = "Darwin" ] && [ "$MODEL_PROFILE" = "validation" ] && [ "$TOTAL_RAM_GB" -ge 40 ]; then
+    MODEL_NAME="qwen2.5-coder-14b"
+    MODEL_REPO="bartowski/Qwen2.5-Coder-14B-Instruct-GGUF"
+    MODEL_FILE="Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf"
+    CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
+    MODEL_PROFILE_NOTE="stable validation profile for local self-improvement runs on macOS"
+    if [ -z "${LLAMA_BATCH_SIZE:-}" ] || [ "$LLAMA_BATCH_SIZE" = "2048" ]; then
+      LLAMA_BATCH_SIZE=1024
+    fi
+    if [ -z "${LLAMA_UBATCH_SIZE:-}" ] || [ "$LLAMA_UBATCH_SIZE" = "512" ]; then
+      LLAMA_UBATCH_SIZE=256
+    fi
   elif [ "$OS_NAME" = "Darwin" ] && [ "$TOTAL_RAM_GB" -ge 64 ]; then
     MODEL_NAME="qwen2.5-coder-32b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-32B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf"
     CTX_SIZE="${LLAMA_CTX_SIZE:-24576}"
+    MODEL_PROFILE_NOTE="largest local macOS profile"
     if [ -z "${LLAMA_BATCH_SIZE:-}" ] || [ "$LLAMA_BATCH_SIZE" = "2048" ]; then
       LLAMA_BATCH_SIZE=1024
     fi
@@ -200,25 +218,51 @@ select_model() {
     MODEL_REPO="bartowski/Qwen_Qwen3-Coder-Next-GGUF"
     MODEL_FILE="Qwen3-Coder-Next-Q4_K_M.gguf"
     CTX_SIZE="${LLAMA_CTX_SIZE:-32768}"
+    MODEL_PROFILE_NOTE="large multi-GPU profile"
   elif [ "$TOTAL_RAM_GB" -ge 96 ]; then
     MODEL_NAME="qwen2.5-coder-32b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-32B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf"
     CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
+    MODEL_PROFILE_NOTE="high-memory profile"
   elif [ "$TOTAL_RAM_GB" -ge 40 ]; then
     MODEL_NAME="qwen2.5-coder-14b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-14B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf"
     CTX_SIZE="${LLAMA_CTX_SIZE:-24576}"
+    MODEL_PROFILE_NOTE="mid-memory profile"
   else
     MODEL_NAME="qwen2.5-coder-7b"
     MODEL_REPO="bartowski/Qwen2.5-Coder-7B-Instruct-GGUF"
     MODEL_FILE="Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
     CTX_SIZE="${LLAMA_CTX_SIZE:-16384}"
+    MODEL_PROFILE_NOTE="small-memory profile"
   fi
 
   MODEL_DIR="$MODELS_ROOT/$MODEL_NAME"
   MODEL_PATH="$MODEL_DIR/$MODEL_FILE"
+}
+
+write_model_selection_artifact() {
+  mkdir -p "$(dirname "$MODEL_SELECTION_ARTIFACT")"
+  cat > "$MODEL_SELECTION_ARTIFACT" <<EOF
+{
+  "generated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "os": "$OS_NAME",
+  "ram_gb": $TOTAL_RAM_GB,
+  "backend": "$BACKEND",
+  "profile": "$MODEL_PROFILE",
+  "model_name": "$MODEL_NAME",
+  "model_repo": "$MODEL_REPO",
+  "model_file": "$MODEL_FILE",
+  "model_path": "$MODEL_PATH",
+  "ctx_size": $CTX_SIZE,
+  "batch_size": $LLAMA_BATCH_SIZE,
+  "ubatch_size": $LLAMA_UBATCH_SIZE,
+  "profile_note": "$MODEL_PROFILE_NOTE",
+  "selection_only": $MODEL_SELECTION_ONLY
+}
+EOF
 }
 
 find_best_available_model() {
@@ -352,7 +396,9 @@ start_api() {
   if [ -d "$MODULES_DIR" ]; then
     cd "$MODULES_DIR" || exit 1
 
-    if [ -f package-lock.json ]; then
+    if [ -d node_modules ]; then
+      echo "Modules dependencies already present; skipping install."
+    elif [ -f package-lock.json ]; then
       npm ci
     else
       npm install
@@ -361,7 +407,9 @@ start_api() {
 
   cd "$API_DIR" || exit 1
 
-  if [ -f package-lock.json ]; then
+  if [ -d node_modules ]; then
+    echo "API dependencies already present; skipping install."
+  elif [ -f package-lock.json ]; then
     npm ci
   else
     npm install
@@ -391,12 +439,21 @@ build_tensor_split
 
 echo "Selected backend: $BACKEND"
 echo "Selected model:   $MODEL_FILE"
+echo "Model profile:    $MODEL_PROFILE"
+echo "Profile note:     $MODEL_PROFILE_NOTE"
 echo "Model path:       $MODEL_PATH"
 echo "Context size:     $CTX_SIZE"
 echo "Port:             $MODEL_PORT"
 
+write_model_selection_artifact
+
 if [ "${GPT_BUILD_ONLY:-0}" = "1" ]; then
   echo "Build-only mode complete."
+  exit 0
+fi
+
+if [ "$MODEL_SELECTION_ONLY" = "1" ]; then
+  echo "Selection-only mode complete."
   exit 0
 fi
 

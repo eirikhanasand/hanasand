@@ -5,7 +5,7 @@ export default function interpretQuery(query: string) {
 
     const staticResults = staticMappings
         .filter(mapping => mapping.match.some(keyword => normalized.includes(keyword)))
-        .map(mapping => mapping.action(query))
+        .map(mapping => mapping.action())
 
     const dynamicResult = { action: 'dynamic', text: query }
 

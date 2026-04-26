@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Hanasand App",
+    "slug": "hanasand-app",
+    "scheme": "hanasandapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hanasand.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Use the camera to scan documents quickly into a PDF.",
+        "NSPhotoLibraryUsageDescription": "Use your library to review and clean up images.",
+        "NSPhotoLibraryAddUsageDescription": "Save exported PDFs and attachments when needed."
+      }
+    },
+    "plugins": [
+      "expo-camera",
+      "expo-media-library",
+      "expo-sharing"
+    ]
+  }
+}

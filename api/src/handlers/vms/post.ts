@@ -29,7 +29,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     }
 
     if (!name || !owner || !created_by) {
-        return res.status(400).send({ error: "Missing required fields" })
+        return res.status(400).send({ error: 'Missing required fields' })
     }
 
     try {
@@ -49,6 +49,6 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         return res.status(201).send(result.rows[0])
     } catch (error) {
         console.log(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

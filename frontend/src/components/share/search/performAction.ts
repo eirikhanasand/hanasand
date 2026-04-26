@@ -51,7 +51,7 @@ export default function performAction({
         case 'reload':
             router.refresh()
             reset()
-            break;
+            break
     }
 
     reset()

@@ -39,7 +39,9 @@ export async function requestService<T>(service: ServiceName, path: string, init
             try {
                 const payload = await response.json()
                 message = payload?.message || payload?.error || message
-            } catch {}
+            } catch {
+                message = `${response.status} ${response.statusText}`
+            }
             return `Error: ${message}`
         }
 

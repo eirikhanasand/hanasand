@@ -14,7 +14,7 @@ export default function CreateClient() {
     const [title, setTitle] = useState<string>('')
     const [editing, setEditing] = useState(false)
     const router = useRouter()
-    const text = editing ? `Creating thought` : `Start writing...`
+    const text = editing ? 'Creating thought' : 'Start writing...'
 
     async function handleCreate() {
         if (!title) {
@@ -34,7 +34,7 @@ export default function CreateClient() {
             (async() => {
                 const response = await fetchThoughtByTitle(title)
                 if (Array.isArray(response) && response.length > 0) {
-                    setError(`The thought already exists!`)
+                    setError('The thought already exists!')
                 }
             })()
         }

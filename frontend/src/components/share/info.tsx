@@ -16,8 +16,8 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
     const [linkText, setLinkText] = useState(share?.id || '')
     const aliasText = share?.alias || ''
     const { condition: error } = useClearStateAfter()
-    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({ 
-        initialState: false, 
+    const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
+        initialState: false,
         timeout: 1000,
         onClear: () => setDidCopy(false)
     })

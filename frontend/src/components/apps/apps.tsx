@@ -10,15 +10,15 @@ type AppViewProps = {
 export default function Apps() {
     const apps = [
         {
-            text: 'Follow up on activities, even when offline',
+            text: 'Activity follow-up, offline too',
             image: '/images/assets/iphone-events.png'
         },
         {
-            text: 'Or explore potential designs for other apps',
+            text: 'App design experiments',
             image: '/images/assets/pecubit.png'
         },
     ]
-    
+
     return (
         <div className='grid'>
             {apps.map((app, index) => {
@@ -32,7 +32,7 @@ export default function Apps() {
                 )
             })}
             <div className='text-gray-500 grid place-items-center p-8 font-semibold self-center'>
-                <h1 className='max-w-[80vw] py-50 md:py-10 text-center'>more content coming soon &lt;3 if only there were 48 hours in a day...</h1>
+                <h1 className='max-w-[80vw] py-50 md:py-10 text-center'>More soon.</h1>
             </div>
         </div>
     )
@@ -48,8 +48,8 @@ function AppView({text, image, reverse}: AppViewProps) {
                 <AppImage image={image} />
             </div>
         )
-    } 
-    
+    }
+
     return (
         <div className='flex md:grid flex-col-reverse md:grid-cols-2'>
             <AppImage image={image} />
@@ -65,9 +65,9 @@ function AppImage({image}: {image: string}) {
         <div className='grid place-items-center'>
             <Image
                 height={900}
-                width={450} 
+                width={450}
                 src={image}
-                alt='React Native Gambling App' 
+                alt='React Native Gambling App'
                 quality={100}
             />
         </div>

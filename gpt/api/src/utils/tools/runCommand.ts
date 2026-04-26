@@ -173,7 +173,9 @@ async function hasSandboxExecutable() {
             try {
                 await access(path.join(entry, SANDBOX_EXECUTABLE))
                 return true
-            } catch {}
+            } catch {
+                continue
+            }
         }
     } catch {
         return false

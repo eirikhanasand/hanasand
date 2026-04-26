@@ -36,6 +36,7 @@ export default async function scaffoldFastifyPostgresApp(args: ScaffoldFastifyPo
         type: 'module',
         scripts: {
             dev: 'tsx watch src/index.ts',
+            'db:migrate': 'tsx src/scripts/migrate.ts',
             build: 'tsc -p tsconfig.json',
             start: 'node dist/index.js',
         },
@@ -67,7 +68,13 @@ export default async function scaffoldFastifyPostgresApp(args: ScaffoldFastifyPo
 
     await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\ndist\n.env\n')
     await writeTemplateFile(absolutePath, '.dockerignore', 'node_modules\ndist\n.env\nnpm-debug.log\n.git\n')
-    await writeTemplateFile(absolutePath, '.env.example', 'PORT=3001\nDATABASE_URL=postgres://postgres:postgres@db:5432/app\n')
+    await writeTemplateFile(absolutePath, '.env.example', [
+        'PORT=3001',
+        'DATABASE_URL=postgres://postgres:postgres@db:5432/app',
+        'API_HOST_PORT=3001',
+        'POSTGRES_HOST_PORT=5432',
+        '',
+    ].join('\n'))
     await writeTemplateFile(absolutePath, 'Dockerfile', `FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -101,6 +108,11 @@ CMD ["node", "dist/index.js"]
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
   db:
@@ -122,37 +134,143 @@ CMD ["node", "dist/index.js"]
 volumes:
   pgdata:
 `)
+    await writeTemplateFile(absolutePath, 'src/lib/env.ts', `export const env = {
+  port: Number(process.env.PORT || 3001),
+  databaseUrl: process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:5432/app',
+}
+`)
+    await writeTemplateFile(absolutePath, 'src/lib/schema.ts', `export const bootstrapSql = \`
+create table if not exists tasks (
+  id serial primary key,
+  title text not null,
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+insert into tasks (title, done)
+select 'Ship the first endpoint', false
+where not exists (select 1 from tasks);
+\`
+`)
+    await writeTemplateFile(absolutePath, 'src/lib/db.ts', `import pg from 'pg'
+import { env } from './env.js'
+import { bootstrapSql } from './schema.js'
+
+export const pool = new pg.Pool({
+  connectionString: env.databaseUrl,
+})
+
+export async function ensureSchema() {
+  await pool.query(bootstrapSql)
+}
+
+export async function getDatabaseTime() {
+  const result = await pool.query('select now() as now')
+  return result.rows[0]?.now || null
+}
+`)
+    await writeTemplateFile(absolutePath, 'src/routes/health.ts', `import type { FastifyInstance } from 'fastify'
+import { getDatabaseTime } from '../lib/db.js'
+
+export default async function registerHealthRoutes(app: FastifyInstance) {
+  app.get('/health', async () => {
+    const databaseTime = await getDatabaseTime()
+    return {
+      ok: true,
+      service: '${appName}',
+      databaseTime,
+    }
+  })
+
+  app.get('/ready', async () => {
+    await getDatabaseTime()
+    return {
+      ok: true,
+      ready: true,
+    }
+  })
+}
+`)
+    await writeTemplateFile(absolutePath, 'src/routes/tasks.ts', `import type { FastifyInstance } from 'fastify'
+import { pool } from '../lib/db.js'
+
+type CreateTaskBody = {
+  title?: string
+}
+
+export default async function registerTaskRoutes(app: FastifyInstance) {
+  app.get('/api/tasks', async () => {
+    const result = await pool.query(
+      'select id, title, done, created_at from tasks order by created_at desc limit 25'
+    )
+
+    return {
+      items: result.rows,
+    }
+  })
+
+  app.post<{ Body: CreateTaskBody }>('/api/tasks', async (request, reply) => {
+    const title = String(request.body?.title || '').trim()
+    if (!title) {
+      reply.code(400)
+      return {
+        ok: false,
+        error: 'title is required',
+      }
+    }
+
+    const result = await pool.query(
+      'insert into tasks (title, done) values ($1, false) returning id, title, done, created_at',
+      [title]
+    )
+
+    reply.code(201)
+    return {
+      ok: true,
+      item: result.rows[0],
+    }
+  })
+}
+`)
+    await writeTemplateFile(absolutePath, 'src/scripts/migrate.ts', `import { ensureSchema, pool } from '../lib/db.js'
+
+const run = async () => {
+  try {
+    await ensureSchema()
+    console.log('Database schema is ready.')
+  } finally {
+    await pool.end()
+  }
+}
+
+void run()
+`)
     await writeTemplateFile(absolutePath, 'src/index.ts', `import Fastify from 'fastify'
-import pg from 'pg'
+import { env } from './lib/env.js'
+import { ensureSchema, pool } from './lib/db.js'
+import registerHealthRoutes from './routes/health.js'
+import registerTaskRoutes from './routes/tasks.js'
 
 const app = Fastify({ logger: true })
-const port = Number(process.env.PORT || 3001)
-const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:5432/app'
-
-const pool = new pg.Pool({ connectionString })
-
-app.get('/health', async () => {
-  const result = await pool.query('select now() as now')
-  return {
-    ok: true,
-    service: '${appName}',
-    databaseTime: result.rows[0]?.now || null,
-  }
-})
 
 app.get('/', async () => {
   return {
     app: '${appName}',
     status: 'ready',
-    endpoints: ['/health'],
+    endpoints: ['/health', '/ready', '/api/tasks'],
   }
 })
 
+void app.register(registerHealthRoutes)
+void app.register(registerTaskRoutes)
+
 const start = async () => {
   try {
-    await app.listen({ host: '0.0.0.0', port })
+    await ensureSchema()
+    await app.listen({ host: '0.0.0.0', port: env.port })
   } catch (error) {
     app.log.error(error)
+    await pool.end().catch(() => null)
     process.exit(1)
   }
 }
@@ -161,10 +279,20 @@ void start()
 `)
     await writeTemplateFile(absolutePath, 'README.md', `# ${appName}
 
-## Local
+## What you get
+
+- Fastify + Postgres starter with a real connection pool
+- idempotent bootstrap migration via \`npm run db:migrate\`
+- health endpoints at \`/health\` and \`/ready\`
+- sample CRUD-ish endpoint at \`/api/tasks\`
+- Docker Compose with database + API health checks
+
+## Local development
 
 \`\`\`bash
+cp .env.example .env
 npm install
+npm run db:migrate
 npm run dev
 \`\`\`
 
@@ -174,7 +302,17 @@ npm run dev
 API_HOST_PORT=3201 POSTGRES_HOST_PORT=55432 docker compose up --build
 \`\`\`
 
-API: http://127.0.0.1:3001
+## Smoke checks
+
+\`\`\`bash
+curl http://127.0.0.1:3001/health
+curl http://127.0.0.1:3001/api/tasks
+curl -X POST http://127.0.0.1:3001/api/tasks \\
+  -H 'content-type: application/json' \\
+  -d '{"title":"Verify the starter"}'
+\`\`\`
+
+API default: http://127.0.0.1:3001
 `)
 
     const installResult = await runCommand({

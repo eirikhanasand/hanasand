@@ -141,7 +141,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     return (
         <section className='min-h-[90.5vh] w-full px-4 py-10 md:px-10 lg:px-24 grid place-items-center'>
             <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center'>
-                <div className='glass-panel spawn grid w-full overflow-hidden rounded-[2rem] p-5 md:p-8'>
+                <div className='glass-panel spawn grid w-full overflow-hidden rounded-4xl p-5 md:p-8'>
                     <div className='grid gap-6'>
                         <div>
                             <div className='icon-tile bg-orange-500/15 text-orange-300'>
@@ -149,7 +149,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             </div>
                             <p className='mt-5 text-xs uppercase tracking-[0.35em] text-bright/35'>Create access</p>
                             <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Start building</h1>
-                            <p className='mt-2 text-sm text-bright/45'>Create a workspace for uploads, password checks, test runs and API experiments.</p>
+                            <p className='mt-2 text-sm text-bright/45'>Create your workspace.</p>
                         </div>
 
                         {(internal && path) && <h1 className='grid w-full rounded-xl border border-red-400/20 bg-red-500/12 p-3 text-sm text-red-100'>
@@ -214,17 +214,17 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 </button>
                             </form>
                             <Or className='z-10 text-bright/35' />
-                        <Link href='/login' className='w-full flex flex-col gap-3 self-center'>
-                            <button
-                                type='submit'
-                                className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
-                            >
-                                Login
-                            </button>
-                        </Link>
+                            <Link href='/login' className='w-full flex flex-col gap-3 self-center'>
+                                <button
+                                    type='submit'
+                                    className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
+                                >
+                                    Login
+                                </button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
-            </div>
                 <div className='hidden gap-3 lg:grid'>
                     <RegisterInfo icon={<Fingerprint className='h-4 w-4' />} label='Upload' value='Share files quickly' tone='orange' />
                     <RegisterInfo icon={<KeyRound className='h-4 w-4' />} label='Protect' value='Check password safety' tone='blue' />

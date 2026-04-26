@@ -12,7 +12,7 @@ export default async function postVMMetrics(req: FastifyRequest, res: FastifyRep
 
     const data = req.body as any ?? {}
     if (!data || !data.name) {
-        return res.status(400).send({ error: "Missing name" })
+        return res.status(400).send({ error: 'Missing name' })
     }
 
     try {
@@ -21,8 +21,8 @@ export default async function postVMMetrics(req: FastifyRequest, res: FastifyRep
         const values: string[] = Object.values(data)
 
         const query = `
-            INSERT INTO vm_metrics (${fields.join(",")})
-            VALUES (${placeholders.join(",")})
+            INSERT INTO vm_metrics (${fields.join(',')})
+            VALUES (${placeholders.join(',')})
             RETURNING *
         `
 
@@ -31,6 +31,6 @@ export default async function postVMMetrics(req: FastifyRequest, res: FastifyRep
         return res.status(201).send(result.rows[0])
     } catch (error) {
         console.error(error)
-        return res.status(500).send({ error: "Failed to create vm metrics" })
+        return res.status(500).send({ error: 'Failed to create vm metrics' })
     }
 }

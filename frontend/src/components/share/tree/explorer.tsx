@@ -16,11 +16,11 @@ type ExplorerProps = {
 
 const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
 
-export default function Explorer({ 
-    showExplorer, 
-    setShowExplorer, 
-    openFolders, 
-    tree: serverTree, 
+export default function Explorer({
+    showExplorer,
+    setShowExplorer,
+    openFolders,
+    tree: serverTree,
     share
 }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
@@ -57,8 +57,8 @@ export default function Explorer({
                 </div>}
                 {tree && share && (
                     <OpenFoldersProvider serverOpenFolders={openFolders}>
-                        <TreeHeader 
-                            share={share} 
+                        <TreeHeader
+                            share={share}
                             setIsCreatingNewFile={setIsCreatingNewFile}
                         />
                         <Tree

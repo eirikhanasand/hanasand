@@ -15,7 +15,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
     const isSelf = profileId === userId
-    
+
     if (!name || !userId) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }

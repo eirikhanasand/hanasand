@@ -1,11 +1,10 @@
 'use client'
 
 import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
 import '@styles/github.css'
 import './editor.css'
 import { postArticle } from '@/utils/articles/postArticle'
+import { configureMarkdownRenderer, renderMarkdown } from './markdownRenderer'
 
 type EditorProps = {
     id: string
@@ -43,36 +42,7 @@ type MarkdownProps = {
     className?: string
 }
 
-marked.use({
-    renderer: {
-        code(token: { lang?: string, text: string }) {
-            const language = hljs.getLanguage(typeof token.lang === 'string'
-                ? token.lang : 'plaintext')
-                ? token.lang
-                || 'plaintext'
-                : 'plaintext'
-            const text = hljs.highlight(token.text, { language }).value
-            const style = 'padding: 5px 10px; margin: 0;'
-            const className = 'inline-block rounded-lg overflow-auto whitespace-pre-wrap wrap-break-word w-full'
-            return `<pre class='${className}'><code style='${style}' class='hljs ${language}'>${text}</code></pre>`
-        },
-        image(token: { href: string, title?: string | null }) {
-            const width = 'width=\'300\''
-            return `<img src='${token.href}' alt='${token.title}' ${width} />`
-        },
-        link(token: { href: string, title?: string | null, text: string }) {
-            const style = 'text-blue-500 underline'
-            const rel = 'noopener noreferrer'
-            return `<a href='${token.href}' title='${token.title}' target='_blank' rel='${rel}' class='${style}'>${token.text}</a>`
-        },
-        codespan(token: { text: string }) {
-            return `<code class='break-all bg-extralight p-0.3 rounded-xs'>${token.text}</code>`
-        },
-        hr() {
-            return `<hr class='my-6 border-t-2 border-white-400 opacity-50' />`
-        }
-    }
-})
+configureMarkdownRenderer()
 
 export default function Editor({
     id,
@@ -146,8 +116,7 @@ export default function Editor({
         if (textareaRef.current) {
             autoResize(textareaRef.current)
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [markdown, displayEditor, textareaRef.current])
+    }, [markdown, displayEditor])
 
     useEffect(() => {
         if (typeof setEditing !== 'undefined') {
@@ -232,7 +201,7 @@ export function Markdown({
         <div
             className={`markdown-preview ${displayEditor && 'pl-2 border-l-2 border-blue-500'} text-foreground h-full break-words ${className}`}
             onClick={handleDisplayEditor}
-            dangerouslySetInnerHTML={{ __html: marked.parse(markdown) }}
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(markdown) }}
         />
     )
 }

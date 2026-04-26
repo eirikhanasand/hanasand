@@ -13,16 +13,16 @@ export default async function putVMMetrics(req: FastifyRequest, res: FastifyRepl
     const { id } = req.params as { id: string }
     const data = req.body as any ?? {}
     if (!id) {
-        return res.status(400).send({ error: "Missing metrics id" })
+        return res.status(400).send({ error: 'Missing metrics id' })
     }
 
     if (!data || Object.keys(data).length === 0) {
-        return res.status(400).send({ error: "No fields to update" })
+        return res.status(400).send({ error: 'No fields to update' })
     }
 
     try {
         const fields = Object.keys(data)
-        const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(", ")
+        const setClause = fields.map((f, i) => `${f} = $${i + 1}`).join(', ')
         const values: string[] = Object.values(data)
 
         const query = `
@@ -35,12 +35,12 @@ export default async function putVMMetrics(req: FastifyRequest, res: FastifyRepl
         const result = await run(query, [...values, id])
 
         if (result.rows.length === 0) {
-            return res.status(404).send({ error: "Metrics not found" })
+            return res.status(404).send({ error: 'Metrics not found' })
         }
 
         return res.send(result.rows[0])
     } catch (error) {
         console.error(error)
-        return res.status(500).send({ error: "Failed to update vm metrics" })
+        return res.status(500).send({ error: 'Failed to update vm metrics' })
     }
 }

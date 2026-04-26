@@ -3,13 +3,13 @@ import { validateSession } from '#utils/auth/session.ts'
 
 /**
  * Tests if a token is valid for a user
- * 
+ *
  * Required parameter: `id`
  * Requires header: `Authorization: Bearer <token>`
- * 
+ *
  * @param req Incoming Fastify Request
  * @param res Outgoing Fastify Response
- * 
+ *
  * @returns Fastify Response
  */
 export default async function tokenHandler(req: FastifyRequest, res: FastifyReply) {

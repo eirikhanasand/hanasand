@@ -1,11 +1,11 @@
 export const staticMappings = [
     {
         match: ['view site', 'site', 'view', 'render', 'display', 'show'],
-        action: (query: string) => ({ action: 'site', text: 'View Site' })
+        action: () => ({ action: 'site', text: 'View Site' })
     },
     {
         match: ['fetch', 'request', 'get', 'post', 'put', 'delete', 'head', 'options', 'patch', 'connect', 'trace'],
-        action: (query: string) => ({ action: 'fetch', text: 'Fetch' })
+        action: () => ({ action: 'fetch', text: 'Fetch' })
     },
     {
         match: ['code', 'source'],
@@ -13,11 +13,11 @@ export const staticMappings = [
     },
     {
         match: ['file'],
-        action: (query: string) => ({ action: 'tree', text: 'Open file' })
+        action: () => ({ action: 'tree', text: 'Open file' })
     },
     {
         match: ['github'],
-        action: (query: string) => ({ action: 'github', text: 'Open Github' })
+        action: () => ({ action: 'github', text: 'Open Github' })
     },
     {
         match: ['terminal', 'term', 'vm', 'ssh'],

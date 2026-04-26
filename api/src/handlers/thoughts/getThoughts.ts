@@ -7,7 +7,7 @@ import run from '#db'
  */
 export default async function getThoughts(_: FastifyRequest, res: FastifyReply) {
     try {
-        const result = await run(`SELECT * FROM thoughts`)
+        const result = await run('SELECT * FROM thoughts')
         if (!result.rows.length) {
             return res.send([])
         }

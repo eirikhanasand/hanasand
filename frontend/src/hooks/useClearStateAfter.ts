@@ -11,7 +11,7 @@ type ClearStateAfterProps = {
     setCondition: Dispatch<SetStateAction<string | boolean | null>>
 }
 
-// Generic function to clear any variable after x seconds. 
+// Generic function to clear any variable after x seconds.
 export default function useClearStateAfter({
     initialState = null,
     timeout: passedTimeout = 5000,

@@ -18,7 +18,7 @@ function composePrefix(args: ComposeArgs) {
 }
 
 function shellEscape(value: string) {
-    return `'${value.replace(/'/g, `'\\''`)}'`
+    return `'${value.replace(/'/g, '\'\\\'\'')}'`
 }
 
 export async function composeUp(args: ComposeArgs & { build?: boolean }) {

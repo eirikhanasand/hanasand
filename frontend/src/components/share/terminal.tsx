@@ -13,12 +13,12 @@ type ConsoleProps = {
     setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
-export default function Terminal({ 
-    share, 
-    open, 
-    setOpen, 
+export default function Terminal({
+    share,
+    open,
+    setOpen,
     shareTerminalHeight,
-    triggerChange, 
+    triggerChange,
     setTriggerChange
 }: ConsoleProps) {
     const [height, setHeight] = useState(shareTerminalHeight)
@@ -128,7 +128,7 @@ export default function Terminal({
         <>
             {isDragging && (
                 <div
-                    className="fixed inset-0 z-9999"
+                    className='fixed inset-0 z-9999'
                     style={{ cursor: 'row-resize', userSelect: 'none', pointerEvents: 'all' }}
                 />
             )}
@@ -137,16 +137,16 @@ export default function Terminal({
             {!open && (
                 <div
                     onClick={handleChange}
-                    data-testid="share-terminal-toggle"
-                    className="fixed bottom-2 left-1/2 -translate-x-1/2 bg-dark/40 hover:bg-dark px-8 py-1 rounded-md cursor-pointer transition-all border border-light/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.4)] backdrop-blur-md z-100"
+                    data-testid='share-terminal-toggle'
+                    className='fixed bottom-2 left-1/2 -translate-x-1/2 bg-dark/40 hover:bg-dark px-8 py-1 rounded-md cursor-pointer transition-all border border-light/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.4)] backdrop-blur-md z-100'
                 >
-                    <div className="mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[2.5px]" />
+                    <div className='mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[2.5px]' />
                 </div>
             )}
 
             {/* Console container */}
             <div
-                data-testid="share-terminal-panel"
+                data-testid='share-terminal-panel'
                 className={`fixed left-0 w-full bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
                 style={{
                     bottom: 0,
@@ -156,17 +156,17 @@ export default function Terminal({
                 {/* Resize handle */}
                 <div
                     onMouseDown={handleMouseDown}
-                    className="group absolute top-0 w-full h-2 cursor-row-resize hover:bg-light/10"
+                    className='group absolute top-0 w-full h-2 cursor-row-resize hover:bg-light/10'
                 >
-                    <div className="mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-1.25" />
+                    <div className='mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-1.25' />
                 </div>
 
                 {/* Header bar */}
-                <div className="flex justify-between items-center px-3 py-1 bg-dark/60 text-xs text-gray-400 border-t border-light/20">
+                <div className='flex justify-between items-center px-3 py-1 bg-dark/60 text-xs text-gray-400 border-t border-light/20'>
                     <div className='flex gap-2'>
                         <span>TERMINAL</span>
-                        <span>{isConnected 
-                            ? <Wifi className='w-3.5 h-3.5 stroke-green-500' /> 
+                        <span>{isConnected
+                            ? <Wifi className='w-3.5 h-3.5 stroke-green-500' />
                             : <WifiOff className='w-3.5 h-3.5 stroke-red-500' />
                         }</span>
                         <span className='flex justify-between items-center gap-1'>
@@ -176,16 +176,16 @@ export default function Terminal({
                     </div>
                     <button
                         onClick={() => setOpen(false)}
-                        className="hover:text-white transition-colors cursor-pointer"
+                        className='hover:text-white transition-colors cursor-pointer'
                     >
                         <ChevronDown size={16} />
                     </button>
                 </div>
 
-                <div className="px-2 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300">
+                <div className='px-2 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300'>
                     {share && <TerminalViewer
                         open={open}
-                        share={share} 
+                        share={share}
                         sendInput={sendInput}
                         sendResize={sendResize}
                         chunks={chunks}

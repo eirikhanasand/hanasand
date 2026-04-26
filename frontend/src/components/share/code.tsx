@@ -1,17 +1,14 @@
 'use client'
 
-import { useEffect, useState, useRef, Dispatch, SetStateAction } from 'react'
-import hljs from 'highlight.js'
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
 import '@styles/github.css'
-import { getShare } from '@/utils/share/get'
-import config from '@/config'
 import Editor from '@/components/share/editor'
-import { getCookie } from '@/utils/cookies/cookies'
+import { applyHighlightedCode } from './codeUtils'
+import { useShareCodeSocket } from './useShareCodeSocket'
 
 type CodeProps = {
     id: string
     setParticipants: Dispatch<SetStateAction<number>>
-    isConnected: boolean
     setIsConnected: Dispatch<SetStateAction<boolean>>
     share: Share | null
     setShare: Dispatch<SetStateAction<Share | null>>
@@ -26,7 +23,6 @@ type CodeProps = {
 export default function Code({
     id,
     setParticipants,
-    isConnected,
     setIsConnected,
     share,
     setShare,
@@ -37,44 +33,21 @@ export default function Code({
     syntaxHighlighting,
     setError
 }: CodeProps) {
-    const [reconnect, setReconnect] = useState(false)
     const [lastEdit, setLastEdit] = useState(new Date().getTime())
     const codeRef = useRef<HTMLPreElement>(null)
-    const wsRef = useRef<WebSocket | null>(null)
+    const { sendEdit } = useShareCodeSocket({
+        id,
+        share,
+        editingContent,
+        setEditingContent,
+        setError,
+        setIsConnected,
+        setParticipants,
+        setShare,
+    })
 
     useEffect(() => {
-        async function fetchShare() {
-            try {
-                const userId = getCookie('id') ?? undefined
-                const token = getCookie('access_token') ?? undefined
-                const data = await getShare({ id, token, userId })
-                if (typeof data === 'string') {
-                    setError(data)
-                    return
-                }
-
-                setError(null)
-                setShare(data)
-                setEditingContent(data.content)
-            } catch (error) {
-                console.error(`Error fetching share: ${error}`)
-                setError('Failed to load share')
-            }
-        }
-
-        fetchShare()
-    }, [id, setEditingContent])
-
-    useEffect(() => {
-        if (codeRef.current) {
-            codeRef.current.removeAttribute('data-highlighted')
-            if (syntaxHighlighting) {
-                codeRef.current.textContent = editingContent
-                hljs.highlightElement(codeRef.current)
-            } else {
-                codeRef.current.innerText = editingContent
-            }
-        }
+        applyHighlightedCode(codeRef.current, editingContent, syntaxHighlighting)
     }, [editingContent, syntaxHighlighting])
 
     useEffect(() => {
@@ -85,91 +58,18 @@ export default function Code({
                 return
             }
 
-            codeRef.current.removeAttribute('data-highlighted')
-            if (syntaxHighlighting) {
-                codeRef.current.textContent = editingContent
-                hljs.highlightElement(codeRef.current)
-            } else {
-                codeRef.current.innerText = editingContent
-            }
+            applyHighlightedCode(codeRef.current, editingContent, syntaxHighlighting)
         }, 1000)
 
         return () => clearTimeout(timeout)
     }, [lastEdit, share?.content, syntaxHighlighting])
 
-    useEffect(() => {
-        if (!share) return
-
-        const ws = new WebSocket(`${config.url.cdn_wss}/share/${share.id}`)
-        wsRef.current = ws
-
-        ws.onopen = () => {
-            setReconnect(false)
-            setIsConnected(true)
-        }
-
-        ws.onclose = () => {
-            setIsConnected(false)
-        }
-
-        ws.onerror = (error) => {
-            console.log('WebSocket error:', error)
-            setIsConnected(false)
-        }
-
-        ws.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data)
-                if (msg.type === 'update' && msg.content !== editingContent) {
-                    setParticipants(msg.participants)
-                    setEditingContent(msg.content)
-                    setShare((prev) => prev ? { ...prev, timestamp: msg.timestamp } : prev)
-                }
-
-                if (msg.type === 'join') {
-                    setParticipants(msg.participants)
-                }
-            } catch (error) {
-                console.error(`Invalid message from server: ${error}`)
-            }
-        }
-
-        return () => {
-            ws.close()
-        }
-    }, [id, share, reconnect])
-
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-        if (!isConnected) {
-            setReconnect(true)
-        }
-
         const value = e.target.value
         setEditingContent(value)
-
-        if (codeRef.current) {
-            codeRef.current.removeAttribute('data-highlighted')
-            if (syntaxHighlighting) {
-                codeRef.current.textContent = editingContent
-                hljs.highlightElement(codeRef.current)
-            } else {
-                codeRef.current.innerText = editingContent
-            }
-        }
-
-        function sendUpdate() {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({
-                    type: 'edit',
-                    id: share?.id,
-                    content: value,
-                }))
-            }
-        }
-
+        applyHighlightedCode(codeRef.current, value, syntaxHighlighting)
         setLastEdit(new Date().getTime())
-        setEditingContent(value)
-        sendUpdate()
+        sendEdit(value)
     }
 
     if (!share) {

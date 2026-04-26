@@ -25,8 +25,8 @@ export default function GPT_Header({
                 </div>
             </div>
             <div className='grid gap-3 sm:grid-cols-2'>
-                    <GPT_HeaderCard label='Viewers' value={String(participants)} icon={<Eye className='h-4 w-4' />} />
-                    <GPT_ConnectionCard isConnected={isConnected} />
+                <GPT_HeaderCard label='Viewers' value={String(participants)} icon={<Eye className='h-4 w-4' />} />
+                <GPT_ConnectionCard isConnected={isConnected} />
             </div>
         </div>
     )

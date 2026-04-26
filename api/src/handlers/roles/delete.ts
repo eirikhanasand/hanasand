@@ -27,7 +27,7 @@ export default async function deleteRole(req: FastifyRequest, res: FastifyReply)
     }
 
     try {
-        const result = await run(`DELETE FROM roles WHERE id = $1 RETURNING *`, [id])
+        const result = await run('DELETE FROM roles WHERE id = $1 RETURNING *', [id])
         if (!result.rows.length) {
             return res.status(404).send({ error: 'Role not found.' })
         }

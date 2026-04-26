@@ -32,7 +32,7 @@ export default function Tooltip({ children, content, align = 'left' }: TooltipPr
         <>
             <div
                 ref={ref}
-                className="inline-flex cursor-help"
+                className='inline-flex cursor-help'
                 onMouseEnter={() => setVisible(true)}
                 onMouseLeave={() => setVisible(false)}
             >
@@ -43,7 +43,7 @@ export default function Tooltip({ children, content, align = 'left' }: TooltipPr
                 createPortal(
                     <div
                         ref={tooltipRef}
-                        className="fixed z-99999 p-2 rounded-md mb-2 bg-blue-400/20 text-white/70 outline outline-blue-400/40 max-w-xs text-xs backdrop-blur-xs"
+                        className='fixed z-99999 p-2 rounded-md mb-2 bg-blue-400/20 text-white/70 outline outline-blue-400/40 max-w-xs text-xs backdrop-blur-xs'
                         style={{ left: pos.x, top: pos.y }}
                     >
                         {content}

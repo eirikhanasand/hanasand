@@ -25,7 +25,7 @@ export default function LoginIcon() {
             </Link>
         )
     }
-    
+
     return (
         <Link
             href='/login'

@@ -109,8 +109,8 @@ export default function TestClientPopup({
                                         className={`max-w-3xl rounded-2xl border px-4 py-3 ${
                                             message.role === 'user'
                                                 ? 'ml-auto border-[#fd8738]/20 bg-[#fd8738]/12 text-bright/90'
-                                                    : message.error
-                                                        ? 'border-red-500/20 bg-red-500/10 text-red-100'
+                                                : message.error
+                                                    ? 'border-red-500/20 bg-red-500/10 text-red-100'
                                                     : 'bg-dark/20 text-bright/90 outline outline-dark'
                                         }`}
                                     >

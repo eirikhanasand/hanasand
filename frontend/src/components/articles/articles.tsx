@@ -89,7 +89,7 @@ function Article({ article }: ArticleProps) {
             href={`/articles/${id}`}
         >
             <article className='outline-1 outline-dark w-full h-full max-h-fit md:max-h-full lg:max-h-[58vh] overflow-hidden rounded-2xl'>
-                {metadata.image && <Image className='w-full max-h-[15rem] md:h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
+                {metadata.image && <Image className='w-full max-h-60 md:h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
                 <div className='p-5 text-foreground grid gap-2'>
                     <div className='w-full'>
                         <h1 className='text-gray-500/70 min-w-fit text-xs mt-1 float-right'>Published {prettyDate(new Date(created).toISOString())}</h1>

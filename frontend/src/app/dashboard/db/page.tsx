@@ -24,7 +24,7 @@ export default async function DatabasePage() {
                 title='Database'
                 actions={
                     <div className='flex flex-wrap gap-2'>
-                        <Link 
+                        <Link
                             href='/dashboard/db/backups'
                             className={`
                                 rounded-lg border border-white/10 bg-black/18

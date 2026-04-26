@@ -13,7 +13,7 @@ export default function () {
     sleep(timeout)
 }
 
-export let options = {
+export const options = {
     // @ts-expect-error
     stages: JSON.parse(__ENV.STAGES || '[]'),
     thresholds: {

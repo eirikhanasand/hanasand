@@ -84,10 +84,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                         </div>
                         <p className='mt-8 text-xs uppercase tracking-[0.35em] text-orange-200/80'>hanasand.com</p>
                         <h1 className='mt-4 max-w-xl text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-bright'>
-                            Build, test, upload and ship from one sharp workspace.
+                            Build, test, upload.
                         </h1>
                         <p className='mt-5 max-w-lg text-sm leading-7 text-bright/55'>
-                            Your files, password checks, test runs and coding tools are ready the moment you sign in.
+                            Files, checks, and tools after sign-in.
                         </p>
                     </div>
                     <div className='grid gap-3 sm:grid-cols-2'>
@@ -101,7 +101,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                         <div>
                             <p className='text-xs uppercase tracking-[0.35em] text-bright/35'>Secure login</p>
                             <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Welcome back</h1>
-                            <p className='mt-2 text-sm text-bright/45'>Jump back into uploads, security checks and the coding workspace.</p>
+                            <p className='mt-2 text-sm text-bright/45'>Open your workspace.</p>
                         </div>
 
                         {(expired && path) && <h1 className='grid w-full rounded-xl border border-blue-400/20 bg-blue-500/12 p-3 text-sm text-blue-100'>Token expired. You will be redirected back to {path} after reauthenticating.</h1>}
@@ -136,17 +136,17 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 </button>
                             </form>
                             <Or className='z-10 text-bright/35' />
-                        <Link href='/register' className='w-full flex flex-col gap-3 self-center'>
-                            <button
-                                type='submit'
-                                className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
-                            >
-                                Create account
-                            </button>
-                        </Link>
+                            <Link href='/register' className='w-full flex flex-col gap-3 self-center'>
+                                <button
+                                    type='submit'
+                                    className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
+                                >
+                                    Create account
+                                </button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
-            </div>
             </div>
         </section>
     )

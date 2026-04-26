@@ -22,10 +22,19 @@ sub vcl_recv {
         return (pass);
     }
 
+    if (req.url ~ "^/api/ai/(models|runtime)(/.*)?$") {
+        return (pass);
+    }
+
     return (hash);
 }
 
 sub vcl_backend_response {
+    if (beresp.http.Cache-Control ~ "no-store") {
+        set beresp.ttl = 0s;
+        return (deliver);
+    }
+
     set beresp.ttl = 1h;
     set beresp.http.Cache-Control = "hanasand-cache, max-age=3600";
 

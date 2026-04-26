@@ -21,6 +21,17 @@ type WriteRepoFileArgs = {
     content: string
 }
 
+type EditRepoFileArgs = {
+    path: string
+    find: string
+    replace: string
+    replaceAll?: boolean
+}
+
+type BatchEditRepoFilesArgs = {
+    edits: EditRepoFileArgs[]
+}
+
 type GrepRepoArgs = {
     query: string
     path?: string
@@ -37,6 +48,19 @@ const IGNORED_DIRS = new Set([
     'dist',
     'build',
     'coverage',
+])
+const DENY_EDIT_SEGMENTS = ['.git/', 'node_modules/', '.next/', 'dist/', 'build/', 'coverage/']
+const DENY_EDIT_EXTENSIONS = ['.pem', '.key', '.p12', '.crt', '.cer', '.der', '.sqlite', '.db', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf', '.zip', '.tar', '.gz', '.7z', '.gguf', '.dylib', '.so']
+const PATCH_PREFERRED_BASENAMES = new Set([
+    'package.json',
+    'docker-compose.yml',
+    'docker-compose.yaml',
+    'dockerfile',
+    'tsconfig.json',
+    'eslint.config.mjs',
+    'eslint.config.js',
+    'next.config.ts',
+    'next.config.js',
 ])
 
 function ensureInsideRepo(inputPath?: string) {
@@ -130,6 +154,7 @@ export async function readRepoFile(args: ReadRepoFileArgs) {
 }
 
 export async function writeRepoFile(args: WriteRepoFileArgs) {
+    assertRepoEditPolicy(args.path, 'write')
     const filePath = ensureInsideRepo(args.path)
     const previousContent = await readFile(filePath, 'utf8').catch(() => '')
     await mkdir(path.dirname(filePath), { recursive: true })
@@ -141,6 +166,104 @@ export async function writeRepoFile(args: WriteRepoFileArgs) {
         lines: args.content.split('\n').length,
         previousContent,
         diff: buildUnifiedDiff(args.path, previousContent, args.content),
+    }
+}
+
+export async function editRepoFile(args: EditRepoFileArgs) {
+    if (!args.find) {
+        throw new Error('The find snippet cannot be empty.')
+    }
+
+    assertRepoEditPolicy(args.path, 'edit')
+    const filePath = ensureInsideRepo(args.path)
+    const fileStats = await stat(filePath)
+    if (!fileStats.isFile()) {
+        throw new Error('Path is not a file.')
+    }
+    if (fileStats.size > MAX_FILE_BYTES) {
+        throw new Error(`File is too large to edit safely (${fileStats.size} bytes).`)
+    }
+
+    const previousContent = await readFile(filePath, 'utf8')
+    const matchIndices = findAllMatchIndices(previousContent, args.find)
+    const matchCount = matchIndices.length
+    const matchedLines = matchIndices.map((index) => lineNumberFromIndex(previousContent, index))
+
+    if (matchCount === 0) {
+        throw new Error('The target snippet was not found in the file. Match count: 0.')
+    }
+
+    if (!args.replaceAll && matchCount > 1) {
+        throw new Error(`The target snippet matched ${matchCount} times at lines ${matchedLines.join(', ')}. Refine the snippet or set replaceAll to true.`)
+    }
+
+    const nextContent = args.replaceAll
+        ? previousContent.split(args.find).join(args.replace)
+        : previousContent.replace(args.find, args.replace)
+
+    await writeFile(filePath, nextContent, 'utf8')
+
+    return {
+        path: path.relative(config.repo_root, filePath),
+        replacements: args.replaceAll ? matchCount : 1,
+        matchCount,
+        matchedLines,
+        bytes: Buffer.byteLength(nextContent, 'utf8'),
+        lines: nextContent.split('\n').length,
+        previousContent,
+        content: nextContent,
+        previewBefore: buildPreviewExcerpt(previousContent, matchIndices[0], args.find.length),
+        previewAfter: buildPreviewExcerpt(nextContent, matchIndices[0], args.replace.length),
+        diff: buildUnifiedDiff(args.path, previousContent, nextContent),
+    }
+}
+
+export async function batchEditRepoFiles(args: BatchEditRepoFilesArgs) {
+    if (!Array.isArray(args.edits) || !args.edits.length) {
+        throw new Error('The edits array cannot be empty.')
+    }
+
+    const originalContents = new Map<string, string>()
+    const results: Array<Awaited<ReturnType<typeof editRepoFile>>> = []
+
+    try {
+        for (let index = 0; index < args.edits.length; index += 1) {
+            const edit = args.edits[index]
+            const filePath = ensureInsideRepo(edit.path)
+            const relativePath = path.relative(config.repo_root, filePath)
+
+            if (!originalContents.has(relativePath)) {
+                const original = await readFile(filePath, 'utf8')
+                originalContents.set(relativePath, original)
+            }
+
+            const result = await editRepoFile(edit)
+            results.push(result)
+        }
+
+        return {
+            ok: true,
+            editsAttempted: args.edits.length,
+            editsApplied: results.length,
+            rolledBack: false,
+            results,
+        }
+    } catch (error) {
+        await Promise.all(
+            [...originalContents.entries()].map(async ([relativePath, originalContent]) => {
+                const filePath = ensureInsideRepo(relativePath)
+                await writeFile(filePath, originalContent, 'utf8')
+            })
+        )
+
+        return {
+            ok: false,
+            editsAttempted: args.edits.length,
+            editsApplied: results.length,
+            rolledBack: true,
+            error: error instanceof Error ? error.message : String(error),
+            results,
+        }
     }
 }
 
@@ -226,4 +349,62 @@ function buildUnifiedDiff(filePath: string, previousContent: string, nextContent
     }
 
     return diffLines.join('\n')
+}
+
+function assertRepoEditPolicy(targetPath: string, operation: 'edit' | 'write') {
+    const relativePath = path.relative(config.repo_root, ensureInsideRepo(targetPath)).replace(/\\/g, '/')
+    const normalized = relativePath.toLowerCase()
+    const baseName = path.basename(relativePath).toLowerCase()
+
+    if (
+        normalized === '.env'
+        || (baseName.startsWith('.env.') && baseName !== '.env.example')
+        || DENY_EDIT_SEGMENTS.some((segment) => normalized.includes(segment))
+        || DENY_EDIT_EXTENSIONS.some((extension) => normalized.endsWith(extension))
+    ) {
+        throw new Error(`Denied by repo edit safety policy: ${relativePath} is a sensitive or non-text path.`)
+    }
+
+    if (operation === 'write') {
+        if (
+            PATCH_PREFERRED_BASENAMES.has(baseName)
+            || normalized.startsWith('.github/workflows/')
+            || normalized.includes('/.github/workflows/')
+        ) {
+            throw new Error(`Denied by repo edit safety policy: ${relativePath} is patch-safe but not rewrite-safe. Use edit_file instead of write_file.`)
+        }
+    }
+}
+
+function findAllMatchIndices(content: string, snippet: string) {
+    const matches: number[] = []
+    let fromIndex = 0
+
+    while (fromIndex <= content.length) {
+        const index = content.indexOf(snippet, fromIndex)
+        if (index === -1) {
+            break
+        }
+
+        matches.push(index)
+        fromIndex = index + Math.max(snippet.length, 1)
+    }
+
+    return matches
+}
+
+function lineNumberFromIndex(content: string, index: number) {
+    if (index <= 0) {
+        return 1
+    }
+
+    return content.slice(0, index).split('\n').length
+}
+
+function buildPreviewExcerpt(content: string, index: number, length: number, radius = 80) {
+    const start = Math.max(0, index - radius)
+    const end = Math.min(content.length, index + length + radius)
+    const prefix = start > 0 ? '...' : ''
+    const suffix = end < content.length ? '...' : ''
+    return `${prefix}${content.slice(start, end)}${suffix}`
 }

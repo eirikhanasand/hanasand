@@ -13,7 +13,7 @@ export default async function page() {
     const token = Cookies.get('access_token')?.value || ''
 
     if (!id || !token) {
-        return redirect(`/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true`)
+        return redirect('/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true')
     }
 
     const [system, dockerContainers, vms, vmMetrics] = await Promise.all([

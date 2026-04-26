@@ -13,7 +13,7 @@ export default function ImageBreakdown({ image }: { image: ImageVulnerabilityRep
                         className='rounded-xl border border-white/10 bg-black/50 p-4'
                     >
                         <div>
-                            <div className='wrap-break-words font-medium text-white'>{group.source}</div>
+                            <div className='wrap-break-word font-medium text-white'>{group.source}</div>
                             <div className='mt-1 text-sm text-white/60'>{group.total} findings</div>
                         </div>
                         <div className='mt-3 flex flex-wrap gap-2'>

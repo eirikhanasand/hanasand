@@ -30,7 +30,7 @@ async function fetchJson(path: string, options: RequestInit = {}) {
     })
 
     const text = await response.text()
-    let body: unknown = text
+    let body: unknown
     try {
         body = text ? JSON.parse(text) : null
     } catch {

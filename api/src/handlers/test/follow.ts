@@ -11,19 +11,19 @@ const apiSrcDir = path.resolve(handlersDir, '..', '..')
 const k6ScriptPath = path.join(apiSrcDir, 'utils', 'test', 'test.ts')
 
 const defaultStages = [
-    { "duration": "5s", "target": 1 },
-    { "duration": "10s", "target": 10 },
-    { "duration": "10s", "target": 50 },
-    { "duration": "10s", "target": 100 },
-    { "duration": "10s", "target": 200 },
-    { "duration": "10s", "target": 500 },
-    { "duration": "10s", "target": 1000 },
-    { "duration": "10s", "target": 500 },
-    { "duration": "10s", "target": 200 },
-    { "duration": "10s", "target": 100 },
-    { "duration": "10s", "target": 50 },
-    { "duration": "10s", "target": 10 },
-    { "duration": "10s", "target": 1 }
+    { 'duration': '5s', 'target': 1 },
+    { 'duration': '10s', 'target': 10 },
+    { 'duration': '10s', 'target': 50 },
+    { 'duration': '10s', 'target': 100 },
+    { 'duration': '10s', 'target': 200 },
+    { 'duration': '10s', 'target': 500 },
+    { 'duration': '10s', 'target': 1000 },
+    { 'duration': '10s', 'target': 500 },
+    { 'duration': '10s', 'target': 200 },
+    { 'duration': '10s', 'target': 100 },
+    { 'duration': '10s', 'target': 50 },
+    { 'duration': '10s', 'target': 10 },
+    { 'duration': '10s', 'target': 1 }
 ]
 
 export default async function followTest(id: string, rerun?: boolean) {

@@ -1,4 +1,13 @@
+import type { Metadata } from 'next'
 import Articles from '@/components/articles/articles'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Articles',
+    description: 'Browse articles, notes, and longer-form writing published on Hanasand.',
+    path: '/articles',
+    keywords: ['articles', 'blog', 'hanasand writing'],
+})
 
 export default async function Page({
     searchParams,

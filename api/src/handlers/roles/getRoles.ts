@@ -13,7 +13,7 @@ export default async function getRoles(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
-        const result = await run(`SELECT * FROM roles`)
+        const result = await run('SELECT * FROM roles')
         if (!result.rows.length) {
             return res.status(404).send({ error: 'No roles found.' })
         }

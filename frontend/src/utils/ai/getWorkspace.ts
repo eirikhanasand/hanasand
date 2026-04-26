@@ -6,9 +6,9 @@ export async function getAiWorkspace({
 }: {
     id?: string
     token?: string
-}): Promise<{ conversations: AIConversation[], repositories: AIImportedRepo[] }> {
+}): Promise<AIWorkspaceBundle> {
     if (!id || !token) {
-        return { conversations: [], repositories: [] }
+        return { conversations: [], repositories: [], deployments: [], releases: [], deployQuota: null, ownershipSummary: null, runtimeState: null }
     }
     const normalizedToken = decodeURIComponent(token)
 
@@ -21,7 +21,7 @@ export async function getAiWorkspace({
     })
 
     if (!response.ok) {
-        return { conversations: [], repositories: [] }
+        return { conversations: [], repositories: [], deployments: [], releases: [], deployQuota: null, ownershipSummary: null, runtimeState: null }
     }
 
     const data = await response.json().catch(() => null)
@@ -30,11 +30,30 @@ export async function getAiWorkspace({
         repositories: Array.isArray(data?.repositories)
             ? data.repositories.map((repository: AIImportedRepo) => ({
                 ...repository,
+                authMode: repository.authMode || 'public',
+                authHint: repository.authHint || null,
+                credential: repository.credential && typeof repository.credential === 'object'
+                    ? repository.credential
+                    : {
+                        provider: 'github_pat',
+                        hasCredential: false,
+                        tokenHint: null,
+                        attachedAt: null,
+                        lastUsedAt: null,
+                        lastValidatedAt: null,
+                    },
                 syncStatus: repository.syncStatus || 'ready',
                 lastSyncedAt: repository.lastSyncedAt || null,
                 lastSyncError: repository.lastSyncError || null,
                 syncHistory: Array.isArray(repository.syncHistory) ? repository.syncHistory : [],
+                stackType: repository.stackType || 'unknown',
+                stackReason: repository.stackReason || null,
             }))
             : [],
+        deployments: Array.isArray(data?.deployments) ? data.deployments : [],
+        releases: Array.isArray(data?.releases) ? data.releases : [],
+        deployQuota: data?.deployQuota && typeof data.deployQuota === 'object' ? data.deployQuota as AIDeployQuota : null,
+        ownershipSummary: data?.ownershipSummary && typeof data.ownershipSummary === 'object' ? data.ownershipSummary as AIOwnershipSummary : null,
+        runtimeState: data?.runtimeState && typeof data.runtimeState === 'object' ? data.runtimeState as AIRuntimeState : null,
     }
 }

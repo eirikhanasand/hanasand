@@ -12,11 +12,11 @@ export default async function deleteCertificate(req: FastifyRequest, res: Fastif
 
     const { id } = req.params as { id: string }
     if (!id) {
-        return res.status(400).send({ error: "No certificate id provided" })
+        return res.status(400).send({ error: 'No certificate id provided' })
     }
 
     try {
-        await run(`DELETE FROM certificates WHERE id = $1`, [id])
+        await run('DELETE FROM certificates WHERE id = $1', [id])
         return res.send({ ok: true })
     } catch (err: any) {
         console.error(err)

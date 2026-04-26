@@ -8,8 +8,7 @@ import { fetchMailQueueSummary } from './stalwartAdmin.ts'
 export async function getMailHealth(): Promise<MailHealth> {
     const checkedAt = new Date().toISOString()
     const checks: MailHealthCheck[] = []
-    let queueDepth = 0
-    let smtpBannerLatencyMs: number | null = null
+    let queueDepth: number
     const internalMailHost = new URL(mailConfig.internalUrl).hostname
 
     const hostRecords = await resolveDnsWithResolvers(mailConfig.host, 'A')
@@ -57,7 +56,7 @@ export async function getMailHealth(): Promise<MailHealth> {
         detail: tlsRpt[0] || 'Missing TLS reporting TXT record.',
     })
 
-    smtpBannerLatencyMs = await measureSmtpBannerLatency(internalMailHost, 25)
+    const smtpBannerLatencyMs = await measureSmtpBannerLatency(internalMailHost, 25)
     checks.push({
         id: 'smtp-banner',
         label: 'SMTP banner',

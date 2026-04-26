@@ -49,13 +49,13 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
 
     return (
         <div onClick={handleClick} className={`${forceVisible ? 'flex' : 'hidden group-hover:flex'} h-9 items-center justify-end gap-1 rounded-md group cursor-pointer`}>
-            {!isRunning && <button onClick={handleStart} disabled={loading} className="grid h-9 w-9 place-items-center rounded-md text-green-400 group-hover:cursor-pointer hover:bg-bright/3">
+            {!isRunning && <button onClick={handleStart} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-green-400 group-hover:cursor-pointer hover:bg-bright/3'>
                 <Play className='w-5 h-5' />
             </button>}
-            {isRunning && <button onClick={handleRestart} disabled={loading} className="grid h-9 w-9 place-items-center rounded-md text-blue-400 group-hover:cursor-pointer hover:bg-bright/3">
+            {isRunning && <button onClick={handleRestart} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-blue-400 group-hover:cursor-pointer hover:bg-bright/3'>
                 <RefreshCcw className='w-5 h-5' />
             </button>}
-            {isRunning && <button onClick={handleStop} disabled={loading} className="grid h-9 w-9 place-items-center rounded-md text-red-400 group-hover:cursor-pointer hover:bg-bright/3">
+            {isRunning && <button onClick={handleStop} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-red-400 group-hover:cursor-pointer hover:bg-bright/3'>
                 <StopCircle className='w-5 h-5' />
             </button>}
             <Notify absolute className='px-8' color='bg-blue-500' background='bg-dark/40 outline outline-dark text-bright/80' message={message} />

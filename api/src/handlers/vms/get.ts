@@ -26,7 +26,7 @@ export default async function getVM(req: FastifyRequest, res: FastifyReply) {
 
         if (result.rows.length === 0) {
             if (id) {
-                return res.status(404).send({ error: "VM not found" })
+                return res.status(404).send({ error: 'VM not found' })
             }
 
             return res.status(200).send([])
@@ -35,6 +35,6 @@ export default async function getVM(req: FastifyRequest, res: FastifyReply) {
         return res.send(result.rows)
     } catch (error) {
         console.log(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

@@ -285,7 +285,7 @@ type FetchRequest = {
     created: string
 }
 
-type RequestType = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "CONNECT" | "TRACE" | string
+type RequestType = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | 'CONNECT' | 'TRACE' | string
 
 type Parameter = {
     parameter: string
@@ -566,6 +566,7 @@ type AIArtifact = {
 
 type AIConversation = {
     id: string
+    ownerId: string
     title: string
     preferredModel: string | null
     activeModel: string | null
@@ -575,10 +576,142 @@ type AIConversation = {
     shareIds: string[]
     workspaceMeta: Record<string, unknown>
     messages: AIConversationMessage[]
+    collaboration: AIConversationCollaboration
     metrics: GPT_ModelMetrics
     archivedAt?: string | null
     createdAt: string
     updatedAt: string
+}
+
+type AIConversationCollaboration = {
+    role: 'owner' | 'reviewer' | 'editor'
+    canInvite: boolean
+    seatLimit: number
+    seatCount: number
+    remainingSeats: number
+    collaborators: AIConversationCollaborator[]
+}
+
+type AIConversationCollaborator = {
+    userId: string
+    name: string | null
+    avatar: string | null
+    role: 'reviewer' | 'editor'
+    invitedBy: string | null
+    createdAt: string
+}
+
+type AIStackType = 'nextjs_docker' | 'fastify_postgres' | 'fastify_worker_redis' | 'unknown'
+
+type AIDeploymentAccessPolicy = 'owner_only' | 'collaborators' | 'public_preview'
+
+type AIReleaseStatus = 'current' | 'superseded' | 'failed' | 'rollback_target' | 'rolled_back' | 'restored_source'
+
+type AIRelease = {
+    id: string
+    ownerId: string
+    conversationId: string
+    deploymentId: string | null
+    vmName: string
+    stackType: AIStackType
+    accessPolicy: AIDeploymentAccessPolicy
+    status: AIReleaseStatus
+    previewUrl: string | null
+    createdBy: string | null
+    createdAt: string
+    updatedAt: string
+    notes: string | null
+}
+
+type AIUsageEventKind =
+    | 'conversation_created'
+    | 'message_written'
+    | 'deployment_started'
+    | 'release_recorded'
+    | 'rollback_marked'
+    | 'collaborator_invited'
+    | 'collaborator_removed'
+
+type AIUsageEvent = {
+    ownerId: string
+    ownerName: string | null
+    actorId: string | null
+    actorName: string | null
+    conversationId: string | null
+    deploymentId: string | null
+    releaseId: string | null
+    kind: AIUsageEventKind
+    units: number
+    metadata: Record<string, unknown>
+    createdAt: string
+}
+
+type AIOwnershipSummary = {
+    ownerIds: string[]
+    repositoryOwnerIds: string[]
+    vmOwnerIds: string[]
+    ownedConversationCount: number
+    sharedConversationCount: number
+    collaboratorSeatCount: number
+    repositoryCount: number
+    externalRepositoryCount: number
+    deploymentCount: number
+    releaseCount: number
+    externalVmCount: number
+    usageEventCount24h: number
+    usageUnitCount24h: number
+    deploymentEventCount24h: number
+    activeActorCount24h: number
+    boundaryWarnings: string[]
+    recentUsage: AIUsageEvent[]
+}
+
+type AIRuntimeStatus = 'offline' | 'idle' | 'preparing' | 'generating' | 'error'
+
+type AIRuntimeToolState = 'running' | 'completed' | 'error'
+
+type AIRuntimeToolRun = {
+    conversationId: string | null
+    label: string
+    detail: string | null
+    state: AIRuntimeToolState
+    updatedAt: string
+}
+
+type AIRuntimeFailure = {
+    source: 'model' | 'tool' | 'conversation'
+    message: string
+    conversationId: string | null
+    updatedAt: string
+}
+
+type AIRuntimeWorkspace = {
+    conversationId: string | null
+    workspaceId: string | null
+    workspaceKind: AIWorkspaceKind | null
+    shareIds: string[]
+    workspaceMeta: Record<string, unknown>
+}
+
+type AIRuntimeState = {
+    status: AIRuntimeStatus
+    connectedClientCount: number
+    connectedModelNames: string[]
+    activeConversationId: string | null
+    activeWorkspace: AIRuntimeWorkspace
+    lastToolRun: AIRuntimeToolRun | null
+    lastFailure: AIRuntimeFailure | null
+    lastUpdatedAt: string | null
+}
+
+type AIWorkspaceBundle = {
+    conversations: AIConversation[]
+    repositories: AIImportedRepo[]
+    deployments: AIDeployment[]
+    releases: AIRelease[]
+    deployQuota: AIDeployQuota | null
+    ownershipSummary: AIOwnershipSummary | null
+    runtimeState: AIRuntimeState | null
 }
 
 type AIImportedRepoFile = {
@@ -596,19 +729,36 @@ type AIRepositorySyncEvent = {
 
 type AIImportedRepo = {
     id: string
+    ownerId: string
+    accessScope: 'owned' | 'shared_conversation'
     name: string
     fullName: string
     branch: string
     defaultBranch: string
     sourcePath: string
     sourceUrl: string
+    authMode: 'public' | 'github_token'
+    authHint: string | null
     syncStatus: 'ready' | 'syncing' | 'error'
     lastSyncedAt: string | null
     lastSyncError: string | null
     syncHistory: AIRepositorySyncEvent[]
+    stackType: AIStackType
+    stackReason: string | null
+    stackSupported: boolean
     files: AIImportedRepoFile[]
     truncated: boolean
     importedAt: string
+    credential: AIRepositoryCredentialSummary
+}
+
+type AIRepositoryCredentialSummary = {
+    provider: 'github_pat'
+    hasCredential: boolean
+    tokenHint: string | null
+    attachedAt: string | null
+    lastUsedAt: string | null
+    lastValidatedAt: string | null
 }
 
 type GPT_ModelStatus = 'idle' | 'preparing' | 'generating' | 'error'
@@ -667,4 +817,183 @@ type VMConnectionDetails = {
     sshCommand: string | null
     certificateCount: number
     certificates: Certificate[]
+}
+
+type AgentVmMissingCapability = {
+    key: 'remote_command_execution' | 'remote_file_write' | 'remote_terminal_stream' | 'remote_repo_sync'
+    reason: string
+}
+
+type AgentVmTarget = {
+    id: string
+    name: string
+    owner: string
+    createdBy: string
+    accessUsers: string[]
+    status: string
+    type: string
+    architecture: string
+    imageDescription: string
+    createdAt: string
+    lastUsedAt: string
+    lastCheckedAt: string
+    network: {
+        ipv4: string
+        sshHost: string | null
+        sshUser: string
+    }
+    resources: {
+        cpu: string
+        memory: string
+    }
+    capabilities: {
+        canView: boolean
+        canConnect: boolean
+        canManage: boolean
+        canSyncAuthorizedKeys: boolean
+        canExecuteRemoteCommands: boolean
+        canWriteRemoteFiles: boolean
+        supportedActions: Array<'start' | 'stop' | 'restart'>
+        supportedConnectionMethods: Array<'ssh'>
+        missingCapabilities: AgentVmMissingCapability[]
+    }
+    endpoints: {
+        summary: string
+        details: string
+        connection: string
+        syncAuthorizedKeys: string
+        request: string
+        actions: Partial<Record<'start' | 'stop' | 'restart', string>>
+    }
+    suggestedFlow: {
+        selection: 'vm' | 'unavailable'
+        connect: string | null
+        prerequisites: string[]
+        notes: string[]
+    }
+}
+
+type AgentExecutionTarget = {
+    id: string
+    label: string
+    kind: 'local_workspace' | 'vm'
+    transport: 'local_process' | 'hanasand_vm_api'
+    summary: string
+    readiness: 'ready' | 'partial'
+    trustBoundary: 'local' | 'remote'
+    target: AgentVmTarget | {
+        kind: 'local_workspace'
+        supportedWorkspaceKinds: Array<'share' | 'repo'>
+        supportedOperations: string[]
+        missingCapabilities: string[]
+    }
+}
+
+type AIDeploymentStatus = 'planned' | 'syncing' | 'building' | 'running' | 'healthchecking' | 'blocked' | 'failed'
+
+type AIDeploymentStage = 'planned' | 'sync_access' | 'clone' | 'sync' | 'install' | 'build' | 'run' | 'healthcheck' | 'healthcheck_failed' | 'blocked' | 'manual_step_required'
+
+type AIDeploymentEvent = {
+    stage: AIDeploymentStage
+    message: string
+    timestamp: string
+}
+
+type AIDeployment = {
+    id: string
+    ownerId: string
+    conversationId: string
+    repositoryId: string | null
+    workspaceKind: AIWorkspaceKind | null
+    workspaceId: string | null
+    vmName: string
+    serviceName: string
+    stackType: AIStackType
+    accessPolicy: AIDeploymentAccessPolicy
+    startedBy: string | null
+    status: AIDeploymentStatus
+    previewUrl: string | null
+    healthcheckUrl: string | null
+    events: AIDeploymentEvent[]
+    failureReason: string | null
+    createdAt: string
+    updatedAt: string
+    completedAt: string | null
+}
+
+type AIStackType = 'nextjs_docker' | 'fastify_postgres' | 'fastify_worker_redis' | 'unknown'
+
+type AIDeploymentAccessPolicy = 'owner_only' | 'collaborators' | 'public_preview'
+
+type AIReleaseStatus = 'current' | 'superseded' | 'failed' | 'rollback_target' | 'rolled_back' | 'restored_source'
+
+type AIRelease = {
+    id: string
+    ownerId: string
+    conversationId: string
+    deploymentId: string | null
+    vmName: string
+    stackType: AIStackType
+    accessPolicy: AIDeploymentAccessPolicy
+    status: AIReleaseStatus
+    previewUrl: string | null
+    createdBy: string | null
+    createdAt: string
+    updatedAt: string
+    notes: string | null
+}
+
+type AIUsageEventKind =
+    | 'conversation_created'
+    | 'message_written'
+    | 'deployment_started'
+    | 'release_recorded'
+    | 'rollback_marked'
+    | 'collaborator_invited'
+    | 'collaborator_removed'
+
+type AIUsageEvent = {
+    ownerId: string
+    ownerName: string | null
+    actorId: string | null
+    actorName: string | null
+    conversationId: string | null
+    deploymentId: string | null
+    releaseId: string | null
+    kind: AIUsageEventKind
+    units: number
+    metadata: Record<string, unknown>
+    createdAt: string
+}
+
+type AIOwnershipSummary = {
+    ownerIds: string[]
+    repositoryOwnerIds: string[]
+    vmOwnerIds: string[]
+    ownedConversationCount: number
+    sharedConversationCount: number
+    collaboratorSeatCount: number
+    repositoryCount: number
+    externalRepositoryCount: number
+    deploymentCount: number
+    releaseCount: number
+    externalVmCount: number
+    usageEventCount24h: number
+    usageUnitCount24h: number
+    deploymentEventCount24h: number
+    activeActorCount24h: number
+    boundaryWarnings: string[]
+    recentUsage: AIUsageEvent[]
+}
+
+type AIDeployQuota = {
+    used: number
+    limit: number
+    remaining: number
+    windowMinutes: number
+    resetsAt: string
+    activeRunning: number
+    maxRunning: number
+    runningRemaining: number
+    sharedAcrossCollaborators: boolean
 }

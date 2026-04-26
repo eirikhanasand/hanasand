@@ -1,9 +1,9 @@
 import { Dispatch, SetStateAction } from 'react'
 
 type CopyProps = {
-  text: string
-  setDidCopy: Dispatch<SetStateAction<boolean | string | null>>
-  type?: 'link' | 'alias'
+    text: string
+    setDidCopy: Dispatch<SetStateAction<boolean | string | null>>
+    type?: 'link' | 'alias'
 }
 
 export default function copy({ type, text, setDidCopy }: CopyProps) {

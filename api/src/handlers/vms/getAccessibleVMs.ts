@@ -10,7 +10,7 @@ export default async function getAccessibleVMs(req: FastifyRequest, res: Fastify
     }
 
     if (!user) {
-        return res.status(400).send({ error: "Missing user." })
+        return res.status(400).send({ error: 'Missing user.' })
     }
 
     try {
@@ -28,6 +28,6 @@ export default async function getAccessibleVMs(req: FastifyRequest, res: Fastify
         return res.send(result.rows)
     } catch (error) {
         console.log(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

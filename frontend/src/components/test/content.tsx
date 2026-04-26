@@ -6,7 +6,7 @@ import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import TestContent from './testContent'
 import Notify from '../notify/notify'
 
-type ContentProps = { 
+type ContentProps = {
     test: Test
     setTest: Dispatch<SetStateAction<Test>>
     setParticipants: Dispatch<SetStateAction<number>>
@@ -17,15 +17,15 @@ type ContentProps = {
     setRerun: Dispatch<SetStateAction<boolean>>
 }
 
-export default function Content({ 
-    test, 
-    setTest, 
-    setParticipants, 
-    setIsConnected, 
-    showLogs, 
-    showErrors, 
-    rerun, 
-    setRerun 
+export default function Content({
+    test,
+    setTest,
+    setParticipants,
+    setIsConnected,
+    showLogs,
+    showErrors,
+    rerun,
+    setRerun
 }: ContentProps) {
     const [reconnect, setReconnect] = useState(false)
     const id = test.id
@@ -78,7 +78,7 @@ export default function Content({
                         }))
                     }
                 } else {
-                    console.log("Unhandled msg.type:", msg.type)
+                    console.log('Unhandled msg.type:', msg.type)
                 }
             } catch (error) {
                 console.error(`Invalid message from server: ${error}`)
@@ -91,7 +91,7 @@ export default function Content({
     }, [id, setTest, reconnect, setIsConnected, setParticipants, rerun, setRerun, setError])
 
     return (
-        <div className="p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4">
+        <div className='p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4'>
             <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
             <Notify message={error} />
         </div>

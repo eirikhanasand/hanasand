@@ -63,7 +63,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                     </div>
                     {user.highest_role_priority === 0 && <Crown className='w-5 h-5 stroke-amber-300' />}
                     <div onClick={handleRoles} className='hidden group-hover:grid rounded-lg hover:bg-[#6464641a] h-7 w-7 place-items-center cursor-pointer'>
-                        {displayRoles 
+                        {displayRoles
                             ? <X className='w-4 h-4 self-center stroke-bright/50' />
                             : <Pencil className='w-4 h-4 self-center stroke-bright/50' />
                         }

@@ -1,4 +1,5 @@
-import { ChangeEvent, Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
+import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
+import { handleEditorKeyDown } from './editorKeybindings'
 
 type EditorProps = {
     codeRef: RefObject<HTMLPreElement | null>
@@ -8,16 +9,6 @@ type EditorProps = {
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
     setError: Dispatch<SetStateAction<string | boolean | null>>
-}
-
-type HandleKeyDownProps = {
-    e: React.KeyboardEvent<HTMLTextAreaElement>
-    handleChange: (e: ChangeEvent<HTMLTextAreaElement>) => void
-    editingContent: string
-    history: string[]
-    setHistory: Dispatch<SetStateAction<string[]>>
-    historyIndex: number
-    setHistoryIndex: Dispatch<SetStateAction<number>>
 }
 
 export default function Editor({
@@ -100,7 +91,7 @@ export default function Editor({
             <h1 className={`absolute top-[6.7px] z-50 left-4 ${displayLineNumbers && 'pl-4'} pointer-events-none select-none text-gray-500`}>
                 {editingContent.trim().length <= 0 && 'Hello world...'}
             </h1>
-            <div className={`hljs relative w-full h-full flex`}>
+            <div className={'hljs relative w-full h-full flex'}>
                 {displayLineNumbers && (
                     <div
                         // @ts-expect-error Not fully compatible because ref is
@@ -139,108 +130,16 @@ export default function Editor({
                     whiteSpace: 'pre',
                     overflowWrap: 'normal',
                 }}
-                onKeyDown={(e) => HandleKeyDown({
-                    e,
-                    handleChange,
+                onKeyDown={(event) => handleEditorKeyDown({
+                    event,
                     editingContent,
+                    handleChange,
                     history,
-                    setHistory,
                     historyIndex,
+                    setHistory,
                     setHistoryIndex
                 })}
             />
         </main>
     )
-}
-
-function HandleKeyDown({
-    e,
-    handleChange,
-    editingContent,
-    history,
-    setHistory,
-    historyIndex,
-    setHistoryIndex
-}: HandleKeyDownProps) {
-    function handleChangeWithHistory(newValue: string) {
-        const updatedHistory = history.slice(0, historyIndex + 1)
-        setHistory([...updatedHistory, newValue])
-        setHistoryIndex(updatedHistory.length)
-        handleChange({ target: { value: newValue } } as React.ChangeEvent<HTMLTextAreaElement>)
-    }
-
-    function handleUndo() {
-        if (historyIndex > 0) {
-            const prev = history[historyIndex - 1]
-            setHistoryIndex(historyIndex - 1)
-            handleChange({ target: { value: prev } } as React.ChangeEvent<HTMLTextAreaElement>)
-        }
-    }
-
-    function handleRedo() {
-        if (historyIndex < history.length - 1) {
-            const next = history[historyIndex + 1]
-            setHistoryIndex(historyIndex + 1)
-            handleChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>)
-        }
-    }
-
-    const textarea = e.currentTarget
-    if (e.key === 'Tab') {
-        e.preventDefault()
-        const textarea = e.currentTarget
-        const start = textarea.selectionStart
-        const end = textarea.selectionEnd
-        const newValue = editingContent.substring(0, start) + '    ' + editingContent.substring(end)
-        handleChangeWithHistory(newValue)
-        setTimeout(() => {
-            textarea.selectionStart = textarea.selectionEnd = start + 4
-        }, 0)
-    }
-
-    if (e.key === 'Ω' || (e.altKey && e.key === 'w')) {
-        e.preventDefault()
-    }
-
-    if (
-        (e.key === '7' && (e.metaKey || e.ctrlKey) && e.shiftKey)
-    ) {
-        e.preventDefault()
-        const start = textarea.selectionStart
-        const end = textarea.selectionEnd
-        const value = editingContent
-        const startLine = value.lastIndexOf('\n', textarea.selectionStart - 1) + 1
-        const endLine = value.indexOf('\n', textarea.selectionEnd)
-        const adjustedEnd = endLine === -1 ? value.length : endLine
-        const selection = value.substring(startLine, adjustedEnd)
-        const before = value.substring(0, startLine)
-        const after = value.substring(adjustedEnd)
-        const lines = selection.split('\n')
-        const commentedLines = lines.map((line) => {
-            if (line.trimStart().startsWith('//')) {
-                return line.slice(3)
-            }
-
-            return '// ' + line
-        })
-
-        const newValue = before + commentedLines.join('\n') + after
-
-        handleChangeWithHistory(newValue)
-
-        setTimeout(() => {
-            textarea.selectionStart = start
-            textarea.selectionEnd = end + 2 * lines.length
-        }, 0)
-    }
-
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault()
-        handleUndo()
-    }
-
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
-        e.preventDefault()
-        handleRedo()
-    }
 }

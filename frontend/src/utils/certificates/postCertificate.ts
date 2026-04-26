@@ -18,9 +18,9 @@ export default async function postCertificate(certificate: Partial<Certificate>)
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const response = await fetch(`${config.url.api}/certificates`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`, 
+                'Authorization': `Bearer ${token}`,
                 id
             },
             body: JSON.stringify({ ...certificate }),
@@ -46,7 +46,7 @@ export default async function postCertificate(certificate: Partial<Certificate>)
         if (error.message === 'conflict') {
             return {
                 status: 409,
-                message: `You already have a certificate with this name.`
+                message: 'You already have a certificate with this name.'
             }
         }
 

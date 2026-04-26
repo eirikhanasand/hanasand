@@ -7,7 +7,7 @@ type ParameterProps = {
 }
 
 export default function Parameter({ parameter, value, setParameters }: ParameterProps) {
-    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    function handleChange() {
         setParameters([])
         // setParameters(e.target.value)
     }

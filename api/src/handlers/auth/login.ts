@@ -32,7 +32,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             await run('INSERT INTO login_events (user_id, ip, user_agent, status, reason) VALUES ($1, $2, $3, $4, $5)', [id, ip, String(userAgent), 'failed', 'rate_limited']).catch(() => {})
             return res.status(429).send({ error: 'Please try again later.' })
         }
-        
+
         const isValid = await bcrypt.compare(password, user.password)
         if (!isValid) {
             const attemptQuery = `
@@ -51,7 +51,8 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         }
 
         await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [id, ip])
-        const { password: _, ...userWithoutPassword } = user
+        const { password: ignoredPassword, ...userWithoutPassword } = user
+        void ignoredPassword
         const roleQuery = `
             SELECT r.id, r.name, r.description, r.priority
             FROM roles r

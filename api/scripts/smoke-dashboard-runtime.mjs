@@ -46,10 +46,12 @@ async function apiRequest(path, init = {}) {
     })
 
     const text = await response.text()
-    let body = text
+    let body
     try {
         body = text ? JSON.parse(text) : null
-    } catch {}
+    } catch {
+        body = text
+    }
 
     return { response, body }
 }

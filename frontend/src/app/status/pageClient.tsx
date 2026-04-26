@@ -7,6 +7,7 @@ import useWS from '@/hooks/useWS'
 import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, Binoculars, CheckCircle, HeartPulse, ShieldAlert, Timer, XCircle } from 'lucide-react'
 import { toDomainTPS } from '@/utils/monitoring/domain'
+import Marquee from '@/components/shared/marquee'
 
 type MetricSummary = {
     value: string
@@ -44,6 +45,10 @@ function relativeTime(value: string) {
     return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
+function clampMetricLabel(value: string) {
+    return value.slice(0, 100)
+}
+
 export default function StatusDashboard({ metrics: serverMetrics, domainMetrics: serverDomainMetrics, topDomains, serviceStatus }: DashboardProps) {
     const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
     const [domainMetrics, setDomainMetrics] = useState<TrafficSummaryMetric[]>(serverDomainMetrics)
@@ -59,6 +64,8 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
     }, [])
 
     const domainsSortedByTps = toDomainTPS([], domains, 5)
+    const liveDomains = domainsSortedByTps.filter(domain => domain.tps > 0)
+    const livePeakTps = liveDomains.reduce((highest, domain) => Math.max(highest, domain.tps), 0)
     const statusTone = {
         up: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-100',
         degraded: 'border-amber-400/20 bg-amber-500/10 text-amber-100',
@@ -66,7 +73,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
     }
 
     return (
-        <div className="grid gap-4 h-full">
+        <div className='grid gap-4 h-full'>
             <section className='grid gap-4'>
                 <div className='flex flex-wrap items-start justify-between gap-4'>
                     <div>
@@ -125,6 +132,41 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                 </div>
             </section>
 
+            <section className='grid gap-3 md:grid-cols-3'>
+                <div className='glass-card rounded-lg p-4'>
+                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Live feed</p>
+                    <div className='mt-3 flex items-end justify-between gap-3'>
+                        <div>
+                            <h3 className='text-lg font-semibold text-bright'>{liveDomains.length > 0 ? 'Active' : 'Idle'}</h3>
+                            <p className='mt-1 text-sm text-bright/55'>
+                                {liveDomains.length > 0
+                                    ? `${liveDomains.length} domain${liveDomains.length === 1 ? '' : 's'} reporting right now`
+                                    : 'No domains are reporting live TPS right now'}
+                            </p>
+                        </div>
+                        <div className='rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-100'>
+                            {livePeakTps.toFixed(2)} TPS
+                        </div>
+                    </div>
+                </div>
+
+                <div className='glass-card rounded-lg p-4'>
+                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Domain summary</p>
+                    <h3 className='mt-3 text-lg font-semibold text-bright'>{domainMetrics.length} cards loaded</h3>
+                    <p className='mt-1 text-sm text-bright/55'>
+                        Hourly, daily, weekly, and total counters from the CDN summary cache.
+                    </p>
+                </div>
+
+                <div className='glass-card rounded-lg p-4'>
+                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Monitor snapshot</p>
+                    <h3 className='mt-3 text-lg font-semibold text-bright'>{relativeTime(serviceStatus.generated_at)}</h3>
+                    <p className='mt-1 text-sm text-bright/55'>
+                        Last generated health sample for the service checks above.
+                    </p>
+                </div>
+            </section>
+
             {/* Live traffic */}
             <div className='flex items-center justify-between gap-4'>
                 <div>
@@ -141,10 +183,14 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
 
             {/* Metrics */}
             <h1 className='font-semibold text-lg'>Most visited subdomains</h1>
-            <div className="grid md:grid-cols-5 gap-4">
+            <div className='grid md:grid-cols-5 gap-4'>
                 {domainMetrics.map((d, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
-                        <h2 className="font-semibold text-bright/90">{d.value}</h2>
+                        <Marquee
+                            text={clampMetricLabel(d.value)}
+                            className='w-full'
+                            innerClassName='font-semibold text-bright/90'
+                        />
                         <span className='text-xs text-almostbright'>Hourly: {d.hits_hour ?? 0}</span>
                         <span className='text-xs text-almostbright'>Daily: {d.hits_today}</span>
                         <span className='text-xs text-almostbright'>Weekly: {d.hits_last_week}</span>
@@ -155,10 +201,14 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
 
             {/* Top endpoints */}
             <h1 className='font-semibold text-lg'>Top endpoints</h1>
-            <div className="grid md:grid-cols-5 gap-4">
+            <div className='grid md:grid-cols-5 gap-4'>
                 {metrics.map((m, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
-                        <h2 className="font-semibold text-bright/90">{m.value}</h2>
+                        <Marquee
+                            text={clampMetricLabel(m.value)}
+                            className='w-full'
+                            innerClassName='font-semibold text-bright/90'
+                        />
                         <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
                         <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
                         <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>

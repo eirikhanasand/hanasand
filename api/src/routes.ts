@@ -55,6 +55,10 @@ import deleteVMs from './handlers/vms/deleteVMs.ts'
 import shutdownVMs from './handlers/vms/shutdown.ts'
 import getVMDetails from './handlers/vms/getVMDetails.ts'
 import getVmConnection from './handlers/vms/getConnection.ts'
+import getAgentTarget from './handlers/vms/getAgentTarget.ts'
+import getAgentTargets from './handlers/vms/getAgentTargets.ts'
+import postAgentTargetSyncAccess from './handlers/vms/postAgentTargetSyncAccess.ts'
+import postAgentTargetRequest from './handlers/vms/postAgentTargetRequest.ts'
 import stopVms from './handlers/vms/stopVms.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDocker from './handlers/docker/getDocker.ts'
@@ -64,10 +68,12 @@ import ingestStatus from './handlers/status/ingest.ts'
 import deactivateUser from './handlers/user/deactivateUser.ts'
 import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sessions.ts'
 import httpRequestTool from './handlers/tools/httpRequest.ts'
+import getExecutionTargets from './handlers/tools/getExecutionTargets.ts'
 import aiTool from './handlers/tools/ai.ts'
 import { getLogs, getLogServices, getRealtimeLogs } from './handlers/logs/get.ts'
 import ingestLog from './handlers/logs/ingest.ts'
 import getAiWorkspace from './handlers/ai/getWorkspace.ts'
+import getAiRuntime from './handlers/ai/getRuntime.ts'
 import postAiConversation from './handlers/ai/postConversation.ts'
 import putAiConversation from './handlers/ai/putConversation.ts'
 import deleteAiConversation from './handlers/ai/deleteConversation.ts'
@@ -75,6 +81,12 @@ import upsertAiMessage from './handlers/ai/upsertMessage.ts'
 import postAiRepository from './handlers/ai/postRepository.ts'
 import getAiModels from './handlers/ai/getModels.ts'
 import importRepository from './handlers/ai/importRepository.ts'
+import putRepositoryCredential from './handlers/ai/putRepositoryCredential.ts'
+import deleteRepositoryCredential from './handlers/ai/deleteRepositoryCredential.ts'
+import { getAiDeployments, postAiDeployment } from './handlers/ai/deployments.ts'
+import { deleteAiConversationCollaborator, postAiConversationCollaborator } from './handlers/ai/collaborators.ts'
+import { getAiReleases, postAiRollback } from './handlers/ai/releases.ts'
+import { getAiPreview } from './handlers/ai/preview.ts'
 import getMailOverview from './handlers/mail/getOverview.ts'
 import postSendMail from './handlers/mail/postSend.ts'
 import postMailAction from './handlers/mail/postAction.ts'
@@ -85,11 +97,13 @@ import getMailBlob from './handlers/mail/getBlob.ts'
 
 /**
  * Defines the routes available in the API.
- * 
+ *
  * @param fastify Fastify Instance
  * @param _ Fastify Plugin Options
  */
-export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPluginOptions) {
+export default async function apiRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
+    void options
+
     // Index handler
     fastify.get('/', indexHandler)
 
@@ -159,6 +173,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.delete('/certificates/:id', deleteCertificate)
 
     // Vms
+    fastify.get('/vms/agent/targets', getAgentTargets)
+    fastify.get('/vm/:id/agent-target', getAgentTarget)
+    fastify.post('/vm/:id/agent-target/sync-access', postAgentTargetSyncAccess)
+    fastify.post('/vm/:id/request', postAgentTargetRequest)
     fastify.get('/vm/:id', getVM)
     fastify.get('/vm/:id/connection', getVmConnection)
     fastify.get('/vm/details/:name', getVMDetails)
@@ -192,18 +210,30 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/docker', getDocker)
 
     // Coding tools
+    fastify.get('/tools/execution-targets', getExecutionTargets)
     fastify.post('/tools/http/request', httpRequestTool)
     fastify.post('/tools/ai', aiTool)
 
     // AI workspace
     fastify.get('/ai/workspace', getAiWorkspace)
+    fastify.get('/ai/runtime', getAiRuntime)
     fastify.get('/ai/models', getAiModels)
+    fastify.get('/ai/previews/:id', getAiPreview)
+    fastify.get('/ai/previews/:id/*', getAiPreview)
     fastify.post('/ai/import-repository', importRepository)
     fastify.post('/ai/conversations', postAiConversation)
     fastify.put('/ai/conversations/:id', putAiConversation)
     fastify.delete('/ai/conversations/:id', deleteAiConversation)
+    fastify.post('/ai/conversations/:id/collaborators', postAiConversationCollaborator)
+    fastify.delete('/ai/conversations/:id/collaborators/:userId', deleteAiConversationCollaborator)
     fastify.put('/ai/conversations/:id/messages', upsertAiMessage)
     fastify.post('/ai/repositories', postAiRepository)
+    fastify.get('/ai/deployments', getAiDeployments)
+    fastify.post('/ai/deployments', postAiDeployment)
+    fastify.get('/ai/releases', getAiReleases)
+    fastify.post('/ai/releases/:id/rollback', postAiRollback)
+    fastify.put('/ai/repositories/:id/credentials/github', putRepositoryCredential)
+    fastify.delete('/ai/repositories/:id/credentials/github', deleteRepositoryCredential)
 
     // Mail
     fastify.get('/mail/overview', getMailOverview)

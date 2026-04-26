@@ -10,7 +10,7 @@ export default async function Page({
     const path = Array.isArray(params.path) ? params.path[0] : params.path
 
     return <RegisterPage
-        serverInternal={Boolean(internal) ?? false}
+        serverInternal={Boolean(internal)}
         path={path || null}
     />
 }

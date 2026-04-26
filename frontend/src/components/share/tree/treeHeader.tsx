@@ -8,7 +8,7 @@ type TreeHeaderProps = {
 
 export default function TreeHeader({ share, setIsCreatingNewFile }: TreeHeaderProps) {
     const buttonStyle = 'rounded-sm h-6 w-6 hover:bg-extralight/80 grid place-items-center cursor-pointer'
-    
+
     function handleClick(type: 'file' | 'folder') {
         setIsCreatingNewFile(prev => prev === type ? null : type)
     }

@@ -8,6 +8,8 @@ type VMDetailsProps = {
 }
 
 export default function VMNetwork({ boxStyle, boxTitleStyle, vm, details }: VMDetailsProps) {
+    void vm
+
     return (
         <div className={boxStyle}>
             <h1 className={boxTitleStyle}>Network</h1>

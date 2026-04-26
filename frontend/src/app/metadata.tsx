@@ -7,6 +7,10 @@ const metadata: Metadata = {
     description: 'Welcome to Hanasand',
     creator: 'Eirik Hanasand',
     publisher: 'Eirik Hanasand',
+    metadataBase: new URL('https://hanasand.com'),
+    alternates: {
+        canonical: '/',
+    },
     openGraph: {
         title: 'Hanasand',
         description: 'Welcome to Hanasand',

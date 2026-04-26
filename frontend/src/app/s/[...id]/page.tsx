@@ -23,11 +23,11 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <div className='w-full h-[92.5vh]'>
-            <SharePageClient 
-                id={id} 
-                share={safeShare} 
-                randomId={random} 
-                openFolders={openFolders} 
+            <SharePageClient
+                id={id}
+                share={safeShare}
+                randomId={random}
+                openFolders={openFolders}
                 tree={tree}
                 sharePageWidth={sharePageWidth}
                 shareTerminalHeight={shareTerminalHeight}

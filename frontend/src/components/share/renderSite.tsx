@@ -11,12 +11,12 @@ type ShowSiteProps = {
     setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
-export default function RenderSite({ 
-    share, 
-    renderSite, 
-    setRenderSite, 
-    sharePageWidth, 
-    triggerChange, 
+export default function RenderSite({
+    share,
+    renderSite,
+    setRenderSite,
+    sharePageWidth,
+    triggerChange,
     setTriggerChange
 }: ShowSiteProps) {
     const [width, setWidth] = useState(sharePageWidth)
@@ -125,11 +125,11 @@ export default function RenderSite({
         <div style={{ width }} className={`${renderSite ? 'relative' : 'absolute right-0 bottom-0 z-100 w-2 h-full'} pb-25`}>
             <div
                 onMouseDown={handleMouseDown}
-                className="absolute top-0 right-0 h-full w-2 cursor-col-resize z-20 pl-2 pr-8 group grid place-items-center"
+                className='absolute top-0 right-0 h-full w-2 cursor-col-resize z-20 pl-2 pr-8 group grid place-items-center'
                 style={{ right: width - (renderSite ? 22 : 18) }}
             >
-                <div style={{ left: renderSite ? 14 : 18 }} className="absolute w-2 l-100 h-full right-5 group-hover:bg-light" />
-                <div className="absolute h-10 w-1 right-5 bg-extralight group-hover:bg-white/30 rounded-full" />
+                <div style={{ left: renderSite ? 14 : 18 }} className='absolute w-2 l-100 h-full right-5 group-hover:bg-light' />
+                <div className='absolute h-10 w-1 right-5 bg-extralight group-hover:bg-white/30 rounded-full' />
             </div>
 
             {renderSite && width > 0 && !share?.alias && (
@@ -140,26 +140,26 @@ export default function RenderSite({
                 <iframe
                     src={`https://${share.alias}.hanasand.com`}
                     className='absolute w-full h-full border-none rounded-lg'
-                    title="Embedded Site"
+                    title='Embedded Site'
                 ></iframe>
             )}
 
             <div
                 onClick={handleChange}
-                className="
+                className='
                     group fixed bottom-16 right-3 z-100 cursor-pointer select-none
                     w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
                     hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
                     backdrop-blur-md bg-bright/3 group-hover:bg-bright/10 overflow-hidden
                     hover:scale-[1.03] hover:border-white/30 transition-all
                     shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.4)]
-                "
+                '
             >
                 {/* Glass overlay */}
-                <div className="absolute inset-0 bg-black/10" />
+                <div className='absolute inset-0 bg-black/10' />
 
                 <div className='grid place-items-center'>
-                    <h1 className="relative z-10 text-white/90 font-semibold tracking-wide flex gap-2">
+                    <h1 className='relative z-10 text-white/90 font-semibold tracking-wide flex gap-2'>
                         <Monitor /> {renderSite ? 'Hide site' : 'Show site'}
                     </h1>
                 </div>

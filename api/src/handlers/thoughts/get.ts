@@ -12,7 +12,7 @@ export default async function getThought(req: FastifyRequest, res: FastifyReply)
     }
 
     try {
-        const result = await run(`SELECT * FROM thoughts WHERE id = $1`, [id])
+        const result = await run('SELECT * FROM thoughts WHERE id = $1', [id])
         if (!result.rows.length) {
             return res.status(404).send({ error: 'Thought not found.' })
         }

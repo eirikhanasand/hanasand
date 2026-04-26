@@ -38,7 +38,7 @@ export default function PwnedPageClient() {
     }
 
     return (
-        <div className={`w-full h-full p-4 space-y-4 relative rounded-lg outline outline-dark`}>
+        <div className={'w-full h-full p-4 space-y-4 relative rounded-lg outline outline-dark'}>
             <div className='h-full grid place-items-center'>
                 <div className='flex flex-col items-center gap-4'>
                     <div className='flex gap-2'>

@@ -35,9 +35,9 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
             <div
                 onClick={handleClick}
                 className={`rounded-lg group ${keys['shift']
-                        ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none'
-                        : 'hover:bg-dark/45'
-                    } cursor-pointer border border-white/8 bg-black/10 p-3 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
+                    ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none'
+                    : 'hover:bg-dark/45'
+                } cursor-pointer border border-white/8 bg-black/10 p-3 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
             >
                 <div className='flex w-full items-center gap-2 h-full'>
                     <div className='flex-1 min-w-0 grid gap-2'>
@@ -67,10 +67,10 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                                 <span>editors.</span>
                             </div>
                             <div className='flex w-fit gap-1 items-center'>
-                                <Tag 
-                                    color='dynamic' 
-                                    text={formatStatus(vm.status)} 
-                                    map={{ 
+                                <Tag
+                                    color='dynamic'
+                                    text={formatStatus(vm.status)}
+                                    map={{
                                         'stopped': { color: 'red', icon: 'error' },
                                         'idle': { color: 'yellow', icon: 'warning' },
                                         'running': { color: 'green', icon: 'success' },

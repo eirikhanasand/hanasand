@@ -17,7 +17,7 @@ export default async function postThought(req: FastifyRequest<{ Body: { title: s
 
     try {
         const result = await run(
-            `INSERT INTO thoughts (title, created_by) VALUES ($1, $2) RETURNING *`,
+            'INSERT INTO thoughts (title, created_by) VALUES ($1, $2) RETURNING *',
             [title, id]
         )
 

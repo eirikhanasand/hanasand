@@ -93,8 +93,8 @@ export default function DatabaseBackupsPageClient({ backups }: { backups: Backup
                                 <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Next backup</p>
                                 <p className='mt-2'>{formatSchedule(backup.nextBackup)}</p>
                             </div>
-                            <Link 
-                                href={`/dashboard/db/restore?service=${encodeURIComponent(backup.name.replace(/_database$/, ''))}`} 
+                            <Link
+                                href={`/dashboard/db/restore?service=${encodeURIComponent(backup.name.replace(/_database$/, ''))}`}
                                 className='rounded-xl bg-black/18 p-4 transition hover:bg-black/24'
                             >
                                 <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Restore</p>

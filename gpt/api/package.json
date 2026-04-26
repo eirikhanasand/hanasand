@@ -7,7 +7,18 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "start": "bun src/index.ts"
+    "start": "bun src/index.ts",
+    "lint": "eslint ./src ./scripts ./distless",
+    "lint:fix": "eslint ./src ./scripts ./distless --fix",
+    "orchestration:demo": "bun scripts/orchestration-demo.ts",
+    "orchestration:evaluate": "bun scripts/orchestration-evaluate.ts",
+    "orchestration:benchmark": "bun scripts/orchestration-benchmark.ts",
+    "orchestration:context-export": "bun scripts/orchestration-context-export.ts",
+    "orchestration:context-export:shell": "sh scripts/orchestration-context-export.sh",
+    "smoke:model-loopback": "node scripts/model-loopback-smoke.mjs",
+    "smoke:mac-validation-profile": "node scripts/mac-validation-profile-smoke.mjs",
+    "benchmark:read-only-repo": "node scripts/read-only-repo-benchmark.mjs",
+    "benchmark:model-overhead": "node scripts/model-overhead-sample.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -15,9 +26,15 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "5.10.0",
     "@types/node": "^25.6.0",
     "@types/ws": "^8.18.1",
-    "typescript": "^5.9.3"
+    "@typescript-eslint/parser": "8.58.2",
+    "eslint": "10.2.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "8.58.2",
+    "utilbee": "1.4.5"
   },
   "imports": {
     "#constants": "./src/constants.ts",

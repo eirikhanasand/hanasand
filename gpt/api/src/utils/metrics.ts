@@ -1,5 +1,5 @@
-import os from "os"
-import si from "systeminformation"
+import os from 'os'
+import si from 'systeminformation'
 import getGpuUsage from './gpu/mac.ts'
 import { getModelState } from './modelState.ts'
 
@@ -12,7 +12,7 @@ export default async function metrics(): Promise<GPT_Client> {
     const usedMem = totalMem - freeMem
     const ram: GPT_RAM[] = [
         {
-            name: "System RAM",
+            name: 'System RAM',
             load: usedMem / totalMem,
         }
     ]

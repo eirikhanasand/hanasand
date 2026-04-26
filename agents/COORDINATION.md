@@ -1,42 +1,44 @@
 ---
 claimed_by:
-status: active
-last_updated: 2026-04-22
+status: idle
+last_updated: 2026-04-25
 ---
 
 # Agent Coordination
 
-If you are another agent working in this repository, please add a short dated note here before and after major changes.
+This file is intentionally short. Treat it as the live handoff surface, not as a changelog.
 
-How to use this file:
-- Add your agent name under `claimed_by` only while actively updating this file.
-- Append a dated note under `## Notes` with what you touched, what you observed, and any blockers.
-- When you are done writing here, clear `claimed_by:` and set `status:` back to `active` or `idle` as appropriate.
-- Do not delete previous notes.
+## Start Here
 
-Current guidance:
-- Another active workstream is already modifying unrelated frontend dashboard/status files. Avoid those paths unless you intentionally coordinate.
-- The local 32B model is not ready to switch to yet. There is no active model process right now, and `gpt/models/qwen2.5-coder-32b` only shows about `2.5G`, while the working 14B model file is about `8.9G`.
-- The browser `/ai` workspace now has a share-backed Next.js + Docker starter.
-- The local model tool loop now has Docker-oriented scaffolds plus compose up/logs/down tools.
+Read these in order:
+- [START_HERE.md](/Users/eirikhanasand/Desktop/personal/hanasand/agents/START_HERE.md)
 
-## Notes
+Detailed worknotes are local ignored context. Prefer source, tests, and the live app unless historical detail is needed.
 
-### 2026-04-22 - codex
-- Added browser-workspace starter support in `/ai` for a share-backed Next.js + Docker app.
-- Added local autonomous tool-loop support for `scaffold_nextjs_docker_app`, `scaffold_fastify_postgres_app`, `compose_up`, `compose_logs`, and `compose_down`.
-- Verified `frontend` and `gpt/api` TypeScript after those changes.
-- Observed that the 32B model directory does not contain a complete `.gguf` yet, so a safe runtime swap has not been completed.
-- If you are the other agent: please append your progress here so we stop duplicating work.
-- Follow-up smoke: scaffolded `sandbox/agent-nextjs-docker-smoke`, ran `npm install`, `npm run build`, `HOST_PORT=3200 docker compose up --build -d`, fetched `http://127.0.0.1:3200`, collected compose logs, and cleaned down successfully.
-- Important finding: the first Dockerized Next.js scaffold hard-coded host port `3000`; templates were updated to use `HOST_PORT` so future smoke runs do not fail on busy machines.
-- Important finding: the local tool helper's command sandbox currently fails with `sandbox-exec: sandbox_apply: Operation not permitted` in this environment, even though direct `npm install` works. Future work should harden or bypass that path safely.
+## Current State
 
-### 2026-04-22 - codex
-- Claimed packet `20-release-runbook.md` for a low-collision documentation pass.
-- Intentionally avoiding the active frontend `/status` and dashboard-related workstream while this claim is active.
-- Added a launcher fallback in `gpt/run_model_common.sh` so the runtime prefers a complete local model (14B or 7B) instead of stalling on the incomplete 32B target.
-- Added a structured `http_request` tool in `gpt/api/src/utils/tools/httpRequest.ts` and wired it into `gpt/api/src/utils/tools/modelToolLoop.ts`.
-- Marked packet `10-http-and-api-tool-expansion.md` as completed and wrote notes to `agents/work-results/packet-10-http-and-api-tool-expansion.md`.
-- Ran the local 14B model and captured its packet 20 draft output at `agents/local-model-notes/packet-20-release-runbook.local-model.md`.
-- Local-model caveat: direct `curl` to the llama server works, but the in-process `bun` prompt path still fails to open the localhost socket in this environment.
+- No other agents are currently active in this repository.
+- Long packet queues and generated control-plane artifacts are intentionally gitignored.
+- Use this repo note as the compact handoff surface.
+- Fresh work should start from the current product/runtime state, then consult ignored local worknotes only when needed.
+
+## Working Rules
+
+- Do not add long progress logs here.
+- If you discover a new frontier, update `START_HERE.md` with one compact sentence and make the code or test change.
+- Keep generated run artifacts out of Git.
+
+## Current Frontier
+
+### Product track
+- The browser AI workspace, deploy flow, preview routing, quotas, and review/session surfaces have been actively developed.
+- The next useful product work should come from a fresh live gap review.
+
+### Self-improvement track
+- The benchmark, orchestration, context, and model-overhead tools exist under `gpt/`.
+- Keep benchmark outputs ignored unless a small source change needs them as fixture data.
+
+## Cleanup Notes
+
+- This file was intentionally reset from a long dated log into a lightweight handoff surface.
+- Older work history remains local ignored context.

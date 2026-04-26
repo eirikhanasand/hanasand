@@ -29,27 +29,24 @@ export default function Tag({ icon, text, date, color, map }: TagProps) {
 }
 
 function getIcon(icon: string | undefined) {
-    let IconElement: React.ReactNode = null
     const smallIconClass = 'w-3 h-3 stroke-bright/70'
 
     switch (icon) {
-        case 'ram': IconElement = <MemoryStick className={smallIconClass} />; break
-        case 'cpu': IconElement = <Cpu className={smallIconClass} />; break
-        case 'refresh': IconElement = <RefreshCcw className={smallIconClass} />; break
-        case 'error': IconElement = <StopCircle className={smallIconClass} />; break
-        case 'warning': IconElement = <TriangleAlert className={smallIconClass} />; break
-        case 'success': IconElement = <CloudCheck className={smallIconClass} />; break
-        case 'bug': IconElement = <Bug className={smallIconClass} />; break
-        case 'pencil': IconElement = <Pencil className={smallIconClass} />; break
-        default: IconElement = <Info className={smallIconClass} />; break
+        case 'ram': return <MemoryStick className={smallIconClass} />
+        case 'cpu': return <Cpu className={smallIconClass} />
+        case 'refresh': return <RefreshCcw className={smallIconClass} />
+        case 'error': return <StopCircle className={smallIconClass} />
+        case 'warning': return <TriangleAlert className={smallIconClass} />
+        case 'success': return <CloudCheck className={smallIconClass} />
+        case 'bug': return <Bug className={smallIconClass} />
+        case 'pencil': return <Pencil className={smallIconClass} />
+        default: return <Info className={smallIconClass} />
     }
-
-    return IconElement
 }
 
 function getMapIcon(value?: string, map?: Map) {
     if (!value || !map) {
-        return 
+        return
     }
 
     const iconKey = map[value.toLowerCase()] || 'default'

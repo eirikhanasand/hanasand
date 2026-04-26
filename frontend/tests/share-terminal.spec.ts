@@ -117,7 +117,7 @@ test('public share terminal runs commands without websocket or script-path failu
             term.buffer.active.getLine(index)?.translateToString(true) || ''
         ).join('\n')
     }) + consoleMessages.join('\n')
-    expect(terminalText).not.toContain(`/home/ubuntu/find_vm.sh': command not found`)
-    expect(terminalText).not.toContain(`/home/ubuntu/clone_vm.sh': command not found`)
+    expect(terminalText).not.toContain('/home/ubuntu/find_vm.sh\': command not found')
+    expect(terminalText).not.toContain('/home/ubuntu/clone_vm.sh\': command not found')
     expect(terminalText).not.toContain('Websocket not connected')
 })

@@ -147,14 +147,14 @@ async function pruneRemovedEntries({
     for (const fileId of staleFiles) {
         const ok = await deleteShare(fileId, token, userId)
         if (!ok) {
-            throw new Error(`Failed to remove a stale file from the repository workspace.`)
+            throw new Error('Failed to remove a stale file from the repository workspace.')
         }
     }
 
     for (const folder of staleFolders.sort((left, right) => right.depth - left.depth)) {
         const ok = await deleteShare(folder.id, token, userId)
         if (!ok) {
-            throw new Error(`Failed to remove a stale folder from the repository workspace.`)
+            throw new Error('Failed to remove a stale folder from the repository workspace.')
         }
     }
 }

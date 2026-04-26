@@ -10,7 +10,7 @@ export async function getUserShares({ id, token }: GetUserSharesProps): Promise<
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
         const normalizedToken = decodeURIComponent(token)
-        const response = await fetch(`${config.url.cdn}/share/user/${id}`, { 
+        const response = await fetch(`${config.url.cdn}/share/user/${id}`, {
             headers: {
                 'Authorization': `Bearer ${normalizedToken}`,
                 id
@@ -33,7 +33,7 @@ export async function getUserShares({ id, token }: GetUserSharesProps): Promise<
             return 'Unable to load shares.'
         } else {
             console.error(`Fetch failed: ${error}`)
-            return `Shares not found.`
+            return 'Shares not found.'
         }
     }
 }

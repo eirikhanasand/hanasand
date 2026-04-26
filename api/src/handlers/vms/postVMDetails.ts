@@ -3,15 +3,15 @@ import run from '#db'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 
 const requiredFields: (keyof PostVmDetails)[] = [
-    "name", "status", "type", "architecture", "created", "last_used",
-    "config_architecture", "config_image_architecture", "config_image_description",
-    "config_image_label", "config_image_os", "config_image_release", "config_image_serial",
-    "config_image_type", "config_image_version", "limits_cpu", "limits_memory",
-    "volatile_base_image", "volatile_cloud_init_instance_id", "volatile_eth0_hwaddr",
-    "volatile_last_state_power", "volatile_uuid",
-    "volatile_uuid_generation", "volatile_vsock_id",
-    "device_eth0_ipv4_address", "device_eth0_name", "device_eth0_network",
-    "device_eth0_type", "ephemeral", "stateful", "description", "profiles"
+    'name', 'status', 'type', 'architecture', 'created', 'last_used',
+    'config_architecture', 'config_image_architecture', 'config_image_description',
+    'config_image_label', 'config_image_os', 'config_image_release', 'config_image_serial',
+    'config_image_type', 'config_image_version', 'limits_cpu', 'limits_memory',
+    'volatile_base_image', 'volatile_cloud_init_instance_id', 'volatile_eth0_hwaddr',
+    'volatile_last_state_power', 'volatile_uuid',
+    'volatile_uuid_generation', 'volatile_vsock_id',
+    'device_eth0_ipv4_address', 'device_eth0_name', 'device_eth0_network',
+    'device_eth0_type', 'ephemeral', 'stateful', 'description', 'profiles'
 ]
 
 export default async function postVMDetails(req: FastifyRequest, res: FastifyReply) {
@@ -36,7 +36,7 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
         || (req.body as PostVmDetails)[field] === null
     )
     if (missingFields.length > 0) {
-        return res.status(400).send({ error: `Missing required fields: ${missingFields.join(", ")}` });
+        return res.status(400).send({ error: `Missing required fields: ${missingFields.join(', ')}` })
     }
 
     try {
@@ -116,6 +116,6 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
         return res.status(201).send(result.rows[0])
     } catch (error) {
         console.log(error)
-        return res.status(500).send({ error: "Internal server error" })
+        return res.status(500).send({ error: 'Internal server error' })
     }
 }

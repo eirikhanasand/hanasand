@@ -246,7 +246,7 @@ function stripHtml(value: string) {
         .replace(/&amp;/gi, '&')
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
-        .replace(/&#39;/gi, "'")
+        .replace(/&#39;/gi, '\'')
         .replace(/&quot;/gi, '"')
 }
 

@@ -76,7 +76,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             })
         }
 
-        const rootResult = await run(`SELECT * FROM root`)
+        const rootResult = await run('SELECT * FROM root')
         if (rootResult.rows.length <= 1) {
             const rootQuery = await loadSQL('assignAdministratorRole.sql')
             await run(rootQuery, [id])

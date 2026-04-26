@@ -54,7 +54,7 @@ function queueSave(id: string, content: string) {
         if (!entry) return
         try {
             await run(
-                `UPDATE share SET content = $1, timestamp = NOW() WHERE id = $2`,
+                'UPDATE share SET content = $1, timestamp = NOW() WHERE id = $2',
                 [entry.content, id]
             )
             console.log(`Saved share ${id} to DB`)

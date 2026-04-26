@@ -12,7 +12,7 @@ export default async function postThoughtByTitle(req: FastifyRequest, res: Fasti
     }
 
     try {
-        const result = await run(`SELECT * FROM thoughts WHERE title = $1`, [title])
+        const result = await run('SELECT * FROM thoughts WHERE title = $1', [title])
         if (!result.rows.length) {
             return res.status(404).send({ error: 'No thoughts found.' })
         }

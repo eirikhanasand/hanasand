@@ -8,11 +8,15 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     if (typeof link === 'number') {
         return redirect(`/g?id=${id}&null=true`)
-    }    
-
-    if (!link?.path.includes('http')) {
-        return redirect(`https://${link?.path}` || `/g?id=${id}&null=true`)
     }
 
-    return redirect(link?.path || `/g?id=${id}&null=true`)
+    if (!link?.path) {
+        return redirect(`/g?id=${id}&null=true`)
+    }
+
+    if (!link.path.includes('http')) {
+        return redirect(`https://${link.path}`)
+    }
+
+    return redirect(link.path)
 }

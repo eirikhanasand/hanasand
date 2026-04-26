@@ -16,7 +16,7 @@ export default async function Page() {
     if (!name || !id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
-    
+
     const roles = await getRoles({ id, token })
     const text = timeBasedGreeting({ name })
 

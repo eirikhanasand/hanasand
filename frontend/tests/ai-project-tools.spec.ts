@@ -1,6 +1,26 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Browser } from '@playwright/test'
 
-test('AI workspace can create a project and run a terminal command against the attached share', async ({ browser, baseURL }) => {
+test.describe.configure({ mode: 'serial' })
+
+type ShareEntry = {
+    id: string
+    name: string
+    path: string
+    content: string
+    parent: string
+    type: string
+    alias: string
+}
+
+async function createAiWorkspacePage({
+    browser,
+    baseURL,
+    promptCompleteContent,
+}: {
+    browser: Browser
+    baseURL: string | undefined
+    promptCompleteContent: string
+}) {
     const shareState = new Map<string, {
         id: string
         name: string
@@ -29,31 +49,27 @@ test('AI workspace can create a project and run a terminal command against the a
         },
     ])
 
-    await context.addInitScript(() => {
+    await context.addInitScript((content: string) => {
         ;(window as typeof window & {
             __lastTerminalCommand?: string
+            __HANASAND_CREATE_SOCKET__?: (url: string) => WebSocket
         }).__lastTerminalCommand = ''
 
-        class MockWebSocket {
-            static CONNECTING = 0
+        class MockHanasandSocket {
             static OPEN = 1
-            static CLOSING = 2
             static CLOSED = 3
 
             url: string
-            readyState = MockWebSocket.OPEN
+            readyState = MockHanasandSocket.OPEN
             onopen: ((event: Event) => void) | null = null
             onclose: ((event: CloseEvent) => void) | null = null
             onerror: ((event: Event) => void) | null = null
             onmessage: ((event: MessageEvent<string>) => void) | null = null
-            private listeners: Record<string, Array<(event: Event | MessageEvent<string> | CloseEvent) => void>> = {}
 
             constructor(url: string) {
                 this.url = url
                 window.setTimeout(() => {
-                    const openEvent = new Event('open')
-                    this.onopen?.(openEvent)
-                    this.dispatch('open', openEvent)
+                    this.onopen?.(new Event('open'))
                     if (url.includes('/client/ws/gpt')) {
                         this.emit({
                             type: 'snapshot',
@@ -109,11 +125,7 @@ test('AI workspace can create a project and run a terminal command against the a
                             type: 'prompt_complete',
                             conversationId,
                             clientName: 'local-32b',
-                            content: [
-                                'Preparing a remote project and verifying it from the share terminal.',
-                                '<hanasand-tool>{"action":"create_project","projectName":"Northstar Admin","vmName":"northstar-admin"}</hanasand-tool>',
-                                '<hanasand-tool>{"action":"run_terminal_command","command":"pwd && ls","timeoutMs":4000}</hanasand-tool>',
-                            ].join('\n\n'),
+                            content,
                             metrics: {
                                 conversationId,
                                 status: 'idle',
@@ -148,44 +160,19 @@ test('AI workspace can create a project and run a terminal command against the a
             }
 
             close() {
-                this.readyState = MockWebSocket.CLOSED
-                const event = new CloseEvent('close')
-                this.onclose?.(event)
-                this.dispatch('close', event)
+                this.readyState = MockHanasandSocket.CLOSED
+                this.onclose?.(new CloseEvent('close'))
             }
 
             private emit(payload: unknown) {
-                const event = new MessageEvent('message', { data: JSON.stringify(payload) })
-                this.onmessage?.(event)
-                this.dispatch('message', event)
-            }
-
-            addEventListener(type: string, listener: (event: Event | MessageEvent<string> | CloseEvent) => void) {
-                this.listeners[type] = [...(this.listeners[type] || []), listener]
-            }
-
-            removeEventListener(type: string, listener: (event: Event | MessageEvent<string> | CloseEvent) => void) {
-                this.listeners[type] = (this.listeners[type] || []).filter((entry) => entry !== listener)
-            }
-
-            private dispatch(type: string, event: Event | MessageEvent<string> | CloseEvent) {
-                for (const listener of this.listeners[type] || []) {
-                    listener(event)
-                }
+                this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(payload) }))
             }
         }
 
-        Object.defineProperty(window, 'WebSocket', {
-            configurable: true,
-            writable: true,
-            value: MockWebSocket,
-        })
-        Object.defineProperty(globalThis, 'WebSocket', {
-            configurable: true,
-            writable: true,
-            value: MockWebSocket,
-        })
-    })
+        ;(window as typeof window & {
+            __HANASAND_CREATE_SOCKET__?: (url: string) => WebSocket
+        }).__HANASAND_CREATE_SOCKET__ = (url: string) => new MockHanasandSocket(url) as unknown as WebSocket
+    }, promptCompleteContent)
 
     const page = await context.newPage()
 
@@ -226,6 +213,7 @@ test('AI workspace can create a project and run a terminal command against the a
     await page.route('https://cdn.hanasand.com/api/share', async (route) => {
         const body = route.request().postDataJSON() as {
             id: string
+            includeTree?: boolean
             name?: string
             path?: string
             content?: string
@@ -257,6 +245,7 @@ test('AI workspace can create a project and run a terminal command against the a
                 content: entry.content,
                 owner: 'playwright-user',
                 parent,
+                tree: body.includeTree ? [] : undefined,
             }),
         })
     })
@@ -264,10 +253,17 @@ test('AI workspace can create a project and run a terminal command against the a
     await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/tree\/.+/, async (route) => {
         const rootId = route.request().url().split('/').pop() || ''
 
-        const buildTree = (parentId: string) => (treeChildren.get(parentId) || [])
+        type MockTreeNode = {
+            id: string
+            name: string
+            type: 'folder' | 'file'
+            children: MockTreeNode[]
+        }
+
+        const buildTree = (parentId: string): MockTreeNode[] => (treeChildren.get(parentId) || [])
             .map((childId) => shareState.get(childId))
             .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-            .map((entry) => ({
+            .map((entry): MockTreeNode => ({
                 id: entry.id,
                 name: entry.name,
                 type: entry.type === 'folder' ? 'folder' : 'file',
@@ -291,15 +287,24 @@ test('AI workspace can create a project and run a terminal command against the a
     })
 
     await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const url = route.request().url()
+        if (url.includes('/share/tree/') || url.includes('/share/user/')) {
+            await route.fallback()
+            return
+        }
+
         const method = route.request().method()
-        const shareId = route.request().url().split('/').pop() || ''
+        const shareId = url.split('/').pop() || ''
         const existing = shareState.get(shareId)
 
         if (method === 'GET') {
             await route.fulfill({
                 status: existing ? 200 : 404,
                 contentType: 'application/json',
-                body: JSON.stringify(existing || { message: 'not found' }),
+                body: JSON.stringify(existing ? {
+                    ...existing,
+                    tree: existing.type === 'folder' ? [] : undefined,
+                } : { message: 'not found' }),
             })
             return
         }
@@ -324,7 +329,10 @@ test('AI workspace can create a project and run a terminal command against the a
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify(next),
+                body: JSON.stringify({
+                    ...next,
+                    tree: next.type === 'folder' ? [] : undefined,
+                }),
             })
             return
         }
@@ -335,23 +343,131 @@ test('AI workspace can create a project and run a terminal command against the a
     await page.goto('/ai')
     await expect(page.getByText('Your chats stay attached to repos and shares.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible()
-    await expect(page.getByText('1 model connected')).toBeVisible()
+    await expect(page.getByText('1 model connected')).toBeVisible({ timeout: 15000 })
+
+    return {
+        context,
+        page,
+        shareState,
+        treeChildren,
+        getVmName: () => vmName,
+    }
+}
+
+function listWorkspacePaths({
+    rootId,
+    shareState,
+    treeChildren,
+}: {
+    rootId: string
+    shareState: Map<string, ShareEntry>
+    treeChildren: Map<string, string[]>
+}) {
+    const paths: string[] = []
+
+    const visit = (parentId: string, prefix = '') => {
+        for (const childId of treeChildren.get(parentId) || []) {
+            const entry = shareState.get(childId)
+            if (!entry) {
+                continue
+            }
+
+            const path = prefix ? `${prefix}/${entry.name}` : entry.name
+            paths.push(path)
+            if (entry.type === 'folder') {
+                visit(childId, path)
+            }
+        }
+    }
+
+    visit(rootId)
+    return paths.sort()
+}
+
+test('AI workspace can create a project and run a terminal command against the attached share', async ({ browser, baseURL }) => {
+    const { context, page, shareState, getVmName } = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: [
+            'Preparing a remote project and verifying it from the share terminal.',
+            '<hanasand-tool>{"action":"create_project","projectName":"Northstar Admin","vmName":"northstar-admin"}</hanasand-tool>',
+            '<hanasand-tool>{"action":"run_terminal_command","command":"pwd && ls","timeoutMs":4000}</hanasand-tool>',
+        ].join('\n\n'),
+    })
 
     await page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill('Create a project and verify it from the terminal.')
     await page.getByRole('button', { name: 'Send' }).click()
 
     await expect(page.getByText('Preparing a remote project and verifying it from the share terminal.')).toBeVisible()
-    await expect(page.getByText(/Created project workspace for Northstar Admin/)).toBeVisible()
-    await expect(page.getByText(/Ran terminal command on share/)).toBeVisible()
-    await expect(page.getByText('/workspace/northstar-admin')).toBeVisible()
+    await expect(page.getByText(/Created project workspace for Northstar Admin/).first()).toBeVisible()
+    await expect(page.getByText(/Ran terminal command on share/).first()).toBeVisible()
+    await expect(page.getByText('/workspace/northstar-admin').first()).toBeVisible()
 
     const terminalCommand = await page.evaluate(() => (window as typeof window & {
         __lastTerminalCommand?: string
     }).__lastTerminalCommand || '')
-    expect(vmName).toBe('northstar-admin')
+    expect(getVmName()).toBe('northstar-admin')
     expect(terminalCommand).toBe('pwd && ls')
     expect([...shareState.values()].some((entry) => entry.path === 'README.md')).toBeTruthy()
     expect([...shareState.values()].some((entry) => entry.path === 'package.json')).toBeTruthy()
+
+    await context.close()
+})
+
+test('AI workspace can scaffold a Next.js and Docker starter directly into the attached share', async ({ browser, baseURL }) => {
+    const { context, page, shareState, treeChildren, getVmName } = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: [
+            'Scaffolding a Docker-ready starter directly in the attached workspace.',
+            '<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Moonbase Console"}</hanasand-tool>',
+        ].join('\n\n'),
+    })
+
+    await page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill('Scaffold a Docker-ready Next.js workspace.')
+    await page.getByRole('button', { name: 'Send' }).click()
+
+    await expect(page.getByText('Scaffolding a Docker-ready starter directly in the attached workspace.')).toBeVisible()
+    await expect(page.getByText(/Scaffolded a Next\.js \+ Docker workspace for Moonbase Console/).first()).toBeVisible()
+
+    const rootEntry = [...shareState.values()].find((entry) => entry.type === 'folder' && entry.parent === '')
+    expect(rootEntry).toBeTruthy()
+    expect(rootEntry?.name).toBe('moonbase-console')
+    expect(rootEntry?.path).toBe('moonbase-console')
+    expect(getVmName()).toBe('')
+
+    const workspacePaths = listWorkspacePaths({
+        rootId: rootEntry!.id,
+        shareState,
+        treeChildren,
+    })
+
+    expect(workspacePaths).toEqual(expect.arrayContaining([
+        '.dockerignore',
+        '.gitignore',
+        'Dockerfile',
+        'README.md',
+        'app',
+        'app/globals.css',
+        'app/layout.tsx',
+        'app/page.tsx',
+        'docker-compose.yml',
+        'next-env.d.ts',
+        'next.config.ts',
+        'package.json',
+        'public',
+        'public/.gitkeep',
+        'tsconfig.json',
+    ]))
+
+    const readmeEntry = [...shareState.values()].find((entry) => entry.name === 'README.md')
+    const composeEntry = [...shareState.values()].find((entry) => entry.name === 'docker-compose.yml')
+    const dockerfileEntry = [...shareState.values()].find((entry) => entry.name === 'Dockerfile')
+
+    expect(readmeEntry?.content).toContain('# Moonbase Console')
+    expect(readmeEntry?.content).toContain('HOST_PORT=3200 docker compose up --build')
+    expect(composeEntry?.content).toContain('${HOST_PORT:-3000}:3000')
+    expect(dockerfileEntry?.content).toContain('FROM node:20-alpine AS deps')
 
     await context.close()
 })

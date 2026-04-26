@@ -116,7 +116,7 @@ export default function LogsPageClient({
                 <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
                 <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
                 <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
-                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Native host logs' value={String(nativeLiveCount)} note='Journal and auth' />
+                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Native host logs' value={String(nativeLiveCount)} note='Journal, auth, ssh' />
             </section>
 
             <section className='glass-card rounded-[1.4rem] p-4'>

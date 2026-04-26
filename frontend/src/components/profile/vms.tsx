@@ -19,7 +19,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
             const updatedVMs = await getVMs(id)
             setVms(updatedVMs)
         } else {
-            return router.push(`/login?internal=true&path=/profile`)
+            return router.push('/login?internal=true&path=/profile')
         }
     }
 
@@ -41,9 +41,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     }
                 >
                     <div className='p-px'>
-                        <div className="py-0.5 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-sm flex gap-1 items-center px-4">
-                            <Info className="h-3 w-3 stroke-blue-400" />
-                            <span className="text-bright/70 text-[0.7rem]">Managed</span>
+                        <div className='py-0.5 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-sm flex gap-1 items-center px-4'>
+                            <Info className='h-3 w-3 stroke-blue-400' />
+                            <span className='text-bright/70 text-[0.7rem]'>Managed</span>
                         </div>
                     </div>
                 </Tooltip>

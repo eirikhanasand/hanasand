@@ -72,8 +72,8 @@ export default function Certificates({ certificates: serverCertificates }: { cer
         const newCertificateNameInput = getCookie('newCertificateNameInput')
         const newCertificateKeyInput = getCookie('newCertificateKeyInput')
         // const name = getCookie('name')
-        setFormData(prev => ({ 
-            ...prev, 
+        setFormData(prev => ({
+            ...prev,
             // Commented out - Might confuse the user until group logic has been settled.
             // owner: name || ''
             name: newCertificateNameInput || '',
@@ -118,11 +118,11 @@ export default function Certificates({ certificates: serverCertificates }: { cer
 
                         <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
                             <CertificateInputField
-                                label="Name"
-                                name="name"
+                                label='Name'
+                                name='name'
                                 value={formData.name ?? ''}
                                 onChange={handleChange}
-                                placeholder="My SSL Certificate"
+                                placeholder='My SSL Certificate'
                             />
                             {/* Commented out - Might confuse the user until group logic has been settled. */}
                             {/* <CertificateInputField
@@ -133,11 +133,11 @@ export default function Certificates({ certificates: serverCertificates }: { cer
                                 placeholder="User, team or group name"
                             /> */}
                             <CertificateInputField
-                                label="Public Key"
-                                name="public_key"
+                                label='Public Key'
+                                name='public_key'
                                 value={formData.public_key ?? ''}
                                 onChange={handleChange}
-                                placeholder="-----BEGIN PUBLIC KEY----- ..."
+                                placeholder='-----BEGIN PUBLIC KEY----- ...'
                                 textarea
                             />
                             <Notify background='bg-dark' fullWidth message={message} />

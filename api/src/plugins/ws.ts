@@ -1,6 +1,5 @@
 import fp from 'fastify-plugin'
 import WebSocket from 'ws'
-import type { RawData } from 'ws'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { registerClient } from '#utils/ws/registerClient.ts'
 import { removeClient } from '#utils/ws/removeClient.ts'
@@ -8,7 +7,7 @@ import config from '#constants'
 import followTest from '../handlers/test/follow.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
 
-type PendingUpdates = { 
+type PendingUpdates = {
     content: string
     timer: NodeJS.Timeout
 }
@@ -23,9 +22,9 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
     // pwned
     fastify.get('/api/ws/pwned/:id', { websocket: true }, (connection, req: FastifyRequest) => {
         const id = (req.params as { id: string}).id
-        
+
         registerClient(id, connection, pwnedClients)
-        
+
         const internalWs = new WebSocket(`${config.pwned_ws}/${id}`)
 
         internalWs.on('message', (msg) => {
@@ -53,7 +52,7 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
         internalWs.on('close', () => {
             try {
                 connection.close()
-            } catch (error) { 
+            } catch (error) {
                 console.log(`Error occured while closing connection for id ${id}: ${error}`)
             }
         })

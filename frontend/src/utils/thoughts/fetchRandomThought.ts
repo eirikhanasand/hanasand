@@ -9,7 +9,7 @@ export default async function fetchRandomThought(): Promise<Thought | null> {
         })
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch random thought.`)
+            throw new Error('Failed to fetch random thought.')
         }
 
         const data = await response.json()

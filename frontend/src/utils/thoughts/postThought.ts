@@ -33,7 +33,7 @@ export async function postThought(title: string): Promise<{ status: number, mess
         if (!response.ok) {
             throw new Error(await response.text())
         }
-    
+
         const data = await response.json()
         return { status: response.status, message: data }
     } catch (error) {

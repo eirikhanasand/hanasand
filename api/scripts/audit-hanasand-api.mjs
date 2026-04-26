@@ -94,7 +94,7 @@ async function request(label, path, {
     }
     const elapsed = Math.round(performance.now() - started)
     const text = await res.text()
-    let parsed = text
+    let parsed
     try {
         parsed = text ? JSON.parse(text) : null
     } catch {
@@ -135,8 +135,8 @@ async function cleanup() {
     await pool.query('DELETE FROM vm_shutdown WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM vms WHERE name = $1', [`vm-${runId}`]).catch(() => {})
     await pool.query('DELETE FROM user_roles WHERE user_id = $1', [runId]).catch(() => {})
-    await pool.query("DELETE FROM roles WHERE id LIKE 'role_audit_%'").catch(() => {})
-    await pool.query("DELETE FROM service_logs WHERE metadata->>'runId' = $1", [runId]).catch(() => {})
+    await pool.query('DELETE FROM roles WHERE id LIKE \'role_audit_%\'').catch(() => {})
+    await pool.query('DELETE FROM service_logs WHERE metadata->>\'runId\' = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM tokens WHERE id = $1', [runId]).catch(() => {})
     await pool.query('DELETE FROM users WHERE id = $1', [runId]).catch(() => {})
 }
@@ -361,7 +361,11 @@ async function main() {
     await request('GET /docker', '/docker', { headers: authHeaders(), expect: expectObject })
 
     const failed = results.filter(result => !result.ok)
-    console.table(results.map(({ body, ...result }) => result))
+    console.table(results.map((result) => {
+        const { body, ...rest } = result
+        void body
+        return rest
+    }))
     if (failed.length) {
         console.error(JSON.stringify(failed, null, 2))
         process.exitCode = 1

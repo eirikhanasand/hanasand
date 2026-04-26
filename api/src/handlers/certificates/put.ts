@@ -13,7 +13,7 @@ export default async function putCertificate(req: FastifyRequest, res: FastifyRe
     }
 
     if (!id) {
-        return res.status(400).send({ error: "No certificate id provided" })
+        return res.status(400).send({ error: 'No certificate id provided' })
     }
 
     try {
@@ -34,13 +34,13 @@ export default async function putCertificate(req: FastifyRequest, res: FastifyRe
         }
 
         if (fields.length === 0) {
-            return res.status(400).send({ error: "No fields to update" })
+            return res.status(400).send({ error: 'No fields to update' })
         }
 
         values.push(id)
         const query = `UPDATE certificates SET ${fields.join(', ')} WHERE id = $${idx}`
 
-        const result = await run(query, values)
+        await run(query, values)
 
         return res.send({ ok: true })
     } catch (err: any) {

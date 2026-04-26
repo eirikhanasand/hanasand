@@ -57,10 +57,10 @@ function Social() {
             {social.map((social) => {
                 return (
                     <a href={social.url} key={social.name}>
-                        <Image 
-                            className='socialImage' 
-                            alt={social.name} 
-                            src={social.icon} 
+                        <Image
+                            className='socialImage'
+                            alt={social.name}
+                            src={social.icon}
                             width={450}
                             height={900}
                         />

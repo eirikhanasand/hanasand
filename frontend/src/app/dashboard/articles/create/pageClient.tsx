@@ -16,7 +16,7 @@ export default function CreateClient() {
     const [editing, setEditing] = useState(false)
     const router = useRouter()
     const name = (id || '').replace('.md', '')
-    const text = editing ? `Creating ${name}` : `Start writing...`
+    const text = editing ? `Creating ${name}` : 'Start writing...'
 
     async function handleCreate() {
         if (!id) {
@@ -66,10 +66,10 @@ export default function CreateClient() {
                 {content.length > 10 ? (
                     <div>
                         <h1 className='font-semibold z-10'>Article ID</h1>
-                        <input 
-                            value={id || ''} 
+                        <input
+                            value={id || ''}
                             placeholder='example.md'
-                            onChange={(e) => setId(e.target.value.replaceAll('.md', ''))} 
+                            onChange={(e) => setId(e.target.value.replaceAll('.md', ''))}
                             className='bg-light rounded-lg p-2 mt-4 w-full'
                         />
                     </div>

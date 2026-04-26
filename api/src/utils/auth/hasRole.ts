@@ -9,12 +9,12 @@ type Valid = {
 
 /**
  * Role wrapper helper function. Used to check whether a role has higher access
- * than the target role, before allowing API access, for example when updating 
+ * than the target role, before allowing API access, for example when updating
  * or deleting roles.
- * 
+ *
  * @param req Fastify Request
  * @param res Fastify Response
- * 
+ *
  * @returns Object with a `valid` parameter, and optionally an `error` parameter
  * if an error occured while checking the roles.
  */

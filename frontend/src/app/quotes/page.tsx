@@ -10,7 +10,7 @@ export default function page() {
                 {shuffledQuotes.concat(shuffledQuotes).concat(shuffledQuotes).map((quote, index) => (
                     <div
                         key={index}
-                        className='w-full text-center max-w-[160px] mx-auto text-gray-500 text-2xs'
+                        className='mx-auto w-full max-w-40 text-center text-2xs text-gray-500'
                     >
                         <h1>{quote}</h1>
                     </div>

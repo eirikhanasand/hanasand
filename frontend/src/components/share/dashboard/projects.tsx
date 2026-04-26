@@ -22,12 +22,12 @@ export default async function Shares() {
                     <h1 className='text-lg font-semibold'>Shares</h1>
                     <p className='mt-1 text-sm text-bright/45'>Open an existing workspace or create a new one.</p>
                 </div>
-                <Link href='/s' className='flex gap-2 rounded-xl px-4 py-2.5 outline outline-dark transition-colors hover:bg-green-500/20 hover:outline-green-500/35'>
+                <Link href='/s?mode=share' className='flex gap-2 rounded-xl px-4 py-2.5 outline outline-dark transition-colors hover:bg-green-500/20 hover:outline-green-500/35'>
                     <Plus />
                     <h1 className='select-none font-semibold'>Create</h1>
                 </Link>
             </div>
-            {typeof shares === 'string' 
+            {typeof shares === 'string'
                 ? <h1 className='text-red-500 font-sm'>{shares}</h1>
                 : (shares as Share[]).map((share) => <DashboardShare key={share.id} share={share} />)}
         </div>

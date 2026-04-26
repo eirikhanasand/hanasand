@@ -1,8 +1,16 @@
 import config from '@/config'
+import RequestMetricCard from '@/components/box/requestMetricCard'
 import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
+import {
+    formatHeaders,
+    formatRequestLine,
+    sendFromBrowser,
+    sendViaShareVm,
+    withRequestDetails,
+} from '@/utils/box/requestTool'
 import { Bot, Clock3, Play, Plus, Server, Trash2 } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import type { MouseEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './types'
 
@@ -219,9 +227,13 @@ export default function NewRequest({
 
             <section className='grid min-h-0 gap-3 self-start rounded-xl border border-white/10 bg-white/5 p-4 lg:h-full lg:grid-rows-[auto_auto_minmax(0,1fr)]'>
                 <div className='grid gap-2 sm:grid-cols-3'>
-                    <MetricCard label='Status' value={responseStatus} tone={response?.ok ? 'good' : response?.error ? 'bad' : 'neutral'} />
-                    <MetricCard label='Source' value={executionMode} tone='neutral' />
-                    <MetricCard
+                    <RequestMetricCard
+                        label='Status'
+                        value={responseStatus}
+                        tone={response?.ok ? 'good' : response?.error ? 'bad' : 'neutral'}
+                    />
+                    <RequestMetricCard label='Source' value={executionMode} tone='neutral' />
+                    <RequestMetricCard
                         label='Latency'
                         value={response?.elapsed_ms !== undefined ? `${response.elapsed_ms} ms` : 'Pending'}
                         tone='neutral'
@@ -270,119 +282,4 @@ export default function NewRequest({
             </section>
         </div>
     )
-}
-
-function MetricCard({
-    label,
-    value,
-    tone,
-    icon,
-}: {
-    label: string
-    value: string
-    tone: 'good' | 'bad' | 'neutral'
-    icon?: ReactNode
-}) {
-    const toneClass = tone === 'good'
-        ? 'text-emerald-300'
-        : tone === 'bad'
-            ? 'text-red-300'
-            : 'text-bright'
-
-    return (
-        <div className='rounded-xl border border-white/8 bg-black/20 p-3'>
-            <div className='mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-bright/40'>
-                {icon}
-                {label}
-            </div>
-            <div className={`text-sm font-semibold ${toneClass}`}>{value}</div>
-        </div>
-    )
-}
-
-async function sendViaShareVm({
-    shareAlias,
-    method,
-    url,
-    headers,
-    body,
-}: {
-    shareAlias: string
-    method: string
-    url: string
-    headers: Record<string, string>
-    body: string
-}): Promise<ToolResponse> {
-    const result = await fetch(`${config.url.cdn}/share/request/${shareAlias}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ method, url, headers, body }),
-    })
-
-    return result.json().catch(() => ({ error: 'Invalid response.' }))
-}
-
-async function sendFromBrowser({
-    method,
-    url,
-    headers,
-    body,
-}: {
-    method: string
-    url: string
-    headers: Record<string, string>
-    body: string
-}): Promise<ToolResponse> {
-    const normalizedMethod = method.toUpperCase()
-    const started = performance.now()
-
-    try {
-        const response = await fetch(url, {
-            method: normalizedMethod,
-            headers,
-            body: ['GET', 'HEAD'].includes(normalizedMethod) ? undefined : body,
-        })
-
-        const text = await response.text()
-        return {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok,
-            elapsed_ms: Math.round(performance.now() - started),
-            headers: Object.fromEntries(response.headers.entries()),
-            body: text,
-        }
-    } catch (error) {
-        return {
-            error: error instanceof Error ? error.message : String(error),
-            elapsed_ms: Math.round(performance.now() - started),
-        }
-    }
-}
-
-function withRequestDetails(response: ToolResponse, request: NonNullable<ToolResponse['request']>): ToolResponse {
-    return {
-        ...response,
-        request: response.request ?? request
-    }
-}
-
-function formatHeaders(headers?: Record<string, string>) {
-    if (!headers || Object.keys(headers).length === 0) {
-        return 'No headers.'
-    }
-
-    return Object.entries(headers)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n')
-}
-
-function formatRequestLine(request?: ToolResponse['request']) {
-    if (!request) {
-        return 'Request details will appear here.'
-    }
-
-    return `${request.method} ${request.url}`
 }

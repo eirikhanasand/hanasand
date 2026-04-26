@@ -13,6 +13,9 @@ export default async function putAiConversation(req: FastifyRequest, res: Fastif
     if (!existing) {
         return res.status(404).send({ error: 'Conversation not found.' })
     }
+    if (existing.access_role === 'reviewer') {
+        return res.status(403).send({ error: 'Reviewer access is read-only.' })
+    }
 
     const {
         title,
@@ -50,7 +53,16 @@ export default async function putAiConversation(req: FastifyRequest, res: Fastif
             archived_at = CASE WHEN $17::boolean THEN $18 ELSE archived_at END,
             updated_at = NOW()
         WHERE id = $1
-          AND owner_id = $2
+          AND (
+              owner_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM ai_conversation_collaborators
+                  WHERE conversation_id = ai_conversations.id
+                    AND user_id = $2
+                    AND role = 'editor'
+              )
+          )
     `, [
         id,
         userId,

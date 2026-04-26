@@ -20,7 +20,12 @@ export default async function AIConversationPage({
         <AIPageClient
             initialConversations={workspace.conversations}
             initialRepositories={workspace.repositories}
+            initialDeployments={workspace.deployments}
+            initialReleases={workspace.releases}
+            initialDeployQuota={workspace.deployQuota}
+            initialOwnershipSummary={workspace.ownershipSummary}
             initialShares={initialShares}
+            initialRuntimeState={workspace.runtimeState}
             isAuthenticated={Boolean(id && token)}
             initialConversationId={conversationId}
             mode='workspace'

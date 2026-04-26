@@ -43,8 +43,6 @@ type EmailRecord = {
 
 const CORE = 'urn:ietf:params:jmap:core'
 const MAIL = 'urn:ietf:params:jmap:mail'
-const SUBMISSION = 'urn:ietf:params:jmap:submission'
-const SIEVE = 'urn:ietf:params:jmap:sieve'
 
 export async function getMailSession(username: string, password: string) {
     const response = await fetch(new URL('/jmap/session', ensureTrailingSlash(mailConfig.internalUrl)), {
@@ -227,7 +225,9 @@ export async function listInboxMessagesForFiltering(username: string, password: 
     return listMessages(username, password, mailboxId, 100)
 }
 
-export async function getSieveScript(_username: string, _password: string) {
+export async function getSieveScript(username: string, password: string) {
+    void username
+    void password
     return null
 }
 
@@ -244,7 +244,7 @@ async function getEmailsByIds(username: string, password: string, session: JmapS
     return response.list || []
 }
 
-async function jmapCall<T = any>(username: string, password: string, session: JmapSession, methodCalls: Array<[string, Record<string, unknown>, string]>, using: string[] = [CORE, MAIL]) {
+async function jmapCall<T = unknown>(username: string, password: string, session: JmapSession, methodCalls: Array<[string, Record<string, unknown>, string]>, using: string[] = [CORE, MAIL]) {
     const response = await fetch(toApiUrl(session.apiUrl), {
         method: 'POST',
         headers: {

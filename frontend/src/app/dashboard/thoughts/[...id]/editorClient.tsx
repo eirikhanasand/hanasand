@@ -8,10 +8,10 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export default function EditorClient({ thought }: { thought: Thought }) {
-    const { condition: error, setCondition: setError } = useClearStateAfter()
+    const { setCondition: setError } = useClearStateAfter()
     const [editing, setEditing] = useState(false)
     const router = useRouter()
-    const text = editing ? `Editing thought` : `Click to edit thought`
+    const text = editing ? 'Editing thought' : 'Click to edit thought'
 
     async function handleDelete() {
         const result = await deleteThought(thought.id)

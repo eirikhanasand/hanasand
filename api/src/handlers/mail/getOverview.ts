@@ -28,20 +28,20 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
             return res
                 .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
                 .send({
-                actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
-                mailboxUser: access.targetUser,
-                mailboxAddress: access.address,
-                mailPassword: access.password,
-                accessibleAccounts,
-                mailboxes: [],
-                selectedMailboxId: null,
-                messages: [],
-                selectedMessage: null,
-                filters: [],
-                recentRecipients,
-                health,
-                settings: settingsFor(access),
-            })
+                    actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
+                    mailboxUser: access.targetUser,
+                    mailboxAddress: access.address,
+                    mailPassword: access.password,
+                    accessibleAccounts,
+                    mailboxes: [],
+                    selectedMailboxId: null,
+                    messages: [],
+                    selectedMessage: null,
+                    filters: [],
+                    recentRecipients,
+                    health,
+                    settings: settingsFor(access),
+                })
         }
 
         await applyMailRules({
@@ -66,20 +66,20 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
         return res
             .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
             .send({
-            actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
-            mailboxUser: access.targetUser,
-            mailboxAddress: access.address,
-            mailPassword: access.password,
-            accessibleAccounts,
-            mailboxes: refreshedMailboxData.mailboxes,
-            selectedMailboxId,
-            messages,
-            selectedMessage,
-            filters,
-            recentRecipients,
-            health,
-            settings: settingsFor(access),
-        })
+                actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
+                mailboxUser: access.targetUser,
+                mailboxAddress: access.address,
+                mailPassword: access.password,
+                accessibleAccounts,
+                mailboxes: refreshedMailboxData.mailboxes,
+                selectedMailboxId,
+                messages,
+                selectedMessage,
+                filters,
+                recentRecipients,
+                health,
+                settings: settingsFor(access),
+            })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to load mailbox.' })

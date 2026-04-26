@@ -21,7 +21,7 @@ export default async function checkPwned(password: string): Promise<{ count: num
 
         const data = await response.json()
         return data
-    } catch (error) {
+    } catch {
         clearTimeout(timeout)
         console.log('Unable to fetch pwned')
         return { ok: true, error: 'Unable to fetch pwned' }

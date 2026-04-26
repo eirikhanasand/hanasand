@@ -37,6 +37,21 @@ next-env.d.ts
 
 # gpts
 /gpt/models/*
+/gpt/api/runtime/orchestration/
+/gpt/api/runtime/
+/gpt/runtime/
+/gpt/api/sandbox/
+/gpt/sandbox/
+/sandbox/
+/agents/control-plane/
+/agents/references/
+/agents/work-packet-branches/
+/agents/work-packets/
+/agents/work-results/
 
 # mail runtime data
 /mail/stalwart/
+
+# App
+.artifacts/
+.expo

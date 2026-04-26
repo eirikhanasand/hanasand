@@ -1,13 +1,13 @@
 import config from '@/config'
 import { redirect } from 'next/navigation'
 
-type FetchRoleProps = { 
+type FetchRoleProps = {
     id: string
     token: string
     role: string
 }
 
-type RoleAssignmentResponse = { 
+type RoleAssignmentResponse = {
     status: boolean
     data: Role | null
 }

@@ -12,17 +12,17 @@ export default async function deleteVMMetrics(req: FastifyRequest, res: FastifyR
 
     const { id } = req.params as { id: string }
     if (!id) {
-        return res.status(400).send({ error: "Missing metrics id" })
+        return res.status(400).send({ error: 'Missing metrics id' })
     }
 
     try {
         const result = await run(
-            "DELETE FROM vm_metrics WHERE id = $1 RETURNING *",
+            'DELETE FROM vm_metrics WHERE id = $1 RETURNING *',
             [id]
         )
 
         if (result.rowCount === 0) {
-            return res.status(404).send({ error: "Metrics not found" })
+            return res.status(404).send({ error: 'Metrics not found' })
         }
 
         return res.send({
@@ -31,6 +31,6 @@ export default async function deleteVMMetrics(req: FastifyRequest, res: FastifyR
         })
     } catch (error) {
         console.error(error)
-        return res.status(500).send({ error: "Failed to delete vm metrics" })
+        return res.status(500).send({ error: 'Failed to delete vm metrics' })
     }
 }

@@ -43,7 +43,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
             setVM(vmResponse[0])
         }
 
-    
+
         const detailsResponse = await getVMDetails(serverVM.name, token, id)
         if (detailsResponse) {
             setDetails(detailsResponse)
@@ -56,15 +56,15 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
     }
 
     return (
-        <div className="grid gap-2">
+        <div className='grid gap-2'>
             <div className='flex w-full justify-between'>
-                <h1 className="font-semibold text-2xl">{vm.name}</h1>
+                <h1 className='font-semibold text-2xl'>{vm.name}</h1>
                 <div
-                    className="flex justify-between items-center cursor-pointer gap-2 text-bright/80 rounded-md hover:bg-bright/5 px-3 group"
+                    className='flex justify-between items-center cursor-pointer gap-2 text-bright/80 rounded-md hover:bg-bright/5 px-3 group'
                     onClick={handleRefresh}
                 >
                     <h1 className='text-sm'>Last checked {smallDate(vm.last_checked)}</h1>
-                    <button className="group-hover:text-green-400 group-hover:cursor-pointer">
+                    <button className='group-hover:text-green-400 group-hover:cursor-pointer'>
                         <RefreshCcw className='w-4 h-4' />
                     </button>
                 </div>

@@ -6,9 +6,9 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 export default function LogoutClient({ logoutServer }: { logoutServer: boolean }) {
     const router = useRouter()
-    const { condition: logout } = useClearStateAfter({ 
-        initialState: logoutServer, 
-        timeout: 5000, 
+    const { condition: logout } = useClearStateAfter({
+        initialState: logoutServer,
+        timeout: 5000,
         onClear: () => router.push('/')
     })
 

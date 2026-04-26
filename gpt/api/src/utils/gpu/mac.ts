@@ -1,4 +1,4 @@
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 
 type GpuMetrics = {
     hwActiveFrequency: string                       // "389 MHz"
@@ -9,11 +9,30 @@ type GpuMetrics = {
     power: string                                   // "50 mW"
 }
 
+const FALLBACK_GPU_METRICS: GpuMetrics = {
+    hwActiveFrequency: '',
+    hwActiveResidency: 0,
+    hwFrequencyBreakdown: {},
+    swRequestedState: {},
+    idleResidency: 1,
+    power: '',
+}
+
+const POWERMETRICS_TIMEOUT_MS = 1500
+const POWERMETRICS_ENABLED = process.env.GPT_ENABLE_POWERMETRICS === '1'
+
 export default function getGpuUsage(): Promise<GpuMetrics> {
-    return new Promise((resolve, reject) => {
-        exec('sudo powermetrics --samplers gpu_power -i500 -n1', (err, stdout, stderr) => {
+    if (!POWERMETRICS_ENABLED) {
+        return Promise.resolve(FALLBACK_GPU_METRICS)
+    }
+
+    return new Promise((resolve) => {
+        execFile('powermetrics', ['--samplers', 'gpu_power', '-i500', '-n1'], {
+            timeout: POWERMETRICS_TIMEOUT_MS,
+            killSignal: 'SIGKILL',
+        }, (err, stdout) => {
             if (err) {
-                return reject(err)
+                return resolve(FALLBACK_GPU_METRICS)
             }
 
             try {
@@ -21,8 +40,8 @@ export default function getGpuUsage(): Promise<GpuMetrics> {
 
                 let hwActiveFrequency = ''
                 let hwActiveResidency = 0
-                let hwFrequencyBreakdown: Record<string, number> = {}
-                let swRequestedState: Record<string, number> = {}
+                const hwFrequencyBreakdown: Record<string, number> = {}
+                const swRequestedState: Record<string, number> = {}
                 let idleResidency = 0
                 let power = ''
 
@@ -41,7 +60,7 @@ export default function getGpuUsage(): Promise<GpuMetrics> {
                             hwActiveResidency = parseFloat(match[0]) / 100
 
                             // Breakdown by MHz
-                            const freqParts = trimmed.split('(')[1].split(')')[0].split(/\s+/);
+                            const freqParts = trimmed.split('(')[1].split(')')[0].split(/\s+/)
                             for (let i = 0; i < freqParts.length; i += 2) {
                                 const freq = freqParts[i].replace('MHz:', '')
                                 const percent = parseFloat(freqParts[i + 1].replace('%', '')) / 100
@@ -52,7 +71,7 @@ export default function getGpuUsage(): Promise<GpuMetrics> {
 
                     // GPU SW requested state
                     if (trimmed.startsWith('GPU SW requested state:')) {
-                        const match = trimmed.match(/\(.*\)/);
+                        const match = trimmed.match(/\(.*\)/)
                         if (match) {
                             const states = match[0].replace(/[()]/g, '').split(/\s+/)
                             for (let i = 0; i < states.length; i += 2) {
@@ -72,7 +91,7 @@ export default function getGpuUsage(): Promise<GpuMetrics> {
                     }
                 }
 
-                resolve({
+                return resolve({
                     hwActiveFrequency,
                     hwActiveResidency,
                     hwFrequencyBreakdown,
@@ -80,8 +99,8 @@ export default function getGpuUsage(): Promise<GpuMetrics> {
                     idleResidency,
                     power,
                 })
-            } catch (parseErr) {
-                reject(parseErr)
+            } catch {
+                return resolve(FALLBACK_GPU_METRICS)
             }
         })
     })

@@ -6,14 +6,14 @@ type PgError = Error & {
     code?: string
 }
 
-const { 
-    DB, 
-    DB_USER, 
+const {
+    DB,
+    DB_USER,
     DB_HOST,
-    DB_PASSWORD, 
-    DB_PORT, 
-    DB_MAX_CONN, 
-    DB_IDLE_TIMEOUT_MS, 
+    DB_PASSWORD,
+    DB_PORT,
+    DB_MAX_CONN,
+    DB_IDLE_TIMEOUT_MS,
     DB_TIMEOUT_MS
 } = config
 const { Pool } = pg

@@ -11,7 +11,7 @@ export function Toggle<T extends string | boolean>(props: {
     right: { value: T, text?: string, label?: string, icon?: ReactNode }
 }) {
     return (
-        <div className='inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1 text-xs text-bright/70'>
+        <div className='inline-flex rounded-full border border-white/10 bg-white/3 p-1 text-xs text-bright/70'>
             {[props.left, props.right].map(option => {
                 const active = option.value === props.value
                 return (
@@ -21,7 +21,7 @@ export function Toggle<T extends string | boolean>(props: {
                         onClick={() => props.onChange(option.value)}
                         aria-pressed={active}
                         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition ${
-                            active ? 'bg-white/[0.12] text-bright' : 'hover:bg-white/[0.05]'
+                            active ? 'bg-white/12 text-bright' : 'hover:bg-white/5'
                         }`}
                     >
                         {option.icon}
@@ -52,5 +52,5 @@ const severityTone: Record<SeverityLevel, string> = {
     high: 'border-orange-400/25 bg-orange-500/8 text-orange-100',
     medium: 'border-amber-300/25 bg-amber-400/8 text-amber-100',
     low: 'border-emerald-400/25 bg-emerald-500/8 text-emerald-100',
-    unknown: 'border-white/10 bg-white/[0.03] text-bright/70',
+    unknown: 'border-white/10 bg-white/3 text-bright/70',
 }

@@ -142,7 +142,7 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
             onClick={() => terminalRef.current?.focus()}
             className='h-full w-full rounded-md bg-[#11130f] px-2 py-1'
             data-share-terminal={share.alias}
-            data-testid="share-terminal-xterm"
+            data-testid='share-terminal-xterm'
         />
     )
 }

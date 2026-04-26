@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
     Archive,
     Clock3,
@@ -8,15 +8,12 @@ import {
     FolderInput,
     Forward,
     Inbox,
-    Mail,
     MailPlus,
     PanelLeftClose,
     PanelLeftOpen,
     Radar,
-    Paperclip,
     Reply,
     Search,
-    Send,
     Settings2,
     ShieldCheck,
     ShieldAlert,
@@ -28,49 +25,37 @@ import {
     createMailbox,
     deleteFilter,
     fetchMailOverview,
-    mailBlobUrl,
     messageAction,
     sendMail,
-    type DraftAttachment,
 } from '@/utils/mail/client'
-import type { MailAddress, MailAttachment, MailMessage, MailMessageSummary, MailOverview, RecentMailRecipient } from '@/utils/mail/types'
+import type { MailOverview } from '@/utils/mail/types'
 import { DashboardPage, dashboardPanelClass } from '@/components/dashboard/ui'
-import Image from 'next/image'
+import { Composer, MessageRow } from './mailWorkspaceParts'
+import {
+    ActionIconButton,
+    AttachmentPreview,
+    MailSketch,
+    buildMailFrameHtml,
+    composeFromReply,
+    emptyComposer,
+    formatDate,
+    formatMailboxAddress,
+    formatRelativeTime,
+    iconButton,
+    iconForMailbox,
+    runAction,
+    subtleInput,
+    toolbarButton,
+    withInlineAttachments,
+    type ComposerState,
+} from './utils'
 
 type Props = {
     mailboxUser?: string | null
 }
 
-type ComposerMode = 'new' | 'reply' | 'replyAll' | 'forward'
-
-type ComposerState = {
-    open: boolean
-    mode: ComposerMode
-    to: string
-    cc: string
-    bcc: string
-    subject: string
-    body: string
-    attachments: DraftAttachment[]
-}
-
-const emptyComposer: ComposerState = {
-    open: false,
-    mode: 'new',
-    to: '',
-    cc: '',
-    bcc: '',
-    subject: '',
-    body: '',
-    attachments: [],
-}
-
 const POLL_INTERVAL_MS = 10_000
 const STALE_AFTER_MS = 5 * 60_000
-
-const toolbarButton = 'inline-flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-medium text-bright/78 transition hover:border-white/18 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45'
-const iconButton = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-bright/72 transition hover:border-white/18 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45'
-const subtleInput = 'h-8 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-[12px] text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/[0.05]'
 
 export default function MailWorkspace({ mailboxUser }: Props) {
     const [overview, setOverview] = useState<MailOverview | null>(null)
@@ -256,7 +241,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             </div>
 
             {error && (
-                <div className='rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-100'>
+                <div className='rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100'>
                     {error}
                 </div>
             )}
@@ -306,7 +291,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                         setSelectedMailboxId(mailbox.id)
                                         void load({ mailboxId: mailbox.id, messageId: null })
                                     }}
-                                    className={`flex w-full items-center justify-between rounded-2xl border px-2.5 py-2 text-left text-[12px] transition ${
+                                    className={`flex w-full items-center justify-between rounded-2xl border px-2.5 py-2 text-left text-xs transition ${
                                         selectedMailboxId === mailbox.id
                                             ? 'border-orange-300/30 bg-orange-300/10 text-bright'
                                             : 'border-transparent text-bright/70 hover:border-white/10 hover:bg-white/4 hover:text-bright'
@@ -443,7 +428,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                                 className='min-w-0 rounded-2xl border border-white/8 bg-black/10 px-2.5 py-2'
                                             >
                                                 <div className='flex items-center justify-between gap-2'>
-                                                    <p className='min-w-0 text-[11px] font-medium text-bright/84 wrap-break-word'>{check.label}</p>
+                                                    <p className='min-w-0 wrap-break-word text-[11px] font-medium text-bright/84'>{check.label}</p>
                                                     <span className={`rounded-full px-2 py-0.5 text-[10px] ${
                                                         check.status === 'healthy'
                                                             ? 'bg-emerald-500/12 text-emerald-100'
@@ -502,7 +487,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                             />
                         ))}
                         {!filteredMessages.length && !loading && (
-                            <div className='rounded-2xl border border-dashed border-white/10 px-3 py-4 text-[12px] text-bright/42'>
+                            <div className='rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-bright/42'>
                                 {query ? 'Nothing in this mailbox matches the current search.' : 'This mailbox is quiet right now.'}
                             </div>
                         )}
@@ -510,13 +495,13 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </section>
 
                 <section className={`${dashboardPanelClass} order-2 p-3 xl:order-3`}>
-                    {loading && !overview && <div className='px-2 py-6 text-[12px] text-bright/42'>Loading mailbox…</div>}
-                    {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 px-4 py-8 text-[12px] text-bright/42'>Choose a message to read it here.</div>}
+                    {loading && !overview && <div className='px-2 py-6 text-xs text-bright/42'>Loading mailbox…</div>}
+                    {!loading && !selectedMessage && <div className='rounded-2xl border border-dashed border-white/10 px-4 py-8 text-xs text-bright/42'>Choose a message to read it here.</div>}
                     {selectedMessage && overview && (
                         <div className='grid gap-3'>
                             <div className='flex flex-wrap items-center justify-between gap-2 border-b border-white/8 pb-3'>
                                 <div className='min-w-0'>
-                                    <h2 className='truncate text-[18px] font-semibold tracking-[-0.03em] text-bright'>{selectedMessage.subject}</h2>
+                                    <h2 className='truncate text-lg font-semibold tracking-[-0.03em] text-bright'>{selectedMessage.subject}</h2>
                                     <div className='mt-1 grid gap-0.5 text-[11px] text-bright/52'>
                                         <p>From {selectedMessage.from.map(formatMailboxAddress).join(', ')}</p>
                                         <p>To {selectedMessage.to.map(formatMailboxAddress).join(', ')}</p>
@@ -693,486 +678,5 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 </div>
             )}
         </DashboardPage>
-    )
-}
-
-function MessageRow({ message, active, onClick }: {
-    message: MailMessageSummary
-    active: boolean
-    onClick: () => void
-}) {
-    const senderLine = message.from.map(from => from.name || from.email).join(', ')
-
-    return (
-        <button
-            data-testid={`mail-message-${message.id}`}
-            onClick={onClick}
-            className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
-                active
-                    ? 'border-orange-300/30 bg-orange-300/10'
-                    : 'border-transparent bg-white/2 hover:border-white/10 hover:bg-white/4'
-            }`}
-        >
-            <div className='flex items-start justify-between gap-3'>
-                <div className='min-w-0 flex-1'>
-                    <div className='flex min-w-0 items-center gap-2'>
-                        {!message.isRead && <span className='h-1.5 w-1.5 rounded-full bg-orange-300' />}
-                        <p className='truncate text-[12px] font-medium text-bright'>{message.subject}</p>
-                    </div>
-                    <div className='mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-bright/44'>
-                        <span className='truncate'>{senderLine}</span>
-                        {message.preview ? <span className='shrink-0 text-bright/24'>•</span> : null}
-                        {message.preview ? <span className='truncate text-bright/54'>{message.preview}</span> : null}
-                    </div>
-                </div>
-                <div className='flex shrink-0 items-center gap-2 pt-0.5'>
-                    {message.hasAttachment && <Paperclip className='h-3.5 w-3.5 text-bright/34' />}
-                    <span className='text-[10px] text-bright/32'>{formatDate(message.receivedAt)}</span>
-                </div>
-            </div>
-        </button>
-    )
-}
-
-function Composer({ state, now, mailboxUser, recentRecipients, onChange, onClose, onSubmit }: {
-    state: ComposerState
-    now: number
-    mailboxUser: string
-    recentRecipients: RecentMailRecipient[]
-    onChange: (state: ComposerState) => void
-    onClose: () => void
-    onSubmit: (state: ComposerState) => Promise<void>
-}) {
-    const [submitting, setSubmitting] = useState(false)
-    const [activeRecipientField, setActiveRecipientField] = useState<'to' | 'cc' | 'bcc' | null>('to')
-
-    function patch(values: Partial<ComposerState>) {
-        onChange({ ...state, ...values })
-    }
-
-    return (
-        <div className='fixed inset-0 z-1400 grid place-items-center bg-black/50 p-4 backdrop-blur-sm'>
-            <form
-                data-testid='mail-compose-form'
-                className='w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#0f120f]/92 p-3 sm:p-4
-                    shadow-[0_30px_100px_rgba(0,0,0,0.36)] backdrop-blur-2xl'
-                onSubmit={async event => {
-                    event.preventDefault()
-                    setSubmitting(true)
-                    try {
-                        await onSubmit(state)
-                    } finally {
-                        setSubmitting(false)
-                    }
-                }}
-            >
-                <div className='flex items-center justify-between gap-3 border-b border-white/8 pb-3'>
-                    <div>
-                        <p className='text-[10px] uppercase tracking-[0.28em] text-bright/34'>{state.mode}</p>
-                        <h3 className='mt-1 text-[16px] font-semibold text-bright'>Compose</h3>
-                    </div>
-                    <button type='button' className={toolbarButton} onClick={onClose}>Close</button>
-                </div>
-
-                <div className='mt-3 grid gap-2'>
-                    <RecipientField
-                        testId='mail-compose-to'
-                        placeholder='To'
-                        value={state.to}
-                        onChange={(value) => patch({ to: value })}
-                        onFocus={() => setActiveRecipientField('to')}
-                        onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'to' ? null : current), 120)}
-                        suggestions={activeRecipientField === 'to' ? recentRecipients : []}
-                        now={now}
-                    />
-                    <div className='grid gap-2 md:grid-cols-2'>
-                        <RecipientField
-                            placeholder='CC'
-                            value={state.cc}
-                            onChange={(value) => patch({ cc: value })}
-                            onFocus={() => setActiveRecipientField('cc')}
-                            onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'cc' ? null : current), 120)}
-                            suggestions={activeRecipientField === 'cc' ? recentRecipients : []}
-                            now={now}
-                        />
-                        <RecipientField
-                            placeholder='BCC'
-                            value={state.bcc}
-                            onChange={(value) => patch({ bcc: value })}
-                            onFocus={() => setActiveRecipientField('bcc')}
-                            onBlur={() => window.setTimeout(() => setActiveRecipientField(current => current === 'bcc' ? null : current), 120)}
-                            suggestions={activeRecipientField === 'bcc' ? recentRecipients : []}
-                            now={now}
-                        />
-                    </div>
-                    <input data-testid='mail-compose-subject' className={`${subtleInput} w-full`} placeholder='Subject' value={state.subject} onChange={event => patch({ subject: event.target.value })} />
-                    <textarea
-                        data-testid='mail-compose-body'
-                        className='min-h-56 w-full rounded-[20px] border border-white/10 bg-white/3 px-3 py-3 text-[13px] leading-6 text-bright outline-none transition placeholder:text-bright/28 focus:border-orange-300/45 focus:bg-white/5 sm:min-h-64'
-                        placeholder='Write your message...'
-                        value={state.body}
-                        onChange={event => patch({ body: event.target.value })}
-                    />
-
-                    <label className='inline-flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/2 px-3 py-2 text-[11px] text-bright/56 hover:bg-white/4'>
-                        <Paperclip className='h-3.5 w-3.5' />
-                        Add attachments
-                        <input
-                            type='file'
-                            multiple
-                            className='hidden'
-                            onChange={async event => {
-                                const files = Array.from(event.target.files || [])
-                                const attachments = await Promise.all(files.map(fileToDraftAttachment))
-                                patch({ attachments: [...state.attachments, ...attachments] })
-                                event.target.value = ''
-                            }}
-                        />
-                    </label>
-
-                    {!!state.attachments.length && (
-                        <div className='grid gap-2 md:grid-cols-2'>
-                            {state.attachments.map((attachment, index) => (
-                                <div key={`${attachment.name}-${index}`} className='rounded-2xl border border-white/10 bg-white/3 px-3 py-2'>
-                                    <div className='flex items-start justify-between gap-3'>
-                                        <div className='min-w-0'>
-                                            <p className='truncate text-[12px] font-medium text-bright'>{attachment.name}</p>
-                                            <p className='text-[10px] text-bright/34'>{prettyBytes(attachment.size)}</p>
-                                        </div>
-                                        <button
-                                            type='button'
-                                            className='text-[10px] text-red-200/75 hover:text-red-100'
-                                            onClick={() => patch({ attachments: state.attachments.filter((_, current) => current !== index) })}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div className='mt-4 flex items-center justify-between gap-3'>
-                    <p className='text-[11px] text-bright/36'>Sending as `{mailboxUser}`</p>
-                    <div className='flex items-center gap-2'>
-                        <button type='button' className={toolbarButton} onClick={onClose}>Cancel</button>
-                        <button data-testid='mail-compose-send' type='submit' className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20 disabled:cursor-not-allowed disabled:opacity-45' disabled={submitting}>
-                            <Send className='h-3.5 w-3.5' />
-                            {submitting ? 'Sending…' : 'Send'}
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    )
-}
-
-function RecipientField({
-    value,
-    now,
-    onChange,
-    onFocus,
-    onBlur,
-    suggestions,
-    placeholder,
-    testId,
-}: {
-    value: string
-    now: number
-    onChange: (value: string) => void
-    onFocus: () => void
-    onBlur: () => void
-    suggestions: RecentMailRecipient[]
-    placeholder: string
-    testId?: string
-}) {
-    const currentToken = value.split(',').at(-1)?.trim().toLowerCase() || ''
-    const visibleSuggestions = suggestions
-        .filter(recipient => {
-            if (!currentToken) {
-                return true
-            }
-
-            const label = `${recipient.name || ''} ${recipient.email}`.toLowerCase()
-            return label.includes(currentToken)
-        })
-        .slice(0, 6)
-
-    function applySuggestion(recipient: RecentMailRecipient) {
-        const parts = value.split(',').map(part => part.trim()).filter(Boolean)
-        const label = recipient.name ? `${recipient.name} <${recipient.email}>` : recipient.email
-
-        if (value.includes(',')) {
-            parts[parts.length - 1] = label
-            onChange(`${parts.join(', ')}${parts.length ? ', ' : ''}`)
-            return
-        }
-
-        onChange(label)
-    }
-
-    return (
-        <div className='relative'>
-            <input
-                data-testid={testId}
-                className={`${subtleInput} w-full`}
-                placeholder={placeholder}
-                value={value}
-                onFocus={onFocus}
-                onBlur={onBlur}
-                onChange={event => onChange(event.target.value)}
-            />
-            {!!visibleSuggestions.length && (
-                <div className='absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 rounded-2xl border border-white/10 bg-[#101310]/96 p-1 shadow-[0_22px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl'>
-                    {visibleSuggestions.map(recipient => (
-                        <button
-                            key={recipient.email}
-                            type='button'
-                            data-testid={`mail-recipient-suggestion-${recipient.email.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                            className='flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/5'
-                            onMouseDown={event => event.preventDefault()}
-                            onClick={() => applySuggestion(recipient)}
-                        >
-                            <div className='min-w-0'>
-                                <p className='truncate text-[12px] text-bright'>{recipient.name || recipient.email}</p>
-                                {recipient.name && <p className='truncate text-[10px] text-bright/40'>{recipient.email}</p>}
-                            </div>
-                            <span className='shrink-0 text-[10px] text-bright/28'>
-                                {formatRelativeTime(new Date(recipient.lastUsedAt).getTime(), now)}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}
-
-function composeFromReply(mode: ComposerMode, message: MailMessage, ownAddress?: string): ComposerState {
-    const subject = mode === 'forward'
-        ? prefixSubject(message.subject, 'Fwd:')
-        : prefixSubject(message.subject, 'Re:')
-
-    const recipients = mode === 'reply'
-        ? message.replyTo.length ? message.replyTo : message.from
-        : mode === 'replyAll'
-            ? dedupeAddresses(
-                [...(message.replyTo.length ? message.replyTo : message.from), ...message.to, ...message.cc]
-                    .filter(address => address.email.toLowerCase() !== (ownAddress || '').toLowerCase())
-            )
-            : []
-
-    const quoted = `\n\nOn ${formatDate(message.receivedAt, true)}, ${message.from.map(from => from.email).join(', ')} wrote:\n${message.textBody.split('\n').map(line => `> ${line}`).join('\n')}`
-
-    return {
-        open: true,
-        mode,
-        to: recipients.map(address => address.email).join(', '),
-        cc: '',
-        bcc: '',
-        subject,
-        body: mode === 'forward' ? `\n\n---------- Forwarded message ----------\n${message.textBody}` : quoted,
-        attachments: [],
-    }
-}
-
-function prefixSubject(subject: string, prefix: string) {
-    return subject.toLowerCase().startsWith(prefix.toLowerCase()) ? subject : `${prefix} ${subject}`
-}
-
-function dedupeAddresses(addresses: MailAddress[]) {
-    const seen = new Set<string>()
-    return addresses.filter(address => {
-        const key = address.email.toLowerCase()
-        if (seen.has(key)) {
-            return false
-        }
-        seen.add(key)
-        return true
-    })
-}
-
-async function runAction(
-    messageId: string,
-    overview: MailOverview,
-    setError: (value: string) => void,
-    load: (params?: { mailboxId?: string | null, messageId?: string | null, mailboxUser?: string | null, silent?: boolean }) => Promise<void>,
-    action: 'read' | 'unread' | 'flag' | 'unflag' | 'archive' | 'junk' | 'ham' | 'trash' | 'restore'
-) {
-    try {
-        await messageAction(messageId, { mailboxUser: overview.mailboxUser, action })
-        await load({ silent: true })
-    } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Unable to update message.')
-    }
-}
-
-function iconForMailbox(role?: string) {
-    if (role === 'inbox') return <Inbox className='h-3.5 w-3.5 text-orange-300' />
-    if (role === 'archive') return <Archive className='h-3.5 w-3.5 text-emerald-300' />
-    if (role === 'junk') return <ShieldAlert className='h-3.5 w-3.5 text-red-300' />
-    if (role === 'trash') return <Trash2 className='h-3.5 w-3.5 text-red-200' />
-    return <Mail className='h-3.5 w-3.5 text-bright/40' />
-}
-
-function formatDate(value: string, verbose = false) {
-    if (!value) {
-        return 'Unknown time'
-    }
-
-    return new Intl.DateTimeFormat('en', {
-        dateStyle: verbose ? 'full' : 'medium',
-        timeStyle: 'short',
-    }).format(new Date(value))
-}
-
-function formatRelativeTime(value: number, now: number) {
-    const diffMinutes = Math.max(1, Math.floor((now - value) / 60_000))
-    if (diffMinutes < 60) {
-        return `${diffMinutes}m`
-    }
-
-    const diffHours = Math.floor(diffMinutes / 60)
-    if (diffHours < 24) {
-        return `${diffHours}h`
-    }
-
-    const diffDays = Math.floor(diffHours / 24)
-    return `${diffDays}d`
-}
-
-function formatMailboxAddress(address: MailAddress) {
-    return address.name ? `${address.name} <${address.email}>` : address.email
-}
-
-function prettyBytes(size: number) {
-    if (size < 1024) return `${size} B`
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function buildMailFrameHtml(html: string) {
-    return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root { color-scheme: dark; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #0d100d;
-      color: #edf2e7;
-      font-family: Manrope, Aptos, sans-serif;
-    }
-    body {
-      padding: 24px;
-      line-height: 1.65;
-    }
-    img, iframe, video {
-      max-width: 100%;
-      height: auto;
-      border-radius: 14px;
-    }
-    a { color: #f4a261; }
-    table { max-width: 100%; }
-    pre, code {
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-  </style>
-</head>
-<body>${html}</body>
-</html>`
-}
-
-async function fileToDraftAttachment(file: File): Promise<DraftAttachment> {
-    const buffer = await file.arrayBuffer()
-    return {
-        name: file.name,
-        type: file.type || 'application/octet-stream',
-        size: file.size,
-        contentBase64: arrayBufferToBase64(buffer),
-    }
-}
-
-function AttachmentPreview({ attachment, mailboxUser }: { attachment: MailAttachment, mailboxUser: string }) {
-    const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
-    if (attachment.type.startsWith('image/')) {
-        return (
-            <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-2.5 transition hover:bg-white/5'>
-                <Image src={url} alt={attachment.name} className='h-36 w-full rounded-xl object-cover' />
-                <p className='mt-2 truncate text-[11px] font-medium text-bright'>{attachment.name}</p>
-            </a>
-        )
-    }
-
-    if (attachment.type === 'application/pdf') {
-        return (
-            <div className='rounded-2xl border border-white/10 bg-white/3 p-2.5'>
-                <iframe title={attachment.name} src={url} className='h-48 w-full rounded-xl bg-[#0d100d]' />
-                <a href={url} target='_blank' rel='noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-bright'>
-                    {attachment.name}
-                    <Forward className='h-3.5 w-3.5' />
-                </a>
-            </div>
-        )
-    }
-
-    return (
-        <a href={url} target='_blank' rel='noreferrer' className='rounded-2xl border border-white/10 bg-white/3 p-2.5 text-[11px] text-bright/62 transition hover:bg-white/5'>
-            <p className='truncate font-medium text-bright'>{attachment.name}</p>
-            <p className='mt-1 text-[10px] text-bright/36'>{attachment.type} • {prettyBytes(attachment.size)}</p>
-        </a>
-    )
-}
-
-function withInlineAttachments(message: MailMessage, mailboxUser: string) {
-    let html = message.htmlBody
-    for (const attachment of message.attachments) {
-        if (attachment.cid) {
-            const url = mailBlobUrl(mailboxUser, attachment.blobId, attachment.name)
-            html = html.replaceAll(`cid:${attachment.cid}`, url)
-            html = html.replaceAll(`cid:<${attachment.cid}>`, url)
-        }
-    }
-
-    return html
-}
-
-function ActionIconButton({ label, icon, onClick }: { label: string, icon: ReactNode, onClick: () => void }) {
-    return (
-        <button title={label} aria-label={label} className={iconButton} onClick={onClick}>
-            {icon}
-        </button>
-    )
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-    let binary = ''
-    const bytes = new Uint8Array(buffer)
-    const chunkSize = 0x8000
-    for (let index = 0; index < bytes.length; index += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
-    }
-    return btoa(binary)
-}
-
-function MailSketch() {
-    return (
-        <svg className='pointer-events-none absolute -right-6 bottom-2 h-auto w-44 rotate-[1.5deg] text-bright/8' viewBox='0 0 430 190' aria-hidden='true'>
-            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M31 154 L31 90 L112 63 L197 93 L197 154' />
-            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M31 90 L112 44 L197 93' />
-            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M112 44 L112 154' />
-            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M62 154 V101 H92 V154' />
-            <path fill='none' stroke='currentColor' strokeWidth='1.15' strokeLinecap='round' strokeLinejoin='round' d='M128 154 V111 H180 V154' />
-            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M225 147 L225 88 L282 62 L340 88 L340 147' />
-            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M225 88 L282 36 L340 88' />
-            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M250 147 V101 H316 V147' />
-            <path fill='none' stroke='currentColor' strokeWidth='0.95' strokeLinecap='round' strokeLinejoin='round' d='M351 151 V100 L382 81 L414 100 V151' />
-            <path fill='none' stroke='currentColor' strokeOpacity='0.55' strokeWidth='0.85' strokeLinecap='round' strokeLinejoin='round' d='M16 171 C67 162 102 178 153 167 C204 156 238 174 291 164 C331 156 366 168 419 160' />
-        </svg>
     )
 }

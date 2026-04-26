@@ -8,6 +8,7 @@ type VMMetricsProps = {
 }
 
 export default function VMMetrics({ boxStyle, boxTitleStyle, vm, metrics }: VMMetricsProps) {
+    void vm
     const displayMetrics = Array.isArray(metrics) && metrics.length ? JSON.stringify(metrics) : 'Coming soon'
 
     return (
@@ -32,7 +33,7 @@ export default function VMMetrics({ boxStyle, boxTitleStyle, vm, metrics }: VMMe
                 <Field title='Architecture' value={details.architecture} />
                 {uniqueArchitecture && <Field title='Config Architecture' value={details.config_architecture} />}
             </div> : <h1>Unable to get metrics. Please try again later, refresh the page, or check again using the button in the top right.'</h1>} */}
-        
+
             {/* <div className="grid gap-4">
                 {vms.map(vm => {
                     const metrics = vmMetrics

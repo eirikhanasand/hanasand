@@ -50,7 +50,7 @@ export default function ClientPage({
     const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
     const [openFiles, setOpenFiles] = useState(serverOpenFiles)
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const maxWidth = showMetadata && showExplorer 
+    const maxWidth = showMetadata && showExplorer
         ? 'max-w-[64vw]'
         : 'max-w-full'
 
@@ -68,7 +68,6 @@ export default function ClientPage({
                 <Code
                     id={share?.id || id}
                     setParticipants={setParticipants}
-                    isConnected={isConnected}
                     setIsConnected={setIsConnected}
                     editingContent={editingContent}
                     setEditingContent={setEditingContent}

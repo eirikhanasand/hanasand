@@ -35,7 +35,7 @@ export default function OpenFiles({ openFiles, setOpenFiles }: OpenFilesProps) {
             }
         }
 
-        window.addEventListener("keydown", downHandler)
+        window.addEventListener('keydown', downHandler)
     }, [])
 
     if (!openFiles.length) {

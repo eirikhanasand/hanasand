@@ -49,8 +49,8 @@ export default function TrafficSpeedometerGlass({ name, tps }: { name: string, t
                             endAngle={0}
                             innerRadius={90.8}
                             outerRadius={112}
-                            dataKey="value"
-                            stroke="none"
+                            dataKey='value'
+                            stroke='none'
                             cx='50%'
                             cy='105%'
                             isAnimationActive={true}

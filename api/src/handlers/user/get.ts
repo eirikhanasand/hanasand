@@ -3,12 +3,12 @@ import run from '#db'
 
 /**
  * Fetches the `name` and `avatar` for a user based on `id`.
- * 
+ *
  * Required parameter: `id`
- * 
+ *
  * @param req Incoming Fastify Request
  * @param res Outgoing Fastify Response
- * 
+ *
  * @returns Fastify Response
  */
 export default async function userHandler(req: FastifyRequest, res: FastifyReply) {
@@ -18,7 +18,7 @@ export default async function userHandler(req: FastifyRequest, res: FastifyReply
     }
 
     try {
-        const userResult = await run(`SELECT id, name, avatar, active, deactivated_at, deactivated_by FROM users WHERE id = $1`, [id])
+        const userResult = await run('SELECT id, name, avatar, active, deactivated_at, deactivated_by FROM users WHERE id = $1', [id])
         if (!userResult.rows.length) {
             return res.status(404).send({ error: `There is no user with id ${id}` })
         }

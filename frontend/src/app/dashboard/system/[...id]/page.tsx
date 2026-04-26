@@ -22,8 +22,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className="h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6">
-            <h1 className="font-semibold text-2xl">{vm.name} Management</h1>
+        <div className='h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6'>
+            <h1 className='font-semibold text-2xl'>{vm.name} Management</h1>
             <VMDetailClient vm={vm} metrics={metrics} />
         </div>
     )

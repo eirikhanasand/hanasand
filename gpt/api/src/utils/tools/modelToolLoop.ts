@@ -4,9 +4,10 @@ import config from '#constants'
 import generateNextjsMarketingSite from '#utils/tools/generateNextjsMarketingSite.ts'
 import httpRequest from '#utils/tools/httpRequest.ts'
 import { inspectManagedProcess, startManagedProcess, stopManagedProcess, waitForHttp } from '#utils/tools/managedProcess.ts'
-import { grepRepo, listRepoFiles, readRepoFile, writeRepoFile } from '#utils/tools/repoTools.ts'
+import { batchEditRepoFiles, editRepoFile, grepRepo, listRepoFiles, readRepoFile, writeRepoFile } from '#utils/tools/repoTools.ts'
 import runCommand from '#utils/tools/runCommand.ts'
 import scaffoldFastifyPostgresApp from '#utils/tools/scaffoldFastifyPostgresApp.ts'
+import scaffoldFastifyWorkerRedisApp from '#utils/tools/scaffoldFastifyWorkerRedisApp.ts'
 import scaffoldNextjsDockerApp from '#utils/tools/scaffoldNextjsDockerApp.ts'
 import scaffoldNextjsApp from '#utils/tools/scaffoldNextjsApp.ts'
 import searchWeb from '#utils/tools/searchWeb.ts'
@@ -17,7 +18,7 @@ const TOOL_SYSTEM_PROMPT = [
     'Do not claim you lack internet access, current-date awareness, or shell access when those tools would help.',
     'Think privately before acting. For code tasks, inspect the repository deliberately, gather evidence, then act.',
     'Use tools aggressively for anything current, verifiable, filesystem-related, package-related, or command-line oriented.',
-    'Prefer list_files, grep_repo, and read_file before editing unfamiliar code. Prefer write_file for precise file creation or full-file rewrites.',
+    'Prefer list_files, grep_repo, and read_file before editing unfamiliar code. Prefer edit_file for targeted snippet changes and write_file for precise file creation or full-file rewrites.',
     'For app development, you can scaffold files, install packages, start dev servers, wait for HTTP readiness, inspect logs, and verify behavior in a browser.',
     'When repeated or multi-step work would benefit future tasks, create a reusable script, helper, or tool in the repository instead of repeating the same manual steps.',
     'Prefer durable improvements: if a missing capability blocks the task and can be implemented safely, add the capability, then use it.',
@@ -29,11 +30,14 @@ const TOOL_SYSTEM_PROMPT = [
     '<tool_call>{"name":"list_files","arguments":{"path":"optional/subdir","limit":200}}</tool_call>',
     '<tool_call>{"name":"grep_repo","arguments":{"query":"search text","path":"optional/subdir","limit":60}}</tool_call>',
     '<tool_call>{"name":"read_file","arguments":{"path":"frontend/src/app/page.tsx","startLine":1,"endLine":200}}</tool_call>',
+    '<tool_call>{"name":"edit_file","arguments":{"path":"frontend/src/app/page.tsx","find":"old snippet","replace":"new snippet","replaceAll":false}}</tool_call>',
+    '<tool_call>{"name":"batch_edit_files","arguments":{"edits":[{"path":"file-a.ts","find":"old","replace":"new"},{"path":"file-b.ts","find":"before","replace":"after"}]}}</tool_call>',
     '<tool_call>{"name":"write_file","arguments":{"path":"notes/output.md","content":"..."}}</tool_call>',
     '<tool_call>{"name":"run_command","arguments":{"command":"date","cwd":"/optional/path","timeoutMs":120000}}</tool_call>',
     '<tool_call>{"name":"scaffold_nextjs_app","arguments":{"targetDir":"sandbox/my-app","packageManager":"npm"}}</tool_call>',
     '<tool_call>{"name":"scaffold_nextjs_docker_app","arguments":{"targetDir":"sandbox/my-docker-app"}}</tool_call>',
     '<tool_call>{"name":"scaffold_fastify_postgres_app","arguments":{"targetDir":"sandbox/my-api"}}</tool_call>',
+    '<tool_call>{"name":"scaffold_fastify_worker_redis_app","arguments":{"targetDir":"sandbox/my-worker-stack"}}</tool_call>',
     '<tool_call>{"name":"generate_nextjs_marketing_site","arguments":{"appDir":"sandbox/my-app","brandName":"Northstar Atelier","tagline":"Spaces that feel composed, calm, and enduring.","description":"Boutique architecture for private homes and hospitality environments.","primaryCtaLabel":"Book a Design Consult","secondaryCtaLabel":"View Case Studies","styleDirection":"Quiet luxury with tactile materials and editorial spacing."}}</tool_call>',
     '<tool_call>{"name":"start_process","arguments":{"command":"npm run dev -- --hostname 127.0.0.1 --port 3025","cwd":"sandbox/my-app","name":"next-dev"}}</tool_call>',
     '<tool_call>{"name":"inspect_process","arguments":{"id":"process-id","tailBytes":12000}}</tool_call>',
@@ -85,6 +89,26 @@ type ToolCall =
         }
     }
     | {
+        name: 'edit_file'
+        arguments: {
+            path: string
+            find: string
+            replace: string
+            replaceAll?: boolean
+        }
+    }
+    | {
+        name: 'batch_edit_files'
+        arguments: {
+            edits: Array<{
+                path: string
+                find: string
+                replace: string
+                replaceAll?: boolean
+            }>
+        }
+    }
+    | {
         name: 'write_file'
         arguments: {
             path: string
@@ -116,6 +140,13 @@ type ToolCall =
     }
     | {
         name: 'scaffold_fastify_postgres_app'
+        arguments: {
+            targetDir: string
+            appName?: string
+        }
+    }
+    | {
+        name: 'scaffold_fastify_worker_redis_app'
         arguments: {
             targetDir: string
             appName?: string
@@ -240,6 +271,14 @@ type ToolLoopResult = {
     content: string
     timings?: ChatCompletionResponse['timings']
     artifacts?: AIArtifact[]
+    overhead: {
+        iterations: number
+        completionCalls: number
+        completionMs: number
+        toolCalls: number
+        toolMs: number
+        totalMs: number
+    }
 }
 
 type ToolExecutionResult = {
@@ -258,19 +297,111 @@ export default async function runModelToolLoop(
     request: GPT_PromptRequest,
     emitToolProgress?: ToolProgressEmitter,
 ): Promise<ToolLoopResult> {
-    const maxIterations = Math.max(8, config.web_search_max_iterations + 8)
-    const iterationMaxTokens = Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
+    const loopStartedAt = Date.now()
+    const userMessage = latestUserMessage(request.messages)
+    const autonomousRepoTask = isAutonomousRepoTask(userMessage)
+    const readOnlyRepoTask = isReadOnlyRepoTask(userMessage)
+    const readOnlySingleFilePath = readOnlyRepoTask ? extractSingleRepoFilePath(userMessage) : null
+    const readOnlyConciseAnswer = readOnlyRepoTask && prefersConciseReadOnlyAnswer(userMessage)
+    const maxIterations = readOnlyRepoTask
+        ? (readOnlySingleFilePath ? 0 : 1)
+        : autonomousRepoTask
+            ? 3
+            : Math.max(8, config.web_search_max_iterations + 8)
+    const iterationMaxTokens = readOnlyRepoTask
+        ? Math.max(
+            readOnlyConciseAnswer ? 48 : 80,
+            Math.min(
+                request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000,
+                readOnlySingleFilePath && readOnlyConciseAnswer ? 72 : 160,
+            ),
+        )
+        : autonomousRepoTask
+            ? Math.max(96, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 220))
+            : Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
     const workingMessages = withToolSystemPrompt(request.messages)
     const executedToolCalls = new Set<string>()
     const collectedArtifacts: AIArtifact[] = []
-    const userMessage = latestUserMessage(workingMessages)
     const prefersBrowserWorkspace = isBrowserWorkspaceRequest(request.messages)
+    let toolCalls = 0
+    let toolMs = 0
+    let completionCalls = 0
+    let completionMs = 0
 
-    if (isAutonomousRepoTask(userMessage)) {
+    async function executeTrackedToolCall(toolCall: ToolCall, iteration: number, progress?: ToolProgressEmitter) {
+        const startedAt = Date.now()
+        try {
+            return await executeToolCall(toolCall, iteration, progress)
+        } finally {
+            toolCalls += 1
+            toolMs += Date.now() - startedAt
+        }
+    }
+
+    async function createTrackedCompletion(
+        modelUrl: string,
+        messages: GPT_ChatMessage[],
+        maxTokens: number,
+        temperature: number,
+    ) {
+        const startedAt = Date.now()
+        try {
+            return await createCompletion(modelUrl, messages, maxTokens, temperature)
+        } finally {
+            completionCalls += 1
+            completionMs += Date.now() - startedAt
+        }
+    }
+
+    if (autonomousRepoTask) {
         workingMessages.push({
             role: 'system',
-            content: 'This looks like a multi-step repository task. Inspect the repo with list_files, grep_repo, read_file, or run_command before proposing a fix. After making changes, verify the result before answering.',
+            content: readOnlyRepoTask
+                ? 'This is a read-only repository task. Inspect only the minimum file content needed, then answer directly. Do not keep exploring, do not broaden scope, and do not ask for more tools once you can answer.'
+                : 'This is a tightly scoped repository task. Inspect only the minimum files needed, perform one focused change, verify it, then answer. Do not broaden scope, repeat the same tool, or keep exploring once you have enough information to act.',
         })
+    }
+
+    if (readOnlySingleFilePath) {
+        const preloadRange = await inferReadOnlyPreloadRange(userMessage, readOnlySingleFilePath)
+        const preloadToolCall: ToolCall = {
+            name: 'read_file',
+            arguments: {
+                path: readOnlySingleFilePath,
+                startLine: preloadRange?.startLine,
+                endLine: preloadRange?.endLine,
+            },
+        }
+        const preloadKey = JSON.stringify(preloadToolCall)
+        if (!executedToolCalls.has(preloadKey)) {
+            try {
+                const { message: toolMessage, artifacts } = await executeToolCall(preloadToolCall, -1, emitToolProgress)
+                collectedArtifacts.push(...(artifacts || []))
+                executedToolCalls.add(preloadKey)
+                workingMessages.push({
+                    role: 'assistant',
+                    content: `<tool_call>${preloadKey}</tool_call>`,
+                })
+                workingMessages.push(toolMessage)
+                workingMessages.push({
+                    role: 'system',
+                    content: [
+                        `The user asked about exactly one file: ${readOnlySingleFilePath}.`,
+                        preloadRange
+                            ? `The preloaded excerpt was narrowed to ${preloadRange.startLine}-${preloadRange.endLine} because ${preloadRange.reason}.`
+                            : 'The full file was preloaded because no safe narrowing heuristic applied.',
+                        readOnlyConciseAnswer
+                            ? 'Answer directly from the provided content with only the requested result. Keep it terse and do not add explanation unless the user asked for it.'
+                            : 'Answer directly from that file content now. Do not inspect any additional files unless the provided content is clearly insufficient.',
+                    ].join(' '),
+                })
+            } catch {
+                workingMessages.push({
+                    role: 'system',
+                    content: `The requested file path ${readOnlySingleFilePath} could not be preloaded. If you still need repository inspection, keep it minimal.`,
+                })
+            }
+        }
     }
 
     if (isNextJsBuildTask(userMessage) && !prefersBrowserWorkspace) {
@@ -287,7 +418,7 @@ export default async function runModelToolLoop(
         }
         const preflightKey = JSON.stringify(preflightToolCall)
         if (!executedToolCalls.has(preflightKey)) {
-            const { message: toolMessage, artifacts } = await executeToolCall(preflightToolCall, -1, emitToolProgress)
+            const { message: toolMessage, artifacts } = await executeTrackedToolCall(preflightToolCall, -1, emitToolProgress)
             collectedArtifacts.push(...(artifacts || []))
             executedToolCalls.add(preflightKey)
             workingMessages.push({
@@ -316,7 +447,7 @@ export default async function runModelToolLoop(
             }
             const siteToolKey = JSON.stringify(siteToolCall)
             if (!executedToolCalls.has(siteToolKey)) {
-                const { message: siteToolMessage, artifacts } = await executeToolCall(siteToolCall, -1, emitToolProgress)
+                const { message: siteToolMessage, artifacts } = await executeTrackedToolCall(siteToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(artifacts || []))
                 executedToolCalls.add(siteToolKey)
                 workingMessages.push({
@@ -343,7 +474,7 @@ export default async function runModelToolLoop(
             }
             const startProcessKey = JSON.stringify(startProcessToolCall)
             if (!executedToolCalls.has(startProcessKey)) {
-                const { message: startMessage, artifacts: startArtifacts } = await executeToolCall(startProcessToolCall, -1, emitToolProgress)
+                const { message: startMessage, artifacts: startArtifacts } = await executeTrackedToolCall(startProcessToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(startArtifacts || []))
                 executedToolCalls.add(startProcessKey)
                 workingMessages.push({
@@ -362,7 +493,7 @@ export default async function runModelToolLoop(
                     },
                 }
                 const waitKey = JSON.stringify(waitToolCall)
-                const { message: waitMessage, artifacts: waitArtifacts } = await executeToolCall(waitToolCall, -1, emitToolProgress)
+                const { message: waitMessage, artifacts: waitArtifacts } = await executeTrackedToolCall(waitToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(waitArtifacts || []))
                 executedToolCalls.add(waitKey)
                 workingMessages.push({
@@ -383,7 +514,7 @@ export default async function runModelToolLoop(
                     },
                 }
                 const browserKey = JSON.stringify(browserToolCall)
-                const { message: browserMessage, artifacts: browserArtifacts } = await executeToolCall(browserToolCall, -1, emitToolProgress)
+                const { message: browserMessage, artifacts: browserArtifacts } = await executeTrackedToolCall(browserToolCall, -1, emitToolProgress)
                 collectedArtifacts.push(...(browserArtifacts || []))
                 executedToolCalls.add(browserKey)
                 workingMessages.push({
@@ -398,7 +529,7 @@ export default async function runModelToolLoop(
                         arguments: { id: processId },
                     }
                     const stopKey = JSON.stringify(stopToolCall)
-                    const { message: stopMessage, artifacts: stopArtifacts } = await executeToolCall(stopToolCall, -1, emitToolProgress)
+                    const { message: stopMessage, artifacts: stopArtifacts } = await executeTrackedToolCall(stopToolCall, -1, emitToolProgress)
                     collectedArtifacts.push(...(stopArtifacts || []))
                     executedToolCalls.add(stopKey)
                     workingMessages.push({
@@ -421,7 +552,7 @@ export default async function runModelToolLoop(
         }
         const scaffoldKey = JSON.stringify(scaffoldToolCall)
         if (!executedToolCalls.has(scaffoldKey)) {
-            const { message: toolMessage, artifacts } = await executeToolCall(scaffoldToolCall, -1)
+            const { message: toolMessage, artifacts } = await executeTrackedToolCall(scaffoldToolCall, -1)
             collectedArtifacts.push(...(artifacts || []))
             executedToolCalls.add(scaffoldKey)
             workingMessages.push({ role: 'assistant', content: `<tool_call>${scaffoldKey}</tool_call>` })
@@ -436,6 +567,7 @@ export default async function runModelToolLoop(
                 cwd: targetDir,
                 url: 'http://127.0.0.1:3000',
                 expectText: pathBaseName(targetDir),
+                executeTool: executeTrackedToolCall,
             })
         }
     }
@@ -450,7 +582,7 @@ export default async function runModelToolLoop(
         }
         const scaffoldKey = JSON.stringify(scaffoldToolCall)
         if (!executedToolCalls.has(scaffoldKey)) {
-            const { message: toolMessage, artifacts } = await executeToolCall(scaffoldToolCall, -1)
+            const { message: toolMessage, artifacts } = await executeTrackedToolCall(scaffoldToolCall, -1)
             collectedArtifacts.push(...(artifacts || []))
             executedToolCalls.add(scaffoldKey)
             workingMessages.push({ role: 'assistant', content: `<tool_call>${scaffoldKey}</tool_call>` })
@@ -465,12 +597,43 @@ export default async function runModelToolLoop(
                 cwd: targetDir,
                 url: 'http://127.0.0.1:3001/health',
                 expectText: 'ok',
+                executeTool: executeTrackedToolCall,
+            })
+        }
+    }
+
+    if (isMultiServiceWorkerTask(userMessage)) {
+        const targetDir = extractTargetDirFromRequest(userMessage) || 'sandbox/ai-fastify-worker-redis-app'
+        const scaffoldToolCall: ToolCall = {
+            name: 'scaffold_fastify_worker_redis_app',
+            arguments: {
+                targetDir,
+            },
+        }
+        const scaffoldKey = JSON.stringify(scaffoldToolCall)
+        if (!executedToolCalls.has(scaffoldKey)) {
+            const { message: toolMessage, artifacts } = await executeTrackedToolCall(scaffoldToolCall, -1)
+            collectedArtifacts.push(...(artifacts || []))
+            executedToolCalls.add(scaffoldKey)
+            workingMessages.push({ role: 'assistant', content: `<tool_call>${scaffoldKey}</tool_call>` })
+            workingMessages.push(toolMessage)
+        }
+
+        if (/\bdocker compose\b|\bredis\b|run it|start it|verify it/i.test(userMessage)) {
+            await executeComposeVerificationFlow({
+                workingMessages,
+                executedToolCalls,
+                collectedArtifacts,
+                cwd: targetDir,
+                url: 'http://127.0.0.1:3001/health',
+                expectText: 'ok',
+                executeTool: executeTrackedToolCall,
             })
         }
     }
 
     for (let iteration = 0; iteration <= maxIterations; iteration += 1) {
-        const completion = await createCompletion(
+        const completion = await createTrackedCompletion(
             config.model_api,
             workingMessages,
             iterationMaxTokens,
@@ -540,15 +703,16 @@ export default async function runModelToolLoop(
             const toolContents = workingMessages.filter((message) => message.role === 'tool').map((message) => message.content)
             const hasWrittenFiles = toolContents.some((content) =>
                 content.includes('Tool write_file executed')
+                || content.includes('Tool edit_file executed')
                 || content.includes('Tool generate_nextjs_marketing_site executed')
                 || content.includes('Tool scaffold_nextjs_app executed')
             )
             const hasStartedProcess = toolContents.some((content) => content.includes('Tool start_process executed'))
             const hasBrowserVerification = toolContents.some((content) => content.includes('Tool browser_task executed'))
-            if (isAutonomousRepoTask(userMessage) && looksLikeProposedPatch(content) && !hasWrittenFiles) {
+            if (autonomousRepoTask && looksLikeProposedPatch(content) && !hasWrittenFiles) {
                 workingMessages.push({
                     role: 'system',
-                    content: 'Do not stop at a proposal. Apply the changes to the repository using write_file or run_command, then continue.',
+                    content: 'Do not stop at a proposal. Apply the changes to the repository using edit_file, write_file, or run_command, then continue.',
                 })
                 continue
             }
@@ -565,6 +729,14 @@ export default async function runModelToolLoop(
                 content,
                 timings: completion.timings,
                 artifacts: collectedArtifacts,
+                overhead: {
+                    iterations: iteration + 1,
+                    completionCalls,
+                    completionMs,
+                    toolCalls,
+                    toolMs,
+                    totalMs: Date.now() - loopStartedAt,
+                },
             }
         }
 
@@ -577,7 +749,7 @@ export default async function runModelToolLoop(
             continue
         }
 
-        const { message: toolMessage, artifacts } = await executeToolCall(toolCall, iteration, emitToolProgress)
+        const { message: toolMessage, artifacts } = await executeTrackedToolCall(toolCall, iteration, emitToolProgress)
         collectedArtifacts.push(...(artifacts || []))
         executedToolCalls.add(toolKey)
         workingMessages.push({
@@ -656,6 +828,10 @@ function parseToolCall(content: string): ToolCall | null {
         extractBalancedJson(content, '"name": "grep_repo"'),
         extractBalancedJson(content, '"name":"read_file"'),
         extractBalancedJson(content, '"name": "read_file"'),
+        extractBalancedJson(content, '"name":"edit_file"'),
+        extractBalancedJson(content, '"name": "edit_file"'),
+        extractBalancedJson(content, '"name":"batch_edit_files"'),
+        extractBalancedJson(content, '"name": "batch_edit_files"'),
         extractBalancedJson(content, '"name":"write_file"'),
         extractBalancedJson(content, '"name": "write_file"'),
         extractBalancedJson(content, '"name":"run_command"'),
@@ -666,6 +842,8 @@ function parseToolCall(content: string): ToolCall | null {
         extractBalancedJson(content, '"name": "scaffold_nextjs_docker_app"'),
         extractBalancedJson(content, '"name":"scaffold_fastify_postgres_app"'),
         extractBalancedJson(content, '"name": "scaffold_fastify_postgres_app"'),
+        extractBalancedJson(content, '"name":"scaffold_fastify_worker_redis_app"'),
+        extractBalancedJson(content, '"name": "scaffold_fastify_worker_redis_app"'),
         extractBalancedJson(content, '"name":"generate_nextjs_marketing_site"'),
         extractBalancedJson(content, '"name": "generate_nextjs_marketing_site"'),
         extractBalancedJson(content, '"name":"start_process"'),
@@ -703,6 +881,12 @@ function parseToolCall(content: string): ToolCall | null {
             if (parsed?.name === 'read_file' && parsed.arguments?.path) {
                 return parsed
             }
+            if (parsed?.name === 'edit_file' && parsed.arguments?.path && typeof parsed.arguments?.find === 'string' && typeof parsed.arguments?.replace === 'string') {
+                return parsed
+            }
+            if (parsed?.name === 'batch_edit_files' && Array.isArray(parsed.arguments?.edits) && parsed.arguments.edits.every((edit) => edit?.path && typeof edit.find === 'string' && typeof edit.replace === 'string')) {
+                return parsed
+            }
             if (parsed?.name === 'write_file' && parsed.arguments?.path && typeof parsed.arguments?.content === 'string') {
                 return parsed
             }
@@ -716,6 +900,9 @@ function parseToolCall(content: string): ToolCall | null {
                 return parsed
             }
             if (parsed?.name === 'scaffold_fastify_postgres_app' && parsed.arguments?.targetDir) {
+                return parsed
+            }
+            if (parsed?.name === 'scaffold_fastify_worker_redis_app' && parsed.arguments?.targetDir) {
                 return parsed
             }
             if (parsed?.name === 'generate_nextjs_marketing_site' && parsed.arguments?.appDir && parsed.arguments?.brandName && parsed.arguments?.tagline && parsed.arguments?.description) {
@@ -830,6 +1017,34 @@ function parseToolCall(content: string): ToolCall | null {
         }
     }
 
+    if (xmlName === 'edit_file') {
+        const targetPath = content.match(/<path>\s*([\s\S]*?)\s*<\/path>/i)?.[1]?.trim()
+        const find = content.match(/<find>\s*([\s\S]*?)\s*<\/find>/i)?.[1]
+        const replace = content.match(/<replace>\s*([\s\S]*?)\s*<\/replace>/i)?.[1]
+        const replaceAll = /<replaceAll>\s*true\s*<\/replaceAll>/i.test(content)
+        if (targetPath && typeof find === 'string' && typeof replace === 'string') {
+            return {
+                name: 'edit_file',
+                arguments: {
+                    path: targetPath,
+                    find,
+                    replace,
+                    replaceAll,
+                },
+            }
+        }
+    }
+
+    if (xmlName === 'batch_edit_files') {
+        const edits = parseXmlJson<Array<{ path: string, find: string, replace: string, replaceAll?: boolean }>>(content, 'edits')
+        if (Array.isArray(edits) && edits.every((edit) => edit?.path && typeof edit.find === 'string' && typeof edit.replace === 'string')) {
+            return {
+                name: 'batch_edit_files',
+                arguments: { edits },
+            }
+        }
+    }
+
     if (xmlName === 'write_file') {
         const targetPath = content.match(/<path>\s*([\s\S]*?)\s*<\/path>/i)?.[1]?.trim()
         const fileContent = content.match(/<content>\s*([\s\S]*?)\s*<\/content>/i)?.[1]
@@ -875,6 +1090,14 @@ function parseToolCall(content: string): ToolCall | null {
         const appName = content.match(/<appName>\s*([\s\S]*?)\s*<\/appName>/i)?.[1]?.trim()
         if (targetDir) {
             return { name: 'scaffold_fastify_postgres_app', arguments: { targetDir, appName: appName || undefined } }
+        }
+    }
+
+    if (xmlName === 'scaffold_fastify_worker_redis_app') {
+        const targetDir = content.match(/<targetDir>\s*([\s\S]*?)\s*<\/targetDir>/i)?.[1]?.trim()
+        const appName = content.match(/<appName>\s*([\s\S]*?)\s*<\/appName>/i)?.[1]?.trim()
+        if (targetDir) {
+            return { name: 'scaffold_fastify_worker_redis_app', arguments: { targetDir, appName: appName || undefined } }
         }
     }
 
@@ -1023,6 +1246,24 @@ function isAutonomousRepoTask(message: string) {
     return /(fix|implement|debug|investigate|audit|analyze|analyse|refactor|edit|update|patch|search the repo|read the file|look through)/i.test(message)
 }
 
+function isReadOnlyRepoTask(message: string) {
+    const requestsInspection = /(inspect|read|review|report|list|answer with|tell me|which|what are|do not edit|only read)/i.test(message)
+    const requestsMutation = /(fix|implement|refactor|edit|update|patch|write|create|apply|change|move)/i.test(message)
+    return requestsInspection && !requestsMutation
+}
+
+function prefersConciseReadOnlyAnswer(message: string) {
+    return /(answer with|list|names? of|which|what are|one per line|only the|do not explain)/i.test(message)
+}
+
+function extractSingleRepoFilePath(message: string) {
+    const matches = [...message.matchAll(/([A-Za-z0-9_./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|css|scss|yml|yaml|sh))/g)]
+        .map((match) => match[1])
+        .filter((value) => !/^https?:\/\//i.test(value))
+    const unique = [...new Set(matches)]
+    return unique.length === 1 ? unique[0] : null
+}
+
 function extractTargetDirFromRequest(message: string) {
     const match = message.match(/\bin\s+([A-Za-z0-9_./-]+)(?:[\s.,]|$)/i)
     return match?.[1]?.replace(/[.,;:]+$/g, '') || null
@@ -1041,6 +1282,11 @@ function isDockerizedNextJsTask(message: string) {
 function isFastifyPostgresTask(message: string) {
     return /(fastify|postgres|backend api|api service)/i.test(message)
         && /(build|create|scaffold|make|docker|compose)/i.test(message)
+}
+
+function isMultiServiceWorkerTask(message: string) {
+    return /(worker|queue|redis|multi[- ]service|background job)/i.test(message)
+        && /(build|create|scaffold|make|docker|compose|stack)/i.test(message)
 }
 
 function pathBaseName(targetDir: string) {
@@ -1066,6 +1312,38 @@ function extractLocalUrl(message: string) {
 function extractAnyUrl(message: string) {
     const match = message.match(/https?:\/\/[^\s)]+/i)
     return match?.[0]?.replace(/[.,;:!?]+$/g, '') || null
+}
+
+async function inferReadOnlyPreloadRange(message: string, filePath: string) {
+    if (!/after the main exported hook|after the main exported|defined after/i.test(message)) {
+        return null
+    }
+
+    try {
+        const fullFile = await readRepoFile({ path: filePath })
+        const lines = fullFile.content.split('\n')
+        const exportedHookLine = lines.findIndex((line) => /^\s*export default function use[A-Z0-9_]+/.test(line.trim()))
+        if (exportedHookLine === -1) {
+            return null
+        }
+
+        const firstHelperLine = lines.findIndex((line, index) =>
+            index > exportedHookLine
+            && /^(function|async function)\s+[A-Za-z0-9_$]+/.test(line.trim()),
+        )
+
+        if (firstHelperLine === -1) {
+            return null
+        }
+
+        return {
+            startLine: firstHelperLine + 1,
+            endLine: lines.length,
+            reason: 'the question explicitly asked for top-level helpers after the exported hook',
+        }
+    } catch {
+        return null
+    }
 }
 
 async function createCompletion(
@@ -1107,12 +1385,15 @@ function getMessageContent(response: ChatCompletionResponse) {
 
 function describeToolCall(toolCall: ToolCall) {
     if (toolCall.name === 'read_file') return `Read file ${toolCall.arguments.path}`
+    if (toolCall.name === 'edit_file') return `Patched file ${toolCall.arguments.path}`
+    if (toolCall.name === 'batch_edit_files') return `Patched ${toolCall.arguments.edits.length} files as one batch`
     if (toolCall.name === 'write_file') return `Updated file ${toolCall.arguments.path}`
     if (toolCall.name === 'grep_repo') return `Searched code for "${toolCall.arguments.query}"`
     if (toolCall.name === 'list_files') return `Listed project files${toolCall.arguments.path ? ` in ${toolCall.arguments.path}` : ''}`
     if (toolCall.name === 'run_command') return `Ran command ${toolCall.arguments.command}`
     if (toolCall.name === 'search_web') return `Searched the web for "${toolCall.arguments.query}"`
     if (toolCall.name === 'scaffold_nextjs_app') return `Scaffolded Next.js app ${toolCall.arguments.targetDir}`
+    if (toolCall.name === 'scaffold_fastify_worker_redis_app') return `Scaffolded Fastify worker stack ${toolCall.arguments.targetDir}`
     if (toolCall.name === 'generate_nextjs_marketing_site') return `Generated marketing site in ${toolCall.arguments.appDir}`
     if (toolCall.name === 'start_process') return `Started process ${toolCall.arguments.name || toolCall.arguments.command}`
     if (toolCall.name === 'inspect_process') return `Inspected process ${toolCall.arguments.id}`
@@ -1155,9 +1436,9 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `search_web_${iteration + 1}`,
                 content: [
-                `Tool search_web executed for query: ${toolCall.arguments.query}`,
-                'Use this result actively and cite relevant URLs from it.',
-                result.markdown,
+                    `Tool search_web executed for query: ${toolCall.arguments.query}`,
+                    'Use this result actively and cite relevant URLs from it.',
+                    result.markdown,
                 ].join('\n\n'),
             },
         }
@@ -1180,9 +1461,9 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `list_files_${iteration + 1}`,
                 content: [
-                `Tool list_files executed for path: ${result.root}`,
-                `Truncated: ${result.truncated ? 'yes' : 'no'}`,
-                result.files.length ? result.files.join('\n') : '<no files found>',
+                    `Tool list_files executed for path: ${result.root}`,
+                    `Truncated: ${result.truncated ? 'yes' : 'no'}`,
+                    result.files.length ? result.files.join('\n') : '<no files found>',
                 ].join('\n\n'),
             },
         }
@@ -1206,12 +1487,12 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `grep_repo_${iteration + 1}`,
                 content: [
-                `Tool grep_repo executed for query: ${result.query}`,
-                `Root: ${result.root}`,
-                `Truncated: ${result.truncated ? 'yes' : 'no'}`,
-                result.matches.length
-                    ? result.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
-                    : '<no matches found>',
+                    `Tool grep_repo executed for query: ${result.query}`,
+                    `Root: ${result.root}`,
+                    `Truncated: ${result.truncated ? 'yes' : 'no'}`,
+                    result.matches.length
+                        ? result.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
+                        : '<no matches found>',
                 ].join('\n\n'),
             },
         }
@@ -1235,9 +1516,9 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `read_file_${iteration + 1}`,
                 content: [
-                `Tool read_file executed for path: ${result.path}`,
-                `Lines: ${result.startLine}-${result.endLine} of ${result.totalLines}`,
-                result.content,
+                    `Tool read_file executed for path: ${result.path}`,
+                    `Lines: ${result.startLine}-${result.endLine} of ${result.totalLines}`,
+                    result.content,
                 ].join('\n\n'),
             },
             artifacts: [{
@@ -1247,6 +1528,89 @@ async function executeToolCall(
                 content: result.content,
                 language: 'text',
             }],
+        }
+    }
+
+    if (toolCall.name === 'edit_file') {
+        const result = await editRepoFile({
+            path: toolCall.arguments.path,
+            find: toolCall.arguments.find,
+            replace: toolCall.arguments.replace,
+            replaceAll: toolCall.arguments.replaceAll,
+        })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: 'completed',
+            toolDetail: `${result.path} patched (${result.replacements} replacement${result.replacements === 1 ? '' : 's'}).`,
+        })
+
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `edit_file_${iteration + 1}`,
+                content: [
+                    `Tool edit_file executed for path: ${result.path}`,
+                    `Replacements: ${result.replacements}`,
+                    `Match count: ${result.matchCount}`,
+                    result.matchedLines.length ? `Matched lines: ${result.matchedLines.join(', ')}` : null,
+                    `Bytes written: ${result.bytes}`,
+                    `Lines written: ${result.lines}`,
+                    result.previewBefore ? `Preview before:\n${result.previewBefore}` : null,
+                    result.previewAfter ? `Preview after:\n${result.previewAfter}` : null,
+                ].filter(Boolean).join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: result.path,
+                path: result.path,
+                content: result.content,
+                language: 'text',
+            }, {
+                kind: 'diff',
+                title: `Diff: ${result.path}`,
+                path: result.path,
+                content: result.diff,
+                language: 'diff',
+            }],
+        }
+    }
+
+    if (toolCall.name === 'batch_edit_files') {
+        const result = await batchEditRepoFiles({
+            edits: toolCall.arguments.edits,
+        })
+        emitToolProgress?.({
+            toolId,
+            toolLabel: describeToolCall(toolCall),
+            toolState: result.ok ? 'completed' : 'error',
+            toolDetail: result.ok
+                ? `${result.editsApplied} edit${result.editsApplied === 1 ? '' : 's'} applied.`
+                : `Batch failed after ${result.editsApplied} edit${result.editsApplied === 1 ? '' : 's'}; rollback ${result.rolledBack ? 'completed' : 'not needed'}.`,
+        })
+
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `batch_edit_files_${iteration + 1}`,
+                content: [
+                    'Tool batch_edit_files executed',
+                    `Requested edits: ${result.editsAttempted}`,
+                    `Applied edits: ${result.editsApplied}`,
+                    `Rolled back: ${result.rolledBack ? 'yes' : 'no'}`,
+                    result.error ? `Error: ${result.error}` : null,
+                    result.results.length
+                        ? `Files:\n${result.results.map((entry) => `${entry.path} (${entry.replacements} replacement${entry.replacements === 1 ? '' : 's'})`).join('\n')}`
+                        : null,
+                ].filter(Boolean).join('\n\n'),
+            },
+            artifacts: result.results.flatMap((entry) => ([{
+                kind: 'diff' as const,
+                title: `Diff: ${entry.path}`,
+                path: entry.path,
+                content: entry.diff,
+                language: 'diff',
+            }])),
         }
     }
 
@@ -1267,9 +1631,9 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `write_file_${iteration + 1}`,
                 content: [
-                `Tool write_file executed for path: ${result.path}`,
-                `Bytes written: ${result.bytes}`,
-                `Lines written: ${result.lines}`,
+                    `Tool write_file executed for path: ${result.path}`,
+                    `Bytes written: ${result.bytes}`,
+                    `Lines written: ${result.lines}`,
                 ].join('\n\n'),
             },
             artifacts: [{
@@ -1301,12 +1665,12 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `start_process_${iteration + 1}`,
                 content: [
-                `Tool start_process executed: ${result.name}`,
-                `Process id: ${result.id}`,
-                `PID: ${result.pid}`,
-                `Working directory: ${result.cwd}`,
-                `Command: ${result.command}`,
-                `Alive: ${result.alive ? 'yes' : 'no'}`,
+                    `Tool start_process executed: ${result.name}`,
+                    `Process id: ${result.id}`,
+                    `PID: ${result.pid}`,
+                    `Working directory: ${result.cwd}`,
+                    `Command: ${result.command}`,
+                    `Alive: ${result.alive ? 'yes' : 'no'}`,
                 ].join('\n\n'),
             },
             artifacts: [{
@@ -1331,17 +1695,17 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `scaffold_nextjs_app_${iteration + 1}`,
                 content: [
-                `Tool scaffold_nextjs_app executed for target: ${toolCall.arguments.targetDir}`,
-                `Package manager: ${result.packageManager}`,
-                `Absolute path: ${result.absolutePath}`,
-                `Exit code: ${result.exitCode ?? 'null'}`,
-                result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
-                result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                    `Tool scaffold_nextjs_app executed for target: ${toolCall.arguments.targetDir}`,
+                    `Package manager: ${result.packageManager}`,
+                    `Absolute path: ${result.absolutePath}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
                 ].join('\n\n'),
             },
             artifacts: [{
                 kind: 'file',
-                title: `Scaffolded app`,
+                title: 'Scaffolded app',
                 path: result.absolutePath,
                 content: result.stdout || result.stderr || result.absolutePath,
                 language: 'text',
@@ -1397,6 +1761,30 @@ async function executeToolCall(
         }
     }
 
+    if (toolCall.name === 'scaffold_fastify_worker_redis_app') {
+        const result = await scaffoldFastifyWorkerRedisApp(toolCall.arguments)
+        return {
+            message: {
+                role: 'tool',
+                tool_call_id: `scaffold_fastify_worker_redis_app_${iteration + 1}`,
+                content: [
+                    `Tool scaffold_fastify_worker_redis_app executed for target: ${toolCall.arguments.targetDir}`,
+                    `Absolute path: ${result.absolutePath}`,
+                    `Exit code: ${result.exitCode ?? 'null'}`,
+                    result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                    result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                ].join('\n\n'),
+            },
+            artifacts: [{
+                kind: 'file',
+                title: 'Fastify + worker + Redis app',
+                path: result.absolutePath,
+                content: result.stdout || result.stderr || result.absolutePath,
+                language: 'text',
+            }],
+        }
+    }
+
     if (toolCall.name === 'generate_nextjs_marketing_site') {
         const result = await generateNextjsMarketingSite(toolCall.arguments)
         emitToolProgress?.({
@@ -1410,9 +1798,9 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `generate_nextjs_marketing_site_${iteration + 1}`,
                 content: [
-                `Tool generate_nextjs_marketing_site executed for app: ${result.appDir}`,
-                `Brand: ${result.brandName}`,
-                `Files:\n${result.files.join('\n')}`,
+                    `Tool generate_nextjs_marketing_site executed for app: ${result.appDir}`,
+                    `Brand: ${result.brandName}`,
+                    `Files:\n${result.files.join('\n')}`,
                 ].join('\n\n'),
             },
             artifacts: result.files.map((file) => ({
@@ -1436,12 +1824,12 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `inspect_process_${iteration + 1}`,
                 content: [
-                `Tool inspect_process executed for id: ${result.id}`,
-                `Alive: ${result.alive ? 'yes' : 'no'}`,
-                `PID: ${result.pid}`,
-                `Working directory: ${result.cwd}`,
-                `Command: ${result.command}`,
-                result.logTail ? `LOG:\n${result.logTail}` : 'LOG:\n<empty>',
+                    `Tool inspect_process executed for id: ${result.id}`,
+                    `Alive: ${result.alive ? 'yes' : 'no'}`,
+                    `PID: ${result.pid}`,
+                    `Working directory: ${result.cwd}`,
+                    `Command: ${result.command}`,
+                    result.logTail ? `LOG:\n${result.logTail}` : 'LOG:\n<empty>',
                 ].join('\n\n'),
             },
             artifacts: result.logTail ? [{
@@ -1466,8 +1854,8 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `stop_process_${iteration + 1}`,
                 content: [
-                `Tool stop_process executed for id: ${result.id}`,
-                `Stopped: ${result.stopped ? 'yes' : 'no'}`,
+                    `Tool stop_process executed for id: ${result.id}`,
+                    `Stopped: ${result.stopped ? 'yes' : 'no'}`,
                 ].join('\n\n'),
             },
         }
@@ -1549,11 +1937,11 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `wait_for_http_${iteration + 1}`,
                 content: [
-                `Tool wait_for_http executed for URL: ${result.url}`,
-                `Reachable: ${result.ok ? 'yes' : 'no'}`,
-                `Status: ${result.status}`,
-                'error' in result && result.error ? `Error: ${result.error}` : null,
-                'excerpt' in result && result.excerpt ? `Excerpt:\n${result.excerpt}` : null,
+                    `Tool wait_for_http executed for URL: ${result.url}`,
+                    `Reachable: ${result.ok ? 'yes' : 'no'}`,
+                    `Status: ${result.status}`,
+                    'error' in result && result.error ? `Error: ${result.error}` : null,
+                    'excerpt' in result && result.excerpt ? `Excerpt:\n${result.excerpt}` : null,
                 ].filter(Boolean).join('\n\n'),
             },
             artifacts: [{
@@ -1615,12 +2003,12 @@ async function executeToolCall(
                 role: 'tool',
                 tool_call_id: `browser_task_${iteration + 1}`,
                 content: [
-                `Tool browser_task executed for URL: ${result.url}`,
-                `Title: ${result.title}`,
-                `Screenshot: ${result.screenshotPath || '<none>'}`,
-                result.pageErrors.length ? `Page errors:\n${result.pageErrors.join('\n')}` : 'Page errors:\n<none>',
-                result.consoleMessages.length ? `Console:\n${result.consoleMessages.join('\n')}` : 'Console:\n<none>',
-                `Text excerpt:\n${result.textExcerpt}`,
+                    `Tool browser_task executed for URL: ${result.url}`,
+                    `Title: ${result.title}`,
+                    `Screenshot: ${result.screenshotPath || '<none>'}`,
+                    result.pageErrors.length ? `Page errors:\n${result.pageErrors.join('\n')}` : 'Page errors:\n<none>',
+                    result.consoleMessages.length ? `Console:\n${result.consoleMessages.join('\n')}` : 'Console:\n<none>',
+                    `Text excerpt:\n${result.textExcerpt}`,
                 ].join('\n\n'),
             },
             artifacts: [
@@ -1633,13 +2021,13 @@ async function executeToolCall(
                 }] : []),
                 ...(result.consoleMessages.length ? [{
                     kind: 'log' as const,
-                    title: `Browser console`,
+                    title: 'Browser console',
                     content: result.consoleMessages.join('\n'),
                     language: 'text',
                 }] : []),
                 ...(result.pageErrors.length ? [{
                     kind: 'log' as const,
-                    title: `Browser page errors`,
+                    title: 'Browser page errors',
                     content: result.pageErrors.join('\n'),
                     language: 'text',
                 }] : []),
@@ -1664,12 +2052,12 @@ async function executeToolCall(
             role: 'tool',
             tool_call_id: `run_command_${iteration + 1}`,
             content: [
-            `Tool run_command executed: ${result.command}`,
-            `Working directory: ${result.cwd}`,
-            `Exit code: ${result.exitCode ?? 'null'}`,
-            `Timed out: ${result.timedOut ? 'yes' : 'no'}`,
-            result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
-            result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                `Tool run_command executed: ${result.command}`,
+                `Working directory: ${result.cwd}`,
+                `Exit code: ${result.exitCode ?? 'null'}`,
+                `Timed out: ${result.timedOut ? 'yes' : 'no'}`,
+                result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
+                result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
             ].join('\n\n'),
         },
         artifacts: [{
@@ -1692,6 +2080,7 @@ async function executeComposeVerificationFlow({
     cwd,
     url,
     expectText,
+    executeTool,
 }: {
     workingMessages: GPT_ChatMessage[]
     executedToolCalls: Set<string>
@@ -1699,8 +2088,9 @@ async function executeComposeVerificationFlow({
     cwd: string
     url: string
     expectText?: string
+    executeTool: (toolCall: ToolCall, iteration: number, progress?: ToolProgressEmitter) => Promise<ToolExecutionResult>
 }) {
-    const steps: ToolCall[] = [
+    const verificationSteps: ToolCall[] = [
         {
             name: 'compose_up',
             arguments: {
@@ -1725,6 +2115,9 @@ async function executeComposeVerificationFlow({
                 expectText,
             },
         },
+    ]
+
+    const cleanupSteps: ToolCall[] = [
         {
             name: 'compose_logs',
             arguments: {
@@ -1740,15 +2133,55 @@ async function executeComposeVerificationFlow({
         },
     ]
 
-    for (const toolCall of steps) {
-        const key = JSON.stringify(toolCall)
-        if (executedToolCalls.has(key)) {
-            continue
+    let composeLifecycleStarted = false
+
+    try {
+        for (const toolCall of verificationSteps) {
+            const key = JSON.stringify(toolCall)
+            if (executedToolCalls.has(key)) {
+                if (toolCall.name === 'compose_up') {
+                    composeLifecycleStarted = true
+                }
+                continue
+            }
+
+            if (toolCall.name === 'compose_up') {
+                composeLifecycleStarted = true
+            }
+
+            const { message, artifacts } = await executeTool(toolCall, -1)
+            executedToolCalls.add(key)
+            collectedArtifacts.push(...(artifacts || []))
+            workingMessages.push({ role: 'assistant', content: `<tool_call>${key}</tool_call>` })
+            workingMessages.push(message)
         }
-        const { message, artifacts } = await executeToolCall(toolCall, -1)
-        executedToolCalls.add(key)
-        collectedArtifacts.push(...(artifacts || []))
-        workingMessages.push({ role: 'assistant', content: `<tool_call>${key}</tool_call>` })
-        workingMessages.push(message)
+    } finally {
+        for (const toolCall of cleanupSteps) {
+            if (!composeLifecycleStarted) {
+                break
+            }
+            const key = JSON.stringify(toolCall)
+            if (executedToolCalls.has(key)) {
+                continue
+            }
+
+            workingMessages.push({ role: 'assistant', content: `<tool_call>${key}</tool_call>` })
+
+            try {
+                const { message, artifacts } = await executeTool(toolCall, -1)
+                executedToolCalls.add(key)
+                collectedArtifacts.push(...(artifacts || []))
+                workingMessages.push(message)
+            } catch (error) {
+                workingMessages.push({
+                    role: 'tool',
+                    tool_call_id: `${toolCall.name}_cleanup`,
+                    content: [
+                        `Tool ${toolCall.name} cleanup failed in: ${cwd}`,
+                        `Error: ${error instanceof Error ? error.message : String(error)}`,
+                    ].join('\n\n'),
+                })
+            }
+        }
     }
 }

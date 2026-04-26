@@ -148,7 +148,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                                     <th className='px-4 py-3'>Path</th>
                                     <th className='px-4 py-3'>Status</th>
                                     <th className='px-4 py-3'>Duration</th>
-                                    <th className='px-4 py-3 max-w-[18rem] truncate'>Domain</th>
+                                    <th className='px-4 py-3 max-w-72 truncate'>Domain</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -165,7 +165,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                                             </span>
                                         </td>
                                         <td className='px-4 py-3 text-bright/62'>{req.request_time}ms</td>
-                                        <td className='px-4 py-3 max-w-[18rem] truncate text-bright/62'>{req.domain}</td>
+                                        <td className='px-4 py-3 max-w-72 truncate text-bright/62'>{req.domain}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -185,7 +185,7 @@ function StatCard({ title, value, accent = 'slate', icon, outline }: StatCardPro
         rose: 'from-rose-500/18 to-red-500/6 border-rose-400/18 text-rose-200',
         violet: 'from-violet-500/18 to-fuchsia-500/6 border-violet-400/18 text-violet-200',
         cyan: 'from-cyan-500/18 to-sky-500/6 border-cyan-400/18 text-cyan-200',
-        slate: 'from-white/10 to-white/[0.03] border-white/10 text-bright/75',
+        slate: 'from-white/10 to-white/3 border-white/10 text-bright/75',
     } as const
 
     return (

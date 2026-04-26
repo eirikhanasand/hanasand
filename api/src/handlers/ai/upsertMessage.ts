@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import { getConversationForUser, requireAiUser } from './shared.ts'
+import { recordAiUsageEvent } from '#utils/ai/usage.ts'
 
 export default async function upsertAiMessage(req: FastifyRequest, res: FastifyReply) {
     const userId = await requireAiUser(req, res)
@@ -12,6 +13,9 @@ export default async function upsertAiMessage(req: FastifyRequest, res: FastifyR
     const conversation = await getConversationForUser(id, userId)
     if (!conversation) {
         return res.status(404).send({ error: 'Conversation not found.' })
+    }
+    if (conversation.access_role === 'reviewer') {
+        return res.status(403).send({ error: 'Reviewer access is read-only.' })
     }
 
     const {
@@ -37,6 +41,14 @@ export default async function upsertAiMessage(req: FastifyRequest, res: FastifyR
     if (!messageId || !role) {
         return res.status(400).send({ error: 'Missing message id or role.' })
     }
+
+    const existing = await run(`
+        SELECT 1
+        FROM ai_messages
+        WHERE id = $1
+        LIMIT 1
+    `, [messageId])
+    const inserted = !existing.rows.length
 
     await run(`
         INSERT INTO ai_messages (
@@ -74,8 +86,35 @@ export default async function upsertAiMessage(req: FastifyRequest, res: FastifyR
             active_model = COALESCE($5, active_model),
             updated_at = NOW()
         WHERE id = $1
-          AND owner_id = $2
+          AND (
+              owner_id = $2
+              OR EXISTS (
+                  SELECT 1
+                  FROM ai_conversation_collaborators
+                  WHERE conversation_id = ai_conversations.id
+                    AND user_id = $2
+                    AND role = 'editor'
+              )
+          )
     `, [id, userId, role, content, modelName])
+
+    if (inserted) {
+        await recordAiUsageEvent({
+            ownerId: conversation.owner_id,
+            actorId: userId,
+            conversationId: conversation.id,
+            workspaceKind: conversation.workspace_kind,
+            workspaceId: conversation.workspace_id,
+            kind: 'message_written',
+            metadata: {
+                role,
+                pending,
+                error,
+                modelName,
+                accessRole: conversation.access_role || 'owner',
+            },
+        })
+    }
 
     return res.status(201).send({ ok: true })
 }
