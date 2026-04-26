@@ -169,7 +169,7 @@ export default function RateLimitsPageClient({
                         </p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-bright/78'>
+                        <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
                             <input
                                 type='checkbox'
                                 checked={settings.enabled}
@@ -204,7 +204,7 @@ export default function RateLimitsPageClient({
                                 <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>{scope}</p>
                                 <h2 className='mt-1 text-base font-semibold text-bright/90'>Default policy</h2>
                             </div>
-                            <div className='rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] text-bright/55'>
+                            <div className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/55'>
                                 all API routes
                             </div>
                         </div>
@@ -246,7 +246,7 @@ export default function RateLimitsPageClient({
                     <button
                         type='button'
                         onClick={addOverride}
-                        className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/[0.08]'
+                        className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
                     >
                         <Plus className='h-4 w-4' />
                         Add override
