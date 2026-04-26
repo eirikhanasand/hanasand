@@ -13,9 +13,9 @@ export default async function Page({
     const id = Array.isArray(params.id) ? params.id[0] : params.id
 
     return (
-        <div className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-40 lg:px-100 grid gap-2 place-items-center'>
-            <div className='grid w-full spawn rounded-lg overflow-hidden outline outline-dark'>
-                <div className='w-full h-full outline outline-dark p-4 space-y-4 relative grid place-items-center'>
+        <div className='grid min-h-[90.5vh] w-full place-items-center px-4 py-6 sm:px-6 md:px-10 lg:px-16'>
+            <div className='grid w-full max-w-6xl spawn rounded-lg overflow-hidden outline outline-dark'>
+                <div className='grid min-h-[34rem] w-full place-items-center gap-6 outline outline-dark p-4 pb-20 sm:p-6 sm:pb-20 md:min-h-[36rem]'>
                     {pathDidNotExist && (
                         <div className='absolute top-2 w-full px-2'>
                             <h1 className='p-2 rounded-lg'>The test &apos;{id}&apos; does not exist yet! Feel free to create it 😃</h1>
@@ -30,12 +30,11 @@ export default async function Page({
                             <LinkPageClient serverId={id} created={created} />
                         </div>
                     </div>
-                    {created && <Link href='/test' className='absolute bottom-0 right-16 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+                    {created && <Link href='/test' className='absolute bottom-4 right-16 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
                         <ArrowLeft />
                     </Link> }
-                    <div className='-ml-4 flex w-full absolute bottom-0 p-4'>
-                        <div className='w-12' />
-                        <h1 className='flex-1 rounded-lg w-full grid place-items-center text-superlight/90 text-center md:text-left text-sm md:text-base'>
+                    <div className='absolute bottom-4 left-4 right-16 flex min-w-0'>
+                        <h1 className='flex-1 rounded-lg text-superlight/90 text-center text-sm md:text-base'>
                             Always get permission before testing.
                         </h1>
                     </div>

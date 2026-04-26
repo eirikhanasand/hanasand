@@ -59,8 +59,8 @@ export default function TestStatsPageClient() {
     }
 
     return (
-        <div className='grid h-full w-full gap-4 p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]'>
-            <section className='grid gap-4 rounded-xl border border-white/10 bg-white/4 p-4'>
+        <div className='grid w-full min-w-0 gap-4 p-4 md:p-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]'>
+            <section className='grid min-w-0 gap-4 rounded-xl border border-white/10 bg-white/4 p-4'>
                 <div className='flex gap-2'>
                     <ChartColumn className='stroke-orange-500' />
                     <h1 className='text-xl'>Test Results</h1>
@@ -82,11 +82,11 @@ export default function TestStatsPageClient() {
                     </button>
                 </form>
                 {test && (
-                    <div className='grid gap-3 rounded-xl border border-white/10 bg-white/4 p-4 text-sm text-bright/80'>
-                        <div className='flex gap-2'><Rocket className='h-4 w-4' /><h1>{test.id}</h1></div>
-                        <div className='flex gap-2'><Globe className='h-4 w-4 shrink-0' /><h1 className='break-all'>{test.url}</h1></div>
-                        <div className='flex gap-2'><Watch className='h-4 w-4' /><h1>{prettyDate(test.created_at)}</h1></div>
-                        <div className='flex gap-2'><Eye className='h-4 w-4' /><h1>{test.visits}</h1></div>
+                    <div className='grid min-w-0 gap-3 rounded-xl border border-white/10 bg-white/4 p-4 text-sm text-bright/80'>
+                        <div className='flex min-w-0 gap-2'><Rocket className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-words'>{test.id}</h1></div>
+                        <div className='flex min-w-0 gap-2'><Globe className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-all'>{test.url}</h1></div>
+                        <div className='flex min-w-0 gap-2'><Watch className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-words'>{prettyDate(test.created_at)}</h1></div>
+                        <div className='flex min-w-0 gap-2'><Eye className='h-4 w-4 shrink-0' /><h1 className='min-w-0 break-words'>{test.visits}</h1></div>
                         <Link href={`/test/${test.id}`} className='mt-2 rounded-lg border border-white/10 bg-white/6 px-3 py-2 text-center text-sm hover:bg-white/10'>
                             Open Scan
                         </Link>
@@ -98,7 +98,7 @@ export default function TestStatsPageClient() {
                     </Link>
                 </div>
             </section>
-            <section className='grid gap-4'>
+            <section className='grid min-w-0 gap-4'>
                 <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine />
                 <RecentScans title='Recent Scans' empty='No recent scans yet.' scans={recentScans} />
             </section>

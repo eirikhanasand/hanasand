@@ -68,16 +68,16 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
 
     if (created) {
         return (
-            <div onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex gap-2 cursor-pointer items-center bg-dark px-4 py-1 rounded-xl'>
-                <Copy height={15} width={15} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'} />
-                <h1>{serverId}</h1>
+            <div onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex max-w-full cursor-pointer items-center gap-2 rounded-xl bg-dark px-4 py-1'>
+                <Copy height={15} width={15} className={`shrink-0 ${didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'}`} />
+                <h1 className='min-w-0 break-all'>{serverId}</h1>
             </div>
         )
     }
 
     return (
-        <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]'>
-            <section className='grid gap-5 rounded-3xl border border-white/10 bg-white/4 p-6'>
+        <div className='grid w-full min-w-0 max-w-6xl gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]'>
+            <section className='grid min-w-0 gap-5 rounded-2xl border border-white/10 bg-white/4 p-5 sm:p-6'>
                 <div>
                     <h2 className='text-xl font-semibold text-bright'>Load Test Launcher</h2>
                     <p className='mt-2 max-w-2xl text-sm leading-6 text-bright/55'>Create a fresh scan every time, then revisit or rerun from its result page.</p>
@@ -101,7 +101,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                     </div>
                 </form>
             </section>
-            <section className='grid gap-4'>
+            <section className='grid min-w-0 gap-4'>
                 <RecentScans title='My Recent Scans' empty='No personal scans yet.' scans={myScans} mine />
                 <RecentScans title='Recent Scans' empty='No scans recorded yet.' scans={recentScans} />
             </section>

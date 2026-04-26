@@ -91,7 +91,7 @@ export default function Content({
     }, [id, setTest, reconnect, setIsConnected, setParticipants, rerun, setRerun, setError])
 
     return (
-        <div className='p-2 flex-1 rounded-lg outline-1 outline-dark max-w-full overflow-hidden space-y-4'>
+        <div className='min-h-[30rem] min-w-0 max-w-full space-y-4 overflow-hidden rounded-lg outline-1 outline-dark p-2 md:h-full'>
             <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
             <Notify message={error} />
         </div>

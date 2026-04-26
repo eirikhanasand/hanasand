@@ -13,7 +13,7 @@ type RecentScansProps = {
 
 export default function RecentScans({ title, empty, scans, mine = false }: RecentScansProps) {
     return (
-        <section className='grid gap-3 rounded-xl border border-white/10 bg-white/4 p-4'>
+        <section className='grid min-w-0 gap-3 rounded-xl border border-white/10 bg-white/4 p-4'>
             <div className='flex items-center justify-between gap-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-bright'>{title}</h2>
@@ -31,16 +31,16 @@ export default function RecentScans({ title, empty, scans, mine = false }: Recen
                         <Link
                             key={scan.id}
                             href={`/test/${scan.id}`}
-                            className='grid gap-2 rounded-lg border border-white/8 bg-white/3 px-3 py-3 transition hover:bg-white/7'
+                            className='grid min-w-0 gap-2 rounded-lg border border-white/8 bg-white/3 px-3 py-3 transition hover:bg-white/7'
                         >
-                            <div className='flex items-center justify-between gap-3'>
+                            <div className='flex min-w-0 items-center justify-between gap-3'>
                                 <div className='min-w-0'>
                                     <div className='truncate text-sm font-medium text-bright/90'>{scan.url}</div>
-                                    <div className='mt-1 flex flex-wrap items-center gap-3 text-xs text-bright/45'>
-                                        <span className='flex items-center gap-1'><Fingerprint className='h-3.5 w-3.5' /> {scan.id}</span>
-                                        <span className='flex items-center gap-1'><ActivityIcon className='h-3.5 w-3.5' /> {scan.status}</span>
-                                        <span className='flex items-center gap-1'><Eye className='h-3.5 w-3.5' /> {scan.visits}</span>
-                                        {mine && <span className='flex items-center gap-1'><UserRound className='h-3.5 w-3.5' /> mine</span>}
+                                    <div className='mt-1 flex min-w-0 flex-wrap items-center gap-3 text-xs text-bright/45'>
+                                        <span className='flex min-w-0 items-center gap-1'><Fingerprint className='h-3.5 w-3.5 shrink-0' /> <span className='min-w-0 break-all'>{scan.id}</span></span>
+                                        <span className='flex items-center gap-1'><ActivityIcon className='h-3.5 w-3.5 shrink-0' /> {scan.status}</span>
+                                        <span className='flex items-center gap-1'><Eye className='h-3.5 w-3.5 shrink-0' /> {scan.visits}</span>
+                                        {mine && <span className='flex items-center gap-1'><UserRound className='h-3.5 w-3.5 shrink-0' /> mine</span>}
                                     </div>
                                 </div>
                                 <ArrowRight className='h-4 w-4 shrink-0 text-bright/35' />

@@ -12,7 +12,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className='p-8 flex w-[100vw] h-[90.5vh] gap-2 overflow-hidden'>
+        <div className='grid min-h-[90.5vh] w-full gap-3 overflow-x-hidden p-4 md:h-[90.5vh] md:grid-cols-[18rem_minmax(0,1fr)] md:p-6 lg:p-8'>
             <TestPageClient test={test} />
         </div>
     )

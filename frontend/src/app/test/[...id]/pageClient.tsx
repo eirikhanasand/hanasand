@@ -6,6 +6,7 @@ import { ActivityIcon, Bug, Fingerprint, Hourglass, LinkIcon, Logs, RefreshCw, T
 import Visits from '@/components/test/visits'
 import Content from '@/components/test/content'
 import { Dispatch, SetStateAction, useState } from 'react'
+import type { ReactNode } from 'react'
 import ConnectionStatus from '@/components/test/connectionStatus'
 
 type LeftSideProps = {
@@ -87,9 +88,9 @@ function LeftSide({
     }
 
     return (
-        <div className='p-2 outline-1 outline-dark rounded-lg h-full min-w-60 w-fit flex flex-col gap-2 relative'>
+        <aside className='flex min-h-0 w-full min-w-0 flex-col gap-2 rounded-lg outline-1 outline-dark p-2 md:h-full'>
             <div className='overflow-auto flex-1'>
-                <div className='flex justify-between items-center gap-5'>
+                <div className='flex flex-wrap justify-between items-center gap-3'>
                     <h1 className='text-lg font-semibold'>Metadata</h1>
                     <div className='flex items-center gap-2'>
                         {isConnected ? (
@@ -108,66 +109,51 @@ function LeftSide({
                 <div className='px-px'>
                     <ConnectionStatus isConnected={isConnected} />
                 </div>
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <Users />
-                    <h1>{participants}</h1>
-                </div>
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <Fingerprint />
-                    <h1>{test.id}</h1>
-                </div>
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <LinkIcon />
-                    <h1>{test.url}</h1>
-                </div>
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <Hourglass />
-                    <h1>{test.timeout}s</h1>
-                </div>
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <Timer />
-                    <h1>{`${ms ? `${ms}ms` : 'Pending'}`}</h1>
-                </div>
-                <div className='flex gap-2 rounded-rlg hover:bg-dark p-2'>
-                    <Workflow />
-                    <h1>{test.stages.default ? 'Default' : JSON.stringify(test.stages)}</h1>
-                </div>
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <ActivityIcon />
-                    <h1>{upperCaseFirstLetter(test.status)}</h1>
-                </div>
+                <MetaRow icon={<Users />} value={participants} />
+                <MetaRow icon={<Fingerprint />} value={test.id} />
+                <MetaRow icon={<LinkIcon />} value={test.url} />
+                <MetaRow icon={<Hourglass />} value={`${test.timeout}s`} />
+                <MetaRow icon={<Timer />} value={`${ms ? `${ms}ms` : 'Pending'}`} />
+                <MetaRow icon={<Workflow />} value={test.stages.default ? 'Default' : JSON.stringify(test.stages)} />
+                <MetaRow icon={<ActivityIcon />} value={upperCaseFirstLetter(test.status)} />
                 <Visits id={test.id} serverVisits={test.visits} />
-                <div className='flex gap-2 rounded-lg hover:bg-dark p-2'>
-                    <Watch />
-                    <h1>{prettyDate(test.created_at)}</h1>
-                </div>
+                <MetaRow icon={<Watch />} value={prettyDate(test.created_at)} />
                 {test.logs.length > 0 && <button
                     onClick={() => setShowLogs(prev => !prev)}
-                    className='flex gap-2 rounded-lg hover:bg-dark p-2 w-full cursor-pointer'
+                    className='flex w-full min-w-0 gap-2 rounded-lg p-2 text-left hover:bg-dark'
                 >
-                    <Logs />
-                    <h1>{showLogs ? 'Hide' : 'Show'} ({test.logs.length}) logs</h1>
+                    <Logs className='h-5 w-5 shrink-0' />
+                    <h1 className='min-w-0 break-words'>{showLogs ? 'Hide' : 'Show'} ({test.logs.length}) logs</h1>
                 </button>}
                 {test.errors.length > 0 && <button
                     onClick={() => setShowErrors(prev => !prev)}
-                    className='text-red-500 flex gap-2 rounded-lg hover:bg-red-500/20 p-2 w-full cursor-pointer bg-red-500/10 outline-1 outline-red-500/20'
+                    className='flex w-full min-w-0 gap-2 rounded-lg bg-red-500/10 p-2 text-left text-red-500 outline-1 outline-red-500/20 hover:bg-red-500/20'
                 >
-                    <Bug />
-                    <h1>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
+                    <Bug className='h-5 w-5 shrink-0' />
+                    <h1 className='min-w-0 break-words'>{showErrors ? 'Hide' : 'Show'} ({test.errors.length}) errors</h1>
                 </button>}
             </div>
             <div className='mt-auto'>
                 <button
                     onClick={handleRerun}
-                    className={`group flex gap-2 rounded-lg p-2 w-full ${rerun
+                    className={`group flex w-full min-w-0 gap-2 rounded-lg p-2 ${rerun
                         ? 'cursor-not-allowed bg-yellow-400/10 outline-1 outline-yellow-400/20 text-yellow-500 hover:bg-yellow-400/15'
                         : 'cursor-pointer bg-blue-400/10 outline-1 outline-blue-400/20 text-blue-500 hover:bg-blue-400/15'
                     }`}
                 >
-                    {rerun ? <Hourglass className='group-hover:stroke-yellow-400/10 ' /> : <RefreshCw className='group-hover:stroke-blue-400' />}
+                    {rerun ? <Hourglass className='h-5 w-5 shrink-0 group-hover:stroke-yellow-400/10 ' /> : <RefreshCw className='h-5 w-5 shrink-0 group-hover:stroke-blue-400' />}
                     {rerun ? <h1>Running...</h1> : <h1>Rerun</h1>}
                 </button>
             </div>
+        </aside>
+    )
+}
+
+function MetaRow({ icon, value }: { icon: ReactNode, value: ReactNode }) {
+    return (
+        <div className='flex min-w-0 gap-2 rounded-lg p-2 hover:bg-dark'>
+            <span className='grid h-6 w-6 shrink-0 place-items-center [&>svg]:h-5 [&>svg]:w-5'>{icon}</span>
+            <h1 className='min-w-0 flex-1 break-words leading-6'>{value}</h1>
         </div>
     )
 }
