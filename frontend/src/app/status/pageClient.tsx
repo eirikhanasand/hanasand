@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import getMetrics, { type TrafficSummaryMetric } from '@/utils/traffic/getMetrics'
+import { type TrafficSummaryMetric } from '@/utils/traffic/getMetrics'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
-import useWS from '@/hooks/useWS'
 import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, Binoculars, CheckCircle, HeartPulse, ShieldAlert, Timer, XCircle } from 'lucide-react'
 import { toDomainTPS } from '@/utils/monitoring/domain'
@@ -26,8 +25,12 @@ type DashboardProps = {
     serviceStatus: ServiceStatus
 }
 
-function relativeTime(value: string) {
-    const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000))
+function relativeTime(value: string, now: number | null) {
+    if (!now) {
+        return 'Recent'
+    }
+
+    const seconds = Math.max(0, Math.round((now - new Date(value).getTime()) / 1000))
     if (seconds < 60) {
         return `${seconds}s ago`
     }
@@ -50,20 +53,13 @@ function clampMetricLabel(value: string) {
 }
 
 export default function StatusDashboard({ metrics: serverMetrics, domainMetrics: serverDomainMetrics, topDomains, serviceStatus }: DashboardProps) {
-    const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
-    const [domainMetrics, setDomainMetrics] = useState<TrafficSummaryMetric[]>(serverDomainMetrics)
-    const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id', replace: true })
+    const [now, setNow] = useState<number | null>(null)
 
     useEffect(() => {
-        (async () => {
-            const updatedMetrics = await getMetrics()
-            const updatedDomainMetrics = await getMetrics('domain')
-            setMetrics(updatedMetrics)
-            setDomainMetrics(updatedDomainMetrics)
-        })()
+        setNow(Date.now())
     }, [])
 
-    const domainsSortedByTps = toDomainTPS([], domains, 5)
+    const domainsSortedByTps = toDomainTPS([], topDomains, 5)
     const liveDomains = domainsSortedByTps.filter(domain => domain.tps > 0)
     const livePeakTps = liveDomains.reduce((highest, domain) => Math.max(highest, domain.tps), 0)
     const statusTone = {
@@ -119,7 +115,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                                     <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
                                         <Binoculars className='h-4 w-4 shrink-0 text-orange-300' />
                                         <span className='text-bright/60'>Last check</span>
-                                        <span className='ml-auto text-right font-medium text-bright'>{relativeTime(check.checked_at)}</span>
+                                        <span className='ml-auto text-right font-medium text-bright'>{relativeTime(check.checked_at, now)}</span>
                                     </div>
                                 </div>
                                 {check.message && <p className='mt-3 rounded-lg bg-red-500/10 p-2 text-xs text-red-100'>{check.message}</p>}
@@ -152,7 +148,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
 
                 <div className='glass-card rounded-lg p-4'>
                     <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Domain summary</p>
-                    <h3 className='mt-3 text-lg font-semibold text-bright'>{domainMetrics.length} cards loaded</h3>
+                    <h3 className='mt-3 text-lg font-semibold text-bright'>{serverDomainMetrics.length} cards loaded</h3>
                     <p className='mt-1 text-sm text-bright/55'>
                         Hourly, daily, weekly, and total counters from the CDN summary cache.
                     </p>
@@ -160,7 +156,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
 
                 <div className='glass-card rounded-lg p-4'>
                     <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Monitor snapshot</p>
-                    <h3 className='mt-3 text-lg font-semibold text-bright'>{relativeTime(serviceStatus.generated_at)}</h3>
+                    <h3 className='mt-3 text-lg font-semibold text-bright'>{relativeTime(serviceStatus.generated_at, now)}</h3>
                     <p className='mt-1 text-sm text-bright/55'>
                         Last generated health sample for the service checks above.
                     </p>
@@ -184,7 +180,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
             {/* Metrics */}
             <h1 className='font-semibold text-lg'>Most visited subdomains</h1>
             <div className='grid md:grid-cols-5 gap-4'>
-                {domainMetrics.map((d, i) => (
+                {serverDomainMetrics.map((d, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
                         <Marquee
                             text={clampMetricLabel(d.value)}
@@ -202,7 +198,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
             {/* Top endpoints */}
             <h1 className='font-semibold text-lg'>Top endpoints</h1>
             <div className='grid md:grid-cols-5 gap-4'>
-                {metrics.map((m, i) => (
+                {serverMetrics.map((m, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
                         <Marquee
                             text={clampMetricLabel(m.value)}

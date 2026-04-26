@@ -8,6 +8,10 @@ export async function fetchRecentTests(scope: 'recent' | 'mine', limit = 12): Pr
     try {
         const headers: Record<string, string> = {}
         const id = getCookie('id')
+        if (scope === 'mine' && !id) {
+            return []
+        }
+
         if (scope === 'mine' && id) {
             headers.id = id
         }
@@ -23,8 +27,7 @@ export async function fetchRecentTests(scope: 'recent' | 'mine', limit = 12): Pr
         }
 
         return await response.json()
-    } catch (error) {
-        console.error(`Error fetching recent tests: ${error}`)
+    } catch {
         return []
     }
 }

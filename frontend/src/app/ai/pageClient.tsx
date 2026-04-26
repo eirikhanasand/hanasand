@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bot, FolderKanban, PanelRight, RotateCcw, SquareArrowOutUpRight, X } from 'lucide-react'
+import { FolderKanban, PanelRight, RotateCcw, SquareArrowOutUpRight, X } from 'lucide-react'
 import ChatPane from '@/components/ai/chatPane'
 import ChatSidebar from '@/components/ai/chatSidebar'
 import WorkspacePane from '@/components/ai/workspacePane'
@@ -64,16 +64,12 @@ export default function AIPageClient({
     }
 
     return (
-        <div className={`${compact ? 'h-screen' : 'h-[calc(100vh-4.5rem)]'} w-full overflow-hidden`}>
-            <div className={`flex h-full flex-col ${compact ? 'px-3 pb-3 pt-3' : 'px-4 pb-5 pt-6 md:px-6 lg:px-8 lg:pt-8'}`}>
+        <div className={`${compact ? 'h-screen' : 'h-[calc(100vh-4.5rem)]'} w-full overflow-hidden bg-[#151515]`}>
+            <div className={`flex h-full flex-col ${compact ? 'px-0 pb-0 pt-0' : 'px-0 pb-0 pt-0'}`}>
                 {showHeader ? (
-                    <div className='mb-4 flex items-center justify-between rounded-2xl bg-dark/30 px-4 py-3 outline outline-dark'>
+                    <div className='flex h-14 items-center justify-between border-b border-[#2d2d2b] bg-[#161616] px-5'>
                         <div className='min-w-0'>
-                            <div className='flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-bright/35'>
-                                <Bot className='h-3.5 w-3.5 text-[#fd8738]' />
-                                Hanasand AI Workspace
-                            </div>
-                            <h1 className='mt-2 truncate text-lg font-semibold text-bright/92'>
+                            <h1 className='truncate text-sm font-semibold text-[#eeeeea]'>
                                 {ai.activeConversation?.title || 'Workspace'}
                             </h1>
                         </div>
@@ -81,11 +77,11 @@ export default function AIPageClient({
                             <button
                                 type='button'
                                 onClick={() => setDetailsOpen((prev) => !prev)}
-                                className={`grid h-10 w-10 place-items-center rounded-xl outline transition-colors ${detailsOpen ? 'bg-[#fd8738]/12 text-[#fd8738] outline-[#fd8738]/20' : 'bg-dark/30 text-bright/55 outline-dark hover:text-bright/85'}`}
+                                className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${detailsOpen ? 'bg-[#333331] text-[#eeeeea]' : 'text-[#8d8d89] hover:bg-[#272725] hover:text-[#eeeeea]'}`}
                             >
                                 <PanelRight className='h-4 w-4' />
                             </button>
-                            <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-xl bg-dark/30 px-3 py-2 text-sm text-bright/72 outline outline-dark transition-colors hover:text-[#fd8738]'>
+                            <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#b7b7b2] transition-colors hover:bg-[#272725] hover:text-[#eeeeea]'>
                                 Editor
                                 <SquareArrowOutUpRight className='h-4 w-4' />
                             </Link>
@@ -93,7 +89,7 @@ export default function AIPageClient({
                     </div>
                 ) : null}
 
-                <div className={`grid min-h-0 flex-1 gap-4 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[17rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[17rem_minmax(0,1fr)]'}`}>
+                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[17rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[17rem_minmax(0,1fr)]'}`}>
                     <ChatSidebar
                         activeConversation={ai.activeConversation}
                         activeConversationId={ai.activeConversationId}
@@ -168,19 +164,19 @@ export default function AIPageClient({
                 </div>
 
                 {ai.statusNotice ? (
-                    <div className='mt-3 rounded-2xl bg-amber-500/10 px-4 py-3 text-sm text-amber-100 outline outline-amber-500/20'>
+                    <div className='mx-4 mt-3 rounded-lg border border-[#4a4030] bg-[#27231d] px-4 py-3 text-sm text-[#e6d6b7]'>
                         {ai.statusNotice}
                     </div>
                 ) : null}
 
                 {ai.resumeNotice ? (
-                    <div className='mt-3 flex items-start justify-between gap-3 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-50 outline outline-emerald-500/20'>
+                    <div className='mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-[#3b4537] bg-[#20251f] px-4 py-3 text-sm text-[#d9e3d4]'>
                         <div className='flex min-w-0 items-start gap-3'>
-                            <RotateCcw className='mt-0.5 h-4 w-4 shrink-0 text-emerald-300' />
+                            <RotateCcw className='mt-0.5 h-4 w-4 shrink-0 text-[#a9b8a0]' />
                             <div className='min-w-0'>
                                 <p>{ai.resumeNotice.message}</p>
                                 {ai.resumeNotice.workspaceId ? (
-                                    <Link href={`/s/${ai.resumeNotice.workspaceId}`} className='mt-2 inline-flex items-center gap-2 text-xs text-emerald-200 underline-offset-4 hover:underline'>
+                                    <Link href={`/s/${ai.resumeNotice.workspaceId}`} className='mt-2 inline-flex items-center gap-2 text-xs text-[#d9e3d4] underline-offset-4 hover:underline'>
                                         Open recovered workspace
                                         <SquareArrowOutUpRight className='h-3.5 w-3.5' />
                                     </Link>
@@ -190,7 +186,7 @@ export default function AIPageClient({
                         <button
                             type='button'
                             onClick={() => ai.setResumeNotice(null)}
-                            className='grid h-8 w-8 shrink-0 place-items-center rounded-xl text-emerald-100/80 outline outline-emerald-500/20 transition-colors hover:bg-emerald-500/10 hover:text-emerald-50'
+                            className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#d9e3d4]/80 transition-colors hover:bg-[#30382d] hover:text-[#f1f3ee]'
                             aria-label='Dismiss resume notice'
                         >
                             <X className='h-4 w-4' />
@@ -199,15 +195,15 @@ export default function AIPageClient({
                 ) : null}
 
                 {!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun) ? (
-                    <div className={`mt-3 rounded-2xl px-4 py-3 text-sm outline ${ai.runtimeState.lastFailure ? 'bg-red-500/10 text-red-100 outline-red-500/20' : 'bg-dark/30 text-bright/70 outline-dark'}`}>
+                    <div className={`mx-4 mt-3 rounded-lg border px-4 py-3 text-sm ${ai.runtimeState.lastFailure ? 'border-[#5d3835] bg-[#2a1d1c] text-[#e6c1bd]' : 'border-[#2d2d2b] bg-[#202020] text-[#b7b7b2]'}`}>
                         {ai.runtimeState.lastFailure?.message || ai.runtimeState.lastToolRun?.detail || runtimeStateSummary(ai.runtimeState)}
                     </div>
                 ) : null}
 
                 {mode === 'landing' && !ai.filteredConversations.length && !ai.archivedConversations.length ? (
                     <div className='mt-4 flex justify-center'>
-                        <div className='inline-flex items-center gap-2 rounded-full bg-dark/30 px-4 py-2 text-sm text-bright/48 outline outline-dark'>
-                            <FolderKanban className='h-4 w-4 text-[#fd8738]' />
+                        <div className='inline-flex items-center gap-2 rounded-full border border-[#30302e] bg-[#202020] px-4 py-2 text-sm text-[#8d8d89]'>
+                            <FolderKanban className='h-4 w-4 text-[#b7b7b2]' />
                             Import a repo or attach a share from a chat once you need workspace context.
                         </div>
                     </div>
