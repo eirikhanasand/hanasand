@@ -96,6 +96,8 @@ import deleteMailFilter from './handlers/mail/deleteFilter.ts'
 import getMailBlob from './handlers/mail/getBlob.ts'
 import { deleteNote, getNote, getNotes, postNote, putNote } from './handlers/notes.ts'
 import { downloadAppUpdate, downloadNamedAppUpdate, getAppUpdate, getTauriAppUpdate } from './handlers/app/get.ts'
+import getRateLimitSettingsHandler from './handlers/rateLimit/getSettings.ts'
+import putRateLimitSettingsHandler from './handlers/rateLimit/putSettings.ts'
 
 /**
  * Defines the routes available in the API.
@@ -223,6 +225,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Docker stats
     fastify.get('/docker', getDocker)
+
+    // Rate limiting
+    fastify.get('/rate-limit/settings', getRateLimitSettingsHandler)
+    fastify.put('/rate-limit/settings', putRateLimitSettingsHandler)
 
     // Coding tools
     fastify.get('/tools/execution-targets', getExecutionTargets)

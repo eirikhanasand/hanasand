@@ -406,3 +406,33 @@ type AIRuntimeState = {
     lastFailure: AIRuntimeFailure | null
     lastUpdatedAt: string | null
 }
+
+type RateLimitScope = 'anonymous' | 'authenticated' | 'internal'
+
+type RateLimitRule = {
+    windowMs: number
+    maxRequests: number
+}
+
+type RateLimitOverride = {
+    id: string
+    enabled: boolean
+    method: string
+    route: string
+    scope: RateLimitScope
+    windowMs: number
+    maxRequests: number
+}
+
+type RateLimitSettings = {
+    enabled: boolean
+    defaults: Record<RateLimitScope, RateLimitRule>
+    overrides: RateLimitOverride[]
+    updatedAt: string | null
+    updatedBy: string | null
+}
+
+type RateLimitRoute = {
+    method: string
+    route: string
+}

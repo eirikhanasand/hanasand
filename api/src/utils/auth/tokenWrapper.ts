@@ -21,6 +21,9 @@ type Valid = {
 export default async function tokenWrapper(req: FastifyRequest, res: FastifyReply): Promise<Valid> {
     const authHeader = req.headers['authorization']
     const id = req.headers['id']
+    const cachedSession = (req as FastifyRequest & {
+        rateLimitSession?: Awaited<ReturnType<typeof validateSession>>
+    }).rateLimitSession
 
     if (Array.isArray(id)) {
         return {
@@ -41,7 +44,9 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     const token = authHeader.split(' ')[1]
 
     try {
-        const session = await validateSession({ id, token })
+        const session = cachedSession && cachedSession.user.id === id
+            ? cachedSession
+            : await validateSession({ id, token })
         if (!session) {
             return {
                 valid: false,

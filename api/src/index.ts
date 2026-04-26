@@ -5,6 +5,7 @@ import websocketPlugin from '@fastify/websocket'
 import IndexHandler from './handlers/index.ts'
 import cron from './utils/cron.ts'
 import ws from './plugins/ws.ts'
+import rateLimit from './plugins/rateLimit.ts'
 import fp from '#utils/refresh/fp.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import ensureSchema from '#utils/db/ensureSchema.ts'
@@ -26,6 +27,7 @@ fastify.register(cors, {
 
 fastify.register(fp)
 fastify.register(ws)
+fastify.register(rateLimit)
 fastify.register(apiRoutes, { prefix: '/api' })
 fastify.get('/', IndexHandler)
 fastify.addHook('onError', async (req, _res, error) => {

@@ -232,6 +232,14 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_owner_created_at ON ai_usage_events(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_conversation_created_at ON ai_usage_events(conversation_id, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS api_rate_limit_settings (
+            id TEXT PRIMARY KEY,
+            config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
         CREATE TABLE IF NOT EXISTS mail_accounts (
             user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
             mail_username TEXT NOT NULL UNIQUE,
