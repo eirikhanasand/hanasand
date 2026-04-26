@@ -4,7 +4,7 @@ import { fetchVisits } from '@/utils/test/fetchVisits'
 import { Eye } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-export default function Visits({ id, serverVisits }: { id: number, serverVisits: number }) {
+export default function Visits({ id, serverVisits }: { id: string | number, serverVisits: number }) {
     const [visits, setVisits] = useState(serverVisits)
 
     useEffect(() => {

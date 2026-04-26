@@ -18,9 +18,13 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
     if (!url) {
         return res.status(400).send({ error: 'No url provided.' })
     }
+    const targetUrl = normalizeUrl(url)
+    if (!targetUrl) {
+        return res.status(400).send({ error: 'Only http and https urls can be tested.' })
+    }
 
     const fields: string[] = ['url']
-    const values: (string | number | null | boolean | string[] | Date)[] = [url]
+    const values: (string | number | null | boolean | string[] | Date)[] = [targetUrl]
     const placeholders: string[] = ['$1']
 
     if (ownerId) {
@@ -49,4 +53,17 @@ export default async function postTest(req: FastifyRequest, res: FastifyReply) {
 
     const result = await run(sql, values)
     return res.send(result.rows[0])
+}
+
+function normalizeUrl(url: string) {
+    try {
+        const parsed = new URL(url.trim())
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return null
+        }
+        parsed.hash = ''
+        return parsed.toString()
+    } catch {
+        return null
+    }
 }

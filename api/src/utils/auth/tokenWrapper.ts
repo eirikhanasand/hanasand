@@ -23,13 +23,29 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
     const id = req.headers['id']
     const cachedSession = (req as FastifyRequest & {
         rateLimitSession?: Awaited<ReturnType<typeof validateSession>>
+        apiKeyAuth?: {
+            ownerId: string
+        }
     }).rateLimitSession
+    const apiKeyAuth = (req as FastifyRequest & {
+        apiKeyAuth?: {
+            ownerId: string
+        }
+    }).apiKeyAuth
 
     if (Array.isArray(id)) {
         return {
             valid: false,
             id: id[0],
             error: 'Unauthorized.'
+        }
+    }
+
+    if (apiKeyAuth?.ownerId) {
+        req.headers.id = apiKeyAuth.ownerId
+        return {
+            valid: true,
+            id: apiKeyAuth.ownerId,
         }
     }
 

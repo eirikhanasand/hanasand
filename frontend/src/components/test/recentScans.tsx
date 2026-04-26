@@ -1,7 +1,7 @@
 'use client'
 
 import prettyDate from '@/utils/date/prettyDate'
-import { ActivityIcon, ArrowRight, Eye, Fingerprint, UserRound } from 'lucide-react'
+import { ActivityIcon, ArrowRight, Eye, Fingerprint, Timer, TrendingDown, TrendingUp, UserRound } from 'lucide-react'
 import Link from 'next/link'
 
 type RecentScansProps = {
@@ -44,6 +44,7 @@ export default function RecentScans({ title, empty, scans, mine = false, classNa
                                         <span className='flex items-center gap-1'><Eye className='h-3.5 w-3.5 shrink-0' /> {scan.visits}</span>
                                         {mine && <span className='flex items-center gap-1'><UserRound className='h-3.5 w-3.5 shrink-0' /> mine</span>}
                                     </div>
+                                    <ScanStats scan={scan} />
                                 </div>
                                 <ArrowRight className='h-4 w-4 shrink-0 text-bright/35' />
                             </div>
@@ -53,5 +54,41 @@ export default function RecentScans({ title, empty, scans, mine = false, classNa
                 </div>
             )}
         </section>
+    )
+}
+
+function ScanStats({ scan }: { scan: Test }) {
+    const summary = (scan.latest_run_summary || scan.summary || {}) as {
+        duration?: { p95?: number }
+        failureRate?: number
+    }
+    const p95 = summary.duration?.p95
+    const failureRate = typeof summary.failureRate === 'number' ? summary.failureRate * 100 : null
+    const delta = scan.p95_delta_ms
+
+    if (typeof p95 !== 'number' && typeof failureRate !== 'number' && typeof delta !== 'number') {
+        return null
+    }
+
+    return (
+        <div className='mt-2 flex min-w-0 flex-wrap gap-2 text-[11px] text-bright/55'>
+            {typeof p95 === 'number' && (
+                <span className='inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-1'>
+                    <Timer className='h-3 w-3' />
+                    p95 {Math.round(p95)}ms
+                </span>
+            )}
+            {typeof failureRate === 'number' && (
+                <span className='rounded-md bg-white/5 px-2 py-1'>
+                    fail {failureRate.toFixed(1)}%
+                </span>
+            )}
+            {typeof delta === 'number' && (
+                <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${delta >= 0 ? 'bg-green-400/10 text-green-300' : 'bg-red-400/10 text-red-300'}`}>
+                    {delta >= 0 ? <TrendingUp className='h-3 w-3' /> : <TrendingDown className='h-3 w-3' />}
+                    {delta >= 0 ? 'faster' : 'slower'} {Math.abs(Math.round(delta))}ms
+                </span>
+            )}
+        </div>
     )
 }

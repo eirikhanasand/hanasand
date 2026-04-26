@@ -4,6 +4,23 @@ export default async function ensureSchema() {
     await run('ALTER TABLE load_tests ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_load_tests_created_at ON load_tests(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_load_tests_owner_created_at ON load_tests(owner_id, created_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS load_test_runs (
+            id BIGSERIAL PRIMARY KEY,
+            test_id TEXT NOT NULL REFERENCES load_tests(id) ON DELETE CASCADE,
+            run_number INT NOT NULL,
+            url TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'running',
+            exit_code INT,
+            summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+            started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            finished_at TIMESTAMP,
+            duration_ms INT,
+            UNIQUE(test_id, run_number)
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_load_test_runs_test_started_at ON load_test_runs(test_id, started_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_load_test_runs_url_started_at ON load_test_runs(url, started_at DESC)')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT')
@@ -239,6 +256,40 @@ export default async function ensureSchema() {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            tier TEXT NOT NULL DEFAULT 'custom',
+            description TEXT,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            key_prefix TEXT NOT NULL UNIQUE,
+            secret_hash TEXT NOT NULL,
+            expires_at TIMESTAMPTZ,
+            last_used_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS api_key_scopes (
+            id TEXT PRIMARY KEY,
+            api_key_id TEXT NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+            method TEXT NOT NULL,
+            route TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            per_second INT,
+            per_minute INT,
+            per_hour INT,
+            per_day INT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_api_keys_owner_created_at ON api_keys(owner_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)')
+    await run('CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_route ON api_key_scopes(api_key_id, method, route)')
     await run(`
         CREATE TABLE IF NOT EXISTS mail_accounts (
             user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

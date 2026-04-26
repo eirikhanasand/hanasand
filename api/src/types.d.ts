@@ -5,7 +5,7 @@ type User = {
 }
 
 type Role = {
-    id: number
+    id: string
     name: string
     description?: string
     created_by: string
@@ -27,6 +27,10 @@ type Test = {
     exit_code: number
     visits: number
     summary: any
+    latest_run_summary?: any
+    previous_run_summary?: any
+    latest_run_number?: number
+    p95_delta_ms?: number | null
 }
 
 type PostVmDetails = {
@@ -435,4 +439,39 @@ type RateLimitSettings = {
 type RateLimitRoute = {
     method: string
     route: string
+}
+
+type ApiKeyPeriodLimits = {
+    perSecond: number | null
+    perMinute: number | null
+    perHour: number | null
+    perDay: number | null
+}
+
+type ApiKeyScopeRule = {
+    id: string
+    enabled: boolean
+    method: string
+    route: string
+    limits: ApiKeyPeriodLimits
+}
+
+type ApiKeySummary = {
+    id: string
+    ownerId: string
+    name: string
+    tier: string
+    description: string | null
+    enabled: boolean
+    keyPrefix: string
+    createdAt: string
+    updatedAt: string
+    expiresAt: string | null
+    lastUsedAt: string | null
+    scopes: ApiKeyScopeRule[]
+}
+
+type ApiKeyCreateResult = {
+    apiKey: ApiKeySummary
+    secret: string
 }

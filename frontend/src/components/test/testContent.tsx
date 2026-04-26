@@ -13,7 +13,15 @@ type TestContentProps = {
 export default function TestContent({ test, showLogs, showErrors }: TestContentProps) {
     const isDone = test.status === 'done'
     const isPending = test.status === 'pending'
-    const metrics = test.summary || {}
+    const metrics = (test.summary || {}) as {
+        requests?: number
+        failureRate?: number
+        duration?: { p95?: number }
+        rps?: Array<{ time: string | number, value: number }>
+        latency?: Array<{ time: string | number, p50?: number, p95?: number }>
+        errors?: Array<{ time: string | number, count: number }>
+    }
+    const duration = metrics.duration || {}
 
     return (
         <div className='relative flex h-full min-w-0 flex-col gap-6 overflow-hidden pb-2'>
@@ -33,6 +41,13 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
 
             {/* Metrics Charts */}
             <div className='min-w-0 space-y-4 overflow-y-auto overflow-x-hidden pr-1'>
+                {(metrics.requests || duration.p95 || typeof metrics.failureRate === 'number') && (
+                    <div className='grid gap-2 sm:grid-cols-3'>
+                        <MetricCard label='Requests' value={metrics.requests ?? '0'} />
+                        <MetricCard label='p95 latency' value={typeof duration.p95 === 'number' ? `${Math.round(duration.p95)}ms` : 'n/a'} />
+                        <MetricCard label='Failures' value={typeof metrics.failureRate === 'number' ? `${(metrics.failureRate * 100).toFixed(1)}%` : 'n/a'} />
+                    </div>
+                )}
                 {metrics.rps && metrics.rps.length > 0 && (
                     <div className='min-w-0'>
                         <h2 className='font-medium text-white mb-2'>Requests per Second</h2>
@@ -81,6 +96,15 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
             {showErrors && <div className={`absolute bottom-0 left-0 ${isDone ? 'bg-red-500/40  backdrop-blur-md' : 'bg-red-500/20'} w-full rounded-lg max-h-[20rem] overflow-auto`}>
                 <LogViewer text={test.errors || []} />
             </div>}
+        </div>
+    )
+}
+
+function MetricCard({ label, value }: { label: string, value: string | number }) {
+    return (
+        <div className='rounded-lg border border-white/10 bg-white/4 px-3 py-2'>
+            <div className='text-[11px] uppercase text-bright/35'>{label}</div>
+            <div className='mt-1 text-sm font-semibold text-bright/90'>{value}</div>
         </div>
     )
 }

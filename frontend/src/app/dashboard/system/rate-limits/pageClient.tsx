@@ -1,81 +1,74 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Plus, Save, Trash2 } from 'lucide-react'
+import { Copy, Plus, Save, Trash2 } from 'lucide-react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import { DashboardPanel } from '@/components/dashboard/ui'
 
-export type RateLimitScope = 'anonymous' | 'authenticated' | 'internal'
-
-export type RateLimitRule = {
-    windowMs: number
-    maxRequests: number
-}
-
-export type RateLimitOverride = {
-    id: string
-    enabled: boolean
-    method: string
-    route: string
-    scope: RateLimitScope
-    windowMs: number
-    maxRequests: number
-}
-
-export type RateLimitSettings = {
-    enabled: boolean
-    defaults: Record<RateLimitScope, RateLimitRule>
-    overrides: RateLimitOverride[]
-    updatedAt: string | null
-    updatedBy: string | null
-}
-
-export type RateLimitRoute = {
-    method: string
-    route: string
-}
-
 const scopeOrder: RateLimitScope[] = ['anonymous', 'authenticated', 'internal']
+const periodFields: Array<{ key: keyof ApiKeyPeriodLimits, label: string }> = [
+    { key: 'perSecond', label: 'Per second' },
+    { key: 'perMinute', label: 'Per minute' },
+    { key: 'perHour', label: 'Per hour' },
+    { key: 'perDay', label: 'Per day' },
+]
 
 const fallbackSettings: RateLimitSettings = {
     enabled: true,
     defaults: {
-        anonymous: {
-            windowMs: 60_000,
-            maxRequests: 90,
-        },
-        authenticated: {
-            windowMs: 60_000,
-            maxRequests: 1_800,
-        },
-        internal: {
-            windowMs: 60_000,
-            maxRequests: 6_000,
-        },
+        anonymous: { windowMs: 60_000, maxRequests: 90 },
+        authenticated: { windowMs: 60_000, maxRequests: 1_800 },
+        internal: { windowMs: 60_000, maxRequests: 6_000 },
     },
     overrides: [],
     updatedAt: null,
     updatedBy: null,
 }
 
+type DraftApiKey = {
+    ownerId: string
+    name: string
+    tier: string
+    description: string
+    enabled: boolean
+    expiresAt: string
+    scopes: ApiKeyScopeRule[]
+}
+
+const emptyDraft: DraftApiKey = {
+    ownerId: '',
+    name: '',
+    tier: 'starter',
+    description: '',
+    enabled: true,
+    expiresAt: '',
+    scopes: [],
+}
+
 export default function RateLimitsPageClient({
     initialSettings,
     routes,
+    initialApiKeys,
 }: {
     initialSettings: RateLimitSettings | null
     routes: RateLimitRoute[]
+    initialApiKeys: ApiKeySummary[]
 }) {
     const [settings, setSettings] = useState<RateLimitSettings>(initialSettings || fallbackSettings)
+    const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>(initialApiKeys)
+    const [draft, setDraft] = useState<DraftApiKey>(emptyDraft)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<string | null>(null)
+    const [keyMessage, setKeyMessage] = useState<string | null>(null)
+    const [issuedSecret, setIssuedSecret] = useState<string | null>(null)
 
     const routeOptions = useMemo(
         () => routes.map((route) => `${route.method} ${route.route}`),
         [routes]
     )
 
-    async function save() {
+    async function saveSettings() {
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (!token || !id) {
@@ -105,6 +98,128 @@ export default function RateLimitsPageClient({
             setMessage('Rate-limit settings saved.')
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Unable to save rate-limit settings.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    async function createKey() {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (!token || !id) {
+            setKeyMessage('You need to sign in again before issuing API keys.')
+            return
+        }
+
+        if (!draft.ownerId.trim() || !draft.name.trim()) {
+            setKeyMessage('Owner ID and key name are required.')
+            return
+        }
+
+        setSaving(true)
+        setKeyMessage(null)
+        setIssuedSecret(null)
+        try {
+            const response = await fetch(`${config.url.api}/rate-limit/keys`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${decodeURIComponent(token)}`,
+                    id,
+                },
+                body: JSON.stringify({
+                    ownerId: draft.ownerId.trim(),
+                    name: draft.name.trim(),
+                    tier: draft.tier.trim() || 'custom',
+                    description: draft.description.trim() || null,
+                    enabled: draft.enabled,
+                    expiresAt: draft.expiresAt || null,
+                    scopes: draft.scopes,
+                }),
+            })
+
+            const payload = await response.json().catch(() => null)
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to create API key.')
+            }
+
+            if (payload?.apiKey) {
+                setApiKeys((prev) => [payload.apiKey as ApiKeySummary, ...prev])
+            }
+            setIssuedSecret(typeof payload?.secret === 'string' ? payload.secret : null)
+            setDraft(emptyDraft)
+            setKeyMessage('API key issued.')
+        } catch (error) {
+            setKeyMessage(error instanceof Error ? error.message : 'Unable to create API key.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    async function updateKey(apiKey: ApiKeySummary) {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (!token || !id) {
+            setKeyMessage('You need to sign in again before updating API keys.')
+            return
+        }
+
+        setSaving(true)
+        setKeyMessage(null)
+        try {
+            const response = await fetch(`${config.url.api}/rate-limit/keys/${apiKey.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${decodeURIComponent(token)}`,
+                    id,
+                },
+                body: JSON.stringify(apiKey),
+            })
+
+            const payload = await response.json().catch(() => null)
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to update API key.')
+            }
+
+            if (payload?.apiKey) {
+                setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? payload.apiKey as ApiKeySummary : entry))
+            }
+            setKeyMessage('API key updated.')
+        } catch (error) {
+            setKeyMessage(error instanceof Error ? error.message : 'Unable to update API key.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    async function deleteKey(idToDelete: string) {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (!token || !id) {
+            setKeyMessage('You need to sign in again before deleting API keys.')
+            return
+        }
+
+        setSaving(true)
+        setKeyMessage(null)
+        try {
+            const response = await fetch(`${config.url.api}/rate-limit/keys/${idToDelete}`, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${decodeURIComponent(token)}`,
+                    id,
+                },
+            })
+            const payload = await response.json().catch(() => null)
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to delete API key.')
+            }
+
+            setApiKeys((prev) => prev.filter((entry) => entry.id !== idToDelete))
+            setKeyMessage('API key deleted.')
+        } catch (error) {
+            setKeyMessage(error instanceof Error ? error.message : 'Unable to delete API key.')
         } finally {
             setSaving(false)
         }
@@ -156,16 +271,74 @@ export default function RateLimitsPageClient({
         }))
     }
 
+    function addScopeToDraft() {
+        const firstRoute = routes[0]
+        setDraft((prev) => ({
+            ...prev,
+            scopes: [
+                ...prev.scopes,
+                {
+                    id: crypto.randomUUID(),
+                    enabled: true,
+                    method: firstRoute?.method || 'GET',
+                    route: firstRoute?.route || '/api/',
+                    limits: {
+                        perSecond: 5,
+                        perMinute: 60,
+                        perHour: 1_000,
+                        perDay: 10_000,
+                    },
+                },
+            ],
+        }))
+    }
+
+    function addScopeToKey(keyId: string) {
+        const firstRoute = routes[0]
+        setApiKeys((prev) => prev.map((entry) => entry.id === keyId ? {
+            ...entry,
+            scopes: [
+                ...entry.scopes,
+                {
+                    id: crypto.randomUUID(),
+                    enabled: true,
+                    method: firstRoute?.method || 'GET',
+                    route: firstRoute?.route || '/api/',
+                    limits: {
+                        perSecond: 5,
+                        perMinute: 60,
+                        perHour: 1_000,
+                        perDay: 10_000,
+                    },
+                },
+            ],
+        } : entry))
+    }
+
+    function removeDraftScope(scopeId: string) {
+        setDraft((prev) => ({
+            ...prev,
+            scopes: prev.scopes.filter((scope) => scope.id !== scopeId),
+        }))
+    }
+
+    function removeKeyScope(keyId: string, scopeId: string) {
+        setApiKeys((prev) => prev.map((entry) => entry.id === keyId ? {
+            ...entry,
+            scopes: entry.scopes.filter((scope) => scope.id !== scopeId),
+        } : entry))
+    }
+
     return (
         <div className='grid gap-4'>
             <DashboardPanel className='p-4 sm:p-5'>
                 <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
                     <div className='max-w-3xl'>
                         <p className='text-sm text-bright/72'>
-                            Every API endpoint is now covered by the same limiter. Anonymous traffic is kept tight, while signed-in and internal traffic gets much roomier defaults so normal dashboard and project work stays smooth.
+                            API pressure control now lives in one place: global route limits for every endpoint, plus tiered API keys with route scopes and per-second, per-minute, per-hour, and per-day budgets.
                         </p>
                         <p className='mt-2 text-xs text-bright/42'>
-                            Limits are enforced per API route and also against a broader per-actor bucket, which helps stop slug scanners from hopping across many unique paths.
+                            These controls live in the API layer, not nginx or Lua, so edits are picked up by the Hanasand API process itself rather than relying on a separate proxy reload path.
                         </p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
@@ -180,7 +353,7 @@ export default function RateLimitsPageClient({
                         </label>
                         <button
                             type='button'
-                            onClick={save}
+                            onClick={saveSettings}
                             disabled={saving}
                             className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
                         >
@@ -209,26 +382,18 @@ export default function RateLimitsPageClient({
                             </div>
                         </div>
                         <div className='mt-4 grid gap-3'>
-                            <label className='grid gap-1.5 text-sm text-bright/68'>
-                                <span>Window (ms)</span>
-                                <input
-                                    type='number'
-                                    min={1000}
-                                    value={settings.defaults[scope].windowMs}
-                                    onChange={(event) => updateDefault(scope, 'windowMs', Number(event.target.value || 0))}
-                                    className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
-                                />
-                            </label>
-                            <label className='grid gap-1.5 text-sm text-bright/68'>
-                                <span>Requests per window</span>
-                                <input
-                                    type='number'
-                                    min={1}
-                                    value={settings.defaults[scope].maxRequests}
-                                    onChange={(event) => updateDefault(scope, 'maxRequests', Number(event.target.value || 0))}
-                                    className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
-                                />
-                            </label>
+                            <NumberField
+                                label='Window (ms)'
+                                value={settings.defaults[scope].windowMs}
+                                min={1000}
+                                onChange={(value) => updateDefault(scope, 'windowMs', value)}
+                            />
+                            <NumberField
+                                label='Requests per window'
+                                value={settings.defaults[scope].maxRequests}
+                                min={1}
+                                onChange={(value) => updateDefault(scope, 'maxRequests', value)}
+                            />
                         </div>
                     </DashboardPanel>
                 ))}
@@ -265,67 +430,398 @@ export default function RateLimitsPageClient({
                                 />
                                 Enabled
                             </label>
-                            <label className='grid gap-1.5 text-sm text-bright/68'>
-                                <span>Route</span>
-                                <input
-                                    list='rate-limit-routes'
-                                    value={`${override.method} ${override.route}`}
-                                    onChange={(event) => {
-                                        const [method, ...routeParts] = event.target.value.split(' ')
-                                        updateOverride(override.id, 'method', (method || 'GET').toUpperCase())
-                                        updateOverride(override.id, 'route', routeParts.join(' ') || '/api/')
-                                    }}
-                                    className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
-                                />
-                            </label>
-                            <label className='grid gap-1.5 text-sm text-bright/68'>
-                                <span>Scope</span>
-                                <select
-                                    value={override.scope}
-                                    onChange={(event) => updateOverride(override.id, 'scope', event.target.value as RateLimitScope)}
-                                    className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
-                                >
-                                    {scopeOrder.map((scope) => <option key={scope} value={scope}>{scope}</option>)}
-                                </select>
-                            </label>
-                            <label className='grid gap-1.5 text-sm text-bright/68'>
-                                <span>Window (ms)</span>
-                                <input
-                                    type='number'
-                                    min={1000}
-                                    value={override.windowMs}
-                                    onChange={(event) => updateOverride(override.id, 'windowMs', Number(event.target.value || 0))}
-                                    className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
-                                />
-                            </label>
-                            <label className='grid gap-1.5 text-sm text-bright/68'>
-                                <span>Requests</span>
-                                <input
-                                    type='number'
-                                    min={1}
-                                    value={override.maxRequests}
-                                    onChange={(event) => updateOverride(override.id, 'maxRequests', Number(event.target.value || 0))}
-                                    className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
-                                />
-                            </label>
-                            <button
-                                type='button'
-                                onClick={() => removeOverride(override.id)}
-                                className='inline-flex items-center justify-center rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-red-100 transition-colors hover:bg-red-500/14'
-                            >
-                                <Trash2 className='h-4 w-4' />
-                            </button>
+                            <RouteChooser
+                                label='Route'
+                                routeOptions={routeOptions}
+                                value={`${override.method} ${override.route}`}
+                                onChange={(value) => {
+                                    const [method, ...routeParts] = value.split(' ')
+                                    updateOverride(override.id, 'method', (method || 'GET').toUpperCase())
+                                    updateOverride(override.id, 'route', routeParts.join(' ') || '/api/')
+                                }}
+                            />
+                            <SelectField
+                                label='Scope'
+                                value={override.scope}
+                                options={scopeOrder}
+                                onChange={(value) => updateOverride(override.id, 'scope', value as RateLimitScope)}
+                            />
+                            <NumberField
+                                label='Window (ms)'
+                                value={override.windowMs}
+                                min={1000}
+                                onChange={(value) => updateOverride(override.id, 'windowMs', value)}
+                            />
+                            <NumberField
+                                label='Requests'
+                                value={override.maxRequests}
+                                min={1}
+                                onChange={(value) => updateOverride(override.id, 'maxRequests', value)}
+                            />
+                            <RemoveButton onClick={() => removeOverride(override.id)} />
                         </div>
                     )) : (
-                        <div className='rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm text-bright/52'>
-                            No overrides yet. The defaults above already cover every API endpoint.
-                        </div>
+                        <EmptyState message='No overrides yet. The defaults above already cover every API endpoint.' />
                     )}
                 </div>
-                <datalist id='rate-limit-routes'>
-                    {routeOptions.map((option) => <option key={option} value={option} />)}
-                </datalist>
             </DashboardPanel>
+
+            <DashboardPanel className='p-4 sm:p-5'>
+                <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+                    <div>
+                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>API Keys</p>
+                        <h2 className='mt-1 text-base font-semibold text-bright/90'>Tiered tokens</h2>
+                        <p className='mt-1 text-sm text-bright/60'>
+                            Issue owner-linked keys, scope them to exact endpoints, and give each scope independent second, minute, hour, and day budgets.
+                        </p>
+                    </div>
+                    {keyMessage ? <div className='text-sm text-[#fdc89c]'>{keyMessage}</div> : null}
+                </div>
+
+                <div className='mt-4 rounded-2xl border border-white/10 bg-black/15 p-4'>
+                    <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                        <TextField label='Owner user ID' value={draft.ownerId} onChange={(value) => setDraft((prev) => ({ ...prev, ownerId: value }))} />
+                        <TextField label='Key name' value={draft.name} onChange={(value) => setDraft((prev) => ({ ...prev, name: value }))} />
+                        <TextField label='Tier' value={draft.tier} onChange={(value) => setDraft((prev) => ({ ...prev, tier: value }))} />
+                        <TextField label='Expires at (ISO)' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
+                    </div>
+                    <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
+                        <TextField label='Description' value={draft.description} onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))} />
+                        <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                            <input
+                                type='checkbox'
+                                checked={draft.enabled}
+                                onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))}
+                                className='h-4 w-4 accent-[#fd8738]'
+                            />
+                            Enabled
+                        </label>
+                    </div>
+
+                    <div className='mt-4 flex items-center justify-between gap-3'>
+                        <h3 className='text-sm font-medium text-bright/84'>Scoped endpoint limits</h3>
+                        <button
+                            type='button'
+                            onClick={addScopeToDraft}
+                            className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                        >
+                            <Plus className='h-4 w-4' />
+                            Add scope
+                        </button>
+                    </div>
+                    <div className='mt-3 grid gap-3'>
+                        {draft.scopes.length ? draft.scopes.map((scope, index) => (
+                            <ApiKeyScopeEditor
+                                key={scope.id}
+                                scope={scope}
+                                routeOptions={routeOptions}
+                                title={`Draft scope ${index + 1}`}
+                                onChange={(nextScope) => setDraft((prev) => ({
+                                    ...prev,
+                                    scopes: prev.scopes.map((entry) => entry.id === nextScope.id ? nextScope : entry),
+                                }))}
+                                onRemove={() => removeDraftScope(scope.id)}
+                            />
+                        )) : (
+                            <EmptyState message='No key scopes yet. Add at least one scoped route before issuing the token.' />
+                        )}
+                    </div>
+
+                    <div className='mt-4 flex flex-wrap items-center gap-3'>
+                        <button
+                            type='button'
+                            onClick={createKey}
+                            disabled={saving}
+                            className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                        >
+                            <Save className='h-4 w-4' />
+                            {saving ? 'Issuing...' : 'Issue API key'}
+                        </button>
+                        {issuedSecret ? (
+                            <button
+                                type='button'
+                                onClick={() => navigator.clipboard.writeText(issuedSecret)}
+                                className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78 transition-colors hover:bg-white/8'
+                            >
+                                <Copy className='h-4 w-4' />
+                                Copy `{issuedSecret}`
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+
+                <div className='mt-4 grid gap-4'>
+                    {apiKeys.length ? apiKeys.map((apiKey) => (
+                        <div key={apiKey.id} className='rounded-2xl border border-white/10 bg-black/15 p-4'>
+                            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                                <div>
+                                    <div className='flex flex-wrap items-center gap-2'>
+                                        <h3 className='text-base font-semibold text-bright/90'>{apiKey.name}</h3>
+                                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-bright/50'>{apiKey.tier}</span>
+                                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/50'>{apiKey.keyPrefix}</span>
+                                    </div>
+                                    <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description provided.'}</p>
+                                    <div className='mt-2 flex flex-wrap gap-3 text-xs text-bright/45'>
+                                        <span>Owner `{apiKey.ownerId}`</span>
+                                        <span>Created {new Date(apiKey.createdAt).toLocaleString()}</span>
+                                        <span>Last used {apiKey.lastUsedAt ? new Date(apiKey.lastUsedAt).toLocaleString() : 'never'}</span>
+                                    </div>
+                                </div>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                                        <input
+                                            type='checkbox'
+                                            checked={apiKey.enabled}
+                                            onChange={(event) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, enabled: event.target.checked } : entry))}
+                                            className='h-4 w-4 accent-[#fd8738]'
+                                        />
+                                        Enabled
+                                    </label>
+                                    <button
+                                        type='button'
+                                        onClick={() => updateKey(apiKey)}
+                                        className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14'
+                                    >
+                                        <Save className='h-4 w-4' />
+                                        Save key
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => deleteKey(apiKey.id)}
+                                        className='inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-100 transition-colors hover:bg-red-500/14'
+                                    >
+                                        <Trash2 className='h-4 w-4' />
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                                <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
+                                <TextField label='Tier' value={apiKey.tier} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, tier: value } : entry))} />
+                                <TextField label='Owner user ID' value={apiKey.ownerId} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))} />
+                                <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
+                            </div>
+                            <div className='mt-3'>
+                                <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
+                            </div>
+
+                            <div className='mt-4 flex items-center justify-between gap-3'>
+                                <h4 className='text-sm font-medium text-bright/84'>Scopes</h4>
+                                <button
+                                    type='button'
+                                    onClick={() => addScopeToKey(apiKey.id)}
+                                    className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                                >
+                                    <Plus className='h-4 w-4' />
+                                    Add scope
+                                </button>
+                            </div>
+                            <div className='mt-3 grid gap-3'>
+                                {apiKey.scopes.length ? apiKey.scopes.map((scope, index) => (
+                                    <ApiKeyScopeEditor
+                                        key={scope.id}
+                                        scope={scope}
+                                        routeOptions={routeOptions}
+                                        title={`Scope ${index + 1}`}
+                                        onChange={(nextScope) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? {
+                                            ...entry,
+                                            scopes: entry.scopes.map((currentScope) => currentScope.id === nextScope.id ? nextScope : currentScope),
+                                        } : entry))}
+                                        onRemove={() => removeKeyScope(apiKey.id, scope.id)}
+                                    />
+                                )) : (
+                                    <EmptyState message='This key has no endpoint scopes yet.' />
+                                )}
+                            </div>
+                        </div>
+                    )) : (
+                        <EmptyState message='No API keys issued yet.' />
+                    )}
+                </div>
+            </DashboardPanel>
+
+            <datalist id='rate-limit-routes'>
+                {routeOptions.map((option) => <option key={option} value={option} />)}
+            </datalist>
+        </div>
+    )
+}
+
+function ApiKeyScopeEditor({
+    scope,
+    routeOptions,
+    title,
+    onChange,
+    onRemove,
+}: {
+    scope: ApiKeyScopeRule
+    routeOptions: string[]
+    title: string
+    onChange: (scope: ApiKeyScopeRule) => void
+    onRemove: () => void
+}) {
+    return (
+        <div className='rounded-2xl border border-white/10 bg-black/20 p-3'>
+            <div className='mb-3 flex items-center justify-between gap-3'>
+                <p className='text-sm font-medium text-bright/80'>{title}</p>
+                <RemoveButton onClick={onRemove} />
+            </div>
+            <div className='grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_repeat(4,minmax(0,1fr))] lg:items-end'>
+                <label className='inline-flex items-center gap-2 text-sm text-bright/70'>
+                    <input
+                        type='checkbox'
+                        checked={scope.enabled}
+                        onChange={(event) => onChange({ ...scope, enabled: event.target.checked })}
+                        className='h-4 w-4 accent-[#fd8738]'
+                    />
+                    Enabled
+                </label>
+                <RouteChooser
+                    label='Route'
+                    routeOptions={routeOptions}
+                    value={`${scope.method} ${scope.route}`}
+                    onChange={(value) => {
+                        const [method, ...routeParts] = value.split(' ')
+                        onChange({
+                            ...scope,
+                            method: (method || 'GET').toUpperCase(),
+                            route: routeParts.join(' ') || '/api/',
+                        })
+                    }}
+                />
+                {periodFields.map((period) => (
+                    <NumberField
+                        key={period.key}
+                        label={period.label}
+                        value={scope.limits[period.key] || 0}
+                        min={0}
+                        onChange={(value) => onChange({
+                            ...scope,
+                            limits: {
+                                ...scope.limits,
+                                [period.key]: value > 0 ? value : null,
+                            },
+                        })}
+                    />
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function TextField({
+    label,
+    value,
+    onChange,
+}: {
+    label: string
+    value: string
+    onChange: (value: string) => void
+}) {
+    return (
+        <label className='grid gap-1.5 text-sm text-bright/68'>
+            <span>{label}</span>
+            <input
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+            />
+        </label>
+    )
+}
+
+function NumberField({
+    label,
+    value,
+    min,
+    onChange,
+}: {
+    label: string
+    value: number
+    min: number
+    onChange: (value: number) => void
+}) {
+    return (
+        <label className='grid gap-1.5 text-sm text-bright/68'>
+            <span>{label}</span>
+            <input
+                type='number'
+                min={min}
+                value={value}
+                onChange={(event) => onChange(Number(event.target.value || 0))}
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+            />
+        </label>
+    )
+}
+
+function SelectField({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string
+    value: string
+    options: string[]
+    onChange: (value: string) => void
+}) {
+    return (
+        <label className='grid gap-1.5 text-sm text-bright/68'>
+            <span>{label}</span>
+            <select
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+            >
+                {options.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+        </label>
+    )
+}
+
+function RouteChooser({
+    label,
+    routeOptions,
+    value,
+    onChange,
+}: {
+    label: string
+    routeOptions: string[]
+    value: string
+    onChange: (value: string) => void
+}) {
+    return (
+        <label className='grid gap-1.5 text-sm text-bright/68'>
+            <span>{label}</span>
+            <input
+                list='rate-limit-routes'
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={routeOptions[0] || 'GET /api/'}
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+            />
+        </label>
+    )
+}
+
+function RemoveButton({ onClick }: { onClick: () => void }) {
+    return (
+        <button
+            type='button'
+            onClick={onClick}
+            className='inline-flex items-center justify-center rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-red-100 transition-colors hover:bg-red-500/14'
+        >
+            <Trash2 className='h-4 w-4' />
+        </button>
+    )
+}
+
+function EmptyState({ message }: { message: string }) {
+    return (
+        <div className='rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm text-bright/52'>
+            {message}
         </div>
     )
 }

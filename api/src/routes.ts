@@ -15,6 +15,7 @@ import postArticle from './handlers/articles/post.ts'
 import putArticle from './handlers/articles/put.ts'
 import getTest from './handlers/test/get.ts'
 import postTest from './handlers/test/post.ts'
+import rerunTest from './handlers/test/rerun.ts'
 import { getMyRecentTests, getRecentTests } from './handlers/test/list.ts'
 import restartHandler from './handlers/restart/getRestart.ts'
 import getRoles from './handlers/roles/getRoles.ts'
@@ -98,6 +99,10 @@ import { deleteNote, getNote, getNotes, postNote, putNote } from './handlers/not
 import { downloadAppUpdate, downloadNamedAppUpdate, getAppUpdate, getTauriAppUpdate } from './handlers/app/get.ts'
 import getRateLimitSettingsHandler from './handlers/rateLimit/getSettings.ts'
 import putRateLimitSettingsHandler from './handlers/rateLimit/putSettings.ts'
+import getApiKeysHandler from './handlers/rateLimit/getApiKeys.ts'
+import postApiKeyHandler from './handlers/rateLimit/postApiKey.ts'
+import putApiKeyHandler from './handlers/rateLimit/putApiKey.ts'
+import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
 
 /**
  * Defines the routes available in the API.
@@ -162,6 +167,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/test/:id', getTest)
     fastify.get('/test/visits/:id', getVisits)
     fastify.post('/test', postTest)
+    fastify.post('/test/:id/rerun', rerunTest)
 
     // Restart handler
     fastify.get('/restart/:id', restartHandler)
@@ -229,6 +235,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Rate limiting
     fastify.get('/rate-limit/settings', getRateLimitSettingsHandler)
     fastify.put('/rate-limit/settings', putRateLimitSettingsHandler)
+    fastify.get('/rate-limit/keys', getApiKeysHandler)
+    fastify.post('/rate-limit/keys', postApiKeyHandler)
+    fastify.put('/rate-limit/keys/:id', putApiKeyHandler)
+    fastify.delete('/rate-limit/keys/:id', deleteApiKeyHandler)
 
     // Coding tools
     fastify.get('/tools/execution-targets', getExecutionTargets)

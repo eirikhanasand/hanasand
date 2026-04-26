@@ -9,8 +9,7 @@ export async function getRecentTests(req: FastifyRequest, res: FastifyReply) {
     const { limit } = (req.query as QueryProps) ?? {}
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
     const result = await run(
-        `SELECT * FROM load_tests
-         ORDER BY created_at DESC
+        `${selectRecentTestsSql()}
          LIMIT $1`,
         [safeLimit]
     )
@@ -26,11 +25,45 @@ export async function getMyRecentTests(req: FastifyRequest, res: FastifyReply) {
 
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
     const result = await run(
-        `SELECT * FROM load_tests
-         WHERE owner_id = $1
-         ORDER BY created_at DESC
+        `${selectRecentTestsSql('WHERE tests.owner_id = $1')}
          LIMIT $2`,
         [ownerId, safeLimit]
     )
     return res.send(result.rows)
+}
+
+function selectRecentTestsSql(where = '') {
+    return `
+        SELECT
+            tests.*,
+            latest.summary AS latest_run_summary,
+            latest.run_number AS latest_run_number,
+            previous.summary AS previous_run_summary,
+            CASE
+                WHEN latest.summary ? 'duration' AND previous.summary ? 'duration'
+                THEN ((previous.summary->'duration'->>'p95')::float - (latest.summary->'duration'->>'p95')::float)
+                ELSE NULL
+            END AS p95_delta_ms
+        FROM load_tests tests
+        LEFT JOIN LATERAL (
+            SELECT summary, run_number, started_at
+            FROM load_test_runs
+            WHERE test_id = tests.id
+            ORDER BY started_at DESC
+            LIMIT 1
+        ) latest ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT summary
+            FROM load_test_runs
+            WHERE url = tests.url
+              AND (
+                latest.started_at IS NULL
+                OR started_at < latest.started_at
+              )
+            ORDER BY started_at DESC
+            LIMIT 1
+        ) previous ON TRUE
+        ${where}
+        ORDER BY tests.created_at DESC
+    `
 }

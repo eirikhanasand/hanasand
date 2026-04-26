@@ -13,7 +13,6 @@ type ContentProps = {
     setIsConnected: Dispatch<SetStateAction<boolean>>
     showLogs: boolean
     showErrors: boolean
-    rerun: boolean
     setRerun: Dispatch<SetStateAction<boolean>>
 }
 
@@ -24,7 +23,6 @@ export default function Content({
     setIsConnected,
     showLogs,
     showErrors,
-    rerun,
     setRerun
 }: ContentProps) {
     const [reconnect, setReconnect] = useState(false)
@@ -39,9 +37,6 @@ export default function Content({
         ws.onopen = () => {
             setReconnect(false)
             setIsConnected(true)
-            if (rerun) {
-                ws.send(JSON.stringify({ type: 'rerun', id }))
-            }
         }
 
         ws.onclose = () => {
@@ -88,7 +83,7 @@ export default function Content({
         return () => {
             ws.close()
         }
-    }, [id, setTest, reconnect, setIsConnected, setParticipants, rerun, setRerun, setError])
+    }, [id, setTest, reconnect, setIsConnected, setParticipants, setRerun, setError])
 
     return (
         <div className='min-h-[30rem] min-w-0 max-w-full space-y-4 overflow-hidden rounded-lg outline-1 outline-dark p-2 md:h-full'>

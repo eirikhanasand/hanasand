@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin'
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
+import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { validateSession } from '#utils/auth/session.ts'
 import { getRateLimitSettings, registerRateLimitRoute } from '#utils/rateLimit/config.ts'
 
@@ -11,6 +12,7 @@ type Bucket = {
 type RateLimitActor = {
     scope: RateLimitScope
     identifier: string
+    apiKey?: Awaited<ReturnType<typeof validateApiKey>>
 }
 
 const buckets = new Map<string, Bucket>()
@@ -42,6 +44,38 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         }
 
         const actor = await resolveRateLimitActor(req)
+        if (actor.apiKey) {
+            ;(req as FastifyRequest & { apiKeyAuth?: typeof actor.apiKey }).apiKeyAuth = actor.apiKey
+            const keyScope = matchApiKeyScope(actor.apiKey.apiKey.scopes, req.method, path)
+            if (!keyScope) {
+                return res.status(403).send({
+                    error: 'API key is not allowed to access this endpoint.',
+                    route: path,
+                    method: req.method,
+                })
+            }
+
+            const periodChecks = consumeApiKeyScopeBudgets({
+                apiKeyId: actor.apiKey.apiKey.id,
+                method: req.method,
+                route: path,
+                limits: keyScope.limits,
+            })
+
+            applyApiKeyLimitHeaders(res, periodChecks)
+            const rejected = periodChecks.find((check) => !check.allowed)
+            if (rejected) {
+                return res.status(429).send({
+                    error: 'API key rate limit exceeded.',
+                    route: path,
+                    method: req.method,
+                    period: rejected.period,
+                    retryAfterMs: rejected.retryAfterMs,
+                    resetAt: new Date(rejected.resetAt).toISOString(),
+                })
+            }
+        }
+
         const scopeRule = settings.defaults[actor.scope]
         const routeRule = resolveRouteRule(settings, req.method, path, actor.scope)
 
@@ -89,6 +123,18 @@ function resolveRouteRule(settings: RateLimitSettings, method: string, route: st
 
 async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActor> {
     const ip = getClientIp(req)
+
+    const apiKeySecret = extractPresentedApiKey(req)
+    if (apiKeySecret) {
+        const apiKey = await validateApiKey(apiKeySecret).catch(() => null)
+        if (apiKey) {
+            return {
+                scope: apiKey.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
+                identifier: `api_key:${apiKey.apiKey.id}`,
+                apiKey,
+            }
+        }
+    }
 
     if (isInternalIp(ip)) {
         return {
@@ -159,6 +205,23 @@ function normalizeRequestPath(req: FastifyRequest) {
     return req.url.split('?')[0] || '/'
 }
 
+function extractPresentedApiKey(req: FastifyRequest) {
+    const xApiKey = req.headers['x-api-key']
+    if (typeof xApiKey === 'string' && xApiKey.startsWith('hsk_')) {
+        return xApiKey
+    }
+
+    const authHeader = req.headers.authorization
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1]
+        if (token?.startsWith('hsk_')) {
+            return token
+        }
+    }
+
+    return ''
+}
+
 function consumeBucket({
     key,
     rule,
@@ -196,6 +259,54 @@ function consumeBucket({
     }
 }
 
+function consumeApiKeyScopeBudgets({
+    apiKeyId,
+    method,
+    route,
+    limits,
+}: {
+    apiKeyId: string
+    method: string
+    route: string
+    limits: ApiKeyPeriodLimits
+}) {
+    const checks: Array<{
+        period: 'second' | 'minute' | 'hour' | 'day'
+        limit: number
+        allowed: boolean
+        remaining: number
+        resetAt: number
+        retryAfterMs: number
+    }> = []
+
+    const periodRules = [
+        { period: 'second' as const, windowMs: 1_000, maxRequests: limits.perSecond },
+        { period: 'minute' as const, windowMs: 60_000, maxRequests: limits.perMinute },
+        { period: 'hour' as const, windowMs: 3_600_000, maxRequests: limits.perHour },
+        { period: 'day' as const, windowMs: 86_400_000, maxRequests: limits.perDay },
+    ]
+
+    for (const periodRule of periodRules) {
+        if (!periodRule.maxRequests || periodRule.maxRequests <= 0) {
+            continue
+        }
+
+        checks.push({
+            period: periodRule.period,
+            limit: periodRule.maxRequests,
+            ...consumeBucket({
+                key: `api_key:${apiKeyId}:${method}:${route}:${periodRule.period}`,
+                rule: {
+                    windowMs: periodRule.windowMs,
+                    maxRequests: periodRule.maxRequests,
+                },
+            }),
+        })
+    }
+
+    return checks
+}
+
 function applyRateLimitHeaders(
     res: FastifyReply,
     state: { remaining: number, resetAt: number },
@@ -224,4 +335,20 @@ function sendRateLimitExceeded(
         retryAfterMs: state.retryAfterMs,
         resetAt: new Date(state.resetAt).toISOString(),
     })
+}
+
+function applyApiKeyLimitHeaders(
+    res: FastifyReply,
+    checks: Array<{
+        period: 'second' | 'minute' | 'hour' | 'day'
+        limit: number
+        remaining: number
+        resetAt: number
+    }>
+) {
+    for (const check of checks) {
+        res.header(`x-api-key-rate-limit-${check.period}`, String(check.limit))
+        res.header(`x-api-key-rate-limit-${check.period}-remaining`, String(check.remaining))
+        res.header(`x-api-key-rate-limit-${check.period}-reset`, new Date(check.resetAt).toISOString())
+    }
 }

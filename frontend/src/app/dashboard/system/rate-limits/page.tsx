@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import config from '@/config'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import RateLimitsPageClient from './pageClient'
-import type { RateLimitRoute, RateLimitSettings } from './pageClient'
 
 export default async function RateLimitsPage() {
     const Cookies = await cookies()
@@ -23,6 +22,14 @@ export default async function RateLimitsPage() {
     }).catch(() => null)
 
     const payload = response?.ok ? await response.json().catch(() => null) : null
+    const apiKeysResponse = await fetch(`${config.url.api}/rate-limit/keys`, {
+        headers: {
+            Authorization: `Bearer ${decodeURIComponent(token)}`,
+            id,
+        },
+        cache: 'no-store',
+    }).catch(() => null)
+    const apiKeysPayload = apiKeysResponse?.ok ? await apiKeysResponse.json().catch(() => null) : null
 
     return (
         <DashboardPage className='h-full'>
@@ -34,6 +41,7 @@ export default async function RateLimitsPage() {
             <RateLimitsPageClient
                 initialSettings={payload?.settings && typeof payload.settings === 'object' ? payload.settings as RateLimitSettings : null}
                 routes={Array.isArray(payload?.routes) ? payload.routes as RateLimitRoute[] : []}
+                initialApiKeys={Array.isArray(apiKeysPayload?.apiKeys) ? apiKeysPayload.apiKeys as ApiKeySummary[] : []}
             />
         </DashboardPage>
     )

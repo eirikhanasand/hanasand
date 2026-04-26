@@ -19,7 +19,12 @@ type Valid = {
  * if an error occured while checking the roles.
  */
 export default async function hasRole(req: FastifyRequest, res: FastifyReply, role: string): Promise<Valid> {
-    const id = req.headers['id']
+    const apiKeyOwnerId = (req as FastifyRequest & {
+        apiKeyAuth?: {
+            ownerId: string
+        }
+    }).apiKeyAuth?.ownerId
+    const id = apiKeyOwnerId || req.headers['id']
     if (!id) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }

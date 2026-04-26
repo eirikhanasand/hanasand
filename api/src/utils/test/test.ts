@@ -8,9 +8,15 @@ export default function () {
     const url = __ENV.URL
     // @ts-expect-error
     const timeout = Number(__ENV.TIMEOUT || 1)
-    const response = http.get(url)
+    const response = http.get(url, {
+        timeout: `${timeout}s`,
+        headers: {
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': 'HanasandLoadTest/1.0 (+https://hanasand.com/test)',
+        },
+    })
     check(response, { 'status 200': (r: Response) => r.status === 200 })
-    sleep(timeout)
+    sleep(1)
 }
 
 export const options = {

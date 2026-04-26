@@ -8,6 +8,7 @@ import Content from '@/components/test/content'
 import { Dispatch, SetStateAction, useState } from 'react'
 import type { ReactNode } from 'react'
 import ConnectionStatus from '@/components/test/connectionStatus'
+import { rerunTest } from '@/utils/test/rerunTest'
 
 type LeftSideProps = {
     test: Test
@@ -29,7 +30,12 @@ export default function TestClient({ test: serverTest }: { test: Test }) {
     const [test, setTest] = useState(serverTest)
     const [rerun, setRerun] = useState(false)
 
-    function handleRerun() {
+    async function handleRerun() {
+        if (rerun) {
+            return
+        }
+
+        setRerun(true)
         setTest((prev) => ({
             ...prev,
             status: 'running',
@@ -39,7 +45,16 @@ export default function TestClient({ test: serverTest }: { test: Test }) {
             finished_at: '',
             duration: { milliseconds: 0 },
         }))
-        setRerun(true)
+
+        try {
+            await rerunTest(test.id)
+        } catch {
+            setRerun(false)
+            setTest((prev) => ({
+                ...prev,
+                status: serverTest.status,
+            }))
+        }
     }
 
     return (
@@ -61,7 +76,6 @@ export default function TestClient({ test: serverTest }: { test: Test }) {
                 setIsConnected={setIsConnected}
                 showLogs={showLogs}
                 showErrors={showErrors}
-                rerun={rerun}
                 setRerun={setRerun}
             />
         </>

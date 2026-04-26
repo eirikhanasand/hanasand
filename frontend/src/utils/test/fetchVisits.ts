@@ -1,6 +1,6 @@
 import config from '@/config'
 
-export async function fetchVisits(id: number): Promise<number | null> {
+export async function fetchVisits(id: string | number): Promise<number | null> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
