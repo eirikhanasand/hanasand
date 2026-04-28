@@ -1,7 +1,7 @@
 import { Cog, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
-export default function GreetingNavButtonsManagement({ id }: { id: string }) {
+export default function MobileNav({ id }: { id: string }) {
     return (
         <div className='flex md:hidden gap-2 w-full'>
             <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>

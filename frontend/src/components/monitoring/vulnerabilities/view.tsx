@@ -4,8 +4,8 @@ import type useExpandedImages from './useExpandedImages'
 import type useScanNotice from './useScanNotice'
 import type useSortedImages from './useSortedImages'
 import VulnerabilityHeader from './header'
-import VulnerabilityErrorState from './errorState'
-import VulnerabilityEmptyState from './emptyState'
+import ErrorState from './errorState'
+import EmptyState from './emptyState'
 import VulnerabilityList from './vulnerabilityList'
 
 type Props = Pick<PageClientProps, 'runScanAction'> & Pick<VulnerabilityPageState, 'data' | 'error'> & {
@@ -24,10 +24,10 @@ export default function VulnerabilityView(props: Props) {
             <div className='flex w-full flex-col gap-4 pb-4'>
                 <VulnerabilityHeader {...props} />
                 {props.error
-                    ? <VulnerabilityErrorState error={props.error} />
+                    ? <ErrorState error={props.error} />
                     : props.sorting.images.length
                         ? <VulnerabilityList images={props.sorting.images} expansion={props.expansion} />
-                        : <VulnerabilityEmptyState />}
+                        : <EmptyState />}
             </div>
         </div>
     )

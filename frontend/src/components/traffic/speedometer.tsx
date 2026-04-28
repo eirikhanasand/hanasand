@@ -1,6 +1,6 @@
 import { Cell, Pie, PieChart } from 'recharts'
 
-export default function TrafficSpeedometerGlass({ name, tps }: { name: string, tps: number }) {
+export default function Speedometer({ name, tps }: { name: string, tps: number }) {
 
     function getColor(value: number) {
         if (value < 40) return '#10B981AA'

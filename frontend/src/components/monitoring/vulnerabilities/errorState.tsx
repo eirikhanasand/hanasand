@@ -1,6 +1,6 @@
 import { SearchX } from 'lucide-react'
 
-export default function VulnerabilityErrorState({ error }: { error: string }) {
+export default function ErrorState({ error }: { error: string }) {
     return (
         <div className='w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-10 text-center'>
             <div

@@ -1,5 +1,5 @@
 import DomainSelector from '@/components/monitoring/traffic/domainSelector'
-import LiveTrafficMapDashboard from '@/components/monitoring/traffic/liveMapDashboard'
+import TrafficMap from '@/components/monitoring/traffic/trafficMap'
 import TrafficDashboard from '@/components/monitoring/traffic/traffic'
 import LegacyTrafficDashboard from './pageClient'
 import { getTrafficDomains, getTrafficMetrics, getTrafficRecords } from '@/utils/monitoring/data'
@@ -47,7 +47,7 @@ export default async function Page({
                 <DashboardPanel className='p-4'>
                     <DomainSelector domains={domainOptions} selectedDomain={selectedDomain} />
                 </DashboardPanel>
-                <LiveTrafficMapDashboard
+                <TrafficMap
                     initialMetrics={trafficMetrics}
                     initialRecords={trafficRecords?.result || []}
                 />

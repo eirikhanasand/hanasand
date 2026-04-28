@@ -1,7 +1,7 @@
 import { Cog, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
-export default function GreetingNavManagement({ text, id }: { text: string, id: string }) {
+export default function GreetingNav({ text, id }: { text: string, id: string }) {
     return (
         <div className='flex w-full rounded-lg justify-between items-center'>
             <h1 className='text-lg md:text-2xl font-semibold flex-1'>{text}</h1>

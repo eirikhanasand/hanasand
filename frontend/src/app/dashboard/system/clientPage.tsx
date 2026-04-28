@@ -1,7 +1,7 @@
 'use client'
 
 import { Activity, Cpu, FolderKanban, HardDrive, MemoryStick, RefreshCcw, ServerCog, StopCircle, Thermometer, Workflow } from 'lucide-react'
-import SystemDashboardVMListItem from '@/components/vms/systemDashboardVMListItem'
+import VmRow from '@/components/vms/vmRow'
 import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
@@ -182,7 +182,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                                 .filter((metric) => metric.name === vm.name)
                                 .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 
-                            return <SystemDashboardVMListItem key={vm.name} vm={vm} metrics={latestMetrics} />
+                            return <VmRow key={vm.name} vm={vm} metrics={latestMetrics} />
                         })}
                     </div>
                 </div>

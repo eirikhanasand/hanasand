@@ -1,6 +1,6 @@
 import DashboardArticles from '@/components/articles/dashboardArticles'
 import GreetingNav from '@/components/management/greetingNav'
-import GreetingNavButtons from '@/components/management/greetingNavButtons'
+import MobileNav from '@/components/management/mobileNav'
 import Roles from '@/components/roles/roles'
 import Thoughts from '@/components/thoughts/thoughts'
 import Users from '@/components/users/users'
@@ -26,7 +26,7 @@ export default async function Page() {
                 <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Admin</p>
                 <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Management</h1>
                 <GreetingNav text={text} id={id} />
-                <GreetingNavButtons id={id} />
+                <MobileNav id={id} />
             </section>
             <div className='grid gap-3 xl:grid-cols-2 xl:items-start'>
                 <DashboardArticles />

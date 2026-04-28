@@ -5,7 +5,7 @@ import upperCaseFirstLetter from '@/utils/text/upperCaseFirstLetter'
 import Link from 'next/link'
 import RestartButtons from './restartButtons'
 
-export default function SystemDashboardVMListItem({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) {
+export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) {
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
     const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Unknown'
     const accessUserCount = Array.isArray(vm.access_users) ? vm.access_users.length : 0

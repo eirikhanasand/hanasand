@@ -19,7 +19,7 @@ function formatRelative(value?: string | null) {
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-export default function DatabaseBackupsPageClient({ backups }: { backups: BackupService[] }) {
+export default function BackupPage({ backups }: { backups: BackupService[] }) {
     const [message, setMessage] = useState('')
     const [isPending, startTransition] = useTransition()
 

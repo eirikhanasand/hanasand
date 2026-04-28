@@ -1,5 +1,5 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
-import DatabaseBackupsPageClient from './pageClient'
+import BackupPage from './backupPage'
 import { getBackupServices } from '@/utils/db/internal'
 
 export default async function DatabaseBackupsPage() {
@@ -8,8 +8,7 @@ export default async function DatabaseBackupsPage() {
     return (
         <DashboardPage>
             <DashboardHeader eyebrow='Operations' title='Database Backups' />
-            <DatabaseBackupsPageClient backups={typeof backups === 'string' ? [] : backups} />
+            <BackupPage backups={typeof backups === 'string' ? [] : backups} />
         </DashboardPage>
     )
 }
-

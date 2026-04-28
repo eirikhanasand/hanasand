@@ -1,6 +1,6 @@
 import { Bug } from 'lucide-react'
 
-export default function VulnerabilityEmptyState() {
+export default function EmptyState() {
     return (
         <div className='w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-10 text-center'>
             <div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-orange-300'>

@@ -30,7 +30,7 @@ import statusClasses from './statusClasses'
 
 import type { TrafficMetrics, TrafficRecord } from '@/utils/monitoring/types'
 
-export default function LiveTrafficMapDashboard({
+export default function TrafficMap({
     initialMetrics,
     initialRecords,
 }: {
