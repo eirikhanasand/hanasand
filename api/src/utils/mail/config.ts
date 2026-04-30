@@ -6,6 +6,7 @@ const mailAdminUser = process.env.MAIL_ADMIN_USERNAME || 'admin'
 const mailAdminPassword = process.env.MAIL_ADMIN_PASSWORD || ''
 const mailDomain = process.env.MAIL_DOMAIN || 'hanasand.com'
 const serviceKeySource = process.env.MAIL_SERVICE_KEY || process.env.VM_API_TOKEN || process.env.DB_PASSWORD || ''
+const systemSenderLocalPart = process.env.MAIL_SYSTEM_SENDER_LOCAL_PART || 'noreply'
 const mailUserAliases = new Map(
     (process.env.MAIL_USER_ALIASES || 'eirikhanasand:eirik')
         .split(',')
@@ -17,10 +18,13 @@ const mailUserAliases = new Map(
         })
 )
 const systemMailboxOwner = process.env.MAIL_SYSTEM_MAILBOX_USER || 'eirikhanasand'
-const systemAliasLocalParts = (process.env.MAIL_SYSTEM_ALIASES || 'postmaster,abuse,hostmaster,tls-reports,noreply,noreply-dmarc')
-    .split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
+const systemAliasLocalParts = [...new Set([
+    systemSenderLocalPart,
+    ...(process.env.MAIL_SYSTEM_ALIASES || 'postmaster,abuse,hostmaster,tls-reports,noreply,noreply-dmarc')
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean),
+])]
 
 export const mailConfig = {
     host: mailHost,
@@ -33,6 +37,7 @@ export const mailConfig = {
     managesievePort: Number(process.env.MAIL_MANAGESIEVE_PORT || 4190),
     encryptionKey: crypto.createHash('sha256').update(serviceKeySource).digest(),
     systemMailboxOwner,
+    systemSenderLocalPart,
     systemAliasLocalParts,
     userAliases: mailUserAliases,
     privilegedMailboxUsers: new Set(

@@ -68,11 +68,17 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
         : principal.id
 
     if (principal) {
+        const principalEmails = new Set(principal.emails || [])
         const patches: AdminPatch[] = [
             { action: 'set', field: 'description', value: displayName },
             { action: 'set', field: 'secrets', value: [secret] },
-            { action: 'set', field: 'emails', value: allAddresses },
         ]
+
+        for (const address of allAddresses) {
+            if (!principalEmails.has(address)) {
+                patches.push({ action: 'addItem', field: 'emails', value: address })
+            }
+        }
 
         if (!preferredSecret && inheritedSecret && !existing) {
             patches.splice(1, 1)
