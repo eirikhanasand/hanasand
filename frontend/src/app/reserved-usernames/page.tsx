@@ -64,7 +64,7 @@ export default function ReservedUsernamesPage() {
                     </div>
                     <div className='mt-6 flex flex-wrap gap-2'>
                         {reservedUsernames.map(username => (
-                            <span key={username} className='rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-bright/70'>
+                            <span key={username} className='rounded-full border border-white/10 bg-white/4 px-3 py-1.5 text-sm text-bright/70'>
                                 {username}
                             </span>
                         ))}
