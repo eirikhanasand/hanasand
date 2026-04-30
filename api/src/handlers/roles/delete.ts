@@ -11,19 +11,18 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 export default async function deleteRole(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'user_admin')
-    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
-    if (!valid || !validRole || !hasPermission) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
-    const { valid: roleValid } = await tokenWrapper(req, res)
-    if (!roleValid) {
+    if (!valid || !validRole) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     const { id } = req.params as { id: string }
     if (!id) {
         return res.status(400).send({ error: 'Missing role id.' })
+    }
+
+    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
+    if (!hasPermission) {
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     try {

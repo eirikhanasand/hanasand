@@ -7,6 +7,8 @@ const AUTHENTICATOR_KEY = 'hanasand-mobile/authenticator'
 const AI_CHAT_KEY = 'hanasand-mobile/ai-chat'
 
 export const defaultSettings: AppSettings = {
+    themeMode: 'obsidian',
+    workspaceMode: 'coding',
     siteBaseUrl: 'https://hanasand.com',
     apiBaseUrl: 'https://hanasand.com/api',
     cdnBaseUrl: 'https://cdn.hanasand.com/api',
@@ -14,6 +16,7 @@ export const defaultSettings: AppSettings = {
     userId: '',
     codexUrl: 'https://hanasand.com/ai',
     codexApiPath: '/tools/ai',
+    desktopAgentBaseUrl: 'http://localhost:45731',
     vpnUrlScheme: 'ciscoanyconnect://',
     remoteDesktopHost: '',
     remoteDesktopUser: '',
@@ -24,58 +27,167 @@ export const defaultSettings: AppSettings = {
     serverLogsPath: '/logs',
 }
 
-export async function loadSettings() {
-    const raw = await AsyncStorage.getItem(SETTINGS_KEY)
-    if (!raw) return defaultSettings
+function parseJSON(raw: string) {
     try {
-        return { ...defaultSettings, ...(JSON.parse(raw) as Partial<AppSettings>) }
+        return JSON.parse(raw) as unknown
     } catch {
+        return null
+    }
+}
+
+function parseArray<T>(raw: string | null): T[] {
+    if (!raw) return []
+    const value = parseJSON(raw)
+    return Array.isArray(value) ? value as T[] : []
+}
+
+function asRecord(value: unknown) {
+    return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+}
+
+function stringValue(value: unknown) {
+    return typeof value === 'string' ? value : ''
+}
+
+function numberValue(value: unknown) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+async function getStoredValue(key: string) {
+    try {
+        return await AsyncStorage.getItem(key)
+    } catch {
+        return null
+    }
+}
+
+async function setStoredValue(key: string, value: string) {
+    await AsyncStorage.setItem(key, value)
+}
+
+function normalizeSettings(value: unknown): AppSettings {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return defaultSettings
     }
+
+    const partial = value as Partial<AppSettings>
+    const themeMode = partial.themeMode === 'graphite' || partial.themeMode === 'forest' || partial.themeMode === 'obsidian'
+        ? partial.themeMode
+        : defaultSettings.themeMode
+    const workspaceMode = partial.workspaceMode === 'daily' || partial.workspaceMode === 'coding'
+        ? partial.workspaceMode
+        : defaultSettings.workspaceMode
+
+    const merged = {
+        ...defaultSettings,
+        ...partial,
+        themeMode,
+        workspaceMode,
+    }
+
+    return Object.fromEntries(
+        Object.entries(merged).map(([key, entry]) => [key, typeof entry === 'string' ? entry : String(defaultSettings[key as keyof AppSettings] || '')]),
+    ) as AppSettings
+}
+
+export async function loadSettings() {
+    const raw = await getStoredValue(SETTINGS_KEY)
+    if (!raw) return defaultSettings
+    return normalizeSettings(parseJSON(raw))
 }
 
 export async function saveSettings(settings: AppSettings) {
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+    await setStoredValue(SETTINGS_KEY, JSON.stringify(settings))
 }
 
 export async function loadMailboxConnections() {
-    const raw = await AsyncStorage.getItem(MAILBOX_CONNECTIONS_KEY)
-    if (!raw) return [] as SavedMailboxConnection[]
-    try {
-        return JSON.parse(raw) as SavedMailboxConnection[]
-    } catch {
-        return [] as SavedMailboxConnection[]
-    }
+    return parseArray<unknown>(await getStoredValue(MAILBOX_CONNECTIONS_KEY)).map(item => {
+        const entry = asRecord(item)
+        const id = stringValue(entry.id)
+        const email = stringValue(entry.email)
+        if (!id || !email) return null
+        return {
+            id,
+            label: stringValue(entry.label) || email,
+            email,
+            imapHost: stringValue(entry.imapHost) || 'imap.gmail.com',
+            smtpHost: stringValue(entry.smtpHost) || 'smtp.gmail.com',
+        }
+    }).filter(Boolean) as SavedMailboxConnection[]
 }
 
 export async function saveMailboxConnections(connections: SavedMailboxConnection[]) {
-    await AsyncStorage.setItem(MAILBOX_CONNECTIONS_KEY, JSON.stringify(connections))
+    await setStoredValue(MAILBOX_CONNECTIONS_KEY, JSON.stringify(connections))
 }
 
 export async function loadAuthenticatorEntries() {
-    const raw = await AsyncStorage.getItem(AUTHENTICATOR_KEY)
-    if (!raw) return [] as AuthenticatorEntry[]
-    try {
-        return JSON.parse(raw) as AuthenticatorEntry[]
-    } catch {
-        return [] as AuthenticatorEntry[]
-    }
+    return parseArray<unknown>(await getStoredValue(AUTHENTICATOR_KEY)).map(item => {
+        const entry = asRecord(item)
+        const id = stringValue(entry.id)
+        const secret = stringValue(entry.secret)
+        if (!id || !secret) return null
+        return {
+            id,
+            label: stringValue(entry.label) || 'Authenticator code',
+            issuer: stringValue(entry.issuer) || undefined,
+            account: stringValue(entry.account) || undefined,
+            secret,
+            digits: typeof entry.digits === 'number' ? entry.digits : 6,
+            period: typeof entry.period === 'number' ? entry.period : 30,
+        }
+    }).filter(Boolean) as AuthenticatorEntry[]
 }
 
 export async function saveAuthenticatorEntries(entries: AuthenticatorEntry[]) {
-    await AsyncStorage.setItem(AUTHENTICATOR_KEY, JSON.stringify(entries))
+    await setStoredValue(AUTHENTICATOR_KEY, JSON.stringify(entries))
 }
 
 export async function loadAiChat() {
-    const raw = await AsyncStorage.getItem(AI_CHAT_KEY)
-    if (!raw) return [] as AiChatMessage[]
-    try {
-        return JSON.parse(raw) as AiChatMessage[]
-    } catch {
-        return [] as AiChatMessage[]
-    }
+    return parseArray<unknown>(await getStoredValue(AI_CHAT_KEY)).map(item => {
+        const entry = asRecord(item)
+        const id = stringValue(entry.id)
+        const role = entry.role === 'user' || entry.role === 'assistant' ? entry.role : null
+        if (!id || !role) return null
+        const toolUses = Array.isArray(entry.toolUses)
+            ? entry.toolUses.map(tool => {
+                const toolEntry = asRecord(tool)
+                const name = stringValue(toolEntry.name)
+                if (!name) return null
+                return {
+                    name,
+                    summary: stringValue(toolEntry.summary) || undefined,
+                    durationMs: numberValue(toolEntry.durationMs),
+                }
+            }).filter(Boolean)
+            : undefined
+        const fileSummaries = Array.isArray(entry.fileSummaries)
+            ? entry.fileSummaries.map(file => {
+                const fileEntry = asRecord(file)
+                const path = stringValue(fileEntry.path)
+                if (!path) return null
+                return {
+                    path,
+                    summary: stringValue(fileEntry.summary) || undefined,
+                    additions: numberValue(fileEntry.additions),
+                    deletions: numberValue(fileEntry.deletions),
+                }
+            }).filter(Boolean)
+            : undefined
+        return {
+            id,
+            role,
+            content: stringValue(entry.content),
+            createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : Date.now(),
+            error: typeof entry.error === 'boolean' ? entry.error : undefined,
+            pending: typeof entry.pending === 'boolean' ? entry.pending : undefined,
+            durationMs: numberValue(entry.durationMs),
+            thoughtSummary: stringValue(entry.thoughtSummary) || undefined,
+            toolUses: toolUses?.length ? toolUses : undefined,
+            fileSummaries: fileSummaries?.length ? fileSummaries : undefined,
+        }
+    }).filter(Boolean) as AiChatMessage[]
 }
 
 export async function saveAiChat(messages: AiChatMessage[]) {
-    await AsyncStorage.setItem(AI_CHAT_KEY, JSON.stringify(messages))
+    await setStoredValue(AI_CHAT_KEY, JSON.stringify(messages.slice(-120)))
 }

@@ -89,3 +89,47 @@ test('authenticated users can create a project from /s and trigger share + VM pr
     expect(requestedVmUrl).toContain('/api/vm')
     expect(createdShareBody).toContain('"name":"Playwright Project"')
 })
+
+test('metadata reload keeps the current share id instead of opening a random workspace', async ({ page }) => {
+    const shareId = 'pwshare-metadata'
+
+    await page.route(`https://cdn.hanasand.com/api/share/${shareId}`, async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: 'Playwright Share',
+                path: `share-${shareId}`,
+                content: '',
+                wordCount: 1,
+                estimatedMinutes: 1,
+            }),
+        })
+    })
+
+    await page.route(`https://cdn.hanasand.com/api/share/tree/${shareId}`, async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([
+                {
+                    id: shareId,
+                    alias: 'Playwright Share',
+                    path: `share-${shareId}`,
+                    content: '',
+                    type: 'folder',
+                    name: `share-${shareId}`,
+                    children: [],
+                },
+            ]),
+        })
+    })
+
+    await page.goto(`/s/${shareId}`)
+    await page.getByRole('button', { name: 'Open share metadata' }).click()
+    await page.getByRole('link', { name: 'Reload current share workspace' }).click()
+
+    await expect(page).toHaveURL(new RegExp(`/s/${shareId}$`))
+    await expect(page.getByRole('link', { name: 'Reload current share workspace' })).toHaveAttribute('href', `/s/${shareId}`)
+})

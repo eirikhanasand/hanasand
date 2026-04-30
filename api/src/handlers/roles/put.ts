@@ -1,4 +1,5 @@
 import run from '#db'
+import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
@@ -19,16 +20,16 @@ export default async function putRole(req: FastifyRequest, res: FastifyReply) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { valid: roleValid } = await tokenWrapper(req, res)
-    if (!roleValid) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
     const { id } = req.params as { id: string }
     const { name, description } = req.body as PutRoleBody ?? {}
 
     if (!id) {
         return res.status(400).send({ error: 'Missing role id' })
+    }
+
+    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
+    if (!hasPermission) {
+        return res.status(401).send({ error: 'Unauthorized.' })
     }
 
     try {

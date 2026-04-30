@@ -55,14 +55,24 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                 <h1 className={`self-center ${user.active === false ? 'text-bright/35 line-through' : ''}`} key={user.id}>{user.name}</h1>
                 {keys['shift'] && <Trash2 className='hidden group-hover:block w-5 h-5 stroke-red-500' />}
                 {!keys['shift'] && <div className='group flex items-center gap-2'>
-                    <div onClick={handleActive} className={`hidden group-hover:grid rounded-lg h-7 w-7 place-items-center cursor-pointer ${user.active === false ? 'hover:bg-emerald-500/15' : 'hover:bg-red-500/15'}`}>
+                    <div
+                        aria-label={`${user.active === false ? 'Activate' : 'Deactivate'} ${user.id}`}
+                        onClick={handleActive}
+                        role='button'
+                        className={`hidden group-hover:grid rounded-lg h-7 w-7 place-items-center cursor-pointer ${user.active === false ? 'hover:bg-emerald-500/15' : 'hover:bg-red-500/15'}`}
+                    >
                         {user.active === false
                             ? <CheckCircle2 className='w-4 h-4 self-center stroke-emerald-300' />
                             : <Ban className='w-4 h-4 self-center stroke-red-300' />
                         }
                     </div>
                     {user.highest_role_priority === 0 && <Crown className='w-5 h-5 stroke-amber-300' />}
-                    <div onClick={handleRoles} className='hidden group-hover:grid rounded-lg hover:bg-[#6464641a] h-7 w-7 place-items-center cursor-pointer'>
+                    <div
+                        aria-label={`Manage roles for ${user.id}`}
+                        onClick={handleRoles}
+                        role='button'
+                        className='hidden group-hover:grid rounded-lg hover:bg-[#6464641a] h-7 w-7 place-items-center cursor-pointer'
+                    >
                         {displayRoles
                             ? <X className='w-4 h-4 self-center stroke-bright/50' />
                             : <Pencil className='w-4 h-4 self-center stroke-bright/50' />

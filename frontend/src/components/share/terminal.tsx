@@ -135,13 +135,15 @@ export default function Terminal({
 
             {/* Collapsed icon */}
             {!open && (
-                <div
+                <button
+                    type='button'
+                    aria-label='Open terminal panel'
                     onClick={handleChange}
                     data-testid='share-terminal-toggle'
                     className='fixed bottom-2 left-1/2 -translate-x-1/2 bg-dark/40 hover:bg-dark px-8 py-1 rounded-md cursor-pointer transition-all border border-light/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_2px_4px_rgba(0,0,0,0.4)] backdrop-blur-md z-100'
                 >
                     <div className='mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-[2.5px]' />
-                </div>
+                </button>
             )}
 
             {/* Console container */}
@@ -175,6 +177,8 @@ export default function Terminal({
                         </span>
                     </div>
                     <button
+                        type='button'
+                        aria-label='Close terminal panel'
                         onClick={() => setOpen(false)}
                         className='hover:text-white transition-colors cursor-pointer'
                     >

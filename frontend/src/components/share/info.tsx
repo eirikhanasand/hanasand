@@ -1,10 +1,10 @@
 import { BookText, Eye, Link, ListOrdered, MessageCircleHeart, Pencil, Timer } from 'lucide-react'
 import Marquee from '../marquee/marquee'
-import { useEffect, useState } from 'react'
 import copy from '@/utils/copy'
 import prettyDate from '@/utils/date/prettyDate'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import Notify from '../notify/notify'
+import { usePathname } from 'next/navigation'
 
 type HeaderProps = {
     share: Share | null
@@ -13,7 +13,8 @@ type HeaderProps = {
 }
 
 export default function Info({ share, isConnected, participants }: HeaderProps) {
-    const [linkText, setLinkText] = useState(share?.id || '')
+    const pathname = usePathname()
+    const linkText = pathname.split('/').filter(Boolean).at(-1) || share?.id || ''
     const aliasText = share?.alias || ''
     const { condition: error } = useClearStateAfter()
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
@@ -21,10 +22,6 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
         timeout: 1000,
         onClear: () => setDidCopy(false)
     })
-
-    useEffect(() => {
-        setLinkText(window.location.href.split('/').reverse()[0])
-    }, [])
 
     if (!share) {
         return <></>
@@ -53,9 +50,11 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                     <Pencil height={18} width={18} />
                     <h1>{prettyDate(share.timestamp)}</h1>
                 </span>
-                <span
+                <button
+                    type='button'
+                    aria-label='Copy current share link'
                     onClick={() => copy({ type: 'link', text: window.location.href, setDidCopy })}
-                    className='flex gap-2 text-sm text-bright/80 w-full overflow-hidden cursor-pointer'
+                    className='flex w-full cursor-pointer gap-2 overflow-hidden text-left text-sm text-bright/80'
                 >
                     <Link
                         className={copyColorLink}
@@ -65,11 +64,13 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                     <div className='flex flex-col flex-1 overflow-hidden'>
                         <Marquee className='truncate' text={linkText} />
                     </div>
-                </span>
+                </button>
                 {aliasText !== linkText && (
-                    <span
+                    <button
+                        type='button'
+                        aria-label='Copy share alias link'
                         onClick={() => copy({ type: 'alias', text: `https://${share.alias}.hanasand.com`, setDidCopy })}
-                        className='flex gap-2 text-sm text-bright/80 w-full overflow-hidden cursor-pointer'
+                        className='flex w-full cursor-pointer gap-2 overflow-hidden text-left text-sm text-bright/80'
                     >
                         <MessageCircleHeart
                             className={copyColorAlias}
@@ -79,7 +80,7 @@ export default function Info({ share, isConnected, participants }: HeaderProps) 
                         <div className='flex flex-col flex-1 overflow-hidden'>
                             <Marquee className='truncate' text={aliasText} />
                         </div>
-                    </span>
+                    </button>
                 )}
                 <span className='gap-2 text-sm text-bright/80 flex'>
                     <BookText height={18} width={18} />

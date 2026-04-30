@@ -144,7 +144,9 @@ export default function RenderSite({
                 ></iframe>
             )}
 
-            <div
+            <button
+                type='button'
+                aria-label={renderSite ? 'Hide site' : 'Show site'}
                 onClick={handleChange}
                 className='
                     group fixed bottom-16 right-3 z-100 cursor-pointer select-none
@@ -163,7 +165,7 @@ export default function RenderSite({
                         <Monitor /> {renderSite ? 'Hide site' : 'Show site'}
                     </h1>
                 </div>
-            </div>
+            </button>
         </div>
     )
 }

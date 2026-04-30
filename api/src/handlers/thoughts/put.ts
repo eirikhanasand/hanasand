@@ -26,8 +26,13 @@ export default async function putThought(req: FastifyRequest<{ Params: { id: str
             return res.status(400).send({ error: 'No fields to update' })
         }
 
+        values.push(id)
         const query = `UPDATE thoughts SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`
         const result = await run(query, values)
+
+        if (!result.rows.length) {
+            return res.status(404).send({ error: 'Thought not found' })
+        }
 
         return res.status(201).send({ result, message: `Updated thought ${id}` })
     } catch (error: any) {

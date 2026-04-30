@@ -21,6 +21,8 @@ const TOOL_SYSTEM_PROMPT = [
     'Prefer list_files, grep_repo, and read_file before editing unfamiliar code. Prefer edit_file for targeted snippet changes and write_file for precise file creation or full-file rewrites.',
     'For app development, you can scaffold files, install packages, start dev servers, wait for HTTP readiness, inspect logs, and verify behavior in a browser.',
     'When repeated or multi-step work would benefit future tasks, create a reusable script, helper, or tool in the repository instead of repeating the same manual steps.',
+    'When working inside the Hanasand repository, read agents/START_HERE.md first. For native app or website-to-app parity work, also read agents/DESKTOP_APP_DEVELOPMENT.md and follow it as the operating playbook.',
+    'For requests like "implement the share functionality from the website", independently trace the website component, API helper, backend route, response shape, native app foothold, and verification commands before editing. Do not ask the user for endpoint names or file paths that the repository can reveal.',
     'Prefer durable improvements: if a missing capability blocks the task and can be implemented safely, add the capability, then use it.',
     'For questions about today, the current date, time, local environment, installed packages, git state, files, logs, or audits, prefer the command tool over guessing.',
     'For recent news, release notes, web content, docs, and changing external facts, prefer the web search tool.',
@@ -299,26 +301,32 @@ export default async function runModelToolLoop(
 ): Promise<ToolLoopResult> {
     const loopStartedAt = Date.now()
     const userMessage = latestUserMessage(request.messages)
+    const appParityTrainingTask = isAppParityTrainingTask(userMessage)
+    const appParityRequest = appParityTrainingTask || isAppParityRequest(userMessage)
     const autonomousRepoTask = isAutonomousRepoTask(userMessage)
     const readOnlyRepoTask = isReadOnlyRepoTask(userMessage)
     const readOnlySingleFilePath = readOnlyRepoTask ? extractSingleRepoFilePath(userMessage) : null
     const readOnlyConciseAnswer = readOnlyRepoTask && prefersConciseReadOnlyAnswer(userMessage)
-    const maxIterations = readOnlyRepoTask
-        ? (readOnlySingleFilePath ? 0 : 1)
-        : autonomousRepoTask
-            ? 3
-            : Math.max(8, config.web_search_max_iterations + 8)
-    const iterationMaxTokens = readOnlyRepoTask
-        ? Math.max(
-            readOnlyConciseAnswer ? 48 : 80,
-            Math.min(
-                request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000,
-                readOnlySingleFilePath && readOnlyConciseAnswer ? 72 : 160,
-            ),
-        )
-        : autonomousRepoTask
-            ? Math.max(96, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 220))
-            : Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
+    const maxIterations = appParityTrainingTask
+        ? 3
+        : readOnlyRepoTask
+            ? (readOnlySingleFilePath ? 0 : 1)
+            : autonomousRepoTask
+                ? 3
+                : Math.max(8, config.web_search_max_iterations + 8)
+    const iterationMaxTokens = appParityTrainingTask
+        ? Math.max(240, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 360))
+        : readOnlyRepoTask
+            ? Math.max(
+                readOnlyConciseAnswer ? 48 : 80,
+                Math.min(
+                    request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000,
+                    readOnlySingleFilePath && readOnlyConciseAnswer ? 72 : 160,
+                ),
+            )
+            : autonomousRepoTask
+                ? Math.max(96, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 220))
+                : Math.max(120, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 320))
     const workingMessages = withToolSystemPrompt(request.messages)
     const executedToolCalls = new Set<string>()
     const collectedArtifacts: AIArtifact[] = []
@@ -331,6 +339,9 @@ export default async function runModelToolLoop(
     async function executeTrackedToolCall(toolCall: ToolCall, iteration: number, progress?: ToolProgressEmitter) {
         const startedAt = Date.now()
         try {
+            if (appParityTrainingTask && isMutatingToolCall(toolCall)) {
+                return buildBlockedTrainingToolResult(toolCall, iteration, progress)
+            }
             return await executeToolCall(toolCall, iteration, progress)
         } finally {
             toolCalls += 1
@@ -356,9 +367,42 @@ export default async function runModelToolLoop(
     if (autonomousRepoTask) {
         workingMessages.push({
             role: 'system',
-            content: readOnlyRepoTask
-                ? 'This is a read-only repository task. Inspect only the minimum file content needed, then answer directly. Do not keep exploring, do not broaden scope, and do not ask for more tools once you can answer.'
-                : 'This is a tightly scoped repository task. Inspect only the minimum files needed, perform one focused change, verify it, then answer. Do not broaden scope, repeat the same tool, or keep exploring once you have enough information to act.',
+            content: appParityTrainingTask
+                ? 'This is an app-parity training evaluation. Use the preloaded repository evidence plus read-only tools if needed, prove you can discover the website/API/native app contract yourself, and return a concrete implementation plan. Do not edit files, do not run mutating commands, and do not ask the user for endpoint names, payload shapes, or file paths.'
+                : readOnlyRepoTask
+                    ? 'This is a read-only repository task. Inspect only the minimum file content needed, then answer directly. Do not keep exploring, do not broaden scope, and do not ask for more tools once you can answer.'
+                    : 'This is a tightly scoped repository task. Inspect only the minimum files needed, perform one focused change, verify it, then answer. Do not broaden scope, repeat the same tool, or keep exploring once you have enough information to act.',
+        })
+    }
+
+    if (appParityRequest) {
+        const preflightToolCalls = buildAppParityPreflightToolCalls(userMessage)
+        for (const preflightToolCall of preflightToolCalls) {
+            const preflightKey = JSON.stringify(preflightToolCall)
+            if (executedToolCalls.has(preflightKey)) {
+                continue
+            }
+
+            try {
+                const { message: toolMessage, artifacts } = await executeTrackedToolCall(preflightToolCall, -1, emitToolProgress)
+                collectedArtifacts.push(...(artifacts || []))
+                executedToolCalls.add(preflightKey)
+                workingMessages.push({
+                    role: 'assistant',
+                    content: `<tool_call>${preflightKey}</tool_call>`,
+                })
+                workingMessages.push(toolMessage)
+            } catch (error) {
+                workingMessages.push({
+                    role: 'system',
+                    content: `App-parity preflight could not read ${describeToolCall(preflightToolCall)}: ${error instanceof Error ? error.message : String(error)}.`,
+                })
+            }
+        }
+
+        workingMessages.push({
+            role: 'system',
+            content: 'Use the app-parity preflight evidence above before asking for more context. If the user asked for implementation, continue by editing after the evidence is enough; if this is a training evaluation, return the plan and verification evidence without editing.',
         })
     }
 
@@ -1246,10 +1290,113 @@ function isAutonomousRepoTask(message: string) {
     return /(fix|implement|debug|investigate|audit|analyze|analyse|refactor|edit|update|patch|search the repo|read the file|look through)/i.test(message)
 }
 
+function isAppParityTrainingTask(message: string) {
+    return /app[- ]parity training evaluation|training evaluation.*website.*app|train.*website.*app|share functionality.*training|desktop app improvement drill|desktop ui audit/i.test(message)
+}
+
+function isAppParityRequest(message: string) {
+    return /(website|web).*?(app|native|desktop)|(?:app|native|desktop).*?(website|web)|share functionality/i.test(message)
+}
+
+function buildAppParityPreflightToolCalls(message: string): ToolCall[] {
+    const lowerMessage = message.toLowerCase()
+    const calls: ToolCall[] = [
+        {
+            name: 'read_file',
+            arguments: {
+                path: 'agents/START_HERE.md',
+                startLine: 1,
+                endLine: 80,
+            },
+        },
+        {
+            name: 'read_file',
+            arguments: {
+                path: 'agents/DESKTOP_APP_DEVELOPMENT.md',
+                startLine: 1,
+                endLine: 220,
+            },
+        },
+    ]
+
+    if (lowerMessage.includes('share')) {
+        calls.push(
+            {
+                name: 'read_file',
+                arguments: {
+                    path: 'agents/training-scenarios/share-functionality-port.md',
+                    startLine: 1,
+                    endLine: 120,
+                },
+            },
+            {
+                name: 'grep_repo',
+                arguments: {
+                    query: 'getUserShares',
+                    path: 'frontend/src',
+                    limit: 40,
+                },
+            },
+            {
+                name: 'grep_repo',
+                arguments: {
+                    query: 'createShare',
+                    path: 'app/src',
+                    limit: 40,
+                },
+            },
+        )
+    }
+
+    return calls
+}
+
 function isReadOnlyRepoTask(message: string) {
     const requestsInspection = /(inspect|read|review|report|list|answer with|tell me|which|what are|do not edit|only read)/i.test(message)
     const requestsMutation = /(fix|implement|refactor|edit|update|patch|write|create|apply|change|move)/i.test(message)
     return requestsInspection && !requestsMutation
+}
+
+function isMutatingToolCall(toolCall: ToolCall) {
+    return toolCall.name === 'edit_file'
+        || toolCall.name === 'batch_edit_files'
+        || toolCall.name === 'write_file'
+        || toolCall.name === 'run_command'
+        || toolCall.name === 'start_process'
+        || toolCall.name === 'stop_process'
+        || toolCall.name === 'compose_up'
+        || toolCall.name === 'compose_down'
+        || toolCall.name === 'scaffold_nextjs_app'
+        || toolCall.name === 'scaffold_nextjs_docker_app'
+        || toolCall.name === 'scaffold_fastify_postgres_app'
+        || toolCall.name === 'scaffold_fastify_worker_redis_app'
+        || toolCall.name === 'generate_nextjs_marketing_site'
+}
+
+function buildBlockedTrainingToolResult(
+    toolCall: ToolCall,
+    iteration: number,
+    emitToolProgress?: ToolProgressEmitter,
+): ToolExecutionResult {
+    const toolId = `${toolCall.name}_${iteration + 1}_${Date.now()}`
+    const toolLabel = describeToolCall(toolCall)
+    emitToolProgress?.({
+        toolId,
+        toolLabel,
+        toolState: 'error',
+        toolDetail: 'Blocked because app-parity training evaluations are read-only.',
+    })
+
+    return {
+        message: {
+            role: 'tool',
+            tool_call_id: `blocked_training_${iteration + 1}`,
+            content: [
+                `Tool ${toolCall.name} was blocked by app-parity training mode.`,
+                'This evaluation is read-only. Continue with list_files, grep_repo, and read_file, then return the implementation plan and verification steps.',
+            ].join('\n\n'),
+        },
+    }
 }
 
 function prefersConciseReadOnlyAnswer(message: string) {

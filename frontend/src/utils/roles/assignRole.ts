@@ -5,6 +5,7 @@ type FetchRoleProps = {
     id: string
     token: string
     role: string
+    target: string
 }
 
 type RoleAssignmentResponse = {
@@ -12,7 +13,7 @@ type RoleAssignmentResponse = {
     data: Role | null
 }
 
-export default async function assignRole({ id, token, role }: FetchRoleProps): Promise<RoleAssignmentResponse> {
+export default async function assignRole({ id, token, role, target }: FetchRoleProps): Promise<RoleAssignmentResponse> {
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
@@ -21,13 +22,14 @@ export default async function assignRole({ id, token, role }: FetchRoleProps): P
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
-        const response = await fetch(`${config.url.api}/role/assign/${role}`, {
+        const response = await fetch(`${config.url.api}/role/assign/${target}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
                 id
             },
+            body: JSON.stringify({ role_id: role }),
             signal: controller.signal
         })
 

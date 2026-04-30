@@ -1,5 +1,4 @@
 import { Dispatch, SetStateAction } from 'react'
-import Button from './button'
 
 type ResultProps = {
     id: number
@@ -16,9 +15,18 @@ export default function Result({ id, result, selectedResult, setAction }: Result
     }
 
     return (
-        <div onClick={handleClick} className={`${selected ? 'bg-blue-400/10' : 'bg-bright/3'} w-full p-2 py-3 rounded-lg flex items-center justify-between cursor-pointer min-h-12 h-12 max-h-12`}>
+        <button
+            type='button'
+            aria-label={`Run action ${result.text}`}
+            onClick={handleClick}
+            className={`${selected ? 'bg-blue-400/10' : 'bg-bright/3'} flex h-12 min-h-12 max-h-12 w-full items-center justify-between rounded-lg p-2 py-3 text-left cursor-pointer`}
+        >
             <h1>{result.text}</h1>
-            {selected && <Button text='enter' />}
-        </div>
+            {selected ? (
+                <span className='w-fit rounded-lg p-[0.15rem] px-4 text-bright/70 outline outline-bright/10 backdrop-blur-xs'>
+                    <h1>enter</h1>
+                </span>
+            ) : null}
+        </button>
     )
 }

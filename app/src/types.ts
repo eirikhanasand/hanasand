@@ -5,7 +5,18 @@ export type RouteShortcut = {
     category: string
 }
 
+export type RootTabParamList = {
+    Home: undefined
+    Mail: undefined
+    Scan: undefined
+    Notes: undefined
+    Images: undefined
+    Control: undefined
+}
+
 export type AppSettings = {
+    themeMode: 'obsidian' | 'graphite' | 'forest'
+    workspaceMode: 'coding' | 'daily'
     siteBaseUrl: string
     apiBaseUrl: string
     cdnBaseUrl: string
@@ -13,6 +24,7 @@ export type AppSettings = {
     userId: string
     codexUrl: string
     codexApiPath: string
+    desktopAgentBaseUrl: string
     vpnUrlScheme: string
     remoteDesktopHost: string
     remoteDesktopUser: string
@@ -62,6 +74,13 @@ export type MailOverview = {
     selectedMessage: MailMessage | null
 }
 
+export type MailSendResult = {
+    ok: boolean
+    mailboxUser: string
+    sentMailboxId: string | null
+    sentMessageId: string | null
+}
+
 export type ScannerPage = {
     id: string
     uri: string
@@ -94,6 +113,31 @@ export type AiChatMessage = {
     createdAt: number
     error?: boolean
     pending?: boolean
+    durationMs?: number
+    thoughtSummary?: string
+    toolUses?: AiToolUseSummary[]
+    fileSummaries?: AiFileSummary[]
+}
+
+export type AiToolUseSummary = {
+    name: string
+    summary?: string
+    durationMs?: number
+}
+
+export type AiFileSummary = {
+    path: string
+    summary?: string
+    additions?: number
+    deletions?: number
+}
+
+export type AiRunDetails = {
+    message: string
+    durationMs?: number
+    thoughtSummary?: string
+    toolUses?: AiToolUseSummary[]
+    fileSummaries?: AiFileSummary[]
 }
 
 export type AuthenticatorEntry = {
@@ -122,4 +166,69 @@ export type ShareSummary = {
     timestamp?: string
     content?: string
     locked?: boolean
+    parent?: string | null
+    type?: string | null
+}
+
+export type ShareTreeItem = {
+    id: string
+    name: string
+    alias?: string | null
+    parent?: string | null
+    type: 'file' | 'folder'
+    children?: ShareTreeItem[]
+}
+
+export type Note = {
+    id: string
+    title: string
+    content: string
+    source: string
+    owner_id: string
+    created_at: string
+    updated_at: string
+}
+
+export type DashboardRole = {
+    id: string
+    name?: string
+    description?: string
+    priority?: number
+}
+
+export type DashboardUserRoleAssignment = {
+    id: string
+    roleId: string
+    name?: string
+    priority?: number
+}
+
+export type DashboardUser = {
+    id: string
+    name?: string
+    active?: boolean
+    role?: string
+    roles?: DashboardRole[]
+    highestRolePriority?: number
+}
+
+export type DesktopAgentStatus = {
+    ok: boolean
+    agent?: string
+    hostname?: string
+    platform?: string
+    user?: string
+    cwd?: string
+    uptimeSeconds?: number
+    timestamp?: string
+    message?: string
+    screenCaptureAllowed?: boolean
+    accessibilityAllowed?: boolean
+}
+
+export type DesktopScreenshot = {
+    ok: boolean
+    message?: string
+    mimeType?: string
+    imageBase64?: string
 }

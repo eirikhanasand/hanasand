@@ -7,6 +7,20 @@ type Valid = {
     error?: string
 }
 
+type RoleTargetRequest = {
+    body?: {
+        target?: string
+        role_id?: string
+    }
+    params?: {
+        id?: string
+    }
+}
+
+export function roleTargetFromRequest(req: RoleTargetRequest): string | undefined {
+    return req.body?.target || req.body?.role_id || req.params?.id
+}
+
 /**
  * Used to check whether a user has permission to assign a role, meaning their
  * highest role is of equal or higher priority than the target role.
@@ -31,7 +45,7 @@ export default async function hasPermissionToModifyRole(req: FastifyRequest, res
         }
 
         const highestRole = highestRoleResult.rows[0].id
-        const { target } = req.body as { target: string } ?? {}
+        const target = roleTargetFromRequest(req as RoleTargetRequest)
         if (!target) {
             return res.status(401).send({ error: 'Missing target role.' })
         }

@@ -16,6 +16,10 @@ export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleH
     const [userRoles, setUserRoles] = useState<MinimalRole[]>([])
 
     useEffect(() => {
+        if (!displayRoles) {
+            return
+        }
+
         (async() => {
             const id = getCookie('id')
             const token = getCookie('access_token')
@@ -27,21 +31,25 @@ export default function UserRoleHandler({ displayRoles, roles, user }: UserRoleH
             const response = await getUserRoles({ id, token, target: user.id })
             setUserRoles(response)
         })()
-    }, [])
+    }, [displayRoles, user.id])
 
     if (!displayRoles) {
-        return
+        return null
     }
 
     return (
         <div className='bg-dark absolute right-2 top-10 rounded-lg w-fit h-fit overflow-auto p-2 z-10 select-none'>
-            {roles.map((role) => <Role key={role.id} role={role} userRoles={userRoles} />)}
+            {roles.map((role) => <Role key={role.id} role={role} user={user} userRoles={userRoles} />)}
         </div>
     )
 }
 
-function Role({ role, userRoles }: { role: Role, userRoles: MinimalRole[] }) {
-    const [active, setActive] = useState(userRoles.some((r) => r.role_id === role.name))
+function Role({ role, user, userRoles }: { role: Role, user: UserWithRole, userRoles: MinimalRole[] }) {
+    const [active, setActive] = useState(false)
+
+    useEffect(() => {
+        setActive(userRoles.some((r) => r.role_id === role.id || r.role_id === role.name))
+    }, [role.id, role.name, userRoles])
 
     async function handleClick() {
         const id = getCookie('id')
@@ -52,12 +60,12 @@ function Role({ role, userRoles }: { role: Role, userRoles: MinimalRole[] }) {
         }
 
         if (active) {
-            const response = await unassignRole({ id, token, role: role.id })
+            const response = await unassignRole({ id, token, role: role.id, target: user.id })
             if (response.status) {
                 setActive(false)
             }
         } else {
-            const response = await assignRole({ id, token, role: role.id })
+            const response = await assignRole({ id, token, role: role.id, target: user.id })
             if (response.status) {
                 setActive(true)
             }
@@ -71,6 +79,7 @@ function Role({ role, userRoles }: { role: Role, userRoles: MinimalRole[] }) {
                 {role.priority === 0 ? <Crown className='self-center stroke-amber-300 h-5 w-5' /> : <h1>{role.priority}</h1>}
             </div>
             <input
+                aria-label={`${active ? 'Remove' : 'Assign'} ${role.id} for ${user.id}`}
                 checked={active}
                 onChange={handleClick}
                 type='checkbox'

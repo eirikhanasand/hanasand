@@ -21,7 +21,10 @@
     "smoke:ai-deploy-defaults": "bun scripts/smoke-ai-deploy-defaults.ts",
     "smoke:app-update": "bun scripts/smoke-app-update.ts",
     "smoke:notes": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-notes.mjs",
+    "smoke:unit": "bun scripts/smoke-notes.ts && bun scripts/smoke-role-permissions.ts && bun scripts/smoke-user-delete-contract.ts",
     "smoke:notes-unit": "bun scripts/smoke-notes.ts",
+    "smoke:roles-unit": "bun scripts/smoke-role-permissions.ts",
+    "smoke:user-delete-unit": "bun scripts/smoke-user-delete-contract.ts",
     "smoke:vm-targets": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-vm-agent-targets.mjs",
     "smoke:vm-request-bridge": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-vm-request-bridge.mjs",
     "smoke:ai-deployments": "API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-ai-deployments.mjs"

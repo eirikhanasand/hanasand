@@ -9,6 +9,7 @@ type PostShareProps = {
     name?: string
     parent?: string
     type?: string
+    timeoutMs?: number
     token?: string | null
     userId?: string | null
 }
@@ -21,11 +22,15 @@ export default async function postShare({
     name,
     parent,
     type,
+    timeoutMs,
     token,
     userId
 }: PostShareProps): Promise<Share | ShareWithTree | null> {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
+    const timeout = setTimeout(
+        () => controller.abort(),
+        timeoutMs ?? Math.max(config.abortTimeout, 15000)
+    )
 
     try {
         const response = await fetch(`${config.url.cdn}/share`, {

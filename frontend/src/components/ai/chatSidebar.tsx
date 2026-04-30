@@ -39,15 +39,15 @@ export default function ChatSidebar(props: ChatSidebarProps) {
     const activeLabel = useMemo(() => workspaceLabel(activeConversation), [activeConversation])
 
     return (
-        <aside className='flex min-h-0 flex-col rounded-2xl bg-dark/30 p-3 outline outline-dark'>
+        <aside className='flex min-h-0 flex-col border-r border-[#2d2d2b] bg-[#2b2c2a] p-3'>
             <div className='flex items-center justify-between gap-2 pb-3'>
-                <button type='button' onClick={onNewConversation} className='inline-flex items-center gap-2 rounded-xl bg-[#fd8738] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90'>
+                <button type='button' onClick={onNewConversation} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#eeeeea] transition-colors hover:bg-[#3a3a38]'>
                     <MessageSquarePlus className='h-4 w-4' />
                     New
                 </button>
                 <div className='flex items-center gap-1'>
                     <IconButton icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' className='grid h-9 w-9 place-items-center rounded-xl bg-dark/30 text-bright/55 outline outline-dark transition-colors hover:text-bright/85'>
+                    <Link href='/s' className='grid h-9 w-9 place-items-center rounded-lg text-[#a0a09b] transition-colors hover:bg-[#3a3a38] hover:text-[#eeeeea]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -55,25 +55,25 @@ export default function ChatSidebar(props: ChatSidebarProps) {
 
             {searchOpen ? (
                 <label className='relative mb-3 block'>
-                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/30' />
+                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#858581]' />
                     <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder='Search chats'
-                        className='w-full rounded-xl bg-dark/35 py-2.5 pl-10 pr-3 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24'
+                        className='w-full rounded-lg border border-[#42423f] bg-[#242522] py-2.5 pl-10 pr-3 text-sm text-[#eeeeea] outline-none placeholder:text-[#777772]'
                     />
                 </label>
             ) : null}
 
-            <div className='mb-3 rounded-2xl bg-dark/25 px-3 py-3 outline outline-dark'>
-                <div className='text-[11px] uppercase tracking-[0.22em] text-bright/30'>Hanasand AI</div>
-                <div className='mt-2 truncate text-sm text-bright/82'>{activeLabel}</div>
-                <div className='mt-1 text-xs text-bright/38'>
+            <div className='mb-3 rounded-lg bg-[#242522] px-3 py-3'>
+                <div className='text-[11px] uppercase tracking-[0.18em] text-[#858581]'>Hanasand AI</div>
+                <div className='mt-2 truncate text-sm text-[#eeeeea]'>{activeLabel}</div>
+                <div className='mt-1 text-xs text-[#9a9a95]'>
                     {isAuthenticated ? 'Your chats stay attached to repos and shares.' : 'Sign in to save chats and workspaces.'}
                 </div>
             </div>
 
-            <div className='mb-3 flex items-center justify-between px-1 text-[11px] uppercase tracking-[0.18em] text-bright/30'>
+            <div className='mb-3 flex items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                 <span>Chats</span>
                 <span>{conversations.length}</span>
             </div>
@@ -87,8 +87,8 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                 onSelectConversation={onSelectConversation}
             />
 
-            <div className='mt-3 border-t border-dark/80 pt-3'>
-                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] uppercase tracking-[0.18em] text-bright/30'>
+            <div className='mt-3 border-t border-[#3a3a38] pt-3'>
+                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                     <span>Archived</span>
                     <span>{archivedConversations.length}</span>
                 </button>
@@ -129,7 +129,7 @@ function ConversationList({
 }) {
     if (!conversations.length) {
         return (
-            <div className='rounded-xl bg-dark/20 px-3 py-4 text-sm text-bright/35 outline outline-dark'>
+            <div className='rounded-lg bg-[#242522] px-3 py-4 text-sm text-[#858581]'>
                 No {archived ? 'archived' : 'active'} chats yet.
             </div>
         )
@@ -149,10 +149,10 @@ function ConversationList({
                             onSelectConversation(conversation.id)
                         }
                     }}
-                    className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 outline transition-colors ${conversation.id === activeConversationId ? 'bg-[#fd8738]/12 outline-[#fd8738]/18' : 'bg-dark/25 outline-transparent hover:bg-dark/35 hover:outline-dark'}`}
+                    className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#454642] text-[#eeeeea]' : 'text-[#d3d3ce] hover:bg-[#383936]'}`}
                 >
                     <div className='min-w-0 flex-1 overflow-hidden'>
-                        <div className='truncate text-sm text-bright/88'>{conversation.title}</div>
+                        <div className='truncate text-sm'>{conversation.title}</div>
                     </div>
                     <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100'>
                         <MiniButton icon={<Pencil className='h-3.5 w-3.5' />} onClick={(event) => {
@@ -179,7 +179,7 @@ function ConversationList({
 
 function IconButton({ icon, active = false, onClick }: { icon: React.ReactNode, active?: boolean, onClick: () => void }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-xl outline transition-colors ${active ? 'bg-[#fd8738]/12 text-[#fd8738] outline-[#fd8738]/20' : 'bg-dark/30 text-bright/55 outline-dark hover:text-bright/85'}`}>
+        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${active ? 'bg-[#454642] text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-[#3a3a38] hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )
@@ -195,7 +195,7 @@ function MiniButton({
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-lg outline transition-colors ${danger ? 'bg-red-500/8 text-red-300 outline-red-500/10 hover:bg-red-500/15' : 'bg-dark/35 text-bright/55 outline-dark hover:text-[#fd8738]'}`}>
+        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-md transition-colors ${danger ? 'text-[#d29a95] hover:bg-[#55302d]' : 'text-[#a0a09b] hover:bg-[#454642] hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )

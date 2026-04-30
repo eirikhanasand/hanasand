@@ -1,8 +1,10 @@
 import useHideIfLittleSpace from '@/hooks/useHideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import { OpenFoldersProvider } from '@/hooks/useFolderState'
+import { getCookie } from '@/utils/cookies/cookies'
+import { getTree } from '@/utils/share/getTree'
 import { Folder, X } from 'lucide-react'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react'
 import TreeHeader from './treeHeader'
 import Tree from './tree'
 
@@ -28,12 +30,64 @@ export default function Explorer({
     const [newFileName, setNewFileName] = useState('')
     const [selectedFolder, setSelectedFolder] = useState('')
     const [tree, setTree] = useState(serverTree)
+    const [treeLoading, setTreeLoading] = useState(false)
     useHideIfLittleSpace({ set: setShowExplorer })
+
+    const recoverTree = useCallback(async (shareId: string) => {
+        setTreeLoading(true)
+        const userId = getCookie('id') ?? undefined
+        const token = getCookie('access_token') ?? undefined
+        const nextTree = await getTree({ id: shareId, token, userId })
+        setTree(nextTree)
+        setTreeLoading(false)
+        return nextTree
+    }, [])
+
+    useEffect(() => {
+        setTree(serverTree)
+    }, [serverTree])
+
+    useEffect(() => {
+        const shareId = share?.id
+        if (tree || !shareId) {
+            return
+        }
+        const currentShareId: string = shareId
+
+        let cancelled = false
+
+        async function recoverTree() {
+            const nextTree = await recoverTreeOnce(currentShareId)
+
+            if (!cancelled) {
+                setTree(nextTree)
+            }
+        }
+
+        async function recoverTreeOnce(nextShareId: string) {
+            setTreeLoading(true)
+            const userId = getCookie('id') ?? undefined
+            const token = getCookie('access_token') ?? undefined
+            const nextTree = await getTree({ id: nextShareId, token, userId })
+            if (!cancelled) {
+                setTreeLoading(false)
+            }
+            return nextTree
+        }
+
+        void recoverTree()
+
+        return () => {
+            cancelled = true
+        }
+    }, [share?.id, tree])
 
     if (!showExplorer) {
         return (
-            <div
-                onMouseDown={handleMouseDown}
+            <button
+                type='button'
+                aria-label='Open file explorer'
+                onMouseDown={(event) => handleMouseDown(event)}
                 onClick={handleOpen}
                 className={`group ${sharedStyles}`}
                 style={{
@@ -42,18 +96,35 @@ export default function Explorer({
                 }}
             >
                 <Folder className='stroke-light/50 group-hover:stroke-bright' />
-            </div>
+            </button>
         )
     }
 
     return (
         <div className='min-w-fit w-[15vw] h-full'>
             <div className='outline outline-dark rounded-lg p-2 h-full space-y-2 overflow-auto'>
-                <div className='outline outline-dark rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'>
-                    <X className='cursor-pointer' onClick={() => setShowExplorer(false)} />
-                </div>
+                <button
+                    type='button'
+                    aria-label='Close file explorer'
+                    onClick={() => setShowExplorer(false)}
+                    className='outline outline-dark rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'
+                >
+                    <X className='cursor-pointer' />
+                </button>
                 {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
-                    <h1 className='text-sm text-bright/85'>Unable to load file tree.</h1>
+                    <h1 className='text-sm text-bright/85'>
+                        {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
+                    </h1>
+                    {!treeLoading && share ? (
+                        <button
+                            type='button'
+                            aria-label='Retry loading file tree'
+                            onClick={() => void recoverTree(share.id)}
+                            className='mt-3 inline-flex rounded-lg bg-bright/10 px-3 py-2 text-xs font-medium text-bright/85 outline outline-bright/10 transition-colors hover:bg-bright/15'
+                        >
+                            Retry
+                        </button>
+                    ) : null}
                 </div>}
                 {tree && share && (
                     <OpenFoldersProvider serverOpenFolders={openFolders}>

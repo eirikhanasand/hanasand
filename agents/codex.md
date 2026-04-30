@@ -39,13 +39,88 @@
 - Added a dedicated runtime/dashboard smoke script:
   - `api/scripts/smoke-dashboard-runtime.mjs`
 - Verified the currently deployed `docs` and `idk` stacks are healthy on the VM.
+- Added a durable native app development playbook so future agents can port website functionality into Hanasand app and Nucleus by tracing website/API contracts independently.
+- Started the local Hanasand model runtime and ran a practical app-parity training evaluation for the share-functionality prompt. The eval now passes 11/11 checks and is available as `bun run training:app-parity` in `gpt/api`.
+- Wired the same app-parity training habit into the Hanasand Desktop app AI surface: desktop chat requests now include the repository/app parity primer, and the AI sidebar has an `App parity drill` action for testing the exact user-facing app flow.
+- Extended the Hanasand Desktop loopback control plane so the app can queue AI reloads, app-parity drills, desktop UI audits, dashboard refreshes, native article/thought/share panels, server logs, and settings summaries through `/command`.
+- Improved the Hanasand Desktop native dashboard surface: API-preview-only destinations now render native summary panels instead of raw-only payload dumps, raw payloads are copyable and scrollable, destructive controls are confirmed, and endpoint settings show validation state.
+- Tightened the Hanasand Desktop IDE surface so it is clearly a native scratch/disk-file workspace, differentiates local drafts from disk-backed files, and keeps the left rail scrollable so project/git/tasks/plugins/import controls stay reachable.
+- Kept the local model and Desktop app running together, queued Desktop app-parity/audit commands through the app loopback, and used the downtime to close the share-management parity gap.
+- Brought Hanasand share management closer to web/mobile/desktop parity:
+  - mobile app Utilities can now update, lock/unlock, delete, and inspect share trees in addition to create/open;
+  - Desktop Shares panel can now select/edit, lock/unlock, delete with confirmation, and inspect share trees natively;
+  - mobile helpers defensively normalize share and tree response shapes before rendering.
+- Kept the local Hanasand model and Desktop app running through another practical training loop:
+  - rebuilt and relaunched the Desktop app;
+  - verified loopback health and command discovery;
+  - queued `ai_audit_desktop_ui`, `ai_train_app_parity`, and the new native logs opener through the app.
+- Repaired and extended native Desktop dashboard parity:
+  - added a native logs panel with service/level filters, search, expandable metadata, and readable log cards;
+  - wired `open_dashboard_logs` into `/commands`, `/command`, and the in-app command dispatcher;
+  - repaired the native Docker/System and VM dashboard models so system/vm panels compile and decode defensively;
+  - repaired the native Mail panel structure so mailboxes, message search/detail, actions, and compose are available natively instead of a broken half-panel.
+- Continued the practical Desktop training loop and corrected the UI gaps it exposed:
+  - top-bar terminal/folder/settings icons are now real buttons instead of decorative dead controls;
+  - dashboard action cards now show Native/Web/Action badges with clearer destination affordances;
+  - `/dashboard` now has a native overview/status panel;
+  - `/g` now has a native recent-tests/share-gallery panel with search, status filters, metrics, and open actions;
+  - rebuilt and relaunched the Desktop app, then queued another Desktop UI audit through loopback.
+- Continued the Desktop app loopback training pass after the native dashboard additions:
+  - added a native read-only rate-limits/API-key panel for `/dashboard/system/rate-limits`;
+  - wired `open_dashboard_rate_limits` into `/commands`, `/command`, and the in-app dashboard dispatcher;
+  - verified `swift build`, relaunched the Desktop app, confirmed app/model health, opened the rate-limits panel through loopback, and queued another Desktop UI audit.
+- Continued the command-surface training pass in the Hanasand Desktop app:
+  - replaced decorative plus/mic affordances in the command dock with real quick actions for new prompt, dashboard, app-parity drill, and status;
+  - made the send control visibly disabled until a prompt is ready;
+  - verified `swift build`, relaunched the Desktop app, confirmed app/model health, and queued another Desktop UI audit against the fresh process.
+- Continued the live Desktop correction pass while the model edited in the background:
+  - converted the top-bar ellipsis into an explicit Dashboard action instead of a decorative glyph;
+  - made the command-dock working-directory row reveal the active local folder instead of showing a dead chevron;
+  - kept the model-generated user/role management additions, fixed the transient missing-type build race by waiting for the edit to settle, rebuilt, relaunched, and queued another UI audit on the fresh app.
+- Continued cross-surface admin parity while the Desktop model stayed busy:
+  - added mobile Utilities support for loading users/roles, inspecting selected user roles, assigning/removing roles, and activating/deactivating users through the same API endpoints as the website and Desktop app;
+  - hardened the mobile API layer with defensive normalizers for users, roles, and user-role assignments so endpoint shape drift does not crash rendering;
+  - fixed the website role popover so lazy-loaded user roles update checkbox state and compare against stable role ids;
+  - verified mobile `npm run typecheck`, Desktop `swift build`, frontend `bun run lint:eslint`, Desktop loopback health, and queued another app-parity/UI-audit drill.
+- Added shared notes support across the Hanasand API, website dashboard, mobile app, and desktop app.
+- Added and ran `api/scripts/smoke-notes.mjs` through `bun run smoke:notes` against the rebuilt local Docker API to cover the authenticated notes contract, owner isolation, clearable fields, and delete flow.
+- Removed remaining `beekeeper.hanasand.com` defaults from the Hanasand repo; web and desktop now default Beekeeper traffic integrations to `beekeeper.login.no`.
+- Moved the Hanasand server internal API from PM2 to Docker as `internal`, removed Hanasand PM2, and stopped the legacy dev-server `scouterbee` PM2 process after verifying dev Docker `internal`.
+- Completed local Packet 85 by tagging orchestration benchmark artifacts with the active profile identity and adding `benchmark-profile-comparison-latest.{json,md}` generation. Verified with `cd gpt/api && npm run lint` and `cd gpt/api && npm run orchestration:benchmark`.
+- Completed local Packet 86 by making orchestration benchmark regression trends profile-aware, adding `benchmark-profile-baselines-latest.{json,md}`, and validating both same-profile and cross-profile behavior.
+- Completed local Packet 87 by extending the Mac validation profile smoke into a warmup/readiness artifact with probe timings, memory before/after, failure capture, and Markdown output.
+- Completed local Packet 88 by adding orchestration scenario cost attribution and `benchmark-scenario-costs-latest.{json,md}` with profile plus warmup context.
+- Completed local Packet 89 by adding evidence-backed packet selection and `benchmark-packet-selection-latest.{json,md}`. Latest selection picks Packet 90 with high confidence.
+- Completed local Packet 90 by adding `benchmark-self-edit-evidence-bundle-latest.{json,md}` with packet-selection, cost, trend, warmup, difficulty, and review-checklist evidence.
+- Completed local Packet 91 by adding machine-key normalization to benchmark profile comparisons, marking same-machine comparability and separating cross-machine profiles.
+- Completed local Packet 92 by adding `benchmark-failure-clusters-latest.{json,md}`. Latest cluster dedupes six `Escalated delivery handoff` `omission_pressure` warnings into one repeated issue.
+- Completed local Packet 93 by adding `benchmark-root-cause-shortlist-latest.{json,md}`. Latest shortlist ranks `context-packing-omission-pressure` as the top candidate with high confidence, grounded in the repeated omission cluster, top scenario cost, and evidence bundle.
+- Completed local Packet 94 by adding `benchmark-self-improvement-candidate-latest.{json,md}`. Latest candidate is `verified-2026-04-26-context-packing-omission-pressure`, targeting the `Escalated delivery handoff` replay before any pack-policy edit.
+- Completed local Packet 95 by adding `benchmark-self-improvement-release-candidate-latest.{json,md}`. Latest release candidate is `rc-verified-2026-04-26-context-packing-omission-pressure`, with pending human review plus explicit accept/reject requirements.
+- Completed local Packet 96 by adding `npm run self-improvement:review` in `gpt/api`, backed by `scripts/self-improvement-review.ts`, so release-candidate accept/reject outcomes are durable JSON/Markdown artifacts. The validation review rejected the current release candidate because no replay inspection was performed.
+- Completed local Packet 97 by making `npm run orchestration:benchmark` ingest the latest self-improvement review outcome. The current release candidate now regenerates as `reviewed_rejected` with a matched review id instead of returning to pending.
+- Completed local Packet 98 by making release-candidate review ingestion scan local review history by release-candidate id instead of relying only on `latest.json`. The current artifact reports one available review and the matched rejection id.
+- Completed local Packet 99 by propagating durable review state back into verified self-improvement candidate artifacts. The current candidate now reports `candidate_rejected`, matching the release-candidate `reviewed_rejected` state.
+- Completed local Packet 100 by adding `benchmark-self-improvement-replay-inspection-latest.{json,md}`. The latest inspection targets `delivery_handoff_escalated`, links the target replay, reports two omitted hot/critical segments, and keeps the candidate rejected until human replay review.
 
 ## Remaining Work
-- No concrete handoff blockers remain from this batch.
+- Keep running practical Desktop app audits from the loopback and use them to prioritize the next app parity gap.
+- Continue using the Desktop loopback commands as the primary model-training surface, especially after changing native dashboard panels:
+  - `ai_audit_desktop_ui`
+  - `ai_train_app_parity`
+  - `open_dashboard_logs`
+  - `open_dashboard_system`
+  - `open_dashboard_vms`
+  - `open_dashboard_rate_limits`
+- Re-run `bun run smoke:notes` against the deployed API after the next clean deployment window.
+- The canonical local self-improvement packet queue is complete through Packet 100.
 
 ## Future Work
 - Broader product/infrastructure follow-up can continue separately when scoped:
   - mail workspace polish
+	  - Hanasand app/Nucleus parity using `agents/DESKTOP_APP_DEVELOPMENT.md`
+	  - Periodically rerun `MODEL_API=http://127.0.0.1:18082 bun run training:app-parity` while the local model is running to catch regressions in app-parity behavior.
+	  - Also smoke the Hanasand Desktop app AI tab after training changes; the app should compile with `swift build` in `app/desktop` and expose the `App parity drill` control.
   - traffic/status cleanup beyond current smoke coverage
   - AI/beeswarm integration work
   - scanner/ruleset and escalation features

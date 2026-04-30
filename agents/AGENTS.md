@@ -27,6 +27,7 @@ Make Hanasand production-ready without wasting user time, tokens, or server reso
 - Profile pages expose login sessions/devices and token revocation controls.
 - The coding/Postman-style workbench has an authenticated backend HTTP runner and an AI-ready endpoint stub.
 - Application error logs are persisted to `service_logs` and queryable/filterable without shell log tailing.
+- The agent training path for native app parity work is documented in `agents/DESKTOP_APP_DEVELOPMENT.md`. Use it before implementing Hanasand app or Nucleus app features copied from the web products.
 
 ## Useful Commands
 Run from `/Users/eirikhanasand/Desktop/personal/hanasand`.
@@ -35,6 +36,46 @@ Run from `/Users/eirikhanasand/Desktop/personal/hanasand`.
 npx tsc --noEmit -p api/tsconfig.json
 npx tsc --noEmit -p frontend/tsconfig.json
 ```
+
+For cheap API contract checks after auth, notes, role, or user-admin edits:
+
+```bash
+cd api
+bun run smoke:unit
+```
+
+For Hanasand native app work:
+
+```bash
+cd app
+npm run typecheck
+npm run lint
+```
+
+For Nucleus app work:
+
+```bash
+cd /Users/eirikhanasand/Desktop/Login/nucleus
+npx tsc --noEmit
+npm test -- --watchman=false
+```
+
+For practical app-parity agent training, start the local model and run:
+
+```bash
+cd gpt/api
+MODEL_API=http://127.0.0.1:18082 bun run training:app-parity
+```
+
+The Hanasand Desktop app must stay trained too. After app-parity changes, also smoke the actual desktop path:
+
+```bash
+cd app/desktop
+swift build
+HANASAND_DESKTOP_INITIAL_SECTION=ai swift run Hanasand
+```
+
+Use the AI sidebar's `App parity drill` action to verify the model can continue from the Desktop app surface, not just from scripts.
 
 ```bash
 cd api
@@ -86,3 +127,6 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000 PLAYWRIGHT_API_BASE=http://127.0.0.1:8
   - `hanasand` for SSH.
   - `rebuild -d` for restart/rebuild.
 - Preserve server-local files unless explicitly asked to remove them.
+
+## App Parity Rule
+- If the user asks for website functionality in the Hanasand or Nucleus app, independently trace the website implementation and backend contract first. Do not ask for endpoint names or payload shapes unless source inspection and smoke checks cannot identify them.

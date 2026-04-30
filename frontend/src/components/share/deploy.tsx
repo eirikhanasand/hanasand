@@ -2,14 +2,15 @@ import { Dispatch, SetStateAction } from 'react'
 
 type DeployProps = {
     setTerminalOpen: Dispatch<SetStateAction<boolean>>
-    deploying: boolean
-    setDeploying: Dispatch<SetStateAction<boolean>>
+    terminalOpen: boolean
 }
 
-export default function Deploy({ setTerminalOpen, deploying, setDeploying }: DeployProps) {
+export default function Deploy({ setTerminalOpen, terminalOpen }: DeployProps) {
     return (
-        <div
-            onClick={() => { setTerminalOpen(true); setDeploying(true) }}
+        <button
+            type='button'
+            aria-label={terminalOpen ? 'Terminal open for deployment commands' : 'Open terminal for deployment commands'}
+            onClick={() => setTerminalOpen(true)}
             className='
                 group fixed bottom-3 right-3 z-100 cursor-pointer select-none
                 w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
@@ -27,8 +28,11 @@ export default function Deploy({ setTerminalOpen, deploying, setDeploying }: Dep
             <div className='absolute inset-0 bg-black/10' />
 
             <h1 className='relative z-10 text-white/90 font-semibold tracking-wide'>
-                🚀 {deploying ? 'Deploying...' : 'Deploy'}
+                {terminalOpen ? 'Terminal open' : 'Deploy'}
             </h1>
-        </div>
+            <p className='relative z-10 mt-1 text-[11px] uppercase tracking-[0.18em] text-white/55'>
+                {terminalOpen ? 'Run commands here' : 'Open terminal'}
+            </p>
+        </button>
     )
 }

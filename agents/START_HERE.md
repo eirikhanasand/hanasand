@@ -23,6 +23,7 @@ The important rule is that the self-improvement work is only valuable when it fe
 ## Where To Look First
 
 - Live handoff: [COORDINATION.md](/Users/eirikhanasand/Desktop/personal/hanasand/agents/COORDINATION.md)
+- Desktop/app implementation guide: [DESKTOP_APP_DEVELOPMENT.md](/Users/eirikhanasand/Desktop/personal/hanasand/agents/DESKTOP_APP_DEVELOPMENT.md)
 - Source code and tests for the surface you are touching.
 - Local ignored worknotes only when you need historical detail.
 
@@ -32,6 +33,7 @@ The important rule is that the self-improvement work is only valuable when it fe
 - `/ai` is the main user-facing AI workspace.
 - Imported repositories are expected to become real share-backed workspaces.
 - Deployments, previews, releases, quotas, and ownership metadata are already part of the documented flow.
+- Native app work should be driven by website/API contract discovery, then adapted into the target app's local design system.
 
 ### Runtime side
 - `gpt/` contains the local model runtime, orchestration logic, benchmark scripts, and self-improvement artifacts.
@@ -40,8 +42,9 @@ The important rule is that the self-improvement work is only valuable when it fe
 ## Recommended Next Steps
 
 1. Review the live product surface before adding more roadmap text.
-2. Prefer one small production fix over another packet note.
-3. If a note is needed, make it short enough to ingest in one pass.
+2. For app parity work, follow `DESKTOP_APP_DEVELOPMENT.md` and implement from website behavior plus API contracts.
+3. Prefer one small production fix over another packet note.
+4. If a note is needed, make it short enough to ingest in one pass.
 
 ## What To Avoid
 

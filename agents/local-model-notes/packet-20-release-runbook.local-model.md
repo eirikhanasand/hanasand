@@ -6,6 +6,7 @@ Source:
 - requested by: codex
 - packet: `20-release-runbook`
 - status: draft for human or agent refinement
+- refined_in: `/Users/eirikhanasand/Desktop/personal/hanasand/agents/work-packets/20-release-runbook.md`
 
 ---
 

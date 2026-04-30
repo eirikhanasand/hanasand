@@ -17,8 +17,10 @@
     "orchestration:context-export:shell": "sh scripts/orchestration-context-export.sh",
     "smoke:model-loopback": "node scripts/model-loopback-smoke.mjs",
     "smoke:mac-validation-profile": "node scripts/mac-validation-profile-smoke.mjs",
+    "training:app-parity": "bun scripts/app-parity-training-eval.ts",
     "benchmark:read-only-repo": "node scripts/read-only-repo-benchmark.mjs",
-    "benchmark:model-overhead": "node scripts/model-overhead-sample.mjs"
+    "benchmark:model-overhead": "node scripts/model-overhead-sample.mjs",
+    "self-improvement:review": "bun scripts/self-improvement-review.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

@@ -4952,14 +4952,14 @@ final class DesktopAgentModel: ObservableObject {
     var dashboardActions: [DesktopAction] {
         [
             .route("Overview", "Main dashboard and service overview.", "gauge.with.dots.needle", "/dashboard"),
-            .route("Mail", "Open the full mail workspace.", "envelope", "/dashboard/mail"),
+            .route("Mail", "Open Mail.", "envelope", "/dashboard/mail"),
             .route("Notes", "Shared notes and operational memory.", "note.text", "/dashboard/notes"),
             .route("Traffic", "Live traffic, records, and maps.", "point.3.connected.trianglepath.dotted", "/dashboard/traffic"),
             .route("AI Metrics", "Model pool and system AI telemetry.", "sparkles", "/dashboard/system/ai"),
             .route("Rate Limits", "API pressure, route overrides, and keys.", "gauge.with.needle", "/dashboard/system/rate-limits"),
             .route("System", "Infrastructure and VM controls.", "gearshape.2", "/dashboard/system"),
             .route("VMs", "Remote machines and access details.", "display.2", "/dashboard/vms"),
-            .route("Shares", "Coding shares and hosted workspaces.", "folder.badge.gearshape", "/s"),
+            .route("Shares", "Shares and hosted files.", "folder.badge.gearshape", "/s"),
             .route("Links", "Create and inspect /g shortcut links.", "link", "/g"),
             .route("Load Tests", "Recent public load-test runs.", "speedometer", "/dashboard/tests"),
             .route("Articles", "Draft and publish articles.", "text.alignleft", "/dashboard/articles"),
@@ -8207,7 +8207,7 @@ private struct PasswordResetCodeBoxes: View {
             .font(.system(size: 18, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(theme.text)
-            .frame(width: 42, height: 46)
+            .frame(width: 40, height: 46)
             .background(theme.field)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -8259,14 +8259,9 @@ struct HanasandLoginGate: View {
             Rectangle()
                 .fill(theme.text.opacity(0.22))
                 .frame(width: 56, height: 1)
-            Text("Secure workspace")
-                .font(.system(size: 11, weight: .medium))
-                .kerning(1.8)
-                .foregroundStyle(theme.textTertiary)
-                .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.bottom, 8)
+        .padding(.bottom, 16)
     }
 
     private var loginCard: some View {
@@ -13171,14 +13166,14 @@ struct IDELaunchpadWorkspace: View {
     @EnvironmentObject private var model: DesktopAgentModel
 
     var body: some View {
-        FeatureWorkspace(title: "IDE", subtitle: "Native launchpad for code workspaces.") {
+        FeatureWorkspace(title: "IDE", subtitle: "Code and files.") {
             HStack(spacing: 12) {
                 FeatureCard(title: "Workspace", value: model.status.cwd, icon: "folder")
                 FeatureCard(title: "Agent", value: model.status.ok ? "Online" : "Offline", icon: "terminal")
             }
             ActionGrid(actions: [
                 .route("AI Workspace", "Models, repositories, conversations, and previews.", "sparkles", "/dashboard/system/ai"),
-                .route("Shares", "Coding shares and hosted workspaces.", "folder.badge.gearshape", "/s"),
+                .route("Shares", "Shares and hosted files.", "folder.badge.gearshape", "/s"),
                 .route("Links", "Create and inspect /g shortcut links.", "link", "/g"),
                 .route("Load Tests", "Recent public load-test runs.", "speedometer", "/dashboard/tests"),
                 .task("Reveal working directory", "Open the active local folder in Finder.", "folder") { model in

@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { revokeAllTokens } from '#utils/auth/session.ts'
 
 export default async function deleteSelf(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -14,6 +15,7 @@ export default async function deleteSelf(req: FastifyRequest, res: FastifyReply)
     }
 
     try {
+        await revokeAllTokens({ userId: id, revokedBy: id })
         const userResult = await run('DELETE FROM users WHERE id = $1 RETURNING *', [id])
         if (!userResult.rows.length) {
             return res.status(404).send({ error: `There is no user with id ${id}` })

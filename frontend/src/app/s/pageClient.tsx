@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FolderPlus, ServerCog } from 'lucide-react'
 import randomId from '@/utils/random/randomId'
 import postShare from '@/utils/share/post'
@@ -18,14 +18,43 @@ export default function ShareEntryClient({
     initialMode: EntryMode
 }) {
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [projectName, setProjectName] = useState('hanasand-project')
     const [status, setStatus] = useState<string | null>(null)
     const [pending, setPending] = useState<'share' | 'project' | null>(null)
+    const activeMode = searchParams.get('mode') === 'project' ? 'project' : initialMode
 
     async function createShare() {
+        const token = getCookie('access_token')
+        const userId = getCookie('id')
+
         setPending('share')
-        const id = randomId()
-        router.push(`/s/${id}`)
+        setStatus('Creating share workspace...')
+        try {
+            const shareId = randomId()
+            const shareName = `share-${shareId.slice(0, 6)}`
+            const share = await postShare({
+                includeTree: true,
+                id: shareId,
+                content: '',
+                name: shareName,
+                path: shareName,
+                type: 'folder',
+                token,
+                userId,
+            })
+
+            if (!share) {
+                throw new Error('Unable to create the share workspace.')
+            }
+
+            setStatus(`Share ready. Opening workspace ${shareId}.`)
+            router.push(`/s/${shareId}`)
+        } catch (error) {
+            setStatus(error instanceof Error ? error.message : 'Unable to create the share.')
+        } finally {
+            setPending(null)
+        }
     }
 
     async function createProject() {
@@ -99,20 +128,20 @@ export default function ShareEntryClient({
                 <button
                     type='button'
                     onClick={() => router.replace('/s?mode=share')}
-                    className={`rounded-full px-4 py-2 transition-colors ${initialMode === 'share' ? 'bg-[#fd8738] text-black' : 'hover:bg-dark/60'}`}
+                    className={`rounded-full px-4 py-2 transition-colors ${activeMode === 'share' ? 'bg-[#fd8738] text-black' : 'hover:bg-dark/60'}`}
                 >
                     Share flow
                 </button>
                 <button
                     type='button'
                     onClick={() => router.replace('/s?mode=project')}
-                    className={`rounded-full px-4 py-2 transition-colors ${initialMode === 'project' ? 'bg-[#fd8738] text-black' : 'hover:bg-dark/60'}`}
+                    className={`rounded-full px-4 py-2 transition-colors ${activeMode === 'project' ? 'bg-[#fd8738] text-black' : 'hover:bg-dark/60'}`}
                 >
                     Project flow
                 </button>
             </div>
             <div className='grid w-full gap-4 lg:grid-cols-2'>
-                <button type='button' disabled={Boolean(pending)} onClick={() => void createShare()} className={`rounded-3xl p-6 text-left outline transition-colors disabled:opacity-60 ${initialMode === 'share' ? 'bg-[#fd8738]/10 outline-[#fd8738]/25' : 'bg-dark/35 outline-dark hover:bg-dark/45'}`}>
+                <button type='button' disabled={Boolean(pending)} onClick={() => void createShare()} className={`rounded-3xl p-6 text-left outline transition-colors disabled:opacity-60 ${activeMode === 'share' ? 'bg-[#fd8738]/10 outline-[#fd8738]/25' : 'bg-dark/35 outline-dark hover:bg-dark/45'}`}>
                     <div className='inline-flex rounded-2xl bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
                         <FolderPlus className='h-5 w-5' />
                     </div>
@@ -123,8 +152,11 @@ export default function ShareEntryClient({
                     <p className='mt-4 text-xs uppercase tracking-[0.24em] text-bright/32'>
                         Local workspace, no VM required
                     </p>
+                    <div className='mt-5 inline-flex rounded-2xl bg-[#fd8738] px-4 py-3 text-sm font-semibold text-black transition-opacity group-hover:opacity-90'>
+                        {pending === 'share' ? 'Creating share...' : 'Create share'}
+                    </div>
                 </button>
-                <div className={`rounded-3xl p-6 outline ${initialMode === 'project' ? 'bg-[#fd8738]/10 outline-[#fd8738]/25' : 'bg-dark/35 outline-dark'}`}>
+                <div className={`rounded-3xl p-6 outline ${activeMode === 'project' ? 'bg-[#fd8738]/10 outline-[#fd8738]/25' : 'bg-dark/35 outline-dark'}`}>
                     <div className='inline-flex rounded-2xl bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
                         <ServerCog className='h-5 w-5' />
                     </div>

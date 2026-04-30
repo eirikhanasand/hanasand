@@ -31,15 +31,20 @@ export default function Lock({ share, setError, baseButtonStyle }: LockProps) {
 
     if (!share) {
         return (
-            <div className={baseButtonStyle}>
+            <button type='button' aria-label='Share unlock unavailable' className={baseButtonStyle}>
                 <LockKeyholeOpen height={22} width={22} />
-            </div>
+            </button>
         )
     }
 
     return (
-        <div onClick={handleLock} className={baseButtonStyle}>
+        <button
+            type='button'
+            aria-label={locked ? 'Lock is enabled. Click to unlock share' : 'Lock is disabled. Click to lock share'}
+            onClick={handleLock}
+            className={baseButtonStyle}
+        >
             {locked ? <LockKeyhole height={22} width={22} /> : <LockKeyholeOpen height={22} width={22} />}
-        </div>
+        </button>
     )
 }

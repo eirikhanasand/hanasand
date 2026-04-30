@@ -12,8 +12,7 @@ import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
 export default async function assignRole(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
     const { valid: validRole } = await hasRole(req, res, 'user_admin')
-    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
-    if (!valid || !validRole || !hasPermission) {
+    if (!valid || !validRole) {
         return res.status(401).send({ status: false, error: 'Unauthorized.' })
     }
 
@@ -21,6 +20,11 @@ export default async function assignRole(req: FastifyRequest, res: FastifyReply)
     const { role_id  } = req.body as { role_id: string } ?? {}
     if (!id || !role_id) {
         return res.status(404).send({ status: false, error: 'Missing user id (id) or role id (role_id).' })
+    }
+
+    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
+    if (!hasPermission) {
+        return res.status(401).send({ status: false, error: 'Unauthorized.' })
     }
 
     try {

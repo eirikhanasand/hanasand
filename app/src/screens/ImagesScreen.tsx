@@ -4,33 +4,55 @@ import * as MediaLibrary from 'expo-media-library'
 import type { ImageReviewAsset, SwipeDecision } from '../types'
 import { GlassCard, PillButton, Screen, SectionTitle } from '../components/ui'
 import { spacing } from '../theme/tokens'
+import { useAppTheme } from '../theme/context'
 
 const CARD_WIDTH = Dimensions.get('window').width - 48
 const SWIPE_THRESHOLD = 110
 
 export function ImagesScreen() {
+    const theme = useAppTheme()
     const [permissionResponse, requestPermission] = MediaLibrary.usePermissions()
     const [assets, setAssets] = useState<ImageReviewAsset[]>([])
     const [index, setIndex] = useState(0)
     const [decisions, setDecisions] = useState<Record<string, SwipeDecision>>({})
     const [history, setHistory] = useState<string[]>([])
+    const [busy, setBusy] = useState(false)
+    const [loadError, setLoadError] = useState('')
     const translate = useRef(new Animated.ValueXY()).current
+    const loadSequenceRef = useRef(0)
 
     useEffect(() => {
         void loadAssets()
     }, [permissionResponse?.granted])
 
     async function loadAssets() {
+        const requestId = loadSequenceRef.current + 1
+        loadSequenceRef.current = requestId
         if (!permissionResponse?.granted) return
-        const media = await MediaLibrary.getAssetsAsync({ mediaType: 'photo', first: 40, sortBy: ['creationTime'] })
-        setAssets(media.assets.map(asset => ({
-            id: asset.id,
-            uri: asset.uri,
-            filename: asset.filename,
-            width: asset.width,
-            height: asset.height,
-            creationTime: asset.creationTime,
-        })))
+        setBusy(true)
+        setLoadError('')
+        try {
+            const media = await MediaLibrary.getAssetsAsync({ mediaType: 'photo', first: 40, sortBy: ['creationTime'] })
+            if (loadSequenceRef.current !== requestId) return
+            setAssets(media.assets.map(asset => ({
+                id: asset.id,
+                uri: asset.uri,
+                filename: asset.filename,
+                width: asset.width,
+                height: asset.height,
+                creationTime: asset.creationTime,
+            })))
+            setIndex(0)
+            setHistory([])
+            setDecisions({})
+        } catch (cause) {
+            if (loadSequenceRef.current !== requestId) return
+            setLoadError(cause instanceof Error ? cause.message : 'Unable to load photo library.')
+        } finally {
+            if (loadSequenceRef.current === requestId) {
+                setBusy(false)
+            }
+        }
     }
 
     function registerDecision(decision: SwipeDecision) {
@@ -46,7 +68,10 @@ export function ImagesScreen() {
 
     function undoLast() {
         const previousId = history[history.length - 1]
-        if (!previousId) return
+        if (!previousId) {
+            Alert.alert('Nothing to undo', 'No image decisions have been made yet.')
+            return
+        }
         setHistory(current => current.slice(0, -1))
         setDecisions(current => {
             const next = { ...current }
@@ -58,25 +83,44 @@ export function ImagesScreen() {
     }
 
     async function deleteDeferred() {
+        if (busy) return
         const ids = Object.entries(decisions).filter(([, decision]) => decision === 'discard').map(([id]) => id)
         if (!ids.length) {
             Alert.alert('Nothing to delete', 'You have not marked any images for deletion yet.')
             return
         }
-        await MediaLibrary.deleteAssetsAsync(ids)
-        Alert.alert('Deleted', `${ids.length} images were deleted.`)
-        setIndex(0)
-        setHistory([])
-        setDecisions({})
-        await loadAssets()
+        Alert.alert('Delete marked images?', `${ids.length} images will be removed from the photo library.`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                    void (async () => {
+                        setBusy(true)
+                        try {
+                            await MediaLibrary.deleteAssetsAsync(ids)
+                            Alert.alert('Deleted', `${ids.length} images were deleted.`)
+                            setIndex(0)
+                            setHistory([])
+                            setDecisions({})
+                            setAssets(current => current.filter(asset => !ids.includes(asset.id)))
+                        } catch (cause) {
+                            Alert.alert('Delete failed', cause instanceof Error ? cause.message : 'Unable to delete marked images.')
+                        } finally {
+                            setBusy(false)
+                        }
+                    })()
+                },
+            },
+        ])
     }
 
     const current = assets[index]
     const remaining = Math.max(assets.length - index, 0)
     const discardCount = useMemo(() => Object.values(decisions).filter(value => value === 'discard').length, [decisions])
 
-    const panResponder = useRef(
-        PanResponder.create({
+    const panResponder = useMemo(
+        () => PanResponder.create({
             onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 12,
             onPanResponderMove: (_, gesture) => translate.setValue({ x: gesture.dx, y: gesture.dy * 0.2 }),
             onPanResponderRelease: (_, gesture) => {
@@ -91,13 +135,14 @@ export function ImagesScreen() {
                 Animated.spring(translate, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start()
             },
         }),
-    ).current
+        [assets, index, translate],
+    )
 
     if (!permissionResponse?.granted) {
         return (
-            <Screen title='Image review' subtitle='Swipe right to keep, swipe left to mark for delete, then delete in one batch when you are done.'>
+            <Screen title='Images' subtitle=''>
                 <GlassCard>
-                    <SectionTitle eyebrow='Permission required' title='Photo access needed' body='This review flow keeps deletion deferred until the end, so you can move quickly without losing the ability to undo.' />
+                    <SectionTitle eyebrow='Permission required' title='Photo access needed' />
                     <View style={{ marginTop: spacing.md }}>
                         <PillButton label='Allow photo library access' onPress={() => void requestPermission()} tone='accent' />
                     </View>
@@ -107,12 +152,13 @@ export function ImagesScreen() {
     }
 
     return (
-        <Screen title='Image review' subtitle='A faster swipe flow than the old app, with motion, undo, and deferred delete.'>
+        <Screen title='Images' subtitle=''>
             <GlassCard>
-                <SectionTitle eyebrow='Batch mode' title={current ? `${remaining} images left` : 'Review complete'} body='Swipe right to keep, swipe left to mark for deletion. Nothing is deleted until you confirm at the end.' />
+                <SectionTitle eyebrow='Review' title={current ? `${remaining} left` : 'Complete'} />
+                {!!loadError && <Text style={{ color: theme.danger, marginTop: spacing.sm }}>{loadError}</Text>}
                 <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.md }}>
-                    <PillButton label='Undo last' onPress={undoLast} small />
-                    <PillButton label={`Delete marked (${discardCount})`} onPress={() => void deleteDeferred()} tone='danger' small />
+                    <PillButton label='Undo last' onPress={undoLast} small disabled={busy || !history.length} />
+                    <PillButton label={busy ? 'Working...' : `Delete marked (${discardCount})`} onPress={() => void deleteDeferred()} tone='danger' small disabled={busy || !discardCount} />
                 </View>
             </GlassCard>
 
@@ -130,23 +176,23 @@ export function ImagesScreen() {
                     }}
                 >
                     <GlassCard>
-                        <Image source={{ uri: current.uri }} style={{ width: '100%', height: 420, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.04)' }} resizeMode='cover' />
+                        <Image source={{ uri: current.uri }} style={{ width: '100%', height: 420, borderRadius: 24, backgroundColor: theme.ambientNeutral }} resizeMode='cover' />
                         <View style={{ gap: 6, marginTop: spacing.md }}>
-                            <Text style={{ color: '#f3f7fb', fontSize: 17, fontWeight: '700' }}>{current.filename || 'Unnamed image'}</Text>
-                            <Text style={{ color: 'rgba(243,247,251,0.62)' }}>{current.width}×{current.height}</Text>
+                            <Text style={{ color: theme.text, fontSize: 17, fontWeight: '700' }}>{current.filename || 'Unnamed image'}</Text>
+                            <Text style={{ color: theme.textMuted }}>{current.width}×{current.height}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                            <PillButton label='Keep' onPress={() => registerDecision('keep')} tone='accent' />
-                            <PillButton label='Discard later' onPress={() => registerDecision('discard')} tone='danger' />
+                            <PillButton label='Keep' onPress={() => registerDecision('keep')} tone='accent' disabled={busy} />
+                            <PillButton label='Discard later' onPress={() => registerDecision('discard')} tone='danger' disabled={busy} />
                         </View>
                     </GlassCard>
                 </Animated.View>
             ) : (
                 <GlassCard>
-                    <SectionTitle eyebrow='Done' title='Everything in this batch is sorted' body='You can still undo recent choices before deleting the marked images, or reload the library for another pass.' />
+                    <SectionTitle eyebrow='Done' title='Batch sorted' />
                     <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.md }}>
-                        <PillButton label='Reload library' onPress={() => void loadAssets()} tone='accent' />
-                        <PillButton label={`Delete marked (${discardCount})`} onPress={() => void deleteDeferred()} tone='danger' />
+                        <PillButton label={busy ? 'Loading...' : 'Reload library'} onPress={() => void loadAssets()} tone='accent' disabled={busy} />
+                        <PillButton label={busy ? 'Working...' : `Delete marked (${discardCount})`} onPress={() => void deleteDeferred()} tone='danger' disabled={busy || !discardCount} />
                     </View>
                 </GlassCard>
             )}

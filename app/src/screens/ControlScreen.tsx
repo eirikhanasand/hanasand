@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Linking, Share, TextInput, View } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { generateSync } from 'otplib'
-import { fetchAiModels, fetchTopDomains, fetchUserShares, triggerServerAction, createShare as createShareRequest } from '../lib/api'
-import type { AppSettings, AuthenticatorEntry, GptClient, ShareSummary } from '../types'
+import { assignDashboardUserRole, deleteShare as deleteShareRequest, fetchAiModels, fetchDashboardRoles, fetchDashboardUserRoles, fetchDashboardUsers, fetchServerText, fetchShareTree, fetchTopDomains, fetchUserShares, runDesktopAgentCommand, setDashboardUserActive, toggleShareLock, triggerServerAction, createShare as createShareRequest, unassignDashboardUserRole, updateShare as updateShareRequest } from '../lib/api'
+import type { AppSettings, AuthenticatorEntry, DashboardRole, DashboardUser, DashboardUserRoleAssignment, GptClient, ShareSummary, ShareTreeItem } from '../types'
 import { GlassCard, LabeledInput, NativeTile, PillButton, Screen, SectionTitle } from '../components/ui'
-import { spacing } from '../theme/tokens'
+import { spacing, type ThemePalette } from '../theme/tokens'
+import { useAppTheme } from '../theme/context'
+import { routeShortcuts } from '../data/routes'
 
 function buildAuthenticatorEntryFromUri(payload: string): AuthenticatorEntry | null {
     try {
@@ -32,6 +34,14 @@ function buildAuthenticatorEntryFromUri(payload: string): AuthenticatorEntry | n
     }
 }
 
+function tokenForEntry(entry: AuthenticatorEntry) {
+    try {
+        return generateSync({ secret: entry.secret, digits: entry.digits, period: entry.period })
+    } catch {
+        return 'Invalid secret'
+    }
+}
+
 export function ControlScreen({
     settings,
     onSaveSettings,
@@ -39,10 +49,12 @@ export function ControlScreen({
     onSaveAuthenticatorEntries,
 }: {
     settings: AppSettings
-    onSaveSettings: (next: AppSettings) => void
+    onSaveSettings: (next: AppSettings) => Promise<void> | void
     authenticatorEntries: AuthenticatorEntry[]
     onSaveAuthenticatorEntries: (next: AuthenticatorEntry[]) => Promise<void>
 }) {
+    const theme = useAppTheme()
+    const styles = createStyles(theme)
     const [draft, setDraft] = useState(settings)
     const [permission, requestPermission] = useCameraPermissions()
     const [cameraVisible, setCameraVisible] = useState(false)
@@ -51,11 +63,33 @@ export function ControlScreen({
     const [shares, setShares] = useState<ShareSummary[]>([])
     const [shareName, setShareName] = useState('')
     const [shareContent, setShareContent] = useState('')
+    const [editingShareId, setEditingShareId] = useState('')
+    const [editShareName, setEditShareName] = useState('')
+    const [editSharePath, setEditSharePath] = useState('')
+    const [editShareContent, setEditShareContent] = useState('')
+    const [shareTrees, setShareTrees] = useState<Record<string, ShareTreeItem[]>>({})
     const [domains, setDomains] = useState<Array<{ name: string; tps?: number }>>([])
     const [models, setModels] = useState<GptClient[]>([])
+    const [users, setUsers] = useState<DashboardUser[]>([])
+    const [roles, setRoles] = useState<DashboardRole[]>([])
+    const [selectedUserId, setSelectedUserId] = useState('')
+    const [selectedUserRoles, setSelectedUserRoles] = useState<DashboardUserRoleAssignment[]>([])
     const [loadingShares, setLoadingShares] = useState(false)
+    const [loadingRoles, setLoadingRoles] = useState(false)
+    const [shareActionBusy, setShareActionBusy] = useState('')
+    const [roleActionBusy, setRoleActionBusy] = useState('')
+    const [serverBusy, setServerBusy] = useState<'start' | 'stop' | 'logs' | ''>('')
+    const [serverLogs, setServerLogs] = useState('')
+    const [desktopBusy, setDesktopBusy] = useState('')
+    const [desktopCommandResult, setDesktopCommandResult] = useState('')
+    const [savingSettings, setSavingSettings] = useState(false)
+    const [authenticatorBusy, setAuthenticatorBusy] = useState('')
     const cameraLock = useRef(false)
     const [now, setNow] = useState(Date.now())
+
+    useEffect(() => {
+        setDraft(settings)
+    }, [settings])
 
     useEffect(() => {
         void refreshNativeData()
@@ -79,6 +113,78 @@ export function ControlScreen({
         }
     }
 
+    async function loadRoleAdmin() {
+        if (loadingRoles) return
+        setLoadingRoles(true)
+        try {
+            const [nextUsers, nextRoles] = await Promise.all([
+                fetchDashboardUsers(draft),
+                fetchDashboardRoles(draft),
+            ])
+            setUsers(nextUsers)
+            setRoles(nextRoles)
+            const nextSelected = selectedUserId && nextUsers.some(user => user.id === selectedUserId)
+                ? selectedUserId
+                : nextUsers[0]?.id || ''
+            setSelectedUserId(nextSelected)
+            if (nextSelected) {
+                setSelectedUserRoles(await fetchDashboardUserRoles(draft, nextSelected))
+            } else {
+                setSelectedUserRoles([])
+            }
+        } catch (cause) {
+            Alert.alert('Unable to load role admin', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setLoadingRoles(false)
+        }
+    }
+
+    async function selectRoleUser(user: DashboardUser) {
+        if (roleActionBusy) return
+        setSelectedUserId(user.id)
+        setRoleActionBusy(`load-${user.id}`)
+        try {
+            setSelectedUserRoles(await fetchDashboardUserRoles(draft, user.id))
+        } catch (cause) {
+            Alert.alert('Unable to load user roles', cause instanceof Error ? cause.message : 'Request failed.')
+            setSelectedUserRoles([])
+        } finally {
+            setRoleActionBusy('')
+        }
+    }
+
+    async function toggleRole(role: DashboardRole) {
+        if (!selectedUserId || roleActionBusy) return
+        const assigned = selectedUserRoles.some(item => item.roleId === role.id || item.id === role.id || item.name === role.name)
+        setRoleActionBusy(role.id)
+        try {
+            if (assigned) {
+                await unassignDashboardUserRole(draft, selectedUserId, role.id)
+            } else {
+                await assignDashboardUserRole(draft, selectedUserId, role.id)
+            }
+            setSelectedUserRoles(await fetchDashboardUserRoles(draft, selectedUserId))
+        } catch (cause) {
+            Alert.alert('Unable to update role', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setRoleActionBusy('')
+        }
+    }
+
+    async function toggleUserActive(user: DashboardUser) {
+        if (roleActionBusy) return
+        const nextActive = user.active === false
+        setRoleActionBusy(`active-${user.id}`)
+        try {
+            await setDashboardUserActive(draft, user.id, nextActive)
+            setUsers(current => current.map(item => item.id === user.id ? { ...item, active: nextActive } : item))
+        } catch (cause) {
+            Alert.alert('Unable to update user', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setRoleActionBusy('')
+        }
+    }
+
     async function loadShares() {
         setLoadingShares(true)
         try {
@@ -91,7 +197,13 @@ export function ControlScreen({
     }
 
     async function createShare() {
+        if (loadingShares) return
         const name = shareName.trim() || `share-${Date.now()}`
+        if (!shareContent.trim()) {
+            Alert.alert('Missing share content', 'Add content before creating a share.')
+            return
+        }
+        setLoadingShares(true)
         try {
             const share = await createShareRequest(draft, {
                 id: `${Date.now()}`,
@@ -105,7 +217,101 @@ export function ControlScreen({
             setShareContent('')
         } catch (cause) {
             Alert.alert('Unable to create share', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setLoadingShares(false)
         }
+    }
+
+    function beginEditShare(share: ShareSummary) {
+        setEditingShareId(share.id)
+        setEditShareName(share.name || '')
+        setEditSharePath(share.path || '')
+        setEditShareContent(share.content || '')
+    }
+
+    function upsertShare(next: ShareSummary) {
+        setShares(current => current.map(share => share.id === next.id ? { ...share, ...next } : share))
+    }
+
+    async function saveShareEdits() {
+        if (!editingShareId || shareActionBusy) return
+        setShareActionBusy(editingShareId)
+        try {
+            const updated = await updateShareRequest(draft, editingShareId, {
+                name: editShareName.trim() || undefined,
+                path: editSharePath.trim() || undefined,
+                content: editShareContent,
+            })
+            upsertShare(updated)
+            setEditingShareId('')
+        } catch (cause) {
+            Alert.alert('Unable to update share', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setShareActionBusy('')
+        }
+    }
+
+    async function toggleLock(share: ShareSummary) {
+        if (shareActionBusy) return
+        setShareActionBusy(share.id)
+        try {
+            upsertShare(await toggleShareLock(draft, share.id))
+        } catch (cause) {
+            Alert.alert('Unable to update lock', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setShareActionBusy('')
+        }
+    }
+
+    async function loadShareTree(share: ShareSummary) {
+        if (shareActionBusy) return
+        setShareActionBusy(share.id)
+        try {
+            const tree = await fetchShareTree(draft, share.id)
+            setShareTrees(current => ({ ...current, [share.id]: tree }))
+        } catch (cause) {
+            Alert.alert('Unable to load share tree', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setShareActionBusy('')
+        }
+    }
+
+    async function deleteShare(share: ShareSummary) {
+        if (shareActionBusy) return
+        Alert.alert('Delete share?', share.name || share.path || share.id, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                    void (async () => {
+                        setShareActionBusy(share.id)
+                        try {
+                            await deleteShareRequest(draft, share.id)
+                            setShares(current => current.filter(item => item.id !== share.id))
+                            setShareTrees(current => {
+                                const next = { ...current }
+                                delete next[share.id]
+                                return next
+                            })
+                            if (editingShareId === share.id) setEditingShareId('')
+                        } catch (cause) {
+                            Alert.alert('Unable to delete share', cause instanceof Error ? cause.message : 'Request failed.')
+                        } finally {
+                            setShareActionBusy('')
+                        }
+                    })()
+                },
+            },
+        ])
+    }
+
+    function shareTreePreview(items: ShareTreeItem[], depth = 0): string {
+        return items.slice(0, 12).map(item => {
+            const prefix = `${'  '.repeat(depth)}${item.type === 'folder' ? '>' : '-'}`
+            const children = item.children?.length ? `\n${shareTreePreview(item.children, depth + 1)}` : ''
+            return `${prefix} ${item.name}${children}`
+        }).join('\n')
     }
 
     async function openVpn() {
@@ -121,11 +327,114 @@ export function ControlScreen({
     }
 
     async function runServerAction(path: string) {
+        const actionPath = path.trim()
+        if (serverBusy) return
+        if (!draft.serverBaseUrl.trim() || !actionPath) {
+            Alert.alert('Missing server setup', 'Add the server base URL and action path first.')
+            return
+        }
+
+        const action = actionPath === draft.serverStopPath.trim() ? 'stop' : 'start'
+        setServerBusy(action)
         try {
-            const result = await triggerServerAction(`${draft.serverBaseUrl}${path}`, draft)
+            const result = await triggerServerAction(serverUrl(actionPath), draft)
             Alert.alert('Server action finished', result || 'Done')
         } catch (cause) {
             Alert.alert('Server action failed', cause instanceof Error ? cause.message : 'Unable to reach the remote management plane.')
+        } finally {
+            setServerBusy('')
+        }
+    }
+
+    function serverUrl(pathOrUrl: string) {
+        const trimmed = pathOrUrl.trim()
+        if (/^https?:\/\//i.test(trimmed)) return trimmed
+        return `${draft.serverBaseUrl.replace(/\/$/, '')}/${trimmed.replace(/^\//, '')}`
+    }
+
+    function siteUrl(path: string) {
+        return `${draft.siteBaseUrl.trim().replace(/\/+$/, '')}/${path.trim().replace(/^\/+/, '')}`
+    }
+
+    async function openRemote(protocol: 'rdp' | 'vnc') {
+        const host = protocol === 'rdp' ? draft.remoteDesktopHost.trim() : (draft.vncHost.trim() || draft.remoteDesktopHost.trim())
+        if (!host) {
+            Alert.alert('Missing host', protocol === 'rdp' ? 'Add an RDP host first.' : 'Add a VNC host first.')
+            return
+        }
+
+        const target = encodeRemoteTarget(host)
+        const url = protocol === 'rdp'
+            ? `rdp://full%20address=s:${target}${draft.remoteDesktopUser.trim() ? `&username=s:${encodeRemoteTarget(draft.remoteDesktopUser.trim())}` : ''}`
+            : `vnc://${target}`
+
+        try {
+            const supported = await Linking.canOpenURL(url)
+            if (!supported) {
+                Alert.alert(protocol === 'rdp' ? 'RDP app needed' : 'VNC app needed', `No app is registered for ${protocol.toUpperCase()} links on this device.`)
+                return
+            }
+            await Linking.openURL(url)
+        } catch (cause) {
+            Alert.alert('Remote desktop failed', cause instanceof Error ? cause.message : `Unable to open ${protocol.toUpperCase()}.`)
+        }
+    }
+
+    async function runDesktopControlCommand(command: string, label: string) {
+        if (desktopBusy) return
+        setDesktopBusy(command)
+        try {
+            const result = await runDesktopAgentCommand(draft, command)
+            setDesktopCommandResult(result.message || `${label} sent to this Mac.`)
+        } catch (cause) {
+            const message = cause instanceof Error ? cause.message : `${label} failed.`
+            setDesktopCommandResult(message)
+            Alert.alert(label, message)
+        } finally {
+            setDesktopBusy('')
+        }
+    }
+
+    function encodeRemoteTarget(value: string) {
+        return encodeURIComponent(value).replace(/%3A/gi, ':').replace(/%40/gi, '@')
+    }
+
+    async function checkServerLogs() {
+        if (serverBusy) return
+        if (!draft.serverBaseUrl.trim() || !draft.serverLogsPath.trim()) {
+            Alert.alert('Missing logs setup', 'Add the server base URL and logs path first.')
+            return
+        }
+
+        setServerBusy('logs')
+        try {
+            const logs = await fetchServerText(serverUrl(draft.serverLogsPath), draft)
+            setServerLogs(logs.trim().slice(0, 1600) || 'No logs returned.')
+        } catch (cause) {
+            Alert.alert('Unable to load logs', cause instanceof Error ? cause.message : 'Request failed.')
+        } finally {
+            setServerBusy('')
+        }
+    }
+
+    async function openShortcut(path: string) {
+        const url = siteUrl(path)
+        try {
+            await Linking.openURL(url)
+        } catch (cause) {
+            Alert.alert('Unable to open shortcut', cause instanceof Error ? cause.message : url)
+        }
+    }
+
+    async function openShare(share: ShareSummary) {
+        const sharePath = share.path || share.id
+        const url = share.alias
+            ? `https://${share.alias}.hanasand.com`
+            : siteUrl(`s/${sharePath}`)
+        try {
+            await Linking.openURL(url)
+        } catch (cause) {
+            Alert.alert('Unable to open share', cause instanceof Error ? cause.message : url)
         }
     }
 
@@ -137,7 +446,23 @@ export function ControlScreen({
             `Codex remote: ${draft.codexUrl}`,
             `Server plane: ${draft.serverBaseUrl}`,
         ].join('\n')
-        await Share.share({ message: content })
+        try {
+            await Share.share({ message: content })
+        } catch (cause) {
+            Alert.alert('Unable to share setup', cause instanceof Error ? cause.message : 'Share failed.')
+        }
+    }
+
+    async function saveRemoteSetup() {
+        if (savingSettings) return
+        setSavingSettings(true)
+        try {
+            await onSaveSettings(draft)
+        } catch (cause) {
+            Alert.alert('Save setup failed', cause instanceof Error ? cause.message : 'Settings could not be saved.')
+        } finally {
+            setSavingSettings(false)
+        }
     }
 
     async function handleScan(payload: string) {
@@ -146,8 +471,7 @@ export function ControlScreen({
         setCameraVisible(false)
         const entry = buildAuthenticatorEntryFromUri(payload)
         if (entry) {
-            await onSaveAuthenticatorEntries([entry, ...authenticatorEntries])
-            Alert.alert('Authenticator added', entry.label)
+            await saveAuthenticatorEntry(entry)
         } else {
             Alert.alert('QR scanned', payload)
         }
@@ -156,41 +480,95 @@ export function ControlScreen({
         }, 900)
     }
 
+    async function saveAuthenticatorEntry(entry: AuthenticatorEntry) {
+        if (authenticatorBusy) return false
+        setAuthenticatorBusy(entry.id)
+        try {
+            const existing = authenticatorEntries.find(item => item.secret.toUpperCase() === entry.secret.toUpperCase())
+            const next = existing
+                ? authenticatorEntries.map(item => item.id === existing.id ? { ...item, ...entry, id: existing.id } : item)
+                : [entry, ...authenticatorEntries]
+            await onSaveAuthenticatorEntries(next)
+            Alert.alert(existing ? 'Authenticator updated' : 'Authenticator added', entry.label)
+            return true
+        } catch (cause) {
+            Alert.alert('Authenticator save failed', cause instanceof Error ? cause.message : 'Could not save authenticator code.')
+            return false
+        } finally {
+            setAuthenticatorBusy('')
+        }
+    }
+
     async function saveManualCode() {
+        if (authenticatorBusy) return
         const secret = manualSecret.trim().replace(/\s+/g, '')
-        if (!secret) return
-        await onSaveAuthenticatorEntries([
+        if (!secret) {
+            Alert.alert('Missing secret', 'Add a TOTP secret first.')
+            return
+        }
+        const saved = await saveAuthenticatorEntry({
+            id: `${Date.now()}`,
+            label: manualLabel.trim() || 'Authenticator code',
+            secret,
+            digits: 6,
+            period: 30,
+        })
+        if (saved) {
+            setManualLabel('')
+            setManualSecret('')
+        }
+    }
+
+    async function removeAuthenticatorEntry(id: string) {
+        if (authenticatorBusy) return
+        const entry = authenticatorEntries.find(item => item.id === id)
+        if (!entry) return
+        Alert.alert('Delete authenticator code?', entry.label, [
+            { text: 'Cancel', style: 'cancel' },
             {
-                id: `${Date.now()}`,
-                label: manualLabel.trim() || 'Authenticator code',
-                secret,
-                digits: 6,
-                period: 30,
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                    void (async () => {
+                        setAuthenticatorBusy(id)
+                        try {
+                            await onSaveAuthenticatorEntries(authenticatorEntries.filter(item => item.id !== id))
+                        } catch (cause) {
+                            Alert.alert('Delete failed', cause instanceof Error ? cause.message : 'Could not delete authenticator code.')
+                        } finally {
+                            setAuthenticatorBusy('')
+                        }
+                    })()
+                },
             },
-            ...authenticatorEntries,
         ])
-        setManualLabel('')
-        setManualSecret('')
     }
 
     const otpCards = authenticatorEntries.slice(0, 5).map(entry => {
-        const token = generateSync({ secret: entry.secret, digits: entry.digits, period: entry.period })
+        const token = tokenForEntry(entry)
         const remaining = entry.period - Math.floor((now / 1000) % entry.period)
         return { entry, token, remaining }
     })
+    const cdnConfigured = Boolean(draft.cdnBaseUrl.trim() && draft.authToken.trim() && draft.userId.trim())
+    const appConfigured = Boolean(draft.apiBaseUrl.trim() && draft.authToken.trim() && draft.userId.trim())
+    const selectedUser = users.find(user => user.id === selectedUserId)
 
     return (
-        <Screen title='Utilities' subtitle='Native ops, authenticator, shares, and system status.'>
+        <Screen title='Utilities' subtitle=''>
             <GlassCard>
-                <SectionTitle eyebrow='Utilities' title='QR + authenticator' body='This is now a dedicated native utility surface instead of being buried under the chat screen.' />
+                <SectionTitle eyebrow='Utilities' title='QR + authenticator' />
                 <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.md }}>
-                    <PillButton label='Scan QR' onPress={() => {
+                    <PillButton label={authenticatorBusy ? 'Working...' : 'Scan QR'} onPress={async () => {
                         if (!permission?.granted) {
-                            void requestPermission()
+                            const next = await requestPermission()
+                            if (!next.granted) {
+                                Alert.alert('Camera access needed', 'Allow camera access before scanning QR codes.')
+                                return
+                            }
                         }
                         setCameraVisible(true)
-                    }} tone='accent' />
-                    <PillButton label='Hide camera' onPress={() => setCameraVisible(false)} />
+                    }} tone='accent' disabled={!!authenticatorBusy} />
+                    {cameraVisible && <PillButton label='Hide camera' onPress={() => setCameraVisible(false)} disabled={!!authenticatorBusy} />}
                 </View>
                 {cameraVisible && permission?.granted && (
                     <View style={{ marginTop: spacing.md, overflow: 'hidden', borderRadius: 22 }}>
@@ -204,36 +582,123 @@ export function ControlScreen({
                     </View>
                 )}
                 <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-                    <TextInput value={manualLabel} onChangeText={setManualLabel} placeholder='Authenticator label' placeholderTextColor='rgba(241,243,238,0.46)' style={styles.inlineInput} />
-                    <TextInput value={manualSecret} onChangeText={setManualSecret} placeholder='Manual secret' placeholderTextColor='rgba(241,243,238,0.46)' style={styles.inlineInput} autoCapitalize='characters' />
-                    <PillButton label='Add code manually' onPress={() => void saveManualCode()} small />
+                    <TextInput value={manualLabel} onChangeText={setManualLabel} placeholder='Authenticator label' placeholderTextColor={theme.textSoft} style={styles.inlineInput} />
+                    <TextInput value={manualSecret} onChangeText={setManualSecret} placeholder='Manual secret' placeholderTextColor={theme.textSoft} style={styles.inlineInput} autoCapitalize='characters' />
+                    <PillButton label={authenticatorBusy ? 'Saving...' : 'Add code manually'} onPress={() => void saveManualCode()} small disabled={!!authenticatorBusy} />
                 </View>
                 <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
                     {otpCards.map(({ entry, token, remaining }) => (
-                        <NativeTile key={entry.id} eyebrow='Authenticator' title={entry.label} body={token} meta={`${remaining}s remaining`} />
+                        <View key={entry.id} style={{ gap: spacing.xs }}>
+                            <NativeTile eyebrow='Authenticator' title={entry.label} body={token} meta={`${remaining}s remaining`} />
+                            <PillButton label={authenticatorBusy === entry.id ? 'Deleting...' : 'Delete code'} onPress={() => void removeAuthenticatorEntry(entry.id)} tone='danger' small disabled={!!authenticatorBusy} />
+                        </View>
                     ))}
                 </View>
             </GlassCard>
 
             <GlassCard>
-                <SectionTitle eyebrow='Shares' title='Native share flow' body='Create quick shares here and inspect your recent share list without bouncing out to the website.' />
+                <SectionTitle eyebrow='Admin' title='Users and roles' body='Native mobile controls for the same role assignment flow as the dashboard and Desktop app.' />
                 <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-                    <TextInput value={shareName} onChangeText={setShareName} placeholder='Share name' placeholderTextColor='rgba(241,243,238,0.46)' style={styles.inlineInput} />
-                    <TextInput value={shareContent} onChangeText={setShareContent} placeholder='Share content' placeholderTextColor='rgba(241,243,238,0.46)' multiline style={[styles.inlineInput, { minHeight: 96, paddingTop: 14, textAlignVertical: 'top' }]} />
                     <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-                        <PillButton label='Create share' onPress={() => void createShare()} tone='accent' />
-                        <PillButton label={loadingShares ? 'Loading…' : 'Load my shares'} onPress={() => void loadShares()} />
+                        <PillButton label={loadingRoles ? 'Loading...' : 'Load users'} onPress={() => void loadRoleAdmin()} tone='accent' disabled={loadingRoles || !appConfigured} />
+                        {!!selectedUser && <PillButton label={roleActionBusy === `active-${selectedUser.id}` ? 'Updating...' : selectedUser.active === false ? 'Activate user' : 'Deactivate user'} onPress={() => void toggleUserActive(selectedUser)} tone={selectedUser.active === false ? 'default' : 'danger'} disabled={!!roleActionBusy || !appConfigured} />}
                     </View>
                     <View style={{ gap: spacing.sm }}>
+                        {users.slice(0, 6).map(user => (
+                            <NativeTile
+                                key={user.id}
+                                eyebrow={user.active === false ? 'Inactive user' : 'User'}
+                                title={user.name || user.id}
+                                body={user.role || user.roles?.map(role => role.name || role.id).join(', ') || 'No role summary'}
+                                meta={user.id}
+                                onPress={() => void selectRoleUser(user)}
+                            />
+                        ))}
+                        {!users.length && (
+                            <NativeTile
+                                eyebrow='Users'
+                                title={appConfigured ? 'No users loaded' : 'Connect API settings'}
+                                body={appConfigured ? 'Load users to manage role assignments.' : 'Add API URL, auth token, and user id before using admin controls.'}
+                                meta='Role admin'
+                            />
+                        )}
+                    </View>
+                    {!!selectedUser && (
+                        <View style={{ gap: spacing.sm }}>
+                            <SectionTitle eyebrow='Selected user' title={selectedUser.name || selectedUser.id} body={`${selectedUserRoles.length} assigned roles`} />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                                {roles.map(role => {
+                                    const assigned = selectedUserRoles.some(item => item.roleId === role.id || item.id === role.id || item.name === role.name)
+                                    return (
+                                        <PillButton
+                                            key={role.id}
+                                            label={`${assigned ? 'Remove' : 'Assign'} ${role.name || role.id}`}
+                                            onPress={() => void toggleRole(role)}
+                                            tone={assigned ? 'danger' : 'default'}
+                                            small
+                                            disabled={!!roleActionBusy || !appConfigured}
+                                        />
+                                    )
+                                })}
+                            </View>
+                        </View>
+                    )}
+                </View>
+            </GlassCard>
+
+            <GlassCard>
+                <SectionTitle eyebrow='Shares' title='Create, edit, lock, and inspect shares' />
+                <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+                    <TextInput value={shareName} onChangeText={setShareName} placeholder='Share name' placeholderTextColor={theme.textSoft} style={styles.inlineInput} />
+                    <TextInput value={shareContent} onChangeText={setShareContent} placeholder='Share content' placeholderTextColor={theme.textSoft} multiline style={[styles.inlineInput, { minHeight: 96, paddingTop: 14, textAlignVertical: 'top' }]} />
+                    <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+                        <PillButton label={loadingShares ? 'Working...' : 'Create share'} onPress={() => void createShare()} tone='accent' disabled={loadingShares || !cdnConfigured} />
+                        <PillButton label={loadingShares ? 'Loading...' : 'Load my shares'} onPress={() => void loadShares()} disabled={loadingShares || !cdnConfigured} />
+                    </View>
+                    {!!editingShareId && (
+                        <View style={{ gap: spacing.sm }}>
+                            <SectionTitle eyebrow='Editing' title={editShareName || editingShareId} body='Save writes back through the same share endpoint the website uses.' />
+                            <TextInput value={editShareName} onChangeText={setEditShareName} placeholder='Share name' placeholderTextColor={theme.textSoft} style={styles.inlineInput} />
+                            <TextInput value={editSharePath} onChangeText={setEditSharePath} placeholder='Path' placeholderTextColor={theme.textSoft} style={styles.inlineInput} autoCapitalize='none' />
+                            <TextInput value={editShareContent} onChangeText={setEditShareContent} placeholder='Content' placeholderTextColor={theme.textSoft} multiline style={[styles.inlineInput, { minHeight: 128, paddingTop: 14, textAlignVertical: 'top' }]} />
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                                <PillButton label={shareActionBusy === editingShareId ? 'Saving...' : 'Save edits'} onPress={() => void saveShareEdits()} tone='accent' disabled={shareActionBusy === editingShareId || !cdnConfigured} />
+                                <PillButton label='Cancel edit' onPress={() => setEditingShareId('')} disabled={!!shareActionBusy} />
+                            </View>
+                        </View>
+                    )}
+                    <View style={{ gap: spacing.sm }}>
                         {shares.slice(0, 5).map(share => (
-                            <NativeTile key={share.id} eyebrow='Share' title={share.name || share.id} body={share.path || share.alias || 'Workspace share'} meta={share.alias ? `${share.alias}.hanasand.com` : share.id} />
+                            <View key={share.id} style={{ gap: spacing.xs }}>
+                                <NativeTile
+                                    eyebrow={share.locked ? 'Locked share' : 'Share'}
+                                    title={share.name || share.id}
+                                    body={share.path || share.alias || 'Workspace share'}
+                                    meta={share.alias ? `${share.alias}.hanasand.com` : share.id}
+                                    onPress={() => void openShare(share)}
+                                />
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                                    <PillButton label='Edit' onPress={() => beginEditShare(share)} small disabled={!!shareActionBusy || !cdnConfigured} />
+                                    <PillButton label={share.locked ? 'Unlock' : 'Lock'} onPress={() => void toggleLock(share)} small disabled={shareActionBusy === share.id || !cdnConfigured} />
+                                    <PillButton label='Tree' onPress={() => void loadShareTree(share)} small disabled={shareActionBusy === share.id || !cdnConfigured} />
+                                    <PillButton label='Delete' onPress={() => void deleteShare(share)} tone='danger' small disabled={shareActionBusy === share.id || !cdnConfigured} />
+                                </View>
+                                {!!shareTrees[share.id]?.length && (
+                                    <NativeTile
+                                        eyebrow='Tree'
+                                        title={`${shareTrees[share.id].length} top-level items`}
+                                        body={shareTreePreview(shareTrees[share.id])}
+                                        meta='Loaded from /share/tree'
+                                    />
+                                )}
+                            </View>
                         ))}
                     </View>
                 </View>
             </GlassCard>
 
             <GlassCard>
-                <SectionTitle eyebrow='System' title='Native status summary' body='The highest-value website monitoring surfaces are represented here as quick native insight cards.' />
+                <SectionTitle eyebrow='System' title='Status' />
                 <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
                     {models.slice(0, 3).map(model => (
                         <NativeTile key={model.name} eyebrow='Model' title={model.name} body={`Status: ${model.model?.status || 'unknown'}`} meta={model.model?.tps ? `${model.model.tps.toFixed(1)} tps` : 'No TPS yet'} />
@@ -241,32 +706,87 @@ export function ControlScreen({
                     {domains.slice(0, 3).map(domain => (
                         <NativeTile key={domain.name} eyebrow='Traffic' title={domain.name} body='Top active domain' meta={typeof domain.tps === 'number' ? `${domain.tps.toFixed(1)} tps` : 'Live'} />
                     ))}
+                    {!!serverLogs && (
+                        <NativeTile
+                            eyebrow='Logs'
+                            title='Latest server logs'
+                            body={serverLogs}
+                            meta='Fetched from the configured logs path'
+                        />
+                    )}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                         <PillButton label='Refresh status' onPress={() => void refreshNativeData()} tone='accent' />
                         <PillButton label='Open VPN' onPress={() => void openVpn()} />
-                        <PillButton label='Start server' onPress={() => void runServerAction(draft.serverStartPath)} />
-                        <PillButton label='Stop server' onPress={() => void runServerAction(draft.serverStopPath)} tone='danger' />
+                        <PillButton label={serverBusy === 'start' ? 'Starting...' : 'Start server'} onPress={() => void runServerAction(draft.serverStartPath)} disabled={!!serverBusy} />
+                        <PillButton label={serverBusy === 'stop' ? 'Stopping...' : 'Stop server'} onPress={() => void runServerAction(draft.serverStopPath)} tone='danger' disabled={!!serverBusy} />
+                        <PillButton label={serverBusy === 'logs' ? 'Loading logs...' : 'Check logs'} onPress={() => void checkServerLogs()} disabled={!!serverBusy} />
                     </View>
                 </View>
             </GlassCard>
 
             <GlassCard>
-                <SectionTitle eyebrow='Remote setup' title='RDP, VNC, and service settings' body='This stays native too, so the operational details live with the rest of the control surface.' />
-                <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-                    <LabeledInput label='CDN API URL' value={draft.cdnBaseUrl} onChangeText={value => setDraft(current => ({ ...current, cdnBaseUrl: value }))} />
-                    <LabeledInput label='Codex URL' value={draft.codexUrl} onChangeText={value => setDraft(current => ({ ...current, codexUrl: value }))} />
-                    <LabeledInput label='Codex API path' value={draft.codexApiPath} onChangeText={value => setDraft(current => ({ ...current, codexApiPath: value }))} placeholder='/tools/ai' />
-                    <LabeledInput label='RDP host' value={draft.remoteDesktopHost} onChangeText={value => setDraft(current => ({ ...current, remoteDesktopHost: value }))} placeholder='mac-or-server.local' />
-                    <LabeledInput label='RDP user' value={draft.remoteDesktopUser} onChangeText={value => setDraft(current => ({ ...current, remoteDesktopUser: value }))} placeholder='eirik' />
-                    <LabeledInput label='VNC host for this Mac' value={draft.vncHost} onChangeText={value => setDraft(current => ({ ...current, vncHost: value }))} placeholder='mac.local:5900' />
-                    <LabeledInput label='Server base URL' value={draft.serverBaseUrl} onChangeText={value => setDraft(current => ({ ...current, serverBaseUrl: value }))} />
-                    <LabeledInput label='Start path' value={draft.serverStartPath} onChangeText={value => setDraft(current => ({ ...current, serverStartPath: value }))} />
-                    <LabeledInput label='Stop path' value={draft.serverStopPath} onChangeText={value => setDraft(current => ({ ...current, serverStopPath: value }))} />
-                    <LabeledInput label='Logs path or URL' value={draft.serverLogsPath} onChangeText={value => setDraft(current => ({ ...current, serverLogsPath: value }))} />
-                    <LabeledInput label='VPN URL scheme' value={draft.vpnUrlScheme} onChangeText={value => setDraft(current => ({ ...current, vpnUrlScheme: value }))} placeholder='ciscoanyconnect://' />
+                <SectionTitle eyebrow='Desktop' title='Remote control' />
+                <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                    <NativeTile
+                        eyebrow='Loopback agent'
+                        title={draft.desktopAgentBaseUrl || 'Desktop agent URL not set'}
+                        body={desktopCommandResult || 'Use Proof PC to reflect a control request inside Hanasand Desktop.'}
+                        meta='No webview. Native app command endpoint.'
+                    />
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                        <PillButton label='Save setup' onPress={() => onSaveSettings(draft)} tone='accent' />
-                        <PillButton label='Share setup' onPress={() => void shareRemoteSetup()} />
+                        <PillButton label={desktopBusy === 'remote_desktop_status' ? 'Checking...' : 'Status'} onPress={() => void runDesktopControlCommand('remote_desktop_status', 'Desktop status')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'remote_desktop_proof' ? 'Sending...' : 'Proof PC'} onPress={() => void runDesktopControlCommand('remote_desktop_proof', 'Desktop proof')} tone='accent' disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'remote_desktop_connect' ? 'Opening...' : 'Connect on Mac'} onPress={() => void runDesktopControlCommand('remote_desktop_connect', 'Remote desktop connect')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'remote_desktop_tunnel' ? 'Requesting...' : 'Tunnel on Mac'} onPress={() => void runDesktopControlCommand('remote_desktop_tunnel', 'Remote desktop tunnel')} disabled={!!desktopBusy} />
+                        <PillButton label='Mac mini profile' onPress={() => void runDesktopControlCommand('remote_desktop_macmini', 'Mac mini profile')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'mac_control_textedit_proof' ? 'Opening...' : 'TextEdit proof'} onPress={() => void runDesktopControlCommand('mac_control_textedit_proof', 'TextEdit proof')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'mac_control_keyboard_proof' ? 'Typing...' : 'Type keys'} onPress={() => void runDesktopControlCommand('mac_control_keyboard_proof', 'Keyboard proof')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'mac_control_pointer_move' ? 'Moving...' : 'Move mouse'} onPress={() => void runDesktopControlCommand('mac_control_pointer_move', 'Move pointer')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'mac_control_pointer_click' ? 'Clicking...' : 'Click'} onPress={() => void runDesktopControlCommand('mac_control_pointer_click', 'Pointer click')} disabled={!!desktopBusy} />
+                        <PillButton label={desktopBusy === 'mac_control_finder' ? 'Opening...' : 'Finder'} onPress={() => void runDesktopControlCommand('mac_control_finder', 'Finder')} disabled={!!desktopBusy} />
+                    </View>
+                </View>
+            </GlassCard>
+
+            <GlassCard>
+                <SectionTitle eyebrow='Website' title='Shortcuts' />
+                <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                    {routeShortcuts.map(shortcut => (
+                        <NativeTile
+                            key={shortcut.path}
+                            eyebrow={shortcut.category}
+                            title={shortcut.title}
+                            body={shortcut.summary}
+                            meta={shortcut.path}
+                            onPress={() => void openShortcut(shortcut.path)}
+                        />
+                    ))}
+                </View>
+            </GlassCard>
+
+            <GlassCard>
+                <SectionTitle eyebrow='Remote setup' title='Settings' />
+                <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+                    <LabeledInput label='API URL' value={draft.apiBaseUrl} onChangeText={value => setDraft(current => ({ ...current, apiBaseUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
+                    <LabeledInput label='User ID' value={draft.userId} onChangeText={value => setDraft(current => ({ ...current, userId: value }))} autoCapitalize='none' autoCorrect={false} textContentType='username' />
+                    <LabeledInput label='Auth token' value={draft.authToken} onChangeText={value => setDraft(current => ({ ...current, authToken: value }))} secureTextEntry autoCapitalize='none' autoCorrect={false} textContentType='password' />
+                    <LabeledInput label='CDN API URL' value={draft.cdnBaseUrl} onChangeText={value => setDraft(current => ({ ...current, cdnBaseUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
+                    <LabeledInput label='Codex URL' value={draft.codexUrl} onChangeText={value => setDraft(current => ({ ...current, codexUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
+                    <LabeledInput label='Codex API path' value={draft.codexApiPath} onChangeText={value => setDraft(current => ({ ...current, codexApiPath: value }))} placeholder='/tools/ai' autoCapitalize='none' autoCorrect={false} />
+                    <LabeledInput label='Desktop agent URL' value={draft.desktopAgentBaseUrl} onChangeText={value => setDraft(current => ({ ...current, desktopAgentBaseUrl: value }))} placeholder='http://localhost:45731' autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
+                    <LabeledInput label='RDP host' value={draft.remoteDesktopHost} onChangeText={value => setDraft(current => ({ ...current, remoteDesktopHost: value }))} placeholder='mac-or-server.local' autoCapitalize='none' autoCorrect={false} />
+                    <LabeledInput label='RDP user' value={draft.remoteDesktopUser} onChangeText={value => setDraft(current => ({ ...current, remoteDesktopUser: value }))} placeholder='eirik' autoCapitalize='none' autoCorrect={false} textContentType='username' />
+                    <LabeledInput label='VNC host for this Mac' value={draft.vncHost} onChangeText={value => setDraft(current => ({ ...current, vncHost: value }))} placeholder='mac.local:5900' autoCapitalize='none' autoCorrect={false} />
+                    <LabeledInput label='Server base URL' value={draft.serverBaseUrl} onChangeText={value => setDraft(current => ({ ...current, serverBaseUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
+                    <LabeledInput label='Start path' value={draft.serverStartPath} onChangeText={value => setDraft(current => ({ ...current, serverStartPath: value }))} autoCapitalize='none' autoCorrect={false} />
+                    <LabeledInput label='Stop path' value={draft.serverStopPath} onChangeText={value => setDraft(current => ({ ...current, serverStopPath: value }))} autoCapitalize='none' autoCorrect={false} />
+                    <LabeledInput label='Logs path or URL' value={draft.serverLogsPath} onChangeText={value => setDraft(current => ({ ...current, serverLogsPath: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' />
+                    <LabeledInput label='VPN URL scheme' value={draft.vpnUrlScheme} onChangeText={value => setDraft(current => ({ ...current, vpnUrlScheme: value }))} placeholder='ciscoanyconnect://' autoCapitalize='none' autoCorrect={false} keyboardType='url' />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                        <PillButton label={savingSettings ? 'Saving...' : 'Save setup'} onPress={() => void saveRemoteSetup()} tone='accent' disabled={savingSettings} />
+                        <PillButton label='Open RDP' onPress={() => void openRemote('rdp')} disabled={savingSettings} />
+                        <PillButton label='Open VNC' onPress={() => void openRemote('vnc')} disabled={savingSettings} />
+                        <PillButton label='Share setup' onPress={() => void shareRemoteSetup()} disabled={savingSettings} />
                     </View>
                 </View>
             </GlassCard>
@@ -274,15 +794,17 @@ export function ControlScreen({
     )
 }
 
-const styles = {
-    inlineInput: {
-        minHeight: 46,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(247,248,242,0.10)',
-        backgroundColor: 'rgba(247,248,242,0.07)',
-        paddingHorizontal: 14,
-        color: '#f1f3ee',
-        fontSize: 15,
-    } as const,
+function createStyles(theme: ThemePalette) {
+    return {
+        inlineInput: {
+            minHeight: 46,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: theme.surfaceBorderSoft,
+            backgroundColor: theme.backgroundRaised,
+            paddingHorizontal: 14,
+            color: theme.text,
+            fontSize: 15,
+        } as const,
+    }
 }

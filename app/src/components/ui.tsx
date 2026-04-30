@@ -1,23 +1,56 @@
-import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
-import type { ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { createContext, type ReactNode, useContext, useMemo } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native'
+import { Settings2 } from 'lucide-react-native'
 import Svg, { Circle, Line, Path } from 'react-native-svg'
-import { palette, radius, spacing } from '../theme/tokens'
+import { radius, spacing, type ThemePalette } from '../theme/tokens'
+import { useAppTheme } from '../theme/context'
+
+const SettingsDrawerContext = createContext<{ openSettings: () => void } | null>(null)
+
+export function SettingsDrawerProvider({
+    openSettings,
+    children,
+}: {
+    openSettings: () => void
+    children: ReactNode
+}) {
+    return (
+        <SettingsDrawerContext.Provider value={{ openSettings }}>
+            {children}
+        </SettingsDrawerContext.Provider>
+    )
+}
 
 export function Screen({ title, subtitle, right, children, scroll = true }: { title: string; subtitle?: string; right?: ReactNode; children: ReactNode; scroll?: boolean }) {
+    const settingsDrawer = useContext(SettingsDrawerContext)
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
     const body = scroll ? <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView> : <View style={styles.content}>{children}</View>
 
     return (
-        <LinearGradient colors={['#10130f', '#0b0c0b', '#050605']} style={styles.root}>
+        <LinearGradient colors={[theme.backgroundRaised, theme.backgroundAlt, theme.background, '#050605']} locations={[0, 0.28, 0.72, 1]} style={styles.root}>
             <View pointerEvents='none' style={styles.atmosphere}>
+                <LinearGradient
+                    colors={['rgba(255,255,255,0.055)', 'rgba(255,255,255,0.012)', 'rgba(0,0,0,0)']}
+                    locations={[0, 0.36, 1]}
+                    style={styles.topSheen}
+                />
+                <LinearGradient
+                    colors={['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)', 'rgba(0,0,0,0)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.leftSheen}
+                />
+                <LinearGradient
+                    colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.34)']}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    style={styles.bottomShade}
+                />
                 <View style={styles.grid}>
                     <AtmosphereGrid />
                 </View>
-                <View style={[styles.ambientBlob, styles.ambientPrimary]} />
-                <View style={[styles.ambientBlob, styles.ambientSecondary]} />
-                <View style={[styles.ambientBlob, styles.ambientNeutral]} />
                 <View style={styles.lumbermillWrap}>
                     <LumbermillSketch />
                 </View>
@@ -25,30 +58,40 @@ export function Screen({ title, subtitle, right, children, scroll = true }: { ti
                     <FutureCabinSketch />
                 </View>
             </View>
-            <SafeAreaView style={styles.rootEdges}>
+            <View style={styles.rootEdges}>
                 <View style={styles.header}>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.eyebrow}>Hanasand App</Text>
                         <Text style={styles.title}>{title}</Text>
                         {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
                     </View>
-                    {right}
+                    <View style={styles.headerActions}>
+                        {right}
+                        {settingsDrawer ? (
+                            <Pressable onPress={settingsDrawer.openSettings} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressedButton]}>
+                                <Settings2 color={theme.textMuted} size={18} strokeWidth={2.1} />
+                            </Pressable>
+                        ) : null}
+                    </View>
                 </View>
                 {body}
-            </SafeAreaView>
+            </View>
         </LinearGradient>
     )
 }
 
 export function GlassCard({ children, style }: { children: ReactNode; style?: object }) {
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
     return (
-        <BlurView intensity={32} tint='dark' style={[styles.card, style]}>
+        <View style={[styles.card, style]}>
             {children}
-        </BlurView>
+        </View>
     )
 }
 
 export function SectionTitle({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) {
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
     return (
         <View style={{ gap: 6 }}>
             <Text style={styles.eyebrow}>{eyebrow}</Text>
@@ -58,16 +101,45 @@ export function SectionTitle({ eyebrow, title, body }: { eyebrow: string; title:
     )
 }
 
-export function PillButton({ label, onPress, tone = 'default', small = false }: { label: string; onPress: () => void; tone?: 'default' | 'accent' | 'danger'; small?: boolean }) {
+export function PillButton({
+    label,
+    onPress,
+    tone = 'default',
+    small = false,
+    disabled = false,
+}: {
+    label: string
+    onPress: () => void
+    tone?: 'default' | 'accent' | 'danger'
+    small?: boolean
+    disabled?: boolean
+}) {
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
     const toneStyle = tone === 'accent' ? styles.buttonAccent : tone === 'danger' ? styles.buttonDanger : styles.buttonDefault
     return (
-        <Pressable onPress={onPress} style={({ pressed }) => [styles.button, small && styles.buttonSmall, toneStyle, pressed && { opacity: 0.84, transform: [{ scale: 0.98 }] }]}>
+        <Pressable
+            onPress={onPress}
+            disabled={disabled}
+            accessibilityRole='button'
+            accessibilityLabel={label}
+            accessibilityState={{ disabled }}
+            style={({ pressed }) => [
+                styles.button,
+                small && styles.buttonSmall,
+                toneStyle,
+                disabled && styles.buttonDisabled,
+                pressed && !disabled && { opacity: 0.84, transform: [{ scale: 0.98 }] },
+            ]}
+        >
             <Text style={styles.buttonLabel}>{label}</Text>
         </Pressable>
     )
 }
 
 export function StatChip({ label, value }: { label: string; value: string }) {
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
     return (
         <View style={styles.statChip}>
             <Text style={styles.statLabel}>{label}</Text>
@@ -77,17 +149,62 @@ export function StatChip({ label, value }: { label: string; value: string }) {
 }
 
 export function NativeTile({ eyebrow, title, body, meta, onPress }: { eyebrow?: string; title: string; body: string; meta?: string; onPress?: () => void }) {
-    return (
-        <Pressable onPress={onPress} style={({ pressed }) => [styles.nativeTile, pressed && styles.nativeTilePressed]}>
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
+    const content = (
+        <>
             {!!eyebrow && <Text style={styles.tileEyebrow}>{eyebrow}</Text>}
             <Text style={styles.tileTitle}>{title}</Text>
             <Text style={styles.body}>{body}</Text>
             {!!meta && <Text style={styles.tileMeta}>{meta}</Text>}
+        </>
+    )
+
+    if (!onPress) {
+        return (
+            <View style={styles.nativeTile}>
+                {content}
+            </View>
+        )
+    }
+
+    return (
+        <Pressable
+            onPress={onPress}
+            accessibilityRole='button'
+            accessibilityLabel={[eyebrow, title, meta].filter(Boolean).join(', ')}
+            style={({ pressed }) => [styles.nativeTile, pressed && styles.nativeTilePressed]}
+        >
+            {content}
         </Pressable>
     )
 }
 
-export function LabeledInput({ label, value, onChangeText, placeholder, secureTextEntry = false, multiline = false }: { label: string; value: string; onChangeText: (next: string) => void; placeholder?: string; secureTextEntry?: boolean; multiline?: boolean }) {
+export function LabeledInput({
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    secureTextEntry = false,
+    multiline = false,
+    autoCapitalize = 'sentences',
+    autoCorrect = true,
+    keyboardType = 'default',
+    textContentType = 'none',
+}: {
+    label: string
+    value: string
+    onChangeText: (next: string) => void
+    placeholder?: string
+    secureTextEntry?: boolean
+    multiline?: boolean
+    autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters'
+    autoCorrect?: boolean
+    keyboardType?: KeyboardTypeOptions
+    textContentType?: 'none' | 'URL' | 'username' | 'password'
+}) {
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
     return (
         <View style={{ gap: 8 }}>
             <Text style={styles.inputLabel}>{label}</Text>
@@ -95,9 +212,13 @@ export function LabeledInput({ label, value, onChangeText, placeholder, secureTe
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor={palette.textSoft}
+                placeholderTextColor={theme.textSoft}
                 secureTextEntry={secureTextEntry}
                 multiline={multiline}
+                autoCapitalize={autoCapitalize}
+                autoCorrect={autoCorrect}
+                keyboardType={keyboardType}
+                textContentType={textContentType}
                 style={[styles.input, multiline && styles.inputMultiline]}
             />
         </View>
@@ -105,26 +226,29 @@ export function LabeledInput({ label, value, onChangeText, placeholder, secureTe
 }
 
 function SketchPath({ d, tone = 'base' }: { d: string; tone?: 'base' | 'distant' | 'shade' }) {
-    const stroke = tone === 'shade' ? 'rgba(241,243,238,0.055)' : tone === 'distant' ? 'rgba(241,243,238,0.05)' : 'rgba(241,243,238,0.08)'
+    const theme = useAppTheme()
+    const stroke = tone === 'shade' ? theme.ambientNeutral : tone === 'distant' ? theme.grid : theme.textSoft
     const strokeWidth = tone === 'shade' ? 0.9 : tone === 'distant' ? 1.1 : 1.25
     return <Path d={d} fill='none' stroke={stroke} strokeWidth={strokeWidth} strokeLinecap='round' strokeLinejoin='round' />
 }
 
 function AtmosphereGrid() {
+    const theme = useAppTheme()
     const vertical = Array.from({ length: 8 }, (_, index) => 24 + index * 48)
     const horizontal = Array.from({ length: 12 }, (_, index) => index * 48)
 
     return (
-        <Svg viewBox='0 0 360 640' preserveAspectRatio='none' style={styles.sketchSvg}>
-            {vertical.map(position => <Line key={`v-${position}`} x1={position} y1='0' x2={position} y2='640' stroke={palette.grid} strokeWidth='1' />)}
-            {horizontal.map(position => <Line key={`h-${position}`} x1='0' y1={position} x2='360' y2={position} stroke={palette.grid} strokeWidth='1' />)}
+        <Svg viewBox='0 0 360 640' preserveAspectRatio='none' style={baseStyles.sketchSvg}>
+            {vertical.map(position => <Line key={`v-${position}`} x1={position} y1='0' x2={position} y2='640' stroke={theme.grid} strokeWidth='1' />)}
+            {horizontal.map(position => <Line key={`h-${position}`} x1='0' y1={position} x2='360' y2={position} stroke={theme.grid} strokeWidth='1' />)}
         </Svg>
     )
 }
 
 function LumbermillSketch() {
+    const theme = useAppTheme()
     return (
-        <Svg viewBox='0 0 430 190' style={styles.sketchSvg}>
+        <Svg viewBox='0 0 430 190' style={baseStyles.sketchSvg}>
             <SketchPath tone='distant' d='M7 122 C37 101 76 112 107 93 C143 71 176 94 209 75 C247 53 286 86 322 68 C356 51 382 68 420 57' />
             <SketchPath tone='distant' d='M43 125 V96 L61 82 L82 96 V125' />
             <SketchPath tone='distant' d='M82 96 L96 102 V126' />
@@ -174,8 +298,8 @@ function LumbermillSketch() {
             <SketchPath tone='shade' d='M164 82 L142 103' />
             <SketchPath tone='shade' d='M183 94 L170 103' />
             <SketchPath d='M120 124 C137 116 151 128 168 120 C184 113 195 124 209 118' />
-            <Circle cx='239' cy='128' r='26' fill='none' stroke='rgba(241,243,238,0.08)' strokeWidth='1.25' />
-            <Circle cx='239' cy='128' r='8' fill='none' stroke='rgba(241,243,238,0.08)' strokeWidth='1.25' />
+            <Circle cx='239' cy='128' r='26' fill='none' stroke={theme.textSoft} strokeWidth='1.25' />
+            <Circle cx='239' cy='128' r='8' fill='none' stroke={theme.textSoft} strokeWidth='1.25' />
             <SketchPath d='M239 102 V154' />
             <SketchPath d='M213 128 H265' />
             <SketchPath d='M221 110 L257 146' />
@@ -225,8 +349,9 @@ function LumbermillSketch() {
 }
 
 function FutureCabinSketch() {
+    const theme = useAppTheme()
     return (
-        <Svg viewBox='0 0 430 190' style={styles.sketchSvg}>
+        <Svg viewBox='0 0 430 190' style={baseStyles.sketchSvg}>
             <SketchPath tone='shade' d='M224 137 C267 119 310 129 352 110 C385 95 407 97 426 85' />
             <SketchPath d='M267 114 L267 75 L340 55 L398 89 L398 114' />
             <SketchPath d='M340 55 L340 101' />
@@ -257,7 +382,7 @@ function FutureCabinSketch() {
             <SketchPath d='M379 98 L403 95 V114' />
             <SketchPath d='M363 89 L363 80' />
             <SketchPath d='M359 78 H367' />
-            <Circle cx='363' cy='85' r='3' fill='none' stroke='rgba(241,243,238,0.08)' strokeWidth='1.25' />
+            <Circle cx='363' cy='85' r='3' fill='none' stroke={theme.textSoft} strokeWidth='1.25' />
             <SketchPath tone='shade' d='M356 86 C360 78 366 78 371 86' />
             <SketchPath tone='shade' d='M353 101 L375 107' />
             <SketchPath tone='shade' d='M384 101 L398 97' />
@@ -285,118 +410,136 @@ function FutureCabinSketch() {
     )
 }
 
-export const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: palette.background },
-    rootEdges: { flex: 1 },
-    atmosphere: {
-        ...StyleSheet.absoluteFillObject,
-        overflow: 'hidden',
-    },
-    grid: {
-        ...StyleSheet.absoluteFillObject,
-        opacity: 0.36,
-    },
-    header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md, gap: 6, flexDirection: 'row', alignItems: 'flex-start' },
-    content: { paddingHorizontal: spacing.lg, paddingBottom: 140, gap: spacing.md },
-    eyebrow: { color: palette.textSoft, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 },
-    title: { color: palette.text, fontSize: 30, fontWeight: '700' },
-    subtitle: { color: palette.textMuted, fontSize: 14, lineHeight: 20, marginTop: 2 },
-    sectionTitle: { color: palette.text, fontSize: 21, fontWeight: '700' },
-    body: { color: palette.textMuted, fontSize: 14, lineHeight: 20 },
-    card: {
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: palette.surfaceBorder,
-        padding: spacing.lg,
-        backgroundColor: palette.surface,
-        shadowColor: palette.shadow,
-        shadowOpacity: 0.42,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 14 },
-    },
-    button: { minHeight: 44, borderRadius: radius.pill, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: palette.surfaceBorder },
-    buttonSmall: { minHeight: 38, paddingHorizontal: 14 },
-    buttonDefault: { backgroundColor: palette.surfaceStrong },
-    buttonAccent: { backgroundColor: palette.accentSoft, borderColor: 'rgba(217,106,49,0.34)' },
-    buttonDanger: { backgroundColor: 'rgba(184,106,94,0.18)', borderColor: 'rgba(184,106,94,0.32)' },
-    buttonLabel: { color: palette.text, fontWeight: '600', fontSize: 14 },
-    statChip: { flex: 1, minWidth: 92, borderRadius: radius.md, borderWidth: 1, borderColor: palette.surfaceBorder, backgroundColor: palette.surfaceStrong, padding: spacing.md, gap: 6 },
-    statLabel: { color: palette.textSoft, fontSize: 12 },
-    statValue: { color: palette.text, fontSize: 18, fontWeight: '700' },
-    nativeTile: {
-        gap: 6,
-        borderRadius: radius.md,
-        padding: spacing.md,
-        borderWidth: 1,
-        borderColor: palette.surfaceBorderSoft,
-        backgroundColor: palette.surfaceStrong,
-    },
-    nativeTilePressed: {
-        opacity: 0.9,
-        transform: [{ scale: 0.99 }],
-    },
-    tileEyebrow: {
-        color: palette.textSoft,
-        fontSize: 11,
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-    },
-    tileTitle: {
-        color: palette.text,
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    tileMeta: {
-        color: palette.accentAlt,
-        fontSize: 12,
-        marginTop: 2,
-    },
-    inputLabel: { color: palette.textMuted, fontSize: 13, fontWeight: '600' },
-    input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: palette.surfaceBorder, backgroundColor: palette.surfaceStrong, paddingHorizontal: 14, color: palette.text, fontSize: 15 },
-    inputMultiline: { minHeight: 110, textAlignVertical: 'top', paddingVertical: 14 },
-    ambientBlob: {
-        position: 'absolute',
-        borderRadius: 999,
-    },
-    ambientPrimary: {
-        width: 420,
-        height: 320,
-        top: -60,
-        right: -90,
-        backgroundColor: palette.ambientPrimary,
-    },
-    ambientSecondary: {
-        width: 380,
-        height: 320,
-        bottom: 96,
-        left: -130,
-        backgroundColor: palette.ambientSecondary,
-    },
-    ambientNeutral: {
-        width: 480,
-        height: 360,
-        top: 140,
-        left: -10,
-        backgroundColor: palette.ambientNeutral,
-    },
-    lumbermillWrap: {
-        position: 'absolute',
-        top: 116,
-        left: -8,
-        width: 264,
-        height: 118,
-        opacity: 0.72,
-        transform: [{ rotate: '-1.4deg' }],
-    },
-    cabinWrap: {
-        position: 'absolute',
-        right: -6,
-        bottom: 182,
-        width: 252,
-        height: 116,
-        opacity: 0.68,
-        transform: [{ rotate: '1.2deg' }],
-    },
+function createStyles(theme: ThemePalette) {
+    return StyleSheet.create({
+        root: { flex: 1, backgroundColor: theme.background },
+        rootEdges: { flex: 1 },
+        atmosphere: {
+            ...StyleSheet.absoluteFillObject,
+            overflow: 'hidden',
+        },
+        grid: {
+            ...StyleSheet.absoluteFillObject,
+            opacity: 0.36,
+        },
+        header: { paddingHorizontal: spacing.lg, paddingTop: 84, paddingBottom: spacing.md, gap: 6, flexDirection: 'row', alignItems: 'flex-start' },
+        headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+        content: { paddingHorizontal: spacing.lg, paddingBottom: 168, gap: spacing.md },
+        eyebrow: { color: theme.textSoft, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 },
+        title: { color: theme.text, fontSize: 30, fontWeight: '700' },
+        subtitle: { color: theme.textMuted, fontSize: 14, lineHeight: 20, marginTop: 2 },
+        sectionTitle: { color: theme.text, fontSize: 21, fontWeight: '700' },
+        body: { color: theme.textMuted, fontSize: 14, lineHeight: 20 },
+        card: {
+            borderRadius: radius.lg,
+            borderWidth: 1,
+            borderColor: theme.surfaceBorder,
+            padding: spacing.lg,
+            backgroundColor: theme.surface,
+            shadowOpacity: 0,
+        },
+        button: { minHeight: 44, borderRadius: radius.pill, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.surfaceBorder },
+        buttonSmall: { minHeight: 38, paddingHorizontal: 14 },
+        buttonDefault: { backgroundColor: theme.surfaceStrong },
+        buttonAccent: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
+        buttonDanger: { backgroundColor: `${theme.danger}2e`, borderColor: `${theme.danger}55` },
+        buttonDisabled: { opacity: 0.55 },
+        buttonLabel: { color: theme.text, fontWeight: '600', fontSize: 14 },
+        statChip: { flex: 1, minWidth: 92, borderRadius: radius.md, borderWidth: 1, borderColor: theme.surfaceBorder, backgroundColor: theme.surfaceStrong, padding: spacing.md, gap: 6 },
+        statLabel: { color: theme.textSoft, fontSize: 12 },
+        statValue: { color: theme.text, fontSize: 18, fontWeight: '700' },
+        nativeTile: {
+            gap: 6,
+            borderRadius: radius.md,
+            padding: spacing.md,
+            borderWidth: 1,
+            borderColor: theme.surfaceBorderSoft,
+            backgroundColor: theme.surfaceStrong,
+        },
+        nativeTilePressed: {
+            opacity: 0.9,
+            transform: [{ scale: 0.99 }],
+        },
+        tileEyebrow: {
+            color: theme.textSoft,
+            fontSize: 11,
+            textTransform: 'uppercase',
+            letterSpacing: 1.8,
+        },
+        tileTitle: {
+            color: theme.text,
+            fontSize: 16,
+            fontWeight: '700',
+        },
+        tileMeta: {
+            color: theme.accentAlt,
+            fontSize: 12,
+            marginTop: 2,
+        },
+        inputLabel: { color: theme.textMuted, fontSize: 13, fontWeight: '600' },
+        input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: theme.surfaceBorder, backgroundColor: theme.surfaceStrong, paddingHorizontal: 14, color: theme.text, fontSize: 15 },
+        inputMultiline: { minHeight: 110, textAlignVertical: 'top', paddingVertical: 14 },
+        settingsButton: {
+            width: 42,
+            height: 42,
+            borderRadius: 15,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: theme.surfaceBorderSoft,
+            backgroundColor: theme.ambientNeutral,
+        },
+        pressedButton: {
+            opacity: 0.84,
+            transform: [{ scale: 0.98 }],
+        },
+        topSheen: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 210,
+        },
+        leftSheen: {
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: 96,
+        },
+        bottomShade: {
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 220,
+        },
+        lumbermillWrap: {
+            position: 'absolute',
+            top: 116,
+            left: -8,
+            width: 264,
+            height: 118,
+            opacity: 0.72,
+            transform: [{ rotate: '-1.4deg' }],
+        },
+        cabinWrap: {
+            position: 'absolute',
+            right: -6,
+            bottom: 182,
+            width: 252,
+            height: 116,
+            opacity: 0.68,
+            transform: [{ rotate: '1.2deg' }],
+        },
+        sketchSvg: {
+            width: '100%',
+            height: '100%',
+        },
+    })
+}
+
+const baseStyles = StyleSheet.create({
     sketchSvg: {
         width: '100%',
         height: '100%',

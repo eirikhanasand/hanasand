@@ -73,7 +73,16 @@ export default function Code({
     }
 
     if (!share) {
-        return null
+        return (
+            <main className='grid h-full w-full place-items-center overflow-hidden rounded-lg outline outline-dark'>
+                <div className='max-w-md rounded-2xl bg-dark/35 px-6 py-5 text-center outline outline-dark'>
+                    <h1 className='text-lg font-semibold text-bright/90'>Loading workspace...</h1>
+                    <p className='mt-2 text-sm leading-6 text-bright/55'>
+                        Hanasand is reconnecting to this share and restoring the editor state.
+                    </p>
+                </div>
+            </main>
+        )
     }
 
     return (

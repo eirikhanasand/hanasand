@@ -17,12 +17,12 @@ export default function TreeHeader({ share, setIsCreatingNewFile }: TreeHeaderPr
         <div className='bg-light rounded-md w-full p-1 px-2 flex gap-2 items-center justify-between'>
             <h1 className='text-sm text-bright/80'>{share.alias}</h1>
             <div className='flex gap-2'>
-                <div onClick={() => handleClick('file')} className={buttonStyle}>
+                <button type='button' aria-label='Create file' onClick={() => handleClick('file')} className={buttonStyle}>
                     <FilePlus className='stroke-bright/80 w-4 h-4' />
-                </div>
-                <div onClick={() => handleClick('folder')} className={buttonStyle}>
+                </button>
+                <button type='button' aria-label='Create folder' onClick={() => handleClick('folder')} className={buttonStyle}>
                     <FolderPlus className='stroke-bright/80 w-4 h-4' />
-                </div>
+                </button>
             </div>
         </div>
     )

@@ -33,9 +33,11 @@ Detailed worknotes are local ignored context. Prefer source, tests, and the live
 ### Product track
 - The browser AI workspace, deploy flow, preview routing, quotas, and review/session surfaces have been actively developed.
 - The next useful product work should come from a fresh live gap review.
+- Native app parity work now has a dedicated playbook in `DESKTOP_APP_DEVELOPMENT.md`; use it to port website features into Hanasand app or Nucleus without extra user guidance.
 
 ### Self-improvement track
 - The benchmark, orchestration, context, and model-overhead tools exist under `gpt/`.
+- The canonical packet queue now runs through `100`, and agents should claim the lowest-numbered dependency-satisfied packet instead of skipping ahead to easier later notes.
 - Keep benchmark outputs ignored unless a small source change needs them as fixture data.
 
 ## Cleanup Notes

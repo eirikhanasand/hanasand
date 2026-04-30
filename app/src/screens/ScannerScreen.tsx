@@ -7,22 +7,31 @@ import * as Sharing from 'expo-sharing'
 import type { ScannerPage } from '../types'
 import { GlassCard, PillButton, Screen, SectionTitle } from '../components/ui'
 import { spacing } from '../theme/tokens'
+import { useAppTheme } from '../theme/context'
 
 export function ScannerScreen() {
+    const theme = useAppTheme()
     const [permission, requestPermission] = useCameraPermissions()
     const cameraRef = useRef<CameraView | null>(null)
     const [pages, setPages] = useState<ScannerPage[]>([])
     const [busy, setBusy] = useState(false)
     const [showCamera, setShowCamera] = useState(false)
+    const [lastPdfUri, setLastPdfUri] = useState('')
 
     const orderedPages = useMemo(() => pages, [pages])
 
     async function capture() {
-        if (!cameraRef.current) return
+        if (!cameraRef.current) {
+            Alert.alert('Camera unavailable', 'Open the camera before capturing a page.')
+            return
+        }
         setBusy(true)
         try {
             const shot = await cameraRef.current.takePictureAsync({ quality: 0.85 })
-            if (!shot?.uri) return
+            if (!shot?.uri) {
+                Alert.alert('Capture failed', 'The camera did not return an image.')
+                return
+            }
             setPages(current => [...current, { id: `${Date.now()}-${current.length}`, uri: shot.uri, createdAt: Date.now() }])
         } catch (cause) {
             Alert.alert('Capture failed', cause instanceof Error ? cause.message : 'The camera could not save this page.')
@@ -43,11 +52,40 @@ export function ScannerScreen() {
     }
 
     function remove(index: number) {
-        setPages(current => current.filter((_, itemIndex) => itemIndex !== index))
+        const page = pages[index]
+        if (!page) return
+        Alert.alert('Delete page?', `Page ${index + 1} will be removed from this scan.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => setPages(current => current.filter((_, itemIndex) => itemIndex !== index)) },
+        ])
+    }
+
+    function clearPages() {
+        if (!pages.length) return
+        Alert.alert('Clear scanned pages?', `${pages.length} pages will be removed from this scan.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Clear', style: 'destructive', onPress: () => setPages([]) },
+        ])
+    }
+
+    async function sharePdf(uri = lastPdfUri) {
+        if (!uri) return
+        try {
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Export scanned PDF' })
+            } else {
+                Alert.alert('PDF ready', uri)
+            }
+        } catch (cause) {
+            Alert.alert('Share failed', cause instanceof Error ? cause.message : 'Unable to share the PDF.')
+        }
     }
 
     async function exportPdf() {
-        if (!pages.length) return
+        if (!pages.length) {
+            Alert.alert('No pages', 'Capture at least one page before exporting.')
+            return
+        }
         setBusy(true)
         try {
             const encoded = await Promise.all(
@@ -64,11 +102,8 @@ export function ScannerScreen() {
         </html>
       `
             const file = await Print.printToFileAsync({ html })
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Export scanned PDF' })
-            } else {
-                Alert.alert('PDF created', file.uri)
-            }
+            setLastPdfUri(file.uri)
+            await sharePdf(file.uri)
         } catch (cause) {
             Alert.alert('PDF export failed', cause instanceof Error ? cause.message : 'Unable to export the scan bundle.')
         } finally {
@@ -77,14 +112,14 @@ export function ScannerScreen() {
     }
 
     if (!permission) {
-        return <Screen title='Scanner' subtitle='Loading camera permissions…'><GlassCard><Text style={{ color: '#f3f7fb' }}>Checking camera access…</Text></GlassCard></Screen>
+        return <Screen title='Scanner' subtitle=''><GlassCard><Text style={{ color: theme.text }}>Checking camera access...</Text></GlassCard></Screen>
     }
 
     if (!permission.granted) {
         return (
-            <Screen title='Scanner' subtitle='Grant camera access to scan document batches quickly.'>
+            <Screen title='Scanner' subtitle=''>
                 <GlassCard>
-                    <SectionTitle eyebrow='Permission required' title='Camera access needed' body='The scanner is built for rapid batch capture. It uses the device camera with continuous autofocus, then lets you reorder and trim pages before exporting a PDF.' />
+                    <SectionTitle eyebrow='Permission required' title='Camera access needed' />
                     <View style={{ marginTop: spacing.md }}>
                         <PillButton label='Allow camera access' onPress={() => void requestPermission()} tone='accent' />
                     </View>
@@ -94,13 +129,14 @@ export function ScannerScreen() {
     }
 
     return (
-        <Screen title='Scanner' subtitle='Scan many pages quickly, reorder them, drop mistakes, and export one clean PDF.' scroll={false}>
+        <Screen title='Scanner' subtitle='' scroll={false}>
             <View style={{ flex: 1, gap: spacing.md }}>
                 <GlassCard>
-                    <SectionTitle eyebrow='Capture mode' title={showCamera ? 'Live camera ready' : 'Batch scanning, simplified'} body='Open the camera, keep shooting, then review the stack below. The pages are only deleted from the stack when you remove them yourself.' />
+                    <SectionTitle eyebrow='Capture' title={showCamera ? 'Camera ready' : 'Batch scan'} />
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md }}>
                         <PillButton label={showCamera ? 'Hide camera' : 'Open camera'} onPress={() => setShowCamera(current => !current)} tone='accent' />
-                        <PillButton label={busy ? 'Working…' : 'Export PDF'} onPress={() => void exportPdf()} />
+                        <PillButton label={busy ? 'Working...' : 'Export PDF'} onPress={() => void exportPdf()} disabled={busy || !pages.length} />
+                        {!!pages.length && <PillButton label='Clear pages' onPress={clearPages} tone='danger' disabled={busy} />}
                     </View>
                 </GlassCard>
 
@@ -108,25 +144,33 @@ export function ScannerScreen() {
                     <GlassCard style={{ padding: 10 }}>
                         <CameraView ref={cameraRef} facing='back' autofocus='on' style={{ height: 280, borderRadius: 22, overflow: 'hidden' }} />
                         <View style={{ marginTop: spacing.sm }}>
-                            <PillButton label={busy ? 'Capturing…' : 'Capture page'} onPress={() => void capture()} tone='accent' />
+                            <PillButton label={busy ? 'Capturing...' : 'Capture page'} onPress={() => void capture()} tone='accent' disabled={busy} />
                         </View>
                     </GlassCard>
                 )}
 
                 <ScrollView contentContainerStyle={{ gap: spacing.md, paddingBottom: 180 }}>
                     <GlassCard>
-                        <SectionTitle eyebrow='Review pages' title={`${orderedPages.length} pages in this batch`} body='Move pages up or down before export, and remove any accidental shots. The PDF is generated only when you decide the stack is clean.' />
+                        <SectionTitle eyebrow='Pages' title={`${orderedPages.length} pages`} />
                     </GlassCard>
+                    {!!lastPdfUri && (
+                        <GlassCard>
+                            <SectionTitle eyebrow='Last export' title='PDF ready' body={lastPdfUri.split('/').pop() || lastPdfUri} />
+                            <View style={{ marginTop: spacing.md }}>
+                                <PillButton label='Share again' onPress={() => void sharePdf()} tone='accent' disabled={busy} />
+                            </View>
+                        </GlassCard>
+                    )}
                     {orderedPages.map((page, index) => (
                         <GlassCard key={page.id}>
-                            <Image source={{ uri: page.uri }} style={{ width: '100%', height: 240, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)' }} resizeMode='cover' />
+                            <Image source={{ uri: page.uri }} style={{ width: '100%', height: 240, borderRadius: 22, backgroundColor: theme.ambientNeutral }} resizeMode='cover' />
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md }}>
-                                <Text style={{ color: '#f3f7fb', fontWeight: '700' }}>Page {index + 1}</Text>
-                                <Text style={{ color: 'rgba(243,247,251,0.46)' }}>Ready for PDF</Text>
+                                <Text style={{ color: theme.text, fontWeight: '700' }}>Page {index + 1}</Text>
+                                <Text style={{ color: theme.textSoft }}>Ready for PDF</Text>
                             </View>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md }}>
-                                <PillButton label='Move up' onPress={() => move(index, -1)} small />
-                                <PillButton label='Move down' onPress={() => move(index, 1)} small />
+                                {index > 0 && <PillButton label='Move up' onPress={() => move(index, -1)} small />}
+                                {index < orderedPages.length - 1 && <PillButton label='Move down' onPress={() => move(index, 1)} small />}
                                 <PillButton label='Delete page' onPress={() => remove(index)} tone='danger' small />
                             </View>
                         </GlassCard>

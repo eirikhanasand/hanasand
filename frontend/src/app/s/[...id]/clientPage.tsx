@@ -15,7 +15,6 @@ import DisplayError from '@/components/share/search/displayError'
 type ClientPageProps = {
     id: string
     share: Share | null
-    randomId: string
     openFolders: string[]
     tree: Tree | null
     sharePageWidth: number
@@ -26,7 +25,6 @@ type ClientPageProps = {
 export default function ClientPage({
     id,
     share: serverShare,
-    randomId,
     openFolders,
     tree,
     sharePageWidth,
@@ -44,7 +42,6 @@ export default function ClientPage({
     const [box, setBox] = useState(false)
     const [share, setShare] = useState<Share | null>(serverShare)
     const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
-    const [deploying, setDeploying] = useState(false)
     const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
     const [triggerSiteChange, setTriggerSiteChange] = useState<boolean | 'close'>(false)
     const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
@@ -80,6 +77,7 @@ export default function ClientPage({
                 />
             </div>
             <Metadata
+                shareRouteId={id}
                 share={share}
                 setShare={setShare}
                 isConnected={isConnected}
@@ -88,7 +86,6 @@ export default function ClientPage({
                 participants={participants}
                 clickedWord={clickedWord}
                 setClickedWord={setClickedWord}
-                randomServerId={randomId}
                 editingContent={editingContent}
                 setDisplayLineNumbers={setDisplayLineNumbers}
                 syntaxHighlighting={syntaxHighlighting}
@@ -105,8 +102,7 @@ export default function ClientPage({
                 setTriggerChange={setTriggerTerminalChange}
             />
             <Deploy
-                deploying={deploying}
-                setDeploying={setDeploying}
+                terminalOpen={terminalOpen}
                 setTerminalOpen={setTerminalOpen}
             />
             <RenderSite

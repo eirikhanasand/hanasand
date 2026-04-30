@@ -8,13 +8,13 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import HideIfLittleSpace from '@/hooks/useHideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
-import randomId from '@/utils/random/randomId'
 import { Copy, Eye, Highlighter, Info as InfoIcon, ListOrdered, Package, RefreshCw, X } from 'lucide-react'
 import Link from 'next/link'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { Dispatch, SetStateAction } from 'react'
 import Box from '../box/box'
 
 type MetadataProps = {
+    shareRouteId: string
     share: Share | null
     setShare: Dispatch<SetStateAction<Share | null>>
     isConnected: boolean
@@ -23,7 +23,6 @@ type MetadataProps = {
     participants: number
     clickedWord: string | null
     setClickedWord: Dispatch<SetStateAction<string | null>>
-    randomServerId: string
     editingContent: string
     setDisplayLineNumbers: Dispatch<SetStateAction<boolean>>
     syntaxHighlighting: boolean
@@ -36,13 +35,13 @@ const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center 
 const baseButtonStyle = 'outline outline-dark rounded-lg h-12 w-12 hover:bg-light/50 grid place-items-center cursor-pointer'
 
 export default function Metadata({
+    shareRouteId,
     share,
     isConnected,
     showMetadata,
     setShowMetadata,
     participants,
     clickedWord,
-    randomServerId,
     editingContent,
     setDisplayLineNumbers,
     setSyntaxHighlighting,
@@ -51,7 +50,6 @@ export default function Metadata({
     setBox
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
-    const [id] = useState(() => randomServerId || randomId())
     const { condition: error, setCondition: setError } = useClearStateAfter()
     HideIfLittleSpace({ set: setShowMetadata })
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
@@ -63,8 +61,10 @@ export default function Metadata({
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
         return (
-            <div
-                onMouseDown={handleMouseDown}
+            <button
+                type='button'
+                aria-label='Open share metadata'
+                onMouseDown={(event) => handleMouseDown(event)}
                 onClick={handleOpen}
                 className={`group ${sharedStyles}`}
                 style={{ top: position.y, left: position.x }}
@@ -78,7 +78,7 @@ export default function Metadata({
                         <Eye className={color} />
                     </h1>
                 )}
-            </div>
+            </button>
         )
     }
 
@@ -86,31 +86,35 @@ export default function Metadata({
         <div className='min-w-fit w-[9vw] h-full'>
             <div className='outline outline-dark space-y-2 h-full p-2 rounded-lg w-full'>
                 <div className='grid grid-cols-5 gap-2'>
-                    <div className={baseButtonStyle}>
-                        <X className='cursor-pointer' onClick={() => setShowMetadata(false)} />
-                    </div>
-                    <Link href={`/s/${id}`} className={baseButtonStyle}>
-                        <RefreshCw className='cursor-pointer' onClick={() => setShowMetadata(false)} />
+                    <button type='button' aria-label='Close metadata' onClick={() => setShowMetadata(false)} className={baseButtonStyle}>
+                        <X className='cursor-pointer' />
+                    </button>
+                    <Link href={`/s/${share?.id || shareRouteId}`} aria-label='Reload current share workspace' className={baseButtonStyle}>
+                        <RefreshCw className='cursor-pointer' />
                     </Link>
-                    <div onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
+                    <button type='button' aria-label='Copy current file contents' onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
                         <Copy height={22} width={22} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-bright' : 'stroke-red-500'} />
-                    </div>
+                    </button>
                     <Lock baseButtonStyle={baseButtonStyle} share={share} setError={setError} />
-                    <div onClick={() => setDisplayLineNumbers(prev => !prev)} className={baseButtonStyle}>
+                    <button type='button' aria-label='Toggle line numbers' onClick={() => setDisplayLineNumbers(prev => !prev)} className={baseButtonStyle}>
                         <ListOrdered height={22} width={22} />
-                    </div>
-                    <div
+                    </button>
+                    <button
+                        type='button'
+                        aria-label={syntaxHighlighting ? 'Disable syntax highlighting' : 'Enable syntax highlighting'}
                         onClick={() => setSyntaxHighlighting(prev => !prev)}
                         className={`stroke-rgb ${baseButtonStyle}`}
                     >
                         <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={22} width={22} />
-                    </div>
-                    <div
+                    </button>
+                    <button
+                        type='button'
+                        aria-label={box ? 'Hide share tool box' : 'Show share tool box'}
                         onClick={() => setBox(prev => !prev)}
                         className={`stroke-rgb ${baseButtonStyle}`}
                     >
                         <Package className={box ? 'stroke-rgb' : 'stroke-bright'} height={22} width={22} />
-                    </div>
+                    </button>
                 </div>
                 <Notify message={error} />
                 <Info share={share} isConnected={isConnected} participants={participants} />

@@ -3,6 +3,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import run from '#db'
+import hasPermissionToModifyRole from '#utils/auth/hasPermissionToModifyRole.ts'
 
 /**
  * POST /role/unassign
@@ -19,6 +20,11 @@ export default async function unassignRole(req: FastifyRequest, res: FastifyRepl
     const { role_id  } = req.body as { role_id: string } ?? {}
     if (!id || !role_id) {
         return res.status(400).send({ status: false, error: 'Missing user id (id) or role id (role_id).' })
+    }
+
+    const { valid: hasPermission } = await hasPermissionToModifyRole(req, res)
+    if (!hasPermission) {
+        return res.status(401).send({ status: false, error: 'Unauthorized.' })
     }
 
     try {

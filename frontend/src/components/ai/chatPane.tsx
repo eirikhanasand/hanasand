@@ -57,19 +57,19 @@ export default function ChatPane({
 
     return (
         <Fragment>
-            <section className='flex min-h-0 min-w-0 flex-1 flex-col rounded-2xl bg-dark/28 outline outline-dark'>
-                <div className='border-b border-dark/80 px-5 py-4'>
+            <section className='flex min-h-0 min-w-0 flex-1 flex-col bg-[#151515]'>
+                <div className='border-b border-[#2d2d2b] px-5 py-4'>
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
-                            <h1 className='truncate text-base font-semibold text-bright/92'>{activeConversation?.title || 'New chat'}</h1>
-                            <p className='mt-1 text-sm text-bright/38'>
+                            <h1 className='truncate text-base font-semibold text-[#eeeeea]'>{activeConversation?.title || 'New chat'}</h1>
+                            <p className='mt-1 text-sm text-[#8d8d89]'>
                                 {isConnected ? `${participants || 1} model${participants === 1 ? '' : 's'} connected` : 'No model connected'}
                             </p>
                         </div>
                         <div className='flex items-center gap-2'>
                             <StatusChip icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />} label={isThinking ? 'Thinking...' : 'Ready'} accent={isThinking} />
                             {latestArtifacts.length ? (
-                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs outline transition-colors ${showArtifacts ? 'bg-[#fd8738]/12 text-[#fd8738] outline-[#fd8738]/18' : 'bg-dark/30 text-bright/55 outline-dark hover:text-bright/82'}`}>
+                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition-colors ${showArtifacts ? 'bg-[#333331] text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-[#272725] hover:text-[#eeeeea]'}`}>
                                     <PanelRightOpen className='h-3.5 w-3.5' />
                                     Artifacts
                                 </button>
@@ -79,12 +79,12 @@ export default function ChatPane({
                 </div>
 
                 <div className={`grid min-h-0 flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
-                    <div ref={scrollRef} className='min-h-0 space-y-4 overflow-y-auto px-5 py-5'>
+                    <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-6 md:px-12 xl:px-20'>
                         {!activeConversation?.messages.length ? (
                             <EmptyComposerState landing={landing} />
                         ) : activeConversation.messages.map((message) => (
-                            <article key={message.id} className={`max-w-3xl rounded-2xl px-4 py-3 ${message.role === 'user' ? 'ml-auto bg-[#fd8738]/12 text-bright/92 outline outline-[#fd8738]/20' : message.error ? 'bg-red-500/10 text-red-100 outline outline-red-500/20' : message.role === 'tool' ? 'bg-dark/24 text-bright/75 outline outline-dark' : 'bg-dark/22 text-bright/90 outline outline-dark'}`}>
-                                <div className='mb-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.18em] text-bright/35'>
+                            <article key={message.id} className={`max-w-3xl rounded-xl border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#444440] bg-[#242424] text-[#eeeeea]' : message.error ? 'border-[#5d3835] bg-[#241b1a] text-[#e6c1bd]' : message.role === 'tool' ? 'border-[#333331] bg-[#1d1d1d] text-[#d3d3ce]' : 'border-transparent bg-transparent text-[#eeeeea]'}`}>
+                                <div className='mb-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-[#777772]'>
                                     <span>{message.role === 'tool' ? toolLabel(message) : message.role}</span>
                                     <span>{message.role === 'assistant' ? (message.modelName || activeConversation.activeModel || 'assistant') : null}</span>
                                 </div>
@@ -107,8 +107,8 @@ export default function ChatPane({
                     </div>
 
                     {showArtifacts ? (
-                        <aside className='min-h-0 border-t border-dark/80 bg-dark/18 xl:border-t-0 xl:border-l'>
-                            <div className='border-b border-dark/80 px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-bright/35'>
+                        <aside className='min-h-0 border-t border-[#2d2d2b] bg-[#1a1a1a] xl:border-t-0 xl:border-l'>
+                            <div className='border-b border-[#2d2d2b] px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                                 Workspace output
                             </div>
                             <div className='min-h-0 space-y-3 overflow-y-auto p-4'>
@@ -116,10 +116,10 @@ export default function ChatPane({
                                     <section key={group.kind} className='space-y-3'>
                                         <div className='flex items-center justify-between gap-3'>
                                             <div>
-                                                <div className='text-[10px] uppercase tracking-[0.18em] text-bright/32'>{group.label}</div>
-                                                <div className='mt-1 text-xs text-bright/48'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
+                                                <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{group.label}</div>
+                                                <div className='mt-1 text-xs text-[#9a9a95]'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
                                             </div>
-                                            <div className='rounded-full bg-dark/30 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-bright/38 outline outline-dark'>
+                                            <div className='rounded-full bg-[#242424] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#858581]'>
                                                 {group.kind}
                                             </div>
                                         </div>
@@ -131,8 +131,8 @@ export default function ChatPane({
                     ) : null}
                 </div>
 
-                <div className='border-t border-dark/80 p-4'>
-                    <div className='rounded-2xl bg-dark/22 p-3 outline outline-dark'>
+                <div className='border-t border-[#2d2d2b] p-4 md:px-12 xl:px-20'>
+                    <div className='rounded-2xl border border-[#343432] bg-[#2b2b2a] p-3 shadow-[0_18px_70px_rgba(0,0,0,0.34)]'>
                         <textarea
                             value={composer}
                             onChange={(event) => onComposerChange(event.target.value)}
@@ -144,11 +144,11 @@ export default function ChatPane({
                             }}
                             placeholder='Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...'
                             readOnly={readOnly}
-                            className='min-h-24 w-full resize-none bg-transparent text-sm text-bright/90 outline-none placeholder:text-bright/28'
+                            className='min-h-24 w-full resize-none bg-transparent text-sm text-[#eeeeea] outline-none placeholder:text-[#777772]'
                         />
                         <div className='mt-3 flex items-center justify-between gap-3'>
-                            <p className='text-xs text-bright/28'>{readOnly ? 'Reviewer mode: inspect the conversation and workspace, but only editors can send.' : 'Enter to send, Shift+Enter for newline'}</p>
-                            <button type='button' disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected} onClick={onSend} className='inline-flex items-center gap-2 rounded-xl bg-[#fd8738] px-4 py-2 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
+                            <p className='text-xs text-[#8d8d89]'>{readOnly ? 'Reviewer mode: inspect the conversation and workspace, but only editors can send.' : 'Enter to send, Shift+Enter for newline'}</p>
+                            <button type='button' disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected} onClick={onSend} className='inline-flex items-center gap-2 rounded-xl bg-[#eeeeea] px-4 py-2 font-semibold text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
                                 {awaitingResponse ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                                 Send
                             </button>
@@ -165,13 +165,13 @@ function EmptyComposerState({ landing }: { landing: boolean }) {
     return (
         <div className='flex h-full min-h-60 items-center justify-center'>
             <div className='max-w-xl text-center'>
-                <div className='mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#fd8738]/12 text-[#fd8738] outline outline-[#fd8738]/18'>
+                <div className='mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#242424] text-[#d3d3ce]'>
                     <Bot className='h-5 w-5' />
                 </div>
-                <h2 className='mt-5 text-xl font-semibold text-bright/92'>
+                <h2 className='mt-5 text-xl font-semibold text-[#eeeeea]'>
                     {landing ? 'Start with the task, not the tooling.' : 'Describe what you want built.'}
                 </h2>
-                <p className='mt-3 text-sm leading-6 text-bright/42'>
+                <p className='mt-3 text-sm leading-6 text-[#9a9a95]'>
                     {landing
                         ? 'Ask for a feature, a bug fix, or an app. Attach repos or shares when needed.'
                         : 'Attach repos, inspect files, scaffold starters, and review tool output here.'}
@@ -183,7 +183,7 @@ function EmptyComposerState({ landing }: { landing: boolean }) {
 
 function MarkdownBlock({ content }: { content: string }) {
     return (
-        <div className='prose prose-invert max-w-none wrap-break-word text-sm leading-6 prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-xl prose-pre:bg-black/30 prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#fd8738]'>
+        <div className='prose prose-invert max-w-none wrap-break-word text-sm leading-6 prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-xl prose-pre:bg-[#202020] prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#d3d3ce]'>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
             </ReactMarkdown>
@@ -203,12 +203,12 @@ function ToolMessage({
 
     return (
         <div className='space-y-2'>
-            <div className='inline-flex items-center gap-2 rounded-full bg-dark/30 px-3 py-1 text-xs text-bright/55 outline outline-dark'>
-                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-[#fd8738]' /> : <Sparkles className='h-3.5 w-3.5 text-[#fd8738]' />}
+            <div className='inline-flex items-center gap-2 rounded-full bg-[#242424] px-3 py-1 text-xs text-[#b7b7b2]'>
+                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-[#eeeeea]' /> : <Sparkles className='h-3.5 w-3.5 text-[#d3d3ce]' />}
                 {state === 'running' ? 'Thinking...' : state === 'error' ? 'Tool error' : 'Tool complete'}
             </div>
             {browserSummary ? <BrowserVerificationCard summary={browserSummary} /> : null}
-            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-bright/78'>{message.content}</div>
+            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-[#d3d3ce]'>{message.content}</div>
         </div>
     )
 }
@@ -223,7 +223,7 @@ function StatusChip({
     accent?: boolean
 }) {
     return (
-        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs outline ${accent ? 'bg-[#fd8738]/12 text-[#fd8738] outline-[#fd8738]/18' : 'bg-dark/30 text-bright/55 outline-dark'}`}>
+        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${accent ? 'bg-[#333331] text-[#eeeeea]' : 'bg-[#242424] text-[#9a9a95]'}`}>
             {icon}
             {label}
         </div>
@@ -249,22 +249,22 @@ function ArtifactList({
                 <details
                     key={`${artifact.kind}-${artifact.title}-${index}`}
                     open={forceExpanded || index === artifacts.length - 1}
-                    className={`rounded-xl bg-black/18 p-3 outline ${artifact.kind === 'screenshot' ? 'outline-sky-400/30' : index === artifacts.length - 1 ? 'outline-[#fd8738]/25' : 'outline-dark'}`}
+                    className={`rounded-xl border bg-[#202020] p-3 ${artifact.kind === 'screenshot' ? 'border-[#555550]' : index === artifacts.length - 1 ? 'border-[#444440]' : 'border-[#30302e]'}`}
                 >
                     <summary className='cursor-pointer list-none'>
                         <div className='flex items-center justify-between gap-3'>
                             <div>
-                                <div className='text-[10px] uppercase tracking-[0.18em] text-bright/38'>{artifactKindLabel(artifact.kind)}</div>
-                                <div className='mt-1 text-sm font-medium text-bright/88'>{artifact.title}</div>
+                                <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{artifactKindLabel(artifact.kind)}</div>
+                                <div className='mt-1 text-sm font-medium text-[#eeeeea]'>{artifact.title}</div>
                             </div>
                             <div className='flex items-center gap-2'>
                                 {artifact.kind === 'screenshot' ? (
-                                    <div className='rounded-full bg-sky-400/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-sky-200 outline outline-sky-400/20'>
+                                    <div className='rounded-full bg-[#30302e] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d3d3ce]'>
                                         Verification
                                     </div>
                                 ) : null}
                                 {index === artifacts.length - 1 ? (
-                                    <div className='rounded-full bg-[#fd8738]/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#fd8738] outline outline-[#fd8738]/20'>
+                                    <div className='rounded-full bg-[#30302e] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d3d3ce]'>
                                         Newest
                                     </div>
                                 ) : null}
@@ -272,15 +272,15 @@ function ArtifactList({
                         </div>
                     </summary>
                     {artifact.url ? (
-                        <a href={artifact.url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-xs text-[#fd8738] hover:underline'>
+                        <a href={artifact.url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-xs text-[#d3d3ce] hover:underline'>
                             {artifact.url}
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     ) : null}
                     {artifact.dataUrl ? (
                         <button type='button' onClick={() => onPreview(artifact)} className='mt-3 block w-full text-left'>
-                            <Image src={artifact.dataUrl} alt={artifact.title} width={1200} height={800} className='max-h-72 w-full rounded-lg object-contain outline outline-dark transition hover:opacity-92' />
-                            <div className='mt-2 text-xs text-bright/45'>Open full-size preview</div>
+                            <Image src={artifact.dataUrl} alt={artifact.title} width={1200} height={800} className='max-h-72 w-full rounded-lg object-contain outline outline-[#30302e] transition hover:opacity-92' />
+                            <div className='mt-2 text-xs text-[#9a9a95]'>Open full-size preview</div>
                         </button>
                     ) : null}
                     {artifact.kind === 'diff' && artifact.content ? (
@@ -302,12 +302,12 @@ function ArtifactTextContent({ artifact }: { artifact: AIArtifact }) {
 
     return (
         <div className='mt-3'>
-            <pre className='max-h-72 overflow-auto rounded-lg bg-black/25 p-3 text-xs leading-5 text-bright/78'>{visibleContent}</pre>
+            <pre className='max-h-72 overflow-auto rounded-lg bg-[#151515] p-3 text-xs leading-5 text-[#d3d3ce]'>{visibleContent}</pre>
             {shouldCollapse ? (
                 <button
                     type='button'
                     onClick={() => setExpanded((prev) => !prev)}
-                    className='mt-2 text-xs text-[#fd8738] hover:underline'
+                    className='mt-2 text-xs text-[#d3d3ce] hover:underline'
                 >
                     {expanded ? 'Collapse output' : `Expand full output (${lines.length} lines)`}
                 </button>
@@ -332,10 +332,10 @@ function ArtifactPreviewOverlay({
             <div className='w-full max-w-6xl rounded-3xl bg-[#070909] p-4 outline outline-white/10' onClick={(event) => event.stopPropagation()}>
                 <div className='mb-3 flex items-center justify-between gap-3'>
                     <div>
-                        <div className='text-[10px] uppercase tracking-[0.18em] text-bright/32'>{artifactKindLabel(artifact.kind)}</div>
-                        <div className='mt-1 text-sm font-medium text-bright/88'>{artifact.title}</div>
+                        <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{artifactKindLabel(artifact.kind)}</div>
+                        <div className='mt-1 text-sm font-medium text-[#eeeeea]'>{artifact.title}</div>
                     </div>
-                    <button type='button' onClick={onClose} className='rounded-full bg-white/5 p-2 text-bright/72 outline outline-white/10 transition hover:bg-white/8'>
+                    <button type='button' onClick={onClose} className='rounded-full bg-white/5 p-2 text-[#d3d3ce] outline outline-white/10 transition hover:bg-white/8'>
                         <X className='h-4 w-4' />
                     </button>
                 </div>
@@ -354,7 +354,7 @@ function DiffArtifact({ content }: { content: string }) {
             {lines.map((line, index) => (
                 <div
                     key={`${line}-${index}`}
-                    className={`whitespace-pre-wrap break-all rounded px-2 ${line.startsWith('+') ? 'bg-emerald-500/10 text-emerald-300' : line.startsWith('-') ? 'bg-red-500/10 text-red-300' : 'text-bright/72'}`}
+                    className={`whitespace-pre-wrap break-all rounded px-2 ${line.startsWith('+') ? 'bg-[#283026] text-[#b9c8b0]' : line.startsWith('-') ? 'bg-[#352321] text-[#d8aaa5]' : 'text-[#b7b7b2]'}`}
                 >
                     {line || ' '}
                 </div>
@@ -383,9 +383,9 @@ function BrowserVerificationCard({
     const issueLines = [...summary.pageErrors, ...summary.consoleMessages].slice(0, 4)
 
     return (
-        <div className={`rounded-2xl px-4 py-3 outline ${summary.status === 'passed' ? 'bg-emerald-500/10 text-emerald-50 outline-emerald-500/20' : 'bg-amber-500/10 text-amber-50 outline-amber-500/20'}`}>
+        <div className={`rounded-2xl border px-4 py-3 ${summary.status === 'passed' ? 'border-[#3b4537] bg-[#20251f] text-[#d9e3d4]' : 'border-[#4a4030] bg-[#27231d] text-[#e6d6b7]'}`}>
             <div className='flex items-start gap-3'>
-                <div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${summary.status === 'passed' ? 'bg-emerald-400/12 text-emerald-300' : 'bg-amber-400/12 text-amber-200'}`}>
+                <div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${summary.status === 'passed' ? 'bg-[#30382d] text-[#d9e3d4]' : 'bg-[#332c21] text-[#e6d6b7]'}`}>
                     {summary.status === 'passed' ? <CheckCircle2 className='h-4 w-4' /> : <AlertTriangle className='h-4 w-4' />}
                 </div>
                 <div className='min-w-0 flex-1'>
