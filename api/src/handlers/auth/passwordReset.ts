@@ -39,16 +39,18 @@ type UserRow = {
     id: string
     name: string
     active: boolean
+    recovery_email: string | null
+    mail_address: string | null
 }
 
 export async function requestPasswordReset(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.body as RequestBody ?? {}
-    const userId = normalizeUserId(id)
-    if (!userId) {
+    const identifier = normalizeUserId(id)
+    if (!identifier) {
         return res.status(400).send({ error: 'Enter your username.' })
     }
 
-    const user = await getActiveUser(userId)
+    const user = await getActiveUser(identifier)
     if (!user) {
         return res.send({ ok: true })
     }
@@ -71,7 +73,7 @@ export async function requestPasswordReset(req: FastifyRequest, res: FastifyRepl
 
     try {
         await sendSystemMail({
-            to: addressForUser(user.id),
+            to: recoveryAddressForUser(user),
             subject: 'Hanasand password reset code',
             textBody: `Your Hanasand password reset code is ${code}.\n\nIt expires in ${RESET_TTL_MINUTES} minutes. If you did not request this, you can ignore this email.`,
             htmlBody: `<p>Your Hanasand password reset code is <strong>${code}</strong>.</p><p>It expires in ${RESET_TTL_MINUTES} minutes. If you did not request this, you can ignore this email.</p>`,
@@ -92,7 +94,8 @@ export async function requestPasswordReset(req: FastifyRequest, res: FastifyRepl
 
 export async function verifyPasswordResetCode(req: FastifyRequest, res: FastifyReply) {
     const { id, code } = req.body as VerifyBody ?? {}
-    const userId = normalizeUserId(id)
+    const user = await getActiveUser(normalizeUserId(id))
+    const userId = user?.id || ''
     const resetCode = String(code || '').trim()
     if (!userId || !/^\d{6}$/.test(resetCode)) {
         return res.status(400).send({ error: 'Enter the 6 digit code.' })
@@ -131,7 +134,8 @@ export async function verifyPasswordResetCode(req: FastifyRequest, res: FastifyR
 
 export async function completePasswordReset(req: FastifyRequest, res: FastifyReply) {
     const { id, resetToken, password } = req.body as CompleteBody ?? {}
-    const userId = normalizeUserId(id)
+    const user = await getActiveUser(normalizeUserId(id))
+    const userId = user?.id || ''
     const tokenHash = hashResetToken(String(resetToken || ''))
     if (!userId || !resetToken || !password) {
         return res.status(400).send({ error: 'Missing reset token or password.' })
@@ -173,8 +177,23 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
 }
 
 async function getActiveUser(id: string) {
-    const result = await run('SELECT id, name, active FROM users WHERE id = $1 AND active IS TRUE LIMIT 1', [id])
+    const result = await run(`
+        SELECT u.id, u.name, u.active, ma.recovery_email, ma.mail_address
+        FROM users u
+        LEFT JOIN mail_accounts ma ON ma.user_id = u.id
+        WHERE u.active IS TRUE
+          AND (
+              u.id = $1
+              OR lower(ma.mail_address) = lower($1)
+              OR lower(ma.recovery_email) = lower($1)
+          )
+        LIMIT 1
+    `, [id])
     return (result.rows[0] as UserRow | undefined) || null
+}
+
+function recoveryAddressForUser(user: UserRow) {
+    return user.recovery_email || user.mail_address || addressForUser(user.id)
 }
 
 async function getPendingReset(userId: string) {

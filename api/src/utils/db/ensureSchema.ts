@@ -312,12 +312,14 @@ export default async function ensureSchema() {
             user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
             mail_username TEXT NOT NULL UNIQUE,
             mail_address TEXT NOT NULL UNIQUE,
+            recovery_email TEXT,
             mail_password_encrypted TEXT NOT NULL,
             principal_id INT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run('ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS recovery_email TEXT')
     await run(`
         CREATE TABLE IF NOT EXISTS mail_filters (
             id BIGSERIAL PRIMARY KEY,
