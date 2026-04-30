@@ -9,12 +9,11 @@ export async function sendSystemMail(params: {
     htmlBody?: string
 }) {
     const access = await getMailAccess(mailConfig.systemMailboxOwner)
-    const from = `noreply@${mailConfig.domain}`
 
     await sendMailViaSmtp({
         username: access.username,
         password: access.password,
-        from: { email: from, name: 'Hanasand' },
+        from: { email: access.address, name: 'Hanasand' },
         to: [{ email: params.to }],
         subject: params.subject,
         textBody: params.textBody,
