@@ -52,6 +52,30 @@ The script builds the Forgejo runner locally if needed, registers it with `macos
 
 Only the safe `status` command is enabled. Add future actions as explicit allowlist entries.
 
+## Visual Smoke Screenshots
+
+Run a repeatable native UI smoke pass from macOS:
+
+```sh
+app/desktop/scripts/smoke-screenshots.sh
+```
+
+The script builds/launches the Desktop app if the loopback agent is not already reachable, opens important sections through `POST /command`, validates that screenshots were written, and captures them into `.artifacts/desktop-smoke-<timestamp>/` with a `manifest.json` plus a browsable `report.html` contact sheet.
+
+Useful options:
+
+```sh
+HANASAND_DESKTOP_SMOKE_KEEP_RUNNING=1 app/desktop/scripts/smoke-screenshots.sh
+HANASAND_DESKTOP_SMOKE_OUT=/tmp/hanasand-smoke app/desktop/scripts/smoke-screenshots.sh
+HANASAND_DESKTOP_AGENT_URL=http://127.0.0.1:45731 app/desktop/scripts/smoke-screenshots.sh
+HANASAND_DESKTOP_SMOKE_SCOPE=core app/desktop/scripts/smoke-screenshots.sh
+HANASAND_DESKTOP_SMOKE_SCOPE=dashboard app/desktop/scripts/smoke-screenshots.sh
+HANASAND_DESKTOP_SMOKE_CAPTURE_MODE=rect app/desktop/scripts/smoke-screenshots.sh
+HANASAND_DESKTOP_SMOKE_CAPTURE_RECT=80,70,1340,900 app/desktop/scripts/smoke-screenshots.sh
+```
+
+The default `full` smoke path captures Control, Server, Mail, Documents, Images, Dashboard, Settings, and every registered native dashboard route: dashboard mail, shares, links, tests, articles, thoughts, profile, users, roles, logs, system, VMs, notes, databases, backups, restore, vulnerabilities, rate limits, and traffic. The script statically checks that every `open_dashboard_*` loopback command is included in screenshot coverage before it starts capturing. Use `HANASAND_DESKTOP_SMOKE_SCOPE=core` for a fast shell pass or `dashboard` for route parity only. Screenshots use the visible Hanasand window id by default so older background windows do not pollute the visual review. Set `HANASAND_DESKTOP_SMOKE_CAPTURE_MODE=rect` for rectangle capture, or set `HANASAND_DESKTOP_SMOKE_CAPTURE_MODE=screen HANASAND_DESKTOP_SMOKE_CAPTURE_RECT=` for full-screen captures.
+
 ## Legacy C++ Agent
 
 The small C++ loopback agent is still available when a GUI is not needed.

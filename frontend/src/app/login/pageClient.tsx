@@ -6,7 +6,8 @@ import login from '@/utils/login/login'
 import Or from '@/utils/or'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import config from '@/config'
 import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from 'lucide-react'
 
 type LoginPageProps = {
@@ -17,6 +18,9 @@ type LoginPageProps = {
 
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
     const router = useRouter()
+    const [mode, setMode] = useState<'login' | 'request-reset' | 'verify-reset'>('login')
+    const [resetUserId, setResetUserId] = useState('')
+    const [busy, setBusy] = useState(false)
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -62,6 +66,57 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         }
     }
 
+    async function handleResetRequest(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        setBusy(true)
+        setError(null)
+        const formData = new FormData(e.currentTarget)
+        const id = String(formData.get('resetUserId') || '').trim()
+        try {
+            const response = await fetch(`${config.url.api}/auth/password-reset/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id }),
+            })
+            const data = await response.json().catch(() => null)
+            if (!response.ok) {
+                return setError(data?.error || 'Unable to send reset code.')
+            }
+
+            setResetUserId(id)
+            setMode('verify-reset')
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Unable to send reset code.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    async function handleResetVerify(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        setBusy(true)
+        setError(null)
+        const formData = new FormData(e.currentTarget)
+        const code = String(formData.get('code') || '').trim()
+        try {
+            const response = await fetch(`${config.url.api}/auth/password-reset/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: resetUserId, code }),
+            })
+            const data = await response.json().catch(() => null)
+            if (!response.ok) {
+                return setError(data?.error || 'Invalid reset code.')
+            }
+
+            router.push(`/reset-password?id=${encodeURIComponent(resetUserId)}#token=${encodeURIComponent(data.resetToken)}`)
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Invalid reset code.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
@@ -75,30 +130,18 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     }, [router])
 
     return (
-        <section className='min-h-[90.5vh] w-full px-4 py-10 md:px-10 lg:px-24 grid place-items-center'>
-            <div className='grid w-full max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center'>
-                <div className='hidden gap-5 lg:grid'>
-                    <div className='glass-panel rounded-4xl p-8'>
-                        <div className='icon-tile bg-orange-500/15 text-orange-300'>
-                            <Sparkles className='h-5 w-5' />
-                        </div>
-                        <p className='mt-8 text-xs uppercase tracking-[0.35em] text-orange-200/80'>hanasand.com</p>
-                        <h1 className='mt-4 max-w-xl text-5xl font-semibold leading-[0.95] tracking-[-0.05em] text-bright'>
-                            Build, test, upload.
-                        </h1>
-                        <p className='mt-5 max-w-lg text-sm leading-7 text-bright/55'>
-                            Files, checks, and tools after sign-in.
-                        </p>
+        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+            <div className='grid w-full max-w-[420px] gap-5'>
+                <div className='grid justify-items-center text-center'>
+                    <div className='icon-tile bg-orange-500/15 text-orange-300'>
+                        <Sparkles className='h-5 w-5' />
                     </div>
-                    <div className='grid gap-3 sm:grid-cols-2'>
-                        <AuthInfo icon={<ShieldCheck className='h-4 w-4' />} label='Protect' value='Check passwords fast' tone='emerald' />
-                        <AuthInfo icon={<KeyRound className='h-4 w-4' />} label='Create' value='Code and test APIs' tone='amber' />
-                    </div>
+                    <p className='mt-5 text-xs uppercase tracking-[0.35em] text-orange-200/80'>hanasand.com</p>
                 </div>
 
                 <div className='glass-panel spawn grid w-full overflow-hidden rounded-4xl p-5 md:p-8'>
-                    <div className='grid gap-6'>
-                        <div>
+                    <div className='mx-auto grid w-full max-w-[340px] gap-6'>
+                        <div className='text-center'>
                             <p className='text-xs uppercase tracking-[0.35em] text-bright/35'>Secure login</p>
                             <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Welcome back</h1>
                             <p className='mt-2 text-sm text-bright/45'>Open your workspace.</p>
@@ -108,44 +151,106 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                         {(internal && path) && <h1 className='grid w-full rounded-xl border border-red-400/20 bg-red-500/12 p-3 text-sm text-red-100'>{path} is internal. Please log in.</h1>}
 
                         <Notify message={error as string | null} />
-                        <div className='grid gap-4'>
-                            <form
-                                className='w-full flex flex-col gap-3 self-center'
-                                onSubmit={handleSubmit}
-                            >
+                        {mode === 'login' && (
+                            <div className='grid gap-4'>
+                                <form
+                                    className='flex w-full flex-col gap-3 self-center'
+                                    onSubmit={handleSubmit}
+                                >
+                                    <input
+                                        type='text'
+                                        name='username'
+                                        placeholder='Username'
+                                        className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
+                                        required
+                                    />
+                                    <input
+                                        type='password'
+                                        name='password'
+                                        placeholder='Password'
+                                        className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
+                                        required
+                                    />
+                                    <button
+                                        type='submit'
+                                        className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92'
+                                    >
+                                        Login
+                                        <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
+                                    </button>
+                                </form>
+                                <button
+                                    type='button'
+                                    onClick={() => setMode('request-reset')}
+                                    className='text-sm font-semibold text-orange-200/80 transition hover:text-orange-100'
+                                >
+                                    Reset password
+                                </button>
+                                <Or className='z-10 text-bright/35' />
+                                <Link href='/register' className='w-full flex flex-col gap-3 self-center'>
+                                    <button
+                                        type='submit'
+                                        className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
+                                    >
+                                        Create account
+                                    </button>
+                                </Link>
+                            </div>
+                        )}
+
+                        {mode === 'request-reset' && (
+                            <form className='flex w-full flex-col gap-3 self-center' onSubmit={handleResetRequest}>
                                 <input
                                     type='text'
-                                    name='username'
+                                    name='resetUserId'
                                     placeholder='Username'
                                     className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
+                                <button
+                                    type='submit'
+                                    disabled={busy}
+                                    className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92 disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                    Send code
+                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
+                                </button>
+                                <button type='button' onClick={() => setMode('login')} className='text-sm font-semibold text-bright/50 transition hover:text-bright/80'>
+                                    Back to login
+                                </button>
+                            </form>
+                        )}
+
+                        {mode === 'verify-reset' && (
+                            <form className='flex w-full flex-col gap-3 self-center' onSubmit={handleResetVerify}>
                                 <input
-                                    type='password'
-                                    name='password'
-                                    placeholder='Password'
-                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
+                                    type='text'
+                                    name='code'
+                                    inputMode='numeric'
+                                    pattern='[0-9]{6}'
+                                    maxLength={6}
+                                    placeholder='6 digit code'
+                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-center text-sm font-semibold tracking-[0.35em] text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
                                 <button
                                     type='submit'
-                                    className='group flex items-center justify-between rounded-2xl bg-bright px-4 py-3 text-sm font-semibold text-background transition hover:bg-orange-200'
+                                    disabled={busy}
+                                    className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92 disabled:cursor-not-allowed disabled:opacity-60'
                                 >
-                                    Login
+                                    Continue
                                     <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
                                 </button>
-                            </form>
-                            <Or className='z-10 text-bright/35' />
-                            <Link href='/register' className='w-full flex flex-col gap-3 self-center'>
-                                <button
-                                    type='submit'
-                                    className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
-                                >
-                                    Create account
+                                <button type='button' onClick={() => setMode('request-reset')} className='text-sm font-semibold text-bright/50 transition hover:text-bright/80'>
+                                    Send another code
                                 </button>
-                            </Link>
-                        </div>
+                            </form>
+                        )}
                     </div>
+                </div>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                    <AuthInfo icon={<ShieldCheck className='h-4 w-4' />} label='Protect' value='Check passwords fast' tone='emerald' />
+                    <AuthInfo icon={<KeyRound className='h-4 w-4' />} label='Create' value='Code and test APIs' tone='amber' />
                 </div>
             </div>
         </section>

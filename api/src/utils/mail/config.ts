@@ -17,7 +17,7 @@ const mailUserAliases = new Map(
         })
 )
 const systemMailboxOwner = process.env.MAIL_SYSTEM_MAILBOX_USER || 'eirikhanasand'
-const systemAliasLocalParts = (process.env.MAIL_SYSTEM_ALIASES || 'postmaster,abuse,hostmaster,tls-reports,noreply-dmarc')
+const systemAliasLocalParts = (process.env.MAIL_SYSTEM_ALIASES || 'postmaster,abuse,hostmaster,tls-reports,noreply,noreply-dmarc')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean)

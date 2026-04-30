@@ -10,6 +10,7 @@ DIST_DIR="${ROOT_DIR}/dist"
 BUILD_DIR="${ROOT_DIR}/.build/release"
 APP_DIR="${DIST_DIR}/Hanasand.app"
 PACKAGE_PATH="${DIST_DIR}/Hanasand-${VERSION}-macos.zip"
+ICON_FILE="${ROOT_DIR}/Resources/Hanasand.icns"
 
 rm -rf "$APP_DIR" "$PACKAGE_PATH"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$DIST_DIR"
@@ -18,6 +19,9 @@ swift build --package-path "$ROOT_DIR" -c release
 
 cp "$BUILD_DIR/Hanasand" "$APP_DIR/Contents/MacOS/Hanasand"
 chmod +x "$APP_DIR/Contents/MacOS/Hanasand"
+if [[ -f "$ICON_FILE" ]]; then
+  cp "$ICON_FILE" "$APP_DIR/Contents/Resources/Hanasand.icns"
+fi
 
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -31,6 +35,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key>
   <string>Hanasand</string>
   <key>CFBundleDisplayName</key>
+  <string>Hanasand</string>
+  <key>CFBundleIconFile</key>
   <string>Hanasand</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>

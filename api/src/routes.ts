@@ -6,6 +6,7 @@ import postUser from './handlers/user/post.ts'
 import logoutHandler from './handlers/auth/logout.ts'
 import postPwned from './handlers/pwned/post.ts'
 import tokenHandler from './handlers/auth/token.ts'
+import { completePasswordReset, requestPasswordReset, verifyPasswordResetCode } from './handlers/auth/passwordReset.ts'
 import getRole from './handlers/roles/get.ts'
 import postRole from './handlers/roles/post.ts'
 import putRole from './handlers/roles/put.ts'
@@ -127,6 +128,9 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/auth/token/:id', tokenHandler)
     fastify.get('/auth/sessions', getSessions)
     fastify.post('/auth/login/:id', loginHandler)
+    fastify.post('/auth/password-reset/request', requestPasswordReset)
+    fastify.post('/auth/password-reset/verify', verifyPasswordResetCode)
+    fastify.post('/auth/password-reset/complete', completePasswordReset)
     fastify.post('/auth/sessions/revoke', revokeSessions)
     fastify.delete('/auth/sessions/:token_id', revokeSession)
 
