@@ -1,4 +1,5 @@
 import run from '#db'
+import { reservedUsernames } from '#utils/auth/reservedUsernames.ts'
 
 export default async function ensureSchema() {
     await run('CREATE EXTENSION IF NOT EXISTS pgcrypto')
@@ -25,6 +26,17 @@ export default async function ensureSchema() {
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT')
+    await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS reserved BOOLEAN NOT NULL DEFAULT FALSE')
+    await run(`
+        INSERT INTO users (id, name, password, avatar, active, reserved)
+        SELECT id, name, crypt(gen_random_uuid()::text, gen_salt('bf')), '', FALSE, TRUE
+        FROM unnest($1::text[], $2::text[]) AS reserved(id, name)
+        ON CONFLICT (id) DO NOTHING
+    `, [
+        reservedUsernames,
+        reservedUsernames.map(username => `${username} reserved account`),
+    ])
+    await run('UPDATE users SET reserved = TRUE WHERE lower(id) = ANY($1::text[])', [reservedUsernames])
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS user_agent TEXT NOT NULL DEFAULT \'\'')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()')
     await run('ALTER TABLE tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ')

@@ -5,6 +5,7 @@ import checkPwned from '#utils/pwned/checkPwned.ts'
 import login from '#utils/auth/login.ts'
 import { loadSQL } from '#utils/loadSQL.ts'
 import { ensureMailAccountForUser } from '#utils/mail/accounts.ts'
+import { getReservedUsernameReason, normalizeUsername } from '#utils/auth/reservedUsernames.ts'
 
 type GetUserBodyProps = {
     id: string
@@ -15,12 +16,18 @@ type GetUserBodyProps = {
 
 export default async function postUser(req: FastifyRequest, res: FastifyReply) {
     const { id, name, password, avatar } = req.body as GetUserBodyProps ?? {}
-    const user = { id, name }
+    const normalizedId = normalizeUsername(id || '')
+    const user = { id: normalizedId, name }
     const ip = req.ip
     const userAgent = String(req.headers['user-agent'] || '')
 
     if (!id || !name || !password) {
         return res.status(400).send({ error: 'Missing fields' })
+    }
+
+    const reservedReason = getReservedUsernameReason(normalizedId)
+    if (reservedReason) {
+        return res.status(400).send({ error: reservedReason })
     }
 
     let numbers = 0
@@ -61,7 +68,7 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             `INSERT INTO users (id, name, password, avatar) 
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO NOTHING`,
-            [id, name, hashedPassword, avatar || '']
+            [normalizedId, name, hashedPassword, avatar || '']
         )
 
         if (!response.rowCount) {
@@ -69,17 +76,17 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         }
 
         const userQuery = await loadSQL('assignUserRole.sql')
-        await run(userQuery, [id])
+        await run(userQuery, [normalizedId])
         if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
-            await ensureMailAccountForUser(id, name, password).catch(error => {
-                req.log.warn({ error, userId: id }, 'Failed to provision mail account during signup')
+            await ensureMailAccountForUser(normalizedId, name, password).catch(error => {
+                req.log.warn({ error, userId: normalizedId }, 'Failed to provision mail account during signup')
             })
         }
 
         const rootResult = await run('SELECT * FROM root')
         if (rootResult.rows.length <= 1) {
             const rootQuery = await loadSQL('assignAdministratorRole.sql')
-            await run(rootQuery, [id])
+            await run(rootQuery, [normalizedId])
             assignedRoot = true
         }
 
@@ -90,10 +97,10 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
             WHERE ur.user_id = $1
             ORDER BY r.priority ASC, r.id ASC
         `
-        const roleResponse = await run(roleQuery, [id])
+        const roleResponse = await run(roleQuery, [normalizedId])
         const roles = roleResponse.rows
 
-        const session = await login({ id, ip, userAgent })
+        const session = await login({ id: normalizedId, ip, userAgent })
         if (!session) {
             const base = { ...user, message: 'User created', roles, error: 'Unable to login. Please try again later.' }
             const data = assignedRoot ? { ...base, assignedRoot } : base

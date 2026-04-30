@@ -50,6 +50,7 @@ services:
       MAIL_PRIVILEGED_USERS: ${MAIL_PRIVILEGED_USERS:-admin,administrator,eirik,eirikhanasand}
       MAIL_USER_ALIASES: ${MAIL_USER_ALIASES:-eirikhanasand:eirik}
       MAIL_SYSTEM_MAILBOX_USER: ${MAIL_SYSTEM_MAILBOX_USER:-eirikhanasand}
+      MAIL_SYSTEM_SENDER_LOCAL_PART: ${MAIL_SYSTEM_SENDER_LOCAL_PART:-noreply}
       MAIL_SYSTEM_ALIASES: ${MAIL_SYSTEM_ALIASES:-postmaster,abuse,hostmaster,tls-reports,noreply-dmarc}
       MAIL_IMAP_PORT: ${MAIL_IMAP_PORT:-993}
       MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}

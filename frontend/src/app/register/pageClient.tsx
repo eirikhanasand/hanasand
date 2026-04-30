@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ArrowRight, CheckCircle2, Fingerprint, KeyRound, UserPlus } from 'lucide-react'
+import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 
 type RegisterPageProps = {
     path: string | null
@@ -30,6 +31,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         && specialCharactersInPasswordCount >= 2
         && lowerCaseInPasswordCount >= 2
         && upperCaseInPasswordCount >= 2
+    const reservedUsername = reservedUsernames.includes(username.trim().toLowerCase())
     const lengthColor = password.length > 0 ? password.length >= 16 ? 'text-green-500' : 'text-red-500' : ''
     const numberColor = password.length > 0 ? numbersInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
     const lowerCaseColor = password.length > 0 ? lowerCaseInPasswordCount >= 2 ? 'text-green-500' : 'text-red-500' : ''
@@ -42,6 +44,9 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         e.preventDefault()
         if (!passwordIsValid) {
             return setError('Invalid password. Check the requirements.')
+        }
+        if (reservedUsername) {
+            return setError('This username is reserved. Choose another username.')
         }
 
         const formData = new FormData(e.currentTarget)
@@ -171,6 +176,10 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                     className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
                                     required
                                 />
+                                {reservedUsername && <div className='rounded-2xl border border-orange-300/15 bg-orange-400/10 p-3 text-sm leading-6 text-orange-100/80'>
+                                    This username is reserved for system, security, management, or anti-impersonation use.
+                                    <Link href='/reserved-usernames' className='ml-1 font-semibold underline underline-offset-4'>View reserved names.</Link>
+                                </div>}
                                 <input
                                     type='text'
                                     name='name'
@@ -203,8 +212,9 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 </div>}
                                 <button
                                     type='submit'
+                                    disabled={!passwordIsValid || reservedUsername}
                                     className={`group flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                                        passwordIsValid
+                                        passwordIsValid && !reservedUsername
                                             ? 'cursor-pointer bg-bright text-background hover:bg-orange-200'
                                             : 'cursor-not-allowed border border-white/10 bg-white/5 text-bright/35'
                                     }`}
