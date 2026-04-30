@@ -25,12 +25,12 @@ let sizes: [(String, CGFloat)] = [
 
 func titleFont(size: CGFloat) -> NSFont {
     let preferred = [
+        "Georgia-Bold",
+        "TimesNewRomanPS-BoldMT",
         "NewYorkExtraLarge-Black",
         "NewYorkExtraLarge-Bold",
         "NewYork-Black",
         "NewYork-Bold",
-        "Georgia-Bold",
-        "TimesNewRomanPS-BoldMT",
     ]
     for name in preferred {
         if let font = NSFont(name: name, size: size) {
@@ -136,31 +136,33 @@ func drawIcon(size: CGFloat) throws -> Data {
         options: []
     )
 
-    let font = titleFont(size: size * 0.76)
+    let font = titleFont(size: size * 0.60)
     let coreTextFont = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
+    let glyphXScale = 0.82
+    let glyphXInset = size * CGFloat(1 - glyphXScale) / 2
     let shadowAttributes: [NSAttributedString.Key: Any] = [
         NSAttributedString.Key(kCTFontAttributeName as String): coreTextFont,
         NSAttributedString.Key(kCTForegroundColorAttributeName as String): NSColor.black.withAlphaComponent(0.46).cgColor,
-        .kern: -size * 0.018,
+        .kern: -size * 0.006,
     ]
     let attributes: [NSAttributedString.Key: Any] = [
         NSAttributedString.Key(kCTFontAttributeName as String): coreTextFont,
         NSAttributedString.Key(kCTForegroundColorAttributeName as String): NSColor(calibratedWhite: 0.955, alpha: 1).cgColor,
-        .kern: -size * 0.026,
+        .kern: -size * 0.006,
     ]
     let letter = NSAttributedString(string: "H", attributes: attributes)
     let line = CTLineCreateWithAttributedString(letter)
     let bounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
     let letterPosition = CGPoint(
         x: (size - bounds.width) / 2 - bounds.minX,
-        y: (size - bounds.height) / 2 - bounds.minY - size * 0.025
+        y: (size - bounds.height) / 2 - bounds.minY - size * 0.01
     )
     let shadowLetter = NSAttributedString(string: "H", attributes: shadowAttributes)
     let shadowLine = CTLineCreateWithAttributedString(shadowLetter)
-    context.textPosition = CGPoint(
-        x: letterPosition.x + size * 0.018,
-        y: letterPosition.y - size * 0.024
-    )
+    context.saveGState()
+    context.translateBy(x: glyphXInset, y: 0)
+    context.scaleBy(x: CGFloat(glyphXScale), y: 1)
+    context.textPosition = CGPoint(x: letterPosition.x + size * 0.018, y: letterPosition.y - size * 0.024)
     CTLineDraw(shadowLine, context)
 
     context.setShadow(
@@ -175,11 +177,12 @@ func drawIcon(size: CGFloat) throws -> Data {
     let highlightAttributes: [NSAttributedString.Key: Any] = [
         NSAttributedString.Key(kCTFontAttributeName as String): coreTextFont,
         NSAttributedString.Key(kCTForegroundColorAttributeName as String): NSColor.white.withAlphaComponent(0.32).cgColor,
-        .kern: -size * 0.026,
+        .kern: -size * 0.006,
     ]
     let highlightLine = CTLineCreateWithAttributedString(NSAttributedString(string: "H", attributes: highlightAttributes))
     context.textPosition = CGPoint(x: letterPosition.x - size * 0.006, y: letterPosition.y + size * 0.008)
     CTLineDraw(highlightLine, context)
+    context.restoreGState()
 
     context.restoreGState()
 

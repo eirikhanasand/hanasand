@@ -20155,8 +20155,9 @@ struct HanasandLogo: View {
                     .shadow(color: Color.black.opacity(0.28), radius: size * 0.08, y: size * 0.035)
 
                 Text("H")
-                    .font(.system(size: size * 0.68, weight: .black, design: .serif))
-                    .tracking(-size * 0.02)
+                    .font(.custom("Georgia", size: size * 0.56).weight(.bold))
+                    .scaleEffect(x: 0.82, y: 1, anchor: .center)
+                    .tracking(-size * 0.006)
                     .foregroundStyle(Color(red: 0.96, green: 0.94, blue: 0.88))
                     .shadow(color: Color.black.opacity(0.42), radius: size * 0.035, x: size * 0.01, y: size * 0.018)
             }
