@@ -482,6 +482,13 @@ SERVER_ARGS=(
   --mlock
 )
 
+if [ "${HANASAND_MODEL_IDLE_MODE:-1}" = "1" ]; then
+  SERVER_ARGS+=(
+    --poll "${LLAMA_POLL_LEVEL:-0}"
+    --prio "${LLAMA_PROCESS_PRIORITY:--1}"
+  )
+fi
+
 if [ "${#SERVER_EXTRA_ARGS[@]}" -gt 0 ]; then
   SERVER_ARGS+=("${SERVER_EXTRA_ARGS[@]}")
 fi
