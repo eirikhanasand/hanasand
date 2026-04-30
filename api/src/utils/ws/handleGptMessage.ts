@@ -9,6 +9,21 @@ type RegisteredGptClient = GPT_Client & {
 }
 
 const gptClientRegistry = new Map<string, Map<string, RegisteredGptClient>>()
+const pendingPromptRequests = new Map<string, {
+    resolve: (event: GPT_PromptCompletion) => void
+    reject: (error: Error) => void
+    timeout: NodeJS.Timeout
+}>()
+
+type GPT_PromptCompletion = {
+    type?: string
+    conversationId?: string
+    clientName?: string | null
+    content?: string
+    error?: string
+    artifacts?: unknown[]
+    metrics?: GPT_ModelMetrics
+}
 
 function defaultModelMetrics(): GPT_ModelMetrics {
     return {
@@ -133,6 +148,51 @@ export function sendGptSnapshot(id: string, socket: WS) {
     }))
 }
 
+export async function requestGptCompletion(id: string, request: Omit<GPT_PromptRequest, 'type'>, timeoutMs = 120_000) {
+    const clients = gpt.get(id)
+    if (!clients) {
+        throw new Error('No Hanasand AI model client is connected.')
+    }
+
+    const targets = [...clients].filter((client) => {
+        if (client.readyState !== WS.OPEN) {
+            return false
+        }
+
+        const state = gptSockets.get(client)
+        if (!state || state.role !== 'producer') {
+            return false
+        }
+
+        return !request.clientName || state.clientName === request.clientName
+    })
+
+    if (!targets.length) {
+        throw new Error(request.clientName
+            ? `Hanasand AI client ${request.clientName} is not connected.`
+            : 'No Hanasand AI model client is connected.')
+    }
+
+    const conversationId = request.conversationId || `tools-${crypto.randomUUID()}`
+    const promptRequest: GPT_PromptRequest = {
+        ...request,
+        conversationId,
+        type: 'prompt_request',
+    }
+
+    const completion = await new Promise<GPT_PromptCompletion>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            pendingPromptRequests.delete(conversationId)
+            reject(new Error('Hanasand AI timed out while generating a response.'))
+        }, timeoutMs)
+
+        pendingPromptRequests.set(conversationId, { resolve, reject, timeout })
+        targets[0].send(JSON.stringify(promptRequest))
+    })
+
+    return completion
+}
+
 function relayPromptRequest(id: string, requester: WS, request: GPT_PromptRequest) {
     const clients = gpt.get(id)
     if (!clients) {
@@ -189,6 +249,8 @@ function broadcastUpdate(id: string, sender: WS, client: GPT_Client) {
 }
 
 function broadcastPromptEvent(id: string, sender: WS, event: { type?: string }) {
+    settlePendingPromptRequest(event as GPT_PromptCompletion)
+
     const clients = gpt.get(id)
     if (!clients) {
         return
@@ -204,4 +266,29 @@ function broadcastPromptEvent(id: string, sender: WS, event: { type?: string }) 
             clientSocket.send(payload)
         }
     }
+}
+
+function settlePendingPromptRequest(event: GPT_PromptCompletion) {
+    if (!event.conversationId) {
+        return
+    }
+
+    if (event.type !== 'prompt_complete' && event.type !== 'prompt_error') {
+        return
+    }
+
+    const pending = pendingPromptRequests.get(event.conversationId)
+    if (!pending) {
+        return
+    }
+
+    clearTimeout(pending.timeout)
+    pendingPromptRequests.delete(event.conversationId)
+
+    if (event.type === 'prompt_error') {
+        pending.reject(new Error(event.error || 'Hanasand AI failed to generate a response.'))
+        return
+    }
+
+    pending.resolve(event)
 }
