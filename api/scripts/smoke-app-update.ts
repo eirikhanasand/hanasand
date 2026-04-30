@@ -62,6 +62,15 @@ assert.equal(tauriManifest.platforms['darwin-aarch64'].url, `http://127.0.0.1:18
 const currentResponse = await app.inject('/api/app/darwin-aarch64/0.1.2')
 assert.equal(currentResponse.statusCode, 204)
 
+process.env.HANASAND_APP_VERSION = 'ab6241d'
+const hashManifestResponse = await app.inject('/api/app?platform=macos&version=0.0.0')
+assert.equal(hashManifestResponse.statusCode, 200)
+assert.equal(hashManifestResponse.json().update_available, true)
+
+const hashCurrentResponse = await app.inject('/api/app/darwin-aarch64/ab6241d')
+assert.equal(hashCurrentResponse.statusCode, 204)
+delete process.env.HANASAND_APP_VERSION
+
 const downloadResponse = await app.inject(`/api/app/download/${artifactName}`)
 assert.equal(downloadResponse.statusCode, 200)
 assert.equal(downloadResponse.body, artifactBody)

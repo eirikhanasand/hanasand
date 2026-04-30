@@ -112,6 +112,14 @@ function normalizePlatform(platform?: string) {
 }
 
 function compareVersions(a: string, b: string) {
+    if (a === b) return 0
+
+    const leftIsNumeric = /^[0-9]+(?:[.-][0-9]+)*$/.test(a)
+    const rightIsNumeric = /^[0-9]+(?:[.-][0-9]+)*$/.test(b)
+    if (!leftIsNumeric || !rightIsNumeric) {
+        return 1
+    }
+
     const left = a.split(/[.-]/).map(part => Number.parseInt(part, 10) || 0)
     const right = b.split(/[.-]/).map(part => Number.parseInt(part, 10) || 0)
     const length = Math.max(left.length, right.length)
