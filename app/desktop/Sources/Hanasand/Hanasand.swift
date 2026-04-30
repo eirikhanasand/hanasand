@@ -20135,36 +20135,35 @@ struct HanasandLogo: View {
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
-            let scale = size / 600
             ZStack {
-                Color.black
-                Group {
-                    logoRect(x: 0, y: 0, width: 40, height: 170, scale: scale)
-                    logoRect(x: 0, y: 0, width: 170, height: 40, scale: scale)
-                    logoRect(x: 430, y: 0, width: 170, height: 40, scale: scale)
-                    logoRect(x: 560, y: 0, width: 40, height: 170, scale: scale)
-                    logoRect(x: 0, y: 430, width: 40, height: 170, scale: scale)
-                    logoRect(x: 0, y: 560, width: 170, height: 40, scale: scale)
-                    logoRect(x: 560, y: 430, width: 40, height: 170, scale: scale)
-                    logoRect(x: 430, y: 560, width: 170, height: 40, scale: scale)
-                }
-                .foregroundStyle(Color(red: 0.94, green: 0.49, blue: 0.20))
-                Group {
-                    logoRect(x: 190, y: 110, width: 70, height: 380, scale: scale)
-                    logoRect(x: 190, y: 420, width: 220, height: 70, scale: scale)
-                }
-                .foregroundStyle(.white)
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.075),
+                                Color.black.opacity(0.72),
+                                Color.black.opacity(0.94)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: max(1, size * 0.012))
+                    )
+                    .shadow(color: Color.black.opacity(0.28), radius: size * 0.08, y: size * 0.035)
+
+                Text("H")
+                    .font(.system(size: size * 0.68, weight: .black, design: .serif))
+                    .tracking(-size * 0.02)
+                    .foregroundStyle(Color(red: 0.96, green: 0.94, blue: 0.88))
+                    .shadow(color: Color.black.opacity(0.42), radius: size * 0.035, x: size * 0.01, y: size * 0.018)
             }
             .frame(width: size, height: size)
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityLabel("Hanasand logo")
-    }
-
-    private func logoRect(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, scale: CGFloat) -> some View {
-        Rectangle()
-            .frame(width: width * scale, height: height * scale)
-            .position(x: (x + width / 2) * scale, y: (y + height / 2) * scale)
     }
 }
 
