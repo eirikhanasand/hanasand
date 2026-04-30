@@ -171,6 +171,7 @@ export async function completePasswordReset(req: FastifyRequest, res: FastifyRep
         req.log.error({ error, userId }, 'Failed to sync mail password after password reset')
     })
     await run('UPDATE password_reset_codes SET consumed_at = NOW() WHERE id = $1', [reset.id])
+    await run('DELETE FROM attempts WHERE id = $1', [userId])
     await revokeAllTokens({ userId, revokedBy: 'password_reset' })
 
     return res.send({ ok: true })

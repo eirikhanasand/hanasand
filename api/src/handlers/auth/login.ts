@@ -7,13 +7,13 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
     const { id } = req.params as { id: string } ?? {}
     const { password } = req.body as { password: string } ?? {}
     const identifier = String(id || '').trim()
+    const ip = req.ip
+    const userAgent = String(req.headers['user-agent'] || '')
     if (!identifier || !password) {
         return res.status(400).send({ error: 'Missing username or password.' })
     }
 
     try {
-        const ip = req.ip
-        const userAgent = req.headers['user-agent'] || ''
         const query = `
             SELECT u.id, u.name, u.password, u.avatar, u.active
             FROM users u
@@ -24,21 +24,21 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         `
         const result = await run(query, [identifier])
         if (result.rows.length === 0) {
-            await run('INSERT INTO login_events (user_id, ip, user_agent, status, reason) VALUES ($1, $2, $3, $4, $5)', [identifier, ip, String(userAgent), 'failed', 'unknown_user']).catch(() => {})
+            await recordLoginEvent(identifier, ip, userAgent, 'unknown_user')
             return res.status(404).send({ error: 'Incorrect username or password.' })
         }
 
         const user = result.rows[0]
         const userId = user.id
         if (user.active === false) {
-            await run('INSERT INTO login_events (user_id, ip, user_agent, status, reason) VALUES ($1, $2, $3, $4, $5)', [userId, ip, String(userAgent), 'failed', 'deactivated']).catch(() => {})
+            await recordLoginEvent(userId, ip, userAgent, 'deactivated')
             return res.status(403).send({ error: 'This account is deactivated.' })
         }
 
-        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1 AND ip = $2', [userId, ip])
+        const attemptCheck = await run('SELECT attempts FROM attempts WHERE id = $1', [userId])
         if (attemptCheck.rows.length > 0 && attemptCheck.rows[0].attempts >= 3) {
-            console.log('Too many failed attempts. Please try again later.')
-            await run('INSERT INTO login_events (user_id, ip, user_agent, status, reason) VALUES ($1, $2, $3, $4, $5)', [userId, ip, String(userAgent), 'failed', 'rate_limited']).catch(() => {})
+            req.log.warn({ userId, ip, userAgent }, 'Login rate limited')
+            await recordLoginEvent(userId, ip, userAgent, 'rate_limited')
             return res.status(429).send({ error: 'Please try again later.' })
         }
 
@@ -54,12 +54,12 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
                 timestamp = NOW();
             `
             await run(attemptQuery, [userId, ip])
-            await run('INSERT INTO login_events (user_id, ip, user_agent, status, reason) VALUES ($1, $2, $3, $4, $5)', [userId, ip, String(userAgent), 'failed', 'bad_password']).catch(() => {})
-            console.log(`Invalid password for ${userId}.`)
+            await recordLoginEvent(userId, ip, userAgent, 'bad_password')
+            req.log.info({ userId, ip, userAgent }, 'Invalid login password')
             return res.status(401).send({ error: 'Incorrect username or password.' })
         }
 
-        await run('DELETE FROM attempts WHERE id = $1 AND ip = $2', [userId, ip])
+        await run('DELETE FROM attempts WHERE id = $1', [userId])
         const { password: ignoredPassword, ...userWithoutPassword } = user
         void ignoredPassword
         const roleQuery = `
@@ -70,14 +70,25 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         `
         const roleResponse = await run(roleQuery, [userId])
         const roles = roleResponse.rows
-        const session = await login({ id: userId, ip, userAgent: String(userAgent) })
+        const session = await login({ id: userId, ip, userAgent })
         if (!session) {
+            req.log.error({ userId, ip, userAgent }, 'Login session issuance failed')
+            await recordLoginEvent(userId, ip, userAgent, 'session_issue_failed')
             return res.status(503).send({ ...userWithoutPassword, error: 'Please try again later.' })
         }
 
         return res.send({ ...userWithoutPassword, roles, token: session.token, expires_at: session.expires_at })
     } catch (err: unknown) {
         const error = err as Error
-        return res.status(500).send({ error: error.message })
+        req.log.error({ err: error, identifier, ip, userAgent }, 'Login failed unexpectedly')
+        await recordLoginEvent(identifier, ip, userAgent, 'unexpected_error')
+        return res.status(500).send({ error: 'Unable to login. Please try again later.' })
     }
+}
+
+async function recordLoginEvent(userId: string, ip: string, userAgent: string, reason: string) {
+    await run(
+        'INSERT INTO login_events (user_id, ip, user_agent, status, reason) VALUES ($1, $2, $3, $4, $5)',
+        [userId, ip, userAgent, 'failed', reason],
+    ).catch(() => {})
 }

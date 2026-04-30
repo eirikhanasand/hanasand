@@ -45,15 +45,15 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
             }
         } catch (error) {
             if ('message' in (error as { message: string })) {
+                const message = (error as { message: string }).message
                 try {
-                    const message = (error as { message: string }).message
                     const msg = JSON.parse(message)
-                    return setError(msg?.error)
-                } catch (error) {
-                    setError(error instanceof Error
-                        ? error.message.toLowerCase().includes('unauthorized')
+                    return setError(msg?.error || message)
+                } catch {
+                    setError(message
+                        ? message.toLowerCase().includes('unauthorized')
                             ? 'Unauthorized.'
-                            : error.message
+                            : message
                         : 'Unknown error! Please contact @eirikhanasand.')
                 }
             }
