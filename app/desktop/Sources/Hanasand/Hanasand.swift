@@ -1055,6 +1055,24 @@ final class DesktopAgentModel: ObservableObject {
         } else if lowered == "vpn" || lowered.contains("open vpn") || lowered.contains("connect vpn") || lowered.contains("cisco") {
             openVPN()
             finishPromptRun()
+        } else if let browserCommand = BrowserChatCommand.parse(trimmed) {
+            switch browserCommand.kind {
+            case .open:
+                let resolved = BrowserTargetResolver.resolve(browserCommand.target)
+                openInlineBrowser(url: resolved.url, title: resolved.title, source: "Control prompt")
+                append(meta: "Browser", body: "Opened \(resolved.title) in the built-in browser.", kind: .command)
+                recordRun(title: "Browser", detail: resolved.url, kind: .command)
+            case .popOut:
+                let resolved = BrowserTargetResolver.resolve(browserCommand.target)
+                popOutBrowser(url: resolved.url, title: resolved.title, minified: false, source: "Control prompt")
+                append(meta: "Browser", body: "Popped out \(resolved.title).", kind: .command)
+                recordRun(title: "Browser pop out", detail: resolved.url, kind: .command)
+            case .popOutCurrent:
+                popOutBrowser(source: "Control prompt")
+                append(meta: "Browser", body: "Popped out the current browser page.", kind: .command)
+                recordRun(title: "Browser pop out", detail: browserActiveAddress, kind: .command)
+            }
+            finishPromptRun()
         } else if lowered.contains("mail") || lowered.contains("inbox") {
             selectedSection = .mail
             currentTaskState = "Loading mail"
@@ -18477,17 +18495,26 @@ struct AIWorkspace: View {
     var body: some View {
         VStack(spacing: 0) {
             TopBar()
-            HStack(spacing: 0) {
-                aiSidebar
-                    .frame(width: 300)
-                Divider()
-                    .background(theme.divider)
+            HStack(alignment: .top, spacing: 18) {
                 VStack(spacing: 0) {
                     aiHeader
                     chatPane
                     composer
                 }
+                .frame(maxWidth: 920)
+                .background(theme.backgroundElevated.opacity(0.72))
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(theme.divider.opacity(0.9), lineWidth: 1)
+                )
+
+                aiRail
+                    .frame(width: 248)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 22)
         }
         .background(theme.background)
         .task {
@@ -18502,108 +18529,91 @@ struct AIWorkspace: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Hanasand AI")
-                    .font(.system(size: 22, weight: .black))
+                    .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(theme.text)
                 Text(model.aiSummary)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(theme.textTertiary)
                     .lineLimit(1)
             }
             Spacer()
-            FeatureCard(title: "Socket", value: model.aiSocketConnected ? "Live" : "Offline", icon: model.aiSocketConnected ? "bolt.horizontal.circle" : "bolt.slash")
-                .frame(width: 170)
-            FeatureCard(title: "Models", value: "\(model.aiClients.count)", icon: "cpu")
-                .frame(width: 150)
-            FeatureCard(title: "Last run", value: model.aiLastDuration, icon: "timer")
-                .frame(width: 170)
-            ActionButton(title: "Browser", icon: "globe") {
-                model.openInlineBrowser(url: model.browserActiveAddress, title: model.browserActiveTitle, source: "AI toolbar")
-            }
-            ActionButton(title: "Pop out", icon: "rectangle.inset.filled.and.person.filled") {
-                model.popOutBrowser(source: "AI toolbar")
-            }
-            ActionButton(title: showChatBrowserPreview ? "Hide preview" : "Preview", icon: "rectangle.rightthird.inset.filled") {
-                showChatBrowserPreview.toggle()
-            }
-            ActionButton(title: "Reload", icon: "arrow.clockwise") {
-                Task { await model.loadAIPage() }
-            }
+            Label(model.aiSocketConnected ? "Live" : "Offline", systemImage: model.aiSocketConnected ? "bolt.horizontal.circle" : "bolt.slash")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(model.aiSocketConnected ? theme.green : theme.textTertiary)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .background(theme.backgroundElevated.opacity(0.96))
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(theme.backgroundElevated.opacity(0.72))
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(theme.divider)
+                .fill(theme.divider.opacity(0.72))
                 .frame(height: 1)
         }
     }
 
-    private var aiSidebar: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Runtime")
-                    .font(.system(size: 18, weight: .black))
-                    .foregroundStyle(theme.text)
-                Text(model.aiSocketConnected ? "Streaming tool-aware responses" : "Waiting for runtime")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary)
+    private var aiRail: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            AIRailButton(title: "Reload", subtitle: "Refresh runtime", icon: "arrow.clockwise") {
+                Task { await model.loadAIPage() }
             }
-            .padding(.top, 18)
-            .padding(.horizontal, 16)
+            AIRailButton(title: "Browser", subtitle: "Open current page", icon: "globe") {
+                model.openInlineBrowser(url: model.browserActiveAddress, title: model.browserActiveTitle, source: "AI toolbar")
+            }
+            AIRailButton(title: "Pop out", subtitle: "Floating browser", icon: "rectangle.inset.filled.and.person.filled") {
+                model.popOutBrowser(source: "AI toolbar")
+            }
+            AIRailButton(title: showChatBrowserPreview ? "Hide preview" : "Preview", subtitle: "Inline browser", icon: "rectangle.rightthird.inset.filled") {
+                showChatBrowserPreview.toggle()
+            }
+            AIRailButton(title: model.isRunning ? "Training" : "App parity", subtitle: "Run drill", icon: "graduationcap") {
+                model.submitAppParityTrainingPrompt()
+            }
+            .disabled(model.isRunning)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Models")
-                    .font(.system(size: 12, weight: .bold))
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Runtime")
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
                     .textCase(.uppercase)
-                ForEach(model.aiClients.prefix(6)) { client in
+                HStack {
+                    Text("\(model.aiClients.count) model\(model.aiClients.count == 1 ? "" : "s")")
+                    Spacer()
+                    Text(model.aiLastDuration)
+                }
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(theme.textSecondary)
+                ForEach(model.aiClients.prefix(3)) { client in
                     AIClientRow(client: client)
                 }
                 if model.aiClients.isEmpty {
-                    CompactInfoCard(title: "No model yet", lines: ["Open the AI runtime or reload this page."])
+                    CompactInfoCard(title: "No model yet", lines: ["Reload to reconnect."])
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(12)
+            .background(theme.card.opacity(0.72))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Training")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(theme.textTertiary)
-                    .textCase(.uppercase)
-                Text("Run the website-to-app parity drill through the same chat surface you will use.")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ActionButton(title: model.isRunning ? "Training" : "App parity drill", icon: "graduationcap") {
-                    model.submitAppParityTrainingPrompt()
-                }
-                .disabled(model.isRunning)
-            }
-            .padding(.horizontal, 10)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Run trace")
-                    .font(.system(size: 12, weight: .bold))
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Trace")
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
                     .textCase(.uppercase)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(model.aiTrace) { event in
+                        ForEach(model.aiTrace.prefix(8)) { event in
                             AITraceRow(event: event)
                         }
                         if model.aiTrace.isEmpty {
-                            CompactInfoCard(title: "Trace", lines: ["Tool calls, timing summaries, and file artifacts appear here."])
+                            CompactInfoCard(title: "Quiet", lines: ["Tool events appear here."])
                         }
                     }
-                    .padding(.bottom, 12)
                 }
             }
-            .padding(.horizontal, 10)
-
-            Spacer(minLength: 0)
+            .padding(12)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(theme.card.opacity(0.72))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .background(theme.sidebar.opacity(0.88))
     }
 
     private var chatPane: some View {
@@ -18622,10 +18632,10 @@ struct AIWorkspace: View {
                         }
                     }
                 }
-                .padding(18)
+                .padding(22)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(theme.background)
+            .background(theme.backgroundElevated.opacity(0.44))
 
             if showChatBrowserPreview {
                 Divider()
@@ -18634,7 +18644,7 @@ struct AIWorkspace: View {
                     .frame(width: 390)
             }
         }
-        .background(theme.background)
+        .background(theme.backgroundElevated.opacity(0.44))
         .onAppear {
             chatBrowserPreview.load(model.browserActiveAddress)
         }
@@ -18647,7 +18657,7 @@ struct AIWorkspace: View {
         HStack(alignment: .bottom, spacing: 10) {
             TextField("Ask Hanasand AI", text: $model.prompt, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(theme.text)
                 .lineLimit(2...6)
                 .focused(commandFocused)
@@ -18661,7 +18671,7 @@ struct AIWorkspace: View {
                 model.submitAIChatPrompt()
             } label: {
                 Label(model.isRunning ? "Working" : "Send", systemImage: model.isRunning ? "circle.dotted" : "paperplane.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(theme.text)
                     .padding(.horizontal, 16)
                     .frame(height: 46)
@@ -18688,18 +18698,18 @@ struct AIClientRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "cpu")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(theme.accent)
                 .frame(width: 32, height: 32)
                 .background(theme.accentSoft)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(client.name)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
                 Text(client.statusText)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(theme.textTertiary)
                     .lineLimit(1)
             }
@@ -18711,6 +18721,40 @@ struct AIClientRow: View {
     }
 }
 
+struct AIRailButton: View {
+    @Environment(\.desktopTheme) private var theme
+    let title: String
+    let subtitle: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(theme.accent)
+                    .frame(width: 30, height: 30)
+                    .background(theme.accentSoft.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.text)
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(theme.textTertiary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .background(theme.card.opacity(0.74))
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct AIChatBrowserPreview: View {
     @Environment(\.desktopTheme) private var theme
     @ObservedObject var tab: BrowserTabState
@@ -18719,7 +18763,7 @@ struct AIChatBrowserPreview: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Label(tab.title, systemImage: "globe")
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
                 Spacer()
@@ -18773,15 +18817,15 @@ struct AITraceRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: event.kind.icon)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(event.kind == .error ? theme.danger : theme.accent)
                 Text(event.title)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
             }
             Text(event.detail)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(4)
         }
@@ -18799,17 +18843,17 @@ struct EmptyAIChatCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(theme.accent)
                     .frame(width: 36, height: 36)
                     .background(theme.accentSoft)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Ask from here")
-                        .font(.system(size: 16, weight: .black))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(theme.text)
                     Text("The composer below sends directly to the Hanasand model pool.")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(theme.textSecondary)
                 }
             }
@@ -18818,7 +18862,7 @@ struct EmptyAIChatCard: View {
                 Label("Tools", systemImage: "wrench.and.screwdriver")
                 Label("Trace", systemImage: "waveform.path.ecg")
             }
-            .font(.system(size: 12, weight: .bold))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(theme.textTertiary)
         }
         .padding(16)
@@ -18851,7 +18895,7 @@ struct AIMessageBubble: View {
                             .scaleEffect(0.55)
                     }
                 }
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(message.isError ? theme.danger : theme.textTertiary)
 
                 AIMessageContentView(
@@ -18892,7 +18936,7 @@ struct AIMessageContentView: View {
                 switch segment.kind {
                 case .text:
                     Text(segment.content)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(isError ? theme.danger : theme.text)
                         .textSelection(.enabled)
                         .lineSpacing(3)
