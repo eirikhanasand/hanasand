@@ -9,14 +9,6 @@ export const metadata: Metadata = buildRouteMetadata({
     keywords: ['shared workspace', 'hanasand ai', 'project workspace'],
 })
 
-export default async function ShareEntryPage({
-    searchParams,
-}: {
-    searchParams?: Promise<Record<string, string | string[] | undefined>>
-}) {
-    const resolvedSearchParams = await searchParams
-    const mode = typeof resolvedSearchParams?.mode === 'string' ? resolvedSearchParams.mode : null
-    const initialMode = mode === 'project' ? 'project' : 'share'
-
-    return <ShareEntryClient initialMode={initialMode} />
+export default function ShareEntryPage() {
+    return <ShareEntryClient />
 }
