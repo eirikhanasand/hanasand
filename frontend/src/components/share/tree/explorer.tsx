@@ -7,6 +7,7 @@ import { Folder, X } from 'lucide-react'
 import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react'
 import TreeHeader from './treeHeader'
 import Tree from './tree'
+import NewFile from './newFile'
 
 type ExplorerProps = {
     showExplorer: boolean
@@ -31,6 +32,8 @@ export default function Explorer({
     const [selectedFolder, setSelectedFolder] = useState('')
     const [tree, setTree] = useState(serverTree)
     const [treeLoading, setTreeLoading] = useState(false)
+    const rootFolder = getProjectRoot(tree, share)
+    const visibleTree = rootFolder ? rootFolder.children : tree
     useHideIfLittleSpace({ set: setShowExplorer })
 
     const recoverTree = useCallback(async (shareId: string) => {
@@ -126,14 +129,26 @@ export default function Explorer({
                         </button>
                     ) : null}
                 </div>}
-                {tree && share && (
+                {visibleTree && share && (
                     <OpenFoldersProvider serverOpenFolders={openFolders}>
                         <TreeHeader
                             share={share}
                             setIsCreatingNewFile={setIsCreatingNewFile}
                         />
+                        {rootFolder && visibleTree.length === 0 && (
+                            <NewFile
+                                isCreatingNewFile={isCreatingNewFile}
+                                display={Boolean(isCreatingNewFile)}
+                                newFileName={newFileName}
+                                setNewFileName={setNewFileName}
+                                setIsCreatingNewFile={setIsCreatingNewFile}
+                                file={rootFolder}
+                                tree={visibleTree}
+                                setTree={setTree}
+                            />
+                        )}
                         <Tree
-                            tree={tree}
+                            tree={visibleTree}
                             newFileName={newFileName}
                             setNewFileName={setNewFileName}
                             isCreatingNewFile={isCreatingNewFile}
@@ -147,4 +162,17 @@ export default function Explorer({
             </div>
         </div>
     )
+}
+
+function getProjectRoot(tree: Tree | null, share: Share | null): FileFolder | null {
+    if (!tree || !share || tree.length !== 1) {
+        return null
+    }
+
+    const [root] = tree
+    if (root.type !== 'folder' || root.id !== share.id) {
+        return null
+    }
+
+    return root
 }

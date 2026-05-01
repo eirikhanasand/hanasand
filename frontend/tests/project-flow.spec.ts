@@ -38,6 +38,7 @@ test('logged-out users get an editor workspace without action buttons', async ({
     await expect(page.locator('main textarea').first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create project' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+    await expect(page.locator('ul', { hasText: `project-${createdShareId}` })).toHaveCount(0)
     expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
 })
 
