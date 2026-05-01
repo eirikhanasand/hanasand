@@ -21151,12 +21151,10 @@ struct UpdateStatusPill: View {
                 .minimumScaleFactor(0.78)
         }
         .font(.system(size: 11, weight: .bold))
-        .padding(.horizontal, 9)
-        .frame(height: 28)
+        .frame(width: 108, height: 28)
         .background(theme.cardRaised)
         .overlay(Capsule().stroke(theme.divider, lineWidth: 1))
         .clipShape(Capsule())
-        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var color: Color {
