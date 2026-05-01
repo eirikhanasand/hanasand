@@ -9,6 +9,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
 
+enum AIRightRailMode {
+    case hidden
+    case expanded
+    case compact
+}
+
 @main
 struct HanasandApp: App {
     @StateObject private var model = DesktopAgentModel()
@@ -692,12 +698,16 @@ final class DesktopAgentModel: ObservableObject {
     @Published var updateStatus = AppUpdateStatus.idle
     @Published var updateManifest: AppUpdateManifest?
     @Published var stagedUpdatePath: String?
+    @Published var backgroundInstalledUpdateVersion = ""
     @Published var mailSummary = "Ready to load inbox"
     @Published var aiSummary = "Ready to connect"
     @Published var aiMessages: [AIChatMessage] = []
     @Published var aiTrace: [AITraceEvent] = []
     @Published var aiClients: [AIConnectedClient] = []
     @Published var aiSocketConnected = false
+    @Published var aiRightRailMode: AIRightRailMode = .hidden
+    @Published var aiInlineBrowserVisible = false
+    @Published var aiBrowserTab: BrowserTabState?
     @Published var aiActiveConversationID: String?
     @Published var aiRunStartedAt: Date?
     @Published var aiLastDuration = "No run yet"
@@ -831,6 +841,7 @@ final class DesktopAgentModel: ObservableObject {
     private static let sidebarVisibleKey = "hanasand.desktop.sidebarVisible"
     private static let selectedSectionKey = "hanasand.desktop.selectedSection"
     private static let customProjectsKey = "hanasand.desktop.customProjects"
+    private static let backgroundInstalledUpdateVersionKey = "hanasand.desktop.backgroundInstalledUpdateVersion"
     private var server: LoopbackAgentServer?
     private var codexWorkerProcess: Process?
     private var updateTask: Task<Void, Never>?
@@ -855,6 +866,12 @@ final class DesktopAgentModel: ObservableObject {
             selectedSection = section
         }
         customProjectTitles = UserDefaults.standard.stringArray(forKey: Self.customProjectsKey) ?? []
+        let storedInstalledUpdateVersion = UserDefaults.standard.string(forKey: Self.backgroundInstalledUpdateVersionKey) ?? ""
+        if storedInstalledUpdateVersion.isNewerVersion(than: Self.appVersion) {
+            backgroundInstalledUpdateVersion = storedInstalledUpdateVersion
+        } else if !storedInstalledUpdateVersion.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Self.backgroundInstalledUpdateVersionKey)
+        }
         runHistory = Self.loadPersistedRunHistory()
         if let initialSection = ProcessInfo.processInfo.environment["HANASAND_DESKTOP_INITIAL_SECTION"],
            let section = DesktopSection(rawValue: initialSection) {
@@ -931,31 +948,88 @@ final class DesktopAgentModel: ObservableObject {
 
     func checkForUpdates(automatic: Bool = false) async {
         updateStatus = automatic ? .checking(message: "Checking") : .checking(message: "Checking")
+        var downloadedPath: URL?
 
         do {
-            let manifest = try await AppUpdateClient().fetchManifest(currentVersion: Self.appVersion)
+            let currentVersion = effectiveInstalledVersion
+            let client = AppUpdateClient()
+            let manifest = try await client.fetchManifest(currentVersion: currentVersion)
             updateManifest = manifest
 
             guard manifest.updateAvailable else {
-                if manifest.hasNewerVersion(than: Self.appVersion) {
+                if manifest.hasNewerVersion(than: currentVersion) {
                     updateStatus = .unavailable(message: "Update feed is live. Version \(manifest.latestVersion) is listed, but no packaged desktop build is published yet.")
                 } else {
-                    updateStatus = .upToDate(message: "Hanasand Desktop \(Self.appVersion) is current.")
+                    updateStatus = .upToDate(message: backgroundInstalledUpdateVersion.isEmpty ? "Hanasand Desktop \(Self.appVersion) is current." : "Hanasand Desktop \(backgroundInstalledUpdateVersion) is installed and will be active on next launch.")
                 }
                 return
             }
 
             updateStatus = .downloading(message: "Downloading \(manifest.latestVersion)")
-            let stagedPath = try await AppUpdateClient().download(manifest: manifest)
+            let stagedPath = try await client.download(manifest: manifest)
+            downloadedPath = stagedPath
             stagedUpdatePath = stagedPath.path
-            updateStatus = .ready(message: "Staged \(manifest.latestVersion)")
-            append(meta: "Update", body: stagedPath.lastPathComponent, kind: .change)
+            updateStatus = .installing(message: "Installing \(manifest.latestVersion)")
+            let installedApp = try await client.installDownloadedApp(from: stagedPath)
+            rememberBackgroundInstalledUpdate(version: manifest.latestVersion)
+            stagedUpdatePath = installedApp.path
+            updateStatus = .upToDate(message: "Installed \(manifest.latestVersion) in the background. It will be active on next launch.")
+            append(meta: "Update installed", body: "\(manifest.latestVersion) -> \(installedApp.path)", kind: .change)
         } catch {
-            updateStatus = .failed(message: error.localizedDescription)
+            if let downloadedPath {
+                stagedUpdatePath = downloadedPath.path
+                updateStatus = .ready(message: "Downloaded update is ready. Install failed: \(error.localizedDescription)")
+            } else if Self.isNetworkUnavailable(error) {
+                updateStatus = .failed(message: "Server unavailable")
+            } else {
+                updateStatus = .failed(message: error.localizedDescription)
+            }
             if !automatic {
                 append(meta: "Update failed", body: error.localizedDescription, kind: .error)
             }
         }
+    }
+
+    private static func isNetworkUnavailable(_ error: Error) -> Bool {
+        if case UpdateError.httpStatus(let status) = error, [502, 503, 504].contains(status) {
+            return true
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .timedOut:
+                return true
+            default:
+                return false
+            }
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return true
+        }
+
+        let message = error.localizedDescription.lowercased()
+        return message.contains("could not connect")
+            || message.contains("timed out")
+            || message.contains("offline")
+            || message.contains("not connected")
+            || message.contains("could not resolve host")
+            || message.contains("network")
+    }
+
+    var effectiveInstalledVersion: String {
+        backgroundInstalledUpdateVersion.isNewerVersion(than: Self.appVersion) ? backgroundInstalledUpdateVersion : Self.appVersion
+    }
+
+    private func rememberBackgroundInstalledUpdate(version: String) {
+        guard version.isNewerVersion(than: Self.appVersion) else {
+            backgroundInstalledUpdateVersion = ""
+            UserDefaults.standard.removeObject(forKey: Self.backgroundInstalledUpdateVersionKey)
+            return
+        }
+        backgroundInstalledUpdateVersion = version
+        UserDefaults.standard.set(version, forKey: Self.backgroundInstalledUpdateVersionKey)
     }
 
     func revealStagedUpdate() {
@@ -1411,6 +1485,29 @@ final class DesktopAgentModel: ObservableObject {
         browserActiveTitle = resolved.title
         openMiniBrowser(url: resolved.url, title: resolved.title, minified: minified)
         append(meta: "Browser", body: "\(source) popped out \(resolved.url).", kind: .command)
+    }
+
+    func openAIInlineBrowser(url rawValue: String, title rawTitle: String? = nil, source: String = "AI") {
+        let resolved = BrowserTargetResolver.resolve(rawValue)
+        let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? rawTitle! : resolved.title
+        browserActiveAddress = resolved.url
+        browserActiveTitle = title
+        if let aiBrowserTab {
+            aiBrowserTab.load(resolved.url)
+        } else {
+            aiBrowserTab = BrowserTabState(label: title, url: resolved.url)
+        }
+        aiInlineBrowserVisible = true
+        selectedSection = .ai
+        append(meta: "AI browser", body: "\(source) opened \(resolved.url) inline.", kind: .command)
+    }
+
+    func toggleAIRightRailFromHeader() {
+        aiRightRailMode = aiRightRailMode == .hidden ? .expanded : .hidden
+    }
+
+    func toggleAIRightRailWidth() {
+        aiRightRailMode = aiRightRailMode == .compact ? .expanded : .compact
     }
 
     func openIDEFile(_ rawPath: String, line: Int? = nil, revealDiff: Bool = false, source: String = "Agent") {
@@ -2570,6 +2667,7 @@ final class DesktopAgentModel: ObservableObject {
             maxTokens: maxTokens,
             temperature: temperature
         )
+        ensureActiveAIResponse(conversationId: conversationId)
 
         do {
             let data = try JSONEncoder().encode(request)
@@ -2580,16 +2678,14 @@ final class DesktopAgentModel: ObservableObject {
                 guard let self else { return }
                 Task { @MainActor in
                     if let error {
-                        self.isRunning = false
                         self.appendAITrace(.error, title: "Send failed", detail: error.localizedDescription)
-                        self.aiMessages.append(AIChatMessage(role: .assistant, content: error.localizedDescription, isError: true))
+                        self.failActiveAIResponse(error.localizedDescription)
                     }
                 }
             }
         } catch {
-            isRunning = false
             appendAITrace(.error, title: "Request", detail: error.localizedDescription)
-            aiMessages.append(AIChatMessage(role: .assistant, content: error.localizedDescription, isError: true))
+            failActiveAIResponse(error.localizedDescription)
         }
     }
 
@@ -2600,8 +2696,8 @@ final class DesktopAgentModel: ObservableObject {
         switch command.kind {
         case .open:
             let resolved = BrowserTargetResolver.resolve(command.target)
-            openInlineBrowser(url: resolved.url, title: resolved.title, source: "AI chat")
-            aiMessages.append(AIChatMessage(role: .assistant, content: "Opened \(resolved.title) in the built-in browser. The Workspace browser has agent controls for inspecting, clicking, typing, scrolling, and popping the page out."))
+            openAIInlineBrowser(url: resolved.url, title: resolved.title, source: "AI chat")
+            aiMessages.append(AIChatMessage(role: .assistant, content: "Opened \(resolved.title) in the inline AI browser."))
             appendAITrace(.tool, title: "Browser", detail: "Opened \(resolved.url) from a local AI chat command.")
         case .popOut:
             let resolved = BrowserTargetResolver.resolve(command.target)
@@ -2635,22 +2731,113 @@ final class DesktopAgentModel: ObservableObject {
 
     private func sendFallbackAIChat(_ prompt: String) async {
         appendAITrace(.system, title: "Fallback", detail: "No live websocket model was available. The desktop app is using the HTTP AI endpoint, but app-parity tool training works best through the live model pool.")
+        let context = ([DesktopAITraining.appParityPrimer] + aiMessages.suffix(8).map { "\($0.role.rawValue): \($0.content)" }).joined(separator: "\n\n")
         do {
-            let response = try await HanasandAIClient(
-                apiURL: settings.resolvedAIEndpoint,
-                token: authTokenForRequests,
-                userId: userIDForRequests
-            ).send(
+            let response = try await fallbackAIClient().send(
                 prompt: prompt,
-                context: ([DesktopAITraining.appParityPrimer] + aiMessages.suffix(8).map { "\($0.role.rawValue): \($0.content)" }).joined(separator: "\n\n")
+                context: context
             )
             aiMessages.append(AIChatMessage(role: .assistant, content: response.body))
             aiSummary = response.meta
             aiLastDuration = "HTTP fallback"
         } catch {
-            aiMessages.append(AIChatMessage(role: .assistant, content: error.localizedDescription, isError: true))
+            if isTemporaryAIOutage(error) {
+                await retryFallbackAIChat(prompt: prompt, context: context, firstError: error)
+                return
+            }
+            aiMessages.append(AIChatMessage(role: .assistant, content: humanReadableAIError(error), isError: true))
             appendAITrace(.error, title: "Fallback failed", detail: error.localizedDescription)
         }
+    }
+
+    private func retryFallbackAIChat(prompt: String, context: String, firstError: Error) async {
+        let startedAt = Date()
+        let noticeID = "ai-reconnect-\(Int(startedAt.timeIntervalSince1970 * 1000))"
+        aiMessages.append(AIChatMessage(
+            id: noticeID,
+            role: .assistant,
+            content: "Reconnecting",
+            createdAt: startedAt,
+            isPending: true,
+            isError: false,
+            isReconnectNotice: true,
+            reconnectStartedAt: startedAt
+        ))
+        aiSummary = "Reconnecting"
+        appendAITrace(.error, title: "Temporary outage", detail: humanReadableAIError(firstError))
+
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            do {
+                let response = try await fallbackAIClient().send(prompt: prompt, context: context)
+                let reconnectedAt = Date()
+                if let index = aiMessages.firstIndex(where: { $0.id == noticeID }) {
+                    let duration = humanReadableDuration(reconnectedAt.timeIntervalSince(startedAt))
+                    aiMessages[index].content = "Reconnected after \(duration)"
+                    aiMessages[index].isPending = false
+                    aiMessages[index].isError = false
+                    aiMessages[index].reconnectedAt = reconnectedAt
+                }
+                aiMessages.append(AIChatMessage(role: .assistant, content: response.body))
+                aiSummary = response.meta
+                aiLastDuration = "HTTP fallback"
+                appendAITrace(.thought, title: "Reconnected", detail: "The HTTP AI endpoint recovered after \(humanReadableDuration(reconnectedAt.timeIntervalSince(startedAt))).")
+                return
+            } catch {
+                if !isTemporaryAIOutage(error) {
+                    if let index = aiMessages.firstIndex(where: { $0.id == noticeID }) {
+                        aiMessages[index].content = humanReadableAIError(error)
+                        aiMessages[index].isPending = false
+                        aiMessages[index].isError = true
+                    } else {
+                        aiMessages.append(AIChatMessage(role: .assistant, content: humanReadableAIError(error), isError: true))
+                    }
+                    aiSummary = "AI unavailable"
+                    appendAITrace(.error, title: "Reconnect stopped", detail: error.localizedDescription)
+                    return
+                }
+                aiSummary = "Reconnecting"
+            }
+        }
+    }
+
+    private func fallbackAIClient() -> HanasandAIClient {
+        HanasandAIClient(
+            apiURL: settings.resolvedAIEndpoint,
+            token: authTokenForRequests,
+            userId: userIDForRequests
+        )
+    }
+
+    private func isTemporaryAIOutage(_ error: Error) -> Bool {
+        if case HanasandAIError.httpStatus(let status, _) = error, [502, 503, 504].contains(status) {
+            return true
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .notConnectedToInternet, .dnsLookupFailed:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
+
+    private func humanReadableAIError(_ error: Error) -> String {
+        if case HanasandAIError.httpStatus(let status, let detail) = error, [502, 503, 504].contains(status) {
+            return detail ?? "The AI service is taking longer than expected. I’ll keep trying in the background."
+        }
+        return error.localizedDescription
+    }
+
+    private func humanReadableDuration(_ interval: TimeInterval) -> String {
+        let seconds = max(1, Int(interval.rounded()))
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        return "\(hours)h"
     }
 
     private func aiRequestMessages() -> [AIPromptRequest.Message] {
@@ -2705,7 +2892,7 @@ final class DesktopAgentModel: ObservableObject {
         case "prompt_started":
             guard isActiveAIEvent(event) else { return }
             appendAITrace(.thought, title: "Thinking", detail: "The runtime accepted the prompt and prepared context for \(event.clientName ?? "the selected model").")
-            aiMessages.append(AIChatMessage(id: "\(event.conversationId ?? UUID().uuidString)-assistant", role: .assistant, content: "", isPending: true))
+            ensureActiveAIResponse(conversationId: event.conversationId)
         case "prompt_tool":
             guard isActiveAIEvent(event) else { return }
             let label = event.toolLabel ?? event.toolId ?? "Tool"
@@ -2719,10 +2906,9 @@ final class DesktopAgentModel: ObservableObject {
             finishActiveAIResponse(content: event.content, artifacts: event.artifacts ?? [], overhead: event.overhead)
         case "prompt_error":
             guard isActiveAIEvent(event) else { return }
-            isRunning = false
-            aiLastDuration = elapsedAIRunText()
-            appendAITrace(.error, title: "Model error", detail: event.error ?? "The model failed to answer this prompt.")
-            aiMessages.append(AIChatMessage(role: .assistant, content: event.error ?? "The model failed to answer this prompt.", isError: true))
+            let message = event.error ?? "The model failed to answer this prompt."
+            appendAITrace(.error, title: "Model error", detail: message)
+            failActiveAIResponse(message)
         default:
             break
         }
@@ -2745,14 +2931,13 @@ final class DesktopAgentModel: ObservableObject {
     private func finishActiveAIResponse(content: String?, artifacts: [AIArtifact], overhead: AIOverheadSample?) {
         isRunning = false
         aiLastDuration = elapsedAIRunText(overhead: overhead)
-        if let content, !content.isEmpty, !aiMessages.contains(where: { $0.role == .assistant && $0.content == content }) {
-            aiMessages.append(AIChatMessage(role: .assistant, content: content))
-        }
         if let index = aiMessages.lastIndex(where: { $0.isPending && $0.role == .assistant }) {
-            if let content, !content.isEmpty, aiMessages[index].content.isEmpty {
+            if let content, !content.isEmpty {
                 aiMessages[index].content = content
             }
             aiMessages[index].isPending = false
+        } else if let content, !content.isEmpty, !aiMessages.contains(where: { $0.role == .assistant && $0.content == content }) {
+            aiMessages.append(AIChatMessage(role: .assistant, content: content))
         }
 
         let toolCount = aiTrace.filter { $0.kind == .tool }.count
@@ -2764,6 +2949,31 @@ final class DesktopAgentModel: ObservableObject {
         } else {
             appendAITrace(.file, title: "Files", detail: "No file artifacts or changed-file summaries were reported by this model run.")
         }
+    }
+
+    private func failActiveAIResponse(_ message: String) {
+        isRunning = false
+        aiLastDuration = elapsedAIRunText()
+        if let index = aiMessages.lastIndex(where: { $0.isPending && $0.role == .assistant }) {
+            aiMessages[index].content = message
+            aiMessages[index].isPending = false
+            aiMessages[index].isError = true
+        } else {
+            aiMessages.append(AIChatMessage(role: .assistant, content: message, isError: true))
+        }
+    }
+
+    private func ensureActiveAIResponse(conversationId: String?) {
+        if aiMessages.contains(where: { $0.isPending && $0.role == .assistant }) {
+            return
+        }
+
+        aiMessages.append(AIChatMessage(
+            id: "\(conversationId ?? UUID().uuidString)-assistant",
+            role: .assistant,
+            content: "",
+            isPending: true
+        ))
     }
 
     private func elapsedAIRunText(overhead: AIOverheadSample? = nil) -> String {
@@ -7315,14 +7525,30 @@ struct AIChatMessage: Identifiable, Equatable {
     var createdAt: Date
     var isPending: Bool
     var isError: Bool
+    var isReconnectNotice: Bool
+    var reconnectStartedAt: Date?
+    var reconnectedAt: Date?
 
-    init(id: String = UUID().uuidString, role: Role, content: String, createdAt: Date = Date(), isPending: Bool = false, isError: Bool = false) {
+    init(
+        id: String = UUID().uuidString,
+        role: Role,
+        content: String,
+        createdAt: Date = Date(),
+        isPending: Bool = false,
+        isError: Bool = false,
+        isReconnectNotice: Bool = false,
+        reconnectStartedAt: Date? = nil,
+        reconnectedAt: Date? = nil
+    ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.isPending = isPending
         self.isError = isError
+        self.isReconnectNotice = isReconnectNotice
+        self.reconnectStartedAt = reconnectStartedAt
+        self.reconnectedAt = reconnectedAt
     }
 
     static let seed = [
@@ -7499,6 +7725,17 @@ struct HanasandAIClient {
     }
 
     func send(prompt: String, context: String) async throws -> HanasandAIResponse {
+        let (data, response) = try await performRequest(prompt: prompt, context: context, includeUserId: true)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 200
+        if status == 401 && !token.isEmpty && !userId.isEmpty {
+            let (retryData, retryResponse) = try await performRequest(prompt: prompt, context: context, includeUserId: false)
+            return try decodeResponse(data: retryData, response: retryResponse)
+        }
+
+        return try decodeResponse(data: data, response: response)
+    }
+
+    private func performRequest(prompt: String, context: String, includeUserId: Bool) async throws -> (Data, URLResponse) {
         var request = URLRequest(url: apiURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -7506,12 +7743,15 @@ struct HanasandAIClient {
         if !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        if !userId.isEmpty {
+        if includeUserId && !userId.isEmpty {
             request.setValue(userId, forHTTPHeaderField: "id")
         }
         request.httpBody = try JSONEncoder().encode(AIRequest(prompt: prompt, context: context))
 
-        let (data, response) = try await session.data(for: request)
+        return try await session.data(for: request)
+    }
+
+    private func decodeResponse(data: Data, response: URLResponse) throws -> HanasandAIResponse {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 200
         let payload = try? JSONDecoder().decode(AIToolPayload.self, from: data)
 
@@ -7557,6 +7797,9 @@ enum HanasandAIError: LocalizedError {
         case .missingToken(let endpoint):
             return "The Hanasand AI endpoint is configured at \(endpoint), but it requires auth. Add a token in Settings or launch with HANASAND_API_TOKEN/HANASAND_AUTH_TOKEN."
         case .httpStatus(let status, let error):
+            if [502, 503, 504].contains(status) {
+                return error ?? "The AI service is taking longer than expected. I’ll keep trying in the background."
+            }
             return error ?? "The Hanasand AI endpoint returned HTTP \(status)."
         }
     }
@@ -7899,6 +8142,7 @@ enum AppUpdateStatus {
     case idle
     case checking(message: String)
     case downloading(message: String)
+    case installing(message: String)
     case ready(message: String)
     case upToDate(message: String)
     case unavailable(message: String)
@@ -7909,25 +8153,35 @@ enum AppUpdateStatus {
         case .idle: return "Ready"
         case .checking: return "Checking"
         case .downloading: return "Downloading"
+        case .installing: return "Installing"
         case .ready: return "Update staged"
         case .upToDate: return "Up to date"
         case .unavailable: return "No package"
-        case .failed: return "Update failed"
+        case .failed(let message): return message == "Server unavailable" ? "Server unavailable" : "Update failed"
         }
     }
 
     var message: String {
         switch self {
         case .idle: return "Idle"
-        case .checking(let message), .downloading(let message), .ready(let message), .upToDate(let message), .unavailable(let message), .failed(let message):
+        case .checking(let message), .downloading(let message), .installing(let message), .ready(let message), .upToDate(let message), .unavailable(let message), .failed(let message):
             return message
         }
     }
 
     var isBusy: Bool {
         switch self {
-        case .checking, .downloading: return true
+        case .checking, .downloading, .installing: return true
         default: return false
+        }
+    }
+
+    var isServerUnavailable: Bool {
+        switch self {
+        case .failed(let message):
+            return message == "Server unavailable"
+        default:
+            return false
         }
     }
 }
@@ -7983,6 +8237,22 @@ private extension String {
             return Int(numericPrefix) ?? 0
         }
     }
+
+    func isNewerVersion(than currentVersion: String) -> Bool {
+        let latestParts = semanticVersionParts
+        let currentParts = currentVersion.semanticVersionParts
+        let count = max(latestParts.count, currentParts.count)
+
+        for index in 0..<count {
+            let latestValue = index < latestParts.count ? latestParts[index] : 0
+            let currentValue = index < currentParts.count ? currentParts[index] : 0
+            if latestValue != currentValue {
+                return latestValue > currentValue
+            }
+        }
+
+        return false
+    }
 }
 
 struct AppUpdateClient {
@@ -7991,8 +8261,8 @@ struct AppUpdateClient {
 
     init(session: URLSession = .shared) {
         self.session = session
-        let configured = ProcessInfo.processInfo.environment["HANASAND_APP_UPDATE_API"] ?? "https://hanasand.com/api/app"
-        apiURL = URL(string: configured) ?? URL(string: "https://hanasand.com/api/app")!
+        let configured = ProcessInfo.processInfo.environment["HANASAND_APP_UPDATE_API"] ?? "https://api.hanasand.com/api/app"
+        apiURL = URL(string: configured) ?? URL(string: "https://api.hanasand.com/api/app")!
     }
 
     func fetchManifest(currentVersion: String) async throws -> AppUpdateManifest {
@@ -8040,6 +8310,47 @@ struct AppUpdateClient {
         return destination
     }
 
+    func installDownloadedApp(from archiveURL: URL) async throws -> URL {
+        try await Task.detached(priority: .utility) {
+            let fileManager = FileManager.default
+            let support = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let installRoot = support
+                .appendingPathComponent("Hanasand/Install", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try fileManager.createDirectory(at: installRoot, withIntermediateDirectories: true)
+            defer { try? fileManager.removeItem(at: installRoot) }
+
+            guard archiveURL.pathExtension.lowercased() == "zip" else {
+                throw UpdateError.unsupportedPackage
+            }
+
+            try Self.runProcess(executable: "/usr/bin/ditto", arguments: ["-x", "-k", archiveURL.path, installRoot.path])
+
+            guard let newApp = Self.findAppBundle(in: installRoot, preferredName: "Hanasand.app") else {
+                throw UpdateError.invalidPackage
+            }
+
+            let currentApp = Bundle.main.bundleURL
+            guard currentApp.pathExtension.lowercased() == "app" else {
+                throw UpdateError.unsupportedBundleLocation
+            }
+
+            let destination = currentApp.deletingLastPathComponent().appendingPathComponent(currentApp.lastPathComponent)
+            if fileManager.fileExists(atPath: destination.path) {
+                _ = try fileManager.replaceItemAt(destination, withItemAt: newApp, backupItemName: nil, options: [])
+            } else {
+                try fileManager.moveItem(at: newApp, to: destination)
+            }
+
+            return destination
+        }.value
+    }
+
     private func validate(response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { return }
         guard (200..<300).contains(http.statusCode) else {
@@ -8052,12 +8363,54 @@ struct AppUpdateClient {
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
     }
+
+    private static func findAppBundle(in directory: URL, preferredName: String) -> URL? {
+        let preferred = directory.appendingPathComponent(preferredName, isDirectory: true)
+        if FileManager.default.fileExists(atPath: preferred.path) {
+            return preferred
+        }
+
+        let keys: [URLResourceKey] = [.isDirectoryKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        for case let url as URL in enumerator {
+            if url.pathExtension.lowercased() == "app" {
+                enumerator.skipDescendants()
+                return url
+            }
+        }
+
+        return nil
+    }
+
+    private static func runProcess(executable: String, arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw UpdateError.installFailed("\(URL(fileURLWithPath: executable).lastPathComponent) exited with \(process.terminationStatus)")
+        }
+    }
 }
 
 enum UpdateError: LocalizedError {
     case invalidURL
     case httpStatus(Int)
     case checksumMismatch
+    case unsupportedPackage
+    case invalidPackage
+    case unsupportedBundleLocation
+    case installFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -8067,6 +8420,14 @@ enum UpdateError: LocalizedError {
             return "The Hanasand app update endpoint returned HTTP \(status)."
         case .checksumMismatch:
             return "The downloaded update did not match the API checksum."
+        case .unsupportedPackage:
+            return "The downloaded update package is not a zip archive."
+        case .invalidPackage:
+            return "The downloaded update did not contain a Hanasand app bundle."
+        case .unsupportedBundleLocation:
+            return "This running copy is not an app bundle, so it cannot be updated in place."
+        case .installFailed(let message):
+            return "The app update could not be installed: \(message)."
         }
     }
 }
@@ -8225,7 +8586,7 @@ private struct PasswordResetCodeBoxes: View {
             .font(.system(size: 18, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(theme.text)
-            .frame(width: 40, height: 46)
+            .frame(width: 80, height: 46)
             .background(theme.field)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -8253,7 +8614,7 @@ struct HanasandLoginGate: View {
     var body: some View {
         ZStack {
             theme.background
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 masthead
                 loginCard
                 if model.passwordResetStep != .idle {
@@ -8261,7 +8622,7 @@ struct HanasandLoginGate: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .frame(width: 430, alignment: .leading)
+            .frame(width: 392, alignment: .leading)
         }
         .onAppear {
             focusedField = .username
@@ -8269,22 +8630,22 @@ struct HanasandLoginGate: View {
     }
 
     private var masthead: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 9) {
             Text("Hanasand")
-                .font(.system(size: 56, weight: .semibold, design: .serif))
+                .font(.system(size: 46, weight: .semibold, design: .serif))
                 .kerning(0.5)
                 .foregroundStyle(theme.text)
             Rectangle()
                 .fill(theme.text.opacity(0.22))
-                .frame(width: 56, height: 1)
+                .frame(width: 44, height: 1)
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.bottom, 16)
+        .padding(.bottom, 14)
     }
 
     private var loginCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 7) {
                 authTextField("Username", text: $model.loginUsername, field: .username) {
                     focusedField = .password
                 }
@@ -8293,7 +8654,7 @@ struct HanasandLoginGate: View {
                 }
             }
 
-            HStack(alignment: .center, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
                 primaryButton(
                     title: model.isLoggingIn ? "Logging in" : "Log in",
                     busy: model.isLoggingIn,
@@ -8301,7 +8662,7 @@ struct HanasandLoginGate: View {
                 )
                 .disabled(model.isLoggingIn)
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 12)
 
                 if model.passwordResetStep == .idle {
                     Button {
@@ -8311,7 +8672,7 @@ struct HanasandLoginGate: View {
                         }
                     } label: {
                         Text("Forgot password?")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(theme.textTertiary)
                     }
                     .buttonStyle(.plain)
@@ -8322,25 +8683,25 @@ struct HanasandLoginGate: View {
                 statusText(model.loginStatus, isSuccess: false)
             }
         }
-        .padding(18)
+        .padding(14)
         .background(theme.card)
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(theme.divider, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(theme.isLight ? 0.08 : 0.28), radius: 28, x: 0, y: 18)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(theme.isLight ? 0.08 : 0.24), radius: 22, x: 0, y: 14)
     }
 
     private var recoveryCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 13) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Account recovery")
-                        .font(.system(size: 18, weight: .semibold, design: .serif))
+                        .font(.system(size: 17, weight: .semibold, design: .serif))
                         .foregroundStyle(theme.text)
                     Text(recoveryDetail)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(theme.textTertiary)
                 }
                 Spacer()
@@ -8351,14 +8712,14 @@ struct HanasandLoginGate: View {
                     }
                 } label: {
                     Text("Never mind")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(theme.textTertiary)
                 }
                 .buttonStyle(.plain)
             }
 
             if model.passwordResetStep == .code {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     authTextField("Username", text: $model.passwordResetUsername, field: .resetUsername) {
                         Task { await model.requestPasswordResetCode() }
                         focusedField = .resetCode
@@ -8409,14 +8770,14 @@ struct HanasandLoginGate: View {
                 statusText(model.passwordResetStatus, isSuccess: recoveryStatusLooksHelpful)
             }
         }
-        .padding(18)
+        .padding(14)
         .background(theme.backgroundElevated.opacity(theme.isLight ? 0.92 : 0.62))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(theme.accent.opacity(0.32), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(theme.isLight ? 0.08 : 0.22), radius: 24, x: 0, y: 16)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(theme.isLight ? 0.08 : 0.20), radius: 20, x: 0, y: 12)
     }
 
     private var recoveryDetail: String {
@@ -8438,18 +8799,18 @@ struct HanasandLoginGate: View {
     ) -> some View {
         TextField(placeholder, text: text)
             .textFieldStyle(.plain)
-            .font(.system(size: 15, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(theme.text)
             .focused($focusedField, equals: field)
             .onSubmit(onSubmit)
-            .padding(.horizontal, 16)
-            .frame(height: 46)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
             .background(theme.field)
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(focusedField == field ? theme.accent.opacity(0.75) : theme.divider, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func authSecureField(
@@ -8460,18 +8821,18 @@ struct HanasandLoginGate: View {
     ) -> some View {
         SecureField(placeholder, text: text)
             .textFieldStyle(.plain)
-            .font(.system(size: 15, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(theme.text)
             .focused($focusedField, equals: field)
             .onSubmit(onSubmit)
-            .padding(.horizontal, 16)
-            .frame(height: 46)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
             .background(theme.field)
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(focusedField == field ? theme.accent.opacity(0.75) : theme.divider, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func primaryButton(title: String, busy: Bool, action: @escaping () -> Void) -> some View {
@@ -8479,16 +8840,18 @@ struct HanasandLoginGate: View {
             HStack(spacing: 8) {
                 if busy {
                     ProgressView()
-                        .scaleEffect(0.58)
+                        .scaleEffect(0.54)
+                        .frame(width: 12, height: 12)
                 }
                 Text(title)
             }
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: 13, weight: .bold))
             .foregroundStyle(theme.background)
-            .padding(.horizontal, 20)
-            .frame(height: 42)
+            .padding(.horizontal, 18)
+            .frame(minWidth: busy ? 118 : 96)
+            .frame(height: 36)
             .background(theme.text)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -8498,20 +8861,21 @@ struct HanasandLoginGate: View {
             HStack(spacing: 8) {
                 if busy {
                     ProgressView()
-                        .scaleEffect(0.58)
+                        .scaleEffect(0.54)
+                        .frame(width: 12, height: 12)
                 }
                 Text(title)
             }
-            .font(.system(size: 13, weight: .bold))
+            .font(.system(size: 12, weight: .bold))
             .foregroundStyle(theme.text)
-            .padding(.horizontal, 16)
-            .frame(height: 46)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
             .background(theme.cardRaised)
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(theme.divider, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -8519,9 +8883,7 @@ struct HanasandLoginGate: View {
     private func statusText(_ value: String, isSuccess: Bool) -> some View {
         Text(value)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(isSuccess ? theme.textTertiary : theme.danger)
-            .lineLimit(3)
-            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(isSuccess ? theme.green : theme.danger)
     }
 }
 
@@ -8665,7 +9027,7 @@ struct Sidebar: View {
                             }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 8)
 
                 HStack {
                     Text("Projects")
@@ -8683,7 +9045,7 @@ struct Sidebar: View {
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 8)
                 .padding(.top, 34)
                 .padding(.bottom, 14)
 
@@ -8707,7 +9069,7 @@ struct Sidebar: View {
                 .onTapGesture {
                     model.selectedSection = .settings
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 8)
                 .padding(.bottom, 20)
         }
         .background(theme.sidebar)
@@ -8788,6 +9150,15 @@ struct TopBar: View {
             }
             TopBarIconButton(icon: "folder", label: "IDE", active: model.selectedSection == .ide) {
                 model.recordCommand("open_section_ide")
+            }
+            if model.selectedSection == .ai {
+                TopBarIconButton(
+                    icon: model.aiRightRailMode == .hidden ? "sidebar.right" : "eye.slash",
+                    label: model.aiRightRailMode == .hidden ? "Tools" : "Hide",
+                    active: model.aiRightRailMode != .hidden
+                ) {
+                    model.toggleAIRightRailFromHeader()
+                }
             }
             TopBarIconButton(icon: "gearshape", label: "Settings", active: model.selectedSection == .settings) {
                 model.recordCommand("open_section_settings")
@@ -18488,37 +18859,34 @@ struct HanasandCodeEditor: NSViewRepresentable {
 struct AIWorkspace: View {
     @EnvironmentObject private var model: DesktopAgentModel
     @Environment(\.desktopTheme) private var theme
-    @StateObject private var chatBrowserPreview = BrowserTabState(label: "AI Browser", url: "https://hanasand.com")
-    @State private var showChatBrowserPreview = true
+    @State private var showImportHint = true
     let commandFocused: FocusState<Bool>.Binding
 
     var body: some View {
         VStack(spacing: 0) {
             TopBar()
-            HStack(alignment: .top, spacing: 18) {
+            ZStack(alignment: .topTrailing) {
                 VStack(spacing: 0) {
                     aiHeader
                     chatPane
                     composer
                 }
-                .frame(maxWidth: 920)
-                .background(theme.backgroundElevated.opacity(0.72))
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(theme.divider.opacity(0.9), lineWidth: 1)
-                )
-
-                aiRail
-                    .frame(width: 248)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 22)
         }
         .background(theme.background)
         .task {
             await model.loadAIPage()
+        }
+        .onAppear {
+            showImportHint = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    showImportHint = false
+                }
+            }
         }
         .onDisappear {
             model.disconnectAISocket()
@@ -18528,166 +18896,125 @@ struct AIWorkspace: View {
     private var aiHeader: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Hanasand AI")
-                    .font(.system(size: 21, weight: .semibold))
+                Text(model.aiMessages.isEmpty ? "New chat" : "Chat")
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(theme.text)
-                Text(model.aiSummary)
-                    .font(.system(size: 12, weight: .regular))
+                Text("\(model.aiClients.count) model\(model.aiClients.count == 1 ? "" : "s") connected")
+                    .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(theme.textTertiary)
                     .lineLimit(1)
             }
             Spacer()
-            Label(model.aiSocketConnected ? "Live" : "Offline", systemImage: model.aiSocketConnected ? "bolt.horizontal.circle" : "bolt.slash")
+            importContextButton
+            Label(model.aiSocketConnected ? "Ready" : "Offline", systemImage: model.aiSocketConnected ? "sparkles" : "bolt.slash")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(model.aiSocketConnected ? theme.green : theme.textTertiary)
+                .foregroundStyle(model.aiSocketConnected ? theme.textSecondary : theme.textTertiary)
+                .padding(.horizontal, 11)
+                .frame(height: 30)
+                .background(theme.card.opacity(0.78))
+                .clipShape(Capsule())
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
-        .background(theme.backgroundElevated.opacity(0.72))
+        .padding(.horizontal, 28)
+        .frame(height: 68)
+        .background(theme.background.opacity(0.98))
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(theme.divider.opacity(0.72))
+                .fill(theme.divider.opacity(0.55))
                 .frame(height: 1)
         }
     }
 
-    private var aiRail: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            AIRailButton(title: "Reload", subtitle: "Refresh runtime", icon: "arrow.clockwise") {
-                Task { await model.loadAIPage() }
-            }
-            AIRailButton(title: "Browser", subtitle: "Open current page", icon: "globe") {
-                model.openInlineBrowser(url: model.browserActiveAddress, title: model.browserActiveTitle, source: "AI toolbar")
-            }
-            AIRailButton(title: "Pop out", subtitle: "Floating browser", icon: "rectangle.inset.filled.and.person.filled") {
-                model.popOutBrowser(source: "AI toolbar")
-            }
-            AIRailButton(title: showChatBrowserPreview ? "Hide preview" : "Preview", subtitle: "Inline browser", icon: "rectangle.rightthird.inset.filled") {
-                showChatBrowserPreview.toggle()
-            }
-            AIRailButton(title: model.isRunning ? "Training" : "App parity", subtitle: "Run drill", icon: "graduationcap") {
-                model.submitAppParityTrainingPrompt()
-            }
-            .disabled(model.isRunning)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Runtime")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.textTertiary)
-                    .textCase(.uppercase)
-                HStack {
-                    Text("\(model.aiClients.count) model\(model.aiClients.count == 1 ? "" : "s")")
-                    Spacer()
-                    Text(model.aiLastDuration)
-                }
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(theme.textSecondary)
-                ForEach(model.aiClients.prefix(3)) { client in
-                    AIClientRow(client: client)
-                }
-                if model.aiClients.isEmpty {
-                    CompactInfoCard(title: "No model yet", lines: ["Reload to reconnect."])
+    private var importContextButton: some View {
+        Button {
+            model.openNativeDashboard(path: "/s", label: "Shares")
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 12, weight: .medium))
+                if showImportHint {
+                    Text("Import context")
+                        .font(.system(size: 12, weight: .medium))
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
-            .padding(12)
-            .background(theme.card.opacity(0.72))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Trace")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.textTertiary)
-                    .textCase(.uppercase)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(model.aiTrace.prefix(8)) { event in
-                            AITraceRow(event: event)
-                        }
-                        if model.aiTrace.isEmpty {
-                            CompactInfoCard(title: "Quiet", lines: ["Tool events appear here."])
-                        }
-                    }
-                }
-            }
-            .padding(12)
-            .frame(maxHeight: .infinity, alignment: .top)
-            .background(theme.card.opacity(0.72))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .foregroundStyle(theme.textSecondary)
+            .padding(.horizontal, showImportHint ? 11 : 8)
+            .frame(height: 30)
+            .background(theme.card.opacity(0.62))
+            .clipShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .help("Import a repo or attach a share when you need workspace context")
     }
 
     private var chatPane: some View {
-        HStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if model.aiMessages.isEmpty {
-                        EmptyAIChatCard()
-                    } else {
-                        ForEach(model.aiMessages) { message in
-                            AIMessageBubble(message: message)
-                        }
-                        if let edit = model.pendingIDEEdit {
-                            AIPendingEditPanel(edit: edit)
-                                .frame(maxWidth: 720, alignment: .leading)
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                if model.aiMessages.isEmpty {
+                    EmptyAIChatCard()
+                        .frame(maxWidth: .infinity, minHeight: 420, alignment: .center)
+                } else {
+                    ForEach(model.aiMessages) { message in
+                        AIMessageBubble(message: message)
+                    }
+                    if let edit = model.pendingIDEEdit {
+                        AIPendingEditPanel(edit: edit)
+                            .frame(maxWidth: 760, alignment: .leading)
                     }
                 }
-                .padding(22)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(theme.backgroundElevated.opacity(0.44))
-
-            if showChatBrowserPreview {
-                Divider()
-                    .background(theme.divider)
-                AIChatBrowserPreview(tab: chatBrowserPreview)
-                    .frame(width: 390)
-            }
+            .padding(.horizontal, 88)
+            .padding(.vertical, 30)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 520)
         }
-        .background(theme.backgroundElevated.opacity(0.44))
-        .onAppear {
-            chatBrowserPreview.load(model.browserActiveAddress)
-        }
-        .onChange(of: model.browserActiveAddress) { _, address in
-            chatBrowserPreview.load(address)
-        }
+        .background(theme.background)
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("Ask Hanasand AI", text: $model.prompt, axis: .vertical)
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...", text: $model.prompt, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(theme.text)
-                .lineLimit(2...6)
+                .lineLimit(3...8)
                 .focused(commandFocused)
-                .padding(14)
-                .background(theme.commandPanel)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .onSubmit {
                     model.submitAIChatPrompt()
                 }
-            Button {
-                model.submitAIChatPrompt()
-            } label: {
-                Label(model.isRunning ? "Working" : "Send", systemImage: model.isRunning ? "circle.dotted" : "paperplane.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(theme.text)
-                    .padding(.horizontal, 16)
-                    .frame(height: 46)
-                    .background(theme.cardRaised)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            HStack(spacing: 12) {
+                Text("Enter to send, Shift+Enter for newline")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(theme.textTertiary)
+                Spacer()
+                Button {
+                    model.submitAIChatPrompt()
+                } label: {
+                    Label(model.isRunning ? "Working" : "Send", systemImage: model.isRunning ? "circle.dotted" : "paperplane.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.background)
+                        .padding(.horizontal, 14)
+                        .frame(height: 38)
+                        .background(theme.text.opacity(model.isRunning ? 0.58 : 0.92))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isRunning)
             }
-            .buttonStyle(.plain)
-            .disabled(model.isRunning)
         }
-        .padding(14)
-        .background(theme.commandBar)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(theme.divider)
-                .frame(height: 1)
-        }
+        .padding(18)
+        .frame(maxWidth: 980, minHeight: 146, alignment: .topLeading)
+        .background(theme.card.opacity(0.9))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(theme.divider.opacity(0.7), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.28), radius: 24, x: 0, y: 18)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 42)
+        .padding(.bottom, 22)
     }
 }
 
@@ -18718,6 +19045,131 @@ struct AIClientRow: View {
         .padding(10)
         .background(theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct AIRightRail: View {
+    @EnvironmentObject private var model: DesktopAgentModel
+    @Environment(\.desktopTheme) private var theme
+    let mode: AIRightRailMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                AIIconButton(title: mode == .compact ? "Expand tools" : "Collapse to icons", icon: mode == .compact ? "sidebar.right" : "sidebar.right") {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        model.toggleAIRightRailWidth()
+                    }
+                }
+                if mode == .expanded {
+                    Text("Tools")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundStyle(theme.textTertiary)
+                    Spacer()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: mode == .compact ? .center : .leading)
+
+            if mode == .compact {
+                compactActions
+            } else {
+                expandedActions
+                runtimePanel
+                tracePanel
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(mode == .compact ? 8 : 16)
+        .frame(maxHeight: .infinity)
+        .background(theme.backgroundElevated.opacity(0.96))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(theme.divider)
+                .frame(width: 1)
+        }
+    }
+
+    private var compactActions: some View {
+        VStack(spacing: 10) {
+            AIIconButton(title: "Reload", icon: "arrow.clockwise") {
+                Task { await model.loadAIPage() }
+            }
+            AIIconButton(title: model.aiInlineBrowserVisible ? "Hide browser" : "Browser", icon: model.aiInlineBrowserVisible ? "rectangle.slash" : "globe") {
+                toggleBrowser()
+            }
+            AIIconButton(title: "Pop out", icon: "rectangle.inset.filled.and.person.filled") {
+                model.popOutBrowser(source: "AI toolbar")
+            }
+            AIIconButton(title: model.isRunning ? "Training" : "App parity", icon: "graduationcap") {
+                model.submitAppParityTrainingPrompt()
+            }
+            .disabled(model.isRunning)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var expandedActions: some View {
+        VStack(spacing: 10) {
+            AIRailButton(title: "Reload", subtitle: "Refresh runtime", icon: "arrow.clockwise") {
+                Task { await model.loadAIPage() }
+            }
+            AIRailButton(title: model.aiInlineBrowserVisible ? "Hide browser" : "Browser", subtitle: model.aiInlineBrowserVisible ? "Inline browser" : "Open current page", icon: model.aiInlineBrowserVisible ? "rectangle.slash" : "globe") {
+                toggleBrowser()
+            }
+            AIRailButton(title: "Pop out", subtitle: "Floating browser", icon: "rectangle.inset.filled.and.person.filled") {
+                model.popOutBrowser(source: "AI toolbar")
+            }
+            AIRailButton(title: model.isRunning ? "Training" : "App parity", subtitle: "Run drill", icon: "graduationcap") {
+                model.submitAppParityTrainingPrompt()
+            }
+            .disabled(model.isRunning)
+        }
+    }
+
+    private var runtimePanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Runtime")
+                .font(.system(size: 10, weight: .black))
+                .foregroundStyle(theme.textTertiary)
+                .textCase(.uppercase)
+            HStack {
+                Text("\(model.aiClients.count) model\(model.aiClients.count == 1 ? "" : "s")")
+                Spacer()
+                Text(model.aiLastDuration)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(theme.textSecondary)
+            ForEach(model.aiClients.sortedForRuntime.prefix(3)) { client in
+                AIClientRow(client: client)
+            }
+        }
+        .padding(12)
+        .background(theme.card.opacity(0.62))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var tracePanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Trace")
+                .font(.system(size: 10, weight: .black))
+                .foregroundStyle(theme.textTertiary)
+                .textCase(.uppercase)
+            ForEach(model.aiTrace.suffix(3)) { event in
+                AITraceRow(event: event)
+            }
+        }
+        .padding(12)
+        .background(theme.card.opacity(0.62))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func toggleBrowser() {
+        if model.aiInlineBrowserVisible {
+            model.aiInlineBrowserVisible = false
+        } else {
+            model.openAIInlineBrowser(url: model.browserActiveAddress, title: model.browserActiveTitle, source: "AI toolbar")
+        }
     }
 }
 
@@ -18752,6 +19204,26 @@ struct AIRailButton: View {
             .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct AIIconButton: View {
+    @Environment(\.desktopTheme) private var theme
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(theme.textTertiary)
+                .frame(width: 32, height: 32)
+                .background(theme.card.opacity(0.56))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(title)
     }
 }
 
@@ -18840,39 +19312,24 @@ struct EmptyAIChatCard: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(theme.accent)
-                    .frame(width: 36, height: 36)
-                    .background(theme.accentSoft)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Ask from here")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(theme.text)
-                    Text("The composer below sends directly to the Hanasand model pool.")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(theme.textSecondary)
-                }
+        VStack(spacing: 18) {
+            Image(systemName: "briefcase")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .frame(width: 58, height: 58)
+                .background(theme.card.opacity(0.82))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            VStack(spacing: 8) {
+                Text("Start with the task, not the tooling.")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(theme.text)
+                Text("Ask for a feature, a bug fix, or an app. Add context only when it helps.")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(theme.textTertiary)
+                    .multilineTextAlignment(.center)
             }
-            HStack(spacing: 8) {
-                Label("Models", systemImage: "cpu")
-                Label("Tools", systemImage: "wrench.and.screwdriver")
-                Label("Trace", systemImage: "waveform.path.ecg")
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(theme.textTertiary)
         }
-        .padding(16)
-        .frame(maxWidth: 620, alignment: .leading)
-        .background(theme.card)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(theme.divider, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
@@ -18880,47 +19337,164 @@ struct AIMessageBubble: View {
     @Environment(\.desktopTheme) private var theme
     @EnvironmentObject private var model: DesktopAgentModel
     let message: AIChatMessage
+    @State private var isHovered = false
+    @State private var didCopy = false
+
+    var body: some View {
+        if message.isReconnectNotice {
+            AIReconnectNoticeView(message: message)
+        } else {
+            standardMessage
+        }
+    }
+
+    private var standardMessage: some View {
+        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
+            HStack {
+                if message.role == .user {
+                    Spacer(minLength: 120)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    AIMessageContentView(
+                        content: message.content,
+                        isError: message.isError
+                    )
+
+                    if message.role == .assistant {
+                        let referencedFiles = AIFileReferenceParser.references(in: message.content, changedFiles: model.changedFileSummary)
+                        if !referencedFiles.isEmpty {
+                            AIChangedFilesInlinePanel(files: Array(referencedFiles.prefix(6)))
+                        }
+                    }
+                }
+                .padding(message.role == .user ? 14 : 0)
+                .frame(maxWidth: message.role == .user ? 720 : 900, alignment: .leading)
+                .background(message.role == .user ? theme.cardRaised : Color.clear)
+                .overlay {
+                    if message.role == .user {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(theme.divider, lineWidth: 1)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                if message.role == .assistant {
+                    Spacer(minLength: 120)
+                }
+            }
+            if isHovered && !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                copyButton
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private var copyButton: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(message.content, forType: .string)
+            didCopy = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                didCopy = false
+            }
+        } label: {
+            Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(theme.textTertiary)
+                .padding(.horizontal, 9)
+                .frame(height: 24)
+                .background(theme.card.opacity(0.62))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AIReconnectNoticeView: View {
+    @Environment(\.desktopTheme) private var theme
+    let message: AIChatMessage
 
     var body: some View {
         HStack {
-            if message.role == .user {
-                Spacer(minLength: 80)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 7) {
-                    Image(systemName: message.role == .user ? "person.crop.circle" : "sparkles")
-                    Text(message.role == .user ? "You" : "Hanasand AI")
-                    if message.isPending {
-                        ProgressView()
-                            .scaleEffect(0.55)
+            Spacer(minLength: 0)
+            VStack(spacing: 14) {
+                if message.isPending {
+                    TimelineView(.periodic(from: message.reconnectStartedAt ?? message.createdAt, by: 1)) { timeline in
+                        VStack(spacing: 12) {
+                            Text("Reconnecting")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(theme.text)
+                            Text("The AI service is taking a moment. I’ll keep trying in the background.")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                            ReconnectSweepBar(startedAt: message.reconnectStartedAt ?? message.createdAt, now: timeline.date)
+                                .frame(width: 230, height: 3)
+                            Text(elapsedText(now: timeline.date))
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundStyle(theme.textTertiary)
+                        }
                     }
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(message.isError ? theme.danger : theme.textTertiary)
-
-                AIMessageContentView(
-                    content: message.content.isEmpty && message.isPending ? "Thinking..." : message.content,
-                    isError: message.isError
-                )
-
-                if message.role == .assistant {
-                    let referencedFiles = AIFileReferenceParser.references(in: message.content, changedFiles: model.changedFileSummary)
-                    if !referencedFiles.isEmpty {
-                        AIChangedFilesInlinePanel(files: Array(referencedFiles.prefix(6)))
-                    }
+                } else {
+                    Text(message.content)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(message.isError ? theme.danger : theme.text)
+                        .multilineTextAlignment(.center)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: 720, alignment: .leading)
-            .background(message.role == .user ? theme.cardRaised : theme.card)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 22)
+            .frame(maxWidth: 460)
+            .background(theme.card.opacity(0.46))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(theme.divider, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(theme.divider.opacity(0.6), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            if message.role == .assistant {
-                Spacer(minLength: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: message.isPending ? 300 : 140, alignment: .center)
+    }
+
+    private func elapsedText(now: Date) -> String {
+        let startedAt = message.reconnectStartedAt ?? message.createdAt
+        return "Trying again for \(Self.durationText(now.timeIntervalSince(startedAt)))"
+    }
+
+    private static func durationText(_ interval: TimeInterval) -> String {
+        let seconds = max(1, Int(interval.rounded()))
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        return "\(hours)h"
+    }
+}
+
+struct ReconnectSweepBar: View {
+    @Environment(\.desktopTheme) private var theme
+    let startedAt: Date
+    let now: Date
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let progress = now.timeIntervalSince(startedAt).truncatingRemainder(dividingBy: 1.4) / 1.4
+            let sweepWidth = max(42, width * 0.24)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(theme.text.opacity(0.16))
+                Capsule()
+                    .fill(.white.opacity(0.92))
+                    .frame(width: sweepWidth)
+                    .offset(x: -sweepWidth + (width + sweepWidth * 2) * progress)
             }
+            .clipShape(Capsule())
         }
     }
 }
@@ -19580,7 +20154,7 @@ struct UpdatesWorkspace: View {
 
             AppUpdateCard()
 
-            NativeGroupPanel(title: "Staged package", subtitle: model.stagedUpdatePath == nil ? "No local installer staged" : "Ready in Application Support") {
+            NativeGroupPanel(title: updatePackageTitle, subtitle: updatePackageSubtitle) {
                 HStack(spacing: 10) {
                     Image(systemName: model.stagedUpdatePath == nil ? "tray" : "checkmark.seal.fill")
                         .font(.system(size: 16, weight: .bold))
@@ -19589,7 +20163,7 @@ struct UpdatesWorkspace: View {
                         .background(theme.field)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                    Text(model.stagedUpdatePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "The app will stage updates here after a newer package is found.")
+                    Text(model.stagedUpdatePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "The app will install newer packages in the background after they are downloaded.")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)
@@ -19613,6 +20187,17 @@ struct UpdatesWorkspace: View {
             return "\(Int(seconds / 60)) min"
         }
         return "\(Int(seconds)) sec"
+    }
+
+    private var updatePackageTitle: String {
+        model.backgroundInstalledUpdateVersion.isEmpty ? "Update package" : "Installed update"
+    }
+
+    private var updatePackageSubtitle: String {
+        if !model.backgroundInstalledUpdateVersion.isEmpty {
+            return "Installed in place. Active on next launch."
+        }
+        return model.stagedUpdatePath == nil ? "No local installer staged" : "Ready in Application Support"
     }
 }
 
@@ -19963,28 +20548,23 @@ struct AppUpdateCard: View {
                 if model.updateStatus.isBusy {
                     ProgressView()
                         .scaleEffect(0.70)
+                        .frame(width: 18, height: 18)
                 }
-                Button("Check now") {
+                UpdateToolbarButton(title: "Check now", tint: theme.accent) {
                     Task {
                         await model.checkForUpdates()
                     }
                 }
                 .disabled(model.updateStatus.isBusy)
-                .buttonStyle(.plain)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(theme.accent)
                 if model.stagedUpdatePath != nil {
-                    Button("Reveal") {
+                    UpdateToolbarButton(title: "Reveal", tint: theme.text) {
                         model.revealStagedUpdate()
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(theme.text)
                 }
             }
 
             HStack(spacing: 10) {
-                UpdateMetric(label: "Installed", value: DesktopAgentModel.appVersion)
+                UpdateMetric(label: "Installed", value: model.effectiveInstalledVersion)
                 UpdateMetric(label: "Latest", value: model.updateManifest?.latestVersion ?? "Checking")
                 UpdateMetric(label: "Source", value: "/api/app")
                 UpdateMetric(label: "Channel", value: model.updateManifest?.channel.capitalized ?? "Stable")
@@ -20003,6 +20583,24 @@ struct AppUpdateCard: View {
                 .stroke(theme.divider, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+struct UpdateToolbarButton: View {
+    let title: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -20523,10 +21121,11 @@ struct AgentStatusPill: View {
         }
         .font(.system(size: 11, weight: .bold))
         .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .frame(height: 28)
         .background(theme.cardRaised)
         .overlay(Capsule().stroke(theme.divider, lineWidth: 1))
         .clipShape(Capsule())
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -20536,23 +21135,32 @@ struct UpdateStatusPill: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            if status.isBusy {
-                ProgressView()
-                    .scaleEffect(0.45)
-            } else {
-                Circle()
-                    .fill(color)
-                    .frame(width: 7, height: 7)
+            ZStack {
+                if status.isBusy {
+                    ProgressView()
+                        .scaleEffect(0.45)
+                } else if status.isServerUnavailable {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(theme.danger)
+                } else {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                }
             }
+            .frame(width: 13, height: 13)
             Text(status.title)
                 .lineLimit(1)
+                .minimumScaleFactor(0.78)
         }
         .font(.system(size: 11, weight: .bold))
         .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .frame(height: 28)
         .background(theme.cardRaised)
         .overlay(Capsule().stroke(theme.divider, lineWidth: 1))
         .clipShape(Capsule())
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var color: Color {

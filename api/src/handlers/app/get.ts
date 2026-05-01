@@ -4,7 +4,7 @@ import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
-const currentApiBase = process.env.HANASAND_APP_API_BASE || 'https://hanasand.com/api'
+const currentApiBase = process.env.HANASAND_APP_API_BASE || 'https://api.hanasand.com/api'
 const defaultVersion = '0.1.1'
 const defaultUpdateDirectory = '/srv/hanasand/app-updates'
 
@@ -167,7 +167,9 @@ export async function getAppUpdate(req: FastifyRequest<{ Querystring: AppQuery }
         channel: update.channel,
         released_at: update.releasedAt,
         notes: update.notes,
-        download_url: `${publicBaseURL()}/app/download?platform=${encodeURIComponent(platform)}`,
+        download_url: file
+            ? `${publicBaseURL()}/app/download/${encodeURIComponent(path.basename(file.absolute))}`
+            : `${publicBaseURL()}/app/download?platform=${encodeURIComponent(platform)}`,
         package_size: file?.size || null,
         sha256: file?.sha256 || null,
     })

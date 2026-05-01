@@ -46,7 +46,7 @@ const appManifest = appManifestResponse.json()
 assert.equal(appManifest.latest_version, '0.1.2')
 assert.equal(appManifest.update_available, true)
 assert.equal(appManifest.notes, 'Smoke update')
-assert.equal(appManifest.download_url, 'http://127.0.0.1:18111/api/app/download?platform=macos')
+assert.equal(appManifest.download_url, `http://127.0.0.1:18111/api/app/download/${artifactName}`)
 assert.equal(appManifest.package_size, Buffer.byteLength(artifactBody))
 assert.match(appManifest.sha256, /^[a-f0-9]{64}$/)
 

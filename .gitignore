@@ -61,3 +61,5 @@ build/
 dist/
 *.xcworkspace
 *.xcodeproj
+ios
+android
