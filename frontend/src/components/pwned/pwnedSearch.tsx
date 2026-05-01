@@ -15,7 +15,16 @@ type BreachMessage = {
     ok?: boolean
     file?: string
     line?: number
+    match?: string
+    source?: string
     done?: boolean
+}
+
+type BreachFile = {
+    file: string
+    line?: number
+    match?: string
+    source?: string
 }
 
 export default function PwnedSearch({ breached, breachCount, password }: PwnedSearchProps) {
@@ -24,7 +33,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
     const ref = useRef<HTMLDivElement | null>(null)
     const [breachFiles, setBreachFiles] = useState<BreachFile[]>([])
     const uniqueBreachFiles = Array.from(
-        new Map(breachFiles.map(b => [b.file, b])).values()
+        new Map(breachFiles.map(b => [`${b.file}:${b.line ?? ''}:${b.match ?? ''}`, b])).values()
     )
 
     useEffect(() => {
@@ -65,8 +74,13 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                         setLoading(false)
                     }
 
-                    if ('file' in msg && 'line' in msg) {
-                        setBreachFiles(prev => [...prev, { file: msg.file!, line: msg.line! }])
+                    if (msg.file) {
+                        setBreachFiles(prev => [...prev, {
+                            file: msg.file!,
+                            line: msg.line,
+                            match: msg.match,
+                            source: msg.source
+                        }])
                     }
                 }
             } catch (error) {
@@ -86,7 +100,7 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
     const text = uniqueBreachFiles.length === 0 && loading
         ? 'Loading...'
         : uniqueBreachFiles.length === 1
-            ? `The password exists in file '${uniqueBreachFiles[0].file}:${uniqueBreachFiles[0].line}'.`
+            ? `The password exists in file '${formatBreachLocation(uniqueBreachFiles[0])}'.`
             : `The password has been pwned ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
 
     return (
@@ -100,12 +114,14 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
                         <div className=' rounded-lg p-2 max-h-40 md:max-h-60 overflow-auto z-10 grid gap-1 w-full max-w-full'>
                             <div className='flex gap-2 bg-dark/50 rounded-sm px-2 py-1'>
                                 <h1 className='text-bright/90 text-xs md:text-base break-all flex-1 font-bold'>File</h1>
-                                <h1 className='text-bright/90 text-xs md:text-base break-all text-right font-bold'>Line</h1>
+                                <h1 className='text-bright/90 text-xs md:text-base break-all text-right font-bold'>Match</h1>
                             </div>
                             <div className='grid gap-1 w-full max-w-full overflow-hidden'>
-                                {uniqueBreachFiles.map((breach) => (<div key={breach.file} className='flex gap-2 rounded-sm bg-dark/50 px-2 py-1 min-w-0 w-full max-w-full'>
+                                {uniqueBreachFiles.map((breach) => (<div key={`${breach.file}:${breach.line ?? ''}:${breach.match ?? ''}`} className='flex gap-2 rounded-sm bg-dark/50 px-2 py-1 min-w-0 w-full max-w-full'>
                                     <Marquee className='truncate flex-1 ' innerClassName='text-bright/80 text-xs md:text-base break-all' text={breach.file} />
-                                    <h1 className='text-bright/80 text-xs md:text-base break-all w-fit min-w-fit'>{breach.line}</h1>
+                                    <h1 className='text-bright/80 text-xs md:text-base break-all w-fit min-w-fit text-right'>
+                                        {breach.match ?? breach.line ?? breach.source ?? 'found'}
+                                    </h1>
                                 </div>))}
                             </div>
                         </div>
@@ -121,4 +137,10 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
             )}
         </div>
     )
+}
+
+function formatBreachLocation(breach: BreachFile) {
+    const line = breach.line ? `:${breach.line}` : ''
+    const match = breach.match ? ` (${breach.match})` : ''
+    return `${breach.file}${line}${match}`
 }
