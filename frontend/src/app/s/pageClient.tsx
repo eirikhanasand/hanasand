@@ -14,7 +14,6 @@ export default function ShareEntryClient() {
     const router = useRouter()
     const hasStarted = useRef(false)
     const [status, setStatus] = useState('Preparing a project workspace...')
-    const [failed, setFailed] = useState(false)
 
     useEffect(() => {
         if (hasStarted.current) {
@@ -29,12 +28,11 @@ export default function ShareEntryClient() {
         const token = getCookie('access_token')
         const userId = getCookie('id')
         if (!token || !userId) {
-            setFailed(true)
-            setStatus('You need to be signed in to create a project.')
+            setStatus('Redirecting to login...')
+            router.replace('/login?path=/s')
             return
         }
 
-        setFailed(false)
         setStatus('Creating project workspace...')
         try {
             const shareId = randomId()
@@ -86,7 +84,6 @@ export default function ShareEntryClient() {
             setStatus(`Project ready. Workspace ${shareId}, VM ${vmName}, ${readiness}.`)
             router.push(`/s/${shareId}`)
         } catch (error) {
-            setFailed(true)
             setStatus(error instanceof Error ? error.message : 'Unable to create the project.')
         }
     }
@@ -106,16 +103,9 @@ export default function ShareEntryClient() {
                         Project root, VM access, terminal ready
                     </p>
                     <div className='mt-5 flex items-center gap-3 rounded-2xl bg-dark/30 px-4 py-3 text-sm text-bright/78 outline outline-dark'>
-                        {failed
-                            ? <ServerCog className='h-4 w-4 text-red-300' />
-                            : <LoaderCircle className='h-4 w-4 animate-spin text-[#fd8738]' />}
+                        <LoaderCircle className='h-4 w-4 animate-spin text-[#fd8738]' />
                         <span>{status}</span>
                     </div>
-                    {failed ? (
-                        <button type='button' onClick={() => void createProject()} className='mt-4 inline-flex rounded-2xl bg-[#fd8738] px-4 py-3 text-sm font-semibold text-black transition-opacity hover:opacity-90'>
-                            Retry
-                        </button>
-                    ) : null}
                 </div>
             </div>
         </div>

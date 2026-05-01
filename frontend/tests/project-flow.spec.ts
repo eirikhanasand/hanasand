@@ -7,6 +7,14 @@ const vmCreateUrl = /\/api\/vm$/
 const syncAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target\/sync-access$/
 const getAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target$/
 
+test('logged-out users are sent to login without workspace action buttons', async ({ page }) => {
+    await page.goto('/s')
+
+    await expect(page).toHaveURL(/\/login\?path=\/s$/)
+    await expect(page.getByRole('button', { name: 'Create project' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+})
+
 test('the /s entry automatically opens a project-backed workspace', async ({ page, context, baseURL }) => {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     let createdShareBody = ''
@@ -87,6 +95,7 @@ test('the /s entry automatically opens a project-backed workspace', async ({ pag
     await page.goto('/s')
     await expect(page.getByRole('button', { name: 'Create share' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Create project' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0)
     await expect(page.getByText('Share flow')).toHaveCount(0)
     await expect(page.getByText('Project flow')).toHaveCount(0)
 
