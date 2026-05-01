@@ -32,7 +32,10 @@ test('logged-out users get an editor workspace without action buttons', async ({
     await page.goto('/s')
     await shareResponse
 
-    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}$`))
+    await expect(page).toHaveURL(/\/s$/)
+    await expect(page.getByText('Opening workspace')).toHaveCount(0)
+    await expect(page.getByText('Creating project workspace')).toHaveCount(0)
+    await expect(page.locator('main textarea').first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Create project' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0)
     expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
@@ -124,7 +127,8 @@ test('the /s entry automatically opens a project-backed workspace', async ({ pag
 
     await Promise.all([shareResponse, vmResponse])
 
-    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}$`))
+    await expect(page).toHaveURL(/\/s$/)
+    await expect(page.locator('main textarea').first()).toBeVisible()
     expect(createdShareBody).toContain('"includeTree":true')
     expect(createdShareBody).toContain('"type":"folder"')
     expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
@@ -212,7 +216,8 @@ test('authenticated users trigger share and VM provisioning by opening /s', asyn
     await page.goto('/s')
     await Promise.all([shareResponse, vmResponse])
 
-    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}$`))
+    await expect(page).toHaveURL(/\/s$/)
+    await expect(page.locator('main textarea').first()).toBeVisible()
     expect(requestedVmUrl).toContain('/api/vm')
     expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
 })

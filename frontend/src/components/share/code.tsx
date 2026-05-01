@@ -18,6 +18,7 @@ type CodeProps = {
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
     setError: Dispatch<SetStateAction<string | boolean | null>>
+    connect?: boolean
 }
 
 export default function Code({
@@ -31,7 +32,8 @@ export default function Code({
     setEditingContent,
     displayLineNumbers,
     syntaxHighlighting,
-    setError
+    setError,
+    connect = true,
 }: CodeProps) {
     const [lastEdit, setLastEdit] = useState(new Date().getTime())
     const codeRef = useRef<HTMLPreElement>(null)
@@ -44,6 +46,7 @@ export default function Code({
         setIsConnected,
         setParticipants,
         setShare,
+        enabled: connect,
     })
 
     useEffect(() => {

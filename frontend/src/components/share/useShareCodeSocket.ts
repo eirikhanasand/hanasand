@@ -12,6 +12,7 @@ type UseShareCodeSocketProps = {
     setIsConnected: Dispatch<SetStateAction<boolean>>
     setParticipants: Dispatch<SetStateAction<number>>
     setShare: Dispatch<SetStateAction<Share | null>>
+    enabled?: boolean
 }
 
 export function useShareCodeSocket({
@@ -23,11 +24,16 @@ export function useShareCodeSocket({
     setIsConnected,
     setParticipants,
     setShare,
+    enabled = true,
 }: UseShareCodeSocketProps) {
     const [reconnect, setReconnect] = useState(false)
     const wsRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
+        if (!enabled) {
+            return
+        }
+
         async function fetchShareState() {
             try {
                 const userId = getCookie('id') ?? undefined
@@ -48,10 +54,10 @@ export function useShareCodeSocket({
         }
 
         fetchShareState()
-    }, [id, setEditingContent, setError, setShare])
+    }, [enabled, id, setEditingContent, setError, setShare])
 
     useEffect(() => {
-        if (!share) {
+        if (!enabled || !share) {
             return
         }
 
@@ -92,7 +98,7 @@ export function useShareCodeSocket({
         return () => {
             ws.close()
         }
-    }, [editingContent, id, reconnect, setEditingContent, setIsConnected, setParticipants, setShare, share])
+    }, [editingContent, enabled, id, reconnect, setEditingContent, setIsConnected, setParticipants, setShare, share])
 
     function sendEdit(content: string) {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {

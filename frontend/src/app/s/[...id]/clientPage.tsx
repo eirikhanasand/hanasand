@@ -6,11 +6,16 @@ import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Search from '@/components/share/search/search'
 import OpenFiles from '@/components/share/files/openFiles'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import DisplayError from '@/components/share/search/displayError'
+import { getCookie } from '@/utils/cookies/cookies'
+import postShare from '@/utils/share/post'
+import getAgentTarget from '@/utils/vms/fetch/getAgentTarget'
+import syncAgentTargetAccess from '@/utils/vms/fetch/syncAgentTargetAccess'
+import postVM from '@/utils/vms/fetch/postVM'
 
 type ClientPageProps = {
     id: string
@@ -20,6 +25,8 @@ type ClientPageProps = {
     sharePageWidth: number
     shareTerminalHeight: number
     serverOpenFiles: OpenFile[]
+    autoCreate: boolean
+    replaceUrlOnCreate: boolean
 }
 
 export default function ClientPage({
@@ -29,7 +36,9 @@ export default function ClientPage({
     tree,
     sharePageWidth,
     shareTerminalHeight,
-    serverOpenFiles
+    serverOpenFiles,
+    autoCreate,
+    replaceUrlOnCreate,
 }: ClientPageProps) {
     const [showExplorer, setShowExplorer] = useState(true)
     const [showMetadata, setShowMetaData] = useState(true)
@@ -46,10 +55,75 @@ export default function ClientPage({
     const [triggerSiteChange, setTriggerSiteChange] = useState<boolean | 'close'>(false)
     const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
     const [openFiles, setOpenFiles] = useState(serverOpenFiles)
+    const [workspaceCreated, setWorkspaceCreated] = useState(!autoCreate)
+    const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const maxWidth = showMetadata && showExplorer
         ? 'max-w-[64vw]'
         : 'max-w-full'
+
+    useEffect(() => {
+        if (!autoCreate || hasCreatedWorkspace.current) {
+            return
+        }
+
+        hasCreatedWorkspace.current = true
+
+        async function createWorkspace() {
+            const token = getCookie('access_token')
+            const userId = getCookie('id')
+            const normalizedName = `project-${id}`
+            const vmName = normalizedName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 48) || `vm-${id.toLowerCase()}`
+
+            const createdShare = await postShare({
+                includeTree: true,
+                id,
+                content: editingContent,
+                name: normalizedName,
+                path: normalizedName,
+                type: 'folder',
+                token,
+                userId,
+            })
+            if (!createdShare) {
+                setError('Unable to save this workspace yet. Your editor stays open so you can retry.')
+                return
+            }
+
+            setShare(createdShare)
+            setWorkspaceCreated(true)
+            if (replaceUrlOnCreate) {
+                window.history.replaceState(window.history.state, '', `/s/${id}`)
+            }
+
+            if (!token || !userId) {
+                return
+            }
+
+            const vmResult = await postVM({ name: vmName })
+            if (vmResult.status >= 400 && vmResult.status !== 409) {
+                setError(vmResult.message)
+                return
+            }
+
+            const syncResult = await syncAgentTargetAccess(vmName, 'current_user')
+            if (syncResult.status >= 400 || !syncResult.body?.ok) {
+                setError(syncResult.message)
+                return
+            }
+
+            const targetResult = await getAgentTarget(vmName)
+            if (targetResult.status >= 400 || !targetResult.target) {
+                setError(targetResult.message)
+            }
+        }
+
+        void createWorkspace()
+    }, [autoCreate, editingContent, id, replaceUrlOnCreate, setError])
 
     return (
         <div className='flex w-full h-full max-w-[100vw] overflow-hidden p-2 gap-2'>
@@ -74,6 +148,7 @@ export default function ClientPage({
                     displayLineNumbers={displayLineNumbers}
                     syntaxHighlighting={syntaxHighlighting}
                     setError={setError}
+                    connect={workspaceCreated}
                 />
             </div>
             <Metadata
