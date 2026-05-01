@@ -959,8 +959,10 @@ final class DesktopAgentModel: ObservableObject {
             guard manifest.updateAvailable else {
                 if manifest.hasNewerVersion(than: currentVersion) {
                     updateStatus = .unavailable(message: "Update feed is live. Version \(manifest.latestVersion) is listed, but no packaged desktop build is published yet.")
+                } else if !backgroundInstalledUpdateVersion.isEmpty {
+                    updateStatus = .ready(message: "Restart Hanasand to use \(backgroundInstalledUpdateVersion).")
                 } else {
-                    updateStatus = .upToDate(message: backgroundInstalledUpdateVersion.isEmpty ? "Hanasand Desktop \(Self.appVersion) is current." : "Hanasand Desktop \(backgroundInstalledUpdateVersion) is installed and will be active on next launch.")
+                    updateStatus = .upToDate(message: "Hanasand Desktop \(Self.appVersion) is current.")
                 }
                 return
             }
@@ -973,7 +975,7 @@ final class DesktopAgentModel: ObservableObject {
             let installedApp = try await client.installDownloadedApp(from: stagedPath)
             rememberBackgroundInstalledUpdate(version: manifest.latestVersion)
             stagedUpdatePath = installedApp.path
-            updateStatus = .upToDate(message: "Installed \(manifest.latestVersion) in the background. It will be active on next launch.")
+            updateStatus = .ready(message: "Restart Hanasand to use \(manifest.latestVersion).")
             append(meta: "Update installed", body: "\(manifest.latestVersion) -> \(installedApp.path)", kind: .change)
         } catch {
             if let downloadedPath {
