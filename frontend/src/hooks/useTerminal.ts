@@ -15,6 +15,7 @@ export default function useTerminal({ share, open }: TerminalProps) {
     const wsRef = useRef<WebSocket | null>(null)
     const queuedMessagesRef = useRef<string[]>([])
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const lastResizeRef = useRef<{ cols: number; rows: number } | null>(null)
     const shareId = share && 'id' in share ? share.id : null
     const shareAlias = share?.alias || null
     const sessionKey = open && shareId && shareAlias ? `${shareId}:${shareAlias}` : null
@@ -68,6 +69,13 @@ export default function useTerminal({ share, open }: TerminalProps) {
                 setParticipants(1)
                 setIsConnected(true)
                 flushQueue(ws)
+                if (lastResizeRef.current && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'resize',
+                        cols: lastResizeRef.current.cols,
+                        rows: lastResizeRef.current.rows
+                    }))
+                }
             }
 
             ws.onclose = () => {
@@ -163,6 +171,7 @@ export default function useTerminal({ share, open }: TerminalProps) {
             return
         }
 
+        lastResizeRef.current = { cols, rows }
         const payload = JSON.stringify({
             type: 'resize',
             cols,
