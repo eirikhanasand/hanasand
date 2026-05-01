@@ -18963,48 +18963,42 @@ struct AIWorkspace: View {
                     }
                 }
             }
-            .padding(.horizontal, 88)
+            .frame(maxWidth: 980, alignment: .leading)
+            .padding(.horizontal, 42)
             .padding(.vertical, 30)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
             .frame(minHeight: 520)
         }
         .background(theme.background)
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        HStack(spacing: 10) {
             TextField("Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...", text: $model.prompt, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(theme.text)
-                .lineLimit(3...8)
+                .lineLimit(1)
                 .focused(commandFocused)
                 .onSubmit {
                     model.submitAIChatPrompt()
                 }
 
-            HStack(spacing: 12) {
-                Text("Enter to send, Shift+Enter for newline")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(theme.textTertiary)
-                Spacer()
-                Button {
-                    model.submitAIChatPrompt()
-                } label: {
-                    Label(model.isRunning ? "Working" : "Send", systemImage: model.isRunning ? "circle.dotted" : "paperplane.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.background)
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(theme.text.opacity(model.isRunning ? 0.58 : 0.92))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(model.isRunning)
+            Button {
+                model.submitAIChatPrompt()
+            } label: {
+                Image(systemName: model.isRunning ? "circle.dotted" : "arrow.up")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(theme.background)
+                    .frame(width: 38, height: 38)
+                    .background(theme.text.opacity(model.isRunning ? 0.58 : 0.92))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
+            .buttonStyle(.plain)
+            .disabled(model.isRunning || model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .padding(18)
-        .frame(maxWidth: 980, minHeight: 146, alignment: .topLeading)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: 980, minHeight: 56, alignment: .center)
         .background(theme.card.opacity(0.9))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
