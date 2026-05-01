@@ -27,11 +27,6 @@ export default function ShareEntryClient() {
     async function createProject() {
         const token = getCookie('access_token')
         const userId = getCookie('id')
-        if (!token || !userId) {
-            setStatus('Redirecting to login...')
-            router.replace('/login?path=/s')
-            return
-        }
 
         setStatus('Creating project workspace...')
         try {
@@ -55,6 +50,13 @@ export default function ShareEntryClient() {
             })
             if (!share) {
                 throw new Error('Unable to create the project workspace.')
+            }
+
+            setStatus('Opening editor...')
+            router.push(`/s/${shareId}`)
+
+            if (!token || !userId) {
+                return
             }
 
             setStatus('Provisioning VM backing for this project...')
@@ -82,7 +84,6 @@ export default function ShareEntryClient() {
                 : 'created and waiting for the VM to become connectable'
 
             setStatus(`Project ready. Workspace ${shareId}, VM ${vmName}, ${readiness}.`)
-            router.push(`/s/${shareId}`)
         } catch (error) {
             setStatus(error instanceof Error ? error.message : 'Unable to create the project.')
         }

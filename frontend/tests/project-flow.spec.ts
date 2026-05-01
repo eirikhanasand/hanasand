@@ -7,12 +7,35 @@ const vmCreateUrl = /\/api\/vm$/
 const syncAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target\/sync-access$/
 const getAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target$/
 
-test('logged-out users are sent to login without workspace action buttons', async ({ page }) => {
-    await page.goto('/s')
+test('logged-out users get an editor workspace without action buttons', async ({ page }) => {
+    let createdShareBody = ''
+    let createdShareId = ''
 
-    await expect(page).toHaveURL(/\/login\?path=\/s$/)
+    await page.route(shareCreateUrl, async (route) => {
+        createdShareBody = route.request().postData() || ''
+        createdShareId = JSON.parse(createdShareBody).id as string
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: createdShareId,
+                alias: `project-${createdShareId}`,
+                path: `project-${createdShareId}`,
+                content: '',
+                tree: [],
+            }),
+        })
+    })
+
+    const shareResponse = page.waitForResponse((response) => shareCreateUrl.test(response.url()))
+
+    await page.goto('/s')
+    await shareResponse
+
+    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}$`))
     await expect(page.getByRole('button', { name: 'Create project' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0)
+    expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
 })
 
 test('the /s entry automatically opens a project-backed workspace', async ({ page, context, baseURL }) => {
