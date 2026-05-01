@@ -1,4 +1,5 @@
 import config from '@/config'
+import { uploadTimeoutForFileSize } from './uploadTimeout'
 import { getCookie } from '@/utils/cookies/cookies'
 
 type PostFileProps = {
@@ -25,7 +26,7 @@ export async function postFile({ name, file, description, path, type }: PostFile
 
         formData.append('type', type)
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), config.abortTimeout * 10)
+        const timeout = setTimeout(() => controller.abort(), uploadTimeoutForFileSize(file.size, config.abortTimeout * 10))
         const token = getCookie('access_token')
         const userId = getCookie('id')
         const response = await fetch(`${config.url.cdn}/files`, {
@@ -44,7 +45,7 @@ export async function postFile({ name, file, description, path, type }: PostFile
         }
 
         if (!response.ok) {
-            throw new Error('Failed to upload file')
+            return response.status
         }
 
         const json = await response.json()

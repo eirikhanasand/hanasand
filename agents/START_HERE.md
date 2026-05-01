@@ -23,6 +23,7 @@ The important rule is that the self-improvement work is only valuable when it fe
 ## Where To Look First
 
 - Live handoff: [COORDINATION.md](/Users/eirikhanasand/Desktop/personal/hanasand/agents/COORDINATION.md)
+- Local multi-repo and Hanasand server handoff: [HANDOFF_RUNBOOK.md](/Users/eirikhanasand/Desktop/personal/hanasand/agents/HANDOFF_RUNBOOK.md)
 - Desktop/app implementation guide: [DESKTOP_APP_DEVELOPMENT.md](/Users/eirikhanasand/Desktop/personal/hanasand/agents/DESKTOP_APP_DEVELOPMENT.md)
 - Source code and tests for the surface you are touching.
 - Local ignored worknotes only when you need historical detail.

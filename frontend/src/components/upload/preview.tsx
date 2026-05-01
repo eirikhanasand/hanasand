@@ -71,6 +71,10 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                 setError('Path is already taken. Choose another.')
             }
 
+            if (status === 413) {
+                return setError('File is too large for the current upload limit.')
+            }
+
             if (!status || typeof status === 'number' || typeof status !== 'number' && !('id' in status)) {
                 return setError('Upload failed. Try again later.')
             }
