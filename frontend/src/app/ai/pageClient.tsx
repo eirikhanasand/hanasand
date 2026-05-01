@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { FolderKanban, PanelRight, RotateCcw, SquareArrowOutUpRight, X } from 'lucide-react'
+import { PanelRight, RotateCcw, SquareArrowOutUpRight, X } from 'lucide-react'
 import ChatPane from '@/components/ai/chatPane'
 import ChatSidebar from '@/components/ai/chatSidebar'
 import WorkspacePane from '@/components/ai/workspacePane'
@@ -64,7 +64,7 @@ export default function AIPageClient({
     }
 
     return (
-        <div className={`${compact ? 'h-screen' : 'h-[calc(100vh-4.5rem)]'} w-full overflow-hidden bg-[#151515]`}>
+        <div className={`${compact ? 'h-screen' : 'h-[calc(100vh-7.5rem)]'} relative w-full overflow-hidden bg-[#11120f]`}>
             <div className={`flex h-full flex-col ${compact ? 'px-0 pb-0 pt-0' : 'px-0 pb-0 pt-0'}`}>
                 {showHeader ? (
                     <div className='flex h-14 items-center justify-between border-b border-[#2d2d2b] bg-[#161616] px-5'>
@@ -89,7 +89,7 @@ export default function AIPageClient({
                     </div>
                 ) : null}
 
-                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[17rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[17rem_minmax(0,1fr)]'}`}>
+                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[18rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[18rem_minmax(0,1fr)]'}`}>
                     <ChatSidebar
                         activeConversation={ai.activeConversation}
                         activeConversationId={ai.activeConversationId}
@@ -163,51 +163,47 @@ export default function AIPageClient({
                     ) : null}
                 </div>
 
-                {ai.statusNotice ? (
-                    <div className='mx-4 mt-3 rounded-lg border border-[#4a4030] bg-[#27231d] px-4 py-3 text-sm text-[#e6d6b7]'>
-                        {ai.statusNotice}
-                    </div>
-                ) : null}
-
-                {ai.resumeNotice ? (
-                    <div className='mx-4 mt-3 flex items-start justify-between gap-3 rounded-lg border border-[#3b4537] bg-[#20251f] px-4 py-3 text-sm text-[#d9e3d4]'>
-                        <div className='flex min-w-0 items-start gap-3'>
-                            <RotateCcw className='mt-0.5 h-4 w-4 shrink-0 text-[#a9b8a0]' />
-                            <div className='min-w-0'>
-                                <p>{ai.resumeNotice.message}</p>
-                                {ai.resumeNotice.workspaceId ? (
-                                    <Link href={`/s/${ai.resumeNotice.workspaceId}`} className='mt-2 inline-flex items-center gap-2 text-xs text-[#d9e3d4] underline-offset-4 hover:underline'>
-                                        Open recovered workspace
-                                        <SquareArrowOutUpRight className='h-3.5 w-3.5' />
-                                    </Link>
-                                ) : null}
+                {ai.statusNotice || ai.resumeNotice || (!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun)) ? (
+                    <div className='pointer-events-none absolute right-4 top-20 z-20 grid w-[min(32rem,calc(100%-2rem))] gap-3'>
+                        {ai.statusNotice ? (
+                            <div className='pointer-events-auto rounded-2xl border border-[#4a4030] bg-[#27231d]/95 px-4 py-3 text-sm text-[#e6d6b7] shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl'>
+                                {ai.statusNotice}
                             </div>
-                        </div>
-                        <button
-                            type='button'
-                            onClick={() => ai.setResumeNotice(null)}
-                            className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#d9e3d4]/80 transition-colors hover:bg-[#30382d] hover:text-[#f1f3ee]'
-                            aria-label='Dismiss resume notice'
-                        >
-                            <X className='h-4 w-4' />
-                        </button>
+                        ) : null}
+
+                        {ai.resumeNotice ? (
+                            <div className='pointer-events-auto flex items-start justify-between gap-3 rounded-2xl border border-[#3b4537] bg-[#20251f]/95 px-4 py-3 text-sm text-[#d9e3d4] shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl'>
+                                <div className='flex min-w-0 items-start gap-3'>
+                                    <RotateCcw className='mt-0.5 h-4 w-4 shrink-0 text-[#a9b8a0]' />
+                                    <div className='min-w-0'>
+                                        <p>{ai.resumeNotice.message}</p>
+                                        {ai.resumeNotice.workspaceId ? (
+                                            <Link href={`/s/${ai.resumeNotice.workspaceId}`} className='mt-2 inline-flex items-center gap-2 text-xs text-[#d9e3d4] underline-offset-4 hover:underline'>
+                                                Open recovered workspace
+                                                <SquareArrowOutUpRight className='h-3.5 w-3.5' />
+                                            </Link>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <button
+                                    type='button'
+                                    onClick={() => ai.setResumeNotice(null)}
+                                    className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#d9e3d4]/80 transition-colors hover:bg-[#30382d] hover:text-[#f1f3ee]'
+                                    aria-label='Dismiss resume notice'
+                                >
+                                    <X className='h-4 w-4' />
+                                </button>
+                            </div>
+                        ) : null}
+
+                        {!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun) ? (
+                            <div className={`pointer-events-auto rounded-2xl border px-4 py-3 text-sm shadow-[0_18px_60px_rgba(0,0,0,0.26)] backdrop-blur-xl ${ai.runtimeState.lastFailure ? 'border-[#5d3835] bg-[#2a1d1c]/95 text-[#e6c1bd]' : 'border-[#2d2d2b] bg-[#202020]/95 text-[#b7b7b2]'}`}>
+                                {ai.runtimeState.lastFailure?.message || ai.runtimeState.lastToolRun?.detail || runtimeStateSummary(ai.runtimeState)}
+                            </div>
+                        ) : null}
                     </div>
                 ) : null}
 
-                {!ai.statusNotice && (ai.runtimeState.lastFailure || ai.runtimeState.lastToolRun) ? (
-                    <div className={`mx-4 mt-3 rounded-lg border px-4 py-3 text-sm ${ai.runtimeState.lastFailure ? 'border-[#5d3835] bg-[#2a1d1c] text-[#e6c1bd]' : 'border-[#2d2d2b] bg-[#202020] text-[#b7b7b2]'}`}>
-                        {ai.runtimeState.lastFailure?.message || ai.runtimeState.lastToolRun?.detail || runtimeStateSummary(ai.runtimeState)}
-                    </div>
-                ) : null}
-
-                {mode === 'landing' && !ai.filteredConversations.length && !ai.archivedConversations.length ? (
-                    <div className='mt-4 flex justify-center'>
-                        <div className='inline-flex items-center gap-2 rounded-full border border-[#30302e] bg-[#202020] px-4 py-2 text-sm text-[#8d8d89]'>
-                            <FolderKanban className='h-4 w-4 text-[#b7b7b2]' />
-                            Import a repo or attach a share from a chat once you need workspace context.
-                        </div>
-                    </div>
-                ) : null}
             </div>
         </div>
     )

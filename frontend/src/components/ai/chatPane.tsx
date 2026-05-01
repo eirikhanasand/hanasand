@@ -2,9 +2,10 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, Bot, CheckCircle2, ExternalLink, LoaderCircle, PanelRightOpen, Send, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, Bot, CheckCircle2, ExternalLink, FolderKanban, LoaderCircle, PanelRightOpen, Send, Sparkles, X } from 'lucide-react'
 
 type ChatPaneProps = {
     activeConversation: AIConversation | null
@@ -33,6 +34,7 @@ export default function ChatPane({
     const scrollRef = useRef<HTMLDivElement | null>(null)
     const [showArtifacts, setShowArtifacts] = useState(false)
     const [previewArtifact, setPreviewArtifact] = useState<AIArtifact | null>(null)
+    const [showImportHint, setShowImportHint] = useState(true)
     const isThinking = Boolean(activeConversation?.messages.at(-1)?.pending)
         || activeConversation?.metrics?.status === 'preparing'
         || activeConversation?.metrics?.status === 'generating'
@@ -50,6 +52,12 @@ export default function ChatPane({
         container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
     }, [lastMessageKey])
 
+    useEffect(() => {
+        setShowImportHint(true)
+        const timeout = window.setTimeout(() => setShowImportHint(false), 5000)
+        return () => window.clearTimeout(timeout)
+    }, [activeConversation?.id])
+
     const latestArtifacts = activeConversation?.messages.flatMap((message) =>
         Array.isArray(message.metadata?.artifacts) ? message.metadata.artifacts as AIArtifact[] : []
     ) || []
@@ -57,19 +65,29 @@ export default function ChatPane({
 
     return (
         <Fragment>
-            <section className='flex min-h-0 min-w-0 flex-1 flex-col bg-[#151515]'>
-                <div className='border-b border-[#2d2d2b] px-5 py-4'>
+            <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#141412]'>
+                <div className='relative z-10 border-b border-[#292925] px-7 py-5'>
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
-                            <h1 className='truncate text-base font-semibold text-[#eeeeea]'>{activeConversation?.title || 'New chat'}</h1>
+                            <h1 className='truncate text-base font-semibold tracking-[-0.02em] text-[#f3f0e8]'>{activeConversation?.title || 'New chat'}</h1>
                             <p className='mt-1 text-sm text-[#8d8d89]'>
                                 {isConnected ? `${participants || 1} model${participants === 1 ? '' : 's'} connected` : 'No model connected'}
                             </p>
                         </div>
                         <div className='flex items-center gap-2'>
+                            <Link
+                                href='/s'
+                                className={`inline-flex h-9 items-center gap-2 rounded-full bg-[#20211d] text-xs text-[#a6a39b] ring-1 ring-white/[0.035] transition-all duration-300 hover:bg-[#282925] hover:text-[#f2eee5] ${showImportHint ? 'px-3' : 'w-9 justify-center px-0'}`}
+                                aria-label='Import context'
+                            >
+                                <FolderKanban className='h-4 w-4 shrink-0' />
+                                {showImportHint ? (
+                                    <span className='whitespace-nowrap'>Import context when needed</span>
+                                ) : null}
+                            </Link>
                             <StatusChip icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />} label={isThinking ? 'Thinking...' : 'Ready'} accent={isThinking} />
                             {latestArtifacts.length ? (
-                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs transition-colors ${showArtifacts ? 'bg-[#333331] text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-[#272725] hover:text-[#eeeeea]'}`}>
+                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs transition-colors ${showArtifacts ? 'bg-[#333331] text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-[#272725] hover:text-[#eeeeea]'}`}>
                                     <PanelRightOpen className='h-3.5 w-3.5' />
                                     Artifacts
                                 </button>
@@ -79,15 +97,17 @@ export default function ChatPane({
                 </div>
 
                 <div className={`grid min-h-0 flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
-                    <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-6 md:px-12 xl:px-20'>
+                    <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-8 md:px-12 xl:px-24'>
                         {!activeConversation?.messages.length ? (
                             <EmptyComposerState landing={landing} />
                         ) : activeConversation.messages.map((message) => (
-                            <article key={message.id} className={`max-w-3xl rounded-xl border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#444440] bg-[#242424] text-[#eeeeea]' : message.error ? 'border-[#5d3835] bg-[#241b1a] text-[#e6c1bd]' : message.role === 'tool' ? 'border-[#333331] bg-[#1d1d1d] text-[#d3d3ce]' : 'border-transparent bg-transparent text-[#eeeeea]'}`}>
-                                <div className='mb-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-[#777772]'>
-                                    <span>{message.role === 'tool' ? toolLabel(message) : message.role}</span>
-                                    <span>{message.role === 'assistant' ? (message.modelName || activeConversation.activeModel || 'assistant') : null}</span>
-                                </div>
+                            <article key={message.id} className={`max-w-3xl rounded-[1.25rem] border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#464640] bg-[#272724]/95 text-[#f1eee7] shadow-[0_18px_60px_rgba(0,0,0,0.22)]' : message.error ? 'border-[#5d3835] bg-[#241b1a] text-[#e6c1bd]' : message.role === 'tool' ? 'border-[#333331] bg-[#1d1d1d] text-[#d3d3ce]' : 'border-transparent bg-transparent text-[#eeeeea]'}`}>
+                                {message.role === 'tool' || message.role === 'assistant' ? (
+                                    <div className='mb-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-[#777772]'>
+                                        <span>{message.role === 'tool' ? toolLabel(message) : message.role}</span>
+                                        <span>{message.role === 'assistant' ? (message.modelName || activeConversation.activeModel || 'assistant') : null}</span>
+                                    </div>
+                                ) : null}
                                 {message.role === 'user' ? (
                                     <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6'>{message.content}</div>
                                 ) : message.role === 'tool' ? (
@@ -131,8 +151,8 @@ export default function ChatPane({
                     ) : null}
                 </div>
 
-                <div className='border-t border-[#2d2d2b] p-4 md:px-12 xl:px-20'>
-                    <div className='rounded-2xl border border-[#343432] bg-[#2b2b2a] p-3 shadow-[0_18px_70px_rgba(0,0,0,0.34)]'>
+                <div className='relative z-10 border-t border-[#282824] bg-[#141412] px-4 py-3 md:px-12 xl:px-24'>
+                    <div className='mx-auto flex h-14 max-w-6xl items-center gap-2 rounded-2xl border border-[#353530] bg-[#252522] px-3 shadow-[0_14px_44px_rgba(0,0,0,0.24)]'>
                         <textarea
                             value={composer}
                             onChange={(event) => onComposerChange(event.target.value)}
@@ -144,15 +164,13 @@ export default function ChatPane({
                             }}
                             placeholder='Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...'
                             readOnly={readOnly}
-                            className='min-h-24 w-full resize-none bg-transparent text-sm text-[#eeeeea] outline-none placeholder:text-[#777772]'
+                            rows={1}
+                            className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#eeeeea] outline-none placeholder:text-[#777772]'
                         />
-                        <div className='mt-3 flex items-center justify-between gap-3'>
-                            <p className='text-xs text-[#8d8d89]'>{readOnly ? 'Reviewer mode: inspect the conversation and workspace, but only editors can send.' : 'Enter to send, Shift+Enter for newline'}</p>
-                            <button type='button' disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected} onClick={onSend} className='inline-flex items-center gap-2 rounded-xl bg-[#eeeeea] px-4 py-2 font-semibold text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
-                                {awaitingResponse ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
-                                Send
-                            </button>
-                        </div>
+                        <button type='button' disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected} onClick={onSend} className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#f0eee6] px-4 text-sm font-semibold text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
+                            {awaitingResponse ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
+                            Send
+                        </button>
                     </div>
                 </div>
             </section>
@@ -163,12 +181,12 @@ export default function ChatPane({
 
 function EmptyComposerState({ landing }: { landing: boolean }) {
     return (
-        <div className='flex h-full min-h-60 items-center justify-center'>
+        <div className='flex h-full min-h-[28rem] items-center justify-center'>
             <div className='max-w-xl text-center'>
-                <div className='mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#242424] text-[#d3d3ce]'>
-                    <Bot className='h-5 w-5' />
+                <div className='mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#22221f] text-[#d3d3ce] shadow-[0_18px_50px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.035]'>
+                    <Bot className='h-6 w-6' />
                 </div>
-                <h2 className='mt-5 text-xl font-semibold text-[#eeeeea]'>
+                <h2 className='mt-7 text-2xl font-semibold tracking-[-0.035em] text-[#f3f0e8]'>
                     {landing ? 'Start with the task, not the tooling.' : 'Describe what you want built.'}
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#9a9a95]'>
@@ -223,7 +241,7 @@ function StatusChip({
     accent?: boolean
 }) {
     return (
-        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${accent ? 'bg-[#333331] text-[#eeeeea]' : 'bg-[#242424] text-[#9a9a95]'}`}>
+        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-[#333331] text-[#eeeeea]' : 'bg-[#242424] text-[#9a9a95]'}`}>
             {icon}
             {label}
         </div>
