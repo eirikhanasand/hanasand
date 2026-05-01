@@ -12,6 +12,15 @@ APP_DIR="${DIST_DIR}/Hanasand.app"
 PACKAGE_PATH="${DIST_DIR}/Hanasand-${VERSION}-macos.zip"
 ICON_FILE="${ROOT_DIR}/Resources/Hanasand.icns"
 
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?([-+][A-Za-z0-9.]+)?$ ]]; then
+  cat >&2 <<EOF
+Invalid HANASAND_APP_VERSION: ${VERSION}
+Desktop updater versions must be semantic, e.g. 0.1.29.
+Branch names such as local-ai-simplified must not be written into CFBundleShortVersionString.
+EOF
+  exit 64
+fi
+
 rm -rf "$APP_DIR" "$PACKAGE_PATH"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$DIST_DIR"
 
@@ -52,11 +61,29 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-if [[ -n "${HANASAND_CODESIGN_IDENTITY:-}" ]]; then
-  codesign --force --deep --options runtime --sign "$HANASAND_CODESIGN_IDENTITY" "$APP_DIR"
-else
-  codesign --force --deep --sign - "$APP_DIR"
+SIGN_IDENTITY="${HANASAND_CODESIGN_IDENTITY:-}"
+if [[ -z "$SIGN_IDENTITY" ]] && command -v security >/dev/null 2>&1; then
+  SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '/Apple Development:/ { print $2; exit }')"
 fi
+
+if [[ -n "$SIGN_IDENTITY" ]]; then
+  codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP_DIR"
+elif [[ "${HANASAND_ALLOW_ADHOC_SIGNING:-}" == "1" ]]; then
+  echo "Signing ad-hoc because HANASAND_ALLOW_ADHOC_SIGNING=1 is set." >&2
+  codesign --force --deep --sign - "$APP_DIR"
+else
+  cat >&2 <<EOF
+No valid Apple Development signing identity found.
+Refusing to package an ad-hoc desktop update because macOS privacy permissions
+such as Screen Recording are tied to the app signature and will be lost.
+
+Set HANASAND_CODESIGN_IDENTITY to a valid identity, or set
+HANASAND_ALLOW_ADHOC_SIGNING=1 only for throwaway local builds.
+EOF
+  exit 65
+fi
+
+codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 
 (
   cd "$DIST_DIR"

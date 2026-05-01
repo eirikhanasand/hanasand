@@ -26,7 +26,7 @@ The app starts a local agent on `http://127.0.0.1:45731` and keeps the status vi
 HANASAND_APP_VERSION=0.1.2 app/desktop/scripts/package-update.sh
 ```
 
-The script builds a release `.app`, signs it ad-hoc unless `HANASAND_CODESIGN_IDENTITY` is set, and writes `dist/Hanasand-<version>-macos.zip` plus `dist/manifest.json`.
+The script builds a release `.app`, signs it with `HANASAND_CODESIGN_IDENTITY` when set, otherwise auto-selects the first local `Apple Development` signing identity, and verifies the result before writing the archive. Stable signing keeps macOS privacy permissions such as Screen Recording attached across updates. Ad-hoc update packages are refused by default; set `HANASAND_ALLOW_ADHOC_SIGNING=1` only for throwaway local builds. It writes `dist/Hanasand-<version>-macos.zip` plus `dist/manifest.json`.
 The API auto-discovers updates from the update directory, so deploy the zip and manifest together:
 
 ```sh
