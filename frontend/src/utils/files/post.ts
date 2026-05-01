@@ -1,4 +1,5 @@
 import config from '@/config'
+import { getCookie } from '@/utils/cookies/cookies'
 
 type PostFileProps = {
     name: string
@@ -25,9 +26,15 @@ export async function postFile({ name, file, description, path, type }: PostFile
         formData.append('type', type)
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout * 10)
+        const token = getCookie('access_token')
+        const userId = getCookie('id')
         const response = await fetch(`${config.url.cdn}/files`, {
             method: 'POST',
             body: formData,
+            headers: token && userId ? {
+                Authorization: `Bearer ${token}`,
+                id: userId
+            } : undefined,
             signal: controller.signal
         })
 
