@@ -13,7 +13,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen }: DeployProps) {
             onClick={() => setTerminalOpen(true)}
             className='
                 group fixed bottom-3 right-3 z-100 cursor-pointer select-none
-                w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
+                w-[18.5%] min-w-[130px] rounded-xl px-4 py-2 text-center
                 hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
                 backdrop-blur-md bg-white/3 group-hover:bg-white/10 overflow-hidden
                 hover:scale-[1.03] hover:border-white/30 transition-all
@@ -28,11 +28,8 @@ export default function Deploy({ setTerminalOpen, terminalOpen }: DeployProps) {
             <div className='absolute inset-0 bg-black/10' />
 
             <h1 className='relative z-10 text-white/90 font-semibold tracking-wide'>
-                {terminalOpen ? 'Terminal open' : 'Deploy'}
+                Deploy
             </h1>
-            <p className='relative z-10 mt-1 text-[11px] uppercase tracking-[0.18em] text-white/55'>
-                {terminalOpen ? 'Run commands here' : 'Open terminal'}
-            </p>
         </button>
     )
 }
