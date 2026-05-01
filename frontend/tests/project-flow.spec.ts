@@ -223,6 +223,95 @@ test('authenticated users trigger share and VM provisioning by opening /s', asyn
     expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
 })
 
+test('new files stay inside the existing project root', async ({ page }) => {
+    const shareId = 'pwshare-project'
+    const rootId = 'project-root-from-api'
+    const createdPaths: string[] = []
+
+    await page.route(new RegExp(`/api/share/${shareId}$`), async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: 'mayapple-snake-vamo',
+                path: shareId,
+                content: '',
+                wordCount: 0,
+                estimatedMinutes: 0,
+                timestamp: new Date().toISOString(),
+                git: null,
+                locked: false,
+                owner: '',
+                parent: '',
+            }),
+        })
+    })
+
+    await page.route(new RegExp(`/api/share/tree/${shareId}$`), async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([
+                {
+                    id: rootId,
+                    name: 'project-QHNVEX',
+                    alias: 'project-QHNVEX',
+                    parent: null,
+                    type: 'folder',
+                    children: [],
+                },
+            ]),
+        })
+    })
+
+    await page.route(shareCreateUrl, async (route) => {
+        const body = JSON.parse(route.request().postData() || '{}')
+        createdPaths.push(`${body.parent}:${body.name}`)
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id,
+                alias: body.name,
+                path: body.name,
+                content: '',
+                tree: [
+                    {
+                        id: rootId,
+                        name: 'project-QHNVEX',
+                        alias: 'project-QHNVEX',
+                        parent: null,
+                        type: 'folder',
+                        children: [
+                            {
+                                id: body.id,
+                                name: body.name,
+                                alias: body.name,
+                                parent: rootId,
+                                type: 'file',
+                            },
+                        ],
+                    },
+                ],
+            }),
+        })
+    })
+
+    await page.goto(`/s/${shareId}`)
+    await expect(page.getByText('mayapple-snake-vamo')).toBeVisible()
+    await expect(page.getByText('project-QHNVEX')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Create file' }).click()
+    const fileNameInput = page.getByRole('main').locator('input').last()
+    await fileNameInput.fill('ab')
+    await fileNameInput.press('Enter')
+
+    await expect(page.getByRole('link', { name: 'ab' })).toBeVisible()
+    await expect(page.getByText('project-QHNVEX')).toHaveCount(0)
+    expect(createdPaths).toContain(`${rootId}:ab`)
+})
+
 test('metadata reload keeps the current share id instead of opening a random workspace', async ({ page }) => {
     const shareId = 'pwshare-metadata'
 

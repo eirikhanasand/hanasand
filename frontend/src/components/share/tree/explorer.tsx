@@ -170,9 +170,13 @@ function getProjectRoot(tree: Tree | null, share: Share | null): FileFolder | nu
     }
 
     const [root] = tree
-    if (root.type !== 'folder' || root.id !== share.id) {
+    if (root.type !== 'folder') {
         return null
     }
 
-    return root
+    if (root.id === share.id || (root.parent === null && root.name.startsWith('project-'))) {
+        return root
+    }
+
+    return null
 }
