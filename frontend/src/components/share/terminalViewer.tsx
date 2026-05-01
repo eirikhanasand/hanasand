@@ -1,6 +1,6 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 type TerminalViewerProps = {
     open: boolean
@@ -17,6 +17,53 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
     const fitAddonRef = useRef<FitAddon | null>(null)
     const renderedChunkCountRef = useRef(0)
     const resizeObserverRef = useRef<ResizeObserver | null>(null)
+    const fitTimeoutRef = useRef<number | null>(null)
+    const lastSizeRef = useRef({ cols: 0, rows: 0 })
+
+    const clearScheduledFit = useCallback(() => {
+        if (fitTimeoutRef.current === null) {
+            return
+        }
+
+        window.clearTimeout(fitTimeoutRef.current)
+        fitTimeoutRef.current = null
+    }, [])
+
+    const scheduleFit = useCallback((focus = false, delay = 0) => {
+        clearScheduledFit()
+        fitTimeoutRef.current = window.setTimeout(() => {
+            window.requestAnimationFrame(() => {
+                fitTimeoutRef.current = null
+
+                const container = containerRef.current
+                const terminal = terminalRef.current
+                const fitAddon = fitAddonRef.current
+                if (!container || !terminal || !fitAddon) {
+                    return
+                }
+
+                const { height, width } = container.getBoundingClientRect()
+                if (width < 80 || height < 40) {
+                    return
+                }
+
+                try {
+                    fitAddon.fit()
+                    if (focus) {
+                        terminal.focus()
+                    }
+
+                    const nextSize = { cols: terminal.cols, rows: terminal.rows }
+                    if (nextSize.cols !== lastSizeRef.current.cols || nextSize.rows !== lastSizeRef.current.rows) {
+                        lastSizeRef.current = nextSize
+                        sendResize(nextSize.cols, nextSize.rows)
+                    }
+                } catch {
+                    // xterm can briefly be unmeasurable while the panel/browser is hidden.
+                }
+            })
+        }, delay)
+    }, [clearScheduledFit, sendResize])
 
     useEffect(() => {
         if (!containerRef.current || terminalRef.current) {
@@ -54,37 +101,41 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
             sendInput(content)
         }
 
-        const syncSize = () => {
-            if (!fitAddonRef.current || !terminalRef.current) {
-                return
-            }
-
-            fitAddonRef.current.fit()
-            sendResize(terminalRef.current.cols, terminalRef.current.rows)
-        }
-
         const inputDisposable = term.onData((data) => {
             sendInput(data)
         })
 
-        const focusTimeout = window.setTimeout(() => {
-            syncSize()
-            term.focus()
-        }, 50)
+        const refit = () => scheduleFit()
+        const refitWithFocus = () => scheduleFit(true, 50)
+        const refitWhenVisible = () => {
+            if (document.visibilityState === 'visible') {
+                scheduleFit(true, 80)
+            }
+        }
 
         resizeObserverRef.current = new ResizeObserver(() => {
-            syncSize()
+            scheduleFit()
         })
         resizeObserverRef.current.observe(containerRef.current)
+        window.addEventListener('focus', refitWithFocus)
+        window.addEventListener('pageshow', refitWithFocus)
+        window.addEventListener('resize', refit)
+        document.addEventListener('visibilitychange', refitWhenVisible)
+        scheduleFit(true, 80)
 
         return () => {
-            window.clearTimeout(focusTimeout)
+            clearScheduledFit()
             resizeObserverRef.current?.disconnect()
             resizeObserverRef.current = null
+            window.removeEventListener('focus', refitWithFocus)
+            window.removeEventListener('pageshow', refitWithFocus)
+            window.removeEventListener('resize', refit)
+            document.removeEventListener('visibilitychange', refitWhenVisible)
             inputDisposable.dispose()
             term.dispose()
             terminalRef.current = null
             fitAddonRef.current = null
+            lastSizeRef.current = { cols: 0, rows: 0 }
             delete (window as Window & {
                 __shareTerminal?: Terminal
                 __shareTerminalSendInput?: (content: string) => void
@@ -94,7 +145,7 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
                 __shareTerminalSendInput?: (content: string) => void
             }).__shareTerminalSendInput
         }
-    }, [sendInput, sendResize])
+    }, [clearScheduledFit, scheduleFit, sendInput])
 
     useEffect(() => {
         if (!terminalRef.current) {
@@ -103,7 +154,8 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
 
         terminalRef.current.reset()
         renderedChunkCountRef.current = 0
-    }, [share.id])
+        scheduleFit()
+    }, [scheduleFit, share.id])
 
     useEffect(() => {
         if (!terminalRef.current) {
@@ -127,20 +179,14 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
             return
         }
 
-        const timeout = window.setTimeout(() => {
-            fitAddonRef.current?.fit()
-            terminalRef.current?.focus()
-            sendResize(terminalRef.current?.cols || 80, terminalRef.current?.rows || 24)
-        }, 200)
-
-        return () => window.clearTimeout(timeout)
-    }, [open, sendResize])
+        scheduleFit(true, 200)
+    }, [open, scheduleFit])
 
     return (
         <div
             ref={containerRef}
             onClick={() => terminalRef.current?.focus()}
-            className='h-full w-full rounded-md bg-[#11130f] px-2 py-1'
+            className='h-full min-w-0 w-full overflow-hidden rounded-md bg-[#11130f]'
             data-share-terminal={share.alias}
             data-testid='share-terminal-xterm'
         />

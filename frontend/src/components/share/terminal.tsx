@@ -13,6 +13,8 @@ type ConsoleProps = {
     setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
+const DEFAULT_TERMINAL_HEIGHT = 320
+
 export default function Terminal({
     share,
     open,
@@ -21,7 +23,7 @@ export default function Terminal({
     triggerChange,
     setTriggerChange
 }: ConsoleProps) {
-    const [height, setHeight] = useState(shareTerminalHeight)
+    const [height, setHeight] = useState(shareTerminalHeight > 0 ? shareTerminalHeight : DEFAULT_TERMINAL_HEIGHT)
     const [isDragging, setIsDragging] = useState(false)
     const startY = useRef(0)
     const startHeight = useRef(0)
@@ -59,9 +61,9 @@ export default function Terminal({
             setHeight(0)
         } else {
             setOpen(true)
-            setHeight(180)
+            setHeight(shareTerminalHeight > 0 ? shareTerminalHeight : DEFAULT_TERMINAL_HEIGHT)
         }
-    }, [open, setOpen])
+    }, [open, setOpen, shareTerminalHeight])
 
     useEffect(() => {
         if (isDragging) {
@@ -118,8 +120,8 @@ export default function Terminal({
     }, [handleChange, setOpen, setTriggerChange, triggerChange])
 
     useEffect(() => {
-        if (open && !lastOpenRef.current && shareTerminalHeight > 0) {
-            setHeight(shareTerminalHeight)
+        if (open && !lastOpenRef.current) {
+            setHeight(shareTerminalHeight > 0 ? shareTerminalHeight : DEFAULT_TERMINAL_HEIGHT)
         }
         lastOpenRef.current = open
     }, [open, shareTerminalHeight])
@@ -149,7 +151,7 @@ export default function Terminal({
             {/* Console container */}
             <div
                 data-testid='share-terminal-panel'
-                className={`fixed left-0 w-full bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
+                className={`fixed inset-x-0 w-screen max-w-none overflow-hidden bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
                 style={{
                     bottom: 0,
                     height: open ? `${height}px` : '0px',
@@ -164,7 +166,7 @@ export default function Terminal({
                 </div>
 
                 {/* Header bar */}
-                <div className='flex justify-between items-center px-3 py-1 bg-dark/60 text-xs text-gray-400 border-t border-light/20'>
+                <div className='flex h-[30px] shrink-0 justify-between items-center px-3 py-1 bg-dark/60 text-xs text-gray-400 border-t border-light/20'>
                     <div className='flex gap-2'>
                         <span>TERMINAL</span>
                         <span>{isConnected
@@ -186,7 +188,7 @@ export default function Terminal({
                     </button>
                 </div>
 
-                <div className='px-2 text-sm overflow-auto h-[calc(100%-30px)] font-mono text-gray-300'>
+                <div className='h-[calc(100%-30px)] min-w-0 w-full overflow-hidden px-2 pb-2 pt-0 text-sm font-mono text-gray-300'>
                     {share && <TerminalViewer
                         open={open}
                         share={share}
