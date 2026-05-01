@@ -7,7 +7,7 @@ const vmCreateUrl = /\/api\/vm$/
 const syncAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target\/sync-access$/
 const getAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target$/
 
-test('the /s entry only exposes the project-backed workspace flow', async ({ page, context, baseURL }) => {
+test('the /s entry automatically opens a project-backed workspace', async ({ page, context, baseURL }) => {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     let createdShareBody = ''
     let createdShareId = ''
@@ -81,24 +81,24 @@ test('the /s entry only exposes the project-backed workspace flow', async ({ pag
         })
     })
 
+    const shareResponse = page.waitForResponse((response) => shareCreateUrl.test(response.url()))
+    const vmResponse = page.waitForResponse((response) => vmCreateUrl.test(response.url()))
+
     await page.goto('/s')
     await expect(page.getByRole('button', { name: 'Create share' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Create project' })).toHaveCount(0)
     await expect(page.getByText('Share flow')).toHaveCount(0)
     await expect(page.getByText('Project flow')).toHaveCount(0)
 
-    await Promise.all([
-        page.waitForResponse((response) => shareCreateUrl.test(response.url())),
-        page.waitForResponse((response) => vmCreateUrl.test(response.url())),
-        page.getByRole('button', { name: 'Create project' }).click(),
-    ])
+    await Promise.all([shareResponse, vmResponse])
 
     await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}$`))
     expect(createdShareBody).toContain('"includeTree":true')
     expect(createdShareBody).toContain('"type":"folder"')
-    expect(createdShareBody).toContain('"name":"hanasand-project"')
+    expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
 })
 
-test('authenticated users can create a project from /s and trigger share + VM provisioning', async ({ page, context, baseURL }) => {
+test('authenticated users trigger share and VM provisioning by opening /s', async ({ page, context, baseURL }) => {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     let requestedVmUrl = ''
     let createdShareBody = ''
@@ -125,8 +125,8 @@ test('authenticated users can create a project from /s and trigger share + VM pr
             contentType: 'application/json',
             body: JSON.stringify({
                 id: createdShareId,
-                alias: 'Playwright Project',
-                path: 'Playwright Project',
+                alias: `project-${createdShareId}`,
+                path: `project-${createdShareId}`,
                 content: '',
                 tree: [],
             }),
@@ -138,7 +138,7 @@ test('authenticated users can create a project from /s and trigger share + VM pr
         await route.fulfill({
             status: 201,
             contentType: 'application/json',
-            body: JSON.stringify({ message: 'Created VM playwright-project' }),
+            body: JSON.stringify({ message: 'Created VM' }),
         })
     })
 
@@ -148,7 +148,7 @@ test('authenticated users can create a project from /s and trigger share + VM pr
             contentType: 'application/json',
             body: JSON.stringify({
                 ok: true,
-                vmName: 'playwright-project',
+                vmName: 'project',
                 scope: 'current_user',
                 triggeredBy: 'playwright-user',
                 syncedUserIds: ['playwright-user'],
@@ -167,24 +167,22 @@ test('authenticated users can create a project from /s and trigger share + VM pr
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-                name: 'playwright-project',
+                name: 'project',
                 capabilities: { canConnect: true },
                 network: { sshHost: '127.0.0.1' },
             }),
         })
     })
 
+    const shareResponse = page.waitForResponse((response) => shareCreateUrl.test(response.url()))
+    const vmResponse = page.waitForResponse((response) => vmCreateUrl.test(response.url()))
+
     await page.goto('/s')
-    await page.getByPlaceholder('Project name').fill('Playwright Project')
-    await Promise.all([
-        page.waitForResponse((response) => shareCreateUrl.test(response.url())),
-        page.waitForResponse((response) => vmCreateUrl.test(response.url())),
-        page.getByRole('button', { name: 'Create project' }).click(),
-    ])
+    await Promise.all([shareResponse, vmResponse])
 
     await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}$`))
     expect(requestedVmUrl).toContain('/api/vm')
-    expect(createdShareBody).toContain('"name":"Playwright Project"')
+    expect(createdShareBody).toContain(`"name":"project-${createdShareId}"`)
 })
 
 test('metadata reload keeps the current share id instead of opening a random workspace', async ({ page }) => {

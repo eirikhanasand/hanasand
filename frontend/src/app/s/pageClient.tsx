@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ServerCog } from 'lucide-react'
+import { LoaderCircle, ServerCog } from 'lucide-react'
 import randomId from '@/utils/random/randomId'
 import postShare from '@/utils/share/post'
 import postVM from '@/utils/vms/fetch/postVM'
@@ -12,23 +12,33 @@ import { getCookie } from '@/utils/cookies/cookies'
 
 export default function ShareEntryClient() {
     const router = useRouter()
-    const [projectName, setProjectName] = useState('hanasand-project')
-    const [status, setStatus] = useState<string | null>(null)
-    const [pending, setPending] = useState(false)
+    const hasStarted = useRef(false)
+    const [status, setStatus] = useState('Preparing a project workspace...')
+    const [failed, setFailed] = useState(false)
+
+    useEffect(() => {
+        if (hasStarted.current) {
+            return
+        }
+
+        hasStarted.current = true
+        void createProject()
+    }, [])
 
     async function createProject() {
         const token = getCookie('access_token')
         const userId = getCookie('id')
         if (!token || !userId) {
+            setFailed(true)
             setStatus('You need to be signed in to create a project.')
             return
         }
 
-        setPending(true)
+        setFailed(false)
         setStatus('Creating project workspace...')
         try {
             const shareId = randomId()
-            const normalizedName = projectName.trim() || `project-${shareId}`
+            const normalizedName = `project-${shareId}`
             const vmName = normalizedName
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
@@ -76,9 +86,8 @@ export default function ShareEntryClient() {
             setStatus(`Project ready. Workspace ${shareId}, VM ${vmName}, ${readiness}.`)
             router.push(`/s/${shareId}`)
         } catch (error) {
+            setFailed(true)
             setStatus(error instanceof Error ? error.message : 'Unable to create the project.')
-        } finally {
-            setPending(false)
         }
     }
 
@@ -89,29 +98,26 @@ export default function ShareEntryClient() {
                     <div className='inline-flex rounded-2xl bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
                         <ServerCog className='h-5 w-5' />
                     </div>
-                    <h1 className='mt-5 text-2xl font-semibold text-bright/92'>Create a project workspace</h1>
+                    <h1 className='mt-5 text-2xl font-semibold text-bright/92'>Opening workspace</h1>
                     <p className='mt-3 max-w-xl text-sm leading-6 text-bright/45'>
-                        Every workspace on /s is now backed by the project system, so even a one-file workspace gets a project root, file tree, and VM target.
+                        Hanasand is creating a project-backed workspace automatically, then it will open the editor when the VM target is ready.
                     </p>
                     <p className='mt-4 text-xs uppercase tracking-[0.24em] text-bright/32'>
                         Project root, VM access, terminal ready
                     </p>
-                    <input
-                        value={projectName}
-                        onChange={(event) => setProjectName(event.target.value)}
-                        placeholder='Project name'
-                        className='mt-5 w-full rounded-2xl bg-dark/30 px-4 py-3 text-sm text-bright/88 outline outline-dark placeholder:text-bright/26'
-                    />
-                    <button type='button' disabled={pending} onClick={() => void createProject()} className='mt-4 inline-flex rounded-2xl bg-[#fd8738] px-4 py-3 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'>
-                        {pending ? 'Creating project...' : 'Create project'}
-                    </button>
+                    <div className='mt-5 flex items-center gap-3 rounded-2xl bg-dark/30 px-4 py-3 text-sm text-bright/78 outline outline-dark'>
+                        {failed
+                            ? <ServerCog className='h-4 w-4 text-red-300' />
+                            : <LoaderCircle className='h-4 w-4 animate-spin text-[#fd8738]' />}
+                        <span>{status}</span>
+                    </div>
+                    {failed ? (
+                        <button type='button' onClick={() => void createProject()} className='mt-4 inline-flex rounded-2xl bg-[#fd8738] px-4 py-3 text-sm font-semibold text-black transition-opacity hover:opacity-90'>
+                            Retry
+                        </button>
+                    ) : null}
                 </div>
             </div>
-            {status ? (
-                <div className='fixed bottom-4 left-1/2 w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl bg-dark/80 px-4 py-3 text-sm text-bright/88 outline outline-dark backdrop-blur'>
-                    {status}
-                </div>
-            ) : null}
         </div>
     )
 }
