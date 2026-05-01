@@ -22,7 +22,7 @@ export function SettingsDrawerProvider({
     )
 }
 
-export function Screen({ title, subtitle, right, children, scroll = true }: { title: string; subtitle?: string; right?: ReactNode; children: ReactNode; scroll?: boolean }) {
+export function Screen({ title, subtitle, left, right, children, scroll = true }: { title: string; subtitle?: string; left?: ReactNode; right?: ReactNode; children: ReactNode; scroll?: boolean }) {
     const settingsDrawer = useContext(SettingsDrawerContext)
     const theme = useAppTheme()
     const styles = useMemo(() => createStyles(theme), [theme])
@@ -60,6 +60,7 @@ export function Screen({ title, subtitle, right, children, scroll = true }: { ti
             </View>
             <View style={styles.rootEdges}>
                 <View style={styles.header}>
+                    {left ? <View style={styles.headerLeft}>{left}</View> : null}
                     <View style={{ flex: 1 }}>
                         <Text style={styles.title}>{title}</Text>
                         {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -423,6 +424,7 @@ function createStyles(theme: ThemePalette) {
             opacity: 0.36,
         },
         header: { paddingHorizontal: spacing.lg, paddingTop: 84, paddingBottom: spacing.md, gap: 6, flexDirection: 'row', alignItems: 'flex-start' },
+        headerLeft: { marginRight: spacing.xs },
         headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
         content: { paddingHorizontal: spacing.lg, paddingBottom: 168, gap: spacing.md },
         eyebrow: { color: theme.textSoft, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 },
