@@ -307,13 +307,6 @@ export default async function runModelToolLoop(
     const readOnlyRepoTask = isReadOnlyRepoTask(userMessage)
     const readOnlySingleFilePath = readOnlyRepoTask ? extractSingleRepoFilePath(userMessage) : null
     const readOnlyConciseAnswer = readOnlyRepoTask && prefersConciseReadOnlyAnswer(userMessage)
-    const maxIterations = appParityTrainingTask
-        ? 3
-        : readOnlyRepoTask
-            ? (readOnlySingleFilePath ? 0 : 1)
-            : autonomousRepoTask
-                ? 3
-                : Math.max(8, config.web_search_max_iterations + 8)
     const iterationMaxTokens = appParityTrainingTask
         ? Math.max(240, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 10000, 360))
         : readOnlyRepoTask
@@ -676,7 +669,7 @@ export default async function runModelToolLoop(
         }
     }
 
-    for (let iteration = 0; iteration <= maxIterations; iteration += 1) {
+    for (let iteration = 0; ; iteration += 1) {
         const completion = await createTrackedCompletion(
             config.model_api,
             workingMessages,
@@ -807,7 +800,7 @@ export default async function runModelToolLoop(
         })
     }
 
-    throw new Error('Tool loop exceeded the maximum number of search/command iterations.')
+    throw new Error('Tool loop exited unexpectedly.')
 }
 
 function withToolSystemPrompt(messages: GPT_ChatMessage[]) {
