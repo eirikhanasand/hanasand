@@ -28,6 +28,13 @@ export function useShareCodeSocket({
 }: UseShareCodeSocketProps) {
     const [reconnect, setReconnect] = useState(false)
     const wsRef = useRef<WebSocket | null>(null)
+    const latestContentRef = useRef(editingContent)
+    const pendingEditRef = useRef<string | null>(null)
+    const shareId = share?.id
+
+    useEffect(() => {
+        latestContentRef.current = editingContent
+    }, [editingContent])
 
     useEffect(() => {
         if (!enabled) {
@@ -57,16 +64,25 @@ export function useShareCodeSocket({
     }, [enabled, id, setEditingContent, setError, setShare])
 
     useEffect(() => {
-        if (!enabled || !share) {
+        if (!enabled || !shareId) {
             return
         }
 
-        const ws = new WebSocket(`${config.url.cdn_wss}/share/${share.id}`)
+        const ws = new WebSocket(`${config.url.cdn_wss}/share/${shareId}`)
         wsRef.current = ws
 
         ws.onopen = () => {
             setReconnect(false)
             setIsConnected(true)
+
+            if (pendingEditRef.current !== null) {
+                ws.send(JSON.stringify({
+                    type: 'edit',
+                    id: shareId,
+                    content: pendingEditRef.current,
+                }))
+                pendingEditRef.current = null
+            }
         }
 
         ws.onclose = () => {
@@ -81,8 +97,9 @@ export function useShareCodeSocket({
         ws.onmessage = (event) => {
             try {
                 const message = JSON.parse(event.data)
-                if (message.type === 'update' && message.content !== editingContent) {
+                if (message.type === 'update' && message.content !== latestContentRef.current) {
                     setParticipants(message.participants)
+                    latestContentRef.current = message.content
                     setEditingContent(message.content)
                     setShare((prev) => prev ? { ...prev, timestamp: message.timestamp } : prev)
                 }
@@ -98,19 +115,21 @@ export function useShareCodeSocket({
         return () => {
             ws.close()
         }
-    }, [editingContent, enabled, id, reconnect, setEditingContent, setIsConnected, setParticipants, setShare, share])
+    }, [enabled, reconnect, setEditingContent, setIsConnected, setParticipants, setShare, shareId])
 
     function sendEdit(content: string) {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            pendingEditRef.current = content
             setReconnect(true)
             return
         }
 
         wsRef.current.send(JSON.stringify({
             type: 'edit',
-            id: share?.id,
+            id: shareId,
             content,
         }))
+        pendingEditRef.current = null
     }
 
     return { sendEdit }
