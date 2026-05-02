@@ -17,7 +17,7 @@ export default function DashboardProject({ project }: { project: Project }) {
 
     async function handleClick() {
         if (!keys['shift']) {
-            router.push(`/project/${project.alias}`)
+            router.push(`/p/${project.alias}`)
         }
 
         if (keys['shift']) {

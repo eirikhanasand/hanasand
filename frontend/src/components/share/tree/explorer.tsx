@@ -15,6 +15,7 @@ type ExplorerProps = {
     openFolders: string[]
     tree: Tree | null
     share: Share | null
+    setShare: Dispatch<SetStateAction<Share | null>>
 }
 
 const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
@@ -24,7 +25,8 @@ export default function Explorer({
     setShowExplorer,
     openFolders,
     tree: serverTree,
-    share
+    share,
+    setShare,
 }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
     const [isCreatingNewFile, setIsCreatingNewFile] = useState<'file' | 'folder' | null>(null)
@@ -145,6 +147,7 @@ export default function Explorer({
                                 file={rootFolder}
                                 tree={visibleTree}
                                 setTree={setTree}
+                                setShare={setShare}
                             />
                         )}
                         <Tree
@@ -156,6 +159,7 @@ export default function Explorer({
                             selectedFolder={selectedFolder}
                             setSelectedFolder={setSelectedFolder}
                             setTree={setTree}
+                            setShare={setShare}
                         />
                     </OpenFoldersProvider>
                 )}
@@ -174,7 +178,7 @@ function getProjectRoot(tree: Tree | null, share: Share | null): FileFolder | nu
         return null
     }
 
-    if (root.id === share.id || (root.parent === null && root.name.startsWith('project-'))) {
+    if (root.id === share.id) {
         return root
     }
 

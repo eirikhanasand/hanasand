@@ -72,7 +72,7 @@ export default function ClientPage({
         async function createWorkspace() {
             const token = getCookie('access_token')
             const userId = getCookie('id')
-            const normalizedName = `project-${id}`
+            const normalizedName = id
             const vmName = normalizedName
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
@@ -133,6 +133,7 @@ export default function ClientPage({
                 openFolders={openFolders}
                 tree={tree}
                 share={share}
+                setShare={setShare}
             />
             <div className={`flex-1 flex flex-col min-h-full w-full gap-2 text-foreground ${maxWidth}`}>
                 <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />

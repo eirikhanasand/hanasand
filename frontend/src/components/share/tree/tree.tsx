@@ -12,6 +12,7 @@ type TreeProps = {
     selectedFolder: string
     setSelectedFolder: Dispatch<SetStateAction<string>>
     setTree: Dispatch<SetStateAction<Tree | null>>
+    setShare: Dispatch<SetStateAction<Share | null>>
 }
 
 export default function Tree({
@@ -22,7 +23,8 @@ export default function Tree({
     isCreatingNewFile,
     selectedFolder,
     setSelectedFolder,
-    setIsCreatingNewFile
+    setIsCreatingNewFile,
+    setShare,
 }: TreeProps) {
     return (
         <ul onClick={() => setSelectedFolder('')} className='group space-y-1 h-[86%]'>
@@ -38,6 +40,7 @@ export default function Tree({
                     selectedFolder={selectedFolder}
                     setSelectedFolder={setSelectedFolder}
                     setTree={setTree}
+                    setShare={setShare}
                 />
             ))}
         </ul>

@@ -20,7 +20,7 @@ export default function ShareEntryClient() {
                 shareTerminalHeight={0}
                 serverOpenFiles={[]}
                 autoCreate
-                replaceUrlOnCreate={false}
+                replaceUrlOnCreate
             />
         </div>
     )
@@ -29,7 +29,7 @@ export default function ShareEntryClient() {
 function createOptimisticShare(id: string): Share {
     return {
         id,
-        path: `project-${id}`,
+        path: id,
         content: '',
         wordCount: 0,
         estimatedMinutes: 0,
@@ -38,7 +38,7 @@ function createOptimisticShare(id: string): Share {
         locked: false,
         owner: '',
         parent: '',
-        alias: `project-${id}`,
+        alias: id,
     }
 }
 
@@ -46,8 +46,8 @@ function createOptimisticTree(id: string): Tree {
     return [{
         id,
         type: 'folder',
-        name: `project-${id}`,
-        alias: `project-${id}`,
+        name: id,
+        alias: id,
         parent: null,
         children: [],
     }]

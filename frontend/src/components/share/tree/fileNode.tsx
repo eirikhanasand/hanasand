@@ -18,6 +18,7 @@ type FileNodeProps = {
     selectedFolder: string
     setSelectedFolder: Dispatch<SetStateAction<string>>
     setTree: Dispatch<SetStateAction<Tree | null>>
+    setShare: Dispatch<SetStateAction<Share | null>>
 }
 
 export default function FileNode({
@@ -30,6 +31,7 @@ export default function FileNode({
     selectedFolder,
     setSelectedFolder,
     setTree,
+    setShare,
 }: FileNodeProps) {
     const { isOpen, toggleFolder } = useFolderState()
     const open = isOpen(file.id)
@@ -80,6 +82,7 @@ export default function FileNode({
                         file={file}
                         tree={tree}
                         setTree={setTree}
+                        setShare={setShare}
                     />
                 </div>}
                 {open && file.children && (
@@ -93,6 +96,7 @@ export default function FileNode({
                             selectedFolder={selectedFolder}
                             setSelectedFolder={setSelectedFolder}
                             setTree={setTree}
+                            setShare={setShare}
                         />
                     </div>
                 )}
@@ -111,6 +115,7 @@ export default function FileNode({
                 file={file}
                 tree={tree}
                 setTree={setTree}
+                setShare={setShare}
             />
             <Link href={`/s/${file.id}`} className={`flex items-center gap-2 px-2 py-1 ${isActive ? 'bg-light/70 hover:bg-bright/15' : 'hover:bg-light/70'} rounded-md cursor-pointer`}>
                 <File size={14} className='text-bright/80' />

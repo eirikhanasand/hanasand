@@ -15,6 +15,7 @@ type NewFileProps = {
     file: FileItem
     tree: Tree
     setTree: Dispatch<SetStateAction<Tree | null>>
+    setShare: Dispatch<SetStateAction<Share | null>>
 }
 
 export default function NewFile({
@@ -25,7 +26,8 @@ export default function NewFile({
     setIsCreatingNewFile,
     file,
     tree,
-    setTree
+    setTree,
+    setShare,
 }: NewFileProps) {
     const { condition: blink, setCondition: setBlink } = useClearStateAfter({ timeout: 400 })
     const normalizedNewFileName = newFileName.toLowerCase()
@@ -62,6 +64,7 @@ export default function NewFile({
                 setIsCreatingNewFile(null)
                 setNewFileName('')
                 setTree(response.tree)
+                promoteToProjectRoute(file, response.tree, setShare)
             }
         }
     }
@@ -90,4 +93,20 @@ export default function NewFile({
             />
         </div>
     )
+}
+
+function promoteToProjectRoute(
+    file: FileItem,
+    tree: Tree,
+    setShare: Dispatch<SetStateAction<Share | null>>
+) {
+    const root = tree.find((entry) => entry.parent === null)
+    if (!root?.alias || root.alias === file.alias) {
+        return
+    }
+
+    setShare((current) => current
+        ? { ...current, alias: root.alias ?? current.alias }
+        : current)
+    window.history.replaceState(window.history.state, '', `/p/${root.alias}`)
 }

@@ -1,7 +1,9 @@
 import SharePageClient from './clientPage'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { getTree } from '@/utils/share/getTree'
 import { getShare } from '@/utils/share/get'
+import getProject from '@/utils/projects/getProject'
 
 export default async function Page(props: {
     params: Promise<{ id: string[] }>
@@ -27,6 +29,18 @@ export default async function Page(props: {
             getShare({ id, token, userId }),
         ])
     const safeShare = typeof share === 'string' ? null : share
+    const isProject = safeShare && safeShare.alias !== safeShare.id && Array.isArray(tree) && flattenTree(tree).length > 1
+
+    if (!isNewWorkspace && isProject) {
+        redirect(`/p/${safeShare.alias}`)
+    }
+
+    if (!isNewWorkspace && !safeShare) {
+        const project = await getProject({ alias: id, token, userId })
+        if (project) {
+            redirect(`/p/${id}`)
+        }
+    }
 
     return (
         <div className='w-full h-[92.5vh]'>
@@ -48,7 +62,7 @@ export default async function Page(props: {
 function createOptimisticShare(id: string): Share {
     return {
         id,
-        path: `project-${id}`,
+        path: id,
         content: '',
         wordCount: 0,
         estimatedMinutes: 0,
@@ -57,7 +71,7 @@ function createOptimisticShare(id: string): Share {
         locked: false,
         owner: '',
         parent: '',
-        alias: `project-${id}`,
+        alias: id,
     }
 }
 
@@ -65,11 +79,17 @@ function createOptimisticTree(id: string): Tree {
     return [{
         id,
         type: 'folder',
-        name: `project-${id}`,
-        alias: `project-${id}`,
+        name: id,
+        alias: id,
         parent: null,
         children: [],
     }]
+}
+
+function flattenTree(tree: Tree): FileItem[] {
+    return tree.flatMap((item) => item.type === 'folder'
+        ? [item, ...flattenTree(item.children)]
+        : [item])
 }
 
 function parseCookieJson<T>(value: string | undefined, fallback: T): T {
