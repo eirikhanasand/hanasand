@@ -1,15 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Archive, ArchiveRestore, MessageSquarePlus, Pencil, Search, SquareArrowOutUpRight, Trash2 } from 'lucide-react'
 
 type ChatSidebarProps = {
-    activeConversation: AIConversation | null
     activeConversationId: string | null
     archivedConversations: AIConversation[]
     conversations: AIConversation[]
-    isAuthenticated: boolean
     search: string
     setSearch: (value: string) => void
     onArchiveConversation: (id: string, archived: boolean) => void
@@ -21,11 +19,9 @@ type ChatSidebarProps = {
 
 export default function ChatSidebar(props: ChatSidebarProps) {
     const {
-        activeConversation,
         activeConversationId,
         archivedConversations,
         conversations,
-        isAuthenticated,
         search,
         setSearch,
         onArchiveConversation,
@@ -36,18 +32,16 @@ export default function ChatSidebar(props: ChatSidebarProps) {
     } = props
     const [showArchived, setShowArchived] = useState(false)
     const [searchOpen, setSearchOpen] = useState(false)
-    const activeLabel = useMemo(() => workspaceLabel(activeConversation), [activeConversation])
-
     return (
-        <aside className='flex min-h-0 flex-col border-r border-[#252620] bg-[#1d1f1b] p-4'>
+        <aside className='flex min-h-0 flex-col border-r border-bright/10 p-4'>
             <div className='flex items-center justify-between gap-2 pb-4'>
-                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm font-semibold text-[#f1eee7] transition-colors hover:bg-[#2a2b27]'>
+                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm font-medium text-[#f1eee7] transition-colors hover:bg-bright/8'>
                     <MessageSquarePlus className='h-4 w-4' />
                     New
                 </button>
                 <div className='flex items-center gap-1'>
                     <IconButton icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' className='grid h-9 w-9 place-items-center rounded-lg text-[#a0a09b] transition-colors hover:bg-[#30312d] hover:text-[#eeeeea]'>
+                    <Link href='/s' className='grid h-9 w-9 place-items-center rounded-full text-[#a0a09b] transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -60,16 +54,10 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder='Search chats'
-                        className='w-full rounded-lg border border-[#353631] bg-[#20211d] py-2.5 pl-10 pr-3 text-sm text-[#eeeeea] outline-none placeholder:text-[#777772]'
+                        className='w-full rounded-full border border-bright/10 bg-transparent py-2.5 pl-10 pr-3 text-sm text-[#eeeeea] outline-none placeholder:text-[#777772]'
                     />
                 </label>
             ) : null}
-
-            <div className='mb-5 px-2'>
-                <div className='text-[11px] uppercase tracking-[0.22em] text-[#858581]'>Chat</div>
-                <div className='mt-2 truncate text-sm font-semibold text-[#f1eee7]'>{activeLabel}</div>
-                <div className='mt-1 text-xs text-[#9a9a95]'>{isAuthenticated ? 'Your chats stay attached to repos and shares.' : 'Sign in to save chats.'}</div>
-            </div>
 
             <div className='mb-3 flex items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                 <span>Chats</span>
@@ -85,7 +73,7 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                 onSelectConversation={onSelectConversation}
             />
 
-            <div className='mt-5 border-t border-[#30312c] pt-4'>
+            <div className='mt-5 border-t border-bright/10 pt-4'>
                 <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                     <span>Archived</span>
                     <span>{archivedConversations.length}</span>
@@ -127,7 +115,7 @@ function ConversationList({
 }) {
     if (!conversations.length) {
         return (
-            <div className='rounded-2xl bg-[#181a17] px-3 py-4 text-sm text-[#858581]'>
+            <div className='px-1 py-3 text-sm text-[#858581]'>
                 No {archived ? 'archived' : 'active'} chats yet.
             </div>
         )
@@ -147,7 +135,7 @@ function ConversationList({
                             onSelectConversation(conversation.id)
                         }
                     }}
-                    className={`group flex items-center gap-2 rounded-2xl px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#30312d] text-[#f1eee7]' : 'text-[#d3d3ce] hover:bg-[#292a26]'}`}
+                    className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-bright/10 text-[#f1eee7]' : 'text-[#d3d3ce] hover:bg-bright/8'}`}
                 >
                     <div className='min-w-0 flex-1 overflow-hidden'>
                         <div className='truncate text-sm'>{conversation.title}</div>
@@ -177,7 +165,7 @@ function ConversationList({
 
 function IconButton({ icon, active = false, onClick }: { icon: React.ReactNode, active?: boolean, onClick: () => void }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${active ? 'bg-[#30312d] text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-[#292a26] hover:text-[#eeeeea]'}`}>
+        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${active ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )
@@ -193,24 +181,8 @@ function MiniButton({
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${danger ? 'text-[#d29a95] hover:bg-[#55302d]' : 'text-[#a0a09b] hover:bg-[#3a3b36] hover:text-[#eeeeea]'}`}>
+        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${danger ? 'text-[#d29a95] hover:bg-red-500/10' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )
-}
-
-function workspaceLabel(conversation: AIConversation | null) {
-    if (!conversation) {
-        return 'Start a conversation'
-    }
-    if (typeof conversation.workspaceMeta?.repositoryName === 'string') {
-        return conversation.workspaceMeta.repositoryName
-    }
-    if (conversation.workspaceKind === 'share') {
-        return 'Attached share'
-    }
-    if (conversation.workspaceKind === 'repo') {
-        return 'Attached repository'
-    }
-    return 'No workspace attached'
 }

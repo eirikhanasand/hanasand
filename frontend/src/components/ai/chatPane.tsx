@@ -34,7 +34,6 @@ export default function ChatPane({
     const scrollRef = useRef<HTMLDivElement | null>(null)
     const [showArtifacts, setShowArtifacts] = useState(false)
     const [previewArtifact, setPreviewArtifact] = useState<AIArtifact | null>(null)
-    const [showImportHint, setShowImportHint] = useState(true)
     const [emptyTooltip, setEmptyTooltip] = useState('Tell me what is on your mind, and I’ll help from there.')
     const isThinking = Boolean(activeConversation?.messages.at(-1)?.pending)
         || activeConversation?.metrics?.status === 'preparing'
@@ -52,12 +51,6 @@ export default function ChatPane({
         }
         container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
     }, [lastMessageKey])
-
-    useEffect(() => {
-        setShowImportHint(true)
-        const timeout = window.setTimeout(() => setShowImportHint(false), 5000)
-        return () => window.clearTimeout(timeout)
-    }, [activeConversation?.id])
 
     useEffect(() => {
         let cancelled = false
@@ -81,8 +74,8 @@ export default function ChatPane({
 
     return (
         <Fragment>
-            <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#11120f]'>
-                <div className='relative z-10 border-b border-[#252620] bg-[#11120f]/96 px-7 py-5'>
+            <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+                <div className='relative z-10 border-b border-bright/10 px-7 py-5'>
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
                             <h1 className='truncate text-base font-semibold tracking-[-0.02em] text-[#f3f0e8]'>{activeConversation?.title || 'New chat'}</h1>
@@ -93,17 +86,14 @@ export default function ChatPane({
                         <div className='flex items-center gap-2'>
                             <Link
                                 href='/s'
-                                className={`inline-flex h-9 items-center gap-2 rounded-full bg-[#20211d] text-xs text-[#a6a39b] ring-1 ring-white/[0.045] transition-all duration-300 hover:bg-[#282925] hover:text-[#f2eee5] ${showImportHint ? 'px-3' : 'w-9 justify-center px-0'}`}
+                                className='grid h-9 w-9 place-items-center rounded-full text-[#a6a39b] transition-colors hover:bg-bright/8 hover:text-[#f2eee5]'
                                 aria-label='Import context'
                             >
                                 <FolderKanban className='h-4 w-4 shrink-0' />
-                                {showImportHint ? (
-                                    <span className='whitespace-nowrap'>Context</span>
-                                ) : null}
                             </Link>
                             <StatusChip icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />} label={isThinking ? 'Thinking...' : 'Ready'} accent={isThinking} />
                             {latestArtifacts.length ? (
-                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs transition-colors ${showArtifacts ? 'bg-[#333331] text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-[#272725] hover:text-[#eeeeea]'}`}>
+                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs transition-colors ${showArtifacts ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
                                     <PanelRightOpen className='h-3.5 w-3.5' />
                                     Artifacts
                                 </button>
@@ -143,8 +133,8 @@ export default function ChatPane({
                     </div>
 
                     {showArtifacts ? (
-                        <aside className='min-h-0 border-t border-[#2d2d2b] bg-[#1a1a1a] xl:border-t-0 xl:border-l'>
-                            <div className='border-b border-[#2d2d2b] px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
+                        <aside className='min-h-0 border-t border-bright/10 xl:border-t-0 xl:border-l'>
+                            <div className='border-b border-bright/10 px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                                 Workspace output
                             </div>
                             <div className='min-h-0 space-y-3 overflow-y-auto p-4'>
@@ -155,7 +145,7 @@ export default function ChatPane({
                                                 <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{group.label}</div>
                                                 <div className='mt-1 text-xs text-[#9a9a95]'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
                                             </div>
-                                            <div className='rounded-full bg-[#242424] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#858581]'>
+                                            <div className='rounded-full border border-bright/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#858581]'>
                                                 {group.kind}
                                             </div>
                                         </div>
@@ -167,8 +157,8 @@ export default function ChatPane({
                     ) : null}
                 </div>
 
-                <div className='relative z-10 border-t border-[#252620] bg-[#11120f]/96 px-4 py-4 md:px-12 xl:px-24'>
-                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-[1.35rem] border border-[#393a34] bg-[#232420] px-4 shadow-[0_18px_52px_rgba(0,0,0,0.28)]'>
+                <div className='relative z-10 border-t border-bright/10 px-4 py-4 md:px-12 xl:px-24'>
+                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-full border border-bright/10 bg-background/75 px-4 shadow-[0_18px_52px_rgba(0,0,0,0.18)]'>
                         <textarea
                             value={composer}
                             onChange={(event) => onComposerChange(event.target.value)}
@@ -215,7 +205,7 @@ function EmptyComposerState({ tooltip }: { tooltip: string }) {
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>
             <div className='max-w-xl text-center'>
-                <div className='mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-[#22221f] text-[#d3d3ce] shadow-[0_18px_50px_rgba(0,0,0,0.24)] ring-1 ring-white/[0.035]'>
+                <div className='mx-auto grid h-14 w-14 place-items-center rounded-full border border-bright/10 text-[#d3d3ce]'>
                     <Bot className='h-6 w-6' />
                 </div>
                 <h2 className='mt-7 text-2xl font-semibold tracking-[-0.035em] text-[#f3f0e8]'>
@@ -298,7 +288,7 @@ function StatusChip({
     accent?: boolean
 }) {
     return (
-        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-[#333331] text-[#eeeeea]' : 'bg-[#242424] text-[#9a9a95]'}`}>
+        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#9a9a95]'}`}>
             {icon}
             {label}
         </div>
