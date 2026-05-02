@@ -8,7 +8,17 @@ export async function proxy(req: NextRequest) {
     const idCookie = req.cookies.get('id')
     const path = req.nextUrl.pathname
     let validToken = false
-    const response = NextResponse.next()
+    const requestHeaders = new Headers(req.headers)
+    const theme = req.cookies.get('theme')?.value || 'dark'
+
+    requestHeaders.set('x-theme', theme)
+    requestHeaders.set('x-current-path', path)
+
+    const response = NextResponse.next({
+        request: {
+            headers: requestHeaders,
+        },
+    })
 
     if (!pathIsAllowedWhileUnauthorized(path)) {
         if (!tokenCookie || !idCookie) {
@@ -73,8 +83,7 @@ export async function proxy(req: NextRequest) {
         }
     }
 
-    const theme = req.cookies.get('theme')?.value || 'dark'
     response.headers.set('x-theme', theme)
-    response.headers.set('x-current-path', req.nextUrl.pathname)
+    response.headers.set('x-current-path', path)
     return response
 }
