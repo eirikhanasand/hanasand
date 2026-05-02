@@ -336,6 +336,8 @@ export default async function runModelToolLoop(
                 return buildBlockedTrainingToolResult(toolCall, iteration, progress)
             }
             return await executeToolCall(toolCall, iteration, progress)
+        } catch (error) {
+            return buildFailedToolResult(toolCall, iteration, error, progress)
         } finally {
             toolCalls += 1
             toolMs += Date.now() - startedAt
@@ -796,7 +798,7 @@ export default async function runModelToolLoop(
         workingMessages.push(toolMessage)
         workingMessages.push({
             role: 'system',
-            content: 'The tool has finished successfully. Use the tool result above and answer the user now. Do not request the same tool again unless the previous output was clearly insufficient.',
+            content: 'Use the tool result above. If it reports an error, recover by using list_files, grep_repo, or a narrower read_file path instead of stopping. Do not request the same tool again unless the previous output was clearly insufficient.',
         })
     }
 
@@ -1387,6 +1389,36 @@ function buildBlockedTrainingToolResult(
             content: [
                 `Tool ${toolCall.name} was blocked by app-parity training mode.`,
                 'This evaluation is read-only. Continue with list_files, grep_repo, and read_file, then return the implementation plan and verification steps.',
+            ].join('\n\n'),
+        },
+    }
+}
+
+function buildFailedToolResult(
+    toolCall: ToolCall,
+    iteration: number,
+    error: unknown,
+    emitToolProgress?: ToolProgressEmitter,
+): ToolExecutionResult {
+    const toolId = `${toolCall.name}_${iteration + 1}_${Date.now()}`
+    const toolLabel = describeToolCall(toolCall)
+    const message = error instanceof Error ? error.message : String(error)
+
+    emitToolProgress?.({
+        toolId,
+        toolLabel,
+        toolState: 'error',
+        toolDetail: message,
+    })
+
+    return {
+        message: {
+            role: 'tool',
+            tool_call_id: `failed_${toolCall.name}_${iteration + 1}`,
+            content: [
+                `Tool ${toolCall.name} failed for ${toolLabel}.`,
+                message,
+                'Do not stop on this failure. Use list_files or grep_repo to find the correct path, then continue.',
             ].join('\n\n'),
         },
     }

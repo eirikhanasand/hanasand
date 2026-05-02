@@ -8,8 +8,12 @@ const currentFile = fileURLToPath(import.meta.url)
 const srcDir = path.dirname(currentFile)
 const apiDir = path.resolve(srcDir, '..')
 const gptDir = path.resolve(apiDir, '..')
-const repoRoot = path.resolve(gptDir, '..')
 const modulesDir = path.resolve(gptDir, 'modules')
+
+const defaultRepoRoot = path.resolve(gptDir, '..')
+const repoRoot = process.env.HANASAND_REPO_ROOT
+    ? path.resolve(process.env.HANASAND_REPO_ROOT)
+    : defaultRepoRoot
 
 const requiredEnvironmentVariables = [
     'API',
