@@ -27,7 +27,6 @@ export default function ChatPane({
     composer,
     isConnected,
     participants,
-    landing = false,
     readOnly = false,
     onComposerChange,
     onSend,
