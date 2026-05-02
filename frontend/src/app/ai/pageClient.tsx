@@ -64,8 +64,8 @@ export default function AIPageClient({
     }
 
     return (
-        <div className={`${compact ? 'h-screen' : 'h-[calc(100vh-7.5rem)]'} relative w-full overflow-hidden bg-[#11120f]`}>
-            <div className={`flex h-full flex-col ${compact ? 'px-0 pb-0 pt-0' : 'px-0 pb-0 pt-0'}`}>
+        <div className={`${compact ? 'h-screen' : 'h-full'} relative w-full overflow-hidden bg-[#10110f]`}>
+            <div className='flex h-full min-h-0 flex-col'>
                 {showHeader ? (
                     <div className='flex h-14 items-center justify-between border-b border-[#2d2d2b] bg-[#161616] px-5'>
                         <div className='min-w-0'>
@@ -89,7 +89,7 @@ export default function AIPageClient({
                     </div>
                 ) : null}
 
-                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[18rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[18rem_minmax(0,1fr)]'}`}>
+                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[17rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[17rem_minmax(0,1fr)]'}`}>
                     <ChatSidebar
                         activeConversation={ai.activeConversation}
                         activeConversationId={ai.activeConversationId}

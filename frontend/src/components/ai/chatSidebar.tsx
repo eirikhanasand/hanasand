@@ -39,9 +39,9 @@ export default function ChatSidebar(props: ChatSidebarProps) {
     const activeLabel = useMemo(() => workspaceLabel(activeConversation), [activeConversation])
 
     return (
-        <aside className='flex min-h-0 flex-col border-r border-[#2b2b28] bg-[#242521] p-4'>
+        <aside className='flex min-h-0 flex-col border-r border-[#252620] bg-[#1d1f1b] p-4'>
             <div className='flex items-center justify-between gap-2 pb-4'>
-                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-[#f1eee7] transition-colors hover:bg-[#30312d]'>
+                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm font-semibold text-[#f1eee7] transition-colors hover:bg-[#2a2b27]'>
                     <MessageSquarePlus className='h-4 w-4' />
                     New
                 </button>
@@ -66,9 +66,9 @@ export default function ChatSidebar(props: ChatSidebarProps) {
             ) : null}
 
             <div className='mb-5 px-2'>
-                <div className='text-[11px] uppercase tracking-[0.22em] text-[#858581]'>Hanasand AI</div>
+                <div className='text-[11px] uppercase tracking-[0.22em] text-[#858581]'>Chat</div>
                 <div className='mt-2 truncate text-sm font-semibold text-[#f1eee7]'>{activeLabel}</div>
-                <div className='mt-1 text-xs text-[#9a9a95]'>{isAuthenticated ? 'Chats sync with workspace context.' : 'Sign in to save chats.'}</div>
+                <div className='mt-1 text-xs text-[#9a9a95]'>{isAuthenticated ? 'Your chats stay attached to repos and shares.' : 'Sign in to save chats.'}</div>
             </div>
 
             <div className='mb-3 flex items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
@@ -85,7 +85,7 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                 onSelectConversation={onSelectConversation}
             />
 
-            <div className='mt-5 border-t border-[#343530] pt-4'>
+            <div className='mt-5 border-t border-[#30312c] pt-4'>
                 <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
                     <span>Archived</span>
                     <span>{archivedConversations.length}</span>
@@ -127,7 +127,7 @@ function ConversationList({
 }) {
     if (!conversations.length) {
         return (
-            <div className='rounded-lg bg-[#1f201d] px-3 py-4 text-sm text-[#858581]'>
+            <div className='rounded-2xl bg-[#181a17] px-3 py-4 text-sm text-[#858581]'>
                 No {archived ? 'archived' : 'active'} chats yet.
             </div>
         )
@@ -147,7 +147,7 @@ function ConversationList({
                             onSelectConversation(conversation.id)
                         }
                     }}
-                    className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#383934] text-[#f1eee7]' : 'text-[#d3d3ce] hover:bg-[#30312d]'}`}
+                    className={`group flex items-center gap-2 rounded-2xl px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#30312d] text-[#f1eee7]' : 'text-[#d3d3ce] hover:bg-[#292a26]'}`}
                 >
                     <div className='min-w-0 flex-1 overflow-hidden'>
                         <div className='truncate text-sm'>{conversation.title}</div>
@@ -177,7 +177,7 @@ function ConversationList({
 
 function IconButton({ icon, active = false, onClick }: { icon: React.ReactNode, active?: boolean, onClick: () => void }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${active ? 'bg-[#383934] text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-[#30312d] hover:text-[#eeeeea]'}`}>
+        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${active ? 'bg-[#30312d] text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-[#292a26] hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )
@@ -193,7 +193,7 @@ function MiniButton({
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-md transition-colors ${danger ? 'text-[#d29a95] hover:bg-[#55302d]' : 'text-[#a0a09b] hover:bg-[#3a3b36] hover:text-[#eeeeea]'}`}>
+        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${danger ? 'text-[#d29a95] hover:bg-[#55302d]' : 'text-[#a0a09b] hover:bg-[#3a3b36] hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )

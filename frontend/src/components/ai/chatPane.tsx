@@ -5,7 +5,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, Bot, CheckCircle2, ExternalLink, FolderKanban, LoaderCircle, PanelRightOpen, Send, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Bot, CheckCircle2, ExternalLink, FolderKanban, LoaderCircle, PanelRightOpen, Sparkles, X } from 'lucide-react'
+import config from '../../config'
 
 type ChatPaneProps = {
     activeConversation: AIConversation | null
@@ -35,6 +36,7 @@ export default function ChatPane({
     const [showArtifacts, setShowArtifacts] = useState(false)
     const [previewArtifact, setPreviewArtifact] = useState<AIArtifact | null>(null)
     const [showImportHint, setShowImportHint] = useState(true)
+    const [emptyTooltip, setEmptyTooltip] = useState('Tell me what is on your mind, and I’ll help from there.')
     const isThinking = Boolean(activeConversation?.messages.at(-1)?.pending)
         || activeConversation?.metrics?.status === 'preparing'
         || activeConversation?.metrics?.status === 'generating'
@@ -58,6 +60,21 @@ export default function ChatPane({
         return () => window.clearTimeout(timeout)
     }, [activeConversation?.id])
 
+    useEffect(() => {
+        let cancelled = false
+        fetch(`${config.url.api.replace(/\/$/, '')}/tooltips?surface=ai-chat-empty`, { cache: 'no-store' })
+            .then((response) => response.ok ? response.json() : null)
+            .then((payload) => {
+                if (cancelled) return
+                const selected = pickTooltip(Array.isArray(payload?.tooltips) ? payload.tooltips : [])
+                if (selected) setEmptyTooltip(selected)
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
     const latestArtifacts = activeConversation?.messages.flatMap((message) =>
         Array.isArray(message.metadata?.artifacts) ? message.metadata.artifacts as AIArtifact[] : []
     ) || []
@@ -65,8 +82,8 @@ export default function ChatPane({
 
     return (
         <Fragment>
-            <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#141412]'>
-                <div className='relative z-10 border-b border-[#292925] px-7 py-5'>
+            <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#11120f]'>
+                <div className='relative z-10 border-b border-[#252620] bg-[#11120f]/96 px-7 py-5'>
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
                             <h1 className='truncate text-base font-semibold tracking-[-0.02em] text-[#f3f0e8]'>{activeConversation?.title || 'New chat'}</h1>
@@ -77,12 +94,12 @@ export default function ChatPane({
                         <div className='flex items-center gap-2'>
                             <Link
                                 href='/s'
-                                className={`inline-flex h-9 items-center gap-2 rounded-full bg-[#20211d] text-xs text-[#a6a39b] ring-1 ring-white/[0.035] transition-all duration-300 hover:bg-[#282925] hover:text-[#f2eee5] ${showImportHint ? 'px-3' : 'w-9 justify-center px-0'}`}
+                                className={`inline-flex h-9 items-center gap-2 rounded-full bg-[#20211d] text-xs text-[#a6a39b] ring-1 ring-white/[0.045] transition-all duration-300 hover:bg-[#282925] hover:text-[#f2eee5] ${showImportHint ? 'px-3' : 'w-9 justify-center px-0'}`}
                                 aria-label='Import context'
                             >
                                 <FolderKanban className='h-4 w-4 shrink-0' />
                                 {showImportHint ? (
-                                    <span className='whitespace-nowrap'>Import context when needed</span>
+                                    <span className='whitespace-nowrap'>Context</span>
                                 ) : null}
                             </Link>
                             <StatusChip icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />} label={isThinking ? 'Thinking...' : 'Ready'} accent={isThinking} />
@@ -99,7 +116,7 @@ export default function ChatPane({
                 <div className={`grid min-h-0 flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
                     <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-8 md:px-12 xl:px-24'>
                         {!activeConversation?.messages.length ? (
-                            <EmptyComposerState landing={landing} />
+                            <EmptyComposerState tooltip={emptyTooltip} />
                         ) : activeConversation.messages.map((message) => (
                             <article key={message.id} className={`max-w-3xl rounded-[1.25rem] border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#464640] bg-[#272724]/95 text-[#f1eee7] shadow-[0_18px_60px_rgba(0,0,0,0.22)]' : message.error ? 'border-[#5d3835] bg-[#241b1a] text-[#e6c1bd]' : message.role === 'tool' ? 'border-[#333331] bg-[#1d1d1d] text-[#d3d3ce]' : 'border-transparent bg-transparent text-[#eeeeea]'}`}>
                                 {message.role === 'tool' || message.role === 'assistant' ? (
@@ -151,8 +168,8 @@ export default function ChatPane({
                     ) : null}
                 </div>
 
-                <div className='relative z-10 border-t border-[#282824] bg-[#141412] px-4 py-3 md:px-12 xl:px-24'>
-                    <div className='mx-auto flex h-14 max-w-6xl items-center gap-2 rounded-2xl border border-[#353530] bg-[#252522] px-3 shadow-[0_14px_44px_rgba(0,0,0,0.24)]'>
+                <div className='relative z-10 border-t border-[#252620] bg-[#11120f]/96 px-4 py-4 md:px-12 xl:px-24'>
+                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-[1.35rem] border border-[#393a34] bg-[#232420] px-4 shadow-[0_18px_52px_rgba(0,0,0,0.28)]'>
                         <textarea
                             value={composer}
                             onChange={(event) => onComposerChange(event.target.value)}
@@ -167,9 +184,14 @@ export default function ChatPane({
                             rows={1}
                             className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#eeeeea] outline-none placeholder:text-[#777772]'
                         />
-                        <button type='button' disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected} onClick={onSend} className='inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#f0eee6] px-4 text-sm font-semibold text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'>
-                            {awaitingResponse ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
-                            Send
+                        <button
+                            type='button'
+                            aria-label='Send'
+                            disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected}
+                            onClick={onSend}
+                            className='grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f0eee6] text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
+                        >
+                            {awaitingResponse ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <ArrowUp className='h-3.5 w-3.5 stroke-[2.8]' />}
                         </button>
                     </div>
                 </div>
@@ -179,7 +201,18 @@ export default function ChatPane({
     )
 }
 
-function EmptyComposerState({ landing }: { landing: boolean }) {
+function EmptyComposerState({ tooltip }: { tooltip: string }) {
+    const [greeting] = useState(() => {
+        const greetings = [
+            'What can I help you with?',
+            'What are we working on?',
+            'What do you want to tackle?',
+            'What should we look at first?',
+            'What can I help fix or build?',
+        ]
+        return greetings[Math.floor(Math.random() * greetings.length)]
+    })
+
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>
             <div className='max-w-xl text-center'>
@@ -187,16 +220,41 @@ function EmptyComposerState({ landing }: { landing: boolean }) {
                     <Bot className='h-6 w-6' />
                 </div>
                 <h2 className='mt-7 text-2xl font-semibold tracking-[-0.035em] text-[#f3f0e8]'>
-                    {landing ? 'Start with the task, not the tooling.' : 'Describe what you want built.'}
+                    {greeting}
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#9a9a95]'>
-                    {landing
-                        ? 'Ask for a feature, a bug fix, or an app. Attach repos or shares when needed.'
-                        : 'Attach repos, inspect files, scaffold starters, and review tool output here.'}
+                    {tooltip}
                 </p>
             </div>
         </div>
     )
+}
+
+function pickTooltip(tooltips: unknown[]) {
+    const candidates = tooltips
+        .map((item) => {
+            if (typeof item === 'string') return { text: item, weight: 1 }
+            if (item && typeof item === 'object' && 'text' in item && typeof item.text === 'string') {
+                return {
+                    text: item.text,
+                    weight: 'weight' in item && typeof item.weight === 'number' && Number.isFinite(item.weight) ? item.weight : 1,
+                }
+            }
+            if (item && typeof item === 'object' && 'message' in item && typeof item.message === 'string') {
+                return { text: item.message, weight: 1 }
+            }
+            return { text: '', weight: 1 }
+        })
+        .map((item) => ({ ...item, text: item.text.trim(), weight: Math.max(0.1, item.weight) }))
+        .filter((item) => item.text)
+    if (!candidates.length) return ''
+    const total = candidates.reduce((sum, item) => sum + item.weight, 0)
+    let cursor = Math.random() * total
+    for (const candidate of candidates) {
+        cursor -= candidate.weight
+        if (cursor <= 0) return candidate.text
+    }
+    return candidates[0]?.text || ''
 }
 
 function MarkdownBlock({ content }: { content: string }) {
