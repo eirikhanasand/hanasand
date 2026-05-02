@@ -5,10 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type TerminalProps = {
     share: Share | null
-    open: boolean
+    active: boolean
 }
 
-export default function useTerminal({ share, open }: TerminalProps) {
+export default function useTerminal({ share, active }: TerminalProps) {
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [chunks, setChunks] = useState<string[]>([])
@@ -18,7 +18,7 @@ export default function useTerminal({ share, open }: TerminalProps) {
     const lastResizeRef = useRef<{ cols: number; rows: number } | null>(null)
     const shareId = share && 'id' in share ? share.id : null
     const shareAlias = share?.alias || null
-    const sessionKey = open && shareId && shareAlias ? `${shareId}:${shareAlias}` : null
+    const sessionKey = active && shareId && shareAlias ? `${shareId}:${shareAlias}` : null
     const activeSessionRef = useRef<string | null>(sessionKey)
 
     useEffect(() => {

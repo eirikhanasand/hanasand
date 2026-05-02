@@ -28,7 +28,7 @@ export default function Terminal({
     const startY = useRef(0)
     const startHeight = useRef(0)
     const [isDone, setIsDone] = useState(false)
-    const { isConnected, participants, chunks, sendInput, sendResize } = useTerminal({ share, open })
+    const { isConnected, participants, chunks, sendInput, sendResize } = useTerminal({ share, active: Boolean(share) })
     const lastOpenRef = useRef(open)
 
     function handleMouseDown(e: ReactMouseEvent) {
