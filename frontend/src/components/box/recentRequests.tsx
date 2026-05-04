@@ -5,29 +5,35 @@ type RecentRequestsProps = {
     recentRequests: RequestHistoryEntry[]
     activeRequestId?: string | null
     onSelect: (request: RequestHistoryEntry) => void
+    onRun: (request: RequestHistoryEntry) => void
+    onDelete: (id: string) => void
 }
 
 export default function RecentRequests({
     recentRequests,
     activeRequestId,
-    onSelect
+    onSelect,
+    onRun,
+    onDelete,
 }: RecentRequestsProps) {
     if (!recentRequests.length) {
         return (
-            <div className='grid h-full place-items-center rounded-xl border border-dashed border-white/10 px-4 text-center text-sm text-bright/45'>
-                No requests yet.
+            <div className='rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-bright/45'>
+                Previous requests will appear here.
             </div>
         )
     }
 
     return (
-        <div className='grid h-full max-h-full gap-2 overflow-auto pr-1'>
+        <div className='flex max-w-full gap-2 overflow-x-auto pb-1'>
             {recentRequests.map((req) => (
                 <RecentRequest
                     key={req.id}
                     req={req}
                     active={activeRequestId === req.id}
                     onClick={() => onSelect(req)}
+                    onRun={() => onRun(req)}
+                    onDelete={() => onDelete(req.id)}
                 />
             ))}
         </div>

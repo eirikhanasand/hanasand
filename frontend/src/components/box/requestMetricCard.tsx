@@ -18,8 +18,8 @@ export default function RequestMetricCard({
             : 'text-bright'
 
     return (
-        <div className='rounded-xl border border-white/8 bg-black/20 p-3'>
-            <div className='mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-bright/40'>
+        <div className='rounded-lg border border-white/8 bg-black/10 px-3 py-2'>
+            <div className='mb-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-bright/35'>
                 {icon}
                 {label}
             </div>
