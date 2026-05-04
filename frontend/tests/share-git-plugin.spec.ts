@@ -17,7 +17,8 @@ test('share editor exposes git import and pull from the right panel', async () =
     expect(plugin).toContain('attachGitHubCredential(repo.id, githubToken.trim())')
     expect(plugin).toContain('syncRepositoryToShare({ repo: persistedRepo, token: accessToken, userId })')
     expect(plugin).toContain('importRepositoryToShare({ repo: persistedRepo, token: accessToken, userId })')
-    expect(plugin).toContain('Log in to pull public and private repositories')
+    expect(plugin).toContain('Log in to pull public repositories and private GitHub repositories')
+    expect(plugin).toContain('owner/repo, GitHub URL, or public Git URL')
 
     expect(github).toContain('export async function persistGitHubRepository')
     expect(github).toContain("aiClientRequest('/ai/repositories'")

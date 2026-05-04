@@ -125,7 +125,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                 <div className='min-w-0'>
                     <div className='text-xs font-semibold text-bright/86'>Git</div>
                     <div className='mt-0.5 text-[11px] leading-4 text-bright/42'>
-                        Import or pull from GitHub without leaving the editor.
+                        Import or pull from GitHub, Forgejo, GitLab, or any public Git URL.
                     </div>
                 </div>
             </div>
@@ -138,7 +138,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             Sign in for Git access
                         </div>
                         <Link href='/login' className='mt-2 inline-block underline-offset-4 hover:underline'>
-                            Log in to pull public and private repositories
+                            Log in to pull public repositories and private GitHub repositories
                         </Link>
                     </div>
                 ) : null}
@@ -146,14 +146,14 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                 <input
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
-                    placeholder='owner/repo or GitHub URL'
+                    placeholder='owner/repo, GitHub URL, or public Git URL'
                     spellCheck={false}
                     className='min-w-0 rounded-lg bg-black/18 px-2.5 py-2 text-xs text-bright/86 outline outline-dark placeholder:text-bright/28'
                 />
                 <input
                     value={githubToken}
                     onChange={(event) => setGitHubToken(event.target.value)}
-                    placeholder='GitHub token for private repos'
+                    placeholder='GitHub token for private GitHub repos'
                     type='password'
                     autoComplete='off'
                     spellCheck={false}

@@ -8,39 +8,168 @@ import { requireAiUser } from './shared.ts'
 import { buildTokenHint, getRepoCredential, touchRepoCredentialUsage, toRepoCredentialSummary } from '#utils/ai/repoCredentials.ts'
 import { detectRepositoryStack } from '#utils/ai/stack.ts'
 
-const MAX_FILES = 160
+const MAX_FILES = 10_000
 const MAX_FILE_SIZE = 250_000
 
-type ParsedGitHubRepo = {
+type ParsedGitRepo = {
+    host: string
     owner: string
     repo: string
+    fullName: string
+    repositoryUrl: string
     branch?: string
     sourcePath: string
+    webBaseUrl?: string
+    isGitHub: boolean
 }
 
-function parseGitHubInput(input: string): ParsedGitHubRepo {
+export function parseGitInput(input: string): ParsedGitRepo {
     const trimmed = input.trim()
     const urlMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)(?:\/tree\/([^/?#]+)(?:\/(.*))?)?/i)
     if (urlMatch) {
+        const repo = urlMatch[2].replace(/\.git$/i, '')
         return {
+            host: 'github.com',
             owner: urlMatch[1],
-            repo: urlMatch[2].replace(/\.git$/i, ''),
+            repo,
+            fullName: `${urlMatch[1]}/${repo}`,
+            repositoryUrl: `https://github.com/${urlMatch[1]}/${repo}.git`,
             branch: urlMatch[3] || undefined,
             sourcePath: (urlMatch[4] || '').replace(/^\/+|\/+$/g, ''),
+            webBaseUrl: `https://github.com/${urlMatch[1]}/${repo}`,
+            isGitHub: true,
+        }
+    }
+
+    const genericUrl = parseGenericGitUrl(trimmed)
+    if (genericUrl) {
+        return genericUrl
+    }
+
+    const hostPathMatch = trimmed.match(/^([^/\s]+\.[^/\s]+)\/(.+?)(?:#([^\s:]+))?(?::(.+))?$/)
+    if (hostPathMatch) {
+        const parsed = buildGenericGitRepo({
+            host: hostPathMatch[1],
+            repoPath: hostPathMatch[2],
+            repositoryUrl: `https://${hostPathMatch[1]}/${hostPathMatch[2]}`,
+            branch: hostPathMatch[3],
+            sourcePath: hostPathMatch[4] || '',
+            webBaseUrl: `https://${hostPathMatch[1]}/${hostPathMatch[2].replace(/\.git$/i, '')}`,
+        })
+        if (parsed) {
+            return parsed
         }
     }
 
     const shortMatch = trimmed.match(/^([^/\s]+)\/([^#\s]+)(?:#([^\s:]+))?(?::(.+))?$/)
     if (!shortMatch) {
-        throw new Error('Use a GitHub URL or owner/repo format.')
+        throw new Error('Use a Git URL, GitHub URL, or owner/repo format.')
     }
 
+    const repo = shortMatch[2].replace(/\.git$/i, '')
     return {
+        host: 'github.com',
         owner: shortMatch[1],
-        repo: shortMatch[2].replace(/\.git$/i, ''),
+        repo,
+        fullName: `${shortMatch[1]}/${repo}`,
+        repositoryUrl: `https://github.com/${shortMatch[1]}/${repo}.git`,
         branch: shortMatch[3] || undefined,
         sourcePath: (shortMatch[4] || '').replace(/^\/+|\/+$/g, ''),
+        webBaseUrl: `https://github.com/${shortMatch[1]}/${repo}`,
+        isGitHub: true,
     }
+}
+
+function parseGenericGitUrl(input: string): ParsedGitRepo | null {
+    const scpLikeMatch = input.match(/^git@([^:]+):(.+?)(?:#([^\s:]+))?(?::(.+))?$/i)
+    if (scpLikeMatch) {
+        const repoPath = scpLikeMatch[2].replace(/^\/+|\/+$/g, '')
+        return buildGenericGitRepo({
+            host: scpLikeMatch[1],
+            repoPath,
+            repositoryUrl: `git@${scpLikeMatch[1]}:${repoPath}`,
+            branch: scpLikeMatch[3],
+            sourcePath: scpLikeMatch[4] || '',
+        })
+    }
+
+    let url: URL
+    try {
+        url = new URL(input)
+    } catch {
+        return null
+    }
+
+    if (!['http:', 'https:', 'git:', 'ssh:'].includes(url.protocol)) {
+        return null
+    }
+
+    const pathParts = url.pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
+    const treeIndex = pathParts.findIndex((part) => ['tree', 'src', 'branch'].includes(part.toLowerCase()))
+    const repoParts = treeIndex >= 0 ? pathParts.slice(0, treeIndex) : pathParts
+    const hashTarget = url.hash ? url.hash.slice(1) : ''
+    const [hashBranch, ...hashSourceParts] = hashTarget.split(':')
+    const branch = treeIndex >= 0 ? pathParts[treeIndex + 1] : hashBranch || undefined
+    const sourcePath = treeIndex >= 0 ? pathParts.slice(treeIndex + 2).join('/') : hashSourceParts.join(':')
+    if (!repoParts.length) {
+        return null
+    }
+
+    return buildGenericGitRepo({
+        host: url.host,
+        repoPath: repoParts.join('/'),
+        repositoryUrl: buildCloneUrl(url, repoParts),
+        branch,
+        sourcePath,
+        webBaseUrl: `${url.protocol}//${url.host}/${repoParts.join('/').replace(/\.git$/i, '')}`,
+    })
+}
+
+function buildGenericGitRepo({
+    host,
+    repoPath,
+    repositoryUrl,
+    branch,
+    sourcePath = '',
+    webBaseUrl,
+}: {
+    host: string
+    repoPath: string
+    repositoryUrl: string
+    branch?: string
+    sourcePath?: string
+    webBaseUrl?: string
+}): ParsedGitRepo | null {
+    const parts = repoPath.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
+    if (!parts.length) {
+        return null
+    }
+
+    const repo = parts.at(-1)!.replace(/\.git$/i, '')
+    const owner = parts.length > 1 ? parts.at(-2)! : host
+    const cleanRepoPath = [...parts.slice(0, -1), repo].join('/')
+    const normalizedHost = host.toLowerCase()
+
+    return {
+        host: normalizedHost,
+        owner,
+        repo,
+        fullName: normalizedHost === 'github.com' && parts.length >= 2 ? `${owner}/${repo}` : `${normalizedHost}/${cleanRepoPath}`,
+        repositoryUrl: repositoryUrl.endsWith('.git') ? repositoryUrl : `${repositoryUrl}.git`,
+        branch,
+        sourcePath: sourcePath.replace(/^\/+|\/+$/g, ''),
+        webBaseUrl,
+        isGitHub: normalizedHost === 'github.com',
+    }
+}
+
+function buildCloneUrl(url: URL, repoParts: string[]) {
+    const cleanPath = repoParts.join('/')
+    if (url.protocol === 'ssh:' && url.username) {
+        return `${url.username}@${url.host}:${cleanPath}${cleanPath.endsWith('.git') ? '' : '.git'}`
+    }
+
+    return `${url.protocol}//${url.host}/${cleanPath}${cleanPath.endsWith('.git') ? '' : '.git'}`
 }
 
 function runGit(args: string[], cwd?: string, env?: NodeJS.ProcessEnv) {
@@ -90,7 +219,10 @@ esac
 
 function buildGitEnv(token: string | undefined, askPassPath?: string) {
     if (!token || !askPassPath) {
-        return process.env
+        return {
+            ...process.env,
+            GIT_TERMINAL_PROMPT: '0',
+        }
     }
 
     return {
@@ -122,10 +254,10 @@ export default async function importRepository(req: FastifyRequest, res: Fastify
         return res.status(400).send({ error: 'Missing repository input.' })
     }
 
-    const parsed = parseGitHubInput(input)
-    const repositoryUrl = `https://github.com/${parsed.owner}/${parsed.repo}.git`
+    const parsed = parseGitInput(input)
+    const repositoryUrl = parsed.repositoryUrl
     const savedCredential = existingId ? await getRepoCredential(existingId, userId).catch(() => null) : null
-    const token = githubToken?.trim() || savedCredential?.token || ''
+    const token = parsed.isGitHub ? githubToken?.trim() || savedCredential?.token || '' : ''
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'hanasand-import-'))
     const askPassPath = token ? await createGitAskPass(tempDir) : undefined
     const gitEnv = buildGitEnv(token || undefined, askPassPath)
@@ -167,16 +299,18 @@ export default async function importRepository(req: FastifyRequest, res: Fastify
         if (usedToken && existingId && savedCredential) {
             await touchRepoCredentialUsage(existingId, userId, true).catch(() => undefined)
         }
-        const sourceUrl = parsed.sourcePath
-            ? `https://github.com/${parsed.owner}/${parsed.repo}/tree/${branch}/${parsed.sourcePath}`
-            : `https://github.com/${parsed.owner}/${parsed.repo}/tree/${branch}`
+        const sourceUrl = parsed.webBaseUrl
+            ? parsed.sourcePath
+                ? `${parsed.webBaseUrl}/tree/${branch}/${parsed.sourcePath}`
+                : `${parsed.webBaseUrl}/tree/${branch}`
+            : repositoryUrl
 
         return res.send({
             id: existingId || crypto.randomUUID(),
             ownerId: userId,
             accessScope: 'owned',
             name: parsed.repo,
-            fullName: `${parsed.owner}/${parsed.repo}`,
+            fullName: parsed.fullName,
             branch,
             defaultBranch,
             sourcePath: parsed.sourcePath,
@@ -216,7 +350,7 @@ export default async function importRepository(req: FastifyRequest, res: Fastify
         return res.status(502).send({
             error: error instanceof Error
                 ? error.message.includes('Authentication failed') || error.message.includes('could not read Username')
-                    ? 'GitHub authentication failed. Check the repository visibility or attach a valid repo-scoped token.'
+                    ? 'Git authentication failed. Check the repository visibility or attach a valid token.'
                     : error.message
                 : 'Failed to import repository.',
         })
