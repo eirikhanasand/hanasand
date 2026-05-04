@@ -1,4 +1,5 @@
 import { removeCookie, setCookie } from '@/utils/cookies/cookies'
+import type { ShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
 import { Monitor } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
@@ -9,6 +10,7 @@ type ShowSiteProps = {
     setRenderSite: Dispatch<SetStateAction<boolean>>
     triggerChange: boolean | 'close'
     setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
+    capability: ShareRuntimeCapability
 }
 
 export default function RenderSite({
@@ -17,7 +19,8 @@ export default function RenderSite({
     setRenderSite,
     sharePageWidth,
     triggerChange,
-    setTriggerChange
+    setTriggerChange,
+    capability
 }: ShowSiteProps) {
     const [width, setWidth] = useState(sharePageWidth)
 
@@ -108,6 +111,16 @@ export default function RenderSite({
     }, [width, renderSite, setRenderSite])
 
     useEffect(() => {
+        if (!capability.hasHttpSurface) {
+            if (renderSite) {
+                setRenderSite(false)
+            }
+            if (triggerChange) {
+                setTriggerChange(false)
+            }
+            return
+        }
+
         if (triggerChange === 'close') {
             fade(true)
             setRenderSite(false)
@@ -119,10 +132,14 @@ export default function RenderSite({
             handleChange()
             setTriggerChange(false)
         }
-    }, [triggerChange, setTriggerChange])
+    }, [capability.hasHttpSurface, renderSite, setRenderSite, triggerChange, setTriggerChange])
+
+    if (!capability.hasHttpSurface) {
+        return null
+    }
 
     return (
-        <div style={{ width }} className={`${renderSite ? 'relative' : 'absolute right-0 bottom-0 z-100 w-2 h-full'} pb-25`}>
+        <div style={{ width }} className={`${renderSite ? 'relative min-w-0 shrink-0' : 'absolute right-0 bottom-0 z-100 w-2 h-full'} pb-25`}>
             <div
                 onMouseDown={handleMouseDown}
                 className='absolute top-0 right-0 h-full w-2 cursor-col-resize z-20 pl-2 pr-8 group grid place-items-center'
@@ -132,14 +149,14 @@ export default function RenderSite({
                 <div className='absolute h-10 w-1 right-5 bg-extralight group-hover:bg-white/30 rounded-full' />
             </div>
 
-            {renderSite && width > 0 && !share?.alias && (
-                <h1 className='w-full h-full grid place-items-center text-center border-none text-gray-400 mt-13'>Loading...</h1>
+            {renderSite && width > 0 && !capability.canPreview && (
+                <h1 className='w-full h-full grid place-items-center px-6 text-center border-none text-sm text-bright/45 mt-13'>{capability.reason}</h1>
             )}
 
-            {renderSite && width > 0 && share?.alias && (
+            {renderSite && width > 0 && capability.canPreview && share?.alias && (
                 <iframe
                     src={`https://${share.alias}.hanasand.com`}
-                    className='absolute w-full h-full border-none rounded-lg'
+                    className='absolute w-full h-full min-w-0 border-none rounded-lg'
                     title='Embedded Site'
                 ></iframe>
             )}
@@ -149,22 +166,15 @@ export default function RenderSite({
                 aria-label={renderSite ? 'Hide site' : 'Show site'}
                 onClick={handleChange}
                 className='
-                    group fixed bottom-16 right-3 z-100 cursor-pointer select-none
-                    w-[18.5%] min-w-[130px] py-2 rounded-xl text-center
-                    hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
-                    backdrop-blur-md bg-bright/3 group-hover:bg-bright/10 overflow-hidden
-                    hover:scale-[1.03] hover:border-white/30 transition-all
-                    shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.4)]
+                    group fixed bottom-15 right-3 z-100 inline-flex max-w-[calc(100vw-1.5rem)]
+                    cursor-pointer select-none items-center justify-center gap-2 rounded-full
+                    border border-bright/10 bg-black/55 px-3.5 py-2 text-sm text-bright/78
+                    shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md transition
+                    hover:border-bright/22 hover:bg-bright/8 hover:text-bright
                 '
             >
-                {/* Glass overlay */}
-                <div className='absolute inset-0 bg-black/10' />
-
-                <div className='grid place-items-center'>
-                    <h1 className='relative z-10 text-white/90 font-semibold tracking-wide flex gap-2'>
-                        <Monitor /> {renderSite ? 'Hide site' : 'Show site'}
-                    </h1>
-                </div>
+                <Monitor className='h-4 w-4 shrink-0' />
+                <span className='truncate'>{renderSite ? 'Hide site' : 'Show site'}</span>
             </button>
         </div>
     )

@@ -7,6 +7,7 @@ export type ToolResponse = {
     elapsed_ms?: number
     headers?: Record<string, string>
     body?: string
+    raw?: string
     error?: string
     request?: {
         method: string

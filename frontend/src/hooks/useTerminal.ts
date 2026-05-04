@@ -8,14 +8,24 @@ type TerminalProps = {
     active: boolean
 }
 
+export type TerminalCredentials = {
+    username: string
+    password: string
+    sshCommand: string
+    domain: string
+}
+
 export default function useTerminal({ share, active }: TerminalProps) {
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [chunks, setChunks] = useState<string[]>([])
+    const [status, setStatus] = useState('Terminal closed.')
+    const [credentials, setCredentials] = useState<TerminalCredentials | null>(null)
     const wsRef = useRef<WebSocket | null>(null)
     const queuedMessagesRef = useRef<string[]>([])
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const lastResizeRef = useRef<{ cols: number; rows: number } | null>(null)
+    const terminalSessionRef = useRef<string | null>(null)
     const shareId = share && 'id' in share ? share.id : null
     const shareAlias = share?.alias || null
     const sessionKey = active && shareId && shareAlias ? `${shareId}:${shareAlias}` : null
@@ -27,10 +37,14 @@ export default function useTerminal({ share, active }: TerminalProps) {
 
     useEffect(() => {
         if (!sessionKey || !shareAlias) {
-            return
-        }
+            setStatus('Terminal closed.')
+        return
+    }
 
-        queuedMessagesRef.current = []
+    queuedMessagesRef.current = []
+    setCredentials(null)
+    terminalSessionRef.current = randomId(6)
+        setStatus('Connecting to terminal...')
         let disposed = false
 
         function clearReconnect() {
@@ -54,7 +68,8 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 return
             }
 
-            const session = randomId(6)
+            const session = terminalSessionRef.current || randomId(6)
+            terminalSessionRef.current = session
             const userCookie = getCookie('id')
             const terminalUser = userCookie || 'default'
             const ws = new WebSocket(`${config.url.cdn_wss}/share/${shareAlias}/shell/${terminalUser}/${session}`)
@@ -68,6 +83,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 setChunks([])
                 setParticipants(1)
                 setIsConnected(true)
+                setStatus('Preparing terminal...')
                 flushQueue(ws)
                 if (lastResizeRef.current && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
@@ -85,6 +101,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
 
                 if (activeSessionRef.current === sessionKey) {
                     setIsConnected(false)
+                    setStatus(disposed ? 'Terminal closed.' : 'Reconnecting terminal...')
                 }
                 if (!disposed) {
                     reconnectTimeoutRef.current = setTimeout(() => {
@@ -97,6 +114,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 console.log('WebSocket error:', error)
                 if (activeSessionRef.current === sessionKey) {
                     setIsConnected(false)
+                    setStatus('Terminal connection error. Retrying...')
                 }
             }
 
@@ -116,7 +134,22 @@ export default function useTerminal({ share, active }: TerminalProps) {
                         }
                         setParticipants(msg.participants || 1)
                         if (typeof msg.content === 'string') {
+                            const nextStatus = statusFromTerminalUpdate(msg.content)
+                            if (nextStatus) {
+                                setStatus(nextStatus)
+                            }
                             setChunks((prev) => [...prev, msg.content])
+                        }
+                    }
+
+                    if (msg.type === 'terminal_credentials') {
+                        if (activeSessionRef.current !== sessionKey) {
+                            return
+                        }
+
+                        if (isTerminalCredentials(msg.credentials)) {
+                            setCredentials(msg.credentials)
+                            setStatus('Terminal ready.')
                         }
                     }
 
@@ -189,7 +222,46 @@ export default function useTerminal({ share, active }: TerminalProps) {
         isConnected: sessionKey ? isConnected : false,
         participants: sessionKey ? participants : 1,
         chunks: sessionKey ? chunks : [],
-    }), [chunks, isConnected, participants, sessionKey])
+        status: sessionKey ? status : 'Terminal closed.',
+        credentials: sessionKey ? credentials : null,
+    }), [chunks, credentials, isConnected, participants, sessionKey, status])
 
     return { ...view, sendInput, sendResize }
+}
+
+function statusFromTerminalUpdate(raw: string) {
+    try {
+        const parsed = JSON.parse(raw) as { content?: string, code?: unknown }
+        if (parsed.code !== undefined) {
+            return null
+        }
+
+        if (typeof parsed.content !== 'string') {
+            return null
+        }
+
+        const cleaned = parsed.content
+            .replace(/\r/g, '\n')
+            .split('\n')
+            .map(line => line.replace(/^\[[+\-✓]\]\s*/, '').trim())
+            .filter(Boolean)
+            .at(-1)
+
+        return cleaned || null
+    } catch {
+        const cleaned = raw.trim()
+        return cleaned || null
+    }
+}
+
+function isTerminalCredentials(value: unknown): value is TerminalCredentials {
+    if (!value || typeof value !== 'object') {
+        return false
+    }
+
+    const candidate = value as Partial<TerminalCredentials>
+    return typeof candidate.username === 'string'
+        && typeof candidate.password === 'string'
+        && typeof candidate.sshCommand === 'string'
+        && typeof candidate.domain === 'string'
 }

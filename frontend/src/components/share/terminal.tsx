@@ -1,7 +1,7 @@
 import { type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction, useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Eye, Wifi, WifiOff } from 'lucide-react'
 import TerminalViewer from './terminalViewer'
-import useTerminal from '@/hooks/useTerminal'
+import useTerminal, { type TerminalCredentials } from '@/hooks/useTerminal'
 import { removeCookie, setCookie } from '@/utils/cookies/cookies'
 
 type ConsoleProps = {
@@ -11,6 +11,8 @@ type ConsoleProps = {
     shareTerminalHeight: number
     triggerChange: boolean | 'close'
     setTriggerChange: Dispatch<SetStateAction<boolean | 'close'>>
+    setTerminalStatus: Dispatch<SetStateAction<string>>
+    setTerminalCredentials: Dispatch<SetStateAction<TerminalCredentials | null>>
 }
 
 const DEFAULT_TERMINAL_HEIGHT = 320
@@ -21,14 +23,16 @@ export default function Terminal({
     setOpen,
     shareTerminalHeight,
     triggerChange,
-    setTriggerChange
+    setTriggerChange,
+    setTerminalStatus,
+    setTerminalCredentials
 }: ConsoleProps) {
     const [height, setHeight] = useState(shareTerminalHeight > 0 ? shareTerminalHeight : DEFAULT_TERMINAL_HEIGHT)
     const [isDragging, setIsDragging] = useState(false)
     const startY = useRef(0)
     const startHeight = useRef(0)
     const [isDone, setIsDone] = useState(false)
-    const { isConnected, participants, chunks, sendInput, sendResize } = useTerminal({ share, active: Boolean(share) })
+    const { isConnected, participants, chunks, status, credentials, sendInput, sendResize } = useTerminal({ share, active: Boolean(share) })
     const lastOpenRef = useRef(open)
 
     function handleMouseDown(e: ReactMouseEvent) {
@@ -99,6 +103,14 @@ export default function Terminal({
             }
         }
     }, [height, open])
+
+    useEffect(() => {
+        setTerminalStatus(status)
+    }, [setTerminalStatus, status])
+
+    useEffect(() => {
+        setTerminalCredentials(credentials)
+    }, [credentials, setTerminalCredentials])
 
     useEffect(() => {
         if (!triggerChange) {
@@ -177,6 +189,9 @@ export default function Terminal({
                             <Eye className='h-3.5 w-3.5' />
                             <h1>{participants}</h1>
                         </span>
+                        <span className='max-w-[55vw] truncate text-bright/55'>
+                            {status}
+                        </span>
                     </div>
                     <button
                         type='button'
@@ -195,6 +210,7 @@ export default function Terminal({
                         sendInput={sendInput}
                         sendResize={sendResize}
                         chunks={chunks}
+                        status={status}
                         isDone={isDone}
                     />}
                 </div>

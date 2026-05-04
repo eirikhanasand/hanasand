@@ -6,7 +6,7 @@ import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Search from '@/components/share/search/search'
 import OpenFiles from '@/components/share/files/openFiles'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
@@ -16,6 +16,8 @@ import postShare from '@/utils/share/post'
 import getAgentTarget from '@/utils/vms/fetch/getAgentTarget'
 import syncAgentTargetAccess from '@/utils/vms/fetch/syncAgentTargetAccess'
 import postVM from '@/utils/vms/fetch/postVM'
+import type { TerminalCredentials } from '@/hooks/useTerminal'
+import { getShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
 
 type ClientPageProps = {
     id: string
@@ -51,16 +53,32 @@ export default function ClientPage({
     const [box, setBox] = useState(false)
     const [share, setShare] = useState<Share | null>(serverShare)
     const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
+    const [terminalStatus, setTerminalStatus] = useState('Terminal closed.')
+    const [terminalCredentials, setTerminalCredentials] = useState<TerminalCredentials | null>(null)
     const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
     const [triggerSiteChange, setTriggerSiteChange] = useState<boolean | 'close'>(false)
     const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
     const [openFiles, setOpenFiles] = useState(serverOpenFiles)
     const [workspaceCreated, setWorkspaceCreated] = useState(!autoCreate)
+    const [editorPatch, setEditorPatch] = useState<{ value: string; nonce: number } | null>(null)
     const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const maxWidth = showMetadata && showExplorer
-        ? 'max-w-[64vw]'
-        : 'max-w-full'
+        ? 'max-w-[54vw]'
+        : showMetadata || showExplorer
+            ? 'max-w-[70vw]'
+            : 'max-w-full'
+    const runtimeCapability = useMemo(() => getShareRuntimeCapability({
+        share,
+        tree,
+        activeContent: editingContent,
+    }), [editingContent, share, tree])
+
+    useEffect(() => {
+        if (!runtimeCapability.hasHttpSurface && renderSite) {
+            setRenderSite(false)
+        }
+    }, [renderSite, runtimeCapability.hasHttpSurface])
 
     useEffect(() => {
         if (!autoCreate || hasCreatedWorkspace.current) {
@@ -126,7 +144,7 @@ export default function ClientPage({
     }, [autoCreate, editingContent, id, replaceUrlOnCreate, setError])
 
     return (
-        <div className='flex w-full h-full max-w-[100vw] overflow-hidden p-2 gap-2'>
+        <div className='flex w-full h-full max-w-[100vw] min-w-0 overflow-hidden p-2 gap-2'>
             <Explorer
                 showExplorer={showExplorer}
                 setShowExplorer={setShowExplorer}
@@ -134,8 +152,11 @@ export default function ClientPage({
                 tree={tree}
                 share={share}
                 setShare={setShare}
+                editingContent={editingContent}
+                setEditorPatch={setEditorPatch}
+                setError={setError}
             />
-            <div className={`flex-1 flex flex-col min-h-full w-full gap-2 text-foreground ${maxWidth}`}>
+            <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
                 <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
                 <Code
                     id={share?.id || id}
@@ -150,6 +171,7 @@ export default function ClientPage({
                     syntaxHighlighting={syntaxHighlighting}
                     setError={setError}
                     connect={workspaceCreated}
+                    editorPatch={editorPatch}
                 />
             </div>
             <Metadata
@@ -168,6 +190,9 @@ export default function ClientPage({
                 setSyntaxHighlighting={setSyntaxHighlighting}
                 box={box}
                 setBox={setBox}
+                terminalStatus={terminalStatus}
+                terminalCredentials={terminalCredentials}
+                tree={tree}
             />
             <Terminal
                 share={share}
@@ -176,10 +201,13 @@ export default function ClientPage({
                 shareTerminalHeight={shareTerminalHeight}
                 triggerChange={triggerTerminalChange}
                 setTriggerChange={setTriggerTerminalChange}
+                setTerminalStatus={setTerminalStatus}
+                setTerminalCredentials={setTerminalCredentials}
             />
             <Deploy
                 terminalOpen={terminalOpen}
                 setTerminalOpen={setTerminalOpen}
+                capability={runtimeCapability}
             />
             <RenderSite
                 share={share}
@@ -188,6 +216,7 @@ export default function ClientPage({
                 sharePageWidth={sharePageWidth}
                 triggerChange={triggerSiteChange}
                 setTriggerChange={setTriggerSiteChange}
+                capability={runtimeCapability}
             />
             <Search
                 setTriggerSiteChange={setTriggerSiteChange}

@@ -3,11 +3,12 @@ import useMovable from '@/hooks/movable'
 import { OpenFoldersProvider } from '@/hooks/useFolderState'
 import { getCookie } from '@/utils/cookies/cookies'
 import { getTree } from '@/utils/share/getTree'
-import { Folder, X } from 'lucide-react'
+import { Files, Folder, Search, X } from 'lucide-react'
 import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react'
 import TreeHeader from './treeHeader'
 import Tree from './tree'
 import NewFile from './newFile'
+import WorkspaceSearchPanel from '../workspaceSearchPanel'
 
 type ExplorerProps = {
     showExplorer: boolean
@@ -16,9 +17,10 @@ type ExplorerProps = {
     tree: Tree | null
     share: Share | null
     setShare: Dispatch<SetStateAction<Share | null>>
+    editingContent: string
+    setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
+    setError: Dispatch<SetStateAction<string | boolean | null>>
 }
-
-const sharedStyles = 'absolute bg-dark/10 hover:bg-dark grid place-items-center rounded-lg cursor-move z-100 select-none p-5'
 
 export default function Explorer({
     showExplorer,
@@ -27,8 +29,12 @@ export default function Explorer({
     tree: serverTree,
     share,
     setShare,
+    editingContent,
+    setEditorPatch,
+    setError,
 }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
+    const [activePanel, setActivePanel] = useState<'files' | 'search'>('files')
     const [isCreatingNewFile, setIsCreatingNewFile] = useState<'file' | 'folder' | null>(null)
     const [newFileName, setNewFileName] = useState('')
     const [selectedFolder, setSelectedFolder] = useState('')
@@ -89,33 +95,74 @@ export default function Explorer({
 
     if (!showExplorer) {
         return (
-            <button
-                type='button'
-                aria-label='Open file explorer'
+            <div
                 onMouseDown={(event) => handleMouseDown(event)}
-                onClick={handleOpen}
-                className={`group ${sharedStyles}`}
+                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-dark/20 p-2 shadow-2xl shadow-black/30 backdrop-blur-xl'
                 style={{
                     top: position.y,
                     left: position.x,
                 }}
             >
-                <Folder className='stroke-light/50 group-hover:stroke-bright' />
-            </button>
+                <button
+                    type='button'
+                    aria-label='Open file explorer'
+                    onClick={() => {
+                        setActivePanel('files')
+                        handleOpen()
+                    }}
+                    className='group grid h-11 w-11 place-items-center rounded-lg hover:bg-dark'
+                >
+                    <Folder className='stroke-light/50 group-hover:stroke-bright' />
+                </button>
+                <button
+                    type='button'
+                    aria-label='Open workspace search'
+                    onClick={() => {
+                        setActivePanel('search')
+                        handleOpen()
+                    }}
+                    className='group grid h-11 w-11 place-items-center rounded-lg hover:bg-dark'
+                >
+                    <Search className='stroke-light/50 group-hover:stroke-bright' />
+                </button>
+            </div>
         )
     }
 
     return (
-        <div className='min-w-fit w-[15vw] h-full'>
-            <div className='outline outline-dark rounded-lg p-2 h-full space-y-2 overflow-auto'>
+        <div className='flex h-full min-w-fit gap-2'>
+            <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
+                <button type='button' aria-label='Close left sidebar' onClick={() => setShowExplorer(false)} className='grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'>
+                    <X className='h-5 w-5' />
+                </button>
                 <button
                     type='button'
-                    aria-label='Close file explorer'
-                    onClick={() => setShowExplorer(false)}
-                    className='outline outline-dark rounded-lg hover:bg-dark/50 h-12 w-12 grid place-items-center cursor-pointer'
+                    aria-label='Files'
+                    onClick={() => setActivePanel('files')}
+                    className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'files' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                 >
-                    <X className='cursor-pointer' />
+                    <Files className='h-5 w-5' />
                 </button>
+                <button
+                    type='button'
+                    aria-label='Search and replace'
+                    onClick={() => setActivePanel('search')}
+                    className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'search' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
+                >
+                    <Search className='h-5 w-5' />
+                </button>
+            </nav>
+            {activePanel === 'search' ? (
+                <WorkspaceSearchPanel
+                    tree={tree}
+                    share={share}
+                    editingContent={editingContent}
+                    setShare={setShare}
+                    setEditorPatch={setEditorPatch}
+                    setError={setError}
+                />
+            ) : (
+            <div className='h-full w-[15vw] min-w-[240px] overflow-auto rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
                 {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
                     <h1 className='text-sm text-bright/85'>
                         {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
@@ -164,6 +211,7 @@ export default function Explorer({
                     </OpenFoldersProvider>
                 )}
             </div>
+            )}
         </div>
     )
 }
@@ -178,7 +226,7 @@ function getProjectRoot(tree: Tree | null, share: Share | null): FileFolder | nu
         return null
     }
 
-    if (root.id === share.id) {
+    if (root.id === share.id || (root.parent === null && root.name.startsWith('project-'))) {
         return root
     }
 

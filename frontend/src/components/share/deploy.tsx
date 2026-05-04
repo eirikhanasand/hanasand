@@ -1,35 +1,42 @@
+import type { ShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
 import { Dispatch, SetStateAction } from 'react'
 
 type DeployProps = {
     setTerminalOpen: Dispatch<SetStateAction<boolean>>
     terminalOpen: boolean
+    capability: ShareRuntimeCapability
 }
 
-export default function Deploy({ setTerminalOpen, terminalOpen }: DeployProps) {
+export default function Deploy({ setTerminalOpen, terminalOpen, capability }: DeployProps) {
+    if (!capability.hasHttpSurface) {
+        return null
+    }
+
+    const disabled = !capability.canDeploy
+    const label = disabled ? 'No deploy target' : terminalOpen ? 'Terminal open' : 'Deploy'
+    const stateClass = disabled
+        ? 'cursor-not-allowed border-bright/8 bg-black/36 text-bright/34'
+        : 'cursor-pointer border-[#fd8738]/25 bg-[#fd8738]/12 text-[#ffb77c] hover:border-[#fd8738]/45 hover:bg-[#fd8738]/18 hover:text-[#ffd5b4]'
+
     return (
         <button
             type='button'
-            aria-label={terminalOpen ? 'Terminal open for deployment commands' : 'Open terminal for deployment commands'}
-            onClick={() => setTerminalOpen(true)}
-            className='
-                group fixed bottom-3 right-3 z-100 cursor-pointer select-none
-                w-[18.5%] min-w-[130px] rounded-xl px-4 py-2 text-center
-                hover:shadow-[0_0_10px_rgba(0,0,0,0.3)] duration-300
-                backdrop-blur-md bg-white/3 group-hover:bg-white/10 overflow-hidden
-                hover:scale-[1.03] hover:border-white/30 transition-all
-                shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_8px_rgba(0,0,0,0.4)]
-            '
+            aria-label={disabled ? `Deployment unavailable: ${capability.reason}` : terminalOpen ? 'Terminal open for deployment commands' : 'Open terminal for deployment commands'}
+            title={capability.reason}
+            disabled={disabled}
+            onClick={() => {
+                if (!disabled) {
+                    setTerminalOpen(true)
+                }
+            }}
+            className={`
+                fixed bottom-3 right-3 z-100 inline-flex max-w-[calc(100vw-1.5rem)] select-none
+                items-center justify-center rounded-full border px-3.5 py-2 text-sm
+                shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md transition
+                ${stateClass}
+            `}
         >
-            {/* Animated gradient light shimmer */}
-            <div className='absolute inset-0 animate-gradient-fast bg-size-[200%_200%]
-        bg-linear-to-r from-purple-500 via-red-400 to-orange-400 opacity-0 group-hover:opacity-50 blur-md' />
-
-            {/* Glass overlay */}
-            <div className='absolute inset-0 bg-black/10' />
-
-            <h1 className='relative z-10 text-white/90 font-semibold tracking-wide'>
-                Deploy
-            </h1>
+            <span className='truncate'>{label}</span>
         </button>
     )
 }

@@ -1,11 +1,27 @@
 'use client'
 
-import { useRef } from 'react'
+import { useEffect, useState } from 'react'
 import randomId from '@/utils/random/randomId'
 import SharePageClient from './[...id]/clientPage'
 
 export default function ShareEntryClient() {
-    const shareId = useRef(randomId()).current
+    const [shareId, setShareId] = useState<string | null>(null)
+
+    useEffect(() => {
+        setShareId(randomId())
+    }, [])
+
+    if (!shareId) {
+        return (
+            <div className='grid h-[92.5vh] w-full place-items-center'>
+                <div className='rounded-2xl border border-bright/10 bg-[#070b10]/80 px-6 py-5 text-center shadow-2xl shadow-black/30 backdrop-blur-xl'>
+                    <h1 className='text-sm font-semibold text-bright/85'>Preparing workspace...</h1>
+                    <p className='mt-2 text-xs text-bright/45'>Hanasand is opening a fresh share.</p>
+                </div>
+            </div>
+        )
+    }
+
     const share = createOptimisticShare(shareId)
     const tree = createOptimisticTree(shareId)
 
@@ -20,7 +36,7 @@ export default function ShareEntryClient() {
                 shareTerminalHeight={0}
                 serverOpenFiles={[]}
                 autoCreate
-                replaceUrlOnCreate
+                replaceUrlOnCreate={false}
             />
         </div>
     )

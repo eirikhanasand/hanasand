@@ -1,4 +1,5 @@
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { handleEditorKeyDown } from './editorKeybindings'
 
 type EditorProps = {
@@ -25,18 +26,29 @@ export default function Editor({
     const lineNumberRef = useRef<HTMLElement | null>(null)
     const [lineNumberWidth, setLineNumberWidth] = useState(0)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
+    const searchParams = useSearchParams()
     const lines = editingContent.split(/\r?\n/)
 
     function handleWordClick(e: React.MouseEvent<HTMLTextAreaElement>) {
         const textarea = e.currentTarget
         const cursorPos = textarea.selectionStart
-        const value = textarea.value
+        setClickedWord(getTokenAtPosition(textarea.value, cursorPos))
+    }
+
+    function handleSelection(e: React.SyntheticEvent<HTMLTextAreaElement>) {
+        const textarea = e.currentTarget
+        const selected = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim()
+        if (selected) {
+            setClickedWord(selected)
+        }
+    }
+
+    function getTokenAtPosition(value: string, cursorPos: number) {
         const left = value.slice(0, cursorPos)
         const right = value.slice(cursorPos)
-        const leftWord = left.split(/\s/).pop() ?? ''
-        const rightWord = right.split(/\s/)[0] ?? ''
-        const word = leftWord + rightWord
-        setClickedWord(word)
+        const leftWord = left.match(/[A-Za-z_$][\w$-]*$/)?.[0] ?? ''
+        const rightWord = right.match(/^[A-Za-z_$][\w$-]*/)?.[0] ?? ''
+        return leftWord + rightWord
     }
 
     function handleScrollDiv(e: React.UIEvent<HTMLDivElement>) {
@@ -86,6 +98,28 @@ export default function Editor({
         inputRef.current?.focus()
     }, [])
 
+    useEffect(() => {
+        const targetLine = Number(searchParams.get('line'))
+        if (!targetLine || !inputRef.current) {
+            return
+        }
+
+        const textarea = inputRef.current
+        const lineHeight = 20
+        const scrollTop = Math.max(targetLine - 6, 0) * lineHeight
+        textarea.scrollTop = scrollTop
+        if (codeRef.current) {
+            codeRef.current.scrollTop = scrollTop
+        }
+        if (lineNumberRef.current) {
+            lineNumberRef.current.scrollTop = scrollTop
+        }
+
+        const start = getLineOffset(editingContent, targetLine)
+        textarea.setSelectionRange(start, start)
+        textarea.focus()
+    }, [codeRef, editingContent, searchParams])
+
     return (
         <main className='w-full h-full relative overflow-hidden outline outline-dark rounded-lg'>
             <h1 className={`absolute top-[6.7px] z-50 left-4 ${displayLineNumbers && 'pl-4'} pointer-events-none select-none text-gray-500`}>
@@ -117,6 +151,7 @@ export default function Editor({
                 value={editingContent}
                 onChange={handleChange}
                 onClick={handleWordClick}
+                onSelect={handleSelection}
                 onScroll={(e) => {
                     const lineNumbers = lineNumberRef.current
                     if (lineNumbers) {
@@ -142,4 +177,23 @@ export default function Editor({
             />
         </main>
     )
+}
+
+function getLineOffset(value: string, line: number) {
+    if (line <= 1) {
+        return 0
+    }
+
+    let offset = 0
+    let currentLine = 1
+    while (currentLine < line && offset < value.length) {
+        const next = value.indexOf('\n', offset)
+        if (next < 0) {
+            return value.length
+        }
+        offset = next + 1
+        currentLine += 1
+    }
+
+    return offset
 }

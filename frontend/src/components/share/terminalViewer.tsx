@@ -6,12 +6,13 @@ type TerminalViewerProps = {
     open: boolean
     share: Share
     chunks: string[]
+    status: string
     isDone?: boolean
     sendInput: (message: string) => { status: boolean, message?: string }
     sendResize: (cols: number, rows: number) => void
 }
 
-export default function TerminalViewer({ open, share, chunks, sendInput, sendResize }: TerminalViewerProps) {
+export default function TerminalViewer({ open, share, chunks, status, sendInput, sendResize }: TerminalViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const terminalRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
@@ -183,12 +184,22 @@ export default function TerminalViewer({ open, share, chunks, sendInput, sendRes
     }, [open, scheduleFit])
 
     return (
-        <div
-            ref={containerRef}
-            onClick={() => terminalRef.current?.focus()}
-            className='h-full min-w-0 w-full overflow-hidden rounded-md bg-[#11130f]'
-            data-share-terminal={share.alias}
-            data-testid='share-terminal-xterm'
-        />
+        <div className='relative h-full min-w-0 w-full overflow-hidden rounded-md bg-[#11130f]'>
+            {chunks.length === 0 && status && (
+                <div className='pointer-events-none absolute inset-0 z-10 flex items-start px-3 py-3 text-sm font-medium text-bright/58'>
+                    <span className='inline-flex items-center gap-2 rounded-lg border border-bright/8 bg-black/20 px-3 py-2'>
+                        <span className='h-2 w-2 animate-pulse rounded-full bg-[#9de18f]' />
+                        {status}
+                    </span>
+                </div>
+            )}
+            <div
+                ref={containerRef}
+                onClick={() => terminalRef.current?.focus()}
+                className='h-full min-w-0 w-full overflow-hidden rounded-md bg-[#11130f]'
+                data-share-terminal={share.alias}
+                data-testid='share-terminal-xterm'
+            />
+        </div>
     )
 }

@@ -48,6 +48,18 @@ export async function attachGitHubCredential(repositoryId: string, githubToken: 
     return body?.credential as AIRepositoryCredentialSummary
 }
 
+export async function persistGitHubRepository(repo: AIImportedRepo) {
+    const response = await aiClientRequest('/ai/repositories', {
+        method: 'POST',
+        body: JSON.stringify(repo),
+    })
+
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+        throw new Error(body?.error || 'Failed to save repository sync state.')
+    }
+}
+
 export async function removeGitHubCredential(repositoryId: string) {
     const response = await aiClientRequest(`/ai/repositories/${encodeURIComponent(repositoryId)}/credentials/github`, {
         method: 'DELETE',

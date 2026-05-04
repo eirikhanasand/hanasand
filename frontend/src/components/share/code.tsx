@@ -19,6 +19,7 @@ type CodeProps = {
     syntaxHighlighting: boolean
     setError: Dispatch<SetStateAction<string | boolean | null>>
     connect?: boolean
+    editorPatch?: { value: string; nonce: number } | null
 }
 
 export default function Code({
@@ -34,6 +35,7 @@ export default function Code({
     syntaxHighlighting,
     setError,
     connect = true,
+    editorPatch,
 }: CodeProps) {
     const [lastEdit, setLastEdit] = useState(new Date().getTime())
     const codeRef = useRef<HTMLPreElement>(null)
@@ -52,6 +54,16 @@ export default function Code({
     useEffect(() => {
         applyHighlightedCode(codeRef.current, editingContent, syntaxHighlighting)
     }, [editingContent, syntaxHighlighting])
+
+    useEffect(() => {
+        if (!editorPatch) {
+            return
+        }
+
+        setEditingContent(editorPatch.value)
+        applyHighlightedCode(codeRef.current, editorPatch.value, syntaxHighlighting)
+        sendEdit(editorPatch.value)
+    }, [editorPatch?.nonce])
 
     useEffect(() => {
         if (!codeRef.current) return

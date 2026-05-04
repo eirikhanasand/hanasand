@@ -1,0 +1,24 @@
+import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+
+const root = process.cwd()
+
+test('share editor exposes git import and pull from the right panel', async () => {
+    const metadata = await readFile(path.join(root, 'src/components/share/metadata.tsx'), 'utf8')
+    const plugin = await readFile(path.join(root, 'src/components/share/gitPlugin.tsx'), 'utf8')
+    const github = await readFile(path.join(root, 'src/components/ai/github.ts'), 'utf8')
+
+    expect(metadata).toContain('aria-label={showGitPlugin ? \'Hide Git plugin\' : \'Show Git plugin\'}')
+    expect(metadata).toContain('<GitPlugin shareRouteId={shareRouteId} share={share} />')
+
+    expect(plugin).toContain('importGitHubRepository(currentInput, existingId, githubToken)')
+    expect(plugin).toContain('persistGitHubRepository(persistedRepo)')
+    expect(plugin).toContain('attachGitHubCredential(repo.id, githubToken.trim())')
+    expect(plugin).toContain('syncRepositoryToShare({ repo: persistedRepo, token: accessToken, userId })')
+    expect(plugin).toContain('importRepositoryToShare({ repo: persistedRepo, token: accessToken, userId })')
+    expect(plugin).toContain('Log in to pull public and private repositories')
+
+    expect(github).toContain('export async function persistGitHubRepository')
+    expect(github).toContain("aiClientRequest('/ai/repositories'")
+})
