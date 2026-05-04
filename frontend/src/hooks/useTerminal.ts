@@ -38,12 +38,12 @@ export default function useTerminal({ share, active }: TerminalProps) {
     useEffect(() => {
         if (!sessionKey || !shareAlias) {
             setStatus('Terminal closed.')
-        return
-    }
+            return
+        }
 
-    queuedMessagesRef.current = []
-    setCredentials(null)
-    terminalSessionRef.current = randomId(6)
+        queuedMessagesRef.current = []
+        setCredentials(null)
+        terminalSessionRef.current = randomId(6)
         setStatus('Connecting to terminal...')
         let disposed = false
 
@@ -232,11 +232,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
 function statusFromTerminalUpdate(raw: string) {
     try {
         const parsed = JSON.parse(raw) as { content?: string, code?: unknown }
-        if (parsed.code !== undefined) {
-            return null
-        }
-
-        if (typeof parsed.content !== 'string') {
+        if (parsed.code !== undefined || typeof parsed.content !== 'string') {
             return null
         }
 
