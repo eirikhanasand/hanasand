@@ -178,7 +178,7 @@ export default function ChatPane({
                             aria-label='Send'
                             disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected}
                             onClick={onSend}
-                            className='grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f0eee6] text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
+                            className='grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f0eee6] text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
                         >
                             {awaitingResponse ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <ArrowUp className='h-3.5 w-3.5 stroke-[2.8]' />}
                         </button>
