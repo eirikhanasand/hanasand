@@ -17,7 +17,8 @@ const TOOL_SYSTEM_PROMPT = [
     'You have built-in access to advanced reasoning, repo-aware file tools, live web search, a sandboxed local command line, managed background processes, and a Playwright browser tool.',
     'Do not claim you lack internet access, current-date awareness, or shell access when those tools would help.',
     'Think privately before acting. For code tasks, inspect the repository deliberately, gather evidence, then act.',
-    'Use tools aggressively for anything current, verifiable, filesystem-related, package-related, or command-line oriented.',
+    'For casual greetings, small talk, or simple conversational prompts, answer directly and do not use tools.',
+    'Use tools for anything current, verifiable, filesystem-related, package-related, command-line oriented, or when the user asks you to act on a project.',
     'Prefer list_files, grep_repo, and read_file before editing unfamiliar code. Prefer edit_file for targeted snippet changes and write_file for precise file creation or full-file rewrites.',
     'For app development, you can scaffold files, install packages, start dev servers, wait for HTTP readiness, inspect logs, and verify behavior in a browser.',
     'When repeated or multi-step work would benefit future tasks, create a reusable script, helper, or tool in the repository instead of repeating the same manual steps.',
@@ -301,6 +302,39 @@ export default async function runModelToolLoop(
 ): Promise<ToolLoopResult> {
     const loopStartedAt = Date.now()
     const userMessage = latestUserMessage(request.messages)
+    if (isDirectChatPrompt(userMessage)) {
+        const startedAt = Date.now()
+        const completion = await createCompletion(
+            config.model_api,
+            [
+                {
+                    role: 'system',
+                    content: 'You are Hanasand AI. Answer this casual chat prompt directly and briefly. Do not call tools.',
+                },
+                {
+                    role: 'user',
+                    content: userMessage,
+                },
+            ],
+            Math.max(32, Math.min(request.maxTokens && request.maxTokens > 0 ? request.maxTokens : 96, 160)),
+            request.temperature ?? 0.35,
+        )
+
+        return {
+            content: getMessageContent(completion),
+            timings: completion.timings,
+            artifacts: [],
+            overhead: {
+                iterations: 1,
+                completionCalls: 1,
+                completionMs: Date.now() - startedAt,
+                toolCalls: 0,
+                toolMs: 0,
+                totalMs: Date.now() - loopStartedAt,
+            },
+        }
+    }
+
     const appParityTrainingTask = isAppParityTrainingTask(userMessage)
     const appParityRequest = appParityTrainingTask || isAppParityRequest(userMessage)
     const autonomousRepoTask = isAutonomousRepoTask(userMessage)
@@ -810,6 +844,20 @@ function withToolSystemPrompt(messages: GPT_ChatMessage[]) {
         role: 'system',
         content: TOOL_SYSTEM_PROMPT,
     } satisfies GPT_ChatMessage, ...messages]
+}
+
+function isDirectChatPrompt(message: string) {
+    const trimmed = message.trim()
+    if (!trimmed) {
+        return false
+    }
+
+    if (/\b(build|fix|debug|implement|deploy|inspect|search|browse|look up|read|write|run|test|commit|repo|file|website|app|api|docker|terminal|server)\b/i.test(trimmed)) {
+        return false
+    }
+
+    return trimmed.length <= 160
+        && /^(hei|hi|hello|hey|hallo|yo|sup|thanks|thank you|ok|okay|what'?s up|how are you|who are you|can you help|help)\b/i.test(trimmed)
 }
 
 function extractBalancedJson(content: string, marker: string) {
@@ -1524,24 +1572,34 @@ async function createCompletion(
     maxTokens: number,
     temperature: number,
 ) {
+    const openAiCompatBackend = process.env.HANASAND_MODEL_BACKEND === 'vllm'
+        || process.env.HANASAND_MODEL_PROFILE?.includes('vllm')
+    const requestBody: Record<string, unknown> = {
+        model: process.env.HANASAND_SERVED_MODEL_NAME || 'hanasand',
+        messages,
+        max_tokens: maxTokens,
+        temperature,
+        stream: false,
+    }
+
+    if (openAiCompatBackend) {
+        requestBody.top_p = Number(process.env.HANASAND_MODEL_TOP_P || 0.95)
+        requestBody.top_k = Number(process.env.HANASAND_MODEL_TOP_K || 40)
+    } else {
+        requestBody.timings_per_token = true
+        requestBody.reasoning_format = 'none'
+        requestBody.chat_template_kwargs = {
+            enable_thinking: true,
+        }
+    }
+
     const response = await fetch(`${modelUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             Authorization: 'Bearer no-key',
         },
-        body: JSON.stringify({
-            model: 'hanasand',
-            messages,
-            max_tokens: maxTokens,
-            temperature,
-            stream: false,
-            timings_per_token: true,
-            reasoning_format: 'none',
-            chat_template_kwargs: {
-                enable_thinking: true,
-            },
-        }),
+        body: JSON.stringify(requestBody),
     })
 
     if (!response.ok) {

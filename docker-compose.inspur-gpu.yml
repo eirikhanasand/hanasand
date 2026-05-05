@@ -1,0 +1,23 @@
+services:
+  gpt_worker:
+    container_name: hanasand_gpt_worker
+    image: hanasand_gpt_worker
+    build:
+      context: ./gpt/api
+      dockerfile: ./Dockerfile
+    restart: always
+    network_mode: host
+    environment:
+      API: ${HANASAND_GPT_API:-https://api.hanasand.com/api}
+      MODEL_API: ${HANASAND_MODEL_API:-http://127.0.0.1:18081}
+      HANASAND_MODEL_BACKEND: ${HANASAND_MODEL_BACKEND:-vllm}
+      HANASAND_MODEL_PROFILE: ${HANASAND_MODEL_PROFILE:-qwen3-coder-30b-a3b-vllm}
+      HANASAND_SERVED_MODEL_NAME: ${HANASAND_SERVED_MODEL_NAME:-hanasand}
+      HANASAND_MODEL_CONTEXT_MAX_TOKENS: ${HANASAND_MODEL_CONTEXT_MAX_TOKENS:-65536}
+      HANASAND_WEB_SEARCH: ${HANASAND_WEB_SEARCH:-1}
+      HANASAND_REASONING_BUDGET: ${HANASAND_REASONING_BUDGET:--1}
+      HANASAND_COMMAND_TIMEOUT_MS: ${HANASAND_COMMAND_TIMEOUT_MS:-120000}
+    mem_limit: 2g
+    cpus: "4.0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

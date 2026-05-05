@@ -2,6 +2,9 @@ type SQLParamType = (string | number | null | boolean | string[] | Date | Buffer
 
 type GPT_Client = {
     name: string
+    displayName?: string | null
+    modelId?: string | null
+    profile?: string | null
     ram: GPT_RAM[]
     cpu: GPT_CPU[]
     gpu: GPT_GPU[]

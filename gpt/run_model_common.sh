@@ -5,7 +5,7 @@ LAUNCHER_MODE="${1:-generic}"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 CURRENT_DIR="$SCRIPT_DIR"
 
-LLAMA_DIR="$CURRENT_DIR/llama.cpp"
+LLAMA_DIR="${HANASAND_LLAMA_CPP_DIR:-$CURRENT_DIR/llama.cpp}"
 LLAMA_BUILD_DIR="$LLAMA_DIR/build"
 MODELS_ROOT="$CURRENT_DIR/models"
 API_DIR="$CURRENT_DIR/api"
@@ -16,6 +16,8 @@ BUILD_MARKER="$LLAMA_BUILD_DIR/.hanasand-build"
 MODEL_PROFILE="${HANASAND_MODEL_PROFILE:-default}"
 MODEL_SELECTION_ONLY="${HANASAND_MODEL_SELECTION_ONLY:-0}"
 MODEL_SELECTION_ARTIFACT="$CURRENT_DIR/runtime/self-improvement/model-selection-latest.json"
+REQUIRE_CUDA="${HANASAND_REQUIRE_CUDA:-0}"
+EXPECTED_NVIDIA_GPUS="${HANASAND_EXPECTED_NVIDIA_GPUS:-0}"
 
 OS_NAME="$(uname -s)"
 CPU_CORES="$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)"
@@ -39,6 +41,18 @@ if command -v nvidia-smi >/dev/null 2>&1; then
 fi
 
 echo "Detected: OS=${OS_NAME}, RAM=${TOTAL_RAM_GB}GB, CPU=${CPU_CORES} cores, NVIDIA GPUs=${NVIDIA_GPU_COUNT}"
+
+if [ "$EXPECTED_NVIDIA_GPUS" -gt 0 ] && [ "$NVIDIA_GPU_COUNT" -ne "$EXPECTED_NVIDIA_GPUS" ]; then
+  echo "Expected ${EXPECTED_NVIDIA_GPUS} NVIDIA GPUs but detected ${NVIDIA_GPU_COUNT}."
+  echo "Refusing to start because this profile is meant to be reproducible on the full GPU host."
+  exit 1
+fi
+
+if [ "$REQUIRE_CUDA" = "1" ] && [ "$NVIDIA_GPU_COUNT" -lt 1 ]; then
+  echo "HANASAND_REQUIRE_CUDA=1 but nvidia-smi did not report any GPUs."
+  echo "Install/load the NVIDIA driver stack before starting the model."
+  exit 1
+fi
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1
@@ -143,12 +157,14 @@ install_prereqs() {
     HF_CMD="hf"
   elif need_cmd huggingface-cli; then
     HF_CMD="huggingface-cli"
-  elif need_cmd pip3; then
-    pip3 install --user -U "huggingface_hub[cli]"
-    HF_CMD="$HOME/.local/bin/hf"
   else
-    python3 -m pip install --user -U "huggingface_hub[cli]"
-    HF_CMD="$HOME/.local/bin/hf"
+    if [ ! -d "$CURRENT_DIR/venv" ]; then
+      python3 -m venv "$CURRENT_DIR/venv"
+    fi
+    # shellcheck disable=SC1091
+    source "$CURRENT_DIR/venv/bin/activate"
+    pip install --upgrade pip "huggingface_hub[cli]"
+    HF_CMD="$CURRENT_DIR/venv/bin/hf"
   fi
 
   if [ ! -x "$(command -v "$HF_CMD" 2>/dev/null || echo "$HF_CMD")" ] && ! need_cmd "$HF_CMD"; then
@@ -213,6 +229,12 @@ select_model() {
     if [ -z "${LLAMA_UBATCH_SIZE:-}" ] || [ "$LLAMA_UBATCH_SIZE" = "512" ]; then
       LLAMA_UBATCH_SIZE=256
     fi
+  elif [ "$MODEL_PROFILE" = "inspur-gpu" ]; then
+    MODEL_NAME="qwen3-coder-next"
+    MODEL_REPO="bartowski/Qwen_Qwen3-Coder-Next-GGUF"
+    MODEL_FILE="Qwen3-Coder-Next-Q4_K_M.gguf"
+    CTX_SIZE="${LLAMA_CTX_SIZE:-32768}"
+    MODEL_PROFILE_NOTE="Inspur 8x V100 strict GPU profile"
   elif [ "$OS_NAME" != "Darwin" ] && [ "$TOTAL_RAM_GB" -ge 200 ] && [ "$NVIDIA_GPU_COUNT" -ge 2 ]; then
     MODEL_NAME="qwen3-coder-next"
     MODEL_REPO="bartowski/Qwen_Qwen3-Coder-Next-GGUF"
@@ -320,6 +342,12 @@ build_llama_cpp() {
     git clone https://github.com/ggml-org/llama.cpp.git "$LLAMA_DIR"
   fi
 
+  if [ ! -d "$LLAMA_DIR/tools/server" ]; then
+    echo "llama.cpp checkout at $LLAMA_DIR is missing tools/server; refreshing source checkout."
+    rm -rf "$LLAMA_DIR"
+    git clone https://github.com/ggml-org/llama.cpp.git "$LLAMA_DIR"
+  fi
+
   LLAMA_SERVER_BIN="$LLAMA_BUILD_DIR/bin/llama-server"
 
   if ! binary_matches_host_arch "$LLAMA_SERVER_BIN" || ! build_marker_matches; then
@@ -339,6 +367,13 @@ build_llama_cpp() {
 }
 
 download_model() {
+  if [ "${GPT_REQUIRE_SELECTED_MODEL:-0}" != "1" ]; then
+    if [ "$REQUIRE_CUDA" = "1" ]; then
+      echo "CUDA-required profile selected; local model fallback is disabled."
+      GPT_REQUIRE_SELECTED_MODEL=1
+    fi
+  fi
+
   if [ "${GPT_REQUIRE_SELECTED_MODEL:-0}" != "1" ]; then
     local selected
     selected="$(find_best_available_model "$MODEL_NAME" "$MODEL_FILE")"
@@ -415,7 +450,11 @@ start_api() {
     npm install
   fi
 
-  HANASAND_WEB_SEARCH=1 MODEL_API="http://127.0.0.1:$MODEL_PORT" node src/index.ts &
+  if command -v bun >/dev/null 2>&1; then
+    HANASAND_WEB_SEARCH=1 MODEL_API="http://127.0.0.1:$MODEL_PORT" bun src/index.ts &
+  else
+    HANASAND_WEB_SEARCH=1 MODEL_API="http://127.0.0.1:$MODEL_PORT" node src/index.ts &
+  fi
   NODE_PID=$!
 }
 
@@ -473,8 +512,8 @@ SERVER_ARGS=(
   --host 127.0.0.1
   --port "$MODEL_PORT"
   --ctx-size "$CTX_SIZE"
-  -t "$CPU_CORES"
-  -tb "${LLAMA_THREADS_BATCH:-$CPU_CORES}"
+  -t "${LLAMA_THREADS:-$CPU_CORES}"
+  -tb "${LLAMA_THREADS_BATCH:-${LLAMA_THREADS:-$CPU_CORES}}"
   -b "$LLAMA_BATCH_SIZE"
   -ub "$LLAMA_UBATCH_SIZE"
   -ngl "$N_GPU_LAYERS"

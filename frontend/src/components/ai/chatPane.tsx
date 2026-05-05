@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, ArrowUp, Bot, CheckCircle2, ExternalLink, FolderKanban, LoaderCircle, PanelRightOpen, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Bot, CheckCircle2, ChevronDown, ExternalLink, FolderKanban, LoaderCircle, PanelRightOpen, Sparkles, X } from 'lucide-react'
 import config from '../../config'
 
 type ChatPaneProps = {
@@ -24,15 +24,18 @@ type ChatPaneProps = {
 
 export default function ChatPane({
     activeConversation,
+    clients,
     composer,
     isConnected,
-    participants,
     readOnly = false,
+    onModelStrategyChange,
+    onPreferredModelChange,
     onComposerChange,
     onSend,
 }: ChatPaneProps) {
     const scrollRef = useRef<HTMLDivElement | null>(null)
     const [showArtifacts, setShowArtifacts] = useState(false)
+    const [modelMenuOpen, setModelMenuOpen] = useState(false)
     const [previewArtifact, setPreviewArtifact] = useState<AIArtifact | null>(null)
     const [emptyTooltip, setEmptyTooltip] = useState('Tell me what is on your mind, and I’ll help from there.')
     const isThinking = Boolean(activeConversation?.messages.at(-1)?.pending)
@@ -71,6 +74,11 @@ export default function ChatPane({
         Array.isArray(message.metadata?.artifacts) ? message.metadata.artifacts as AIArtifact[] : []
     ) || []
     const groupedArtifacts = useMemo(() => groupArtifacts(latestArtifacts), [latestArtifacts])
+    const selectedClient = useMemo(() => {
+        const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
+        return clients.find((client) => client.name === selectedName) || clients[0] || null
+    }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
+    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'No model connected'
 
     return (
         <Fragment>
@@ -79,9 +87,40 @@ export default function ChatPane({
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
                             <h1 className='truncate text-base font-semibold tracking-[-0.02em] text-[#f3f0e8]'>{activeConversation?.title || 'New chat'}</h1>
-                            <p className='mt-1 text-sm text-[#8d8d89]'>
-                                {isConnected ? `${participants || 1} model${participants === 1 ? '' : 's'} connected` : 'No model connected'}
-                            </p>
+                            <div className='relative mt-1 inline-block'>
+                                <button
+                                    type='button'
+                                    onClick={() => setModelMenuOpen((prev) => !prev)}
+                                    disabled={!clients.length}
+                                    className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-medium text-[#f0a63a] transition-colors hover:text-[#ffc46d] disabled:cursor-not-allowed disabled:text-[#777772]'
+                                    title={selectedModelLabel}
+                                >
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'No model connected'}</span>
+                                    {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
+                                </button>
+                                {modelMenuOpen && clients.length ? (
+                                    <div className='absolute left-0 top-full z-30 mt-2 w-[min(26rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-[#3a3328] bg-[#171615] shadow-[0_18px_60px_rgba(0,0,0,0.32)]'>
+                                        {clients.map((client) => {
+                                            const active = client.name === selectedClient?.name
+                                            return (
+                                                <button
+                                                    key={client.name}
+                                                    type='button'
+                                                    onClick={() => {
+                                                        onModelStrategyChange('pinned')
+                                                        onPreferredModelChange(client.name)
+                                                        setModelMenuOpen(false)
+                                                    }}
+                                                    className={`block w-full px-3 py-2.5 text-left transition-colors ${active ? 'bg-[#2a2116] text-[#ffc46d]' : 'text-[#d8d4ca] hover:bg-[#22201d] hover:text-[#ffc46d]'}`}
+                                                >
+                                                    <span className='block truncate text-sm font-medium'>{modelLabel(client)}</span>
+                                                    <span className='mt-0.5 block truncate text-xs text-[#8d8d89]'>{client.name}</span>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                ) : null}
+                            </div>
                         </div>
                         <div className='flex items-center gap-2'>
                             <Link
@@ -244,6 +283,10 @@ function pickTooltip(tooltips: unknown[]) {
         if (cursor <= 0) return candidate.text
     }
     return candidates[0]?.text || ''
+}
+
+function modelLabel(client: GPT_Client) {
+    return client.displayName || client.modelId || client.profile || client.name
 }
 
 function MarkdownBlock({ content }: { content: string }) {

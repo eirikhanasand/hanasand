@@ -4,6 +4,9 @@ import { getModelState, resetModelState, updateModelState } from '#utils/modelSt
 import runModelToolLoop from '#utils/tools/modelToolLoop.ts'
 
 const DEFAULT_MAX_TOKENS = 10000
+const CONFIGURED_CONTEXT_MAX_TOKENS = Number(process.env.HANASAND_MODEL_CONTEXT_MAX_TOKENS || 0)
+const IS_CHAT_COMPLETIONS_BACKEND = process.env.HANASAND_MODEL_BACKEND === 'vllm'
+    || process.env.HANASAND_MODEL_PROFILE?.includes('vllm')
 
 let contextCache = {
     fetchedAt: 0,
@@ -30,6 +33,16 @@ function modelUrl(path: string) {
 }
 
 export async function fetchSlotMetrics() {
+    if (IS_CHAT_COMPLETIONS_BACKEND) {
+        if (CONFIGURED_CONTEXT_MAX_TOKENS > 0) {
+            contextCache = {
+                fetchedAt: Date.now(),
+                total: CONFIGURED_CONTEXT_MAX_TOKENS,
+            }
+        }
+        return null
+    }
+
     try {
         const response = await fetch(modelUrl('/slots'))
         if (!response.ok) {
@@ -65,6 +78,11 @@ export async function fetchSlotMetrics() {
 export async function syncModelRuntimeMetrics() {
     const slot = await fetchSlotMetrics()
     if (!slot) {
+        if (CONFIGURED_CONTEXT_MAX_TOKENS > 0) {
+            updateModelState({
+                contextMaxTokens: CONFIGURED_CONTEXT_MAX_TOKENS,
+            })
+        }
         return getModelState()
     }
 
@@ -94,6 +112,10 @@ export async function syncModelRuntimeMetrics() {
 }
 
 async function fetchContextMaxTokens() {
+    if (CONFIGURED_CONTEXT_MAX_TOKENS > 0) {
+        return CONFIGURED_CONTEXT_MAX_TOKENS
+    }
+
     if (contextCache.total && Date.now() - contextCache.fetchedAt < 30000) {
         return contextCache.total
     }
@@ -105,6 +127,10 @@ async function fetchContextMaxTokens() {
 async function countTokens(content: string) {
     if (!content) {
         return 0
+    }
+
+    if (IS_CHAT_COMPLETIONS_BACKEND) {
+        return Math.ceil(content.length / 4)
     }
 
     try {
@@ -131,6 +157,10 @@ async function countTokens(content: string) {
 }
 
 async function renderChatPrompt(messages: GPT_ChatMessage[]) {
+    if (IS_CHAT_COMPLETIONS_BACKEND) {
+        return messages.map(message => `${message.role}: ${message.content}`).join('\n')
+    }
+
     try {
         const response = await fetch(modelUrl('/apply-template'), {
             method: 'POST',

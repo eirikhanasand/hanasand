@@ -565,6 +565,9 @@ type GPT_ChatMessage = {
 
 type GPT_Client = {
     name: string
+    displayName?: string | null
+    modelId?: string | null
+    profile?: string | null
     ram: GPT_RAM[]
     cpu: GPT_CPU[]
     gpu: GPT_GPU[]
@@ -901,6 +904,9 @@ type GPT_GPU = {
 
 type GPT_Client = {
     name: string
+    displayName?: string | null
+    modelId?: string | null
+    profile?: string | null
     ram: GPT_RAM[]
     cpu: GPT_CPU[]
     gpu: GPT_GPU[]
@@ -909,6 +915,9 @@ type GPT_Client = {
 
 type GPT_Client = {
     name: string
+    displayName?: string | null
+    modelId?: string | null
+    profile?: string | null
     ram: GPT_RAM[]
     cpu: GPT_CPU[]
     gpu: GPT_GPU[]

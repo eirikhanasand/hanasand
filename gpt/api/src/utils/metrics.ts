@@ -50,5 +50,14 @@ export default async function metrics(): Promise<GPT_Client> {
         }))
     }
 
-    return { name, ram, cpu, gpu, model: getModelState() }
+    return {
+        name,
+        displayName: process.env.HANASAND_MODEL_DISPLAY_NAME || process.env.HANASAND_VLLM_MODEL_REPO || process.env.HANASAND_MODEL_PROFILE || name,
+        modelId: process.env.HANASAND_VLLM_MODEL_REPO || process.env.HANASAND_MODEL_PROFILE || null,
+        profile: process.env.HANASAND_MODEL_PROFILE || null,
+        ram,
+        cpu,
+        gpu,
+        model: getModelState(),
+    }
 }

@@ -163,7 +163,7 @@ export default function Explorer({
                 />
             ) : (
                 <div className='h-full w-[15vw] min-w-60 overflow-auto rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
-                    {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
+                    {(!tree || !share) && <div className='w-full rounded-lg bg-red-500/20 p-2 outline outline-red-500/30'>
                         <h1 className='text-sm text-bright/85'>
                             {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
                         </h1>
