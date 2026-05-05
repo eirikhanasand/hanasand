@@ -2,6 +2,7 @@ import os from 'os'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import si from 'systeminformation'
 import getGpuUsage from './gpu/mac.ts'
@@ -9,7 +10,8 @@ import { getModelLaneSnapshot } from './modelLanes.ts'
 import { getModelState } from './modelState.ts'
 
 const execFileAsync = promisify(execFile)
-const powerStatePath = path.resolve(process.cwd(), 'runtime/power-month.json')
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+const powerStatePath = path.resolve(moduleDir, '../../runtime/power-month.json')
 
 type NvidiaGpuSample = {
     index: number
