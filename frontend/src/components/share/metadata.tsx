@@ -116,7 +116,7 @@ export default function Metadata({
                             : ''
 
     return (
-        <div className='flex h-full min-w-fit gap-2'>
+        <div className='flex h-full min-w-fit flex-row-reverse gap-2'>
             <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                 <button type='button' aria-label='Close metadata' onClick={() => setShowMetadata(false)} className={baseButtonStyle}>
                     <X className='h-5 w-5' />
