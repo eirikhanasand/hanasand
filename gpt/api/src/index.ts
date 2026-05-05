@@ -1,7 +1,7 @@
 import WebSocket from 'ws'
 import sendMetrics from '#utils/sendMetrics.ts'
 import config from '#constants'
-import { promptModel, syncModelRuntimeMetrics } from '#utils/modelApi.ts'
+import { promptModel } from '#utils/modelApi.ts'
 
 if (!config.ws_api) {
     console.error('Missing WS API')
@@ -13,7 +13,6 @@ let backoff = 1000
 let interval: NodeJS.Timeout | null = null
 let connecting = false
 let socket: WebSocket | null = null
-let prompting = false
 
 function getSocketUrls(baseUrl: string) {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
@@ -50,25 +49,6 @@ async function handleSocketMessage(rawMessage: WebSocket.RawData) {
             messages: request.messages.length,
         })
 
-        if (prompting) {
-            const runtime = await syncModelRuntimeMetrics()
-            if (runtime.status !== 'preparing' && runtime.status !== 'generating') {
-                prompting = false
-            }
-        }
-
-        if (prompting) {
-            socket?.send(JSON.stringify({
-                type: 'prompt_error',
-                conversationId: request.conversationId,
-                clientName: request.clientName || null,
-                error: 'Model is already processing another prompt.',
-                timestamp: new Date().toISOString(),
-            }))
-            return
-        }
-
-        prompting = true
         await promptModel(request, (event) => {
             if (socket?.readyState === WebSocket.OPEN) {
                 socket.send(event)
@@ -89,8 +69,6 @@ async function handleSocketMessage(rawMessage: WebSocket.RawData) {
         }
 
         console.error('Invalid message from server:', err)
-    } finally {
-        prompting = false
     }
 }
 

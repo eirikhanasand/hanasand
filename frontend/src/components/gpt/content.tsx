@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Bot, Cpu, Gauge, HardDrive, MemoryStick } from 'lucide-react'
+import { Bot, Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
 import DisplayClient from './displayClient'
 import Metric from './metric'
 
@@ -23,14 +23,26 @@ export default function GPT_Content({
         gpu: averageLoad(clients.map(client => averageLoad(client.gpu.map(gpu => gpu.load * 100)))),
         tps: averageValue(clients.map(client => client.model.tps || 0)),
     }
+    const lanes = clients.flatMap(client => client.lanes || [])
+    const power = {
+        watts: clients.reduce((sum, client) => sum + (client.power?.totalWatts || 0), 0),
+        monthlyKwh: clients.reduce((sum, client) => sum + (client.power?.monthlyKwh || 0), 0),
+    }
+    const capacity = {
+        active: lanes.reduce((sum, lane) => sum + lane.activeRequests, 0),
+        max: lanes.reduce((sum, lane) => sum + lane.maxRequests, 0),
+        available: lanes.reduce((sum, lane) => sum + lane.availableRequests, 0),
+    }
 
     return (
         <div className='w-full space-y-4'>
-            <div className='grid w-full gap-4 md:grid-cols-2 xl:grid-cols-5'>
+            <div className='grid w-full gap-4 md:grid-cols-2 xl:grid-cols-6'>
                 <SummaryCard title='RAM load' icon={<MemoryStick className='h-4 w-4' />} metric={totalLoad.ram} />
                 <SummaryCard title='CPU load' icon={<Cpu className='h-4 w-4' />} metric={totalLoad.cpu} />
                 <SummaryCard title='GPU load' icon={<HardDrive className='h-4 w-4' />} metric={totalLoad.gpu} />
                 <ThroughputCard tps={totalLoad.tps} />
+                <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
+                <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
                 <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
                     <div className='flex items-center justify-between'>
                         <div>
@@ -102,6 +114,36 @@ function ThroughputCard({ tps }: { tps: number }) {
                 <div className='text-right text-xs uppercase tracking-[0.18em] text-bright/35'>
                     Live generation
                 </div>
+            </div>
+        </div>
+    )
+}
+
+function CapacityCard({ active, available, max, lanes }: { active: number, available: number, max: number, lanes: number }) {
+    return (
+        <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
+            <div className='flex items-center justify-between text-bright/35'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em]'>Lane capacity</span>
+                <Gauge className='h-4 w-4' />
+            </div>
+            <div className='mt-3 text-2xl font-semibold text-bright/90'>{available}/{max}</div>
+            <div className='mt-1 text-xs uppercase tracking-[0.18em] text-bright/35'>
+                {active} active across {lanes} lanes
+            </div>
+        </div>
+    )
+}
+
+function PowerCard({ watts, monthlyKwh }: { watts: number, monthlyKwh: number }) {
+    return (
+        <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
+            <div className='flex items-center justify-between text-bright/35'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em]'>Power</span>
+                <Zap className='h-4 w-4' />
+            </div>
+            <div className='mt-3 text-2xl font-semibold text-bright/90'>{watts.toFixed(0)} W</div>
+            <div className='mt-1 text-xs uppercase tracking-[0.18em] text-bright/35'>
+                {monthlyKwh.toFixed(2)} kWh this month
             </div>
         </div>
     )

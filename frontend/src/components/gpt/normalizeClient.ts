@@ -9,6 +9,8 @@ export default function normalizeClient(client: GPT_Client): GPT_Client {
         ram: Array.isArray(client.ram) ? client.ram : [],
         cpu: Array.isArray(client.cpu) ? client.cpu : [],
         gpu: Array.isArray(client.gpu) ? client.gpu : [],
+        lanes: Array.isArray(client.lanes) ? client.lanes : [],
+        power: client.power,
         model: {
             ...defaultModelMetrics(),
             ...(client.model || {}),

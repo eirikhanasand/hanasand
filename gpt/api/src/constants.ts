@@ -39,6 +39,10 @@ const env = Object.fromEntries(
 const config = {
     ws_api: env.API,
     model_api: process.env.MODEL_API || 'http://127.0.0.1:18081',
+    model_apis: (process.env.MODEL_APIS || process.env.MODEL_API || 'http://127.0.0.1:18081')
+        .split(',')
+        .map((url) => url.trim().replace(/\/+$/, ''))
+        .filter(Boolean),
     gpt_dir: gptDir,
     repo_root: repoRoot,
     modules_dir: modulesDir,

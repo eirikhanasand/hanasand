@@ -1,6 +1,7 @@
 import { writeModelOverheadSample } from '#utils/modelOverhead.ts'
 import config from '#constants'
 import { getModelState, resetModelState, updateModelState } from '#utils/modelState.ts'
+import { acquireModelLane, releaseModelLane } from '#utils/modelLanes.ts'
 import runModelToolLoop from '#utils/tools/modelToolLoop.ts'
 
 const DEFAULT_MAX_TOKENS = 10000
@@ -28,8 +29,8 @@ function logSlotWarning(error: unknown) {
     console.warn('Unable to fetch model slot metrics:', error)
 }
 
-function modelUrl(path: string) {
-    return `${config.model_api}${path}`
+function modelUrl(path: string, baseUrl = config.model_api) {
+    return `${baseUrl}${path}`
 }
 
 export async function fetchSlotMetrics() {
@@ -240,10 +241,7 @@ async function emitStreamedContent(
 
 export async function promptModel(request: GPT_PromptRequest, send: (event: string) => void) {
     const startedAt = Date.now()
-    const currentState = getModelState()
-    if (currentState.status === 'preparing' || currentState.status === 'generating') {
-        throw new Error('Model is already handling another prompt.')
-    }
+    const selectedModelApi = acquireModelLane()
 
     const maxTokens = request.maxTokens && request.maxTokens > 0 ? request.maxTokens : DEFAULT_MAX_TOKENS
     const renderStartedAt = Date.now()
@@ -282,7 +280,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
 
     try {
         const toolLoopStartedAt = Date.now()
-        const result = await runModelToolLoop(request, (toolEvent) => {
+        const result = await runModelToolLoop(request, selectedModelApi, (toolEvent) => {
             send(toPromptEvent('prompt_tool', {
                 conversationId: request.conversationId,
                 clientName: request.clientName || null,
@@ -331,7 +329,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
             recordedAt: new Date().toISOString(),
             conversationId: request.conversationId,
             clientName: request.clientName || null,
-            modelApi: config.model_api,
+            modelApi: selectedModelApi,
             promptMessages: request.messages.length,
             maxTokens,
             promptTokens: finalPromptTokens,
@@ -385,6 +383,7 @@ export async function promptModel(request: GPT_PromptRequest, send: (event: stri
 
         throw error
     } finally {
+        releaseModelLane(selectedModelApi)
         const state = getModelState()
         if (state.status === 'preparing' || state.status === 'generating') {
             updateModelState({

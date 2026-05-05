@@ -1,7 +1,98 @@
 import os from 'os'
+import { execFile } from 'node:child_process'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { promisify } from 'node:util'
 import si from 'systeminformation'
 import getGpuUsage from './gpu/mac.ts'
+import { getModelLaneSnapshot } from './modelLanes.ts'
 import { getModelState } from './modelState.ts'
+
+const execFileAsync = promisify(execFile)
+const powerStatePath = path.resolve(process.cwd(), 'runtime/power-month.json')
+
+type NvidiaGpuSample = {
+    index: number
+    name: string
+    utilizationGpu: number
+    memoryTotalMb: number
+    memoryUsedMb: number
+    powerDrawWatts: number
+    powerLimitWatts: number
+    temperatureC: number
+}
+
+let powerState: {
+    month: string
+    kwh: number
+    sampledAt: number
+} | null = null
+
+async function readPowerState() {
+    if (powerState) {
+        return powerState
+    }
+
+    try {
+        const parsed = JSON.parse(await fs.readFile(powerStatePath, 'utf8')) as typeof powerState
+        powerState = parsed
+    } catch {
+        powerState = null
+    }
+
+    return powerState
+}
+
+async function writePowerState(state: NonNullable<typeof powerState>) {
+    powerState = state
+    await fs.mkdir(path.dirname(powerStatePath), { recursive: true })
+    await fs.writeFile(powerStatePath, JSON.stringify(state, null, 2))
+}
+
+function currentMonth() {
+    return new Date().toISOString().slice(0, 7)
+}
+
+async function sampleNvidiaGpus(): Promise<NvidiaGpuSample[]> {
+    const { stdout } = await execFileAsync('nvidia-smi', [
+        '--query-gpu=index,name,utilization.gpu,memory.total,memory.used,power.draw,power.limit,temperature.gpu',
+        '--format=csv,noheader,nounits',
+    ])
+
+    return stdout.trim().split('\n').filter(Boolean).map((line) => {
+        const [index, name, utilizationGpu, memoryTotalMb, memoryUsedMb, powerDrawWatts, powerLimitWatts, temperatureC] = line
+            .split(',')
+            .map((part) => part.trim())
+
+        return {
+            index: Number(index),
+            name,
+            utilizationGpu: Number(utilizationGpu) || 0,
+            memoryTotalMb: Number(memoryTotalMb) || 0,
+            memoryUsedMb: Number(memoryUsedMb) || 0,
+            powerDrawWatts: Number(powerDrawWatts) || 0,
+            powerLimitWatts: Number(powerLimitWatts) || 0,
+            temperatureC: Number(temperatureC) || 0,
+        }
+    })
+}
+
+async function updateMonthlyPower(totalWatts: number) {
+    const now = Date.now()
+    const month = currentMonth()
+    const previous = await readPowerState()
+    const base = previous && previous.month === month
+        ? previous
+        : { month, kwh: 0, sampledAt: now }
+    const elapsedHours = Math.max(0, Math.min(now - base.sampledAt, 5 * 60 * 1000)) / 1000 / 60 / 60
+    const next = {
+        month,
+        kwh: base.kwh + (totalWatts / 1000) * elapsedHours,
+        sampledAt: now,
+    }
+    await writePowerState(next)
+    return next.kwh
+}
 
 export default async function metrics(): Promise<GPT_Client> {
     const name = os.hostname()
@@ -27,6 +118,8 @@ export default async function metrics(): Promise<GPT_Client> {
 
     // GPU info
     let gpu: GPT_GPU[]
+    let lanes: GPT_ModelLaneMetrics[] = []
+    let power: GPT_ModelPowerMetrics | undefined
     const graphics = await si.graphics()
     const mac = process.platform === 'darwin'
     if (mac) {
@@ -44,10 +137,49 @@ export default async function metrics(): Promise<GPT_Client> {
             metrics: gpuMetrics || undefined,
         }))
     } else {
-        gpu = graphics.controllers.map((g) => ({
-            name: g.model,
-            load: (g.utilizationGpu || 0) / 100,
-        }))
+        let nvidiaGpus: NvidiaGpuSample[] = []
+        try {
+            nvidiaGpus = await sampleNvidiaGpus()
+        } catch (error) {
+            console.warn('Unable to sample NVIDIA GPU metrics:', error)
+        }
+
+        gpu = nvidiaGpus.length
+            ? nvidiaGpus.map((g) => ({
+                name: g.name,
+                load: g.utilizationGpu / 100,
+                memoryUsedMb: g.memoryUsedMb,
+                memoryTotalMb: g.memoryTotalMb,
+                powerDrawWatts: g.powerDrawWatts,
+                powerLimitWatts: g.powerLimitWatts,
+                temperatureC: g.temperatureC,
+            }))
+            : graphics.controllers.map((g) => ({
+                name: g.model,
+                load: (g.utilizationGpu || 0) / 100,
+            }))
+
+        const laneSnapshot = getModelLaneSnapshot()
+        lanes = laneSnapshot.map((lane) => {
+            const gpuSample = nvidiaGpus.find((sample) => sample.index === lane.gpuIndex)
+            return {
+                ...lane,
+                gpuName: gpuSample?.name || `GPU ${lane.gpuIndex}`,
+                gpuLoad: gpuSample ? gpuSample.utilizationGpu / 100 : 0,
+                memoryUsedMb: gpuSample?.memoryUsedMb || 0,
+                memoryTotalMb: gpuSample?.memoryTotalMb || 0,
+                powerDrawWatts: gpuSample?.powerDrawWatts || 0,
+                powerLimitWatts: gpuSample?.powerLimitWatts || 0,
+                temperatureC: gpuSample?.temperatureC || 0,
+            }
+        })
+
+        const totalWatts = nvidiaGpus.reduce((sum, sample) => sum + sample.powerDrawWatts, 0)
+        power = {
+            totalWatts,
+            monthlyKwh: await updateMonthlyPower(totalWatts),
+            sampledAt: new Date().toISOString(),
+        }
     }
 
     return {
@@ -58,6 +190,8 @@ export default async function metrics(): Promise<GPT_Client> {
         ram,
         cpu,
         gpu,
+        lanes,
+        power,
         model: getModelState(),
     }
 }

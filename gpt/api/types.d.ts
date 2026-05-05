@@ -8,6 +8,8 @@ type GPT_Client = {
     ram: GPT_RAM[]
     cpu: GPT_CPU[]
     gpu: GPT_GPU[]
+    lanes?: GPT_ModelLaneMetrics[]
+    power?: GPT_ModelPowerMetrics
     model: GPT_ModelMetrics
 }
 
@@ -24,6 +26,36 @@ type GPT_CPU = {
 type GPT_GPU = {
     name: string
     load: number
+    memoryUsedMb?: number
+    memoryTotalMb?: number
+    powerDrawWatts?: number
+    powerLimitWatts?: number
+    temperatureC?: number
+}
+
+type GPT_ModelLaneMetrics = {
+    id: string
+    index: number
+    url: string
+    gpuIndex: number
+    gpuName: string
+    gpuLoad: number
+    activeRequests: number
+    maxRequests: number
+    queuedRequests: number
+    availableRequests: number
+    contextMaxTokens: number
+    memoryUsedMb: number
+    memoryTotalMb: number
+    powerDrawWatts: number
+    powerLimitWatts: number
+    temperatureC: number
+}
+
+type GPT_ModelPowerMetrics = {
+    totalWatts: number
+    monthlyKwh: number
+    sampledAt: string
 }
 
 type GPT_ModelStatus = 'idle' | 'preparing' | 'generating' | 'error'

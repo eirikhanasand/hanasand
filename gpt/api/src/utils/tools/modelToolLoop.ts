@@ -298,6 +298,7 @@ type ToolProgressEmitter = (event: {
 
 export default async function runModelToolLoop(
     request: GPT_PromptRequest,
+    modelApi: string = config.model_api,
     emitToolProgress?: ToolProgressEmitter,
 ): Promise<ToolLoopResult> {
     const loopStartedAt = Date.now()
@@ -305,7 +306,7 @@ export default async function runModelToolLoop(
     if (isDirectChatPrompt(userMessage)) {
         const startedAt = Date.now()
         const completion = await createCompletion(
-            config.model_api,
+            modelApi,
             [
                 {
                     role: 'system',
@@ -707,7 +708,7 @@ export default async function runModelToolLoop(
 
     for (let iteration = 0; ; iteration += 1) {
         const completion = await createTrackedCompletion(
-            config.model_api,
+            modelApi,
             workingMessages,
             iterationMaxTokens,
             request.temperature ?? 0.7,
