@@ -217,7 +217,12 @@ export default function Metadata({
                 </SidebarTooltip>
             </nav>
             {panelVisible ? (
-                <div className={`min-w-0 h-full ${activePanel === 'phone' ? 'w-[min(30rem,calc(100vw-5.5rem))]' : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'}`}>
+                <div className={`min-w-0 h-full ${activePanel === 'box'
+                    ? 'w-[min(72rem,calc(100vw-5.5rem))] lg:w-[min(72rem,56vw)]'
+                    : activePanel === 'phone'
+                        ? 'w-[min(30rem,calc(100vw-5.5rem))]'
+                        : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'
+                }`}>
                     <div className='h-full w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                         <header className='flex items-center justify-between rounded-lg border border-bright/8 bg-black/14 px-3 py-2 text-bright/80'>
                             <span className='text-[11px] font-semibold uppercase tracking-[0.22em] text-bright/45'>{panelTitle}</span>
