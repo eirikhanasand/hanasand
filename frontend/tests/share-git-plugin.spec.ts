@@ -21,5 +21,5 @@ test('share editor exposes git import and pull from the right panel', async () =
     expect(plugin).toContain('owner/repo, GitHub URL, or public Git URL')
 
     expect(github).toContain('export async function persistGitHubRepository')
-    expect(github).toContain("aiClientRequest('/ai/repositories'")
+    expect(github).toContain('aiClientRequest(\'/ai/repositories\'')
 })

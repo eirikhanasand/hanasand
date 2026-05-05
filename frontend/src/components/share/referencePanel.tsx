@@ -184,7 +184,7 @@ function ReferenceGroup({ title, matches, accent = false }: { title: string; mat
 
 function EmptyReference() {
     return (
-        <div className='rounded-xl border border-dashed border-bright/10 bg-bright/[0.02] p-5 text-center'>
+        <div className='rounded-xl border border-dashed border-bright/10 bg-bright/2 p-5 text-center'>
             <X className='mx-auto h-4 w-4 text-bright/30' />
             <p className='mt-3 text-sm font-semibold text-bright/75'>Follow code without leaving flow</p>
             <p className='mt-2 text-xs leading-5 text-bright/45'>Click an identifier in the editor to see definitions and every call site across the share.</p>

@@ -24,7 +24,7 @@ type WorkspaceSearchPanelProps = {
 }
 
 const inputClass = 'w-full rounded-lg border border-bright/10 bg-black/25 px-3 py-2 text-sm text-bright/90 outline-none transition focus:border-[#e25822]/70 focus:bg-black/35'
-const iconButtonClass = 'grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/[0.03] text-bright/60 transition hover:border-[#e25822]/40 hover:text-bright'
+const iconButtonClass = 'grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/3 text-bright/60 transition hover:border-[#e25822]/40 hover:text-bright'
 
 export default function WorkspaceSearchPanel({
     tree,
@@ -235,7 +235,7 @@ export default function WorkspaceSearchPanel({
                     const isOpen = expanded.has(group.file.id)
                     return (
                         <article key={group.file.id} className='mb-2 overflow-hidden rounded-xl border border-bright/10 bg-bright/[0.025]'>
-                            <button type='button' onClick={() => toggleExpanded(group.file.id)} className='flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-bright/[0.04]'>
+                            <button type='button' onClick={() => toggleExpanded(group.file.id)} className='flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-bright/4'>
                                 {isOpen ? <ChevronDown className='h-4 w-4 text-bright/45' /> : <ChevronRight className='h-4 w-4 text-bright/45' />}
                                 <div className='min-w-0 flex-1'>
                                     <p className='truncate text-sm font-medium text-bright/85'>{group.file.name}</p>
@@ -284,7 +284,7 @@ function Toggle({ active, onClick, label, title }: { active: boolean; onClick: (
 
 function EmptyState({ title, body }: { title: string; body: string }) {
     return (
-        <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-bright/10 bg-bright/[0.02] p-6 text-center'>
+        <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-bright/10 bg-bright/2 p-6 text-center'>
             <div>
                 <p className='text-sm font-semibold text-bright/80'>{title}</p>
                 <p className='mt-2 text-xs leading-5 text-bright/45'>{body}</p>

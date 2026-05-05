@@ -162,55 +162,55 @@ export default function Explorer({
                     setError={setError}
                 />
             ) : (
-            <div className='h-full w-[15vw] min-w-[240px] overflow-auto rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
-                {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
-                    <h1 className='text-sm text-bright/85'>
-                        {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
-                    </h1>
-                    {!treeLoading && share ? (
-                        <button
-                            type='button'
-                            aria-label='Retry loading file tree'
-                            onClick={() => void recoverTree(share.id)}
-                            className='mt-3 inline-flex rounded-lg bg-bright/10 px-3 py-2 text-xs font-medium text-bright/85 outline outline-bright/10 transition-colors hover:bg-bright/15'
-                        >
-                            Retry
-                        </button>
-                    ) : null}
-                </div>}
-                {visibleTree && share && (
-                    <OpenFoldersProvider serverOpenFolders={openFolders}>
-                        <TreeHeader
-                            share={share}
-                            setIsCreatingNewFile={setIsCreatingNewFile}
-                        />
-                        {rootFolder && visibleTree.length === 0 && (
-                            <NewFile
-                                isCreatingNewFile={isCreatingNewFile}
-                                display={Boolean(isCreatingNewFile)}
+                <div className='h-full w-[15vw] min-w-60 overflow-auto rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
+                    {(!tree || !share) && <div className='outline outline-red-500/30 bg-red-500/20 w-full rounded-lg p-2'>
+                        <h1 className='text-sm text-bright/85'>
+                            {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
+                        </h1>
+                        {!treeLoading && share ? (
+                            <button
+                                type='button'
+                                aria-label='Retry loading file tree'
+                                onClick={() => void recoverTree(share.id)}
+                                className='mt-3 inline-flex rounded-lg bg-bright/10 px-3 py-2 text-xs font-medium text-bright/85 outline outline-bright/10 transition-colors hover:bg-bright/15'
+                            >
+                                Retry
+                            </button>
+                        ) : null}
+                    </div>}
+                    {visibleTree && share && (
+                        <OpenFoldersProvider serverOpenFolders={openFolders}>
+                            <TreeHeader
+                                share={share}
+                                setIsCreatingNewFile={setIsCreatingNewFile}
+                            />
+                            {rootFolder && visibleTree.length === 0 && (
+                                <NewFile
+                                    isCreatingNewFile={isCreatingNewFile}
+                                    display={Boolean(isCreatingNewFile)}
+                                    newFileName={newFileName}
+                                    setNewFileName={setNewFileName}
+                                    setIsCreatingNewFile={setIsCreatingNewFile}
+                                    file={rootFolder}
+                                    tree={visibleTree}
+                                    setTree={setTree}
+                                    setShare={setShare}
+                                />
+                            )}
+                            <Tree
+                                tree={visibleTree}
                                 newFileName={newFileName}
                                 setNewFileName={setNewFileName}
+                                isCreatingNewFile={isCreatingNewFile}
                                 setIsCreatingNewFile={setIsCreatingNewFile}
-                                file={rootFolder}
-                                tree={visibleTree}
+                                selectedFolder={selectedFolder}
+                                setSelectedFolder={setSelectedFolder}
                                 setTree={setTree}
                                 setShare={setShare}
                             />
-                        )}
-                        <Tree
-                            tree={visibleTree}
-                            newFileName={newFileName}
-                            setNewFileName={setNewFileName}
-                            isCreatingNewFile={isCreatingNewFile}
-                            setIsCreatingNewFile={setIsCreatingNewFile}
-                            selectedFolder={selectedFolder}
-                            setSelectedFolder={setSelectedFolder}
-                            setTree={setTree}
-                            setShare={setShare}
-                        />
-                    </OpenFoldersProvider>
-                )}
-            </div>
+                        </OpenFoldersProvider>
+                    )}
+                </div>
             )}
         </div>
     )

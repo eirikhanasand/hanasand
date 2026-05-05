@@ -78,9 +78,9 @@ export default function PhoneSimulator({ share, open }: PhoneSimulatorProps) {
     const isOnline = state === 'online'
 
     return (
-        <section className='mt-3 rounded-[2rem] bg-black/35 p-4 text-bright outline outline-dark/80'>
-            <div className='mx-auto w-full max-w-[18rem] rounded-[2.4rem] border border-bright/15 bg-[#080908] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.55)]'>
-                <div className='relative overflow-hidden rounded-[2rem] border border-bright/10 bg-linear-to-br from-[#1a2119] via-[#11140f] to-black px-4 py-5'>
+        <section className='mt-3 rounded-4xl bg-black/35 p-4 text-bright outline outline-dark/80'>
+            <div className='mx-auto w-full max-w-72 rounded-[2.4rem] border border-bright/15 bg-[#080908] p-2 shadow-[0_24px_80px_rgba(0,0,0,0.55)]'>
+                <div className='relative overflow-hidden rounded-4xl border border-bright/10 bg-linear-to-br from-[#1a2119] via-[#11140f] to-black px-4 py-5'>
                     <div className='mb-5 flex items-center justify-between text-xs font-semibold text-bright/70'>
                         <span>00:34</span>
                         <div className='h-6 w-20 rounded-full bg-black/70' />
