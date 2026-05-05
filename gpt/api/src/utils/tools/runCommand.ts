@@ -2,10 +2,13 @@ import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import config from '#constants'
 
 const SANDBOX_EXECUTABLE = process.env.HANASAND_SANDBOX_EXEC || 'sandbox-exec'
 const SANDBOX_APPLY_ERROR = 'sandbox-exec: sandbox_apply: Operation not permitted'
+const SHELL_PATH = process.env.HANASAND_COMMAND_SHELL
+    || (existsSync('/bin/zsh') ? '/bin/zsh' : existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh')
 
 type RunCommandArgs = {
     command: string
@@ -101,8 +104,8 @@ async function runCommandProcess(
 ): Promise<RunCommandResult> {
     return await new Promise((resolve, reject) => {
         const command = useSandbox
-            ? [SANDBOX_EXECUTABLE, '-f', profilePath || '', '/bin/zsh', '-lc', payload.command]
-            : ['/bin/zsh', '-lc', payload.command]
+            ? [SANDBOX_EXECUTABLE, '-f', profilePath || '', SHELL_PATH, '-lc', payload.command]
+            : [SHELL_PATH, '-lc', payload.command]
 
         const child = spawn(command[0], command.slice(1), {
             cwd,
