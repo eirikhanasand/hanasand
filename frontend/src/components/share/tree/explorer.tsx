@@ -97,7 +97,7 @@ export default function Explorer({
         return (
             <div
                 onMouseDown={(event) => handleMouseDown(event)}
-                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-dark/20 p-2 shadow-2xl shadow-black/30 backdrop-blur-xl'
+                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-background/80 p-2 shadow-2xl shadow-black/30 backdrop-blur-md'
                 style={{
                     top: position.y,
                     left: position.x,
@@ -110,7 +110,7 @@ export default function Explorer({
                         setActivePanel('files')
                         handleOpen()
                     }}
-                    className='group grid h-11 w-11 place-items-center rounded-lg hover:bg-dark'
+                    className='group grid h-11 w-11 place-items-center rounded-lg hover:bg-bright/8'
                 >
                     <Folder className='stroke-light/50 group-hover:stroke-bright' />
                 </button>
@@ -121,7 +121,7 @@ export default function Explorer({
                         setActivePanel('search')
                         handleOpen()
                     }}
-                    className='group grid h-11 w-11 place-items-center rounded-lg hover:bg-dark'
+                    className='group grid h-11 w-11 place-items-center rounded-lg hover:bg-bright/8'
                 >
                     <Search className='stroke-light/50 group-hover:stroke-bright' />
                 </button>
@@ -131,14 +131,20 @@ export default function Explorer({
 
     return (
         <div className='flex h-full min-w-fit gap-2'>
-            <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
+            <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                 <button type='button' aria-label='Close left sidebar' onClick={() => setShowExplorer(false)} className='grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'>
                     <X className='h-5 w-5' />
                 </button>
                 <button
                     type='button'
                     aria-label='Files'
-                    onClick={() => setActivePanel('files')}
+                    onClick={() => {
+                        if (activePanel === 'files') {
+                            setShowExplorer(false)
+                            return
+                        }
+                        setActivePanel('files')
+                    }}
                     className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'files' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                 >
                     <Files className='h-5 w-5' />
@@ -146,7 +152,13 @@ export default function Explorer({
                 <button
                     type='button'
                     aria-label='Search and replace'
-                    onClick={() => setActivePanel('search')}
+                    onClick={() => {
+                        if (activePanel === 'search') {
+                            setShowExplorer(false)
+                            return
+                        }
+                        setActivePanel('search')
+                    }}
                     className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'search' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                 >
                     <Search className='h-5 w-5' />
@@ -162,7 +174,7 @@ export default function Explorer({
                     setError={setError}
                 />
             ) : (
-                <div className='h-full w-[15vw] min-w-60 overflow-auto rounded-xl border border-bright/10 bg-[#070b10]/80 p-2 shadow-2xl shadow-black/20 backdrop-blur-xl'>
+                <div className='h-full w-[15vw] min-w-60 overflow-auto rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                     {(!tree || !share) && <div className='w-full rounded-lg bg-red-500/20 p-2 outline outline-red-500/30'>
                         <h1 className='text-sm text-bright/85'>
                             {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}

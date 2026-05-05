@@ -87,7 +87,7 @@ export default function ReferencePanel({
     }, [editingContent, files, query, share])
 
     return (
-        <section className='overflow-hidden rounded-xl border border-bright/10 bg-[#070b10]/80 shadow-2xl shadow-black/25 backdrop-blur-xl'>
+        <section className='overflow-hidden rounded-xl border border-bright/10 bg-background/82 shadow-2xl shadow-black/25 backdrop-blur-md'>
             <header className='flex items-center gap-2 border-b border-bright/10 px-3 py-3'>
                 <button
                     type='button'
