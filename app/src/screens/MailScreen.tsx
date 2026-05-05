@@ -81,7 +81,7 @@ export function MailScreen({ settings, mailboxConnections, onSaveMailboxConnecti
     async function action(type: 'archive' | 'trash' | 'read' | 'flag') {
         if (!selectedMessageId || mailActionBusy) return
         if (!mailConfigured) {
-            Alert.alert('Auth required', 'Add your Hanasand API URL, auth token, and user id in Utilities first.')
+            Alert.alert('Login required', 'Log in again to refresh the session used for mail.')
             return
         }
         setMailActionBusy(type)
@@ -101,7 +101,7 @@ export function MailScreen({ settings, mailboxConnections, onSaveMailboxConnecti
             return
         }
         if (!mailConfigured) {
-            Alert.alert('Auth required', 'Add your Hanasand API URL, auth token, and user id in Utilities first.')
+            Alert.alert('Login required', 'Log in again to refresh the session used for mail.')
             return
         }
         try {
@@ -116,7 +116,7 @@ export function MailScreen({ settings, mailboxConnections, onSaveMailboxConnecti
     async function sendCompose() {
         if (sending) return
         if (!mailConfigured) {
-            Alert.alert('Auth required', 'Add your Hanasand API URL, auth token, and user id in Utilities first.')
+            Alert.alert('Login required', 'Log in again to refresh the session used for mail.')
             return
         }
         if (!composeTo.trim() || !composeSubject.trim()) {

@@ -22,11 +22,29 @@ export function SettingsDrawerProvider({
     )
 }
 
-export function Screen({ title, subtitle, left, right, children, scroll = true }: { title: string; subtitle?: string; left?: ReactNode; right?: ReactNode; children: ReactNode; scroll?: boolean }) {
+export function Screen({
+    title,
+    subtitle,
+    left,
+    right,
+    children,
+    scroll = true,
+    contentStyle,
+}: {
+    title: string
+    subtitle?: string
+    left?: ReactNode
+    right?: ReactNode
+    children: ReactNode
+    scroll?: boolean
+    contentStyle?: object
+}) {
     const settingsDrawer = useContext(SettingsDrawerContext)
     const theme = useAppTheme()
     const styles = useMemo(() => createStyles(theme), [theme])
-    const body = scroll ? <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView> : <View style={styles.content}>{children}</View>
+    const body = scroll
+        ? <ScrollView contentContainerStyle={[styles.content, contentStyle]}>{children}</ScrollView>
+        : <View style={[styles.content, styles.staticContent, contentStyle]}>{children}</View>
 
     return (
         <LinearGradient colors={[theme.backgroundRaised, theme.backgroundAlt, theme.background, '#050605']} locations={[0, 0.28, 0.72, 1]} style={styles.root}>
@@ -427,6 +445,7 @@ function createStyles(theme: ThemePalette) {
         headerLeft: { marginRight: spacing.xs },
         headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
         content: { paddingHorizontal: spacing.lg, paddingBottom: 168, gap: spacing.md },
+        staticContent: { flex: 1 },
         eyebrow: { color: theme.textSoft, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 },
         title: { color: theme.text, fontSize: 30, fontWeight: '700' },
         subtitle: { color: theme.textMuted, fontSize: 14, lineHeight: 20, marginTop: 2 },

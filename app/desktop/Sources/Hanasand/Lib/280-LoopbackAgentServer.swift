@@ -15,6 +15,8 @@ final class LoopbackAgentServer {
     let certificateProvider: () -> String
     let onCommand: (String) -> Void
     var listener: NWListener?
+    var seenProofNonces: [String: Date] = [:]
+    let nonceLock = NSLock()
 
     init(port: UInt16, certificateProvider: @escaping () -> String, onCommand: @escaping (String) -> Void) {
         self.port = port

@@ -16,12 +16,12 @@ export const defaultSettings: AppSettings = {
     userId: '',
     codexUrl: 'https://hanasand.com/ai',
     codexApiPath: '/tools/ai',
-    desktopAgentBaseUrl: 'http://localhost:45731',
+    desktopAgentBaseUrl: '',
     vpnUrlScheme: 'ciscoanyconnect://',
     remoteDesktopHost: '',
     remoteDesktopUser: '',
     vncHost: '',
-    serverBaseUrl: 'http://128.39.142.158',
+    serverBaseUrl: '',
     serverStartPath: '/start',
     serverStopPath: '/stop',
     serverLogsPath: '/logs',
@@ -47,6 +47,28 @@ function asRecord(value: unknown) {
 
 function stringValue(value: unknown) {
     return typeof value === 'string' ? value : ''
+}
+
+function isPrivateNetworkHost(hostname: string) {
+    const host = hostname.toLowerCase()
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local')) return true
+    if (host.startsWith('10.') || host.startsWith('192.168.')) return true
+    const match = host.match(/^172\.(\d{1,2})\./)
+    return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31)
+}
+
+function secureUrlOrDefault(value: string, fallback: string) {
+    const trimmed = value.trim()
+    if (!trimmed) return fallback
+    try {
+        const url = new URL(trimmed)
+        if (url.protocol === 'https:' || (url.protocol === 'http:' && isPrivateNetworkHost(url.hostname))) {
+            return trimmed
+        }
+    } catch {
+        return fallback
+    }
+    return fallback
 }
 
 function numberValue(value: unknown) {
@@ -84,6 +106,13 @@ function normalizeSettings(value: unknown): AppSettings {
         themeMode,
         workspaceMode,
     }
+
+    merged.siteBaseUrl = secureUrlOrDefault(merged.siteBaseUrl, defaultSettings.siteBaseUrl)
+    merged.apiBaseUrl = secureUrlOrDefault(merged.apiBaseUrl, defaultSettings.apiBaseUrl)
+    merged.cdnBaseUrl = secureUrlOrDefault(merged.cdnBaseUrl, defaultSettings.cdnBaseUrl)
+    merged.codexUrl = secureUrlOrDefault(merged.codexUrl, defaultSettings.codexUrl)
+    merged.desktopAgentBaseUrl = secureUrlOrDefault(merged.desktopAgentBaseUrl, defaultSettings.desktopAgentBaseUrl)
+    merged.serverBaseUrl = secureUrlOrDefault(merged.serverBaseUrl, defaultSettings.serverBaseUrl)
 
     return Object.fromEntries(
         Object.entries(merged).map(([key, entry]) => [key, typeof entry === 'string' ? entry : String(defaultSettings[key as keyof AppSettings] || '')]),

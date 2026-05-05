@@ -1,4 +1,4 @@
-import type { AiFileSummary, AiRunDetails, AiToolUseSummary, AppSettings, DashboardRole, DashboardUser, DashboardUserRoleAssignment, DesktopAgentStatus, GptClient, MailAddress, MailboxItem, MailMessage, MailMessageSummary, MailOverview, MailSendResult, Note, ShareSummary, ShareTreeItem } from '../types'
+import type { AiFileSummary, AiRunDetails, AiToolUseSummary, AppSettings, DashboardRole, DashboardUser, DashboardUserRoleAssignment, DesktopAgentPresence, DesktopAgentStatus, GptClient, HanasandAuthSession, MailAddress, MailboxItem, MailMessage, MailMessageSummary, MailOverview, MailSendResult, Note, ShareSummary, ShareTreeItem } from '../types'
 
 function headers(settings: AppSettings) {
     return {
@@ -10,13 +10,13 @@ function headers(settings: AppSettings) {
 
 function requireAppAuth(settings: AppSettings, purpose: string) {
     if (!settings.apiBaseUrl || !settings.authToken || !settings.userId) {
-        throw new Error(`Configure API URL, auth token, and user id to ${purpose}.`)
+        throw new Error(`Log in again to ${purpose}.`)
     }
 }
 
 function requireCdnAuth(settings: AppSettings, purpose: string) {
     if (!settings.cdnBaseUrl || !settings.authToken || !settings.userId) {
-        throw new Error(`Configure CDN API URL, auth token, and user id to ${purpose}.`)
+        throw new Error(`Log in again to ${purpose}.`)
     }
 }
 
@@ -28,33 +28,185 @@ function pathPart(value: string) {
     return value.trim().replace(/^\/+/, '')
 }
 
+function isPrivateNetworkHost(hostname: string) {
+    const host = hostname.toLowerCase()
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local')) return true
+    if (host.startsWith('10.') || host.startsWith('192.168.')) return true
+    const match = host.match(/^172\.(\d{1,2})\./)
+    return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31)
+}
+
+function assertSecureTransport(url: string) {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'https:') return
+    if (parsed.protocol === 'http:' && isPrivateNetworkHost(parsed.hostname)) return
+    throw new Error(`Blocked insecure plaintext endpoint: ${parsed.origin}. Use HTTPS for Hanasand services.`)
+}
+
 function joinUrl(base: string, path: string) {
     const cleanBase = baseUrl(base)
     const cleanPath = pathPart(path)
-    return cleanPath ? `${cleanBase}/${cleanPath}` : cleanBase
+    const next = cleanPath ? `${cleanBase}/${cleanPath}` : cleanBase
+    assertSecureTransport(next)
+    return next
 }
 
 function desktopAgentBases(settings: AppSettings) {
     const primary = settings.desktopAgentBaseUrl.trim()
-    if (!primary) return []
+    if (!primary) return ['http://127.0.0.1:45731', 'http://localhost:45731']
     const fallback = primary.replace('127.0.0.1', 'localhost')
     return fallback === primary ? [primary] : [primary, fallback]
 }
 
+async function fetchDesktopAgentPresence(settings: AppSettings) {
+    requireAppAuth(settings, 'discover the desktop agent')
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'desktop-agent/presence'), {
+        headers: headers(settings),
+    })
+    if (!response.ok) {
+        throw new Error(`Desktop agent discovery failed with HTTP ${response.status}.`)
+    }
+    const payload = await response.json().catch(() => null) as { agents?: DesktopAgentPresence[] } | null
+    return Array.isArray(payload?.agents) ? payload.agents : []
+}
+
+function rightRotate(value: number, amount: number) {
+    return (value >>> amount) | (value << (32 - amount))
+}
+
+function sha256Hex(input: string) {
+    const bytes: number[] = []
+    for (let i = 0; i < input.length; i += 1) {
+        const code = input.charCodeAt(i)
+        if (code < 0x80) {
+            bytes.push(code)
+        } else if (code < 0x800) {
+            bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f))
+        } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < input.length) {
+            const next = input.charCodeAt(i + 1)
+            if (next >= 0xdc00 && next <= 0xdfff) {
+                const point = 0x10000 + (((code & 0x3ff) << 10) | (next & 0x3ff))
+                bytes.push(0xf0 | (point >> 18), 0x80 | ((point >> 12) & 0x3f), 0x80 | ((point >> 6) & 0x3f), 0x80 | (point & 0x3f))
+                i += 1
+            }
+        } else {
+            bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f))
+        }
+    }
+
+    const bitLength = bytes.length * 8
+    bytes.push(0x80)
+    while ((bytes.length % 64) !== 56) bytes.push(0)
+    const high = Math.floor(bitLength / 0x100000000)
+    const low = bitLength >>> 0
+    for (let shift = 24; shift >= 0; shift -= 8) bytes.push((high >>> shift) & 0xff)
+    for (let shift = 24; shift >= 0; shift -= 8) bytes.push((low >>> shift) & 0xff)
+
+    const constants = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ]
+    const hash = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
+    const words = new Array<number>(64)
+
+    for (let chunk = 0; chunk < bytes.length; chunk += 64) {
+        for (let i = 0; i < 16; i += 1) {
+            const offset = chunk + i * 4
+            words[i] = ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
+        }
+        for (let i = 16; i < 64; i += 1) {
+            const s0 = rightRotate(words[i - 15], 7) ^ rightRotate(words[i - 15], 18) ^ (words[i - 15] >>> 3)
+            const s1 = rightRotate(words[i - 2], 17) ^ rightRotate(words[i - 2], 19) ^ (words[i - 2] >>> 10)
+            words[i] = (words[i - 16] + s0 + words[i - 7] + s1) >>> 0
+        }
+
+        let [a, b, c, d, e, f, g, h] = hash
+        for (let i = 0; i < 64; i += 1) {
+            const s1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)
+            const ch = (e & f) ^ (~e & g)
+            const temp1 = (h + s1 + ch + constants[i] + words[i]) >>> 0
+            const s0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)
+            const maj = (a & b) ^ (a & c) ^ (b & c)
+            const temp2 = (s0 + maj) >>> 0
+            h = g; g = f; f = e; e = (d + temp1) >>> 0; d = c; c = b; b = a; a = (temp1 + temp2) >>> 0
+        }
+
+        hash[0] = (hash[0] + a) >>> 0
+        hash[1] = (hash[1] + b) >>> 0
+        hash[2] = (hash[2] + c) >>> 0
+        hash[3] = (hash[3] + d) >>> 0
+        hash[4] = (hash[4] + e) >>> 0
+        hash[5] = (hash[5] + f) >>> 0
+        hash[6] = (hash[6] + g) >>> 0
+        hash[7] = (hash[7] + h) >>> 0
+    }
+
+    return hash.map(value => value.toString(16).padStart(8, '0')).join('')
+}
+
+function desktopAgentSessionCertificate(settings: AppSettings) {
+    const userId = settings.userId.trim()
+    const authToken = settings.authToken.trim()
+    if (!userId || !authToken) return ''
+    return sha256Hex(`hanasand-desktop-agent-session-v1\n${userId}\n${authToken}`)
+}
+
+function desktopAgentProofHeaders(path: string, init: RequestInit | undefined, certificate: string) {
+    if (!certificate) return init
+    const method = (init?.method || 'GET').toUpperCase()
+    const target = `/${pathPart(path)}`
+    const timestamp = String(Math.floor(Date.now() / 1000))
+    const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
+    const proof = sha256Hex(`${certificate}\n${method}\n${target}\n${timestamp}\n${nonce}`)
+    return {
+        ...init,
+        headers: {
+            ...(init?.headers || {}),
+            'X-Hanasand-Session-Timestamp': timestamp,
+            'X-Hanasand-Session-Nonce': nonce,
+            'X-Hanasand-Session-Proof': proof,
+        },
+    }
+}
+
 async function fetchDesktopAgentPath(settings: AppSettings, path: string, init?: RequestInit) {
     const bases = desktopAgentBases(settings)
-    if (!bases.length) {
-        throw new Error('Desktop agent URL is not configured.')
-    }
+    const certificate = desktopAgentSessionCertificate(settings)
 
     let lastError: unknown
     for (const base of bases) {
         try {
-            return await fetch(joinUrl(base, path), init)
+            const response = await fetch(joinUrl(base, path), desktopAgentProofHeaders(path, init, certificate))
+            if (response.status !== 401) return response
+            lastError = new Error('Desktop agent rejected this login session.')
         } catch (error) {
             lastError = error
         }
     }
+
+    try {
+        const agents = await fetchDesktopAgentPresence(settings)
+        for (const agent of agents) {
+            for (const endpoint of agent.endpoints || []) {
+                try {
+                    const response = await fetch(joinUrl(endpoint, path), desktopAgentProofHeaders(path, init, certificate))
+                    if (response.status !== 401) return response
+                    lastError = new Error('Desktop agent rejected this login session.')
+                } catch (error) {
+                    lastError = error
+                }
+            }
+        }
+    } catch (error) {
+        lastError = error
+    }
+
     throw lastError instanceof Error ? lastError : new Error('Desktop agent is unreachable.')
 }
 
@@ -76,6 +228,91 @@ function booleanValue(value: unknown) {
 
 function asRecord(value: unknown) {
     return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+}
+
+function normalizeAuthSession(value: unknown): HanasandAuthSession {
+    const entry = asRecord(value)
+    const id = stringValue(entry.id)
+    const token = stringValue(entry.token)
+    if (!id || !token) {
+        throw new Error(stringValue(entry.error) || 'Unable to sign in.')
+    }
+    const roles = Array.isArray(entry.roles)
+        ? entry.roles.map(role => typeof role === 'string' ? role : stringValue(asRecord(role).id) || stringValue(asRecord(role).name)).filter(Boolean)
+        : undefined
+    return {
+        id,
+        name: stringValue(entry.name) || undefined,
+        avatar: stringValue(entry.avatar) || null,
+        roles: roles?.length ? roles : undefined,
+        token,
+        expiresAt: stringValue(entry.expires_at) || stringValue(entry.expiresAt) || undefined,
+    }
+}
+
+async function readJsonResponse(response: Response) {
+    const payload = await response.json().catch(() => null)
+    if (response.ok) return payload
+    const message = stringValue(asRecord(payload).error) || `Request failed with HTTP ${response.status}.`
+    throw new Error(message)
+}
+
+export async function loginToHanasand(settings: AppSettings, username: string, password: string) {
+    const id = username.trim()
+    if (!id || !password) {
+        throw new Error('Enter username and password.')
+    }
+    const response = await fetch(joinUrl(settings.apiBaseUrl, `auth/login/${segment(id)}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ password }),
+    })
+    return normalizeAuthSession(await readJsonResponse(response))
+}
+
+export async function refreshHanasandSession(settings: AppSettings) {
+    requireAppAuth(settings, 'refresh your login session')
+    const response = await fetch(joinUrl(settings.apiBaseUrl, `auth/token/${segment(settings.userId)}`), {
+        headers: headers(settings),
+    })
+    return normalizeAuthSession(await readJsonResponse(response))
+}
+
+export async function requestPasswordResetCode(settings: AppSettings, username: string) {
+    const id = username.trim()
+    if (!id) throw new Error('Type your username first.')
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'auth/password-reset/request'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id }),
+    })
+    await readJsonResponse(response)
+}
+
+export async function verifyPasswordResetCode(settings: AppSettings, username: string, code: string) {
+    const id = username.trim()
+    const resetCode = code.trim()
+    if (!id || !/^\d{6}$/.test(resetCode)) throw new Error('Enter the 6 digit code.')
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'auth/password-reset/verify'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id, code: resetCode }),
+    })
+    const payload = asRecord(await readJsonResponse(response))
+    const resetToken = stringValue(payload.resetToken)
+    if (!resetToken) throw new Error('The reset code could not be verified.')
+    return resetToken
+}
+
+export async function completePasswordReset(settings: AppSettings, username: string, resetToken: string, password: string) {
+    const id = username.trim()
+    if (!id || !resetToken || !password) throw new Error('Reset session expired. Send a new code.')
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'auth/password-reset/complete'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id, resetToken, password }),
+    })
+    await readJsonResponse(response)
 }
 
 function normalizeToolUses(value: unknown): AiToolUseSummary[] | undefined {
@@ -410,6 +647,7 @@ export async function sendMailMessage(settings: AppSettings, body: {
 }
 
 export async function triggerServerAction(url: string, settings?: AppSettings) {
+    assertSecureTransport(url)
     const response = await fetch(url, {
         method: 'POST',
         headers: settings ? headers(settings) : undefined,
@@ -423,6 +661,7 @@ export async function triggerServerAction(url: string, settings?: AppSettings) {
 }
 
 export async function fetchServerText(url: string, settings?: AppSettings) {
+    assertSecureTransport(url)
     const response = await fetch(url, {
         headers: settings ? headers(settings) : undefined,
     })

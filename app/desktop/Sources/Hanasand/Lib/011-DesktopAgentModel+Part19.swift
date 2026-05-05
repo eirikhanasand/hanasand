@@ -145,6 +145,12 @@ extension DesktopAgentModel {
 
     func runServerAction(_ path: String) async {
         guard !isRunningServerAction else { return }
+        guard !settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            serverActionStatus = "Server not configured"
+            serverSummary = "Configure an HTTPS or private-LAN management plane before running server actions."
+            append(meta: "Server", body: serverSummary, kind: .error)
+            return
+        }
         isRunningServerAction = true
         serverActionStatus = "Preparing \(path)"
         currentTaskState = "Running server action"

@@ -71,16 +71,13 @@ extension DesktopAgentModel {
             url: settings.internalAPIBaseURL.normalizedBaseURL,
             authenticated: hasHanasandAuth
         )
-        async let managementStatus = pingServerEndpoint(
-            title: "Management plane",
-            url: settings.serverBaseURL.normalizedBaseURL,
-            authenticated: hasHanasandAuth
-        )
-        async let logsStatus = pingServerEndpoint(
-            title: "Logs",
-            url: serverLogsURL(),
-            authenticated: hasHanasandAuth
-        )
+        let serverConfigured = !settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        async let managementStatus = serverConfigured
+            ? pingServerEndpoint(title: "Management plane", url: settings.serverBaseURL.normalizedBaseURL, authenticated: hasHanasandAuth)
+            : ServerEndpointStatus(title: "Management plane", target: "Not configured", isReachable: false, detail: "Configure an HTTPS or private-LAN endpoint before using server controls.", checkedAt: Date())
+        async let logsStatus = serverConfigured
+            ? pingServerEndpoint(title: "Logs", url: serverLogsURL(), authenticated: hasHanasandAuth)
+            : ServerEndpointStatus(title: "Logs", target: "Not configured", isReachable: false, detail: "Configure a secure management plane before loading logs.", checkedAt: Date())
 
         serverReachability = await [vpnStatus, internalStatus, managementStatus, logsStatus]
         let reachableCount = serverReachability.filter { $0.isReachable == true }.count
@@ -137,6 +134,10 @@ extension DesktopAgentModel {
     }
 
     func serverLogsURL() -> URL {
+        let base = settings.serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if base.isEmpty {
+            return URL(string: "https://hanasand.com")!
+        }
         let logsPath = settings.serverLogsPath.trimmingCharacters(in: .whitespacesAndNewlines)
         return logsPath.lowercased().hasPrefix("http")
             ? URL(string: logsPath).or(settings.serverBaseURL.normalizedBaseURL)

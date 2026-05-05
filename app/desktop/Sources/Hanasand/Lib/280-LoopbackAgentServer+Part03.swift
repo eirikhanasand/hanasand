@@ -13,22 +13,20 @@ import WebKit
 extension LoopbackAgentServer {
 
     func isAuthorized(_ request: String) -> Bool {
-        if Self.hostHeader(from: request).map(Self.isLocalHostHeader) == true {
-            return true
-        }
         let certificate = certificateProvider().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !certificate.isEmpty else { return false }
-        return Self.hasValidSessionProof(request, certificate: certificate)
+        return hasValidSessionProof(request, certificate: certificate)
     }
 
-    static func hasValidSessionProof(_ request: String, certificate: String) -> Bool {
-        guard let timestamp = headerValue("x-hanasand-session-timestamp", from: request),
+    func hasValidSessionProof(_ request: String, certificate: String) -> Bool {
+        guard let timestamp = Self.headerValue("x-hanasand-session-timestamp", from: request),
               let timestampValue = TimeInterval(timestamp),
               abs(Date().timeIntervalSince1970 - timestampValue) <= 120,
-              let nonce = headerValue("x-hanasand-session-nonce", from: request),
+              let nonce = Self.headerValue("x-hanasand-session-nonce", from: request),
               !nonce.isEmpty,
               nonce.count <= 160,
-              let proof = headerValue("x-hanasand-session-proof", from: request),
+              consumeProofNonce(nonce, timestamp: timestampValue),
+              let proof = Self.headerValue("x-hanasand-session-proof", from: request),
               let firstLine = request.components(separatedBy: "\r\n").first else {
             return false
         }
@@ -39,7 +37,18 @@ extension LoopbackAgentServer {
         let digest = SHA256.hash(data: Data(material.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
-        return timingSafeEqual(proof.lowercased(), digest)
+        return Self.timingSafeEqual(proof.lowercased(), digest)
+    }
+
+    func consumeProofNonce(_ nonce: String, timestamp: TimeInterval) -> Bool {
+        nonceLock.lock()
+        defer { nonceLock.unlock() }
+
+        let now = Date()
+        seenProofNonces = seenProofNonces.filter { now.timeIntervalSince($0.value) <= 180 }
+        guard seenProofNonces[nonce] == nil else { return false }
+        seenProofNonces[nonce] = Date(timeIntervalSince1970: timestamp)
+        return true
     }
 
     static func timingSafeEqual(_ left: String, _ right: String) -> Bool {
@@ -62,19 +71,6 @@ extension LoopbackAgentServer {
                 line.split(separator: ":", maxSplits: 1).last?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             }
-    }
-
-    static func hostHeader(from request: String) -> String? {
-        headerValue("host", from: request)
-    }
-
-    static func isLocalHostHeader(_ host: String) -> Bool {
-        let clean = host
-            .lowercased()
-            .split(separator: ":")
-            .first
-            .map(String.init) ?? host.lowercased()
-        return clean == "localhost" || clean == "127.0.0.1" || clean == "::1"
     }
 
     static func requiresAccessibility(_ command: String) -> Bool {

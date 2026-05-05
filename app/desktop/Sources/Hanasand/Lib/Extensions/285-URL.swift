@@ -18,4 +18,29 @@ extension URL {
         }
         return url
     }
+
+    var usesSecureHanasandTransport: Bool {
+        guard let scheme = scheme?.lowercased() else { return false }
+        if scheme == "https" { return true }
+        guard scheme == "http", let host else { return false }
+        return Self.isPrivateNetworkHost(host)
+    }
+
+    static func isPrivateNetworkHost(_ rawHost: String) -> Bool {
+        let host = rawHost.lowercased()
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" || host.hasSuffix(".local") {
+            return true
+        }
+        if host.hasPrefix("10.") || host.hasPrefix("192.168.") {
+            return true
+        }
+        let parts = host.split(separator: ".")
+        if parts.count >= 2,
+           parts[0] == "172",
+           let second = Int(parts[1]),
+           (16...31).contains(second) {
+            return true
+        }
+        return false
+    }
 }

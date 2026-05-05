@@ -10,6 +10,7 @@ import type { AiChatMessage, AppSettings, AuthenticatorEntry, RootTabParamList, 
 import { SettingsDrawer } from './components/SettingsDrawer'
 import { SettingsDrawerProvider } from './components/ui'
 import { HomeScreen } from './screens/HomeScreen'
+import { LoginScreen } from './screens/LoginScreen'
 import { MailScreen } from './screens/MailScreen'
 import { ScannerScreen } from './screens/ScannerScreen'
 import { ImagesScreen } from './screens/ImagesScreen'
@@ -18,6 +19,7 @@ import { NotesScreen } from './screens/NotesScreen'
 import { defaultSettings, loadAiChat, loadAuthenticatorEntries, loadMailboxConnections, loadSettings, saveAiChat, saveAuthenticatorEntries, saveMailboxConnections, saveSettings } from './lib/storage'
 import { getThemePalette, palette } from './theme/tokens'
 import { AppThemeProvider } from './theme/context'
+import { refreshHanasandSession } from './lib/api'
 
 const Tab = createBottomTabNavigator<RootTabParamList>()
 
@@ -55,7 +57,26 @@ export default function App() {
                 safeLoad(loadAuthenticatorEntries, [] as AuthenticatorEntry[]),
                 safeLoad(loadAiChat, [] as AiChatMessage[]),
             ])
-            setSettings(nextSettings)
+            let hydratedSettings = nextSettings
+            if (nextSettings.authToken && nextSettings.userId) {
+                try {
+                    const session = await refreshHanasandSession(nextSettings)
+                    hydratedSettings = {
+                        ...nextSettings,
+                        authToken: session.token,
+                        userId: session.id,
+                    }
+                    await saveSettings(hydratedSettings)
+                } catch {
+                    hydratedSettings = {
+                        ...nextSettings,
+                        authToken: '',
+                        userId: '',
+                    }
+                    await saveSettings(hydratedSettings)
+                }
+            }
+            setSettings(hydratedSettings)
             setMailboxConnections(nextMailboxConnections)
             setAuthenticatorEntries(nextAuthenticatorEntries)
             setAiMessages(nextAiMessages)
@@ -87,6 +108,16 @@ export default function App() {
         setAiMessages(next)
     }
 
+    async function handleAuthenticated(session: { id: string; token: string }) {
+        const next = {
+            ...settings!,
+            authToken: session.token,
+            userId: session.id,
+        }
+        await saveSettings(next)
+        setSettings(next)
+    }
+
     if (!settings) {
         return (
             <GestureHandlerRootView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.background }}>
@@ -97,6 +128,17 @@ export default function App() {
     }
 
     const activePalette = getThemePalette(settings.themeMode)
+
+    if (!settings.authToken || !settings.userId) {
+        return (
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: activePalette.background }}>
+                <StatusBar style='light' />
+                <AppThemeProvider mode={settings.themeMode}>
+                    <LoginScreen settings={settings} onAuthenticated={handleAuthenticated} />
+                </AppThemeProvider>
+            </GestureHandlerRootView>
+        )
+    }
 
     return (
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: activePalette.background }}>

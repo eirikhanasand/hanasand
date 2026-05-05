@@ -617,8 +617,8 @@ export function ControlScreen({
                         {!users.length && (
                             <NativeTile
                                 eyebrow='Users'
-                                title={appConfigured ? 'No users loaded' : 'Connect API settings'}
-                                body={appConfigured ? 'Load users to manage role assignments.' : 'Add API URL, auth token, and user id before using admin controls.'}
+                                title={appConfigured ? 'No users loaded' : 'Sign in required'}
+                                body={appConfigured ? 'Load users to manage role assignments.' : 'Log in again to refresh the session used for admin controls.'}
                                 meta='Role admin'
                             />
                         )}
@@ -730,20 +730,11 @@ export function ControlScreen({
                     <NativeTile
                         eyebrow='Loopback agent'
                         title={draft.desktopAgentBaseUrl || 'Desktop agent URL not set'}
-                        body={desktopCommandResult || 'Use Proof PC to reflect a control request inside Hanasand Desktop.'}
+                        body={desktopCommandResult || 'Use Hanasand AI on the home screen for desktop tasks. These settings only verify the local bridge.'}
                         meta='No webview. Native app command endpoint.'
                     />
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                         <PillButton label={desktopBusy === 'remote_desktop_status' ? 'Checking...' : 'Status'} onPress={() => void runDesktopControlCommand('remote_desktop_status', 'Desktop status')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'remote_desktop_proof' ? 'Sending...' : 'Proof PC'} onPress={() => void runDesktopControlCommand('remote_desktop_proof', 'Desktop proof')} tone='accent' disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'remote_desktop_connect' ? 'Opening...' : 'Connect on Mac'} onPress={() => void runDesktopControlCommand('remote_desktop_connect', 'Remote desktop connect')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'remote_desktop_tunnel' ? 'Requesting...' : 'Tunnel on Mac'} onPress={() => void runDesktopControlCommand('remote_desktop_tunnel', 'Remote desktop tunnel')} disabled={!!desktopBusy} />
-                        <PillButton label='Mac mini profile' onPress={() => void runDesktopControlCommand('remote_desktop_macmini', 'Mac mini profile')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'mac_control_textedit_proof' ? 'Opening...' : 'TextEdit proof'} onPress={() => void runDesktopControlCommand('mac_control_textedit_proof', 'TextEdit proof')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'mac_control_keyboard_proof' ? 'Typing...' : 'Type keys'} onPress={() => void runDesktopControlCommand('mac_control_keyboard_proof', 'Keyboard proof')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'mac_control_pointer_move' ? 'Moving...' : 'Move mouse'} onPress={() => void runDesktopControlCommand('mac_control_pointer_move', 'Move pointer')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'mac_control_pointer_click' ? 'Clicking...' : 'Click'} onPress={() => void runDesktopControlCommand('mac_control_pointer_click', 'Pointer click')} disabled={!!desktopBusy} />
-                        <PillButton label={desktopBusy === 'mac_control_finder' ? 'Opening...' : 'Finder'} onPress={() => void runDesktopControlCommand('mac_control_finder', 'Finder')} disabled={!!desktopBusy} />
                     </View>
                 </View>
             </GlassCard>
@@ -768,8 +759,6 @@ export function ControlScreen({
                 <SectionTitle eyebrow='Remote setup' title='Settings' />
                 <View style={{ gap: spacing.md, marginTop: spacing.md }}>
                     <LabeledInput label='API URL' value={draft.apiBaseUrl} onChangeText={value => setDraft(current => ({ ...current, apiBaseUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
-                    <LabeledInput label='User ID' value={draft.userId} onChangeText={value => setDraft(current => ({ ...current, userId: value }))} autoCapitalize='none' autoCorrect={false} textContentType='username' />
-                    <LabeledInput label='Auth token' value={draft.authToken} onChangeText={value => setDraft(current => ({ ...current, authToken: value }))} secureTextEntry autoCapitalize='none' autoCorrect={false} textContentType='password' />
                     <LabeledInput label='CDN API URL' value={draft.cdnBaseUrl} onChangeText={value => setDraft(current => ({ ...current, cdnBaseUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
                     <LabeledInput label='Codex URL' value={draft.codexUrl} onChangeText={value => setDraft(current => ({ ...current, codexUrl: value }))} autoCapitalize='none' autoCorrect={false} keyboardType='url' textContentType='URL' />
                     <LabeledInput label='Codex API path' value={draft.codexApiPath} onChangeText={value => setDraft(current => ({ ...current, codexApiPath: value }))} placeholder='/tools/ai' autoCapitalize='none' autoCorrect={false} />

@@ -59,7 +59,6 @@ extension LoopbackAgentServer {
         """
         HTTP/1.1 \(status)\r
         Content-Type: application/json\r
-        Access-Control-Allow-Origin: *\r
         Access-Control-Allow-Methods: GET, POST, OPTIONS\r
         Access-Control-Allow-Headers: Content-Type, Authorization, id, X-Hanasand-Session-Timestamp, X-Hanasand-Session-Nonce, X-Hanasand-Session-Proof\r
         Content-Length: \(body.utf8.count)\r

@@ -96,6 +96,21 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS desktop_agent_presence (
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            device_id TEXT NOT NULL,
+            device_name TEXT NOT NULL DEFAULT 'Mac',
+            endpoints TEXT[] NOT NULL DEFAULT '{}'::text[],
+            agent_token TEXT NOT NULL DEFAULT '',
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (owner_id, device_id)
+        )
+    `)
+    await run('ALTER TABLE desktop_agent_presence ALTER COLUMN agent_token SET DEFAULT \'\'')
+    await run('CREATE INDEX IF NOT EXISTS idx_desktop_agent_presence_owner_updated ON desktop_agent_presence(owner_id, updated_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_desktop_agent_presence_expires ON desktop_agent_presence(expires_at)')
+    await run(`
         CREATE TABLE IF NOT EXISTS ai_conversations (
             id TEXT PRIMARY KEY,
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

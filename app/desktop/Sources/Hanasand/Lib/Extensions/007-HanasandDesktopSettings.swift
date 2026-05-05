@@ -37,14 +37,14 @@ extension HanasandDesktopSettings {
 
     var endpointValidationMessages: [String] {
         [
-            validateURLField("Website", websiteBaseURL, allowedSchemes: ["http", "https"]),
-            validateURLField("API", apiBaseURL, allowedSchemes: ["http", "https"]),
-            validateURLField("Internal API", internalAPIBaseURL, allowedSchemes: ["http", "https"]),
-            validateURLField("Beekeeper API", beekeeperAPIBaseURL, allowedSchemes: ["http", "https"]),
-            validateURLField("CDN", cdnBaseURL, allowedSchemes: ["http", "https"]),
-            validateURLField("AI endpoint", aiAPIURL, allowedSchemes: ["http", "https"]),
-            validateURLField("Desktop agent", desktopAgentBaseURL, allowedSchemes: ["http", "https"]),
-            validateURLField("Server", serverBaseURL, allowedSchemes: ["http", "https"]),
+            validateURLField("Website", websiteBaseURL, optional: false),
+            validateURLField("API", apiBaseURL, optional: false),
+            validateURLField("Internal API", internalAPIBaseURL, optional: false),
+            validateURLField("Beekeeper API", beekeeperAPIBaseURL, optional: false),
+            validateURLField("CDN", cdnBaseURL, optional: false),
+            validateURLField("AI endpoint", aiAPIURL, optional: false),
+            validateURLField("Desktop agent", desktopAgentBaseURL, optional: false),
+            validateURLField("Server", serverBaseURL, optional: true),
         ].compactMap { $0 }
     }
 
@@ -52,13 +52,13 @@ extension HanasandDesktopSettings {
         endpointValidationMessages.isEmpty
     }
 
-    func validateURLField(_ label: String, _ rawValue: String, allowedSchemes: Set<String>) -> String? {
+    func validateURLField(_ label: String, _ rawValue: String, optional: Bool) -> String? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if optional && trimmed.isEmpty { return nil }
         guard let url = URL(string: trimmed),
-              let scheme = url.scheme?.lowercased(),
-              allowedSchemes.contains(scheme),
-              url.host != nil else {
-            return "\(label) needs a valid \(allowedSchemes.sorted().joined(separator: "/")) URL."
+              url.host != nil,
+              url.usesSecureHanasandTransport else {
+            return "\(label) needs HTTPS, or HTTP on localhost/private LAN only."
         }
         return nil
     }

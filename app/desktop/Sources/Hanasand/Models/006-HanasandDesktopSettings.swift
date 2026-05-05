@@ -28,7 +28,7 @@ struct HanasandDesktopSettings: Codable, Equatable {
     var rdpUser = "macmini"
     var remoteDesktopProtocol = RemoteDesktopProtocol.screenSharing.rawValue
     var remoteDesktopTunnelCommand = Self.macMiniTunnelCommand
-    var serverBaseURL = "http://128.39.142.158"
+    var serverBaseURL = ""
     var serverStartPath = "/start"
     var serverStopPath = "/stop"
     var serverLogsPath = "/logs"

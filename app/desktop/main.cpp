@@ -107,7 +107,6 @@ std::string http_response(const std::string& body, int status = 200, const std::
     response
         << "HTTP/1.1 " << status << " " << status_text << "\r\n"
         << "Content-Type: application/json\r\n"
-        << "Access-Control-Allow-Origin: *\r\n"
         << "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
         << "Access-Control-Allow-Headers: Content-Type, Authorization, id\r\n"
         << "Content-Length: " << body.size() << "\r\n"

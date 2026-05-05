@@ -105,6 +105,7 @@ extension DesktopAgentModel {
     }
 
     func request(_ url: URL, method: String = "GET", body: Data? = nil, authenticated: Bool = false, userAgent: String? = nil) -> URLRequest {
+        precondition(url.usesSecureHanasandTransport, "Blocked insecure plaintext endpoint: \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 12

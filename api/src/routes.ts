@@ -104,6 +104,7 @@ import getApiKeysHandler from './handlers/rateLimit/getApiKeys.ts'
 import postApiKeyHandler from './handlers/rateLimit/postApiKey.ts'
 import putApiKeyHandler from './handlers/rateLimit/putApiKey.ts'
 import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
+import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/desktopAgent/presence.ts'
 
 /**
  * Defines the routes available in the API.
@@ -232,6 +233,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/metrics', getMetrics)
     fastify.get('/status', getStatus)
     fastify.post('/status/ingest', ingestStatus)
+
+    // Desktop agent direct-connect discovery
+    fastify.get('/desktop-agent/presence', getDesktopAgentPresence)
+    fastify.post('/desktop-agent/presence', postDesktopAgentPresence)
 
     // Docker stats
     fastify.get('/docker', getDocker)

@@ -15,6 +15,10 @@
       "icon": "./assets/icon.png",
       "bundleIdentifier": "com.hanasand.app",
       "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true
+        },
         "NSCameraUsageDescription": "Use the camera to scan documents quickly into a PDF.",
         "NSPhotoLibraryUsageDescription": "Use your library to review and clean up images.",
         "NSPhotoLibraryAddUsageDescription": "Save exported PDFs and attachments when needed."
@@ -40,7 +44,8 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "package": "com.hanasand.app"
+      "package": "com.hanasand.app",
+      "usesCleartextTraffic": false
     }
   }
 }

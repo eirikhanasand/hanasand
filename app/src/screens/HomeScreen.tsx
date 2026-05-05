@@ -1,32 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { ArrowUp, FolderKanban, Image as ImageIcon, Mail, MonitorCog, ScanLine, Server, Sparkles, Square, StickyNote, TerminalSquare } from 'lucide-react-native'
-import { useNavigation } from '@react-navigation/native'
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs'
-import type { AiChatMessage, AppSettings, DesktopAgentStatus, GptClient, RootTabParamList } from '../types'
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ArrowUp, Sparkles, Square } from 'lucide-react-native'
+import type { AiChatMessage, AppSettings, DesktopAgentStatus, GptClient } from '../types'
 import { askCodex, fetchDesktopAgentStatus, fetchDesktopScreenshot, runDesktopAgentCommand } from '../lib/api'
-import { GlassCard, Screen } from '../components/ui'
+import { Screen } from '../components/ui'
 import { spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
-
-type QuickAction = {
-    key: string
-    title: string
-    icon: typeof MonitorCog
-    route?: keyof RootTabParamList
-}
-
-const quickActions: QuickAction[] = [
-    { key: 'pc', title: 'PC', icon: MonitorCog },
-    { key: 'rdp', title: 'RDP', icon: MonitorCog },
-    { key: 'server', title: 'Server', icon: Server, route: 'Control' },
-    { key: 'mail', title: 'Mail', icon: Mail, route: 'Mail' },
-    { key: 'scan', title: 'Scan', icon: ScanLine, route: 'Scan' },
-    { key: 'notes', title: 'Notes', icon: StickyNote, route: 'Notes' },
-    { key: 'images', title: 'Images', icon: ImageIcon, route: 'Images' },
-    { key: 'control', title: 'Ops', icon: TerminalSquare, route: 'Control' },
-    { key: 'shares', title: 'Shares', icon: FolderKanban, route: 'Control' },
-]
 
 type GptSocketMessage =
   | { type: 'snapshot'; clients?: GptClient[] }
@@ -39,7 +18,15 @@ type GptSocketMessage =
 function toWsUrl(apiBaseUrl: string) {
     const normalized = apiBaseUrl.trim().replace(/\/+$/, '')
     if (normalized.startsWith('https://')) return `wss://${normalized.slice('https://'.length)}`
-    if (normalized.startsWith('http://')) return `ws://${normalized.slice('http://'.length)}`
+    if (normalized.startsWith('http://')) {
+        const url = new URL(normalized)
+        const host = url.hostname.toLowerCase()
+        const local = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local')
+        if (!local) {
+            throw new Error('Blocked insecure AI websocket. Use HTTPS for Hanasand services.')
+        }
+        return `ws://${normalized.slice('http://'.length)}`
+    }
     return normalized
 }
 
@@ -60,20 +47,17 @@ export function HomeScreen({
 }) {
     const theme = useAppTheme()
     const styles = useMemo(() => createStyles(theme), [theme])
-    const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>()
     const [prompt, setPrompt] = useState('')
     const [busy, setBusy] = useState(false)
     const [clients, setClients] = useState<GptClient[]>([])
     const [socketConnected, setSocketConnected] = useState(false)
     const [desktopStatus, setDesktopStatus] = useState<DesktopAgentStatus | null>(null)
     const [desktopIssue, setDesktopIssue] = useState('')
-    const [remoteDesktopMessage, setRemoteDesktopMessage] = useState('')
     const [desktopScreenshotUri, setDesktopScreenshotUri] = useState('')
     const [screenPreviewSize, setScreenPreviewSize] = useState({ width: 1, height: 1 })
     const [remoteKeyboardText, setRemoteKeyboardText] = useState('')
-    const [remoteKeyboardVisible, setRemoteKeyboardVisible] = useState(true)
-    const [liveScreen, setLiveScreen] = useState(false)
-    const [infraBusy, setInfraBusy] = useState('')
+    const [remoteKeyboardVisible, setRemoteKeyboardVisible] = useState(false)
+    const [remoteBusy, setRemoteBusy] = useState('')
     const remoteKeyboardInputRef = useRef<TextInput | null>(null)
     const activeConversationRef = useRef<string | null>(null)
     const socketRef = useRef<WebSocket | null>(null)
@@ -134,74 +118,6 @@ export function HomeScreen({
     }, [settings.desktopAgentBaseUrl])
 
     useEffect(() => {
-        if (!liveScreen) return undefined
-        let cancelled = false
-        const tick = async () => {
-            if (cancelled) return
-            try {
-                const screenshot = await fetchDesktopScreenshot(settings)
-                if (!cancelled) {
-                    setDesktopScreenshotUri(`data:${screenshot.mimeType || 'image/png'};base64,${screenshot.imageBase64}`)
-                    setRemoteDesktopMessage(screenshot.message || 'Live Mac screen updated.')
-                }
-            } catch (cause) {
-                if (!cancelled) {
-                    setRemoteDesktopMessage(cause instanceof Error ? cause.message : 'Live Mac screen failed.')
-                    setLiveScreen(false)
-                }
-            }
-        }
-        void tick()
-        const timer = setInterval(() => void tick(), 1200)
-        return () => {
-            cancelled = true
-            clearInterval(timer)
-        }
-    }, [liveScreen, settings.desktopAgentBaseUrl])
-
-    useEffect(() => {
-        function handleRemoteControlUrl(url: string | null) {
-            if (!url) return
-            const normalized = url.toLowerCase()
-            if (normalized.includes('remote-proof') || normalized.includes('rdp-proof')) {
-                void runRemoteDesktopCommand('remote_desktop_proof', 'RDP proof')
-            } else if (normalized.includes('mac-full-proof') || normalized.includes('full-control-proof')) {
-                void runRemoteDesktopCommand('mac_control_full_proof', 'Full control proof')
-            } else if (normalized.includes('mac-authorize') || normalized.includes('remote-permissions')) {
-                void runRemoteDesktopCommand('mac_control_authorize', 'Authorize Mac')
-            } else if (normalized.includes('codex-proof') || normalized.includes('mac-codex-proof')) {
-                void runDesktopCodexPrompt('Create a tiny proof that the phone can prompt Codex on this Mac. Write /tmp/hanasand-phone-codex-flow.txt and then answer with the proof token.')
-            } else if (normalized.includes('mac-textedit-proof') || normalized.includes('textedit-proof')) {
-                void runRemoteDesktopCommand('mac_control_textedit_proof', 'Mac proof')
-            } else if (normalized.includes('mac-keyboard-proof') || normalized.includes('keyboard-proof')) {
-                void runRemoteDesktopCommand('mac_control_keyboard_proof', 'Keyboard proof')
-            } else if (normalized.includes('mac-move-pointer') || normalized.includes('move-pointer')) {
-                void runRemoteDesktopCommand('mac_control_pointer_move', 'Move pointer')
-            } else if (normalized.includes('mac-click-pointer') || normalized.includes('click-pointer')) {
-                void runRemoteDesktopCommand('mac_control_pointer_click', 'Click pointer')
-            } else if (normalized.includes('mac-screen') || normalized.includes('screen-proof')) {
-                void refreshDesktopScreenshot()
-            } else if (normalized.includes('mac-live-screen') || normalized.includes('live-screen')) {
-                setLiveScreen(true)
-            } else if (normalized.includes('mac-search') || normalized.includes('cmd-space')) {
-                void runRemoteDesktopCommand('mac_control_key_search', 'Go/Search')
-            } else if (normalized.includes('mac-enter')) {
-                void runRemoteDesktopCommand('mac_control_key_enter', 'Enter')
-            } else if (normalized.includes('mac-finder') || normalized.includes('finder-proof')) {
-                void runRemoteDesktopCommand('mac_control_finder', 'Finder')
-            } else if (normalized.includes('remote-connect') || normalized.includes('rdp-connect')) {
-                void runRemoteDesktopCommand('remote_desktop_connect', 'RDP connect')
-            } else if (normalized.includes('remote-tunnel') || normalized.includes('rdp-tunnel')) {
-                void runRemoteDesktopCommand('remote_desktop_tunnel', 'RDP tunnel')
-            }
-        }
-
-        void Linking.getInitialURL().then(handleRemoteControlUrl).catch(() => undefined)
-        const subscription = Linking.addEventListener('url', event => handleRemoteControlUrl(event.url))
-        return () => subscription.remove()
-    }, [settings.desktopAgentBaseUrl])
-
-    useEffect(() => {
         if (!settings.apiBaseUrl.trim()) {
             socketRef.current?.close()
             socketRef.current = null
@@ -210,7 +126,16 @@ export function HomeScreen({
             return
         }
 
-        const ws = new WebSocket(`${toWsUrl(settings.apiBaseUrl)}/client/ws/gpt`)
+        let socketUrl = ''
+        try {
+            socketUrl = `${toWsUrl(settings.apiBaseUrl)}/client/ws/gpt`
+        } catch {
+            setSocketConnected(false)
+            setClients([])
+            return
+        }
+
+        const ws = new WebSocket(socketUrl)
         socketRef.current = ws
 
         ws.onopen = () => setSocketConnected(true)
@@ -296,13 +221,10 @@ export function HomeScreen({
     const latestMessages = useMemo(() => aiMessages.slice(-10), [aiMessages])
     async function refreshDesktopStatus(addChatMessage = true) {
         setDesktopIssue('')
-        setInfraBusy('pc')
+        setRemoteBusy('pc')
         try {
             const status = await fetchDesktopAgentStatus(settings)
             setDesktopStatus(status)
-            if (!addChatMessage && status.ok) {
-                setTimeout(() => void refreshDesktopScreenshot(), 250)
-            }
             if (addChatMessage) {
                 await saveMessages([
                     ...aiMessagesRef.current,
@@ -324,40 +246,16 @@ export function HomeScreen({
                 ])
             }
         } finally {
-            setInfraBusy('')
-        }
-    }
-
-    async function runPcStatusCommand() {
-        setDesktopIssue('')
-        setInfraBusy('pc')
-        try {
-            const status = await runDesktopAgentCommand(settings, 'status')
-            setDesktopStatus(status)
-            await saveMessages([
-                ...aiMessagesRef.current,
-                {
-                    id: `${Date.now()}-assistant`,
-                    role: 'assistant',
-                    content: `PC command ran successfully. Host: ${status.hostname || 'local'}, platform: ${status.platform || 'unknown'}, uptime: ${Math.floor((status.uptimeSeconds || 0) / 60)} min.`,
-                    createdAt: Date.now(),
-                },
-            ])
-        } catch (cause) {
-            const message = cause instanceof Error ? cause.message : 'PC command failed.'
-            setDesktopIssue(message)
-        } finally {
-            setInfraBusy('')
+            setRemoteBusy('')
         }
     }
 
     async function runRemoteDesktopCommand(command: string, label: string) {
         setDesktopIssue('')
-        setInfraBusy('rdp')
+        setRemoteBusy('rdp')
         try {
             const status = await runDesktopAgentCommand(settings, command)
             setDesktopStatus(status)
-            setRemoteDesktopMessage(status.message || `${label} sent to this Mac.`)
             await saveMessages([
                 ...aiMessagesRef.current,
                 {
@@ -367,25 +265,51 @@ export function HomeScreen({
                     createdAt: Date.now(),
                 },
             ])
-            if (liveScreen || desktopScreenshotUri) {
+            if (desktopScreenshotUri) {
                 setTimeout(() => void refreshDesktopScreenshot(), 350)
             }
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : `${label} failed.`
             setDesktopIssue(message)
-            setRemoteDesktopMessage(message)
         } finally {
-            setInfraBusy('')
+            setRemoteBusy('')
         }
     }
 
-    function remoteCodexPromptFromText(value: string) {
+    function desktopControlPromptFromText(value: string) {
         const trimmed = value.trim()
         const lower = trimmed.toLowerCase()
         if (lower.startsWith('codex:')) return trimmed.slice('codex:'.length).trim()
         if (lower.startsWith('codex ')) return trimmed.slice('codex '.length).trim()
         if (lower.startsWith('mac codex:')) return trimmed.slice('mac codex:'.length).trim()
         if (lower.includes(' on my pc') || lower.includes(' on this mac') || lower.includes(' on the mac')) return trimmed
+        const actionPrefixes = [
+            'open',
+            'launch',
+            'start',
+            'visit',
+            'go to',
+            'search',
+            'click',
+            'type',
+            'press',
+            'move',
+            'scroll',
+            'close',
+            'switch',
+            'focus',
+            'use',
+            'show',
+        ]
+        const looksLikeDesktopAction = actionPrefixes.some(prefix => lower === prefix || lower.startsWith(`${prefix} `))
+        if (looksLikeDesktopAction) {
+            return [
+                'Use this Mac like a desktop assistant.',
+                'Infer the application, website, shell command, or UI action needed from the user request.',
+                'Do not rely on hard-coded aliases; choose and execute the needed steps from context.',
+                `User request: ${trimmed}`,
+            ].join('\n')
+        }
         return ''
     }
 
@@ -393,12 +317,11 @@ export function HomeScreen({
         const desktopPrompt = value.trim()
         if (!desktopPrompt) return
         setDesktopIssue('')
-        setInfraBusy('rdp')
+        setRemoteBusy('rdp')
         try {
             const status = await runDesktopAgentCommand(settings, `codex_prompt:${encodeURIComponent(desktopPrompt)}`)
             setDesktopStatus(status)
             const message = status.message || 'Codex prompt queued on this Mac.'
-            setRemoteDesktopMessage(message)
             await saveMessages([
                 ...aiMessagesRef.current,
                 {
@@ -411,29 +334,26 @@ export function HomeScreen({
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : 'Mac Codex prompt failed.'
             setDesktopIssue(message)
-            setRemoteDesktopMessage(message)
             await saveMessages([
                 ...aiMessagesRef.current,
                 { id: `${Date.now()}-assistant`, role: 'assistant', content: message, createdAt: Date.now(), error: true },
             ])
         } finally {
-            setInfraBusy('')
+            setRemoteBusy('')
         }
     }
 
     async function refreshDesktopScreenshot() {
         setDesktopIssue('')
-        setInfraBusy('screen')
+        setRemoteBusy('screen')
         try {
             const screenshot = await fetchDesktopScreenshot(settings)
             setDesktopScreenshotUri(`data:${screenshot.mimeType || 'image/png'};base64,${screenshot.imageBase64}`)
-            setRemoteDesktopMessage(screenshot.message || 'Mac screen captured in the app.')
         } catch (cause) {
             const message = cause instanceof Error ? cause.message : 'Mac screen capture failed.'
             setDesktopIssue(message)
-            setRemoteDesktopMessage(message)
         } finally {
-            setInfraBusy('')
+            setRemoteBusy('')
         }
     }
 
@@ -449,7 +369,7 @@ export function HomeScreen({
     async function typeRemoteKeyboardText() {
         const value = remoteKeyboardText.trim()
         if (!value) {
-            await runRemoteDesktopCommand('mac_control_keyboard_proof', 'Keyboard proof')
+            remoteKeyboardInputRef.current?.focus()
             return
         }
         await runRemoteDesktopCommand(`mac_control_type_text:${encodeURIComponent(value)}`, 'Type text')
@@ -462,20 +382,6 @@ export function HomeScreen({
         setTimeout(() => {
             remoteKeyboardInputRef.current?.focus()
         }, 80)
-    }
-
-    async function handleQuickAction(action: QuickAction) {
-        if (action.key === 'pc') {
-            await runPcStatusCommand()
-            return
-        }
-        if (action.key === 'rdp') {
-            await runRemoteDesktopCommand('remote_desktop_proof', 'RDP proof')
-            return
-        }
-        if (action.route) {
-            navigation.navigate(action.route)
-        }
     }
 
     async function submitPrompt() {
@@ -492,7 +398,7 @@ export function HomeScreen({
         setPrompt('')
         setBusy(true)
 
-        const desktopCodexPrompt = remoteCodexPromptFromText(trimmed)
+        const desktopCodexPrompt = desktopControlPromptFromText(trimmed)
         if (desktopCodexPrompt) {
             await runDesktopCodexPrompt(desktopCodexPrompt)
             setBusy(false)
@@ -543,160 +449,40 @@ export function HomeScreen({
         }
     }
 
-    function clearChat() {
-        if (busy || !aiMessages.length) return
-        Alert.alert('Clear chat?', 'The saved AI conversation on this device will be removed.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Clear',
-                style: 'destructive',
-                onPress: () => void saveMessages([]),
-            },
-        ])
-    }
-
     return (
-        <Screen title='Hanasand AI' subtitle=''>
-            <GlassCard style={styles.commandCard}>
-                <View style={styles.promptShell}>
-                    <Sparkles color={theme.textMuted} size={18} strokeWidth={2.2} />
-                    <TextInput
-                        value={prompt}
-                        onChangeText={setPrompt}
-                        placeholder='Ask Hanasand AI...'
-                        placeholderTextColor={theme.textSoft}
-                        style={styles.promptInput}
-                        returnKeyType='send'
-                        onSubmitEditing={() => void submitPrompt()}
-                        autoFocus
-                    />
-                    {prompt.trim() ? (
-                        <Pressable
-                            disabled={busy}
-                            accessibilityRole='button'
-                            accessibilityLabel='Send prompt'
-                            accessibilityState={{ disabled: busy }}
-                            onPress={() => void submitPrompt()}
-                            style={({ pressed }) => [styles.promptArrowButton, busy && styles.disabled, pressed && !busy && styles.pressed]}
-                        >
-                            {busy ? <Square color={theme.background} size={13} fill={theme.background} /> : <ArrowUp color={theme.background} size={15} strokeWidth={2.8} />}
-                        </Pressable>
-                    ) : null}
-                </View>
-                {socketConnected && bestClient && (
-                    <View style={styles.statusRow}>
-                        <Text style={styles.statusText}>{bestClient.name}{bestClient.model?.tps ? ` · ${bestClient.model.tps.toFixed(1)} tps` : ''}</Text>
-                    </View>
-                )}
-                <View style={styles.infraStrip}>
-                    <View style={[styles.infraDot, desktopStatus?.ok ? styles.infraDotLive : styles.infraDotIdle]} />
-                    <Text style={styles.infraText} numberOfLines={2}>
-                        {desktopStatus?.ok
-                            ? `Mac online: ${desktopStatus.hostname || 'localhost'} · ${desktopStatus.platform || 'desktop'}`
-                            : desktopIssue
-                                ? `Mac agent: ${desktopIssue}`
-                                : 'Mac agent: checking...'}
-                    </Text>
-                </View>
-                {desktopStatus?.ok && (desktopStatus.screenCaptureAllowed === false || desktopStatus.accessibilityAllowed === false) && (
-                    <View style={styles.permissionStrip}>
-                        <Text style={styles.permissionText}>
-                            {desktopStatus.screenCaptureAllowed === false && desktopStatus.accessibilityAllowed === false
-                                ? 'Mac needs Screen Recording + Accessibility.'
-                                : desktopStatus.screenCaptureAllowed === false
-                                    ? 'Mac needs Screen Recording.'
-                                    : 'Mac needs Accessibility.'}
-                        </Text>
-                        <Pressable
-                            accessibilityRole='button'
-                            accessibilityLabel='Open Mac remote-control privacy permissions'
-                            onPress={() => void runRemoteDesktopCommand('mac_control_authorize', 'Authorize Mac')}
-                            style={({ pressed }) => [styles.remoteMiniButton, pressed && styles.pressed]}
-                        >
-                            <Text style={styles.remoteMiniButtonText}>Open</Text>
-                        </Pressable>
-                    </View>
-                )}
+        <Screen title='Hanasand AI' subtitle='' scroll={false} contentStyle={styles.aiScreen}>
+            <View style={styles.aiRoot}>
+                <Pressable
+                    accessibilityRole='button'
+                    accessibilityLabel='Tap Mac screen preview to click the Mac'
+                    disabled={!desktopScreenshotUri}
+                    onLayout={event => setScreenPreviewSize(event.nativeEvent.layout)}
+                    onPress={event => desktopScreenshotUri ? void clickDesktopPreview(event.nativeEvent.locationX, event.nativeEvent.locationY) : undefined}
+                    style={({ pressed }) => [styles.macWindow, pressed && desktopScreenshotUri && styles.pressed]}
+                >
+                    {desktopScreenshotUri ? (
+                        <Image source={{ uri: desktopScreenshotUri }} style={styles.macPreview} resizeMode='contain' />
+                    ) : (
+                        <View style={styles.macPlaceholder}>
+                            <View style={[styles.infraDot, desktopStatus?.ok ? styles.infraDotLive : styles.infraDotIdle]} />
+                            <Text style={styles.macStatusText} numberOfLines={2}>
+                                {desktopStatus?.ok
+                                    ? `${desktopStatus.hostname || 'Mac'} · ${desktopStatus.platform || 'desktop'}`
+                                    : desktopIssue || 'Mac agent checking'}
+                            </Text>
+                        </View>
+                    )}
+                </Pressable>
+
                 <View style={styles.remoteButtonRow}>
                     <Pressable
                         accessibilityRole='button'
-                        accessibilityLabel='Send remote proof to this Mac'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('remote_desktop_proof', 'RDP proof')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>{infraBusy === 'rdp' ? 'Sending...' : 'Proof PC'}</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Request remote desktop connection on this Mac'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('remote_desktop_connect', 'RDP connect')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>Connect</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Request remote desktop tunnel on this Mac'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('remote_desktop_tunnel', 'RDP tunnel')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>Tunnel</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Open TextEdit proof on this Mac'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('mac_control_textedit_proof', 'Mac proof')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>Type proof</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Run full Mac control proof'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('mac_control_full_proof', 'Full control proof')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>Full proof</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Type keyboard proof on this Mac'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('mac_control_keyboard_proof', 'Keyboard proof')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>Keys</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Move mouse on this Mac'
-                        disabled={infraBusy === 'rdp'}
-                        onPress={() => void runRemoteDesktopCommand('mac_control_pointer_move', 'Move pointer')}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'rdp' && styles.disabled, pressed && infraBusy !== 'rdp' && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>Mouse</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Show Mac screen in this app'
-                        disabled={infraBusy === 'screen'}
+                        accessibilityLabel='Refresh Mac screen for mouse control'
+                        disabled={remoteBusy === 'screen'}
                         onPress={() => void refreshDesktopScreenshot()}
-                        style={({ pressed }) => [styles.remoteButton, infraBusy === 'screen' && styles.disabled, pressed && infraBusy !== 'screen' && styles.pressed]}
+                        style={({ pressed }) => [styles.remoteButton, remoteBusy === 'screen' && styles.disabled, pressed && remoteBusy !== 'screen' && styles.pressed]}
                     >
-                        <Text style={styles.remoteButtonText}>{infraBusy === 'screen' ? 'Loading...' : 'Screen'}</Text>
-                    </Pressable>
-                    <Pressable
-                        accessibilityRole='button'
-                        accessibilityLabel='Toggle live Mac screen'
-                        onPress={() => setLiveScreen(current => !current)}
-                        style={({ pressed }) => [styles.remoteButton, liveScreen && styles.remoteButtonActive, pressed && styles.pressed]}
-                    >
-                        <Text style={styles.remoteButtonText}>{liveScreen ? 'Live on' : 'Live'}</Text>
+                        <Text style={styles.remoteButtonText}>{remoteBusy === 'screen' ? 'Loading...' : 'Mouse'}</Text>
                     </Pressable>
                     <Pressable
                         accessibilityRole='button'
@@ -707,19 +493,25 @@ export function HomeScreen({
                         <Text style={styles.remoteButtonText}>Keyboard</Text>
                     </Pressable>
                 </View>
-                {!!remoteDesktopMessage && <Text style={styles.remoteStatusText} numberOfLines={2}>{remoteDesktopMessage}</Text>}
-                {!!desktopScreenshotUri && (
+
+                {desktopStatus?.ok && (desktopStatus.screenCaptureAllowed === false || desktopStatus.accessibilityAllowed === false) && (
                     <Pressable
                         accessibilityRole='button'
-                        accessibilityLabel='Tap Mac screen preview to click the Mac'
-                        onLayout={event => setScreenPreviewSize(event.nativeEvent.layout)}
-                        onPress={event => void clickDesktopPreview(event.nativeEvent.locationX, event.nativeEvent.locationY)}
-                        style={({ pressed }) => [styles.screenPreviewFrame, pressed && styles.pressed]}
+                        accessibilityLabel='Open Mac remote-control privacy permissions'
+                        onPress={() => void runRemoteDesktopCommand('mac_control_authorize', 'Authorize Mac')}
+                        style={({ pressed }) => [styles.permissionLine, pressed && styles.pressed]}
                     >
-                        <Image source={{ uri: desktopScreenshotUri }} style={styles.screenPreview} resizeMode='contain' />
-                        <Text style={styles.screenPreviewHint}>Tap preview to click the Mac</Text>
+                        <Text style={styles.permissionText} numberOfLines={1}>
+                            {desktopStatus.screenCaptureAllowed === false && desktopStatus.accessibilityAllowed === false
+                                ? 'Needs Screen Recording + Accessibility'
+                                : desktopStatus.screenCaptureAllowed === false
+                                    ? 'Needs Screen Recording'
+                                    : 'Needs Accessibility'}
+                        </Text>
+                        <Text style={styles.remoteMiniButtonText}>Open</Text>
                     </Pressable>
                 )}
+
                 {remoteKeyboardVisible && (
                     <View style={styles.remoteKeyboardPanel}>
                         <View style={styles.remoteKeyboardPanelHeader}>
@@ -755,55 +547,9 @@ export function HomeScreen({
                                 <Text style={styles.remoteButtonText}>Type</Text>
                             </Pressable>
                         </View>
-                        <View style={styles.remoteButtonRow}>
-                            <Pressable
-                                accessibilityRole='button'
-                                accessibilityLabel='Open Go/Search on Mac'
-                                onPress={() => void runRemoteDesktopCommand('mac_control_key_search', 'Go/Search')}
-                                style={({ pressed }) => [styles.remoteButton, pressed && styles.pressed]}
-                            >
-                                <Text style={styles.remoteButtonText}>Go/Search</Text>
-                            </Pressable>
-                            <Pressable
-                                accessibilityRole='button'
-                                accessibilityLabel='Press Enter on Mac'
-                                onPress={() => void runRemoteDesktopCommand('mac_control_key_enter', 'Enter')}
-                                style={({ pressed }) => [styles.remoteButton, pressed && styles.pressed]}
-                            >
-                                <Text style={styles.remoteButtonText}>Enter</Text>
-                            </Pressable>
-                            <Pressable
-                                accessibilityRole='button'
-                                accessibilityLabel='Click Mac pointer'
-                                onPress={() => void runRemoteDesktopCommand('mac_control_pointer_click', 'Click pointer')}
-                                style={({ pressed }) => [styles.remoteButton, pressed && styles.pressed]}
-                            >
-                                <Text style={styles.remoteButtonText}>Click</Text>
-                            </Pressable>
-                        </View>
                     </View>
                 )}
-            </GlassCard>
 
-            <GlassCard style={styles.chatCard}>
-                <View style={styles.chatHeader}>
-                    <Text style={styles.chatTitle}>Chat</Text>
-                    <View style={styles.chatHeaderActions}>
-                        <Text style={styles.chatMeta}>{socketConnected && bestClient ? 'Live model' : 'HTTP fallback'}</Text>
-                        {!!aiMessages.length && (
-                            <Pressable
-                                disabled={busy}
-                                accessibilityRole='button'
-                                accessibilityLabel='Clear AI chat'
-                                accessibilityState={{ disabled: busy }}
-                                onPress={clearChat}
-                                style={({ pressed }) => [styles.clearChatButton, busy && styles.disabled, pressed && !busy && styles.pressed]}
-                            >
-                                <Text style={styles.clearChatText}>Clear</Text>
-                            </Pressable>
-                        )}
-                    </View>
-                </View>
                 <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatContent}>
                     {latestMessages.length ? latestMessages.map(message => (
                         <View
@@ -852,26 +598,32 @@ export function HomeScreen({
                         <Text style={styles.emptyChat}>Ask something above. Replies, errors, and pending runs will stay here.</Text>
                     )}
                 </ScrollView>
-            </GlassCard>
 
-            <View style={styles.grid}>
-                {quickActions.map(action => {
-                    const Icon = action.icon
-                    return (
+                <View style={styles.promptShell}>
+                    <Sparkles color={theme.textMuted} size={15} strokeWidth={2.1} />
+                    <TextInput
+                        value={prompt}
+                        onChangeText={setPrompt}
+                        placeholder='Ask Hanasand AI...'
+                        placeholderTextColor={theme.textSoft}
+                        style={styles.promptInput}
+                        returnKeyType='send'
+                        onSubmitEditing={() => void submitPrompt()}
+                        autoFocus
+                    />
+                    {prompt.trim() ? (
                         <Pressable
-                            key={action.key}
+                            disabled={busy}
                             accessibilityRole='button'
-                            accessibilityLabel={action.title}
-                            onPress={() => void handleQuickAction(action)}
-                            style={({ pressed }) => [styles.actionCard, pressed && styles.pressed]}
+                            accessibilityLabel='Send prompt'
+                            accessibilityState={{ disabled: busy }}
+                            onPress={() => void submitPrompt()}
+                            style={({ pressed }) => [styles.promptArrowButton, busy && styles.disabled, pressed && !busy && styles.pressed]}
                         >
-                            <View style={styles.iconWrap}>
-                                <Icon color={theme.text} size={20} strokeWidth={2.1} />
-                            </View>
-                            <Text style={styles.actionLabel}>{infraBusy === action.key ? '...' : action.title}</Text>
+                            {busy ? <Square color={theme.background} size={12} fill={theme.background} /> : <ArrowUp color={theme.background} size={14} strokeWidth={2.7} />}
                         </Pressable>
-                    )
-                })}
+                    ) : null}
+                </View>
             </View>
         </Screen>
     )
@@ -879,27 +631,44 @@ export function HomeScreen({
 
 function createStyles(theme: ThemePalette) {
     return StyleSheet.create({
-        commandCard: {
-            backgroundColor: theme.surface,
-            borderColor: theme.surfaceBorder,
+        aiScreen: { flex: 1, paddingBottom: 96, gap: 0 },
+        aiRoot: { flex: 1, gap: 8 },
+        macWindow: {
+            minHeight: 78,
+            maxHeight: 128,
+            borderRadius: 22,
+            borderWidth: 1,
+            borderColor: theme.surfaceBorderSoft,
+            backgroundColor: `${theme.backgroundRaised}cc`,
+            overflow: 'hidden',
         },
-        promptShell: {
-            width: '100%',
-            minHeight: 56,
+        macPreview: { width: '100%', height: 118 },
+        macPlaceholder: {
+            flex: 1,
+            minHeight: 78,
             flexDirection: 'row',
             alignItems: 'center',
-            gap: spacing.sm,
+            gap: 8,
+            paddingHorizontal: 14,
+        },
+        macStatusText: { flex: 1, color: theme.textMuted, fontSize: 12, lineHeight: 16 },
+        promptShell: {
+            width: '100%',
+            minHeight: 46,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
             borderRadius: 18,
             borderWidth: 1,
             borderColor: theme.surfaceBorderSoft,
-            backgroundColor: theme.backgroundRaised,
-            paddingHorizontal: spacing.md,
+            backgroundColor: `${theme.backgroundRaised}ee`,
+            paddingHorizontal: 12,
         },
-        promptInput: { flex: 1, color: theme.text, fontSize: 18, paddingVertical: spacing.md },
+        promptInput: { flex: 1, color: theme.text, fontSize: 14, paddingVertical: 10, fontWeight: '400' },
         promptArrowButton: {
-            width: 34,
-            height: 34,
-            borderRadius: 17,
+            width: 30,
+            height: 30,
+            borderRadius: 15,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: theme.text,
@@ -907,74 +676,55 @@ function createStyles(theme: ThemePalette) {
             borderColor: theme.text,
         },
         disabled: { opacity: 0.55 },
-        statusRow: { marginTop: spacing.sm },
-        statusText: { color: theme.textSoft, fontSize: 12 },
-        infraStrip: {
-            marginTop: spacing.sm,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.sm,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: theme.surfaceBorder,
-            backgroundColor: theme.backgroundRaised,
-            paddingHorizontal: spacing.md,
-            paddingVertical: 10,
-        },
         infraDot: { width: 9, height: 9, borderRadius: 9 },
         infraDotLive: { backgroundColor: theme.success },
         infraDotIdle: { backgroundColor: theme.textMuted },
-        infraText: { flex: 1, color: theme.textMuted, fontWeight: '700', fontSize: 13 },
-        permissionStrip: {
-            marginTop: spacing.sm,
+        permissionLine: {
+            minHeight: 32,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: spacing.sm,
-            borderRadius: 14,
+            gap: 8,
+            borderRadius: 16,
             borderWidth: 1,
-            borderColor: theme.danger,
-            backgroundColor: `${theme.danger}22`,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
+            borderColor: `${theme.danger}66`,
+            backgroundColor: `${theme.danger}12`,
+            paddingHorizontal: 12,
         },
-        permissionText: { flex: 1, color: theme.text, fontSize: 12, fontWeight: '800' },
+        permissionText: { flex: 1, color: theme.textMuted, fontSize: 11, fontWeight: '500' },
         remoteButtonRow: {
             flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: spacing.sm,
-            marginTop: spacing.sm,
+            gap: 8,
         },
         remoteButton: {
-            minHeight: 36,
+            minHeight: 32,
             borderRadius: 999,
             borderWidth: 1,
             borderColor: theme.surfaceBorderSoft,
-            backgroundColor: theme.backgroundRaised,
-            paddingHorizontal: spacing.md,
+            backgroundColor: `${theme.backgroundRaised}a8`,
+            paddingHorizontal: 14,
             alignItems: 'center',
             justifyContent: 'center',
         },
-        remoteButtonText: { color: theme.text, fontSize: 12, fontWeight: '800' },
+        remoteButtonText: { color: theme.text, fontSize: 12, fontWeight: '600' },
         remoteButtonActive: { borderColor: theme.accent, backgroundColor: theme.accentSoft },
         remoteKeyboardPanel: {
-            marginTop: spacing.sm,
-            borderRadius: 18,
+            borderRadius: 16,
             borderWidth: 1,
             borderColor: theme.surfaceBorderSoft,
-            backgroundColor: theme.backgroundRaised,
-            padding: spacing.sm,
+            backgroundColor: `${theme.backgroundRaised}a8`,
+            padding: 8,
         },
         remoteKeyboardPanelHeader: {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: spacing.sm,
+            gap: 8,
         },
         remoteKeyboardTitle: {
             color: theme.textMuted,
-            fontSize: 12,
-            fontWeight: '900',
+            fontSize: 10,
+            fontWeight: '600',
             textTransform: 'uppercase',
             letterSpacing: 1,
         },
@@ -987,145 +737,85 @@ function createStyles(theme: ThemePalette) {
             alignItems: 'center',
             justifyContent: 'center',
         },
-        remoteMiniButtonText: { color: theme.textMuted, fontSize: 11, fontWeight: '800' },
+        remoteMiniButtonText: { color: theme.textMuted, fontSize: 11, fontWeight: '600' },
         remoteKeyboardBar: {
             flexDirection: 'row',
-            gap: spacing.sm,
+            gap: 8,
             alignItems: 'center',
-            marginTop: spacing.sm,
+            marginTop: 8,
         },
         remoteKeyboardInput: {
             flex: 1,
-            minHeight: 38,
+            minHeight: 34,
             borderRadius: 999,
             borderWidth: 1,
             borderColor: theme.surfaceBorderSoft,
             backgroundColor: theme.backgroundRaised,
             color: theme.text,
-            paddingHorizontal: spacing.md,
-            fontSize: 13,
-            fontWeight: '700',
+            paddingHorizontal: 12,
+            fontSize: 12,
+            fontWeight: '400',
         },
         remoteKeyButton: {
-            minHeight: 38,
+            minHeight: 34,
             borderRadius: 999,
             borderWidth: 1,
             borderColor: theme.surfaceBorderSoft,
             backgroundColor: theme.backgroundRaised,
-            paddingHorizontal: spacing.md,
+            paddingHorizontal: 12,
             alignItems: 'center',
             justifyContent: 'center',
         },
-        remoteStatusText: { color: theme.textMuted, fontSize: 12, fontWeight: '700', marginTop: spacing.xs },
-        screenPreviewFrame: {
-            marginTop: spacing.sm,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: theme.surfaceBorderSoft,
-            overflow: 'hidden',
-            backgroundColor: theme.background,
-        },
-        screenPreview: { width: '100%', height: 160 },
-        screenPreviewHint: {
-            color: theme.textMuted,
-            fontSize: 11,
-            fontWeight: '800',
-            paddingHorizontal: spacing.sm,
-            paddingBottom: spacing.xs,
-        },
-        chatCard: {
-            backgroundColor: theme.surface,
-            borderColor: theme.surfaceBorder,
-        },
-        chatHeader: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: spacing.sm,
-            marginBottom: spacing.md,
-        },
-        chatTitle: { color: theme.text, fontSize: 18, fontWeight: '800' },
-        chatHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-        chatMeta: { color: theme.textSoft, fontSize: 12, fontWeight: '700' },
-        clearChatButton: {
-            minHeight: 30,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: theme.surfaceBorderSoft,
-            backgroundColor: theme.backgroundRaised,
-            paddingHorizontal: spacing.sm,
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        clearChatText: { color: theme.textMuted, fontSize: 12, fontWeight: '800' },
-        chatScroll: { maxHeight: 420 },
-        chatContent: { gap: spacing.sm },
+        chatScroll: { flex: 1 },
+        chatContent: { gap: 10, paddingVertical: 6 },
         chatBubble: {
-            borderRadius: 16,
-            borderWidth: 1,
-            padding: spacing.md,
-            gap: 6,
+            gap: 4,
+            maxWidth: '94%',
         },
         userBubble: {
+            alignSelf: 'flex-end',
+            borderRadius: 15,
+            borderWidth: 1,
             backgroundColor: theme.accentSoft,
             borderColor: theme.accent,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
         },
         assistantBubble: {
-            backgroundColor: theme.surfaceStrong,
-            borderColor: theme.surfaceBorderSoft,
+            alignSelf: 'flex-start',
+            backgroundColor: 'transparent',
+            borderColor: 'transparent',
         },
         errorBubble: {
+            borderRadius: 15,
+            borderWidth: 1,
             borderColor: theme.danger,
             backgroundColor: `${theme.danger}22`,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
         },
         chatRole: {
             color: theme.textSoft,
-            fontSize: 11,
-            fontWeight: '800',
-            textTransform: 'uppercase',
-            letterSpacing: 1.4,
-        },
-        chatText: { color: theme.text, fontSize: 14, lineHeight: 21 },
-        detailBox: {
-            gap: 4,
-            marginTop: 6,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: theme.surfaceBorderSoft,
-            backgroundColor: theme.backgroundRaised,
-            padding: spacing.sm,
-        },
-        detailLabel: {
-            color: theme.textSoft,
-            fontSize: 11,
-            fontWeight: '800',
+            fontSize: 9,
+            fontWeight: '500',
             textTransform: 'uppercase',
             letterSpacing: 1.2,
         },
-        detailText: { color: theme.textMuted, fontSize: 12, lineHeight: 18 },
-        emptyChat: { color: theme.textMuted, lineHeight: 21 },
-        grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-        actionCard: {
-            width: '48%',
-            minHeight: 104,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: theme.surfaceBorder,
-            backgroundColor: theme.surface,
-            padding: spacing.md,
-            justifyContent: 'space-between',
+        chatText: { color: theme.text, fontSize: 13, lineHeight: 18, fontWeight: '400' },
+        detailBox: {
+            gap: 4,
+            marginTop: 6,
+            paddingTop: 2,
         },
-        iconWrap: {
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.surfaceStrong,
-            borderWidth: 1,
-            borderColor: theme.surfaceBorderSoft,
+        detailLabel: {
+            color: theme.textSoft,
+            fontSize: 9,
+            fontWeight: '600',
+            textTransform: 'uppercase',
+            letterSpacing: 1.2,
         },
-        actionLabel: { color: theme.text, fontWeight: '700', fontSize: 18 },
+        detailText: { color: theme.textMuted, fontSize: 11, lineHeight: 16 },
+        emptyChat: { color: theme.textMuted, fontSize: 13, lineHeight: 18, marginTop: 8 },
         pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
     })
 }

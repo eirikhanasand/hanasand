@@ -35,6 +35,15 @@ export type AppSettings = {
     serverLogsPath: string
 }
 
+export type HanasandAuthSession = {
+    id: string
+    name?: string
+    avatar?: string | null
+    roles?: string[]
+    token: string
+    expiresAt?: string
+}
+
 export type MailAddress = {
     email: string
     name?: string
@@ -224,6 +233,14 @@ export type DesktopAgentStatus = {
     message?: string
     screenCaptureAllowed?: boolean
     accessibilityAllowed?: boolean
+}
+
+export type DesktopAgentPresence = {
+    deviceId: string
+    deviceName?: string
+    endpoints: string[]
+    updatedAt?: string
+    expiresAt?: string
 }
 
 export type DesktopScreenshot = {
