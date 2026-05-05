@@ -28,7 +28,7 @@ export function releaseModelLane(baseUrl: string) {
 }
 
 export function getModelLaneSnapshot() {
-    const maxSequences = Number(process.env.HANASAND_VLLM_MAX_NUM_SEQS || 16)
+    const maxSequences = Number(process.env.HANASAND_VLLM_MAX_NUM_SEQS || 4)
     const contextMaxTokens = Number(process.env.HANASAND_MODEL_CONTEXT_MAX_TOKENS || process.env.HANASAND_VLLM_MAX_MODEL_LEN || 0)
 
     return laneUrls.map((url, index) => {
