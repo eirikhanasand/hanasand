@@ -105,21 +105,21 @@ function Open({ client }: { client: GPT_Client }) {
                 />
             ) : null}
             <div className='grid gap-4 lg:grid-cols-3'>
-            <MetricSection
-                title='RAM'
-                icon={<MemoryStick className='h-4 w-4' />}
-                items={client.ram.map((ram, id) => <RAM key={`${ram.name}-${id}`} ram={ram} />)}
-            />
-            <MetricSection
-                title='CPU'
-                icon={<Cpu className='h-4 w-4' />}
-                items={client.cpu.map((cpu, id) => <CPU key={`${cpu.name}-${id}`} cpu={cpu} />)}
-            />
-            <MetricSection
-                title='GPU'
-                icon={<HardDrive className='h-4 w-4' />}
-                items={client.gpu.map((gpu, id) => <GPU key={`${gpu.name}-${id}`} gpu={gpu} />)}
-            />
+                <MetricSection
+                    title='RAM'
+                    icon={<MemoryStick className='h-4 w-4' />}
+                    items={client.ram.map((ram, id) => <RAM key={`${ram.name}-${id}`} ram={ram} />)}
+                />
+                <MetricSection
+                    title='CPU'
+                    icon={<Cpu className='h-4 w-4' />}
+                    items={client.cpu.map((cpu, id) => <CPU key={`${cpu.name}-${id}`} cpu={cpu} />)}
+                />
+                <MetricSection
+                    title='GPU'
+                    icon={<HardDrive className='h-4 w-4' />}
+                    items={client.gpu.map((gpu, id) => <GPU key={`${gpu.name}-${id}`} gpu={gpu} />)}
+                />
             </div>
         </div>
     )
