@@ -14,7 +14,8 @@ export default async function layout({ children }: { children: ReactNode }) {
     const theme = Cookies.get('theme')?.value || 'dark'
     const path = Headers.get('x-current-path') || ''
     const isShare = path.startsWith('/s')
-    const isAppSurface = isShare || path.startsWith('/ai')
+    const isDashboard = path.startsWith('/dashboard')
+    const isAppSurface = isShare || path.startsWith('/ai') || isDashboard
 
     return (
         <html lang='en' className={theme}>

@@ -32,10 +32,10 @@ export default function DashboardProject({ project }: { project: Project }) {
 
     return (
         <div className='group'>
-            <div onClick={handleClick} className={`flex cursor-pointer justify-between p-2 ${keys['shift'] ? 'hover:bg-red-500' : 'hover:bg-dark'} rounded-lg hover:scale-[1.005]`}>
-                <div className='flex justify-between w-full items-center text-bright/80'>
-                    <h1>{project.alias}</h1>
-                    <h1 className='text-bright/60 text-sm self-center'>{prettyDate(project.last_updated)}</h1>
+            <div onClick={handleClick} className={`flex cursor-pointer justify-between rounded-lg px-3 py-2 transition ${keys['shift'] ? 'hover:bg-red-500/30' : 'hover:bg-white/6'}`}>
+                <div className='flex w-full items-center justify-between gap-3 text-bright/80'>
+                    <h1 className='truncate text-sm font-medium'>{project.alias}</h1>
+                    <h1 className='shrink-0 text-xs text-bright/40'>{prettyDate(project.last_updated)}</h1>
                 </div>
                 {keys['shift'] && <Trash2 className='hidden group-hover:block w-5 h-5' />}
             </div>
