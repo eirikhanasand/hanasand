@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { Dispatch, SetStateAction, useState } from 'react'
 import Box from '../box/box'
 import PhoneSimulator from './phoneSimulator'
+import SidebarTooltip from './sidebarTooltip'
 
 type MetadataProps = {
     shareRouteId: string
@@ -117,79 +118,103 @@ export default function Metadata({
 
     return (
         <div className='flex h-full min-w-fit flex-row-reverse gap-2'>
-            <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
-                <button type='button' aria-label='Close metadata' onClick={() => setShowMetadata(false)} className={baseButtonStyle}>
-                    <X className='h-5 w-5' />
-                </button>
-                <button
-                    type='button'
-                    aria-label='Share details'
-                    onClick={() => togglePanel('info')}
-                    className={`${baseButtonStyle} ${activePanel === 'info' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
-                >
-                    <Eye className='h-5 w-5' />
-                </button>
-                <button
-                    type='button'
-                    aria-label='Terminal access'
-                    onClick={() => togglePanel('terminal')}
-                    className={`${baseButtonStyle} ${activePanel === 'terminal' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
-                >
-                    <TerminalSquare className='h-5 w-5' />
-                </button>
-                <button
-                    type='button'
-                    aria-label='Symbols'
-                    onClick={() => togglePanel('symbols')}
-                    className={`${baseButtonStyle} ${activePanel === 'symbols' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
-                >
-                    <ListOrdered className='h-5 w-5' />
-                </button>
-                <Link href={`/s/${share?.id || shareRouteId}`} aria-label='Reload current share workspace' className={baseButtonStyle}>
-                    <RefreshCw className='h-5 w-5' />
-                </Link>
-                <button type='button' aria-label='Copy current file contents' onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
-                    <Copy height={20} width={20} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-bright' : 'stroke-red-500'} />
-                </button>
-                <Lock baseButtonStyle={baseButtonStyle} share={share} setError={setError} />
-                <button type='button' aria-label='Toggle line numbers' onClick={() => setDisplayLineNumbers(prev => !prev)} className={baseButtonStyle}>
-                    <ListOrdered height={20} width={20} />
-                </button>
-                <button
-                    type='button'
-                    aria-label={syntaxHighlighting ? 'Disable syntax highlighting' : 'Enable syntax highlighting'}
-                    onClick={() => setSyntaxHighlighting(prev => !prev)}
-                    className={baseButtonStyle}
-                >
-                    <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
-                </button>
-                <button
-                    type='button'
-                    aria-label='Tool box'
-                    onClick={() => {
-                        setBox(true)
-                        togglePanel('box')
-                    }}
-                    className={`${baseButtonStyle} ${activePanel === 'box' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
-                >
-                    <Package className={activePanel === 'box' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
-                </button>
-                <button
-                    type='button'
-                    aria-label='Git plugin'
-                    onClick={() => togglePanel('git')}
-                    className={`${baseButtonStyle} ${activePanel === 'git' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
-                >
-                    <GitBranch className={activePanel === 'git' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
-                </button>
-                <button
-                    type='button'
-                    aria-label='Phone simulator'
-                    onClick={() => togglePanel('phone')}
-                    className={`${baseButtonStyle} ${activePanel === 'phone' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
-                >
-                    <Smartphone className={activePanel === 'phone' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
-                </button>
+            <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
+                <SidebarTooltip label='Close' side='left'>
+                    <button type='button' aria-label='Close metadata' onClick={() => setShowMetadata(false)} className={baseButtonStyle}>
+                        <X className='h-5 w-5' />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Details' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Share details'
+                        onClick={() => togglePanel('info')}
+                        className={`${baseButtonStyle} ${activePanel === 'info' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <Eye className='h-5 w-5' />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Terminal' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Terminal access'
+                        onClick={() => togglePanel('terminal')}
+                        className={`${baseButtonStyle} ${activePanel === 'terminal' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <TerminalSquare className='h-5 w-5' />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Symbols' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Symbols'
+                        onClick={() => togglePanel('symbols')}
+                        className={`${baseButtonStyle} ${activePanel === 'symbols' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <ListOrdered className='h-5 w-5' />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Reload' side='left'>
+                    <Link href={`/s/${share?.id || shareRouteId}`} aria-label='Reload current share workspace' className={baseButtonStyle}>
+                        <RefreshCw className='h-5 w-5' />
+                    </Link>
+                </SidebarTooltip>
+                <SidebarTooltip label='Copy file' side='left'>
+                    <button type='button' aria-label='Copy current file contents' onClick={() => copy({ text: editingContent, setDidCopy })} className={baseButtonStyle}>
+                        <Copy height={20} width={20} className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-bright' : 'stroke-red-500'} />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label={share?.locked ? 'Unlock' : 'Lock'} side='left'>
+                    <Lock baseButtonStyle={baseButtonStyle} share={share} setError={setError} />
+                </SidebarTooltip>
+                <SidebarTooltip label='Line numbers' side='left'>
+                    <button type='button' aria-label='Toggle line numbers' onClick={() => setDisplayLineNumbers(prev => !prev)} className={baseButtonStyle}>
+                        <ListOrdered height={20} width={20} />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Highlighting' side='left'>
+                    <button
+                        type='button'
+                        aria-label={syntaxHighlighting ? 'Disable syntax highlighting' : 'Enable syntax highlighting'}
+                        onClick={() => setSyntaxHighlighting(prev => !prev)}
+                        className={baseButtonStyle}
+                    >
+                        <Highlighter className={!syntaxHighlighting ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Tool box' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Tool box'
+                        onClick={() => {
+                            setBox(true)
+                            togglePanel('box')
+                        }}
+                        className={`${baseButtonStyle} ${activePanel === 'box' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <Package className={activePanel === 'box' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Git' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Git plugin'
+                        onClick={() => togglePanel('git')}
+                        className={`${baseButtonStyle} ${activePanel === 'git' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <GitBranch className={activePanel === 'git' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Phone' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Phone simulator'
+                        onClick={() => togglePanel('phone')}
+                        className={`${baseButtonStyle} ${activePanel === 'phone' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <Smartphone className={activePanel === 'phone' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                    </button>
+                </SidebarTooltip>
             </nav>
             {panelVisible ? (
                 <div className={`min-w-0 h-full ${activePanel === 'phone' ? 'w-[min(30rem,calc(100vw-5.5rem))]' : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'}`}>
