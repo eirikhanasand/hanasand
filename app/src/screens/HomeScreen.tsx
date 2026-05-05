@@ -124,7 +124,7 @@ export function HomeScreen({
             return
         }
 
-        let socketUrl = ''
+        let socketUrl
         try {
             socketUrl = `${toWsUrl(settings.apiBaseUrl)}/client/ws/gpt`
         } catch {
