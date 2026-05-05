@@ -4,6 +4,7 @@ import Footer from '@/components/footer/footer'
 import BackgroundSketches from '@/components/background/backgroundSketches'
 import './globals.css'
 import Header from '@/components/header/header'
+import DetachedBoxHost from '@/components/box/detachedBoxHost'
 export { default as metadata } from './metadata'
 export { default as viewport } from './metadata'
 
@@ -23,6 +24,7 @@ export default async function layout({ children }: { children: ReactNode }) {
             <body className='h-full w-full max-h-screen max-w-screen overflow-hidden'>
                 <div className='site-atmosphere' />
                 <Header token={token} path={path} />
+                <DetachedBoxHost />
                 <div className={`relative z-10 ${isAppSurface ? 'mt-[7.5vh] h-[92.5vh]' : 'mt-[8.25vh] h-[91.75vh] md:mt-[9.5vh] md:h-[90.5vh]'} w-full overflow-auto`}>
                     {isAppSurface ? null : <BackgroundSketches />}
                     <main className={`w-full ${isAppSurface ? 'h-full' : 'min-h-[90.5vh] pt-3 md:pt-0'}`}>

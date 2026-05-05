@@ -9,7 +9,7 @@ import {
     sendViaShareVm,
     withRequestDetails,
 } from '@/utils/box/requestTool'
-import { Bot, Clock3, Play, Plus, Server, Trash2 } from 'lucide-react'
+import { Bot, Clock3, ImageIcon, Play, Plus, Server, Trash2 } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './types'
@@ -24,7 +24,16 @@ type NewRequestProps = {
     share: Share | null
 }
 
-type ResponseTab = 'response' | 'headers' | 'request'
+type ResponseTab = 'response' | 'preview' | 'headers' | 'request'
+
+type RequestRun = {
+    id: string
+    method: string
+    url: string
+    startedAt: string
+    loading: boolean
+    response: ToolResponse | null
+}
 
 export default function NewRequest({
     initialRequest,
@@ -39,8 +48,8 @@ export default function NewRequest({
     const [body, setBody] = useState(initialRequest.body)
     const [tab, setTab] = useState<'headers' | 'body' | 'ai'>('headers')
     const [responseTab, setResponseTab] = useState<ResponseTab>('response')
-    const [response, setResponse] = useState<ToolResponse | null>(null)
-    const [loading, setLoading] = useState(false)
+    const [runs, setRuns] = useState<RequestRun[]>([])
+    const [activeRunId, setActiveRunId] = useState<string | null>(null)
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
     const inputRef = useRef<HTMLInputElement | null>(null)
@@ -58,6 +67,14 @@ export default function NewRequest({
         [headers]
     )
 
+    const activeRun = useMemo(
+        () => runs.find((run) => run.id === activeRunId) || runs[0] || null,
+        [activeRunId, runs]
+    )
+    const response = activeRun?.response ?? null
+    const hasRunningRequests = runs.some((run) => run.loading)
+    const previewUrl = getImagePreviewUrl(response, activeRun?.url || url)
+
     const executionMode = share?.alias
         ? 'Share VM'
         : getCookie('access_token')
@@ -68,8 +85,25 @@ export default function NewRequest({
         e?.preventDefault()
         const token = getCookie('access_token')
         const id = getCookie('id')
+        const runId = randomId()
+        const request = {
+            method,
+            url,
+            headers: usableHeaders,
+            body,
+        }
+        const startedAt = new Date().toISOString()
 
-        setLoading(true)
+        setRuns((current) => [{
+            id: runId,
+            method,
+            url,
+            startedAt,
+            loading: true,
+            response: null,
+        }, ...current].slice(0, 12))
+        setActiveRunId(runId)
+        setResponseTab('response')
 
         try {
             let data: ToolResponse
@@ -89,30 +123,21 @@ export default function NewRequest({
                         id,
                         Authorization: `Bearer ${token}`,
                     },
-                    body: JSON.stringify({ method, url, headers: usableHeaders, body }),
+                    body: JSON.stringify(request),
                 })
                 data = await result.json().catch(() => ({ error: 'Invalid response.' }))
             } else {
-                data = await sendFromBrowser({
-                    method,
-                    url,
-                    headers: usableHeaders,
-                    body,
-                })
+                data = await sendFromBrowser(request)
             }
 
-            const enrichedResponse = withRequestDetails(data, {
-                method,
-                url,
-                headers: usableHeaders,
-                body,
-            })
+            const enrichedResponse = withRequestDetails(data, request)
 
-            setResponse(enrichedResponse)
-            setResponseTab('response')
+            setRuns((current) => current.map((run) => run.id === runId
+                ? { ...run, loading: false, response: enrichedResponse }
+                : run))
 
             onRequestComplete({
-                id: selectedRequestId ?? randomId(),
+                id: selectedRequestId ?? runId,
                 method,
                 url,
                 headers,
@@ -127,16 +152,10 @@ export default function NewRequest({
         } catch (error) {
             const enrichedResponse = withRequestDetails({
                 error: error instanceof Error ? error.message : String(error),
-            }, {
-                method,
-                url,
-                headers: usableHeaders,
-                body,
-            })
-            setResponse(enrichedResponse)
-            setResponseTab('response')
-        } finally {
-            setLoading(false)
+            }, request)
+            setRuns((current) => current.map((run) => run.id === runId
+                ? { ...run, loading: false, response: enrichedResponse }
+                : run))
         }
     }, [body, headers, method, onRequestComplete, selectedRequestId, share?.alias, usableHeaders, url])
 
@@ -176,31 +195,33 @@ export default function NewRequest({
         inputRef.current?.focus()
     }, [])
 
-    const responseStatus = response?.status
-        ? `${response.status} ${response.statusText || ''}`.trim()
-        : response?.error
-            ? 'Error'
-            : 'Not sent'
+    const responseStatus = activeRun?.loading
+        ? 'Running'
+        : response?.status
+            ? `${response.status} ${response.statusText || ''}`.trim()
+            : response?.error
+                ? 'Error'
+                : 'Not sent'
 
     return (
-        <div className='grid min-h-0 gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(310px,0.85fr)] lg:items-stretch'>
+        <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.85fr)] xl:items-stretch'>
             <section className='grid min-h-0 gap-3 self-start'>
                 <form className='grid gap-2'>
-                    <div className='grid gap-2 lg:grid-cols-[84px_minmax(0,1fr)_82px]'>
+                    <div className='grid gap-2 lg:grid-cols-[84px_minmax(0,1fr)_92px]'>
                         <select value={method} onChange={(e) => setMethod(e.target.value)} className='cursor-pointer rounded-full border border-white/10 bg-white/4 px-3 py-2 text-[11px] font-semibold text-bright outline-none'>
                             {METHODS.map((item) => <option key={item} value={item} className='bg-background'>{item}</option>)}
                         </select>
                         <input
                             ref={inputRef}
-                            className='rounded-full border border-white/10 bg-white/4 px-3 py-2 text-sm text-bright outline-none focus:border-orange-300/45'
+                            className='min-w-0 rounded-full border border-white/10 bg-white/4 px-3 py-2 text-sm text-bright outline-none focus:border-orange-300/45'
                             placeholder='https://api.example.com/v1/users'
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             required
                         />
-                        <button onClick={send} disabled={loading} className='flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-orange-300 px-3 py-2 text-[11px] font-semibold text-background hover:bg-orange-200 disabled:cursor-not-allowed disabled:opacity-50'>
+                        <button onClick={send} className='flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-orange-300 px-3 py-2 text-[11px] font-semibold text-background hover:bg-orange-200'>
                             <Play className='h-3.5 w-3.5' />
-                            {loading ? 'Running' : 'Run'}
+                            Run
                         </button>
                     </div>
 
@@ -214,7 +235,7 @@ export default function NewRequest({
                         </div>
                         <div className='inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-[11px] text-bright/55'>
                             <Server className='h-3.5 w-3.5' />
-                            {executionMode}
+                            {hasRunningRequests ? 'Running requests' : executionMode}
                         </div>
                     </div>
                 </form>
@@ -224,8 +245,8 @@ export default function NewRequest({
                         <div className='grid max-h-44 min-h-0 content-start gap-2 overflow-auto pr-1'>
                             {headers.map((header, index) => (
                                 <div key={index} className='grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
-                                    <input value={header.key} onChange={(e) => updateHeader(index, 'key', e.target.value)} placeholder='Header' className='rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none' />
-                                    <input value={header.value} onChange={(e) => updateHeader(index, 'value', e.target.value)} placeholder='Value' className='rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none' />
+                                    <input value={header.key} onChange={(e) => updateHeader(index, 'key', e.target.value)} placeholder='Header' className='min-w-0 rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none' />
+                                    <input value={header.value} onChange={(e) => updateHeader(index, 'value', e.target.value)} placeholder='Value' className='min-w-0 rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none' />
                                     <button type='button' onClick={() => setHeaders((prev) => prev.length === 1 ? [{ key: '', value: '' }] : prev.filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-red-200/70 hover:bg-red-500/10 hover:text-red-100'>
                                         <Trash2 className='h-4 w-4' />
                                     </button>
@@ -257,7 +278,7 @@ export default function NewRequest({
                 </div>
             </section>
 
-            <section className='grid min-h-0 gap-3 self-start rounded-xl border border-white/10 bg-white/[0.035] p-3 lg:grid-rows-[auto_auto_minmax(0,1fr)]'>
+            <section className='grid min-h-0 gap-3 self-start rounded-xl border border-white/10 bg-white/[0.035] p-3 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]'>
                 <div className='grid gap-2 sm:grid-cols-3'>
                     <RequestMetricCard
                         label='Status'
@@ -267,16 +288,37 @@ export default function NewRequest({
                     <RequestMetricCard label='Source' value={executionMode} tone='neutral' />
                     <RequestMetricCard
                         label='Latency'
-                        value={response?.elapsed_ms !== undefined ? `${response.elapsed_ms} ms` : 'Pending'}
+                        value={response?.elapsed_ms !== undefined ? `${response.elapsed_ms} ms` : activeRun?.loading ? 'Running' : 'Pending'}
                         tone='neutral'
                         icon={<Clock3 className='h-3.5 w-3.5' />}
                     />
                 </div>
 
+                <div className='flex max-w-full gap-2 overflow-x-auto pb-1'>
+                    {runs.length ? runs.map((run) => (
+                        <button
+                            key={run.id}
+                            type='button'
+                            onClick={() => setActiveRunId(run.id)}
+                            className={`grid w-44 shrink-0 gap-1 rounded-lg border px-2.5 py-2 text-left transition ${activeRun?.id === run.id ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
+                        >
+                            <span className='flex min-w-0 items-center gap-2 text-[11px] text-bright/78'>
+                                <span className='font-semibold'>{run.method}</span>
+                                <span className='truncate'>{run.url}</span>
+                            </span>
+                            <span className='text-[10px] text-bright/45'>{run.loading ? 'Running' : run.response?.status || run.response?.error || 'Done'}</span>
+                        </button>
+                    )) : (
+                        <div className='rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-bright/45'>
+                            Run a request to inspect the response.
+                        </div>
+                    )}
+                </div>
+
                 <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                    {(['response', 'headers', 'request'] as const).map((item) => (
+                    {(['response', 'preview', 'headers', 'request'] as const).map((item) => (
                         <button key={item} type='button' onClick={() => setResponseTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${responseTab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
-                            {item}
+                            {item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item}
                         </button>
                     ))}
                 </div>
@@ -284,8 +326,16 @@ export default function NewRequest({
                 <div className='grid min-h-0 overflow-hidden rounded-xl bg-black/20'>
                     {responseTab === 'response' && (
                         <pre className='max-h-72 min-h-44 overflow-auto whitespace-pre-wrap p-4 text-xs text-bright/80'>
-                            {response ? response.error || response.body || 'No response body.' : 'Response will appear here.'}
+                            {activeRun?.loading ? 'Request is running...' : response ? response.error || response.body || 'No response body.' : 'Response will appear here.'}
                         </pre>
+                    )}
+
+                    {responseTab === 'preview' && (
+                        <div className='grid max-h-72 min-h-44 place-items-center overflow-auto p-4 text-xs text-bright/55'>
+                            {previewUrl ? (
+                                <img src={previewUrl} alt='Response preview' className='max-h-64 max-w-full rounded-lg object-contain' />
+                            ) : 'Image previews appear for image URLs or image responses.'}
+                        </div>
                     )}
 
                     {responseTab === 'headers' && (
@@ -314,4 +364,33 @@ export default function NewRequest({
             </section>
         </div>
     )
+}
+
+function getImagePreviewUrl(response: ToolResponse | null, requestUrl: string) {
+    const contentType = Object.entries(response?.headers || {})
+        .find(([key]) => key.toLowerCase() === 'content-type')?.[1] || ''
+
+    if (contentType.toLowerCase().startsWith('image/')) {
+        return requestUrl
+    }
+
+    if (isImageUrl(requestUrl)) {
+        return requestUrl
+    }
+
+    const body = response?.body?.trim()
+    if (body && isImageUrl(body)) {
+        return body
+    }
+
+    return null
+}
+
+function isImageUrl(value: string) {
+    try {
+        const url = new URL(value)
+        return /\.(apng|avif|gif|jpe?g|png|svg|webp)(?:$|\?)/i.test(url.pathname + url.search)
+    } catch {
+        return false
+    }
 }

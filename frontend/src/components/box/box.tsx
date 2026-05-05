@@ -1,7 +1,8 @@
-import { X } from 'lucide-react'
+import { PanelTopClose, PanelTopOpen, X } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from 'react'
 import RecentRequests from './recentRequests'
 import NewRequest from './newRequest'
+import { closeDetachedBox, detachBoxForShare } from './detachedStorage'
 import { loadScopedRequestHistory, saveScopedRequestHistory } from './storage'
 import { RequestDraft, RequestHistoryEntry } from './types'
 
@@ -9,6 +10,7 @@ type BoxProps = {
     box: boolean
     setBox: Dispatch<SetStateAction<boolean>>
     share: Share | null
+    detached?: boolean
 }
 
 const EMPTY_DRAFT: RequestDraft = {
@@ -18,7 +20,7 @@ const EMPTY_DRAFT: RequestDraft = {
     body: ''
 }
 
-export default function Box({ box, setBox, share }: BoxProps) {
+export default function Box({ box, setBox, share, detached = false }: BoxProps) {
     const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null)
     const [recentRequests, setRecentRequests] = useState<RequestHistoryEntry[]>([])
     const [runToken, setRunToken] = useState(0)
@@ -73,17 +75,48 @@ export default function Box({ box, setBox, share }: BoxProps) {
         return null
     }
 
+    const wrapperClass = detached
+        ? 'fixed bottom-4 right-4 z-100 w-[min(68rem,calc(100vw-2rem))]'
+        : 'relative h-full min-h-0 w-full'
+
+    const panelClass = detached
+        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-background/96 p-3 shadow-2xl shadow-black/45 backdrop-blur-md'
+        : 'grid h-full min-h-[34rem] min-w-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-background/70 p-3'
+
     return (
-        <div className='absolute right-3 top-18 z-40 w-[min(58rem,calc(100vw-2rem))]'>
-            <section className='grid max-h-[min(40rem,74vh)] min-h-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-background/95 p-3 shadow-2xl shadow-black/35 backdrop-blur-md'>
+        <div className={wrapperClass}>
+            <section className={panelClass}>
                 <div className='flex items-center justify-between gap-3'>
-                    <div>
+                    <div className='min-w-0'>
                         <h1 className='text-sm font-semibold text-bright'>Requests</h1>
-                        <p className='text-xs text-bright/45'>Runs through the connected terminal when a share VM is available.</p>
+                        <p className='truncate text-xs text-bright/45'>Runs through the connected terminal when a share VM is available.</p>
                     </div>
-                    <button type='button' onClick={() => setBox(false)} className='grid h-8 w-8 place-items-center rounded-full text-bright/55 hover:bg-white/8 hover:text-bright' aria-label='Close requests'>
-                        <X className='h-4 w-4' />
-                    </button>
+                    <div className='flex shrink-0 items-center gap-1'>
+                        <button
+                            type='button'
+                            onClick={() => {
+                                if (detached) {
+                                    closeDetachedBox()
+                                    setBox(false)
+                                } else {
+                                    detachBoxForShare(share)
+                                    setBox(false)
+                                }
+                            }}
+                            className='grid h-8 w-8 place-items-center rounded-full text-bright/55 hover:bg-white/8 hover:text-bright'
+                            aria-label={detached ? 'Attach request workbench' : 'Detach request workbench'}
+                        >
+                            {detached ? <PanelTopClose className='h-4 w-4' /> : <PanelTopOpen className='h-4 w-4' />}
+                        </button>
+                        <button type='button' onClick={() => {
+                            if (detached) {
+                                closeDetachedBox()
+                            }
+                            setBox(false)
+                        }} className='grid h-8 w-8 place-items-center rounded-full text-bright/55 hover:bg-white/8 hover:text-bright' aria-label='Close requests'>
+                            <X className='h-4 w-4' />
+                        </button>
+                    </div>
                 </div>
                 <RecentRequests
                     recentRequests={recentRequests}

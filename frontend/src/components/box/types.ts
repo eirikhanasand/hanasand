@@ -17,6 +17,8 @@ export type ToolResponse = {
     }
 }
 
+export type DetachedBoxShare = Pick<Share, 'id' | 'alias' | 'path'> & Partial<Share>
+
 export type RequestDraft = {
     method: string
     url: string
@@ -36,4 +38,9 @@ export type RequestHistoryEntry = {
     elapsedMs?: number
     error?: string
     requestSource?: 'browser' | 'vm'
+}
+
+export type DetachedBoxState = {
+    open: boolean
+    share: DetachedBoxShare | null
 }
