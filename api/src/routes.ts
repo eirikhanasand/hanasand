@@ -83,6 +83,7 @@ import upsertAiMessage from './handlers/ai/upsertMessage.ts'
 import postAiRepository from './handlers/ai/postRepository.ts'
 import getAiModels from './handlers/ai/getModels.ts'
 import importRepository from './handlers/ai/importRepository.ts'
+import { getGitWorkspaceStatus, postGitWorkspaceCommit, postGitWorkspacePull, postGitWorkspacePush } from './handlers/ai/gitWorkspace.ts'
 import putRepositoryCredential from './handlers/ai/putRepositoryCredential.ts'
 import deleteRepositoryCredential from './handlers/ai/deleteRepositoryCredential.ts'
 import { getAiDeployments, postAiDeployment } from './handlers/ai/deployments.ts'
@@ -268,6 +269,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.delete('/ai/conversations/:id/collaborators/:userId', deleteAiConversationCollaborator)
     fastify.put('/ai/conversations/:id/messages', upsertAiMessage)
     fastify.post('/ai/repositories', postAiRepository)
+    fastify.get('/ai/repositories/:id/git/status', getGitWorkspaceStatus)
+    fastify.post('/ai/repositories/:id/git/pull', postGitWorkspacePull)
+    fastify.post('/ai/repositories/:id/git/commit', postGitWorkspaceCommit)
+    fastify.post('/ai/repositories/:id/git/push', postGitWorkspacePush)
     fastify.get('/ai/deployments', getAiDeployments)
     fastify.post('/ai/deployments', postAiDeployment)
     fastify.get('/ai/releases', getAiReleases)

@@ -412,6 +412,18 @@ type AIRepositoryCredentialSummary = {
     lastValidatedAt: string | null
 }
 
+type AIGitStatusFile = {
+    path: string
+    index: string
+    workingTree: string
+    selected: boolean
+}
+
+type AIGitStatus = {
+    files: AIGitStatusFile[]
+    branchSummary: string | null
+}
+
 type AIRuntimeStatus = 'offline' | 'idle' | 'preparing' | 'generating' | 'error'
 
 type AIRuntimeToolState = 'running' | 'completed' | 'error'

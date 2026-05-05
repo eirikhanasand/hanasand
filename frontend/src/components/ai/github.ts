@@ -70,3 +70,50 @@ export async function removeGitHubCredential(repositoryId: string) {
         throw new Error(body?.error || 'Failed to remove GitHub credential.')
     }
 }
+
+export async function getRepositoryGitStatus(repositoryId: string, shareId: string) {
+    const response = await aiClientRequest(`/ai/repositories/${encodeURIComponent(repositoryId)}/git/status?shareId=${encodeURIComponent(shareId)}`)
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+        throw new Error(body?.error || 'Failed to load Git status.')
+    }
+
+    return body as AIGitStatus
+}
+
+export async function pullRepositoryWorkspace(repositoryId: string) {
+    const response = await aiClientRequest(`/ai/repositories/${encodeURIComponent(repositoryId)}/git/pull`, {
+        method: 'POST',
+    })
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+        throw new Error(body?.error || 'Failed to pull repository.')
+    }
+
+    return body as AIGitStatus
+}
+
+export async function commitRepositoryWorkspace(repositoryId: string, shareId: string, message: string, paths: string[]) {
+    const response = await aiClientRequest(`/ai/repositories/${encodeURIComponent(repositoryId)}/git/commit`, {
+        method: 'POST',
+        body: JSON.stringify({ shareId, message, paths }),
+    })
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+        throw new Error(body?.error || 'Failed to commit staged files.')
+    }
+
+    return body as { ok: true, commit: string, status: AIGitStatus }
+}
+
+export async function pushRepositoryWorkspace(repositoryId: string) {
+    const response = await aiClientRequest(`/ai/repositories/${encodeURIComponent(repositoryId)}/git/push`, {
+        method: 'POST',
+    })
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+        throw new Error(body?.error || 'Failed to push repository.')
+    }
+
+    return body as AIGitStatus
+}

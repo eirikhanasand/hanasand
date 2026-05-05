@@ -9,7 +9,7 @@ test('share editor exposes git import and pull from the right panel', async () =
     const plugin = await readFile(path.join(root, 'src/components/share/gitPlugin.tsx'), 'utf8')
     const github = await readFile(path.join(root, 'src/components/ai/github.ts'), 'utf8')
 
-    expect(metadata).toContain('aria-label={showGitPlugin ? \'Hide Git plugin\' : \'Show Git plugin\'}')
+    expect(metadata).toContain("aria-label='Git plugin'")
     expect(metadata).toContain('<GitPlugin shareRouteId={shareRouteId} share={share} />')
 
     expect(plugin).toContain('importGitHubRepository(currentInput, existingId, githubToken)')
@@ -19,7 +19,13 @@ test('share editor exposes git import and pull from the right panel', async () =
     expect(plugin).toContain('importRepositoryToShare({ repo: persistedRepo, token: accessToken, userId })')
     expect(plugin).toContain('Log in to pull public repositories and private GitHub repositories')
     expect(plugin).toContain('owner/repo, GitHub URL, or public Git URL')
+    expect(plugin).toContain('Auto pull')
+    expect(plugin).toContain('commitRepositoryWorkspace(shareRouteId')
+    expect(plugin).toContain('pushRepositoryWorkspace(shareRouteId)')
 
     expect(github).toContain('export async function persistGitHubRepository')
     expect(github).toContain('aiClientRequest(\'/ai/repositories\'')
+    expect(github).toContain('/git/status?shareId=')
+    expect(github).toContain('/git/commit')
+    expect(github).toContain('/git/push')
 })
