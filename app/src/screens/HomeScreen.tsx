@@ -50,7 +50,6 @@ export function HomeScreen({
     const [prompt, setPrompt] = useState('')
     const [busy, setBusy] = useState(false)
     const [clients, setClients] = useState<GptClient[]>([])
-    const [socketConnected, setSocketConnected] = useState(false)
     const [desktopStatus, setDesktopStatus] = useState<DesktopAgentStatus | null>(null)
     const [desktopIssue, setDesktopIssue] = useState('')
     const [desktopScreenshotUri, setDesktopScreenshotUri] = useState('')
@@ -121,7 +120,6 @@ export function HomeScreen({
         if (!settings.apiBaseUrl.trim()) {
             socketRef.current?.close()
             socketRef.current = null
-            setSocketConnected(false)
             setClients([])
             return
         }
@@ -130,7 +128,6 @@ export function HomeScreen({
         try {
             socketUrl = `${toWsUrl(settings.apiBaseUrl)}/client/ws/gpt`
         } catch {
-            setSocketConnected(false)
             setClients([])
             return
         }
@@ -138,14 +135,11 @@ export function HomeScreen({
         const ws = new WebSocket(socketUrl)
         socketRef.current = ws
 
-        ws.onopen = () => setSocketConnected(true)
         ws.onclose = () => {
-            setSocketConnected(false)
             socketRef.current = null
             failActiveSocketRun('The live model connection closed before the answer finished.')
         }
         ws.onerror = () => {
-            setSocketConnected(false)
             failActiveSocketRun('The live model connection failed before the answer finished.')
         }
         ws.onmessage = (event) => {
@@ -209,7 +203,6 @@ export function HomeScreen({
                         : entry))
                 }
             } catch {
-                setSocketConnected(false)
                 failActiveSocketRun('The live model returned an unreadable response.')
             }
         }
