@@ -2,20 +2,21 @@ import fetchThoughts from '@/utils/thoughts/fetchThoughts'
 import DashboardThought from './dashboardThought'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
+import { DashboardPanel } from '@/components/dashboard/ui'
 
 export default async function Thoughts() {
     const thoughts = await fetchThoughts()
 
     return (
-        <section className='grid h-fit min-w-0 w-full gap-2 rounded-xl border border-white/10 bg-white/4 p-4'>
-            <div className='flex justify-between'>
-                <h1 className='font-semibold text-lg self-center'>Thoughts</h1>
-                <Link href='/dashboard/thoughts/create' className='flex gap-2 rounded-lg p-1.25 px-5 hover:outline-green-500/35 outline-1 outline-dark cursor-pointer hover:bg-green-500/20'>
-                    <Plus />
-                    <h1 className='font-semibold select-none'>Create</h1>
+        <DashboardPanel className='grid h-fit min-w-0 w-full gap-2 p-4'>
+            <div className='flex items-center justify-between gap-3'>
+                <h1 className='text-base font-semibold text-bright'>Thoughts</h1>
+                <Link href='/dashboard/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/70 hover:bg-white/10'>
+                    <Plus className='h-4 w-4' />
+                    Create
                 </Link>
             </div>
             {(thoughts as Thought[]).map((thought) => <DashboardThought key={thought.id} thought={thought} />)}
-        </section>
+        </DashboardPanel>
     )
 }
