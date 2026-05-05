@@ -1,7 +1,8 @@
 'use client'
 
 import { AuthSession, fetchSessions, revokeOtherSessions, revokeSession } from '@/utils/auth/sessions'
-import { Laptop, LogOut, ShieldCheck, Smartphone } from 'lucide-react'
+import { DashboardPanel } from '@/components/dashboard/ui'
+import { Laptop, LogOut, Server, Smartphone } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 function formatDate(value: string) {
@@ -9,6 +10,14 @@ function formatDate(value: string) {
 }
 
 function deviceLabel(userAgent: string) {
+    if (/hanasand[-_\s]?desktop|desktop[-_\s]?app|tauri|electron/i.test(userAgent)) {
+        return 'Desktop app'
+    }
+
+    if (/hanasand[-_\s]?mobile|mobile[-_\s]?app|reactnative|expo|okhttp|cfnetwork|darwin/i.test(userAgent)) {
+        return 'Mobile app'
+    }
+
     if (/mobile|iphone|android/i.test(userAgent)) {
         return 'Mobile browser'
     }
@@ -18,6 +27,14 @@ function deviceLabel(userAgent: string) {
     }
 
     return 'Desktop browser'
+}
+
+function deviceIcon(userAgent: string) {
+    const label = deviceLabel(userAgent)
+
+    if (label === 'Mobile app' || label === 'Mobile browser') return Smartphone
+    if (label === 'Automation or API client') return Server
+    return Laptop
 }
 
 export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
@@ -51,39 +68,37 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
     }
 
     return (
-        <section className='glass-panel rounded-3xl p-5'>
-            <div className='flex items-center justify-between gap-4'>
+        <DashboardPanel className='p-4'>
+            <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <p className='text-xs uppercase tracking-[0.3em] text-orange-200/70'>Security</p>
-                    <h2 className='mt-2 text-xl font-semibold text-bright'>Logged in devices</h2>
-                    <p className='mt-1 text-sm text-bright/45'>Review recent logins and revoke access without changing your password.</p>
+                    <h2 className='text-base font-semibold text-bright'>Devices</h2>
+                    <p className='mt-1 text-sm text-bright/40'>{sessions.length || (loading ? 'Loading' : 'No')} active session{sessions.length === 1 ? '' : 's'}</p>
                 </div>
-                <button onClick={revokeOthers} className='cursor-pointer rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-semibold text-bright/80 hover:bg-white/10'>
-                    Logout other devices
+                <button onClick={revokeOthers} className='h-9 cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/70 hover:bg-white/10'>
+                    Log out others
                 </button>
             </div>
 
-            <div className='mt-5 grid gap-3'>
+            <div className='mt-4 grid gap-2'>
                 {sessions.map(session => {
                     const isRevoked = Boolean(session.revoked_at)
-                    const Icon = /mobile|iphone|android/i.test(session.user_agent) ? Smartphone : Laptop
+                    const label = deviceLabel(session.user_agent)
+                    const Icon = deviceIcon(session.user_agent)
                     return (
-                        <div key={session.token_id} className='grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center'>
-                            <div className='icon-tile bg-emerald-500/12 text-emerald-300'>
-                                <Icon className='h-4 w-4' />
-                            </div>
+                        <div key={session.token_id} className='grid gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center'>
+                            <Icon className='h-4 w-4 text-bright/38' />
                             <div className='min-w-0'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <h3 className='font-semibold text-bright'>{deviceLabel(session.user_agent)}</h3>
-                                    <span className={`rounded-full px-2 py-0.5 text-xs ${isRevoked ? 'bg-red-500/12 text-red-200' : 'bg-emerald-500/12 text-emerald-200'}`}>
+                                    <h3 className='text-sm font-semibold text-bright/88'>{label}</h3>
+                                    <span className={`rounded-md px-1.5 py-0.5 text-[11px] ${isRevoked ? 'bg-red-500/10 text-red-200/80' : 'bg-emerald-500/10 text-emerald-200/80'}`}>
                                         {isRevoked ? 'Revoked' : 'Active'}
                                     </span>
                                 </div>
-                                <p className='mt-1 truncate text-sm text-bright/45'>{session.user_agent || 'Unknown client'}</p>
-                                <p className='mt-1 text-xs text-bright/35'>IP {session.ip} · Login {formatDate(session.created_at)} · Last seen {formatDate(session.last_seen_at)}</p>
+                                <p className='mt-1 truncate text-xs text-bright/32'>{session.user_agent || 'Unknown client'}</p>
+                                <p className='mt-1 text-xs text-bright/32'>IP {session.ip} · {formatDate(session.last_seen_at)}</p>
                             </div>
                             {!isRevoked && (
-                                <button onClick={() => revoke(session.token_id)} className='cursor-pointer rounded-2xl bg-red-500/12 px-4 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20'>
+                                <button onClick={() => revoke(session.token_id)} className='h-8 cursor-pointer rounded-lg bg-red-500/10 px-3 text-xs font-semibold text-red-100/80 hover:bg-red-500/18'>
                                     <LogOut className='mr-2 inline h-4 w-4' />
                                     Revoke
                                 </button>
@@ -91,15 +106,10 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                         </div>
                     )
                 })}
-                {!sessions.length && <div className='rounded-2xl border border-dashed border-white/10 p-5 text-sm text-bright/45'>
+                {!sessions.length && <div className='rounded-lg border border-dashed border-white/10 p-4 text-sm text-bright/40'>
                     {loading ? 'Loading sessions...' : 'No active sessions found.'}
                 </div>}
             </div>
-
-            <div className='mt-4 flex items-center gap-2 text-xs text-bright/35'>
-                <ShieldCheck className='h-4 w-4 text-emerald-300' />
-                Token revocation is immediate for API and dashboard requests.
-            </div>
-        </section>
+        </DashboardPanel>
     )
 }

@@ -1,11 +1,13 @@
 import Certificates from '@/components/profile/certificates'
+import AccountActions from '@/components/profile/accountActions'
 import SessionsPanel from '@/components/profile/sessions'
 import VMs from '@/components/profile/vms'
+import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
+import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import getCertificates from '@/utils/certificates/getCertificates'
 import getVMs from '@/utils/vms/fetch/getVMs'
-import { LayoutDashboard } from 'lucide-react'
+import parseCookie from '@/utils/cookies/parseCookie'
 import { cookies } from 'next/headers'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
@@ -14,32 +16,38 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const Cookies = await cookies()
     const name = Cookies.get('name')?.value
     const userId = Cookies.get('id')?.value
+    const token = Cookies.get('access_token')?.value
+    const rolesCookie = Cookies.get('roles')?.value
+    const roles = parseCookie<Role[]>(rolesCookie, [])
+    const isAdmin = roles.some((role) => role.id.includes('admin'))
     const isSelf = profileId === userId
 
-    if (!name || !userId) {
+    if (!name || !userId || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
     const certificates = await getCertificates(userId)
-    const vms = await getVMs(userId)
+    const vms = await getVMs(userId, token, userId)
 
     return (
-        <div className='h-full'>
-            <div className='grid gap-3 px-4 py-6 sm:px-6 md:px-10 lg:px-16 xl:px-24'>
-                <div className='flex w-full flex-col gap-3 rounded-lg sm:flex-row sm:items-center sm:justify-between'>
-                    <h1 className='text-xl font-semibold flex-1'>@{name}</h1>
-                    <div className='grid h-fit w-fit px-2 py-1 outline-1 outline-dark rounded-lg gap-2'>
-                        <Link href='/dashboard' className='flex justify-between px-6 group cursor-pointer gap-2'>
-                            <LayoutDashboard className='stroke-current group-hover:stroke-[#374c66]' />
-                            <h1 className='font-semibold text-base self-center'>Dashboard</h1>
-                        </Link>
-                    </div>
+        <div className='h-full px-2 pb-2'>
+            <div className='grid h-full min-h-0 gap-2 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start'>
+                <DashboardSidebar id={userId} isAdmin={isAdmin} />
+                <div className='min-h-0 min-w-0 overflow-auto'>
+                    <DashboardPage>
+                        <DashboardHeader
+                            eyebrow='Profile'
+                            title={`@${name}`}
+                            description='Account, access, and workspace resources.'
+                        />
+                        <div className='grid gap-3 xl:grid-cols-2'>
+                            <SessionsPanel isSelf={isSelf} />
+                            <VMs vms={vms} />
+                            <Certificates certificates={certificates} />
+                            <AccountActions isSelf={isSelf} />
+                        </div>
+                    </DashboardPage>
                 </div>
-                <div className='grid gap-3 lg:grid-cols-2'>
-                    <VMs vms={vms} />
-                    <Certificates certificates={certificates} />
-                </div>
-                <SessionsPanel isSelf={isSelf} />
             </div>
         </div>
     )

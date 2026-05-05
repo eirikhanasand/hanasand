@@ -15,7 +15,8 @@ export default async function layout({ children }: { children: ReactNode }) {
     const path = Headers.get('x-current-path') || ''
     const isShare = path.startsWith('/s')
     const isDashboard = path.startsWith('/dashboard')
-    const isAppSurface = isShare || path.startsWith('/ai') || isDashboard
+    const isProfile = path.startsWith('/profile')
+    const isAppSurface = isShare || path.startsWith('/ai') || isDashboard || isProfile
 
     return (
         <html lang='en' className={theme}>

@@ -37,27 +37,24 @@ export default function Certificate({ certificate, update }: { certificate: Cert
 
     return (
         <>
-            <div onClick={handleClick} className={`rounded-lg ${keys['shift'] ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none' : 'hover:bg-dark'} cursor-pointer p-2 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}>
+            <div onClick={handleClick} className={`group w-full cursor-pointer overflow-hidden rounded-lg border border-white/10 bg-white/[0.035] p-3 ${keys['shift'] ? 'select-none hover:border-red-500/20 hover:bg-red-500/10' : 'hover:bg-white/[0.055]'}`}>
                 <div className='flex w-full items-center'>
-                    <div className='flex-1 overflow-auto'>
-                        <div className='flex gap-2'>
-                            <div className='flex gap-2 items-center max-h-5 min-w-fit'>
-                                <h1 className='text-sm font-semibold text-bright/70'>{certificate.name}</h1>
+                    <div className='min-w-0 flex-1'>
+                        <div className='flex min-w-0 items-center gap-2'>
+                            <div className='flex min-w-fit items-center gap-2'>
+                                <h1 className='text-sm font-semibold text-bright/85'>{certificate.name}</h1>
                             </div>
-                            <h1 className='text-almostbright text-sm overflow-auto noscroll max-h-5 whitespace-nowrap'>{certificate.public_key}</h1>
+                            <p className='truncate text-sm text-bright/36'>{certificate.public_key}</p>
                         </div>
-                        <div className='flex gap-1 text-almostbright/70 text-xs justify-between items-center'>
-                            <div className='flex gap-1 items-center'>
+                        <div className='mt-1 flex gap-2 text-xs text-bright/32'>
+                            <div className='flex min-w-0 flex-wrap gap-1'>
                                 <span>{certificate.id}</span>
                                 <span className='font-bold'>·</span>
-                                <span>Created</span>
                                 <span>{prettyDate(certificate.created_at)}</span>
-                                <span>by</span>
-                                <span>{certificate.created_by}.</span>
-                                <span>Owner:</span>
-                                <span>{certificate.owner}.</span>
+                                <span>·</span>
+                                <span>{certificate.owner}</span>
                             </div>
-                            {endsWith && !isManaged && <div className='flex gap-1 items-center'>
+                            {endsWith && !isManaged && <div className='ml-auto hidden shrink-0 gap-1 sm:flex'>
                                 <span>Ends with</span>
                                 <span>{endsWith}</span>
                             </div>}
@@ -65,15 +62,11 @@ export default function Certificate({ certificate, update }: { certificate: Cert
                                 <Tooltip
                                     align='right'
                                     content={
-                                        <h1>
-                                            This certificate is automatically managed by the internal integration
-                                            Hanasand API. It’s used to spawn webshells, and the certificate
-                                            is rotated daily.
-                                        </h1>
+                                        <h1>Managed by Hanasand API and rotated automatically.</h1>
                                     }
                                 >
                                     <div className='p-px'>
-                                        <div className='p-1 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-md flex gap-1 items-center px-4'>
+                                        <div className='flex min-w-full items-center gap-1 rounded-md bg-blue-400/15 px-2 py-1 outline outline-blue-400/25'>
                                             <Info className='h-3 w-3 stroke-blue-400' />
                                             <span className='text-bright/70 text-[0.7rem]'>Managed</span>
                                         </div>

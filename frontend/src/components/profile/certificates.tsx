@@ -8,6 +8,7 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import Notify from '../notify/notify'
 import postCertificate from '@/utils/certificates/postCertificate'
 import getCertificates from '@/utils/certificates/getCertificates'
+import { DashboardPanel } from '@/components/dashboard/ui'
 
 export default function Certificates({ certificates: serverCertificates }: { certificates: Certificate[] | null }) {
     const [certificates, setCertificates] = useState(serverCertificates)
@@ -82,34 +83,39 @@ export default function Certificates({ certificates: serverCertificates }: { cer
     }, [displayNewCertificateDialog])
 
     return (
-        <div className='grid h-fit w-full p-2 outline-1 outline-dark rounded-lg'>
-            <div className='flex justify-between mb-2 items-center'>
-                <h1 className='font-semibold text-lg self-center'>Certificates</h1>
+        <DashboardPanel className='h-fit p-4'>
+            <div className='flex items-center justify-between gap-3'>
+                <div>
+                    <h2 className='text-base font-semibold text-bright'>Certificates</h2>
+                    <p className='mt-1 text-sm text-bright/40'>{certificates?.length || 0} configured</p>
+                </div>
                 <button
                     onClick={() => setDisplayNewCertificateDialog(true)}
-                    className='flex gap-2 rounded-lg p-[3px] px-8 hover:outline-green-500/40 outline-1 outline-dark cursor-pointer hover:bg-green-500/25'
+                    className='flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/70 hover:bg-white/10'
                 >
-                    <Plus className='stroke-bright/80' />
-                    <h1 className='font-semibold text-bright/80'>Add</h1>
+                    <Plus className='h-4 w-4 stroke-bright/70' />
+                    Add
                 </button>
             </div>
-            {certificates
-                ? (certificates as Certificate[]).map((certificate) => <Certificate update={update} key={certificate.id} certificate={certificate} />)
-                : <>No certificates found! Click &apos;Add&apos; to add one.</>
-            }
+            <div className='mt-4 grid gap-2'>
+                {certificates?.length
+                    ? (certificates as Certificate[]).map((certificate) => <Certificate update={update} key={certificate.id} certificate={certificate} />)
+                    : <div className='rounded-lg border border-dashed border-white/10 p-4 text-sm text-bright/40'>No certificates.</div>
+                }
+            </div>
             {displayNewCertificateDialog && (
                 <div
                     onClick={close}
-                    className='absolute inset-0 z-20 grid place-items-center bg-black/60 backdrop-blur-sm cursor-pointer'
+                    className='fixed inset-0 z-50 grid cursor-pointer place-items-center bg-black/60 px-4 backdrop-blur-sm'
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className='bg-light w-[40rem] p-6 rounded-2xl shadow-xl border border-neutral-700 cursor-default'
+                        className='w-full max-w-xl cursor-default rounded-xl border border-white/10 bg-dark p-4 shadow-2xl'
                     >
-                        <div className='flex justify-between items-center mb-4'>
-                            <h1 className='font-semibold text-xl'>Add Certificate</h1>
+                        <div className='mb-4 flex items-center justify-between'>
+                            <h1 className='text-lg font-semibold text-bright'>Add certificate</h1>
                             <button
-                                className='outline outline-neutral-700 rounded-lg hover:bg-neutral-700/30 h-8 w-8 grid place-items-center cursor-pointer'
+                                className='grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-white/10 hover:bg-white/10'
                                 onClick={close}
                             >
                                 <X className='w-4 h-4 cursor-pointer' />
@@ -122,7 +128,7 @@ export default function Certificates({ certificates: serverCertificates }: { cer
                                 name='name'
                                 value={formData.name ?? ''}
                                 onChange={handleChange}
-                                placeholder='My SSL Certificate'
+                                placeholder='Work laptop'
                             />
                             {/* Commented out - Might confuse the user until group logic has been settled. */}
                             {/* <CertificateInputField
@@ -141,17 +147,17 @@ export default function Certificates({ certificates: serverCertificates }: { cer
                                 textarea
                             />
                             <Notify background='bg-dark' fullWidth message={message} />
-                            <div className='flex justify-end gap-3 mt-2'>
+                            <div className='mt-2 flex justify-end gap-2'>
                                 <button
                                     type='button'
                                     onClick={close}
-                                    className='px-4 py-1 rounded-lg bg-neutral-800 text-white/80 hover:bg-neutral-700 transition-all cursor-pointer'
+                                    className='h-9 cursor-pointer rounded-lg px-3 text-sm font-semibold text-bright/52 hover:bg-white/6'
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type='submit'
-                                    className='px-4 py-1 rounded-lg bg-green-600 text-white/90 hover:bg-green-700 transition-all cursor-pointer'
+                                    className='h-9 cursor-pointer rounded-lg bg-white/10 px-4 text-sm font-semibold text-bright/80 hover:bg-white/15'
                                 >
                                     Create
                                 </button>
@@ -160,7 +166,7 @@ export default function Certificates({ certificates: serverCertificates }: { cer
                     </div>
                 </div>
             )}
-        </div>
+        </DashboardPanel>
     )
 }
 
@@ -183,7 +189,7 @@ function CertificateInputField({
 }) {
     return (
         <div className='flex flex-col gap-1'>
-            <label htmlFor={name} className='text-sm font-semibold text-bright/80'>
+            <label htmlFor={name} className='text-sm font-semibold text-bright/70'>
                 {label}
             </label>
             {textarea ? (
@@ -194,7 +200,7 @@ function CertificateInputField({
                     onChange={onChange}
                     placeholder={placeholder}
                     required={required}
-                    className='bg-dark text-bright/90 p-2 rounded-lg border border-dark focus:outline-none focus:ring-2 focus:ring-green-500 resize-none h-24'
+                    className='h-24 resize-none rounded-lg border border-white/10 bg-black/25 p-2 text-bright/85 focus:outline-none focus:ring-2 focus:ring-white/15'
                 />
             ) : (
                 <input
@@ -204,7 +210,7 @@ function CertificateInputField({
                     onChange={onChange}
                     placeholder={placeholder}
                     required={required}
-                    className='bg-dark text-bright/90 p-2 rounded-lg border border-dark focus:outline-none focus:ring-2 focus:ring-green-500'
+                    className='rounded-lg border border-white/10 bg-black/25 p-2 text-bright/85 focus:outline-none focus:ring-2 focus:ring-white/15'
                 />
             )}
         </div>
