@@ -63,11 +63,7 @@ export default function ClientPage({
     const [editorPatch, setEditorPatch] = useState<{ value: string; nonce: number } | null>(null)
     const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const maxWidth = showMetadata && showExplorer
-        ? 'max-w-[54vw]'
-        : showMetadata || showExplorer
-            ? 'max-w-[70vw]'
-            : 'max-w-full'
+    const maxWidth = 'max-w-full'
     const runtimeCapability = useMemo(() => getShareRuntimeCapability({
         share,
         tree,
