@@ -913,7 +913,11 @@ type GPT_ModelLaneMetrics = {
     id: string
     index: number
     url: string
+    model?: string
+    label?: string
+    tier?: 'fast' | 'strong'
     gpuIndex: number
+    gpuIndices?: number[]
     gpuName: string
     gpuLoad: number
     activeRequests: number

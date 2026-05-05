@@ -163,16 +163,20 @@ export default async function metrics(): Promise<GPT_Client> {
 
         const laneSnapshot = getModelLaneSnapshot()
         lanes = laneSnapshot.map((lane) => {
-            const gpuSample = nvidiaGpus.find((sample) => sample.index === lane.gpuIndex)
+            const laneGpuIndices = lane.gpuIndices?.length ? lane.gpuIndices : [lane.gpuIndex]
+            const gpuSamples = laneGpuIndices
+                .map((gpuIndex) => nvidiaGpus.find((sample) => sample.index === gpuIndex))
+                .filter((sample): sample is NvidiaGpuSample => Boolean(sample))
+            const primaryGpuSample = gpuSamples[0]
             return {
                 ...lane,
-                gpuName: gpuSample?.name || `GPU ${lane.gpuIndex}`,
-                gpuLoad: gpuSample ? gpuSample.utilizationGpu / 100 : 0,
-                memoryUsedMb: gpuSample?.memoryUsedMb || 0,
-                memoryTotalMb: gpuSample?.memoryTotalMb || 0,
-                powerDrawWatts: gpuSample?.powerDrawWatts || 0,
-                powerLimitWatts: gpuSample?.powerLimitWatts || 0,
-                temperatureC: gpuSample?.temperatureC || 0,
+                gpuName: primaryGpuSample?.name || `GPU ${lane.gpuIndex}`,
+                gpuLoad: gpuSamples.length ? Math.max(...gpuSamples.map((sample) => sample.utilizationGpu / 100)) : 0,
+                memoryUsedMb: gpuSamples.reduce((sum, sample) => sum + sample.memoryUsedMb, 0),
+                memoryTotalMb: gpuSamples.reduce((sum, sample) => sum + sample.memoryTotalMb, 0),
+                powerDrawWatts: gpuSamples.reduce((sum, sample) => sum + sample.powerDrawWatts, 0),
+                powerLimitWatts: gpuSamples.reduce((sum, sample) => sum + sample.powerLimitWatts, 0),
+                temperatureC: gpuSamples.length ? Math.max(...gpuSamples.map((sample) => sample.temperatureC)) : 0,
             }
         })
 

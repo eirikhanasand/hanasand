@@ -13,7 +13,7 @@ const remoteS3Port = process.env.RUSTFS_POLICY_REMOTE_PORT || '9101'
 const signedHost = process.env.RUSTFS_POLICY_SIGNED_HOST || 'spaces.login.no'
 
 if (wantsHelp) {
-  console.log(`Usage: node scripts/rustfs-bucket-policy.mjs [bucket] [--apply]
+    console.log(`Usage: node scripts/rustfs-bucket-policy.mjs [bucket] [--apply]
 
 Dry-runs by default. With --apply, writes a public-read object policy for the bucket.
 
@@ -24,12 +24,12 @@ Environment overrides:
   RUSTFS_POLICY_REMOTE_HOST  Remote RustFS host. Default: 127.0.0.1
   RUSTFS_POLICY_REMOTE_PORT  Remote RustFS port. Default: 9101
   RUSTFS_POLICY_SIGNED_HOST  Host used in SigV4 signing. Default: spaces.login.no`)
-  process.exit(0)
+    process.exit(0)
 }
 
 if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)) {
-  console.error(`Invalid bucket name: ${bucket}`)
-  process.exit(2)
+    console.error(`Invalid bucket name: ${bucket}`)
+    process.exit(2)
 }
 
 const remoteScript = String.raw`
@@ -150,21 +150,21 @@ sys.exit(0 if result["ok"] else 1)
 `
 
 const ssh = spawn('ssh', [
-  '-p',
-  sshPort,
-  '-o',
-  'StrictHostKeyChecking=accept-new',
-  sshTarget,
-  'python3',
-  '-',
-  bucket,
-  mode,
-  remoteEnvPath,
-  remoteS3Host,
-  remoteS3Port,
-  signedHost,
+    '-p',
+    sshPort,
+    '-o',
+    'StrictHostKeyChecking=accept-new',
+    sshTarget,
+    'python3',
+    '-',
+    bucket,
+    mode,
+    remoteEnvPath,
+    remoteS3Host,
+    remoteS3Port,
+    signedHost,
 ], {
-  stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
 })
 
 ssh.stdin.end(remoteScript)
@@ -175,7 +175,7 @@ ssh.stdout.on('data', (chunk) => { stdout += chunk.toString() })
 ssh.stderr.on('data', (chunk) => { stderr += chunk.toString() })
 
 ssh.on('close', (code) => {
-  if (stdout.trim()) console.log(stdout.trim())
-  if (stderr.trim()) console.error(stderr.trim())
-  process.exit(code || 0)
+    if (stdout.trim()) console.log(stdout.trim())
+    if (stderr.trim()) console.error(stderr.trim())
+    process.exit(code || 0)
 })

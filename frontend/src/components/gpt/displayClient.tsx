@@ -171,13 +171,15 @@ function ModelStat({ title, value, highlight }: { title: string, value: string, 
 function Lane({ lane }: { lane: GPT_ModelLaneMetrics }) {
     const memoryPercent = lane.memoryTotalMb > 0 ? Math.round(lane.memoryUsedMb / lane.memoryTotalMb * 100) : 0
     const capacityPercent = lane.maxRequests > 0 ? Math.round(lane.activeRequests / lane.maxRequests * 100) : 0
+    const gpuLabel = lane.gpuIndices?.length ? `GPUs ${lane.gpuIndices.join(', ')}` : `GPU ${lane.gpuIndex}`
+    const tierLabel = lane.tier === 'strong' ? 'Strong' : 'Fast'
 
     return (
         <div className='rounded-xl bg-dark/20 p-3 outline outline-dark'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
                 <div>
-                    <div className='text-sm font-semibold text-bright/90'>Lane {lane.index + 1}</div>
-                    <div className='mt-1 text-xs text-bright/45'>{lane.gpuName} • GPU {lane.gpuIndex}</div>
+                    <div className='text-sm font-semibold text-bright/90'>{lane.label || `Lane ${lane.index + 1}`} · {tierLabel}</div>
+                    <div className='mt-1 text-xs text-bright/45'>{lane.model || lane.gpuName} • {gpuLabel}</div>
                 </div>
                 <div className='grid gap-2 sm:grid-cols-4 lg:min-w-[34rem]'>
                     <LaneMetric label='capacity' value={`${lane.availableRequests}/${lane.maxRequests}`} tone={capacityPercent < 75 ? 'ok' : 'warn'} />

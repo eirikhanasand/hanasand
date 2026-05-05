@@ -3,12 +3,11 @@ import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 import login from '@/utils/login/login'
-import Or from '@/utils/or'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import config from '@/config'
-import { ArrowRight, KeyRound, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 type LoginPageProps = {
     path: string | null
@@ -131,139 +130,117 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
 
     return (
         <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
-            <div className='grid w-full max-w-[420px] gap-5'>
-                <div className='grid justify-items-center text-center'>
-                    <div className='icon-tile bg-orange-500/15 text-orange-300'>
-                        <Sparkles className='h-5 w-5' />
-                    </div>
-                    <p className='mt-5 text-xs uppercase tracking-[0.35em] text-orange-200/80'>hanasand.com</p>
+            <div className='grid w-full max-w-[392px] gap-4'>
+                <div className='grid justify-items-center gap-2 pb-3 text-center'>
+                    <h1 className='font-serif text-[46px] font-semibold leading-none text-bright'>Hanasand</h1>
+                    <div className='h-px w-11 bg-bright/20' />
                 </div>
 
-                <div className='glass-panel spawn grid w-full overflow-hidden rounded-4xl p-5 md:p-8'>
-                    <div className='mx-auto grid w-full max-w-[340px] gap-6'>
-                        <div className='text-center'>
-                            <p className='text-xs uppercase tracking-[0.35em] text-bright/35'>Secure login</p>
-                            <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>Welcome back</h1>
-                            <p className='mt-2 text-sm text-bright/45'>Open your workspace.</p>
-                        </div>
+                <div className='grid w-full gap-3 rounded-lg border border-white/10 bg-dark/70 p-3 shadow-[0_14px_42px_rgba(0,0,0,0.24)] backdrop-blur-md'>
+                    {(expired && path) && <p className='rounded-lg border border-blue-400/20 bg-blue-500/10 p-3 text-sm text-blue-100'>Token expired. You will be redirected back to {path} after reauthenticating.</p>}
+                    {(internal && path) && <p className='rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100'>{path} is internal. Please log in.</p>}
 
-                        {(expired && path) && <h1 className='grid w-full rounded-xl border border-blue-400/20 bg-blue-500/12 p-3 text-sm text-blue-100'>Token expired. You will be redirected back to {path} after reauthenticating.</h1>}
-                        {(internal && path) && <h1 className='grid w-full rounded-xl border border-red-400/20 bg-red-500/12 p-3 text-sm text-red-100'>{path} is internal. Please log in.</h1>}
-
-                        <Notify message={error as string | null} />
-                        {mode === 'login' && (
-                            <div className='grid gap-4'>
-                                <form
-                                    className='flex w-full flex-col gap-3 self-center'
-                                    onSubmit={handleSubmit}
-                                >
-                                    <input
-                                        type='text'
-                                        name='username'
-                                        placeholder='Username'
-                                        className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
-                                        required
-                                    />
-                                    <input
-                                        type='password'
-                                        name='password'
-                                        placeholder='Password'
-                                        className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
-                                        required
-                                    />
-                                    <button
-                                        type='submit'
-                                        className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92'
-                                    >
-                                        Login
-                                        <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
-                                    </button>
-                                </form>
-                                <button
-                                    type='button'
-                                    onClick={() => setMode('request-reset')}
-                                    className='text-sm font-semibold text-orange-200/80 transition hover:text-orange-100'
-                                >
-                                    Reset password
-                                </button>
-                                <Or className='z-10 text-bright/35' />
-                                <Link href='/register' className='w-full flex flex-col gap-3 self-center'>
-                                    <button
-                                        type='submit'
-                                        className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-bright/80 transition hover:bg-white/10'
-                                    >
-                                        Create account
-                                    </button>
-                                </Link>
-                            </div>
-                        )}
-
-                        {mode === 'request-reset' && (
-                            <form className='flex w-full flex-col gap-3 self-center' onSubmit={handleResetRequest}>
+                    <Notify message={error as string | null} />
+                    {mode === 'login' && (
+                        <div className='grid gap-3'>
+                            <form
+                                className='flex w-full flex-col gap-2 self-center'
+                                onSubmit={handleSubmit}
+                            >
                                 <input
                                     type='text'
-                                    name='resetUserId'
+                                    name='username'
                                     placeholder='Username'
-                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
+                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
                                     required
                                 />
-                                <button
-                                    type='submit'
-                                    disabled={busy}
-                                    className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92 disabled:cursor-not-allowed disabled:opacity-60'
-                                >
-                                    Send code
-                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
-                                </button>
-                                <button type='button' onClick={() => setMode('login')} className='text-sm font-semibold text-bright/50 transition hover:text-bright/80'>
-                                    Back to login
-                                </button>
-                            </form>
-                        )}
-
-                        {mode === 'verify-reset' && (
-                            <form className='flex w-full flex-col gap-3 self-center' onSubmit={handleResetVerify}>
                                 <input
-                                    type='text'
-                                    name='code'
-                                    inputMode='numeric'
-                                    pattern='[0-9]{6}'
-                                    maxLength={6}
-                                    placeholder='6 digit code'
-                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-center text-sm font-semibold tracking-[0.35em] text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
+                                    type='password'
+                                    name='password'
+                                    placeholder='Password'
+                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
                                     required
                                 />
+                                <div className='mt-1 flex items-center gap-3'>
+                                    <button
+                                        type='submit'
+                                        className='group inline-flex h-9 min-w-24 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white'
+                                    >
+                                        Log in
+                                        <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
+                                    </button>
+                                    <Link
+                                        href='/register'
+                                        className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'
+                                    >
+                                        Sign up
+                                    </Link>
+                                    <button
+                                        type='button'
+                                        onClick={() => setMode('request-reset')}
+                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-bright/42 transition hover:bg-white/6 hover:text-bright/72'
+                                    >
+                                        Forgot?
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {mode === 'request-reset' && (
+                        <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest}>
+                            <input
+                                type='text'
+                                name='resetUserId'
+                                placeholder='Username'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                required
+                            />
+                            <div className='mt-1 flex items-center gap-3'>
                                 <button
                                     type='submit'
                                     disabled={busy}
-                                    className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92 disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='group inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                    {busy ? 'Sending' : 'Send code'}
+                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
+                                </button>
+                                <button type='button' onClick={() => setMode('login')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
+                                    Back
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    {mode === 'verify-reset' && (
+                        <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetVerify}>
+                            <input
+                                type='text'
+                                name='code'
+                                inputMode='numeric'
+                                pattern='[0-9]{6}'
+                                maxLength={6}
+                                placeholder='6 digit code'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-center text-sm font-semibold text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                required
+                            />
+                            <div className='mt-1 flex items-center gap-3'>
+                                <button
+                                    type='submit'
+                                    disabled={busy}
+                                    className='group inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     Continue
-                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
+                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                 </button>
-                                <button type='button' onClick={() => setMode('request-reset')} className='text-sm font-semibold text-bright/50 transition hover:text-bright/80'>
-                                    Send another code
+                                <button type='button' onClick={() => setMode('request-reset')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
+                                    Again
                                 </button>
-                            </form>
-                        )}
-                    </div>
-                </div>
-                <div className='grid gap-3 sm:grid-cols-2'>
-                    <AuthInfo icon={<ShieldCheck className='h-4 w-4' />} label='Protect' value='Check passwords fast' tone='emerald' />
-                    <AuthInfo icon={<KeyRound className='h-4 w-4' />} label='Create' value='Code and test APIs' tone='amber' />
+                            </div>
+                        </form>
+                    )}
                 </div>
             </div>
         </section>
-    )
-}
-
-function AuthInfo({ icon, label, value, tone }: { icon: React.ReactNode, label: string, value: string, tone: 'emerald' | 'amber' }) {
-    const toneClass = tone === 'emerald' ? 'bg-emerald-500/12 text-emerald-300' : 'bg-amber-500/12 text-amber-300'
-    return (
-        <div className='glass-card rounded-3xl p-5'>
-            <div className={`icon-tile ${toneClass}`}>{icon}</div>
-            <p className='mt-4 text-xs uppercase tracking-[0.22em] text-bright/35'>{label}</p>
-            <p className='mt-2 text-lg font-semibold text-bright'>{value}</p>
-        </div>
     )
 }
