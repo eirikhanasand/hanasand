@@ -9,3 +9,7 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct DashboardLogsEnvelope: Decodable {
+    let logs: [DashboardLogEntry]
+}

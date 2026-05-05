@@ -9,3 +9,10 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct IDEOpenRequest: Identifiable, Equatable {
+    let id = UUID()
+    let path: String
+    let line: Int?
+    let revealDiff: Bool
+}

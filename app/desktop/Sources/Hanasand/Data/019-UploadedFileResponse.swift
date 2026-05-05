@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct UploadedFileResponse: Decodable {
+    let id: String
+    let name: String?
+    let path: String?
+}

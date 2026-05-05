@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+enum ActionTone {
+    case normal
+    case danger
+}

@@ -9,3 +9,10 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct IDEOutlineItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let line: Int
+    let icon: String
+}

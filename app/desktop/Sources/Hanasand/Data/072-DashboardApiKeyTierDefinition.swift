@@ -9,3 +9,10 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct DashboardApiKeyTierDefinition: Decodable, Identifiable {
+    let id: String
+    let label: String
+    let description: String
+    let defaultLimits: DashboardApiKeyPeriodLimits
+}

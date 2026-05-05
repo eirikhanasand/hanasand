@@ -9,3 +9,11 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct DashboardSeverityCount: Decodable {
+    let critical: Int
+    let high: Int
+    let medium: Int
+    let low: Int
+    let unknown: Int
+}

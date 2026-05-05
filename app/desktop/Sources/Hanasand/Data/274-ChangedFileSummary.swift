@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct ChangedFileSummary: Identifiable {
+    let id: String
+    let status: String
+    let path: String
+}

@@ -9,3 +9,11 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct HanasandLoginGate: View {
+    @EnvironmentObject var model: DesktopAgentModel
+
+    @Environment(\.desktopTheme) var theme
+
+    @FocusState var focusedField: Field?
+}

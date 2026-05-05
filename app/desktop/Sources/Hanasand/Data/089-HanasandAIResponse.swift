@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct HanasandAIResponse {
+    let meta: String
+    let body: String
+}

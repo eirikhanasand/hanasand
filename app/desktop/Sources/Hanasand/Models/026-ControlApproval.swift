@@ -9,3 +9,11 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct ControlApproval: Identifiable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let command: String
+    let kind: ControlApprovalKind
+}

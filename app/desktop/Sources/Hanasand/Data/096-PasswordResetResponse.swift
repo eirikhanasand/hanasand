@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct PasswordResetResponse: Decodable {
+    let ok: Bool?
+    let error: String?
+}

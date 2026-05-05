@@ -9,3 +9,10 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+extension EnvironmentValues {
+    var desktopTheme: DesktopTheme {
+        get { self[DesktopThemeKey.self] }
+        set { self[DesktopThemeKey.self] = newValue }
+    }
+}

@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct DashboardApiKeyCreateEnvelope: Decodable {
+    let apiKey: DashboardApiKeySummary
+    let secret: String?
+}

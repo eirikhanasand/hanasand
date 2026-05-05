@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct LoadTestStagePayload: Encodable {
+    let duration: String
+    let target: Int
+}

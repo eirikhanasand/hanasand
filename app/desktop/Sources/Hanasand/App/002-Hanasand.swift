@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+@main
+struct Hanasand: App {
+    @StateObject var model = DesktopAgentModel()
+}

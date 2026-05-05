@@ -9,3 +9,12 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct IDECodePlugin: Identifiable {
+    let id: String
+    let language: String
+    let icon: String
+    let extensions: [String]
+    let formatter: String
+    let diagnostics: [String]
+}

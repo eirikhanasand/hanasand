@@ -9,3 +9,11 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct SharesNativePanel: View {
+    @EnvironmentObject var model: DesktopAgentModel
+
+    @Environment(\.desktopTheme) var theme
+
+    @State var deletingShare: DashboardShare?
+}

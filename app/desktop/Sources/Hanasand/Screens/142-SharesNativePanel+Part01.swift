@@ -9,3 +9,10 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+extension SharesNativePanel {
+
+    var summaryColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 190), spacing: 12, alignment: .top)]
+    }
+}

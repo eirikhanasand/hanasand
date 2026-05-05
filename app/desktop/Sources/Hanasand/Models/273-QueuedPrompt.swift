@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct QueuedPrompt: Identifiable {
+    let id = UUID()
+    let text: String
+    let createdAt = Date()
+}

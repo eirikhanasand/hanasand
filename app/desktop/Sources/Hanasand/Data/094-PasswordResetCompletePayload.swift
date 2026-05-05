@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct PasswordResetCompletePayload: Encodable {
+    let id: String
+    let resetToken: String
+    let password: String
+}

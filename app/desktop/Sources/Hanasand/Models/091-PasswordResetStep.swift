@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+enum PasswordResetStep {
+    case idle
+    case code
+    case newPassword
+}

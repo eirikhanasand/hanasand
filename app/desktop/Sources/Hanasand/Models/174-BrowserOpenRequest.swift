@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct BrowserOpenRequest: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let url: String
+}

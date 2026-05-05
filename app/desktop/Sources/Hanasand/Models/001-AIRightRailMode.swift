@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+enum AIRightRailMode {
+    case hidden
+    case expanded
+    case compact
+}

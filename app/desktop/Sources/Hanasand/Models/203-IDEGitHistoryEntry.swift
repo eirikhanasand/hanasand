@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+struct IDEGitHistoryEntry: Identifiable {
+    let id: String
+    let line: String
+}

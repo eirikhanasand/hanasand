@@ -9,3 +9,8 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+enum ImageReviewDecision: String {
+    case keep
+    case discard
+}

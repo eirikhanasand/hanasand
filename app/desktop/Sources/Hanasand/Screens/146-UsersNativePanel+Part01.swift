@@ -1,0 +1,150 @@
+import AppKit
+import ApplicationServices
+import Combine
+import CryptoKit
+import Darwin
+import Foundation
+import Network
+import PDFKit
+import SwiftUI
+import UniformTypeIdentifiers
+import WebKit
+
+extension UsersNativePanel {
+
+    var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: 250), spacing: 12, alignment: .top)]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                FeatureCard(title: "Users", value: "\(model.users.count)", icon: "person.2")
+                FeatureCard(title: "Active", value: "\(model.users.filter { $0.active != false }.count)", icon: "checkmark.circle")
+                FeatureCard(title: "Inactive", value: "\(model.users.filter { $0.active == false }.count)", icon: "person.crop.circle.badge.xmark")
+            }
+            SearchFieldRow(placeholder: "Filter users by name, id, or role", text: $searchText)
+
+            if model.users.isEmpty {
+                NativeEmptyState(title: "No users loaded", message: "Use Refresh from this dashboard or configure auth in Settings to load user administration data.")
+            } else {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                    ForEach(filteredUsers) { user in
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 10) {
+                                Image(systemName: user.active == false ? "person.crop.circle.badge.xmark" : "person.crop.circle")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(user.active == false ? theme.danger : theme.accent)
+                                    .frame(width: 38, height: 38)
+                                    .background(theme.cardRaised)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(user.displayName)
+                                        .font(.system(size: 14, weight: .black))
+                                        .foregroundStyle(theme.text)
+                                        .lineLimit(1)
+                                    Text(user.id)
+                                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(theme.textTertiary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            CompactInfoCard(title: "Role", lines: [
+                                user.roleLabel,
+                                "Priority: \(user.highestRolePriority.map(String.init) ?? "unknown")",
+                            ])
+                            HStack {
+                                Button("Open profile") {
+                                    model.openUserProfile(user)
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(theme.accent)
+                                Button("Roles") {
+                                    model.selectDashboardUser(user)
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(theme.textSecondary)
+                                Button(user.active == false ? "Activate" : "Deactivate") {
+                                    pendingStatusUser = user
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(user.active == false ? theme.green : theme.danger)
+                                Button("Delete") {
+                                    pendingDeleteUser = user
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(theme.danger)
+                                Spacer()
+                                Text(user.active == false ? "Inactive" : "Active")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(user.active == false ? theme.danger : theme.green)
+                            }
+                        }
+                        .padding(13)
+                        .background(theme.card)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(theme.divider, lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            }
+
+            if let selectedUser {
+                userRolesPanel(selectedUser)
+            }
+        }
+        .task(id: model.selectedUserID) {
+            await model.loadSelectedUserRoles()
+        }
+        .alert(statusAlertTitle, isPresented: Binding(
+            get: { pendingStatusUser != nil },
+            set: { if !$0 { pendingStatusUser = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                pendingStatusUser = nil
+            }
+            Button(statusActionTitle, role: pendingStatusUser?.active == false ? nil : .destructive) {
+                if let pendingStatusUser {
+                    Task { await model.setDashboardUser(pendingStatusUser, active: pendingStatusUser.active == false) }
+                }
+                pendingStatusUser = nil
+            }
+        } message: {
+            Text(pendingStatusUser?.active == false ? "This will reactivate the selected account." : "This will deactivate the account and revoke its active sessions.")
+        }
+        .alert("Delete user?", isPresented: Binding(
+            get: { pendingDeleteUser != nil },
+            set: { if !$0 { pendingDeleteUser = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteUser = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let pendingDeleteUser {
+                    Task { await model.deleteDashboardUser(pendingDeleteUser) }
+                }
+                pendingDeleteUser = nil
+            }
+        } message: {
+            Text("This permanently removes \(pendingDeleteUser?.displayName ?? "the selected user"). Prefer deactivate unless deletion is intentional.")
+        }
+    }
+
+    var selectedUser: DashboardUser? {
+        model.users.first { $0.id == model.selectedUserID }
+    }
+
+    var statusAlertTitle: String {
+        pendingStatusUser?.active == false ? "Activate user?" : "Deactivate user?"
+    }
+
+    var statusActionTitle: String {
+        pendingStatusUser?.active == false ? "Activate" : "Deactivate"
+    }
+}

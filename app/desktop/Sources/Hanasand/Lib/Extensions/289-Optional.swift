@@ -9,3 +9,9 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+extension Optional where Wrapped == URL {
+    func or(_ fallback: URL) -> URL {
+        self ?? fallback
+    }
+}

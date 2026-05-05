@@ -9,3 +9,11 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+
+enum ControlApprovalKind: String {
+    case stopServer
+    case openTunnel
+    case trashImages
+    case clearDocuments
+    case blocked
+}
