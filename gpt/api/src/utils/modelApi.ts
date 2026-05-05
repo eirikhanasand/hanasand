@@ -241,7 +241,7 @@ async function emitStreamedContent(
 
 export async function promptModel(request: GPT_PromptRequest, send: (event: string) => void) {
     const startedAt = Date.now()
-    const selectedModelApi = acquireModelLane()
+    const selectedModelApi = acquireModelLane(request)
 
     const maxTokens = request.maxTokens && request.maxTokens > 0 ? request.maxTokens : DEFAULT_MAX_TOKENS
     const renderStartedAt = Date.now()
