@@ -28,8 +28,8 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
     const [metrics, setMetrics] = useState(serverMetrics)
     const [connection] = useState(serverConnection)
     const router = useRouter()
-    const boxStyle = 'outline outline-dark p-2 rounded-md w-full'
-    const boxTitleStyle = 'text-lg font-semibold'
+    const boxStyle = 'w-full rounded-xl border border-white/10 bg-white/[0.035] p-4'
+    const boxTitleStyle = 'text-base font-semibold text-bright'
 
     async function handleRefresh() {
         const token = getCookie('access_token')
@@ -56,29 +56,32 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
     }
 
     return (
-        <div className='grid gap-2'>
-            <div className='flex w-full justify-between'>
-                <h1 className='font-semibold text-2xl'>{vm.name}</h1>
+        <div className='grid gap-3'>
+            <div className='flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                <div>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.28em] text-bright/32'>Virtual machine</p>
+                    <h1 className='mt-1.5 text-xl font-semibold text-bright sm:text-2xl'>{vm.name}</h1>
+                </div>
                 <div
-                    className='flex justify-between items-center cursor-pointer gap-2 text-bright/80 rounded-md hover:bg-bright/5 px-3 group'
+                    className='group flex h-9 cursor-pointer items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-bright/70 hover:bg-white/10'
                     onClick={handleRefresh}
                 >
                     <h1 className='text-sm'>Last checked {smallDate(vm.last_checked)}</h1>
-                    <button className='group-hover:text-green-400 group-hover:cursor-pointer'>
+                    <button className='group-hover:cursor-pointer group-hover:text-bright'>
                         <RefreshCcw className='w-4 h-4' />
                     </button>
                 </div>
             </div>
-            <div className='flex w-full justify-between gap-2'>
+            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <VMOverview boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
                 <VMHardware boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} />
                 <VMNetwork boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
                 <VMDetails boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
             </div>
-            <div className='flex w-full justify-between gap-2'>
+            <div className='grid gap-3'>
                 <VMAccess boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} connection={connection} />
             </div>
-            <div className='flex w-full justify-between gap-2'>
+            <div className='grid gap-3'>
                 <VMMetrics boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} metrics={metrics} />
             </div>
         </div>

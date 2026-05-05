@@ -5,6 +5,7 @@ import getVMDetails from '@/utils/vms/fetch/metrics/getVMDetails'
 import getVMConnection from '@/utils/vms/fetch/getVMConnection'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { DashboardPage } from '@/components/dashboard/ui'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
@@ -26,13 +27,13 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className='h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6'>
+        <DashboardPage>
             <VMClient
                 vm={vm}
                 details={details}
                 metrics={metrics}
                 connection={connection}
             />
-        </div>
+        </DashboardPage>
     )
 }

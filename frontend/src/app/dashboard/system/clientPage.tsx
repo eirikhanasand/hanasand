@@ -8,6 +8,7 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import stopAllVms from '@/utils/vms/fetch/stopAllVms'
 import restartDocker from '@/utils/vms/fetch/restartDocker'
 import Notify from '@/components/notify/notify'
+import { DashboardPanel } from '@/components/dashboard/ui'
 
 type SystemDashboardProps = {
     system: SystemSnapshot | null
@@ -66,7 +67,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
         : []
     const runningVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'running').length
     const stoppedVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'stopped').length
-    const vmOverviewClass = 'bg-bright/3 text-sm outline outline-dark rounded-md py-0.5 px-4 text-bright/80'
+    const vmOverviewClass = 'rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-bright/58'
     const idleVms = normalizedVms.length - runningVms - stoppedVms
 
     const metricCards = system ? systemToMetricCards(system) : []
@@ -87,61 +88,61 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
     }
 
     return (
-        <div className='grid gap-6'>
-            <Notify absolute className='px-8' color='bg-blue-500' background='bg-dark/40 outline outline-dark text-bright/80' message={message} />
-            <div className='rounded-md p-2 space-y-2'>
-                <h1 className='font-semibold text-xl text-bright/80'>System Metrics</h1>
+        <div className='grid gap-3'>
+            <Notify absolute className='px-8' color='bg-blue-500' background='bg-dark/40 border border-white/10 text-bright/80' message={message} />
+            <DashboardPanel className='grid gap-3 p-4'>
+                <h1 className='text-base font-semibold text-bright'>System metrics</h1>
                 {!system ? (
-                    <p className='text-sm text-gray-400'>No system metrics available.</p>
+                    <p className='text-sm text-bright/40'>No system metrics available.</p>
                 ) : (
                     <>
-                        <div className='grid md:grid-cols-3 gap-4'>
+                        <div className='grid gap-2 md:grid-cols-3 xl:grid-cols-4'>
                             {metricCards.map((metric) => (
-                                <div key={metric.name} className='rounded-2xl bg-dark/35 p-4 outline outline-dark flex flex-col gap-2'>
-                                    <div className='flex items-center justify-between text-[#fd8738]'>
-                                        <h2 className='font-semibold text-lg text-bright/90'>{metric.name}</h2>
+                                <div key={metric.name} className='flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-3'>
+                                    <div className='flex items-center justify-between text-bright/38'>
+                                        <h2 className='text-sm font-semibold text-bright/82'>{metric.name}</h2>
                                         {metric.icon}
                                     </div>
-                                    <span className='text-sm text-gray-300 wrap-break-word'>{metric.value}</span>
+                                    <span className='wrap-break-word text-sm text-bright/42'>{metric.value}</span>
                                 </div>
                             ))}
                         </div>
-                        <div className='grid md:grid-cols-2 gap-4 pt-2'>
-                            <div className='rounded-2xl bg-dark/35 p-4 outline outline-dark flex flex-col gap-2 min-h-0'>
-                                <div className='flex items-center justify-between text-[#fd8738]'>
-                                    <h2 className='font-semibold text-lg text-bright/90'>IPv4</h2>
+                        <div className='grid gap-2 md:grid-cols-2'>
+                            <div className='flex min-h-0 flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-3'>
+                                <div className='flex items-center justify-between text-bright/38'>
+                                    <h2 className='text-sm font-semibold text-bright/82'>IPv4</h2>
                                     <HardDrive className='h-4 w-4' />
                                 </div>
-                                <pre className='text-xs text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto font-mono'>
+                                <pre className='max-h-40 overflow-y-auto whitespace-pre-wrap break-all font-mono text-xs text-bright/42'>
                                     {system.ipv4?.length ? system.ipv4.join('\n') : '—'}
                                 </pre>
                             </div>
-                            <div className='rounded-2xl bg-dark/35 p-4 outline outline-dark flex flex-col gap-2 min-h-0'>
-                                <div className='flex items-center justify-between text-[#fd8738]'>
-                                    <h2 className='font-semibold text-lg text-bright/90'>IPv6</h2>
+                            <div className='flex min-h-0 flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-3'>
+                                <div className='flex items-center justify-between text-bright/38'>
+                                    <h2 className='text-sm font-semibold text-bright/82'>IPv6</h2>
                                     <HardDrive className='h-4 w-4' />
                                 </div>
-                                <pre className='text-xs text-gray-300 whitespace-pre-wrap break-all max-h-40 overflow-y-auto font-mono'>
+                                <pre className='max-h-40 overflow-y-auto whitespace-pre-wrap break-all font-mono text-xs text-bright/42'>
                                     {system.ipv6?.length ? system.ipv6.join('\n') : '—'}
                                 </pre>
                             </div>
                         </div>
                     </>
                 )}
-            </div>
+            </DashboardPanel>
 
-            <div className='rounded-md p-2 space-y-2'>
-                <h1 className='font-semibold text-xl text-bright/80'>Docker Containers</h1>
-                <div className='grid md:grid-cols-3 gap-4'>
+            <DashboardPanel className='grid gap-3 p-4'>
+                <h1 className='text-base font-semibold text-bright'>Docker containers</h1>
+                <div className='grid gap-2 md:grid-cols-3'>
                     {normalizedDockerContainers.map(container => (
-                        <div key={container.id} className='rounded-2xl p-4 backdrop-blur-md outline outline-white/10 flex flex-col gap-2'>
-                            <div className='flex justify-between items-center'>
-                                <h3 className='font-semibold'>{container.name}</h3>
-                                <button onClick={() => handleRestartContainer(container.id)} className='hover:text-green-400'>
-                                    <RefreshCcw />
+                        <div key={container.id} className='flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-3'>
+                            <div className='flex items-center justify-between'>
+                                <h3 className='text-sm font-semibold text-bright/82'>{container.name}</h3>
+                                <button onClick={() => handleRestartContainer(container.id)} className='grid h-8 w-8 place-items-center rounded-lg text-bright/45 hover:bg-white/10 hover:text-bright'>
+                                    <RefreshCcw className='h-4 w-4' />
                                 </button>
                             </div>
-                            <div className='text-sm flex flex-col gap-1'>
+                            <div className='flex flex-col gap-1 text-sm text-bright/45'>
                                 <p className='flex items-center gap-1'><Cpu className='w-4 h-4' /> CPU: {container.cpu}%</p>
                                 <p className='flex items-center gap-1'><HardDrive className='w-4 h-4' /> Memory: {container.memory} MB</p>
                                 <p>Status: {container.status}</p>
@@ -149,24 +150,24 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                         </div>
                     ))}
                 </div>
-            </div>
+            </DashboardPanel>
 
-            <div className='rounded-md p-2 space-y-2'>
-                <div className='flex justify-between items-center'>
-                    <div className='flex flex-wrap gap-2 items-center'>
-                        <h1 className='font-semibold text-xl text-bright/80'>Virtual Machines</h1>
+            <DashboardPanel className='grid gap-3 p-4'>
+                <div className='flex items-center justify-between gap-3'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <h1 className='text-base font-semibold text-bright'>Virtual machines</h1>
                         <h1 className={vmOverviewClass}>{runningVms} Running</h1>
                         <h1 className={vmOverviewClass}>{idleVms} Idle</h1>
                         <h1 className={vmOverviewClass}>{stoppedVms} Stopped</h1>
                     </div>
-                    <div onClick={handleStopAll} className='flex gap-2 items-center py-0.5 px-6 rounded-md hover:outline hover:outline-red-500/35 hover:bg-red-500/20 cursor-pointer text-bright/80 group'>
+                    <div onClick={handleStopAll} className='group flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-red-300/10 bg-red-500/10 px-3 text-sm font-semibold text-red-100/80 hover:bg-red-500/20'>
                         <StopCircle className='w-4 h-4 group-hover:stroke-red-500' />
-                        <h1 className='text-sm'>Stop all</h1>
+                        Stop all
                     </div>
                 </div>
                 <div className='overflow-x-auto'>
                     <div className='min-w-[74rem]'>
-                        <div className='grid items-center gap-2 rounded-md bg-bright/3 p-2 font-semibold text-bright/80 lg:grid-cols-[minmax(14rem,1.3fr)_minmax(10rem,1fr)_7rem_10rem_minmax(9rem,0.95fr)_minmax(9rem,0.95fr)_7rem_minmax(16rem,1.4fr)_6.5rem]'>
+                        <div className='grid items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-2 text-xs font-semibold text-bright/45 lg:grid-cols-[minmax(14rem,1.3fr)_minmax(10rem,1fr)_7rem_10rem_minmax(9rem,0.95fr)_minmax(9rem,0.95fr)_7rem_minmax(16rem,1.4fr)_6.5rem]'>
                             <h1>Name</h1>
                             <h1>Owner</h1>
                             <h1>CPU</h1>
@@ -186,7 +187,7 @@ export default function SystemDashboard({ system, dockerContainers, vms, vmMetri
                         })}
                     </div>
                 </div>
-            </div>
+            </DashboardPanel>
         </div>
     )
 }

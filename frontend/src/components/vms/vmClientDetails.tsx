@@ -1,5 +1,6 @@
 'use client'
 
+import { DashboardPanel } from '@/components/dashboard/ui'
 import { useState } from 'react'
 
 type VMDetailClientProps = {
@@ -12,9 +13,9 @@ export default function VMDetailClient({ vm, metrics }: VMDetailClientProps) {
     const [latestMetrics] = useState(metrics[0])
 
     return (
-        <div className='rounded-2xl p-6 backdrop-blur-md outline outline-white/10 flex flex-col gap-4'>
+        <DashboardPanel className='flex flex-col gap-4 p-4'>
             <div className='flex justify-between items-center'>
-                <h2 className='font-semibold text-xl'>Metrics</h2>
+                <h2 className='text-base font-semibold text-bright'>Metrics</h2>
             </div>
             {latestMetrics && (
                 <div className='grid md:grid-cols-2 gap-4 text-sm'>
@@ -32,6 +33,6 @@ export default function VMDetailClient({ vm, metrics }: VMDetailClientProps) {
                     </div>
                 </div>
             )}
-        </div>
+        </DashboardPanel>
     )
 }

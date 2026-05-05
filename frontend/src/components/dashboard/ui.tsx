@@ -17,7 +17,7 @@ type DashboardPanelProps = {
     className?: string
 }
 
-export const dashboardPanelClass = 'rounded-xl border border-white/10 bg-dark/55 shadow-[0_14px_42px_rgba(0,0,0,0.18)] backdrop-blur-md'
+export const dashboardPanelClass = 'rounded-xl border border-bright/10 bg-background/82 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-md'
 
 export function DashboardPage({ children, className = '' }: DashboardPageProps) {
     return <div className={`grid min-h-full w-full gap-3 p-2 sm:gap-4 sm:p-4 ${className}`.trim()}>{children}</div>

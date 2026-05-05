@@ -3,6 +3,7 @@ import getVM from '@/utils/vms/fetch/getVM'
 import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
@@ -23,9 +24,13 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     return (
-        <div className='h-full px-8 pb-4 md:px-16 lg:px-32 space-y-6'>
-            <h1 className='font-semibold text-2xl'>{vm.name} Management</h1>
+        <DashboardPage>
+            <DashboardHeader
+                eyebrow='Management'
+                title={vm.name}
+                description='Machine metrics and operational state.'
+            />
             <VMDetailClient vm={vm} metrics={metrics} />
-        </div>
+        </DashboardPage>
     )
 }
