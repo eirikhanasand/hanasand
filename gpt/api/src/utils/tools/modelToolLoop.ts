@@ -2016,6 +2016,10 @@ async function executeToolCall(
                     `Exit code: ${result.exitCode ?? 'null'}`,
                     result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
                     result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                    result.build ? `Build exit code: ${result.build.exitCode ?? 'null'}` : null,
+                    `Compose config exit code: ${result.compose.exitCode ?? 'null'}`,
+                    result.compose.stdout ? `Compose STDOUT:\n${result.compose.stdout}` : null,
+                    result.compose.stderr ? `Compose STDERR:\n${result.compose.stderr}` : null,
                 ].join('\n\n'),
             },
             artifacts: [{
