@@ -25,7 +25,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const isDashboard = pathname.startsWith('/dashboard')
 
     return (
-        <header className={`fixed top-0 left-0 z-1000 w-full ${isShare || isAI ? 'p-2' : 'px-3 pt-3 sm:px-5 md:px-16 md:pt-4 lg:px-32'}`}>
+        <header className={`fixed top-0 left-0 z-1000 w-full ${isShare || isAI || isDashboard ? 'p-2' : 'px-3 pt-3 sm:px-5 md:px-16 md:pt-4 lg:px-32'}`}>
             <div className='w-full text-foreground flex min-h-13 md:grid md:grid-cols-3 px-2.5 sm:px-4 select-none outline outline-dark rounded-xl py-1 bg-background'>
                 <div className='grid md:hidden place-items-center w-full flex-1'>
                     <Link href='/' className='w-full flex px-2.5 items-center h-11 hover:bg-[#6464641a] rounded-lg cursor-pointer'>

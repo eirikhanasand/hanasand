@@ -8,6 +8,7 @@ import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import Tooltip from '../tooltip/tooltip'
 import Link from 'next/link'
+import { DashboardPanel } from '../dashboard/ui'
 
 export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     const [vms, setVms] = useState<VM[]>(serverVMs || [])
@@ -28,9 +29,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     }, [])
 
     return (
-        <section className='grid h-fit w-full gap-2 rounded-xl border border-white/10 bg-white/4 p-4'>
-            <div className='flex justify-between mb-1 items-center'>
-                <h1 className='font-semibold text-lg self-center'>Virtual Machines</h1>
+        <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
+            <div className='mb-1 flex items-center justify-between gap-3'>
+                <h2 className='text-base font-semibold text-bright/90'>Virtual Machines</h2>
                 <Tooltip
                     align='right'
                     content={
@@ -41,9 +42,9 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     }
                 >
                     <div className='p-px'>
-                        <div className='py-0.5 outline outline-blue-400/40 min-w-full bg-blue-400/20 rounded-sm flex gap-1 items-center px-4'>
+                        <div className='flex min-w-full items-center gap-1 rounded-md border border-blue-300/30 bg-blue-400/12 px-2.5 py-1'>
                             <Info className='h-3 w-3 stroke-blue-400' />
-                            <span className='text-bright/70 text-[0.7rem]'>Managed</span>
+                            <span className='text-[0.7rem] text-bright/62'>Managed</span>
                         </div>
                     </div>
                 </Tooltip>
@@ -54,12 +55,12 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     {vms.map(vm => <VMRow update={update} key={vm.name} vm={vm} />)}
                 </div>
             ) : (
-                <div className='flex gap-1 text-sm text-almostbright'>
+                <div className='flex gap-1 text-sm text-bright/42'>
                     <span>No VMs found! Click</span>
-                    <Link href='/s' className='text-blue-500'>here</Link>
+                    <Link href='/s' className='text-bright/72 underline underline-offset-4'>here</Link>
                     <span>to create your first project.</span>
                 </div>
             )}
-        </section>
+        </DashboardPanel>
     )
 }

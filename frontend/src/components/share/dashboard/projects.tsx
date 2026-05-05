@@ -4,6 +4,7 @@ import DashboardShare from './dashboardShare'
 import { getUserShares } from '@/utils/share/getUserShares'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { DashboardPanel } from '@/components/dashboard/ui'
 
 export default async function Shares() {
     const Cookies = await cookies()
@@ -16,20 +17,24 @@ export default async function Shares() {
     const shares = await getUserShares({ id, token })
 
     return (
-        <div className='grid h-fit w-full gap-4 rounded-2xl p-4 outline outline-dark'>
-            <div className='flex items-center justify-between gap-4'>
+        <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
+            <div className='flex items-start justify-between gap-3'>
                 <div>
-                    <h1 className='text-lg font-semibold'>Shares</h1>
-                    <p className='mt-1 text-sm text-bright/45'>Open an existing workspace or create a new one.</p>
+                    <h2 className='text-base font-semibold text-bright/90'>Shares</h2>
+                    <p className='mt-1 text-sm text-bright/42'>Open or create a workspace.</p>
                 </div>
-                <Link href='/s' className='flex gap-2 rounded-xl px-4 py-2.5 outline outline-dark transition-colors hover:bg-green-500/20 hover:outline-green-500/35'>
-                    <Plus />
-                    <h1 className='select-none font-semibold'>Create</h1>
+                <Link href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/78 transition hover:bg-white/9 hover:text-bright'>
+                    <Plus className='h-4 w-4' />
+                    <span>Create</span>
                 </Link>
             </div>
-            {typeof shares === 'string'
-                ? <h1 className='text-red-500 font-sm'>{shares}</h1>
-                : (shares as Share[]).map((share) => <DashboardShare key={share.id} share={share} />)}
-        </div>
+            <div className='grid gap-1'>
+                {typeof shares === 'string'
+                    ? <p className='text-sm text-red-200/80'>{shares}</p>
+                    : (shares as Share[]).length
+                        ? (shares as Share[]).map((share) => <DashboardShare key={share.id} share={share} />)
+                        : <p className='text-sm text-bright/42'>No shares yet.</p>}
+            </div>
+        </DashboardPanel>
     )
 }

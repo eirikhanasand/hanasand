@@ -24,12 +24,16 @@ export default async function Page() {
             <DashboardHeader
                 eyebrow='Workspace'
                 title={text}
-                description='Projects, shares, machines, mail, logs, and system metrics all in the same place.'
+                description='Projects, shares, machines, mail, logs, and system metrics.'
             />
-            <div className='grid gap-3 md:grid-cols-2'>
-                <Projects />
+            <div className='grid gap-3 xl:grid-cols-3'>
+                <div className='xl:col-span-2'>
+                    <Projects />
+                </div>
                 <VMs vms={vms} />
-                <Shares />
+                <div className='xl:col-span-2'>
+                    <Shares />
+                </div>
             </div>
         </DashboardPage>
     )

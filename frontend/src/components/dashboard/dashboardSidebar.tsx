@@ -57,22 +57,22 @@ export default function DashboardSidebar({
     const compact = mode === 'compact'
 
     return (
-        <aside className={`dashboard-sidebar-sticky glass-panel h-fit rounded-[1.4rem] p-2.5 sm:p-3 ${compact ? 'lg:w-19' : 'lg:w-62'}`}>
-            <div className={`mb-3 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2'}`}>
+        <aside className={`dashboard-sidebar-sticky h-fit max-h-full overflow-auto rounded-xl border border-white/10 bg-background/82 p-2 backdrop-blur-md ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+            <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
                 {compact ? (
-                    <LayoutDashboard className='h-4 w-4 text-orange-300' />
+                    <LayoutDashboard className='h-4 w-4 text-bright/70' />
                 ) : (
                     <>
                         <div>
-                            <p className='text-[0.65rem] uppercase tracking-[0.3em] text-bright/38'>Workspace</p>
-                            <h2 className='mt-1 text-sm font-semibold text-bright'>Dashboard</h2>
+                            <p className='text-[0.62rem] font-semibold uppercase tracking-[0.24em] text-bright/32'>Workspace</p>
+                            <h2 className='mt-1 text-sm font-semibold text-bright/86'>Dashboard</h2>
                         </div>
-                        <LayoutDashboard className='h-4 w-4 text-orange-300' />
+                        <LayoutDashboard className='h-4 w-4 text-bright/55' />
                     </>
                 )}
             </div>
 
-            <nav className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1 lg:gap-1.5'>
+            <nav className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1'>
                 {items.map((item) => {
                     const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
 
@@ -81,12 +81,12 @@ export default function DashboardSidebar({
                             key={item.href}
                             href={item.href}
                             title={item.label}
-                            className={`flex min-h-10 items-center rounded-xl border px-3 transition ${
+                            className={`flex min-h-10 items-center rounded-lg border px-3 transition ${
                                 compact ? 'justify-center' : 'gap-3'
                             } ${
                                 active
-                                    ? 'border-white/12 bg-white/12 text-bright'
-                                    : 'border-transparent text-bright/58 hover:border-white/8 hover:bg-white/6 hover:text-bright'
+                                    ? 'border-white/12 bg-white/10 text-bright'
+                                    : 'border-transparent text-bright/52 hover:border-white/8 hover:bg-white/6 hover:text-bright/82'
                             }`}
                         >
                             {item.icon}
