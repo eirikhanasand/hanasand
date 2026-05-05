@@ -885,6 +885,18 @@ type AIRepositoryCredentialSummary = {
     lastValidatedAt: string | null
 }
 
+type AIGitStatusFile = {
+    path: string
+    index: string
+    workingTree: string
+    selected: boolean
+}
+
+type AIGitStatus = {
+    files: AIGitStatusFile[]
+    branchSummary: string | null
+}
+
 type GPT_ModelStatus = 'idle' | 'preparing' | 'generating' | 'error'
 
 type GPT_ChatRole = 'system' | 'user' | 'assistant'
