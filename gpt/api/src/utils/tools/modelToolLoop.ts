@@ -38,7 +38,7 @@ const TOOL_SYSTEM_PROMPT = [
     '<tool_call>{"name":"write_file","arguments":{"path":"notes/output.md","content":"..."}}</tool_call>',
     '<tool_call>{"name":"run_command","arguments":{"command":"date","cwd":"/optional/path","timeoutMs":120000}}</tool_call>',
     '<tool_call>{"name":"scaffold_nextjs_app","arguments":{"targetDir":"sandbox/my-app","packageManager":"npm"}}</tool_call>',
-    '<tool_call>{"name":"scaffold_nextjs_docker_app","arguments":{"targetDir":"sandbox/my-docker-app"}}</tool_call>',
+    '<tool_call>{"name":"scaffold_nextjs_docker_app","arguments":{"targetDir":"sandbox/my-docker-app","appName":"Aurora Sprint","productBrief":"A responsive project planning dashboard with analytics cards, kanban board, pricing, testimonials, Dockerfile, compose file, and build verification."}}</tool_call>',
     '<tool_call>{"name":"scaffold_fastify_postgres_app","arguments":{"targetDir":"sandbox/my-api"}}</tool_call>',
     '<tool_call>{"name":"scaffold_fastify_worker_redis_app","arguments":{"targetDir":"sandbox/my-worker-stack"}}</tool_call>',
     '<tool_call>{"name":"generate_nextjs_marketing_site","arguments":{"appDir":"sandbox/my-app","brandName":"Northstar Atelier","tagline":"Spaces that feel composed, calm, and enduring.","description":"Boutique architecture for private homes and hospitality environments.","primaryCtaLabel":"Book a Design Consult","secondaryCtaLabel":"View Case Studies","styleDirection":"Quiet luxury with tactile materials and editorial spacing."}}</tool_call>',
@@ -139,6 +139,8 @@ type ToolCall =
         arguments: {
             targetDir: string
             appName?: string
+            productBrief?: string
+            productType?: string
         }
     }
     | {
@@ -622,6 +624,8 @@ export default async function runModelToolLoop(
             name: 'scaffold_nextjs_docker_app',
             arguments: {
                 targetDir,
+                appName: extractBrandName(userMessage),
+                productBrief: userMessage.slice(0, 1200),
             },
         }
         const scaffoldKey = JSON.stringify(scaffoldToolCall)
@@ -631,6 +635,22 @@ export default async function runModelToolLoop(
             executedToolCalls.add(scaffoldKey)
             workingMessages.push({ role: 'assistant', content: `<tool_call>${scaffoldKey}</tool_call>` })
             workingMessages.push(toolMessage)
+            const verified = toolMessage.content.includes('Build exit code: 0')
+                && toolMessage.content.includes('Compose config exit code: 0')
+            return {
+                content: verified
+                    ? `Built and verified the Dockerized Next.js app in ${targetDir}. It includes a responsive product dashboard, analytics cards, kanban board, pricing panel, testimonials, empty state, Dockerfile, docker-compose.yml, and passing build/compose verification.`
+                    : `Created the Dockerized Next.js app in ${targetDir}, but verification needs attention. ${toolMessage.content}`,
+                artifacts: collectedArtifacts,
+                overhead: {
+                    iterations: 1,
+                    completionCalls,
+                    completionMs,
+                    toolCalls,
+                    toolMs,
+                    totalMs: Date.now() - loopStartedAt,
+                },
+            }
         }
 
         if (/\bdocker compose\b|\bdockerize\b|run it|start it|verify it/i.test(userMessage)) {
@@ -780,6 +800,12 @@ export default async function runModelToolLoop(
                 || content.includes('Tool edit_file executed')
                 || content.includes('Tool generate_nextjs_marketing_site executed')
                 || content.includes('Tool scaffold_nextjs_app executed')
+                || content.includes('Tool scaffold_nextjs_docker_app executed')
+            )
+            const hasVerifiedDockerScaffold = toolContents.some((content) =>
+                content.includes('Tool scaffold_nextjs_docker_app executed')
+                && content.includes('Build exit code: 0')
+                && content.includes('Compose config exit code: 0')
             )
             const hasStartedProcess = toolContents.some((content) => content.includes('Tool start_process executed'))
             const hasBrowserVerification = toolContents.some((content) => content.includes('Tool browser_task executed'))
@@ -791,7 +817,7 @@ export default async function runModelToolLoop(
                 continue
             }
 
-            if (/(website|landing page|next\.?js|app router)/i.test(userMessage) && (!hasWrittenFiles || !hasStartedProcess || !hasBrowserVerification)) {
+            if (/(website|landing page|next\.?js|app router)/i.test(userMessage) && !hasVerifiedDockerScaffold && (!hasWrittenFiles || !hasStartedProcess || !hasBrowserVerification)) {
                 workingMessages.push({
                     role: 'system',
                     content: 'This web-app task is not complete until you have written the files, started the app, verified it in the browser, and fixed any issues you found. Continue using tools now.',
@@ -1168,8 +1194,10 @@ function parseToolCall(content: string): ToolCall | null {
     if (xmlName === 'scaffold_nextjs_docker_app') {
         const targetDir = content.match(/<targetDir>\s*([\s\S]*?)\s*<\/targetDir>/i)?.[1]?.trim()
         const appName = content.match(/<appName>\s*([\s\S]*?)\s*<\/appName>/i)?.[1]?.trim()
+        const productBrief = content.match(/<productBrief>\s*([\s\S]*?)\s*<\/productBrief>/i)?.[1]?.trim()
+        const productType = content.match(/<productType>\s*([\s\S]*?)\s*<\/productType>/i)?.[1]?.trim()
         if (targetDir) {
-            return { name: 'scaffold_nextjs_docker_app', arguments: { targetDir, appName: appName || undefined } }
+            return { name: 'scaffold_nextjs_docker_app', arguments: { targetDir, appName: appName || undefined, productBrief: productBrief || undefined, productType: productType || undefined } }
         }
     }
 
@@ -1953,9 +1981,17 @@ async function executeToolCall(
                 content: [
                     `Tool scaffold_nextjs_docker_app executed for target: ${toolCall.arguments.targetDir}`,
                     `Absolute path: ${result.absolutePath}`,
+                    `App name: ${result.appName}`,
+                    `Product brief: ${result.productBrief}`,
                     `Exit code: ${result.exitCode ?? 'null'}`,
                     result.stdout ? `STDOUT:\n${result.stdout}` : 'STDOUT:\n<empty>',
                     result.stderr ? `STDERR:\n${result.stderr}` : 'STDERR:\n<empty>',
+                    result.build ? `Build exit code: ${result.build.exitCode ?? 'null'}` : null,
+                    result.build?.stdout ? `Build STDOUT:\n${result.build.stdout}` : null,
+                    result.build?.stderr ? `Build STDERR:\n${result.build.stderr}` : null,
+                    `Compose config exit code: ${result.compose.exitCode ?? 'null'}`,
+                    result.compose.stdout ? `Compose STDOUT:\n${result.compose.stdout}` : null,
+                    result.compose.stderr ? `Compose STDERR:\n${result.compose.stderr}` : null,
                 ].join('\n\n'),
             },
             artifacts: [{
