@@ -22,15 +22,20 @@ async function writeTemplateFile(targetDir: string, relativePath: string, conten
     await writeFile(filePath, content, 'utf8')
 }
 
+function toPackageName(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'fastify-postgres-app'
+}
+
 export default async function scaffoldFastifyPostgresApp(args: ScaffoldFastifyPostgresAppArgs) {
     const absolutePath = resolveTargetDir(args.targetDir.trim())
     const relativePath = path.relative(config.repo_root, absolutePath)
     const appName = args.appName || path.basename(relativePath)
+    const packageName = toPackageName(appName)
 
     await mkdir(absolutePath, { recursive: true })
 
     await writeTemplateFile(absolutePath, 'package.json', JSON.stringify({
-        name: appName,
+        name: packageName,
         version: '0.1.0',
         private: true,
         type: 'module',
@@ -75,18 +80,18 @@ export default async function scaffoldFastifyPostgresApp(args: ScaffoldFastifyPo
         'POSTGRES_HOST_PORT=5432',
         '',
     ].join('\n'))
-    await writeTemplateFile(absolutePath, 'Dockerfile', `FROM node:20-alpine AS deps
+    await writeTemplateFile(absolutePath, 'Dockerfile', `FROM node:18-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 
-FROM node:20-alpine AS builder
+FROM node:18-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/dist ./dist
@@ -316,14 +321,21 @@ API default: http://127.0.0.1:3001
 `)
 
     const installResult = await runCommand({
-        command: 'npm install',
+        command: 'npm install && npm run build',
         cwd: relativePath,
         timeoutMs: 10 * 60 * 1000,
+    })
+    const composeResult = await runCommand({
+        command: 'docker compose config',
+        cwd: relativePath,
+        timeoutMs: 120000,
     })
 
     return {
         ...installResult,
         absolutePath,
         appName,
+        build: installResult,
+        compose: composeResult,
     }
 }

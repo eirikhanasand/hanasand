@@ -1,5 +1,5 @@
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { openSync } from 'node:fs'
+import { existsSync, openSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
@@ -7,6 +7,8 @@ import config from '#constants'
 
 const SANDBOX_EXECUTABLE = process.env.HANASAND_SANDBOX_EXEC || 'sandbox-exec'
 const SANDBOX_APPLY_ERROR = 'sandbox-exec: sandbox_apply: Operation not permitted'
+const SHELL_PATH = process.env.HANASAND_COMMAND_SHELL
+    || (existsSync('/bin/zsh') ? '/bin/zsh' : existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh')
 let sandboxUsable: boolean | null = null
 
 type StartManagedProcessArgs = {
@@ -94,7 +96,7 @@ async function canUseSandbox(tempDir: string, profilePath: string) {
     }
 
     sandboxUsable = await new Promise<boolean>((resolve) => {
-        const probe = spawn(SANDBOX_EXECUTABLE, ['-f', profilePath, '/bin/zsh', '-lc', 'exit 0'], {
+        const probe = spawn(SANDBOX_EXECUTABLE, ['-f', profilePath, SHELL_PATH, '-lc', 'exit 0'], {
             cwd: config.repo_root,
             env: {
                 ...process.env,
@@ -207,8 +209,8 @@ export async function startManagedProcess(args: StartManagedProcessArgs) {
     await mkdir(npmCacheDir, { recursive: true })
     const sandboxEnabled = await canUseSandbox(tempDir, profilePath)
     const command = sandboxEnabled
-        ? [SANDBOX_EXECUTABLE, '-f', profilePath, '/bin/zsh', '-lc', args.command]
-        : ['/bin/zsh', '-lc', args.command]
+        ? [SANDBOX_EXECUTABLE, '-f', profilePath, SHELL_PATH, '-lc', args.command]
+        : [SHELL_PATH, '-lc', args.command]
 
     const child = spawn(command[0], command.slice(1), {
         cwd,

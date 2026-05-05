@@ -23,16 +23,21 @@ async function writeTemplateFile(targetDir: string, relativePath: string, conten
     await writeFile(filePath, content, 'utf8')
 }
 
+function toPackageName(value: string) {
+    return value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'nextjs-app'
+}
+
 export default async function scaffoldNextjsApp(args: ScaffoldNextjsAppArgs) {
     const packageManager = args.packageManager || 'npm'
     const appName = args.appName || path.basename(args.targetDir)
+    const packageName = toPackageName(appName)
     const absolutePath = resolveTargetDir(args.targetDir.trim())
     const relativePath = path.relative(config.repo_root, absolutePath)
 
     await mkdir(absolutePath, { recursive: true })
 
     await writeTemplateFile(absolutePath, 'package.json', JSON.stringify({
-        name: appName,
+        name: packageName,
         version: '0.1.0',
         private: true,
         scripts: {
@@ -42,20 +47,17 @@ export default async function scaffoldNextjsApp(args: ScaffoldNextjsAppArgs) {
             lint: 'eslint .',
         },
         dependencies: {
-            next: '16.2.3',
-            react: '19.2.5',
-            'react-dom': '19.2.5',
+            next: '15.5.6',
+            react: '19.1.0',
+            'react-dom': '19.1.0',
         },
         devDependencies: {
             '@eslint/eslintrc': '^3.3.1',
-            '@tailwindcss/postcss': '^4.1.14',
-            '@types/node': '^24.9.0',
-            '@types/react': '^19.2.2',
-            '@types/react-dom': '^19.2.2',
+            '@types/node': '^20.19.25',
+            '@types/react': '^19.1.0',
+            '@types/react-dom': '^19.1.0',
             eslint: '^9.38.0',
-            'eslint-config-next': '^16.2.3',
-            postcss: '^8.5.6',
-            tailwindcss: '^4.1.14',
+            'eslint-config-next': '^15.5.6',
             typescript: '^5.9.3',
         },
     }, null, 2) + '\n')
@@ -84,7 +86,7 @@ export default async function scaffoldNextjsApp(args: ScaffoldNextjsAppArgs) {
 
     await writeTemplateFile(absolutePath, 'next-env.d.ts', '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n\n// This file is managed by Next.js.\n')
     await writeTemplateFile(absolutePath, 'next.config.ts', 'import type { NextConfig } from \'next\'\n\nconst nextConfig: NextConfig = {}\n\nexport default nextConfig\n')
-    await writeTemplateFile(absolutePath, 'postcss.config.mjs', 'export default {\n  plugins: {\n    "@tailwindcss/postcss": {},\n  },\n}\n')
+    await writeTemplateFile(absolutePath, 'postcss.config.mjs', 'export default {\n  plugins: {},\n}\n')
     await writeTemplateFile(absolutePath, 'eslint.config.mjs', 'import { FlatCompat } from "@eslint/eslintrc"\n\nconst compat = new FlatCompat({ baseDirectory: import.meta.dirname })\n\nexport default [\n  ...compat.extends("next/core-web-vitals", "next/typescript"),\n]\n')
     await writeTemplateFile(absolutePath, 'src/app/layout.tsx', [
         'import "./globals.css"',
@@ -118,8 +120,6 @@ export default async function scaffoldNextjsApp(args: ScaffoldNextjsAppArgs) {
         '',
     ].join('\n'))
     await writeTemplateFile(absolutePath, 'src/app/globals.css', [
-        '@import "tailwindcss";',
-        '',
         ':root {',
         '  color-scheme: light;',
         '}',
@@ -143,7 +143,7 @@ export default async function scaffoldNextjsApp(args: ScaffoldNextjsAppArgs) {
         '',
     ].join('\n'))
 
-    const installCommand = packageManager === 'bun' ? 'bun install' : 'npm install'
+    const installCommand = packageManager === 'bun' ? 'bun install && bun run build' : 'npm install && npm run build'
     const installResult = await runCommand({
         command: installCommand,
         cwd: relativePath,
