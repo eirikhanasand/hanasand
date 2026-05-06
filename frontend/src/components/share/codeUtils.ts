@@ -7,10 +7,9 @@ export function applyHighlightedCode(codeElement: HTMLElement | null, value: str
 
     codeElement.removeAttribute('data-highlighted')
     if (syntaxHighlighting) {
-        codeElement.textContent = value
-        hljs.highlightElement(codeElement)
+        codeElement.innerHTML = hljs.highlightAuto(value).value
         return
     }
 
-    codeElement.innerText = value
+    codeElement.textContent = value
 }
