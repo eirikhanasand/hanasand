@@ -224,7 +224,6 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/vms/access/:user', getAccessibleVMs)
     fastify.post('/vm', postVM)
     fastify.post('/vm/:id/:action', vmAction)
-    fastify.post('/vm/:id/stop', stopVms)
     fastify.post('/vm/details', postVMDetails)
     fastify.post('/vms/shutdown', shutdownVMs)
     fastify.post('/vms/stop', stopVms)
