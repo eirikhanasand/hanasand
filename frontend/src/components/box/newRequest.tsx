@@ -269,7 +269,7 @@ export default function NewRequest({
 
                 <div className='grid min-h-0 overflow-hidden rounded-lg bg-black/22'>
                     {responseTab === 'response' && (
-                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-5 text-bright/80'>
+                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
                             {activeRun?.loading ? 'Request is running...' : response ? response.error || response.body || 'No response body.' : 'Response will appear here.'}
                         </pre>
                     )}
@@ -283,7 +283,7 @@ export default function NewRequest({
                     )}
 
                     {responseTab === 'headers' && (
-                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-5 text-bright/75'>
+                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/75'>
                             {response?.headers ? formatHeaders(response.headers) : 'Response headers will appear here.'}
                         </pre>
                     )}
@@ -292,15 +292,15 @@ export default function NewRequest({
                         <div className='grid min-h-32 gap-3 overflow-auto p-4 text-xs text-bright/80'>
                             <div className='grid gap-1'>
                                 <span className='text-[11px] uppercase tracking-[0.24em] text-bright/40'>Request line</span>
-                                <pre className='whitespace-pre-wrap break-words rounded-lg bg-white/5 p-3'>{formatRequestLine(response?.request)}</pre>
+                                <pre className='whitespace-pre-wrap wrap-break-word rounded-lg bg-white/5 p-3'>{formatRequestLine(response?.request)}</pre>
                             </div>
                             <div className='grid gap-1'>
                                 <span className='text-[11px] uppercase tracking-[0.24em] text-bright/40'>Request headers</span>
-                                <pre className='whitespace-pre-wrap break-words rounded-lg bg-white/5 p-3'>{formatHeaders(response?.request?.headers)}</pre>
+                                <pre className='whitespace-pre-wrap wrap-break-word rounded-lg bg-white/5 p-3'>{formatHeaders(response?.request?.headers)}</pre>
                             </div>
                             <div className='grid gap-1'>
                                 <span className='text-[11px] uppercase tracking-[0.24em] text-bright/40'>Request body</span>
-                                <pre className='whitespace-pre-wrap break-words rounded-lg bg-white/5 p-3'>{response?.request?.body || 'No request body.'}</pre>
+                                <pre className='whitespace-pre-wrap wrap-break-word rounded-lg bg-white/5 p-3'>{response?.request?.body || 'No request body.'}</pre>
                             </div>
                         </div>
                     )}
@@ -337,7 +337,7 @@ export default function NewRequest({
                             <Bot className='h-3.5 w-3.5' />
                             Ask AI
                         </button>
-                        <pre className='max-h-32 min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/20 p-3 text-sm text-bright/70'>
+                        <pre className='max-h-32 min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word rounded-lg bg-black/20 p-3 text-sm text-bright/70'>
                             {aiResponse || 'AI notes will appear here.'}
                         </pre>
                     </div>
