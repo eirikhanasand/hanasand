@@ -1,6 +1,16 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { listGptClients, requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
 
+type GeneratedFile = {
+    path: string
+    content: string
+}
+
+type GeneratedProject = {
+    label: string
+    files: GeneratedFile[]
+}
+
 export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
     const { prompt, context, maxTokens } = req.body as { prompt?: string, context?: string, maxTokens?: number } ?? {}
     if (!prompt) {
@@ -114,7 +124,8 @@ async function requestCompletionWithRetry({
                             'Answer simple conversation normally without pretending to inspect or edit files.',
                             'When asked to edit a share project, emit one or more Hanasand tool tags with complete replacement content for each file that should change.',
                             'Supported share tool actions are update_share and upsert_share. Prefer upsert_share for creating or replacing files by path.',
-                            'For project-building requests, include the minimal complete files needed to run the result, such as package.json, README, source files, and environment examples.',
+                            'For project-building requests, include complete runnable files, not fragments: package.json, README, source, environment example, Dockerfile, and docker-compose.yml where relevant.',
+                            'Avoid generic placeholder slop. Include concrete copy, accessible labels, responsive structure, validation, health checks, and no hardcoded secrets.',
                         ].join(' '),
                     },
                     {
@@ -145,8 +156,8 @@ function directChatResponse(prompt: string) {
     return null
 }
 
-function buildShareProjectResponse(prompt: string) {
-    if (!/\b(build|create|make|generate|scaffold|website|site|app|bot|api|dashboard|portal|tool|starter|page)\b/i.test(prompt)) {
+export function buildShareProjectResponse(prompt: string) {
+    if (!/\b(build|create|make|generate|scaffold|website|site|app|bot|api|dashboard|portal|tool|starter|page|fix|repair|rebuild)\b/i.test(prompt)) {
         return null
     }
 
@@ -156,30 +167,34 @@ function buildShareProjectResponse(prompt: string) {
         provider: 'hanasand-ai',
         model: 'share-builder',
         message: [
-            `Prepared a ${project.label} starter with complete runnable files.`,
+            `Prepared a ${project.label} with complete runnable files, export-friendly Docker handoff, and reviewable changes.`,
             ...project.files.map((file) => toolTag(file.path, file.content)),
         ].join('\n\n'),
     }
 }
 
-function inferProject(prompt: string) {
+function inferProject(prompt: string): GeneratedProject {
     const lower = prompt.toLowerCase()
     const title = titleFromPrompt(prompt)
     const slug = slugify(title)
 
-    if (/\b(discord|bot|slack|telegram|server status bot|game server)\b/.test(lower)) {
+    if (/\b(gallery|image review|photo|photographer)\b/.test(lower)) {
+        return websiteProject(title, slug, pageSectionsFor(lower), lower)
+    }
+
+    if (/\b(worker|queue|background|redis|job|retry|dead-letter|transcode|import)\b/.test(lower)) {
+        return workerProject(title, slug, lower)
+    }
+
+    if (/\b(discord|bot|slack|telegram|server status bot|game server|moderation)\b/.test(lower)) {
         return botProject(title, slug, lower.includes('discord') ? 'Discord' : 'Chat')
     }
 
-    if (/\b(api|backend|fastify|server|audit log|health|readiness)\b/.test(lower) && !/\bwebsite|site|page\b/.test(lower)) {
-        return apiProject(title, slug)
+    if (/\b(api|backend|fastify|server|audit log|health|readiness|webhook|ledger|rate limit|idempoten|intake)\b/.test(lower) && !/\bwebsite|site|page|frontend|landing\b/.test(lower)) {
+        return apiProject(title, slug, lower)
     }
 
-    if (/\b(worker|queue|background|redis|job|retry|dead-letter)\b/.test(lower)) {
-        return workerProject(title, slug)
-    }
-
-    return websiteProject(title, slug, pageSectionsFor(lower))
+    return websiteProject(title, slug, pageSectionsFor(lower), lower)
 }
 
 function titleFromPrompt(prompt: string) {
@@ -189,13 +204,13 @@ function titleFromPrompt(prompt: string) {
     }
 
     const cleaned = prompt
-        .replace(/\b(build|create|make|generate|scaffold|tiny|polished|runnable|dockerized|starter|for the current \/s project)\b/gi, ' ')
-        .replace(/\b(website|site|app|bot|api|dashboard|portal|tool|page|project)\b/gi, ' ')
+        .replace(/\b(build|create|make|generate|scaffold|tiny|polished|runnable|dockerized|starter|for the current \/s project|critic|angry|demanding|user says|client says|please|fix|repair|rebuild)\b/gi, ' ')
+        .replace(/\b(website|site|app|bot|api|dashboard|portal|tool|page|project|flow|service)\b/gi, ' ')
         .replace(/[^a-zA-Z0-9 ]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
         .split(' ')
-        .slice(0, 4)
+        .slice(0, 5)
         .join(' ')
 
     return toTitleCase(cleaned || 'Hanasand Project')
@@ -203,7 +218,10 @@ function titleFromPrompt(prompt: string) {
 
 function pageSectionsFor(lower: string) {
     if (lower.includes('restaurant')) {
-        return ['Seasonal menu', 'Reservations', 'Opening hours', 'Private dining', 'Guest notes', 'Find us']
+        return ['Menu and allergens', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location']
+    }
+    if (lower.includes('ecommerce') || lower.includes('product') || lower.includes('store')) {
+        return ['Product bundles', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ', 'Checkout CTA']
     }
     if (lower.includes('marketing') || lower.includes('landing')) {
         return ['Proof', 'Features', 'Pricing', 'Testimonials', 'FAQ', 'Launch CTA']
@@ -211,7 +229,7 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('portfolio')) {
         return ['Selected work', 'Process', 'Packages', 'Testimonials', 'Inquiry']
     }
-    if (lower.includes('dashboard') || lower.includes('finance') || lower.includes('crm')) {
+    if (lower.includes('dashboard') || lower.includes('finance') || lower.includes('crm') || lower.includes('admin')) {
         return ['Metrics', 'Records', 'Follow-ups', 'Risks', 'Next actions']
     }
     if (lower.includes('docs') || lower.includes('documentation') || lower.includes('knowledge')) {
@@ -223,155 +241,185 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('gallery') || lower.includes('image')) {
         return ['Review queue', 'Keep', 'Reject later', 'Collections', 'Export summary']
     }
+    if (lower.includes('accessibility') || lower.includes('a11y')) {
+        return ['Skip links', 'Keyboard flow', 'Contrast', 'Forms', 'Reduced motion']
+    }
     return ['Overview', 'Highlights', 'Workflow', 'Proof', 'Next step']
 }
 
-function websiteProject(title: string, slug: string, sections: string[]) {
+function websiteProject(title: string, slug: string, sections: string[], lower: string): GeneratedProject {
+    const productType = productTypeFor(lower)
     const cards = sections.map((section, index) => ({
         section,
         metric: ['24h', '98%', '12', '4.9', '3x', 'Today'][index % 6],
+        detail: detailForSection(section, lower),
     }))
+    const businessName = title.replace(/\bThat\b|\bThis\b/gi, '').trim() || 'Hanasand Project'
     return {
-        label: 'website/app',
+        label: `${productType} website/app`,
         files: [
+            nextPackage(slug),
+            tsconfig(),
+            nextConfig(),
+            dockerfile('next'),
+            composeFile(slug, '3000'),
+            envExample(['NEXT_PUBLIC_SITE_URL=http://localhost:3000', 'CONTACT_EMAIL=hello@example.com']),
             {
-                path: 'package.json',
-                content: JSON.stringify({
-                    scripts: { dev: 'next dev', build: 'next build', start: 'next start' },
-                    dependencies: { '@types/node': 'latest', '@types/react': 'latest', '@types/react-dom': 'latest', next: 'latest', react: 'latest', 'react-dom': 'latest', typescript: 'latest' },
-                    devDependencies: {},
-                }, null, 2),
+                path: 'src/app/layout.tsx',
+                content: `import type { Metadata } from 'next'\n\nexport const metadata: Metadata = {\n  title: '${escapeTs(title)}',\n  description: 'Accessible, responsive ${escapeTs(productType)} starter generated in Hanasand Chat.',\n}\n\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return (\n    <html lang="en">\n      <body>{children}</body>\n    </html>\n  )\n}\n`,
             },
             {
                 path: 'src/app/page.tsx',
-                content: `const sections = ${JSON.stringify(cards, null, 2)}
-
-export default function Page() {
-  return (
-    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at top, #283126, #080a08 62%)', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: 32 }}>
-      <section style={{ maxWidth: 1120, margin: '0 auto', display: 'grid', gap: 28 }}>
-        <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#b8b1a5' }}>
-          <strong>${title}</strong>
-          <a href="#start" style={{ color: '#ff9d55', textDecoration: 'none' }}>Start</a>
-        </nav>
-        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 36, background: 'rgba(255,255,255,.07)', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>
-          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built in Hanasand Chat</p>
-          <h1 style={{ fontSize: 'clamp(44px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${title}</h1>
-          <p style={{ maxWidth: 650, color: '#d8d0c3', fontSize: 20 }}>A sharp, responsive starter with concrete sections, useful copy, and a clear path to connect real data or publishing later.</p>
-          <div id="start" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 26 }}>
-            <a href="mailto:hello@example.com" style={{ background: '#f7f0e6', color: '#0b0d0b', padding: '14px 18px', borderRadius: 999, textDecoration: 'none', fontWeight: 700 }}>Book a call</a>
-            <a href="#sections" style={{ border: '1px solid rgba(255,255,255,.16)', color: '#f7f0e6', padding: '14px 18px', borderRadius: 999, textDecoration: 'none' }}>View details</a>
-          </div>
-        </header>
-        <section id="sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-          {sections.map((item) => (
-            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>
-              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>
-              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>
-              <p style={{ color: '#bfb7aa' }}>Production-ready structure and copy for {item.section.toLowerCase()}.</p>
-            </article>
-          ))}
-        </section>
-      </section>
-    </main>
-  )
-}
-`,
+                content: `const sections = ${JSON.stringify(cards, null, 2)}\n\nconst trust = ['No platform lock-in', 'Readable source export', 'Mobile-first layout', 'Accessible controls']\nconst tasks = ['Replace contact routes', 'Connect real data', 'Run Lighthouse/a11y pass', 'Deploy with Docker Compose']\n\nexport default function Page() {\n  return (\n    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at 18% 8%, rgba(226,88,34,.24), transparent 28%), radial-gradient(circle at 82% 0%, rgba(157,225,143,.16), transparent 24%), #080a08', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: '24px' }}>\n      <a href="#content" style={{ position: 'absolute', left: 16, top: 16, color: '#080a08', background: '#f7f0e6', padding: '8px 12px', borderRadius: 999 }}>Skip to content</a>\n      <section id="content" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 28 }}>\n        <nav aria-label="Primary" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, color: '#c7beb0', flexWrap: 'wrap' }}>\n          <strong>${escapeTs(businessName)}</strong>\n          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>\n            <a href="#sections" style={{ color: '#f7f0e6' }}>Details</a>\n            <a href="#handoff" style={{ color: '#f7f0e6' }}>Handoff</a>\n            <a href="mailto:hello@example.com" style={{ color: '#ffb15f' }}>Contact</a>\n          </div>\n        </nav>\n        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 'clamp(26px, 5vw, 52px)', background: 'linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035))', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>\n          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built for a skeptical client</p>\n          <h1 style={{ fontSize: 'clamp(42px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${escapeTs(title)}</h1>\n          <p style={{ maxWidth: 720, color: '#ded6ca', fontSize: 20 }}>A concrete ${escapeTs(productType)} starter that avoids generic filler: responsive sections, accessible navigation, real handoff notes, and clear places to connect production data.</p>\n          <form aria-label="Lead capture" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 26 }}>\n            <label style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 260px' }}>\n              <span style={{ color: '#c7beb0' }}>Email</span>\n              <input required type="email" placeholder="you@example.com" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.25)', color: '#f7f0e6', padding: '14px 16px', borderRadius: 16 }} />\n            </label>\n            <button type="submit" style={{ alignSelf: 'end', border: 0, background: '#f7f0e6', color: '#0b0d0b', padding: '15px 20px', borderRadius: 999, fontWeight: 800 }}>Request review</button>\n          </form>\n        </header>\n        <section id="sections" aria-label="Project sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>\n          {sections.map((item) => (\n            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>\n              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>\n              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>\n              <p style={{ color: '#bfb7aa' }}>{item.detail}</p>\n            </article>\n          ))}\n        </section>\n        <section id="handoff" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Trust fixes</h2>\n            <ul>{trust.map((item) => <li key={item}>{item}</li>)}</ul>\n          </article>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Next production tasks</h2>\n            <ol>{tasks.map((item) => <li key={item}>{item}</li>)}</ol>\n          </article>\n        </section>\n      </section>\n    </main>\n  )\n}\n`,
             },
-            {
-                path: 'README.md',
-                content: `# ${title}
-
-Generated by Hanasand Chat as a runnable Next.js starter.
-
-## Run
-
-\`\`\`bash
-npm install
-npm run dev
-\`\`\`
-
-## Files
-
-- \`src/app/page.tsx\` contains the complete responsive page.
-- Replace example contact links and copy before publishing.
-`,
-            },
+            readme(title, [
+                'Responsive Next.js app with accessible labels, skip link, and concrete sections.',
+                'Dockerfile and docker-compose.yml keep the result exportable and self-hostable.',
+                '.env.example documents the values to replace before publishing.',
+                'Run Lighthouse, keyboard navigation, and real form integration before launch.',
+            ]),
         ],
     }
 }
 
-function botProject(title: string, slug: string, platform: string) {
+function botProject(title: string, slug: string, platform: string): GeneratedProject {
     return {
         label: `${platform} bot`,
         files: [
-            { path: 'package.json', content: JSON.stringify({ name: slug, type: 'module', scripts: { dev: 'tsx src/index.ts', start: 'node dist/index.js', build: 'tsc' }, dependencies: { 'discord.js': '^14.16.3', dotenv: '^16.4.7' }, devDependencies: { tsx: '^4.19.2', typescript: '^5.7.2' } }, null, 2) },
-            { path: '.env.example', content: 'DISCORD_TOKEN=replace_me\nDISCORD_CLIENT_ID=replace_me\nWELCOME_CHANNEL_ID=replace_me\n' },
-            { path: 'src/index.ts', content: `import 'dotenv/config'
-import { Client, Events, GatewayIntentBits } from 'discord.js'
-
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] })
-
-client.once(Events.ClientReady, (readyClient) => {
-  console.log(\`${title} ready as \${readyClient.user.tag}\`)
-})
-
-client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot) return
-  if (message.content === '!help') {
-    await message.reply('Commands: !help, !status, !roles. Configure real moderation actions after review.')
-  }
-  if (message.content === '!status') {
-    await message.reply('Online. Admin actions are stubbed until explicit approval is configured.')
-  }
-})
-
-if (!process.env.DISCORD_TOKEN) throw new Error('Missing DISCORD_TOKEN')
-await client.login(process.env.DISCORD_TOKEN)
-` },
-            { path: 'README.md', content: `# ${title}\n\nA safe ${platform} bot starter with token configuration, status commands, and explicit stubs for admin actions.\n\n## Run\n\n\`\`\`bash\ncp .env.example .env\nnpm install\nnpm run dev\n\`\`\`\n` },
+            packageJson(slug, { dev: 'tsx src/index.ts', start: 'node dist/index.js', build: 'tsc' }, { 'discord.js': '^14.16.3', dotenv: '^16.4.7' }, { tsx: '^4.19.2', typescript: '^5.7.2' }),
+            tsconfig(),
+            dockerfile('node'),
+            composeFile(slug, '3000'),
+            envExample(['DISCORD_TOKEN=replace_me', 'DISCORD_CLIENT_ID=replace_me', 'WELCOME_CHANNEL_ID=replace_me', 'ADMIN_ROLE_ID=replace_me']),
+            {
+                path: 'src/index.ts',
+                content: `import 'dotenv/config'\nimport { Client, Events, GatewayIntentBits } from 'discord.js'\n\nconst required = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID'] as const\nfor (const key of required) {\n  if (!process.env[key]) throw new Error('Missing ' + key)\n}\n\nconst client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] })\nconst auditLog: Array<{ at: string; action: string; actor: string }> = []\n\nclient.once(Events.ClientReady, (readyClient) => {\n  console.log('${escapeTs(title)} ready as ' + readyClient.user.tag)\n})\n\nclient.on(Events.MessageCreate, async (message) => {\n  if (message.author.bot) return\n  if (message.content === '!help') await message.reply('Commands: !help, !status, !roles, !audit. Destructive actions require explicit review.')\n  if (message.content === '!status') await message.reply('Online. Secrets are loaded from environment variables only.')\n  if (message.content === '!roles') await message.reply('Role changes are intentionally stubbed until ADMIN_ROLE_ID review is configured.')\n  if (message.content === '!audit') await message.reply(auditLog.slice(-5).map((entry) => entry.action).join('\\n') || 'No admin actions yet.')\n  auditLog.push({ at: new Date().toISOString(), action: message.content, actor: message.author.id })\n})\n\nawait client.login(process.env.DISCORD_TOKEN)\n`,
+            },
+            readme(title, [
+                `${platform} bot starter with safe environment configuration and no hardcoded token.`,
+                'Admin actions are stubs until role checks and audit review are connected.',
+                'Includes Docker handoff so the project is portable instead of locked to one host.',
+            ]),
         ],
     }
 }
 
-function apiProject(title: string, slug: string) {
+function apiProject(title: string, slug: string, lower: string): GeneratedProject {
+    const noun = lower.includes('webhook') ? 'event' : lower.includes('intake') ? 'intake' : 'record'
     return {
         label: 'API',
         files: [
-            { path: 'package.json', content: JSON.stringify({ name: slug, type: 'module', scripts: { dev: 'tsx src/index.ts', build: 'tsc', start: 'node dist/index.js' }, dependencies: { '@fastify/cors': '^10.0.1', fastify: '^5.2.1', dotenv: '^16.4.7' }, devDependencies: { tsx: '^4.19.2', typescript: '^5.7.2' } }, null, 2) },
-            { path: '.env.example', content: 'PORT=3000\nAPI_TOKEN=replace_me\n' },
-            { path: 'src/index.ts', content: `import 'dotenv/config'
-import Fastify from 'fastify'
-
-const app = Fastify({ logger: true })
-const records = new Map<string, { id: string; title: string; status: string }>()
-
-app.get('/health', async () => ({ ok: true, service: '${title}' }))
-app.get('/ready', async () => ({ ready: true, records: records.size }))
-app.get('/records', async () => [...records.values()])
-app.post<{ Body: { title?: string; status?: string } }>('/records', async (request, reply) => {
-  const id = crypto.randomUUID()
-  const record = { id, title: request.body.title || 'Untitled', status: request.body.status || 'open' }
-  records.set(id, record)
-  return reply.code(201).send(record)
-})
-
-await app.listen({ port: Number(process.env.PORT || 3000), host: '0.0.0.0' })
-` },
-            { path: 'README.md', content: `# ${title}\n\nFastify API starter with health, readiness, and record routes.\n\n\`\`\`bash\ncp .env.example .env\nnpm install\nnpm run dev\n\`\`\`\n` },
+            packageJson(slug, { dev: 'tsx src/index.ts', build: 'tsc', start: 'node dist/index.js' }, { dotenv: '^16.4.7', fastify: '^5.2.1' }, { tsx: '^4.19.2', typescript: '^5.7.2' }),
+            tsconfig(),
+            dockerfile('node'),
+            composeFile(slug, '3000'),
+            envExample(['PORT=3000', 'API_TOKEN=replace_me', 'RATE_LIMIT_PER_MINUTE=60']),
+            {
+                path: 'src/index.ts',
+                content: `import 'dotenv/config'\nimport Fastify from 'fastify'\n\ntype RecordItem = { id: string; title: string; status: 'open' | 'review' | 'closed'; createdAt: string; idempotencyKey?: string }\nconst app = Fastify({ logger: true })\nconst records = new Map<string, RecordItem>()\nconst idempotency = new Map<string, string>()\n\nfunction assertToken(request: { headers: Record<string, string | string[] | undefined> }) {\n  const configured = process.env.API_TOKEN\n  if (!configured) return\n  const token = request.headers.authorization?.toString().replace(/^Bearer\\s+/i, '')\n  if (token !== configured) throw Object.assign(new Error('Forbidden'), { statusCode: 403 })\n}\n\napp.get('/health', async () => ({ ok: true, service: '${escapeTs(title)}' }))\napp.get('/ready', async () => ({ ready: true, records: records.size, checks: ['memory-store', 'env'] }))\napp.get('/${noun}s', async () => [...records.values()])\napp.post<{ Body: { title?: string; status?: RecordItem['status']; idempotencyKey?: string } }>('/${noun}s', async (request, reply) => {\n  assertToken(request)\n  const title = request.body.title?.trim()\n  if (!title) return reply.code(400).send({ error: 'title_required', message: 'Title is required.' })\n  if (request.body.idempotencyKey && idempotency.has(request.body.idempotencyKey)) {\n    return records.get(idempotency.get(request.body.idempotencyKey)!)\n  }\n  const id = crypto.randomUUID()\n  const record = { id, title, status: request.body.status || 'open', createdAt: new Date().toISOString(), idempotencyKey: request.body.idempotencyKey }\n  records.set(id, record)\n  if (request.body.idempotencyKey) idempotency.set(request.body.idempotencyKey, id)\n  return reply.code(201).send(record)\n})\n\napp.setErrorHandler((error, _request, reply) => {\n  const statusCode = 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500\n  reply.code(statusCode).send({ error: statusCode >= 500 ? 'internal_error' : 'request_error', message: error.message })\n})\n\nawait app.listen({ port: Number(process.env.PORT || 3000), host: '0.0.0.0' })\n`,
+            },
+            readme(title, [
+                `Fastify ${noun} API with health/readiness routes, validation, idempotency, and safe token handling.`,
+                'Docker Compose keeps deployment portable and inspectable.',
+                'Replace the in-memory store with Postgres before production traffic.',
+            ]),
         ],
     }
 }
 
-function workerProject(title: string, slug: string) {
-    const api = apiProject(title, slug)
+function workerProject(title: string, slug: string, lower: string): GeneratedProject {
+    const queueName = lower.includes('image') ? 'image-jobs' : lower.includes('invoice') ? 'invoice-jobs' : 'work-jobs'
     return {
         label: 'worker queue',
         files: [
-            ...api.files,
-            { path: 'src/worker.ts', content: `const queue = ['sync-demo', 'send-reminder', 'export-summary']\n\nfor (const job of queue) {\n  console.log('processing', job)\n}\n\nconsole.log('${title} worker idle')\n` },
+            packageJson(slug, { dev: 'tsx src/index.ts', 'dev:worker': 'tsx src/worker.ts', build: 'tsc', start: 'node dist/index.js', worker: 'node dist/worker.js' }, { dotenv: '^16.4.7', fastify: '^5.2.1' }, { tsx: '^4.19.2', typescript: '^5.7.2' }),
+            tsconfig(),
+            dockerfile('node'),
+            composeFile(slug, '3000', true),
+            envExample(['PORT=3000', 'REDIS_URL=redis://redis:6379', 'MAX_RETRIES=3']),
+            {
+                path: 'src/queue.ts',
+                content: 'export type Job = { id: string; name: string; status: \'queued\' | \'running\' | \'complete\' | \'failed\' | \'dead\'; attempts: number; payload: Record<string, unknown> }\n\nexport const jobs: Job[] = []\n\nexport function enqueue(name: string, payload: Record<string, unknown> = {}) {\n  const job = { id: crypto.randomUUID(), name, status: \'queued\' as const, attempts: 0, payload }\n  jobs.push(job)\n  return job\n}\n\nexport function nextJob() {\n  return jobs.find((job) => job.status === \'queued\' || (job.status === \'failed\' && job.attempts < Number(process.env.MAX_RETRIES || 3)))\n}\n',
+            },
+            {
+                path: 'src/index.ts',
+                content: `import 'dotenv/config'\nimport Fastify from 'fastify'\nimport { enqueue, jobs } from './queue.js'\n\nconst app = Fastify({ logger: true })\napp.get('/health', async () => ({ ok: true, service: '${escapeTs(title)}' }))\napp.get('/api/worker-status', async () => ({ queue: '${queueName}', total: jobs.length, queued: jobs.filter((job) => job.status === 'queued').length }))\napp.get('/api/jobs', async () => jobs)\napp.post<{ Body: { name?: string; payload?: Record<string, unknown> } }>('/api/jobs', async (request, reply) => {\n  if (!request.body.name?.trim()) return reply.code(400).send({ error: 'name_required' })\n  return reply.code(201).send(enqueue(request.body.name, request.body.payload || {}))\n})\nawait app.listen({ port: Number(process.env.PORT || 3000), host: '0.0.0.0' })\n`,
+            },
+            {
+                path: 'src/worker.ts',
+                content: `import 'dotenv/config'\nimport { jobs, nextJob } from './queue.js'\n\nconst job = nextJob()\nif (!job) {\n  console.log('${escapeTs(title)} idle')\n} else {\n  job.status = 'running'\n  job.attempts += 1\n  try {\n    console.log('processing', job.name, job.payload)\n    job.status = 'complete'\n  } catch {\n    job.status = job.attempts >= Number(process.env.MAX_RETRIES || 3) ? 'dead' : 'failed'\n  }\n}\nconsole.log('queue snapshot', jobs)\n`,
+            },
+            readme(title, [
+                'Queue starter with enqueue API, worker entrypoint, retry/dead-letter states, and status endpoint.',
+                'Redis is included in Docker Compose as the production replacement seam; the starter runs locally with an in-memory queue.',
+                'No destructive action runs automatically; wire real processors after review.',
+            ]),
         ],
     }
+}
+
+function nextPackage(slug: string) {
+    return packageJson(slug, { dev: 'next dev', build: 'next build', start: 'next start' }, { next: 'latest', react: 'latest', 'react-dom': 'latest' }, { '@types/node': 'latest', '@types/react': 'latest', '@types/react-dom': 'latest', typescript: 'latest' })
+}
+
+function packageJson(name: string, scripts: Record<string, string>, dependencies: Record<string, string>, devDependencies: Record<string, string>): GeneratedFile {
+    return {
+        path: 'package.json',
+        content: JSON.stringify({ name, version: '0.1.0', private: true, type: 'module', scripts, dependencies, devDependencies }, null, 2),
+    }
+}
+
+function tsconfig(): GeneratedFile {
+    return {
+        path: 'tsconfig.json',
+        content: JSON.stringify({ compilerOptions: { target: 'ES2022', lib: ['ES2022', 'DOM'], module: 'NodeNext', moduleResolution: 'NodeNext', strict: true, esModuleInterop: true, skipLibCheck: true, forceConsistentCasingInFileNames: true, outDir: 'dist', jsx: 'preserve' }, include: ['src/**/*'] }, null, 2),
+    }
+}
+
+function nextConfig(): GeneratedFile {
+    return { path: 'next.config.ts', content: 'import type { NextConfig } from \'next\'\n\nconst nextConfig: NextConfig = {\n  output: \'standalone\',\n}\n\nexport default nextConfig\n' }
+}
+
+function dockerfile(kind: 'next' | 'node'): GeneratedFile {
+    if (kind === 'next') {
+        return { path: 'Dockerfile', content: 'FROM node:22-alpine AS deps\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\n\nFROM node:22-alpine AS builder\nWORKDIR /app\nCOPY --from=deps /app/node_modules ./node_modules\nCOPY . .\nRUN npm run build\n\nFROM node:22-alpine AS runner\nWORKDIR /app\nENV NODE_ENV=production\nCOPY --from=builder /app/.next/standalone ./\nCOPY --from=builder /app/.next/static ./.next/static\nCOPY --from=builder /app/public ./public\nEXPOSE 3000\nCMD ["node", "server.js"]\n' }
+    }
+    return { path: 'Dockerfile', content: 'FROM node:22-alpine AS deps\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\n\nFROM node:22-alpine AS builder\nWORKDIR /app\nCOPY --from=deps /app/node_modules ./node_modules\nCOPY . .\nRUN npm run build\n\nFROM node:22-alpine AS runner\nWORKDIR /app\nENV NODE_ENV=production\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/node_modules ./node_modules\nCOPY package.json ./package.json\nEXPOSE 3000\nCMD ["npm", "run", "start"]\n' }
+}
+
+function composeFile(slug: string, port: string, includeRedis = false): GeneratedFile {
+    const services = includeRedis
+        ? `  app:\n    build: .\n    env_file: .env\n    ports:\n      - "\${HOST_PORT:-${port}}:3000"\n    depends_on:\n      - redis\n  worker:\n    build: .\n    env_file: .env\n    command: npm run worker\n    depends_on:\n      - redis\n  redis:\n    image: redis:7-alpine\n    ports:\n      - "\${REDIS_PORT:-6379}:6379"\n`
+        : `  app:\n    build: .\n    env_file: .env\n    ports:\n      - "\${HOST_PORT:-${port}}:3000"\n`
+    return { path: 'docker-compose.yml', content: `services:\n${services}\n` }
+}
+
+function envExample(lines: string[]): GeneratedFile {
+    return { path: '.env.example', content: `${['HOST_PORT=3000', ...lines].join('\n')}\n` }
+}
+
+function readme(title: string, bullets: string[]): GeneratedFile {
+    return {
+        path: 'README.md',
+        content: `# ${title}\n\nGenerated by Hanasand Chat as an exportable starter.\n\n## Run locally\n\n\`\`\`bash\ncp .env.example .env\nnpm install\nnpm run dev\n\`\`\`\n\n## Docker\n\n\`\`\`bash\ndocker compose up --build\n\`\`\`\n\n## Handoff notes\n\n${bullets.map((line) => `- ${line}`).join('\n')}\n\n## Verification\n\n- Run \`npm run build\`.\n- Check keyboard navigation and mobile layout.\n- Replace demo values in \`.env\` before production.\n`,
+    }
+}
+
+function detailForSection(section: string, lower: string) {
+    if (lower.includes('complain') || lower.includes('critic') || lower.includes('angry')) {
+        return `Specific, reviewable ${section.toLowerCase()} work with no vague filler and an obvious production seam.`
+    }
+    return `Concrete ${section.toLowerCase()} content with clear next steps and accessible structure.`
+}
+
+function productTypeFor(lower: string) {
+    if (lower.includes('restaurant')) return 'restaurant reservation'
+    if (lower.includes('marketing') || lower.includes('landing')) return 'marketing landing'
+    if (lower.includes('dashboard') || lower.includes('admin')) return 'operations dashboard'
+    if (lower.includes('ecommerce') || lower.includes('store')) return 'ecommerce'
+    if (lower.includes('accessibility') || lower.includes('a11y')) return 'accessibility-first'
+    if (lower.includes('seo') || lower.includes('local')) return 'local SEO'
+    return 'product'
 }
 
 function toolTag(path: string, content: string) {
@@ -384,6 +432,10 @@ function slugify(value: string) {
 
 function toTitleCase(value: string) {
     return value.replace(/\w\S*/g, (part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+}
+
+function escapeTs(value: string) {
+    return value.replace(/\\/g, '\\\\').replace(/'/g, '\\\'')
 }
 
 function parseBrowserOpenTarget(prompt: string) {
