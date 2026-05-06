@@ -31,6 +31,7 @@ install_forgejo_helper() {
     cat >/usr/local/src/forgejo-gitea-serv.c <<'C'
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -65,8 +66,18 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    const char *original_command = getenv("SSH_ORIGINAL_COMMAND");
+    char original_command_env[8192];
+    if (original_command == NULL) {
+        original_command = "";
+    }
+    if (snprintf(original_command_env, sizeof(original_command_env), "SSH_ORIGINAL_COMMAND=%s", original_command) >= (int)sizeof(original_command_env)) {
+        fprintf(stderr, "SSH_ORIGINAL_COMMAND is too long.\n");
+        return 1;
+    }
+
     char *cmd[] = {
-        "/usr/bin/docker", "exec", "-i", "--user", "git", FORGEJO_CONTAINER,
+        "/usr/bin/docker", "exec", "-i", "--user", "git", "-e", original_command_env, FORGEJO_CONTAINER,
         "/usr/local/bin/gitea", argv[1], argv[2], argv[3], NULL
     };
     execv(cmd[0], cmd);
