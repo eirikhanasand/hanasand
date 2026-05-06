@@ -509,6 +509,23 @@ curl http://127.0.0.1:3001/api/jobs
 - The API only enqueues and inspects jobs.
 - The worker consumes the queue and updates a shared heartbeat key.
 - Redis is the only shared dependency in this starter, which keeps the stack easy to run locally.
+
+## Operations
+
+- Build check: \`npm run build\`
+- Compose check: \`docker compose config\`
+- Runtime check: \`docker compose up --build\`
+- Rollback: redeploy the previous image or Git revision, then run \`docker compose up -d --build\`; keep the \`redisdata\` volume unless you intentionally drain or restore the queue.
+
+## Metrics To Watch
+
+- \`/health\` uptime
+- \`/ready\` dependency readiness
+- queue depth
+- worker heartbeat age
+- completed job count
+- failed job count
+- container restart count
 `)
 
     const installResult = await runCommand({

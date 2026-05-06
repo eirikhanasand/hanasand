@@ -16,10 +16,22 @@ type CaseResult = {
     id: string
     title: string
     tool: string
+    storyPath: string
     ok: boolean
     elapsedMs: number
     result: ToolResult
     checks: Record<string, boolean>
+}
+
+type ScenarioKind = 'next' | 'postgres' | 'redis'
+
+type Scenario = {
+    id: string
+    title: string
+    storyPath: string
+    kind: ScenarioKind
+    tool: string
+    run: () => Promise<unknown>
 }
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -90,15 +102,37 @@ async function run(command: string, cwd: string, timeoutMs: number) {
     })
 }
 
-async function verifyProject(absolutePath: string) {
-    const [packageJson, dockerfile, composeFile, envExample] = await Promise.all([
+async function fileIncludes(filePath: string, patterns: RegExp[]) {
+    const content = await fs.readFile(filePath, 'utf8').catch(() => '')
+    return patterns.every((pattern) => pattern.test(content))
+}
+
+async function verifyProject(absolutePath: string, kind: ScenarioKind) {
+    const [packageJson, dockerfile, composeFile, envExample, readme] = await Promise.all([
         exists(path.join(absolutePath, 'package.json')),
         exists(path.join(absolutePath, 'Dockerfile')),
         exists(path.join(absolutePath, 'docker-compose.yml')),
         exists(path.join(absolutePath, '.env.example')),
+        exists(path.join(absolutePath, 'README.md')),
     ])
     const build = packageJson ? await run('npm run build', absolutePath, 10 * 60 * 1000) : null
     const compose = composeFile ? await run('docker compose config', absolutePath, 2 * 60 * 1000) : null
+    const readmeOps = await fileIncludes(path.join(absolutePath, 'README.md'), [/rollback/i, /metrics/i, /docker compose/i])
+
+    const kindChecks: Record<string, boolean> = {}
+    if (kind === 'next') {
+        kindChecks.standaloneNext = await fileIncludes(path.join(absolutePath, 'next.config.ts'), [/output:\s*["']standalone["']/])
+        kindChecks.appPage = await exists(path.join(absolutePath, 'src/app/page.tsx'))
+        kindChecks.readmeEnv = await fileIncludes(path.join(absolutePath, 'README.md'), [/\.env\.example/, /HOST_PORT/])
+    } else if (kind === 'postgres') {
+        kindChecks.migrationScript = await exists(path.join(absolutePath, 'src/scripts/migrate.ts'))
+        kindChecks.healthRoutes = await fileIncludes(path.join(absolutePath, 'src/routes/health.ts'), [/\/health/, /\/ready/])
+        kindChecks.postgresCompose = await fileIncludes(path.join(absolutePath, 'docker-compose.yml'), [/postgres:16-alpine/, /service_healthy/])
+    } else {
+        kindChecks.workerEntrypoint = await exists(path.join(absolutePath, 'src/worker.ts'))
+        kindChecks.queueRoutes = await fileIncludes(path.join(absolutePath, 'src/routes/jobs.ts'), [/\/api\/jobs/, /\/api\/worker-status/])
+        kindChecks.redisCompose = await fileIncludes(path.join(absolutePath, 'docker-compose.yml'), [/redis:7-alpine/, /worker:/])
+    }
 
     return {
         checks: {
@@ -106,8 +140,11 @@ async function verifyProject(absolutePath: string) {
             dockerfile,
             composeFile,
             envExample,
+            readme,
+            readmeOps,
             build: build?.exitCode === 0,
             compose: compose?.exitCode === 0,
+            ...kindChecks,
         },
         build,
         compose,
@@ -128,10 +165,12 @@ async function main() {
         import('../src/utils/tools/scaffoldFastifyWorkerRedisApp.ts'),
     ])
 
-    const cases = [
+    const cases: Scenario[] = [
         {
             id: 'fixed-price-client-portal',
             title: 'Fixed price client portal',
+            storyPath: 'agents/training-scenarios/user_stories/01-fixed-price-client-portal.md',
+            kind: 'next',
             tool: 'scaffoldNextjsDockerApp',
             run: () => scaffoldNextjsDockerApp({
                 targetDir: rel('fixed-price-client-portal'),
@@ -143,6 +182,8 @@ async function main() {
         {
             id: 'launch-waitlist-admin',
             title: 'Launch waitlist admin',
+            storyPath: 'agents/training-scenarios/user_stories/02-launch-waitlist-admin.md',
+            kind: 'postgres',
             tool: 'scaffoldFastifyPostgresApp',
             run: () => scaffoldFastifyPostgresApp({
                 targetDir: rel('launch-waitlist-admin'),
@@ -152,6 +193,8 @@ async function main() {
         {
             id: 'background-jobs-and-queue',
             title: 'Background jobs and queue',
+            storyPath: 'agents/training-scenarios/user_stories/03-background-jobs-and-queue.md',
+            kind: 'redis',
             tool: 'scaffoldFastifyWorkerRedisApp',
             run: () => scaffoldFastifyWorkerRedisApp({
                 targetDir: rel('background-jobs-and-queue'),
@@ -161,6 +204,8 @@ async function main() {
         {
             id: 'vercel-to-vps-migration',
             title: 'Vercel to VPS migration',
+            storyPath: 'agents/training-scenarios/user_stories/04-vercel-to-vps-migration.md',
+            kind: 'next',
             tool: 'scaffoldNextjsDockerApp',
             run: () => scaffoldNextjsDockerApp({
                 targetDir: rel('vercel-to-vps-migration'),
@@ -172,10 +217,187 @@ async function main() {
         {
             id: 'observable-self-hosted-stack',
             title: 'Observable self-hosted stack',
+            storyPath: 'agents/training-scenarios/user_stories/05-observable-self-hosted-stack.md',
+            kind: 'postgres',
             tool: 'scaffoldFastifyPostgresApp',
             run: () => scaffoldFastifyPostgresApp({
                 targetDir: rel('observable-self-hosted-stack'),
                 appName: 'PulseRail Ops',
+            }),
+        },
+        {
+            id: 'webhook-ingestion-ledger',
+            title: 'Webhook ingestion ledger',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#06-webhook-ingestion-ledger',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('webhook-ingestion-ledger'),
+                appName: 'HookLedger API',
+            }),
+        },
+        {
+            id: 'invoice-export-worker',
+            title: 'Invoice export worker',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#07-invoice-export-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('invoice-export-worker'),
+                appName: 'LedgerLift Exports',
+            }),
+        },
+        {
+            id: 'multi-tenant-agency-dashboard',
+            title: 'Multi-tenant agency dashboard',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#08-multi-tenant-agency-dashboard',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('multi-tenant-agency-dashboard'),
+                appName: 'TenantScope',
+                productType: 'multi-tenant agency dashboard',
+                productBrief: 'TenantScope helps agencies monitor client workspaces, launches, usage, pricing risk, and delivery quality from a portable Dockerized Next.js dashboard.',
+            }),
+        },
+        {
+            id: 'booking-reservation-api',
+            title: 'Booking reservation API',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#09-booking-reservation-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('booking-reservation-api'),
+                appName: 'SlotHarbor API',
+            }),
+        },
+        {
+            id: 'image-processing-queue',
+            title: 'Image processing queue',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#10-image-processing-queue',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('image-processing-queue'),
+                appName: 'PixelForge Queue',
+            }),
+        },
+        {
+            id: 'uptime-status-page',
+            title: 'Uptime status page',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#11-uptime-status-page',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('uptime-status-page'),
+                appName: 'BeaconStatus',
+                productType: 'public uptime status page',
+                productBrief: 'BeaconStatus gives small SaaS teams a public status page with incident summaries, uptime metrics, customer messaging, and Dockerized self-hosting.',
+            }),
+        },
+        {
+            id: 'compliance-audit-api',
+            title: 'Compliance audit API',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#12-compliance-audit-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('compliance-audit-api'),
+                appName: 'AuditTrail API',
+            }),
+        },
+        {
+            id: 'newsletter-dispatch-queue',
+            title: 'Newsletter dispatch queue',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#13-newsletter-dispatch-queue',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('newsletter-dispatch-queue'),
+                appName: 'LetterRun Queue',
+            }),
+        },
+        {
+            id: 'ecommerce-launch-dashboard',
+            title: 'Ecommerce launch dashboard',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#14-ecommerce-launch-dashboard',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('ecommerce-launch-dashboard'),
+                appName: 'CartLift Launch',
+                productType: 'ecommerce launch dashboard',
+                productBrief: 'CartLift Launch helps stores coordinate launches, conversion metrics, pricing, testimonials, readiness gates, and campaign tasks in a portable dashboard.',
+            }),
+        },
+        {
+            id: 'feature-flag-config-api',
+            title: 'Feature flag config API',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#15-feature-flag-config-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('feature-flag-config-api'),
+                appName: 'FlagFoundry API',
+            }),
+        },
+        {
+            id: 'csv-import-worker',
+            title: 'CSV import worker',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#16-csv-import-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('csv-import-worker'),
+                appName: 'ImportPilot Queue',
+            }),
+        },
+        {
+            id: 'developer-docs-portal',
+            title: 'Developer docs portal',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#17-developer-docs-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('developer-docs-portal'),
+                appName: 'DocHarbor',
+                productType: 'developer documentation portal',
+                productBrief: 'DocHarbor is a self-hosted documentation portal with onboarding metrics, pricing tiers, launch checklists, examples, and Dockerized deployment.',
+            }),
+        },
+        {
+            id: 'customer-feedback-api',
+            title: 'Customer feedback API',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#18-customer-feedback-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('customer-feedback-api'),
+                appName: 'VoiceBoard API',
+            }),
+        },
+        {
+            id: 'media-transcoding-queue',
+            title: 'Media transcoding queue',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#19-media-transcoding-queue',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('media-transcoding-queue'),
+                appName: 'ClipSmith Queue',
+            }),
+        },
+        {
+            id: 'incident-response-command-center',
+            title: 'Incident response command center',
+            storyPath: 'agents/training-scenarios/user_stories/20-advanced-user-stories.md#20-incident-response-command-center',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('incident-response-command-center'),
+                appName: 'Fireline Command',
+                productType: 'incident response command center',
+                productBrief: 'Fireline Command helps operators coordinate incidents, customer updates, metrics, pricing impact, readiness tasks, and deployment confidence from one self-hosted UI.',
             }),
         },
     ]
@@ -186,7 +408,7 @@ async function main() {
         const startedAt = Date.now()
         const toolResult = await scenario.run() as ToolResult
         const absolutePath = path.resolve(smokeRoot, toolResult.targetDir || rel(scenario.id))
-        const verification = await verifyProject(absolutePath)
+        const verification = await verifyProject(absolutePath, scenario.kind)
         const checks = {
             ...verification.checks,
             toolSucceeded: toolResult.exitCode === 0,
@@ -195,6 +417,7 @@ async function main() {
             id: scenario.id,
             title: scenario.title,
             tool: scenario.tool,
+            storyPath: scenario.storyPath,
             ok: Object.values(checks).every(Boolean),
             elapsedMs: Date.now() - startedAt,
             result: {
@@ -223,7 +446,7 @@ async function main() {
     await fs.mkdir(outputDir, { recursive: true })
     const outputPath = path.join(outputDir, `${Date.now()}.json`)
     await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
-    console.log(JSON.stringify({ outputPath, ok: report.ok, results: results.map(({ id, ok, elapsedMs, checks }) => ({ id, ok, elapsedMs, checks })) }, null, 2))
+    console.log(JSON.stringify({ outputPath, ok: report.ok, results: results.map(({ id, ok, elapsedMs, storyPath, checks }) => ({ id, ok, elapsedMs, storyPath, checks })) }, null, 2))
 
     if (!report.ok) {
         process.exit(1)

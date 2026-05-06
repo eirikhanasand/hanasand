@@ -318,6 +318,22 @@ curl -X POST http://127.0.0.1:3001/api/tasks \\
 \`\`\`
 
 API default: http://127.0.0.1:3001
+
+## Operations
+
+- Build check: \`npm run build\`
+- Compose check: \`docker compose config\`
+- Migration check: \`npm run db:migrate\`
+- Runtime check: \`docker compose up --build\`
+- Rollback: redeploy the previous image or Git revision, then run \`docker compose up -d --build\`; keep the \`pgdata\` volume unless you intentionally restore from backup.
+
+## Metrics To Watch
+
+- \`/health\` uptime
+- \`/ready\` dependency readiness
+- Postgres connection errors
+- API request latency and error rate
+- container restart count
 `)
 
     const installResult = await runCommand({

@@ -361,6 +361,31 @@ npm run verify
 \`\`\`bash
 HOST_PORT=3200 docker compose up --build
 \`\`\`
+
+## Environment
+
+Copy \`.env.example\` when you need a local override:
+
+\`\`\`bash
+cp .env.example .env
+\`\`\`
+
+\`HOST_PORT\` controls the host port exposed by Docker Compose. \`NEXT_PUBLIC_APP_ENV\` lets operators distinguish local, staging, and production builds without changing source code.
+
+## Operations
+
+- Build check: \`npm run build\`
+- Compose check: \`docker compose config\`
+- Runtime check: \`HOST_PORT=3200 docker compose up --build\`
+- Rollback: redeploy the previous image or Git revision, then run \`docker compose up -d --build\`
+
+## Metrics To Watch
+
+- successful builds
+- failed deploys
+- request latency at the reverse proxy
+- container restart count
+- host CPU, memory, and disk pressure
 `)
 
     const installResult = await runCommand({
