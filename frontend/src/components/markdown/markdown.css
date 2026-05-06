@@ -5,18 +5,19 @@
 .markdown-render_h5,
 .markdown-render_h6 {
     color: var(--color-text-main);
-    margin: 1.5em 0 .5em 0;
+    margin: 1.5em 0 .55em 0;
     line-height: 1.2em;
 }
 
 .markdown-render_h2 {
-    font-weight: 400;
-    font-size: 1.6rem;
+    font-weight: 600;
+    font-size: 1.45rem;
+    letter-spacing: 0;
 }
 
 .markdown-render_h3 {
-    font-weight: 400;
-    font-size: 1.3rem;
+    font-weight: 600;
+    font-size: 1.2rem;
 }
 
 .markdown-render_h4 {
@@ -26,7 +27,8 @@
 
 .markdown-render_section {
     margin: 1rem 0;
-    max-width: 40rem;
+    max-width: 46rem;
+    line-height: 1.75;
     color: var(--color-text-regular);
 }
 
@@ -47,6 +49,8 @@
 
 .markdown-render_li {
     color: var(--color-text-regular);
+    margin: .35rem 0;
+    line-height: 1.7;
 }
 
 .markdown-render_ul .markdown-render_li:before {
@@ -61,6 +65,7 @@
 
 .markdown-render_a {
     color: var(--color-link-primary);
+    text-underline-offset: .2em;
 }
 
 .markdown-render_a:hover {
@@ -73,6 +78,8 @@
     width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
+    overflow: hidden;
+    border-radius: .75rem;
 }
 
 .markdown-render_th, .markdown-render_td {
@@ -103,11 +110,11 @@
 @media only screen and (min-width: 400px) {
 
     .markdown-render_h2 {
-        font-size: 1.7rem;
-    }  
+        font-size: 1.55rem;
+    }
 
     .markdown-render_h3 {
-        font-size: 1.4rem;
+        font-size: 1.25rem;
     }
 
     .markdown-render_h4 {
@@ -119,11 +126,11 @@
 @media only screen and (min-width: 800px) {
 
     .markdown-render_h2 {
-        font-size: 2rem;
+        font-size: 1.75rem;
     }
   
     .markdown-render_h3 {
-        font-size: 1.7rem;
+        font-size: 1.35rem;
     }
     
     .markdown-render_h4 {

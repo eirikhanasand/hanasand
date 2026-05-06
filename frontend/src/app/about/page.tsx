@@ -11,10 +11,6 @@ export const metadata: Metadata = buildRouteMetadata({
 
 export default function page() {
     return (
-        <div className='h-full'>
-            <div className='p-16'>
-                <Article id='readme' />
-            </div>
-        </div>
+        <Article id='readme' />
     )
 }

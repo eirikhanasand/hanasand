@@ -22,7 +22,7 @@ const components = {
     ul: ({ children }: { children: ReactNode }) => <ul className='markdown-render_ul'>{children}</ul>,
     ol: ({ children }: { children: ReactNode }) => <ol className='markdown-render_ol'>{children}</ol>,
     li: ({ children }: { children: ReactNode }) => <li className='markdown-render_li'>{children}</li>,
-    a: ({ children }: { children: ReactNode }) => <a className='markdown-render_a'>{children}</a>
+    a: ({ children, href }: { children: ReactNode, href?: string }) => <a className='markdown-render_a' href={href}>{children}</a>
 }
 
 export default function MarkdownRender({ MDstr }: { MDstr: string }) {
