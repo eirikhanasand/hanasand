@@ -14,6 +14,7 @@ export async function getTree({ id, token, userId }: GetTreeProps): Promise<Tree
     try {
         const response = await fetch(`${config.url.cdn}/share/tree/${id}`, {
             headers: getShareHeaders(token, userId),
+            cache: 'no-store',
             signal: controller.signal
         })
 
