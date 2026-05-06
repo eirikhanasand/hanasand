@@ -10,7 +10,7 @@ import {
     withRequestDetails,
 } from '@/utils/box/requestTool'
 import { Bot, ChevronDown, Clock3, ImageIcon, Play, Plus, Server, Trash2 } from 'lucide-react'
-import type { FormEvent } from 'react'
+import type { ClipboardEvent, FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadScopedRequestVariables, saveScopedRequestVariables } from './storage'
 import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse, VariableRow } from './types'
@@ -259,6 +259,20 @@ export default function NewRequest({
         setHeaders((prev) => normalizeHeaderRows(prev).map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row))
     }
 
+    function handleUrlPaste(event: ClipboardEvent<HTMLInputElement>) {
+        const parsed = parseCurlCommand(event.clipboardData.getData('text'))
+        if (!parsed) {
+            return
+        }
+
+        event.preventDefault()
+        setMethod(parsed.method)
+        setUrl(parsed.url)
+        setHeaders(parsed.headers)
+        setBody(parsed.body)
+        setTab(parsed.headers.some((header) => header.key || header.value) ? 'headers' : parsed.body ? 'body' : 'headers')
+    }
+
     function updateVariable(index: number, field: keyof VariableRow, value: string) {
         setVariables((prev) => {
             const next = normalizeVariableRows(prev).map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row)
@@ -302,6 +316,7 @@ export default function NewRequest({
                         placeholder='https://api.example.com/v1/users'
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
+                        onPaste={handleUrlPaste}
                         required
                     />
                     <button type='submit' className='flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-orange-300 px-3 text-[11px] font-semibold text-background hover:bg-orange-200'>
@@ -579,6 +594,122 @@ function findMissingVariables(value: string, variables: Record<string, string>) 
     }
 
     return Array.from(missing)
+}
+
+function parseCurlCommand(value: string): RequestDraft | null {
+    const trimmed = value.trim()
+    if (!/^curl(?:\s|$)/i.test(trimmed)) {
+        return null
+    }
+
+    const tokens = tokenizeShell(trimmed)
+    if (tokens[0]?.toLowerCase() !== 'curl') {
+        return null
+    }
+
+    let method = 'GET'
+    let url = ''
+    let body = ''
+    const headers: HeaderRow[] = []
+
+    for (let index = 1; index < tokens.length; index += 1) {
+        const token = tokens[index]
+        const next = tokens[index + 1]
+
+        if ((token === '-X' || token === '--request') && next) {
+            method = next.toUpperCase()
+            index += 1
+            continue
+        }
+
+        if ((token === '-H' || token === '--header') && next) {
+            const header = parseHeaderLine(next)
+            if (header) {
+                headers.push(header)
+            }
+            index += 1
+            continue
+        }
+
+        if ((token === '-d' || token === '--data' || token === '--data-raw' || token === '--data-binary' || token === '--data-urlencode') && next) {
+            body = body ? `${body}&${next}` : next
+            if (method === 'GET') {
+                method = 'POST'
+            }
+            index += 1
+            continue
+        }
+
+        if (!token.startsWith('-') && !url) {
+            url = token
+        }
+    }
+
+    return url
+        ? { method, url, headers: headers.length ? headers : [{ key: '', value: '' }], body }
+        : null
+}
+
+function parseHeaderLine(value: string): HeaderRow | null {
+    const separator = value.indexOf(':')
+    if (separator <= 0) {
+        return null
+    }
+
+    return {
+        key: value.slice(0, separator).trim(),
+        value: value.slice(separator + 1).trim(),
+    }
+}
+
+function tokenizeShell(value: string) {
+    const tokens: string[] = []
+    let current = ''
+    let quote: string | null = null
+    let escaping = false
+
+    for (const char of value) {
+        if (escaping) {
+            current += char
+            escaping = false
+            continue
+        }
+
+        if (char === '\\') {
+            escaping = true
+            continue
+        }
+
+        if (quote) {
+            if (char === quote) {
+                quote = null
+            } else {
+                current += char
+            }
+            continue
+        }
+
+        if (char.charCodeAt(0) === 34 || char.charCodeAt(0) === 39) {
+            quote = char
+            continue
+        }
+
+        if (/\s/.test(char)) {
+            if (current) {
+                tokens.push(current)
+                current = ''
+            }
+            continue
+        }
+
+        current += char
+    }
+
+    if (current) {
+        tokens.push(current)
+    }
+
+    return tokens
 }
 
 function headerRowsFromObject(headers: Record<string, string>): HeaderRow[] {
