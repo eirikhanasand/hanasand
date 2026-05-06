@@ -12,6 +12,13 @@ export async function proxy(req: NextRequest) {
     const theme = req.cookies.get('theme')?.value || 'dark'
     const impersonatingId = req.cookies.get('impersonating_id')?.value || ''
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
+    const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
+
+    if (requiresAuth && req.nextUrl.hostname === 'hanasand.com') {
+        const url = req.nextUrl.clone()
+        url.hostname = 'www.hanasand.com'
+        return NextResponse.redirect(url)
+    }
 
     requestHeaders.set('x-theme', theme)
     requestHeaders.set('x-current-path', path)
@@ -26,7 +33,7 @@ export async function proxy(req: NextRequest) {
         },
     })
 
-    if (!pathIsAllowedWhileUnauthorized(path)) {
+    if (requiresAuth) {
         if (!tokenCookie || !idCookie) {
             return NextResponse.redirect(new URL(`/login?internal=true&path=${path}`, req.url))
         }

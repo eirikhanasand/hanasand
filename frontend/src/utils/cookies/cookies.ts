@@ -14,12 +14,12 @@ export function setCookie(name: string, value: string, days?: number) {
         expires = `expires=${date.toUTCString()};`
     }
 
-    document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax`
+    document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax${sharedCookieDomain()}`
 }
 
 export function setCookieWithExpiresAt(name: string, value: string, expiresAt?: string | null) {
     const expires = expiresAt ? `expires=${new Date(expiresAt).toUTCString()};` : ''
-    document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax`
+    document.cookie = `${name}=${encodeURIComponent(value)}; ${expires} path=/; SameSite=Lax${sharedCookieDomain()}`
 }
 
 export function removeCookies(...cookies: string[]) {
@@ -30,4 +30,19 @@ export function removeCookies(...cookies: string[]) {
 
 export function removeCookie(name: string) {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`
+    const domain = sharedCookieDomain()
+    if (domain) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${domain}`
+    }
+}
+
+function sharedCookieDomain() {
+    if (typeof window === 'undefined') {
+        return ''
+    }
+
+    const hostname = window.location.hostname
+    return hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
+        ? '; domain=.hanasand.com'
+        : ''
 }
