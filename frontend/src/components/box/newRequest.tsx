@@ -26,7 +26,7 @@ type NewRequestProps = {
     share: Share | null
 }
 
-type ResponseTab = 'response' | 'preview' | 'headers' | 'request' | 'curl' | 'http'
+type ResponseTab = 'response' | 'raw' | 'preview' | 'headers' | 'request' | 'curl' | 'http'
 
 type RequestRun = {
     id: string
@@ -367,9 +367,9 @@ export default function NewRequest({
 
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                        {(['response', 'preview', 'headers', 'request', 'curl', 'http'] as const).map((item) => (
+                        {(['response', 'raw', 'preview', 'headers', 'request', 'curl', 'http'] as const).map((item) => (
                             <button key={item} type='button' onClick={() => setResponseTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${responseTab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
-                                {item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item === 'curl' ? 'cURL' : item === 'http' ? 'HTTP' : item}
+                                {item === 'response' ? 'Pretty' : item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item === 'curl' ? 'cURL' : item === 'http' ? 'HTTP' : item}
                             </button>
                         ))}
                     </div>
@@ -383,7 +383,13 @@ export default function NewRequest({
                 <div className='grid min-h-44 overflow-hidden rounded-lg bg-black/22'>
                     {responseTab === 'response' && (
                         <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
-                            {activeRun?.loading ? 'Request is running...' : response ? formatResponseBody(response) : 'Response will appear here.'}
+                            {activeRun?.loading ? 'Request is running...' : response ? formatPrettyResponseBody(response) : 'Response will appear here.'}
+                        </pre>
+                    )}
+
+                    {responseTab === 'raw' && (
+                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
+                            {activeRun?.loading ? 'Request is running...' : response ? formatRawResponseBody(response) : 'Raw response will appear here.'}
                         </pre>
                     )}
 
@@ -768,7 +774,7 @@ function redactSensitiveText(value: string) {
     return value.replace(/\bBearer\s+[^'\s]+/gi, 'Bearer [redacted]')
 }
 
-function formatResponseBody(response: ToolResponse) {
+function formatRawResponseBody(response: ToolResponse) {
     const warnings = response.warnings?.length
         ? `Warnings:\n${response.warnings.join('\n')}\n\n`
         : ''
@@ -778,6 +784,23 @@ function formatResponseBody(response: ToolResponse) {
     }
 
     return `${warnings}${response.body || 'No response body.'}`
+}
+
+function formatPrettyResponseBody(response: ToolResponse) {
+    const raw = formatRawResponseBody(response)
+    if (response.error || !response.body) {
+        return raw
+    }
+
+    try {
+        const parsed = JSON.parse(response.body)
+        const warnings = response.warnings?.length
+            ? `Warnings:\n${response.warnings.join('\n')}\n\n`
+            : ''
+        return `${warnings}${JSON.stringify(parsed, null, 2)}`
+    } catch {
+        return raw
+    }
 }
 
 function formatCurlCommand(request: NonNullable<ToolResponse['request']>) {

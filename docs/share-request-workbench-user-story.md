@@ -2,7 +2,7 @@
 
 ## Reddit-Derived Story
 
-As a developer who likes Postman for quick API work but dislikes account gates, bloat, and unreliable duplication, I want a lightweight request workbench inside the share page where I can paste a cURL command from browser devtools, keep a small set of share-scoped variables, send the request through the connected terminal, inspect the body/headers/preview, export the executed request back to cURL or `.http` text, and resend or delete prior requests without losing the exact working setup.
+As a developer who likes Postman for quick API work but dislikes account gates, bloat, and unreliable duplication, I want a lightweight request workbench inside the share page where I can paste a cURL command from browser devtools, keep a small set of share-scoped variables, send the request through the connected terminal, inspect pretty or raw responses with headers and previews, export the executed request back to cURL or `.http` text, and resend or delete prior requests without losing the exact working setup.
 
 Acceptance:
 - `/s` opens a stable `/s/{shareId}` URL so the workspace is recoverable.
@@ -13,6 +13,7 @@ Acceptance:
 - Pasting `curl -X POST 'https://api.hanasand.com/api/' -H 'X-Debug: one' --data-raw '{"hello":"world"}'` sets method `POST`, URL `https://api.hanasand.com/api/`, header `X-Debug: one`, and body `{"hello":"world"}`.
 - After a request runs, the response inspector exposes a `cURL` view with a self-contained cURL command for the exact executed method, URL, headers, and body.
 - After a request runs, the response inspector exposes an `HTTP` view that can be pasted into a repo-owned `.http` request file.
+- JSON responses render in a readable `Pretty` view while the exact body remains available in `Raw`.
 - The response body and headers remain inspectable, and image previews still appear for image responses or image URLs.
 - Request history can resend the same templated request and delete entries without corrupting the original request.
 - Invalid headers or missing variables surface as warnings instead of breaking the workbench.
@@ -23,3 +24,4 @@ E2E check:
 - Paste the cURL command above into the URL field and verify the request form decomposes the command before sending.
 - Run that request, open the `cURL` response view, and verify the exported command includes the same method, URL, header, and body.
 - Open the `HTTP` response view and verify it includes the request line, header, blank separator, and body as plain text suitable for a committed `.http` file.
+- Verify the `Pretty` view formats JSON responses while `Raw` keeps the exact original response body.
