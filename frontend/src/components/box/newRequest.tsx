@@ -26,7 +26,7 @@ type NewRequestProps = {
     share: Share | null
 }
 
-type ResponseTab = 'response' | 'preview' | 'headers' | 'request'
+type ResponseTab = 'response' | 'preview' | 'headers' | 'request' | 'curl'
 
 type RequestRun = {
     id: string
@@ -367,9 +367,9 @@ export default function NewRequest({
 
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                        {(['response', 'preview', 'headers', 'request'] as const).map((item) => (
+                        {(['response', 'preview', 'headers', 'request', 'curl'] as const).map((item) => (
                             <button key={item} type='button' onClick={() => setResponseTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${responseTab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
-                                {item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item}
+                                {item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item === 'curl' ? 'cURL' : item}
                             </button>
                         ))}
                     </div>
@@ -416,6 +416,12 @@ export default function NewRequest({
                                 <pre className='whitespace-pre-wrap wrap-break-word rounded-lg bg-white/5 p-3'>{response?.request?.body || 'No request body.'}</pre>
                             </div>
                         </div>
+                    )}
+
+                    {responseTab === 'curl' && (
+                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/78'>
+                            {response?.request ? formatCurlCommand(response.request) : 'Run a request to generate a cURL command.'}
+                        </pre>
                     )}
                 </div>
             </section>
@@ -766,6 +772,26 @@ function formatResponseBody(response: ToolResponse) {
     }
 
     return `${warnings}${response.body || 'No response body.'}`
+}
+
+function formatCurlCommand(request: NonNullable<ToolResponse['request']>) {
+    const parts = ['curl', '-X', shellQuote(request.method), shellQuote(request.url)]
+
+    for (const [key, value] of Object.entries(request.headers || {})) {
+        parts.push('-H', shellQuote(`${key}: ${value}`))
+    }
+
+    if (request.body) {
+        parts.push('--data-raw', shellQuote(request.body))
+    }
+
+    return parts.join(' ')
+}
+
+function shellQuote(value: string) {
+    const quote = String.fromCharCode(39)
+    const escapedQuote = quote + '\\' + quote + quote
+    return quote + value.replace(/'/g, escapedQuote) + quote
 }
 
 function shortUrlLabel(value: string) {
