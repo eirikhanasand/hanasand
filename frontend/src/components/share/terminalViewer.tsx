@@ -167,9 +167,15 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
         nextChunks.forEach((chunk) => {
             try {
                 const parsed = JSON.parse(chunk) as { content?: string }
-                terminalRef.current?.write(parsed.content || '')
+                const content = cleanTerminalOutput(parsed.content || '')
+                if (content) {
+                    terminalRef.current?.write(content)
+                }
             } catch {
-                terminalRef.current?.write(chunk)
+                const content = cleanTerminalOutput(chunk)
+                if (content) {
+                    terminalRef.current?.write(content)
+                }
             }
         })
         renderedChunkCountRef.current = chunks.length
@@ -202,4 +208,24 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             />
         </div>
     )
+}
+
+function cleanTerminalOutput(content: string) {
+    if (!content) {
+        return ''
+    }
+
+    return content
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .filter((line) => !isShellStartupNoise(line))
+        .join('\r\n')
+}
+
+function isShellStartupNoise(line: string) {
+    const trimmed = line.trim()
+    return trimmed.includes('bash: cannot set terminal process group')
+        || trimmed.includes('bash: no job control in this shell')
+        || trimmed.startsWith('To run a command as administrator')
+        || trimmed.startsWith('See "man sudo_root"')
 }

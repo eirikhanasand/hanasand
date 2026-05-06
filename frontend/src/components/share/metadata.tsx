@@ -332,28 +332,52 @@ function TerminalAccess({
     setDidCopy: Dispatch<SetStateAction<boolean | string | null>>
 }) {
     return (
-        <section className='rounded-lg border border-bright/8 bg-black/16 p-3 text-bright/72'>
-            <div className='mb-3 flex items-center gap-2 text-sm font-semibold text-bright/86'>
-                <TerminalSquare className='h-4 w-4' />
-                Terminal access
-            </div>
-            <div className='mb-3 flex items-start gap-2 rounded-lg bg-bright/5 px-2.5 py-2 text-xs leading-4 text-bright/62'>
-                <span className='mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#9de18f]' />
-                <span>{status || 'Waiting for terminal status...'}</span>
+        <section className='space-y-3 text-bright/72'>
+            <div className='rounded-lg border border-[#9de18f]/16 bg-[#9de18f]/6 p-3'>
+                <div className='mb-2 flex items-center justify-between gap-2'>
+                    <div className='flex items-center gap-2 text-sm font-semibold text-bright/86'>
+                        <TerminalSquare className='h-4 w-4 text-[#9de18f]' />
+                        Browser terminal
+                    </div>
+                    <span className='rounded-full border border-[#9de18f]/24 bg-[#9de18f]/10 px-2 py-0.5 text-[11px] font-medium text-[#b7f0aa]'>
+                        Interactive
+                    </span>
+                </div>
+                <div className='flex items-start gap-2 rounded-lg bg-black/16 px-2.5 py-2 text-xs leading-4 text-bright/62'>
+                    <span className='mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#9de18f]' />
+                    <span>{status || 'Waiting for terminal status...'}</span>
+                </div>
             </div>
 
-            {credentials ? (
-                <div className='space-y-2 text-xs'>
-                    <CredentialRow label='User' value={credentials.username} setDidCopy={setDidCopy} />
-                    <CredentialRow label='Password' value={credentials.password} sensitive setDidCopy={setDidCopy} />
-                    <CredentialRow label='SSH' value={credentials.sshCommand} setDidCopy={setDidCopy} />
-                    <CredentialRow label='Domain' value={credentials.domain} setDidCopy={setDidCopy} />
+            <div className='rounded-lg border border-bright/8 bg-black/16 p-3'>
+                <div className='mb-3 flex items-center gap-2 text-sm font-semibold text-bright/86'>
+                    <KeyRound className='h-4 w-4' />
+                    SSH access
                 </div>
-            ) : (
-                <div className='rounded-lg border border-bright/8 bg-black/18 px-2.5 py-2 text-xs leading-5 text-bright/48'>
-                    Credentials appear here when the VM is reachable.
-                </div>
-            )}
+
+                {credentials ? (
+                    <div className='space-y-3 text-xs'>
+                        <button
+                            type='button'
+                            onClick={() => copy({ text: credentials.sshCommand, setDidCopy })}
+                            className='flex w-full items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/5 px-3 py-2 text-left transition-colors hover:bg-bright/9'
+                        >
+                            <span className='min-w-0'>
+                                <span className='block text-[10px] uppercase tracking-[0.18em] text-bright/36'>Safe SSH command</span>
+                                <span className='block truncate font-mono text-[11px] leading-4 text-bright/78'>{credentials.sshCommand}</span>
+                            </span>
+                            <Copy className='h-4 w-4 shrink-0 text-bright/48' />
+                        </button>
+                        <CredentialRow label='User' value={credentials.username} setDidCopy={setDidCopy} />
+                        <CredentialRow label='Password' value={credentials.password} sensitive setDidCopy={setDidCopy} />
+                        <CredentialRow label='Domain' value={credentials.domain} setDidCopy={setDidCopy} />
+                    </div>
+                ) : (
+                    <div className='rounded-lg border border-bright/8 bg-black/18 px-2.5 py-2 text-xs leading-5 text-bright/48'>
+                        SSH details appear here when the VM is reachable.
+                    </div>
+                )}
+            </div>
         </section>
     )
 }
@@ -380,7 +404,7 @@ function CredentialRow({
                 {label}
             </span>
             <span className='break-all font-mono text-[11px] leading-4 text-bright/74 group-hover:text-bright'>
-                {value}
+                {sensitive ? '************' : value}
             </span>
         </button>
     )

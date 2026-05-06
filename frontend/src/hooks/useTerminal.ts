@@ -15,12 +15,16 @@ export type TerminalCredentials = {
     domain: string
 }
 
+export type TerminalLifecycle = 'closed' | 'connecting' | 'waking' | 'preparing' | 'ready' | 'idle' | 'shutting_down' | 'error'
+
 export default function useTerminal({ share, active }: TerminalProps) {
     const [isConnected, setIsConnected] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [chunks, setChunks] = useState<string[]>([])
     const [status, setStatus] = useState('Terminal closed.')
     const [credentials, setCredentials] = useState<TerminalCredentials | null>(null)
+    const [lifecycle, setLifecycle] = useState<TerminalLifecycle>('closed')
+    const [connectionNonce, setConnectionNonce] = useState(0)
     const wsRef = useRef<WebSocket | null>(null)
     const queuedMessagesRef = useRef<string[]>([])
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -38,6 +42,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
     useEffect(() => {
         if (!sessionKey || !shareAlias) {
             setStatus('Terminal closed.')
+            setLifecycle('closed')
             return
         }
 
@@ -45,6 +50,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
         setCredentials(null)
         terminalSessionRef.current = randomId(6)
         setStatus('Connecting to terminal...')
+        setLifecycle('connecting')
         let disposed = false
 
         function clearReconnect() {
@@ -84,6 +90,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 setParticipants(1)
                 setIsConnected(true)
                 setStatus('Preparing terminal...')
+                setLifecycle('preparing')
                 flushQueue(ws)
                 if (lastResizeRef.current && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
@@ -102,6 +109,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 if (activeSessionRef.current === sessionKey) {
                     setIsConnected(false)
                     setStatus(disposed ? 'Terminal closed.' : 'Reconnecting terminal...')
+                    setLifecycle(disposed ? 'closed' : 'connecting')
                 }
                 if (!disposed) {
                     reconnectTimeoutRef.current = setTimeout(() => {
@@ -115,6 +123,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 if (activeSessionRef.current === sessionKey) {
                     setIsConnected(false)
                     setStatus('Terminal connection error. Retrying...')
+                    setLifecycle('error')
                 }
             }
 
@@ -138,6 +147,10 @@ export default function useTerminal({ share, active }: TerminalProps) {
                             if (nextStatus) {
                                 setStatus(nextStatus)
                             }
+                            const nextLifecycle = lifecycleFromTerminalUpdate(msg.content)
+                            if (nextLifecycle) {
+                                setLifecycle(nextLifecycle)
+                            }
                             setChunks((prev) => [...prev, msg.content])
                         }
                     }
@@ -150,6 +163,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                         if (isTerminalCredentials(msg.credentials)) {
                             setCredentials(msg.credentials)
                             setStatus('Terminal ready.')
+                            setLifecycle('ready')
                         }
                     }
 
@@ -178,7 +192,7 @@ export default function useTerminal({ share, active }: TerminalProps) {
                 current.close()
             }
         }
-    }, [sessionKey, shareAlias])
+    }, [connectionNonce, sessionKey, shareAlias])
 
     const sendInput = useCallback((message: string) => {
         if (!sessionKey) {
@@ -218,15 +232,54 @@ export default function useTerminal({ share, active }: TerminalProps) {
 
         queuedMessagesRef.current.push(payload)
     }, [sessionKey])
+
+    const reconnect = useCallback(() => {
+        if (!sessionKey) {
+            return
+        }
+
+        setStatus('Reconnecting terminal...')
+        setLifecycle('connecting')
+        queuedMessagesRef.current = []
+
+        if (wsRef.current) {
+            wsRef.current.close()
+            return
+        }
+
+        setConnectionNonce((value) => value + 1)
+    }, [sessionKey])
+
+    const restart = useCallback(() => {
+        if (!sessionKey) {
+            return
+        }
+
+        setChunks([])
+        setCredentials(null)
+        queuedMessagesRef.current = []
+        terminalSessionRef.current = randomId(6)
+        setStatus('Restarting terminal...')
+        setLifecycle('connecting')
+
+        if (wsRef.current) {
+            wsRef.current.close()
+            return
+        }
+
+        setConnectionNonce((value) => value + 1)
+    }, [sessionKey])
+
     const view = useMemo(() => ({
         isConnected: sessionKey ? isConnected : false,
         participants: sessionKey ? participants : 1,
         chunks: sessionKey ? chunks : [],
         status: sessionKey ? status : 'Terminal closed.',
         credentials: sessionKey ? credentials : null,
-    }), [chunks, credentials, isConnected, participants, sessionKey, status])
+        lifecycle: sessionKey ? lifecycle : 'closed',
+    }), [chunks, credentials, isConnected, lifecycle, participants, sessionKey, status])
 
-    return { ...view, sendInput, sendResize }
+    return { ...view, sendInput, sendResize, reconnect, restart }
 }
 
 function statusFromTerminalUpdate(raw: string) {
@@ -247,6 +300,55 @@ function statusFromTerminalUpdate(raw: string) {
     } catch {
         const cleaned = raw.trim()
         return cleaned || null
+    }
+}
+
+function lifecycleFromTerminalUpdate(raw: string): TerminalLifecycle | null {
+    const content = terminalContent(raw).toLowerCase()
+    if (!content) {
+        return null
+    }
+
+    if (content.includes('shutting down') || content.includes('shutdown')) {
+        return 'shutting_down'
+    }
+
+    if (content.includes('idle')) {
+        return 'idle'
+    }
+
+    if (
+        content.includes('vm does not exist')
+        || content.includes('starting existing vm')
+        || content.includes('waiting for vm agent')
+        || content.includes('claiming warm vm')
+        || content.includes('opening terminal')
+        || content.includes('this may take some time')
+    ) {
+        return 'waking'
+    }
+
+    if (content.includes('preparing ssh access') || content.includes('preparing terminal')) {
+        return 'preparing'
+    }
+
+    if (content.includes('terminal ready') || content.includes('vm agent is ready')) {
+        return 'ready'
+    }
+
+    if (content.includes('[!]') || content.includes('error') || content.includes('unable to')) {
+        return 'error'
+    }
+
+    return null
+}
+
+function terminalContent(raw: string) {
+    try {
+        const parsed = JSON.parse(raw) as { content?: string }
+        return typeof parsed.content === 'string' ? parsed.content : ''
+    } catch {
+        return raw
     }
 }
 
