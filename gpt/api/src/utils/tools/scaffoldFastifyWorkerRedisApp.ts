@@ -10,9 +10,9 @@ type ScaffoldFastifyWorkerRedisAppArgs = {
 
 const bunHome = JSON.stringify(process.env.HOME || '')
 const installAndBuildCommand = [
-    `(command -v bun >/dev/null 2>&1 && mkdir -p .hanasand-tmp && HOME=${bunHome} TMPDIR="$PWD/.hanasand-tmp" bun install --offline && bun run build)`,
+    `(command -v bun >/dev/null 2>&1 && mkdir -p .hanasand-tmp && HOME=${bunHome} TMPDIR="$PWD/.hanasand-tmp" bun install --offline --ignore-scripts --no-progress && bun run build)`,
     '||',
-    '(npm install --fetch-retries=1 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=5000 --fetch-timeout=5000 --no-audit --no-fund && npm run build)',
+    '(npm install --ignore-scripts --progress=false --fetch-retries=1 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=5000 --fetch-timeout=5000 --no-audit --no-fund && npm run build)',
 ].join(' ')
 
 function resolveTargetDir(targetDir: string) {
@@ -49,7 +49,8 @@ export default async function scaffoldFastifyWorkerRedisApp(args: ScaffoldFastif
         scripts: {
             dev: 'tsx watch src/index.ts',
             'dev:worker': 'tsx watch src/worker.ts',
-            build: 'tsc -p tsconfig.json',
+            build: 'tsc -p tsconfig.json --pretty false',
+            typecheck: 'tsc -p tsconfig.json --noEmit --pretty false',
             start: 'node dist/index.js',
             'start:worker': 'node dist/worker.js',
         },
