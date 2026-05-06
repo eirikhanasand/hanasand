@@ -4,6 +4,7 @@ import './animate.css'
 import fetchArticles from '@/utils/articles/fetchArticles'
 import prettyDate from '@/utils/date/prettyDate'
 import ArticleNotification from './articleNotification'
+import { BookOpen, FileText } from 'lucide-react'
 
 type ArticleProps = {
     article: Article
@@ -39,12 +40,20 @@ export default async function Articles({
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 
     return (
-        <div className='p-4 md:p-16'>
+        <section className='grid gap-6 px-4 py-8 md:px-12 lg:px-16'>
             {message && <ArticleNotification message={message} />}
-            <h1 className='text-foreground text-2xl font-semibold'>Articles</h1>
+            <div className='grid gap-2'>
+                <div className='flex items-center gap-3 text-bright'>
+                    <BookOpen className='h-5 w-5 text-[#f0a17a]' />
+                    <h1 className='text-2xl font-semibold tracking-[-0.02em] text-bright'>Articles</h1>
+                </div>
+                <p className='max-w-2xl text-sm leading-6 text-bright/50'>
+                    Notes, project writeups, and longer-form context from Hanasand.
+                </p>
+            </div>
             <Recent recent={articles} max={max} includeTitle={includeRecentTitle} />
             {recent && articles.length > 0 && <All recent={displayed} max={max} includeTitle={includeRecentTitle} />}
-        </div>
+        </section>
     )
 }
 
@@ -52,9 +61,10 @@ function Recent({ recent, max, includeTitle = true }: RecentProps) {
     const displayed = max ? recent.slice(0, max) : recent
 
     return (
-        <div className='grid gap-4 my-4'>
-            {includeTitle && <h1 className='font-semibold text-xl'>Recently published</h1>}
-            <div className='grid md:grid-cols-2 gap-8'>
+        <div className='grid gap-3'>
+            {includeTitle && <h2 className='text-sm font-semibold uppercase tracking-[0.16em] text-bright/38'>Recently published</h2>}
+            {displayed.length === 0 ? <EmptyArticles /> : null}
+            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 {displayed.map((article) => <Article
                     key={article.title}
                     article={article}
@@ -68,9 +78,9 @@ function All({ recent, max, includeTitle = true }: RecentProps) {
     const displayed = max ? recent.slice(0, max) : recent
 
     return (
-        <div className='grid gap-4 my-4'>
-            {includeTitle && <h1 className='font-semibold text-xl'>All articles</h1>}
-            <div className='grid md:grid-cols-2 gap-8'>
+        <div className='grid gap-3'>
+            {includeTitle && <h2 className='text-sm font-semibold uppercase tracking-[0.16em] text-bright/38'>All articles</h2>}
+            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 {displayed.map((article) => <Article
                     key={article.title}
                     article={article}
@@ -85,22 +95,39 @@ function Article({ article }: ArticleProps) {
 
     return (
         <Link
-            className='hover:scale-[1.03] transition-1000 rounded-3xl cursor-pointer h-fit md:h-full'
+            className='group h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#f0a17a]/55'
             href={`/articles/${id}`}
         >
-            <article className='outline-1 outline-dark w-full h-full max-h-fit md:max-h-full lg:max-h-[58vh] overflow-hidden rounded-2xl'>
-                {metadata.image && <Image className='w-full max-h-60 md:h-[55%] object-cover' src={metadata.image} alt={title} width={800} height={450} />}
-                <div className='p-5 text-foreground grid gap-2'>
-                    <div className='w-full'>
-                        <h1 className='text-gray-500/70 min-w-fit text-xs mt-1 float-right'>Published {prettyDate(new Date(created).toISOString())}</h1>
-                        <h1 className='lg:text-lg font-semibold'>{title}</h1>
+            <article className='grid h-full overflow-hidden rounded-xl border border-white/10 bg-white/[0.035] transition hover:border-white/16 hover:bg-white/[0.055]'>
+                {metadata.image ? (
+                    <div className='aspect-[16/9] overflow-hidden bg-black/20'>
+                        <Image className='h-full w-full object-cover opacity-88 transition duration-300 group-hover:scale-[1.02] group-hover:opacity-100' src={metadata.image} alt={title} width={800} height={450} />
                     </div>
-                    <p className='text-gray-500'>{metadata.description}</p>
-                    <p className='text-sm font-medium text-bright/72'>
+                ) : null}
+                <div className='grid content-start gap-3 p-4 text-foreground'>
+                    <div className='grid gap-2'>
+                        <p className='text-xs text-bright/36'>Published {prettyDate(new Date(created).toISOString())}</p>
+                        <h3 className='text-base font-semibold leading-6 text-bright/88'>{title}</h3>
+                    </div>
+                    <p className='line-clamp-3 text-sm leading-6 text-bright/50'>{metadata.description}</p>
+                    <p className='mt-auto text-sm font-medium text-bright/72'>
                         {metadata.wordCount > 100 ? 'Read article →' : 'Brief note'}
                     </p>
                 </div>
             </article>
         </Link>
+    )
+}
+
+function EmptyArticles() {
+    return (
+        <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-center'>
+            <div className='grid gap-3'>
+                <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/4'>
+                    <FileText className='h-5 w-5 text-[#f0a17a]' />
+                </div>
+                <p className='text-sm text-bright/50'>No articles are published here yet.</p>
+            </div>
+        </div>
     )
 }
