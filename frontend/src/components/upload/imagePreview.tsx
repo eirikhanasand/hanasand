@@ -1,5 +1,3 @@
-import Image from 'next/image'
-
 type ImagePreviewProps = {
     file: File
     url: string
@@ -8,12 +6,10 @@ type ImagePreviewProps = {
 export default function ImagePreview({file, url}: ImagePreviewProps) {
     if (file?.type.startsWith('image/')) {
         return (
-            <Image
+            <img
                 src={url}
                 alt='Preview'
-                width={300}
-                height={300}
-                className='max-w-xs rounded-lg shadow-md'
+                className='max-h-[520px] w-auto max-w-full rounded-lg object-contain shadow-[0_18px_60px_rgba(0,0,0,0.24)]'
             />
         )
     }
@@ -21,7 +17,7 @@ export default function ImagePreview({file, url}: ImagePreviewProps) {
         <video
             src={url}
             controls
-            className='max-w-xs rounded-lg shadow-md'
+            className='max-h-[520px] w-auto max-w-full rounded-lg shadow-[0_18px_60px_rgba(0,0,0,0.24)]'
         />
     )
 }

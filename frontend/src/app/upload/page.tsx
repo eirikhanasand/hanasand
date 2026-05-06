@@ -3,9 +3,8 @@
 import Preview from '@/components/upload/preview'
 import Upload from '@/components/upload/upload'
 import config from '@/config'
-import { DoorOpen, UploadIcon, LinkIcon } from 'lucide-react'
+import { Check, LinkIcon, RotateCcw } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useState } from 'react'
 import copy from '@/utils/copy'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
@@ -16,8 +15,6 @@ export default function Page() {
     const [url, setUrl] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [preview, setPreview] = useState<string | null>(null)
-    const uploadClasses = (!file || !preview) && 'py-40 px-15 h-[30vh md:p-60'
-    const previewClasses = preview && 'p-5 md:p-10 md:px-[33.333vw]'
     const isUploaded = url.includes(config.url.cdn)
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
         initialState: false,
@@ -39,48 +36,60 @@ export default function Page() {
 
     if (isUploaded) {
         return (
-            <div className={`min-h-[90.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses} relative`}>
-                <div>
-                    <div className='bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid place-items-center'>
-                        <div className='grid place-items-center'>
-                            <Image alt='Uploaded image' src={url} height={300} width={348} className='rounded-lg' />
-                        </div>
-                        <div onClick={() => copy({ text: url, setDidCopy })} className={`hover:scale-103 ${didCopy === true ? 'outline outline-green-500/35 bg-green-500/20' : 'bg-light'} flex rounded-lg gap-2 p-2 px-4 cursor-pointer`}>
-                            <LinkIcon className={didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-bright/80' : 'stroke-red-500'} height={18} width={18} />
-                            <h1 className='text-bright/80'>{url}</h1>
+            <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+                <div className='grid w-full max-w-xl gap-3'>
+                    <div className='rounded-xl border border-white/10 bg-dark/70 p-3 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md'>
+                        <div className='grid gap-4'>
+                            <div className='flex items-center gap-2 text-sm font-medium text-emerald-100/78'>
+                                <span className='grid h-7 w-7 place-items-center rounded-lg bg-emerald-400/12 text-emerald-200'>
+                                    <Check className='h-4 w-4' />
+                                </span>
+                                Uploaded
+                            </div>
+                            <div className='grid place-items-center rounded-lg border border-white/8 bg-black/20 p-2'>
+                                <Image alt='Uploaded image' src={url} height={300} width={348} className='max-h-[360px] w-auto rounded-lg object-contain' />
+                            </div>
+                            <button
+                                type='button'
+                                onClick={() => copy({ text: url, setDidCopy })}
+                                className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${didCopy === true ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/[0.045] text-bright/72 hover:bg-white/7 hover:text-bright'}`}
+                            >
+                                <LinkIcon className='h-4 w-4 shrink-0' />
+                                <span className='min-w-0 truncate'>{url}</span>
+                            </button>
                         </div>
                     </div>
-                    <div className='text-foreground rounded-lg grid grid-cols-2 gap-2 mt-2'>
-                        <Link href='/' className='hover:scale-105 rounded-lg hover:bg-[#6464641a] cursor-pointer flex justify-center items-center bg-dark gap-2 p-2'>
-                            <DoorOpen className='stroke-bright/80' />
-                            <h1 className='text-bright/80'>Leave</h1>
-                        </Link>
-                        <div onClick={handleReset} className='hover:scale-105 rounded-lg hover:bg-[#6464641a] cursor-pointer flex justify-center items-center bg-dark gap-2 p-2'>
-                            <UploadIcon className='stroke-bright/80' />
-                            <h1 className='text-bright/80'>Upload Another</h1>
-                        </div>
-                    </div>
+                    <button
+                        type='button'
+                        onClick={handleReset}
+                        className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-4 text-sm font-medium text-bright/68 transition hover:bg-white/7 hover:text-bright'
+                    >
+                        <RotateCcw className='h-4 w-4' />
+                        Upload another
+                    </button>
                 </div>
-            </div>
+            </section>
         )
     }
 
     return (
-        <div className={`min-h-[90.5vh] w-full md:h-full grid gap-2 place-items-center ${uploadClasses} ${previewClasses}`}>
-            <Upload
-                url={url}
-                setUrl={setUrl}
-                setFile={setFile}
-                preview={preview}
-                setPreview={setPreview}
-            />
-            {file && preview && <Preview
-                url={preview}
-                file={file}
-                setFile={setFile}
-                setPreview={setPreview}
-                setUrl={setUrl}
-            />}
-        </div>
+        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+            <div className='w-full max-w-4xl'>
+                <Upload
+                    url={url}
+                    setUrl={setUrl}
+                    setFile={setFile}
+                    preview={preview}
+                    setPreview={setPreview}
+                />
+                {file && preview && <Preview
+                    url={preview}
+                    file={file}
+                    setFile={setFile}
+                    setPreview={setPreview}
+                    setUrl={setUrl}
+                />}
+            </div>
+        </section>
     )
 }

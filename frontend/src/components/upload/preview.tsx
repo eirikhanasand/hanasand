@@ -6,6 +6,7 @@ import config from '@/config'
 import { postFile } from '@/utils/files/post'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import ErrorNotice from '@/components/error/errorNotice'
+import { RotateCcw, UploadCloud } from 'lucide-react'
 
 type PreviewProps = {
     url: string
@@ -95,70 +96,80 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
     if (!url || !file) return null
 
     return (
-        <div className='bg-dark text-foreground p-4 rounded-lg w-full space-y-4 grid'>
-            <div className='grid place-items-center'>
+        <div className='grid w-full overflow-hidden rounded-xl border border-white/10 bg-dark/70 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]'>
+            <div className='grid min-h-[360px] place-items-center border-b border-white/10 bg-black/16 p-4 lg:border-b-0 lg:border-r'>
                 <ImagePreview file={file} url={url} />
             </div>
-            <div className='space-y-2'>
-                <label className='block'>
-                    <span className='text-sm font-semibold'>Name</span>
+            <div className='grid gap-4 p-4 sm:p-6'>
+                <div className='grid gap-1'>
+                    <h1 className='text-lg font-semibold text-bright/88'>Review upload</h1>
+                    <p className='text-sm leading-6 text-bright/45'>Name it, choose an optional public path, then publish.</p>
+                </div>
+
+                <label className='grid gap-2'>
+                    <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>Name</span>
                     <input
                         type='text'
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        className='w-full p-2 rounded bg-light text-foreground'
+                        className='h-10 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-bright outline-none transition focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
                     />
                 </label>
 
-                <label className='block'>
-                    <span className='text-sm font-semibold'>Description</span>
+                <label className='grid gap-2'>
+                    <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>Description</span>
                     <textarea
                         value={description}
                         onChange={e => setDescription(e.target.value)}
                         maxLength={1024}
-                        className='w-full h-fit p-2 rounded bg-light text-foreground'
+                        className='min-h-24 resize-none rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2 text-sm leading-6 text-bright outline-none transition focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
                     />
                 </label>
 
-                <label className='block'>
-                    <span className='text-sm font-semibold'>Path</span>
+                <label className='grid gap-2'>
+                    <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>Path</span>
                     <input
                         type='text'
                         value={path || ''}
                         onChange={handlePathChange}
-                        className='w-full p-2 rounded bg-light text-foreground'
+                        placeholder='optional-short-name'
+                        className='h-10 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-bright outline-none transition placeholder:text-bright/28 focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
                     />
-                    {checkingPath && <span className='text-xs text-gray-400'>Checking availability...</span>}
+                    {checkingPath && <span className='text-xs text-bright/38'>Checking availability...</span>}
                     {!pathAvailable && <ErrorNotice compact className='mt-2' message='Path is taken' />}
                 </label>
 
-                <label className='block'>
-                    <span className='text-sm font-semibold'>File Type</span>
+                <label className='grid gap-2'>
+                    <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>File type</span>
                     <input
                         type='text'
                         value={type}
                         readOnly
-                        className='w-full p-2 rounded bg-light text-foreground cursor-not-allowed'
+                        className='h-10 cursor-not-allowed rounded-lg border border-white/10 bg-white/[0.025] px-3 text-sm text-bright/46 outline-none'
                     />
                 </label>
-            </div>
 
-            {error && <ErrorNotice compact message={error} />}
+                {error && <ErrorNotice compact message={error} />}
 
-            <div className='flex justify-end gap-2'>
-                <button
-                    onClick={handleDiscard}
-                    className='px-4 py-2 bg-light hover:bg-light/90 rounded cursor-pointer'
-                >
-                    Discard
-                </button>
-                <button
-                    onClick={handleUpload}
-                    disabled={uploading || !pathAvailable}
-                    className='px-4 py-2 bg-green-600 hover:bg-green-500 rounded disabled:opacity-50 cursor-pointer'
-                >
-                    {uploading ? 'Uploading...' : 'Upload'}
-                </button>
+                <div className='flex flex-wrap justify-end gap-2'>
+                    <button
+                        type='button'
+                        onClick={handleDiscard}
+                        className='inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-bright/58 transition hover:bg-white/6 hover:text-bright'
+                    >
+                        <RotateCcw className='h-4 w-4' />
+                        Discard
+                    </button>
+                    <button
+                        type='button'
+                        onClick={handleUpload}
+                        disabled={uploading || !pathAvailable}
+                        className='inline-flex h-10 items-center gap-2 rounded-lg bg-bright px-4 text-sm font-semibold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
+                    >
+                        <UploadCloud className='h-4 w-4' />
+                        {uploading ? 'Uploading...' : 'Upload'}
+                    </button>
+                </div>
             </div>
         </div>
     )
