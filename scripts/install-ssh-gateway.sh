@@ -198,6 +198,7 @@ wait_ready "$vm" || {
     echo "VM '$vm' did not become ready." >&2
     exit 1
 }
+"${LXC_BIN}" exec "$vm" -- sh -lc "grep -qE '(^|[[:space:]])$vm([[:space:]]|\$)' /etc/hosts || printf '%s\\n' '127.0.1.1 $vm' >> /etc/hosts" >/dev/null 2>&1 || true
 if ! "${LXC_BIN}" exec "$vm" -- id "$vm" >/dev/null 2>&1; then
     echo "User '$vm' is missing inside VM '$vm'." >&2
     exit 1
