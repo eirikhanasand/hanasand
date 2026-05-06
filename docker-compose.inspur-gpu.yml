@@ -5,7 +5,7 @@ services:
     build:
       context: ./gpt/api
       dockerfile: ./Dockerfile
-    restart: always
+    restart: unless-stopped
     network_mode: host
     environment:
       API: ${HANASAND_GPT_API:-https://api.hanasand.com/api}
