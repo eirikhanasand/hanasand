@@ -1,91 +1,112 @@
 'use client'
 
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getLink } from '@/utils/links/get'
 import prettyDate from '@/utils/date/prettyDate'
-import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Watch } from 'lucide-react'
+import { ArrowLeft, ChartColumn, Eye, Globe, Rocket, Search, Watch } from 'lucide-react'
 import Link from 'next/link'
 import { FormEvent, useState } from 'react'
+import { normalizeShortcut } from '../pageClient'
 
 export default function LinkStatsPageClient() {
     const [query, setQuery] = useState('')
     const [link, setLink] = useState<FullLink | null>()
+    const [busy, setBusy] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const isValidLink = query.length > 0 && query.includes('.') && !query.includes(' ') && !query.endsWith('.')
-    const color = isValidLink ? 'bg-blue-500/80 cursor-pointer' : 'outline outline-dark cursor-not-allowed'
+    const shortcut = normalizeShortcut(query)
+    const canSearch = Boolean(shortcut && !busy)
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
+        setError(null)
 
-        if (!isValidLink) {
+        if (!shortcut) {
+            setError('Enter the shortcut name, not the full destination URL.')
             return
         }
 
-        const result = await getLink(query)
+        setBusy(true)
+        try {
+            const result = await getLink(shortcut)
 
-        if (typeof result === 'number') {
-            return setError('Link does not exist')
-        }
+            if (typeof result === 'number') {
+                setLink(null)
+                return setError('Shortcut does not exist.')
+            }
 
-        if (!result) {
-            return setError('Please try again later.')
-        }
+            if (!result) {
+                return setError('Please try again later.')
+            }
 
-        if (result) {
             setLink(result)
+        } finally {
+            setBusy(false)
         }
     }
 
     return (
-        <div className='w-full h-full outline outline-dark p-4 space-y-4 relative'>
-            <div className='h-full grid place-items-center z-100'>
-                <div className='flex flex-col items-center gap-4'>
-                    <div className='flex gap-2'>
-                        <ChartColumn />
-                        <h1 className='text-xl'>Link statistics</h1>
-                    </div>
-                    <form onSubmit={handleSubmit} className='grid gap-2'>
-                        <Notify color='bg-blue-500/20' background='bg-blue-500/10 outline outline-blue-500/35' message={error} />
-                        <input
-                            className='outline outline-dark w-full rounded-md px-2 py-1 focus:outline-blue-500/50 caret-blue-500 z-10'
-                            placeholder='Link'
-                            onChange={(e) => setQuery(e.target.value)}
-                            value={query}
-                            required
-                        />
-                        <button
-                            type='submit'
-                            className={`${color} w-full rounded-lg px-2 py-1 text-bright/80`}
-                        >
-                            <h1>Search</h1>
-                        </button>
-                    </form>
-                    {link && (
-                        <div className='grid gap-2'>
-                            <div className='flex gap-2'>
-                                <Rocket />
-                                <h1>{link.id}</h1>
+        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+            <div className='grid w-full max-w-md gap-3'>
+                <div className='rounded-xl border border-white/10 bg-dark/70 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md'>
+                    <div className='grid gap-4'>
+                        <div className='grid gap-1'>
+                            <div className='flex items-center gap-2 text-lg font-semibold text-bright/88'>
+                                <ChartColumn className='h-5 w-5 text-[#f0a17a]' />
+                                Shortcut statistics
                             </div>
-                            <div className='flex gap-2'>
-                                <Globe />
-                                <h1>{link.path}</h1>
-                            </div>
-                            <div className='flex gap-2'>
-                                <Watch />
-                                <h1>{prettyDate(new Date().toISOString())}</h1>
-                            </div>
-                            <div className='flex gap-2'>
-                                <Eye />
-                                <h1>{link.visits}</h1>
-                            </div>
+                            <p className='text-sm leading-6 text-bright/45'>Look up a short link by its `/g/` shortcut name.</p>
                         </div>
-                    )}
+                        <form onSubmit={handleSubmit} className='grid gap-3'>
+                            <ErrorNotice compact message={error} />
+                            <label className='grid gap-2'>
+                                <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>Shortcut</span>
+                                <div className='flex h-11 overflow-hidden rounded-lg border border-white/10 bg-white/[0.045] focus-within:border-[#f07d33]/55 focus-within:bg-white/[0.065]'>
+                                    <span className='flex items-center border-r border-white/8 px-3 text-sm text-bright/32'>/g/</span>
+                                    <input
+                                        className='min-w-0 flex-1 bg-transparent px-3 text-sm text-bright outline-none placeholder:text-bright/28'
+                                        placeholder='team-notes'
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        value={query}
+                                        required
+                                    />
+                                </div>
+                            </label>
+                            <button
+                                type='submit'
+                                disabled={!canSearch}
+                                className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-semibold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
+                            >
+                                <Search className='h-4 w-4' />
+                                {busy ? 'Searching...' : 'Search'}
+                            </button>
+                        </form>
+                        {link && (
+                            <div className='grid gap-2 rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm text-bright/70'>
+                                <Stat icon={<Rocket className='h-4 w-4' />} label='Shortcut' value={`/g/${link.id}`} />
+                                <Stat icon={<Globe className='h-4 w-4' />} label='Destination' value={link.path} />
+                                <Stat icon={<Watch className='h-4 w-4' />} label='Created' value={prettyDate(link.timestamp)} />
+                                <Stat icon={<Eye className='h-4 w-4' />} label='Visits' value={String(link.visits)} />
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <Link href='/g' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                    <ArrowLeft className='group-hover:stroke-blue-500' />
-                </Link>
+                <div className='flex justify-end'>
+                    <Link href='/g' className='grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.035] text-bright/58 transition hover:bg-white/7 hover:text-bright' aria-label='Back to shortcut creator'>
+                        <ArrowLeft className='h-4 w-4' />
+                    </Link>
+                </div>
             </div>
+        </section>
+    )
+}
+
+function Stat({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
+    return (
+        <div className='grid grid-cols-[auto_6rem_minmax(0,1fr)] items-center gap-2'>
+            <span className='text-bright/42'>{icon}</span>
+            <span className='text-xs font-medium uppercase tracking-[0.16em] text-bright/34'>{label}</span>
+            <span className='min-w-0 truncate text-right text-bright/74'>{value}</span>
         </div>
     )
 }

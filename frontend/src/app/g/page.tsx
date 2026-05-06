@@ -3,6 +3,7 @@ import { ArrowLeft, ChartColumn, LinkIcon } from 'lucide-react'
 import LinkPageClient from './pageClient'
 import Link from 'next/link'
 import { buildRouteMetadata } from '../seo'
+import ErrorNotice from '@/components/error/errorNotice'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Links',
@@ -22,31 +23,40 @@ export default async function Page({
     const id = Array.isArray(params.id) ? params.id[0] : params.id
 
     return (
-        <div className='min-h-[90.5vh] w-full py-40 px-15 h-[30vh] md:h-full md:p-60 md:px-40 lg:px-100 grid gap-2 place-items-center'>
-            <div className='grid w-full spawn rounded-lg overflow-hidden outline outline-dark'>
-                <div className='w-full h-full p-4 space-y-4 relative'>
-                    {pathDidNotExist && (
-                        <div className='w-full bg-dark rounded-lg p-2 text-gray-200'>
-                            <h1>The shortcut &apos;{id}&apos; does not exist yet! Feel free to create it 😃</h1>
-                        </div>
-                    )}
-                    <div className={!pathDidNotExist ? 'h-full grid place-items-center' : ''}>
-                        <div className='flex flex-col items-center gap-4'>
-                            <div className='flex gap-2'>
-                                <LinkIcon />
-                                <h1 className='text-xl'>{created ? 'Created link' : 'Create link'}</h1>
+        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+            <div className='grid w-full max-w-md gap-3'>
+                <div className='rounded-xl border border-white/10 bg-dark/70 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md'>
+                    <div className='grid gap-4'>
+                        {pathDidNotExist && (
+                            <ErrorNotice
+                                compact
+                                variant='info'
+                                message={`The shortcut ${id ? `"/g/${id}"` : 'you opened'} does not exist yet.`}
+                            />
+                        )}
+                        <div className='grid gap-1'>
+                            <div className='flex items-center gap-2 text-lg font-semibold text-bright/88'>
+                                <LinkIcon className='h-5 w-5 text-[#f0a17a]' />
+                                {created ? 'Created shortcut' : 'Create shortcut'}
                             </div>
-                            <LinkPageClient serverId={id} created={created} />
+                            <p className='text-sm leading-6 text-bright/45'>
+                                {created ? 'Copy the shortcut and share it anywhere.' : 'Make a short Hanasand link for a URL you use often.'}
+                            </p>
                         </div>
+                        <LinkPageClient serverId={id} created={created} />
                     </div>
-                    {created && <Link href='/g' className='absolute bottom-0 right-16 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                        <ArrowLeft />
-                    </Link> }
-                    <Link href='/g/stats' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                        <ChartColumn className='group-hover:stroke-blue-500' />
+                </div>
+                <div className='flex justify-end gap-2'>
+                    {created && (
+                        <Link href='/g' className='grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.035] text-bright/58 transition hover:bg-white/7 hover:text-bright' aria-label='Create another shortcut'>
+                            <ArrowLeft className='h-4 w-4' />
+                        </Link>
+                    )}
+                    <Link href='/g/stats' className='grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/[0.035] text-bright/58 transition hover:bg-white/7 hover:text-bright' aria-label='Open shortcut statistics'>
+                        <ChartColumn className='h-4 w-4' />
                     </Link>
                 </div>
             </div>
-        </div>
+        </section>
     )
 }

@@ -14,9 +14,13 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         return redirect(`/g?id=${id}&null=true`)
     }
 
-    if (!link.path.includes('http')) {
-        return redirect(`https://${link.path}`)
-    }
+    return redirect(destinationForRedirect(link.path))
+}
 
-    return redirect(link.path)
+function destinationForRedirect(path: string) {
+    const trimmed = path.trim()
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+        return trimmed
+    }
+    return `https://${trimmed}`
 }
