@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
-import ShareEntryClient from './pageClient'
+import { redirect } from 'next/navigation'
 import { buildRouteMetadata } from '../seo'
+import randomId from '@/utils/random/randomId'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Shared Workspace',
@@ -10,5 +11,5 @@ export const metadata: Metadata = buildRouteMetadata({
 })
 
 export default function ShareEntryPage() {
-    return <ShareEntryClient />
+    redirect(`/s/${randomId()}?new=1`)
 }
