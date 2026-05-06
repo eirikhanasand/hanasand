@@ -1,4 +1,5 @@
 import { SearchX } from 'lucide-react'
+import ErrorNotice from '@/components/error/errorNotice'
 
 export default function ErrorState({ error }: { error: string }) {
     return (
@@ -13,12 +14,7 @@ export default function ErrorState({ error }: { error: string }) {
             <p className='mt-2 text-sm text-white/80'>
                 The page could not read a valid vulnerability payload from the internal API.
             </p>
-            <div
-                className='mx-auto mt-5 max-w-2xl rounded-xl border border-rose-400/15
-                    bg-rose-500/8 px-4 py-3 text-left text-sm text-rose-200'
-            >
-                {error}
-            </div>
+            <ErrorNotice className='mx-auto mt-5 max-w-2xl text-left' message={error} />
         </div>
     )
 }

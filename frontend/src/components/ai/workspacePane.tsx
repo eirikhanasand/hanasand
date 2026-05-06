@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { ExternalLink, FolderGit2, RefreshCcw, Rocket, ServerCog, Share2, TerminalSquare, UsersRound } from 'lucide-react'
 import { listTreePaths } from './shareTree'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type WorkspacePaneProps = {
     activeConversation: AIConversation | null
@@ -271,7 +272,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         Your current access lets you inspect this AI session and continue from the same conversation route.
                     </div>
                 ) : null}
-                {collaborationError ? <div className='text-sm text-red-300'>{collaborationError}</div> : null}
+                {collaborationError ? <ErrorNotice compact message={collaborationError} /> : null}
             </Panel>
 
             <Panel
@@ -360,7 +361,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <div className='text-xs text-bright/40'>
                     Tokens are only sent with the current import or refresh request and are cleared again after successful use.
                 </div>
-                {importError ? <div className='text-sm text-red-300'>{importError}</div> : null}
+                {importError ? <ErrorNotice compact message={importError} /> : null}
             </Panel>
 
             <Panel

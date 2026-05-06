@@ -24,8 +24,7 @@ struct DatabaseNativePanel: View {
             ForEach(overview.clusters) { cluster in
                 NativeGroupPanel(title: cluster.name.isEmpty ? cluster.id : cluster.name, subtitle: [cluster.engine, cluster.version, cluster.host].compactMap { $0 }.joined(separator: " · ")) {
                     if let error = cluster.error, !error.isEmpty {
-                        Text(error)
-                            .foregroundStyle(.red)
+                        NativeNotice(message: error, title: "Cluster unavailable")
                     } else {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
                             ForEach(cluster.databases) { database in

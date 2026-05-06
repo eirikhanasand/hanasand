@@ -67,14 +67,7 @@ extension RecentTestsNativePanel {
             .foregroundStyle(theme.textSecondary)
 
             if let errors = test.errors, !errors.isEmpty {
-                Text(errors.prefix(2).joined(separator: "\n"))
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(theme.danger)
-                    .lineLimit(3)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(theme.backgroundElevated.opacity(0.72))
-                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                NativeNotice(message: errors.prefix(2).joined(separator: "\n"), title: "Load test issue")
             }
         }
     }

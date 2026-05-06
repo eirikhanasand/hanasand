@@ -5,6 +5,7 @@ import ImagePreview from './imagePreview'
 import config from '@/config'
 import { postFile } from '@/utils/files/post'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type PreviewProps = {
     url: string
@@ -128,7 +129,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                         className='w-full p-2 rounded bg-light text-foreground'
                     />
                     {checkingPath && <span className='text-xs text-gray-400'>Checking availability...</span>}
-                    {!pathAvailable && <span className='text-xs text-red-500'>Path is taken</span>}
+                    {!pathAvailable && <ErrorNotice compact className='mt-2' message='Path is taken' />}
                 </label>
 
                 <label className='block'>
@@ -142,7 +143,7 @@ export default function Preview({ url, file, setFile, setPreview, setUrl }: Prev
                 </label>
             </div>
 
-            {error && <div className='text-red-500 text-sm'>{error}</div>}
+            {error && <ErrorNotice compact message={error} />}
 
             <div className='flex justify-end gap-2'>
                 <button

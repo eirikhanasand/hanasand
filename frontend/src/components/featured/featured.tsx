@@ -1,6 +1,7 @@
 type ArticleProps = {
     title: string
     description: string
+    meta: string
 }
 
 export default function Featured() {
@@ -8,17 +9,20 @@ export default function Featured() {
         {
             title: 'Library Safety Manager',
             image: '/images/assets/abstract.jpg',
-            description: 'Package malware checks for Artifactory flows. Source: <a href=\'https://github.com/eirikhanasand/lsm\' target=\'_blank\' rel=\'noopener noreferrer\' style=\'color:rgb(89, 89, 255); position: relative; top: 0.5px;\'>github.com/eirikhanasand/lsm</a>.'
+            description: 'Package malware checks for Artifactory flows.',
+            meta: 'Security tooling'
         },
         {
             title: 'React Native Event Management Application',
             image: '/images/assets/art.jpg',
-            description: 'React Native event management app.'
+            description: 'A mobile-first event workflow for planning, scanning, and managing attendees.',
+            meta: 'Mobile application'
         },
         {
             title: 'Discord Bot for organization and IaC management',
             image: '/images/assets/city.jpg',
-            description: 'Discord workflows for organization and infrastructure tasks.'
+            description: 'Operational chat commands for organization, infrastructure, and deployment routines.',
+            meta: 'Automation'
         }
     ]
 
@@ -30,22 +34,20 @@ export default function Featured() {
                     key={image.title}
                     title={image.title}
                     description={image.description}
+                    meta={image.meta}
                 />)}
             </div>
         </div>
     )
 }
 
-function Project({ title, description }: ArticleProps) {
+function Project({ title, description, meta }: ArticleProps) {
     return (
-        <article className='outline-1 outline-dark cursor-pointer hover:scale-[1.03] w-full h-fit md:h-full pb-2 md:pb-0 overflow-hidden rounded-3xl'>
-            {/* <article className='bg-dark w-full h-[55vh] overflow-hidden rounded-3xl'> */}
-            {/* <Image className='w-full h-[62%] object-cover' src={image} alt={title} width={800} height={450} /> */}
-            <div className='m-5 text-foreground grid gap-2'>
-                <h1>{title}</h1>
-                <p className='text-gray-500' dangerouslySetInnerHTML={{ __html: description }} />
-                <h1 className='text-red-400'>Coming soon.</h1>
-                {/* <h1 className='text-foreground text-lg'>See more &#x2192;</h1> */}
+        <article className='h-full w-full rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-foreground transition-colors hover:bg-white/[0.055]'>
+            <div className='grid gap-3'>
+                <p className='w-fit rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-bright/45'>{meta}</p>
+                <h2 className='text-lg font-semibold text-bright/90'>{title}</h2>
+                <p className='text-sm leading-6 text-bright/58'>{description}</p>
             </div>
         </article>
     )

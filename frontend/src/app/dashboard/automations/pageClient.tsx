@@ -13,9 +13,11 @@ import {
     type AgentAutomationRun,
     type AutomationPayload,
 } from '@/utils/automations/client'
+import ErrorNotice from '@/components/error/errorNotice'
 
 const defaultRunAt = () => new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)
 const defaultTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+const maxActiveAutomations = 10
 
 export default function AutomationsClient() {
     const [automations, setAutomations] = useState<AgentAutomation[]>([])
@@ -37,6 +39,7 @@ export default function AutomationsClient() {
     })
 
     const selected = useMemo(() => automations.find(item => item.id === selectedId) || null, [automations, selectedId])
+    const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
 
     useEffect(() => {
         void load()
@@ -149,7 +152,7 @@ export default function AutomationsClient() {
                 <div className='mb-2 flex items-center justify-between gap-2 px-2 py-1'>
                     <div>
                         <p className='text-[10px] font-semibold uppercase tracking-[0.24em] text-bright/32'>Scheduled</p>
-                        <h2 className='text-sm font-semibold text-bright/86'>{automations.length} jobs</h2>
+                        <h2 className='text-sm font-semibold text-bright/86'>{activeAutomationCount}/{maxActiveAutomations} active</h2>
                     </div>
                     <button className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/6 text-bright/72 hover:bg-white/10' onClick={newAutomation} title='New automation'>
                         <Plus className='h-4 w-4' />
@@ -278,7 +281,9 @@ export default function AutomationsClient() {
                                             <span>{formatDate(run.startedAt)}</span>
                                             <span>{run.status}{run.durationMs ? ` · ${(run.durationMs / 1000).toFixed(1)}s` : ''}</span>
                                         </div>
-                                        <p className={`mt-2 whitespace-pre-wrap text-sm leading-6 ${run.status === 'failed' ? 'text-red-200/86' : 'text-bright/72'}`}>{run.result || run.error || 'Running...'}</p>
+                                        {run.status === 'failed'
+                                            ? <ErrorNotice compact className='mt-2' message={run.error || run.result || 'Run failed.'} />
+                                            : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-bright/72'>{run.result || 'Running...'}</p>}
                                     </div>
                                 ))}
                                 {!runs.length && <p className='text-sm text-bright/48'>No run history yet.</p>}

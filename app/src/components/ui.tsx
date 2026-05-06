@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import { createContext, type ReactNode, useContext, useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native'
-import { Settings2 } from 'lucide-react-native'
+import { AlertCircle, CheckCircle2, Info, Settings2 } from 'lucide-react-native'
 import Svg, { Circle, Line, Path } from 'react-native-svg'
 import { radius, spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
@@ -163,6 +163,34 @@ export function StatChip({ label, value }: { label: string; value: string }) {
         <View style={styles.statChip}>
             <Text style={styles.statLabel}>{label}</Text>
             <Text style={styles.statValue}>{value}</Text>
+        </View>
+    )
+}
+
+export function InlineNotice({
+    message,
+    title,
+    tone = 'error',
+}: {
+    message?: string
+    title?: string
+    tone?: 'error' | 'info' | 'success'
+}) {
+    const theme = useAppTheme()
+    const styles = useMemo(() => createStyles(theme), [theme])
+    if (!message) return null
+
+    const Icon = tone === 'success' ? CheckCircle2 : tone === 'info' ? Info : AlertCircle
+    const accent = tone === 'success' ? theme.success : tone === 'info' ? theme.accentAlt : theme.danger
+
+    return (
+        <View style={styles.notice}>
+            <View style={[styles.noticeAccent, { backgroundColor: accent }]} />
+            <Icon color={accent} size={17} strokeWidth={2.1} />
+            <View style={{ flex: 1, gap: 2 }}>
+                {!!title && <Text style={styles.noticeTitle}>{title}</Text>}
+                <Text style={styles.noticeText}>{message}</Text>
+            </View>
         </View>
     )
 }
@@ -469,6 +497,30 @@ function createStyles(theme: ThemePalette) {
         statChip: { flex: 1, minWidth: 92, borderRadius: radius.md, borderWidth: 1, borderColor: theme.surfaceBorder, backgroundColor: theme.surfaceStrong, padding: spacing.md, gap: 6 },
         statLabel: { color: theme.textSoft, fontSize: 12 },
         statValue: { color: theme.text, fontSize: 18, fontWeight: '700' },
+        notice: {
+            position: 'relative',
+            overflow: 'hidden',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 10,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: theme.surfaceBorderSoft,
+            backgroundColor: theme.ambientNeutral,
+            paddingHorizontal: 12,
+            paddingVertical: 11,
+        },
+        noticeAccent: {
+            position: 'absolute',
+            top: 9,
+            bottom: 9,
+            left: 0,
+            width: 2,
+            borderTopRightRadius: 2,
+            borderBottomRightRadius: 2,
+        },
+        noticeTitle: { color: theme.text, fontSize: 13, fontWeight: '600' },
+        noticeText: { color: theme.textMuted, fontSize: 13, lineHeight: 18, fontWeight: '500' },
         nativeTile: {
             gap: 6,
             borderRadius: radius.md,

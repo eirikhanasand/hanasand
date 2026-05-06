@@ -1,3 +1,5 @@
+import ErrorNotice from '@/components/error/errorNotice'
+
 type NotifyProps = {
     message: string | boolean | null
     color?: string
@@ -13,11 +15,14 @@ export default function Notify({ message, color, fullWidth, className, glow, bac
         return
     }
 
+    const variant = color?.includes('blue') ? 'info' : color?.includes('green') ? 'success' : 'error'
     const content = (
-        <div className={`w-full ${fullWidth ? '' : 'max-w-xs'} ${className} ${background || 'bg-extralight'} rounded-lg px-2 py-1 ${glow ? 'glow-blue-small' : ''}`}>
-            <h1 className='text-center'>{message}</h1>
-            <div className={`h-1 ${color ? color : 'bg-red-500'} w-0 my-1 animate-slide-line rounded-lg`} />
-        </div>
+        <ErrorNotice
+            compact
+            message={message}
+            variant={variant}
+            className={`${fullWidth ? 'w-full' : 'max-w-xs'} ${className || ''} ${background || ''} ${glow ? 'glow-blue-small' : ''}`}
+        />
     )
 
     if (absolute) {

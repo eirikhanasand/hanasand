@@ -96,10 +96,9 @@ function Article({ article }: ArticleProps) {
                         <h1 className='lg:text-lg font-semibold'>{title}</h1>
                     </div>
                     <p className='text-gray-500'>{metadata.description}</p>
-                    {metadata.wordCount > 100
-                        ? <h1 className='text-foreground text-lg'>See more →</h1>
-                        : <h1 className='text-red-400'>This article is coming soon! &lt;3
-                        </h1>}
+                    <p className='text-sm font-medium text-bright/72'>
+                        {metadata.wordCount > 100 ? 'Read article →' : 'Brief note'}
+                    </p>
                 </div>
             </article>
         </Link>

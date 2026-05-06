@@ -9,6 +9,7 @@ import config from '@/config'
 import { ArrowRight } from 'lucide-react'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type LoginPageProps = {
     path: string | null
@@ -208,8 +209,8 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                 </div>
 
                 <div className='grid w-full gap-3 rounded-lg border border-white/10 bg-dark/70 p-3 shadow-[0_14px_42px_rgba(0,0,0,0.24)] backdrop-blur-md'>
-                    {(expired && path) && <p className='rounded-lg border border-blue-400/20 bg-blue-500/10 p-3 text-sm text-blue-100'>Token expired. You will be redirected back to {path} after reauthenticating.</p>}
-                    {(internal && path) && <p className='rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100'>{path} is internal. Please log in.</p>}
+                    {(expired && path) && <ErrorNotice variant='info' message={`Token expired. You will be redirected back to ${path} after reauthenticating.`} />}
+                    {(internal && path) && <ErrorNotice message={`${path} is internal. Please log in.`} />}
 
                     <Notify message={error as string | null} />
                     {mode === 'login' && (

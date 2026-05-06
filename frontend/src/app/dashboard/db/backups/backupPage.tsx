@@ -6,6 +6,7 @@ import { DatabaseBackup, RotateCcw } from 'lucide-react'
 import { triggerBackupAction } from '../actions'
 import type { BackupService } from '@/utils/db/internal'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
+import ErrorNotice from '@/components/error/errorNotice'
 
 function formatSchedule(value?: string | null) {
     if (!value) return 'Not scheduled'
@@ -81,9 +82,7 @@ export default function BackupPage({ backups }: { backups: BackupService[] }) {
                                 </span>}
                             </div>
                         </div>
-                        {backup.error && (
-                            <div className='mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-100'>{backup.error}</div>
-                        )}
+                        {backup.error && <ErrorNotice compact className='mt-4' message={backup.error} />}
                         <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 text-sm text-bright/65'>
                             <div className='rounded-xl bg-black/18 p-4'>
                                 <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Last backup</p>

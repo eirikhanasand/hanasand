@@ -81,6 +81,8 @@ type NormalizedAutomationInput = {
 const ACTIVE_STATUSES = new Set(['active', 'paused', 'archived'])
 const ACTION_TYPES = new Set(['agent_prompt', 'echo'])
 const NOTIFY_OPTIONS = new Set(['never', 'failure', 'always'])
+const MAX_AUTOMATION_RUNTIME_MS = 10 * 60_000
+const STALE_RUNNING_AFTER_MS = MAX_AUTOMATION_RUNTIME_MS + 2 * 60_000
 
 export function toAutomation(row: AutomationRow) {
     return {
@@ -166,6 +168,8 @@ export function computeNextRunAt({
 }
 
 export async function runDueAutomations() {
+    await recoverStaleAutomationRuns()
+
     const claimResult = await run(`
         UPDATE agent_automations
            SET last_run_at = NOW(),
@@ -187,6 +191,44 @@ export async function runDueAutomations() {
     `)
 
     await Promise.all((claimResult.rows as AutomationRow[]).map(executeAutomation))
+}
+
+export async function recoverStaleAutomationRuns() {
+    const staleAfter = new Date(Date.now() - STALE_RUNNING_AFTER_MS)
+    const staleRuns = await run(`
+        UPDATE agent_automation_runs
+           SET status = 'failed',
+               error = 'Automation exceeded the maximum runtime and was recovered by the scheduler.',
+               completed_at = NOW(),
+               duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::INT * 1000
+         WHERE status = 'running'
+           AND started_at < $1
+         RETURNING automation_id
+    `, [staleAfter])
+
+    if (!staleRuns.rows.length) return
+
+    await run(`
+        UPDATE agent_automations automation
+           SET last_status = 'failed',
+               last_error = 'Automation exceeded the maximum runtime and was recovered by the scheduler.',
+               last_completed_at = NOW(),
+               last_run_at = NULL,
+               next_run_at = CASE
+                   WHEN automation.schedule_kind = 'interval' AND automation.status = 'active' THEN NOW()
+                   ELSE automation.next_run_at
+               END,
+               consecutive_failures = consecutive_failures + 1,
+               updated_at = NOW()
+          FROM (
+              SELECT DISTINCT automation_id
+              FROM agent_automation_runs
+              WHERE status = 'failed'
+                AND error = 'Automation exceeded the maximum runtime and was recovered by the scheduler.'
+                AND completed_at > NOW() - INTERVAL '5 minutes'
+          ) stale
+         WHERE automation.id = stale.automation_id
+    `)
 }
 
 export async function executeAutomation(automation: AutomationRow) {
@@ -286,7 +328,7 @@ async function runAutomationAction(automation: AutomationRow) {
         throw new Error('No Hanasand AI model client is connected.')
     }
 
-    const completion = await requestGptCompletion('gpt', {
+    const completion = await withAutomationTimeout(requestGptCompletion('gpt', {
         conversationId: `automation-${automation.id}-${crypto.randomUUID()}`,
         clientName: preferredClient.name,
         maxTokens: 1800,
@@ -302,12 +344,28 @@ async function runAutomationAction(automation: AutomationRow) {
             },
             { role: 'user', content: automation.prompt },
         ],
-    })
+    }))
 
     return {
         provider: 'hanasand-ai',
         model: preferredClient.name,
         message: completion.content || 'Automation completed without a text result.',
+    }
+}
+
+async function withAutomationTimeout<T>(promise: Promise<T>) {
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    try {
+        return await Promise.race([
+            promise,
+            new Promise<never>((_, reject) => {
+                timeout = setTimeout(() => {
+                    reject(new Error('Automation exceeded the maximum runtime.'))
+                }, MAX_AUTOMATION_RUNTIME_MS)
+            }),
+        ])
+    } finally {
+        if (timeout) clearTimeout(timeout)
     }
 }
 

@@ -15,6 +15,7 @@ import {
 import { importRepositoryToShare } from '@/utils/ai/importRepositoryToShare'
 import { syncRepositoryToShare } from '@/utils/ai/syncRepositoryToShare'
 import { getCookie } from '@/utils/cookies/cookies'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type GitPluginProps = {
     shareRouteId: string
@@ -496,7 +497,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                     </div>
                 ) : null}
                 {status ? <div className='text-[11px] leading-4 text-emerald-200/80'>{status}</div> : null}
-                {error ? <div className='text-[11px] leading-4 text-red-300'>{error}</div> : null}
+                {error ? <ErrorNotice compact message={error} /> : null}
             </div>
         </section>
     )

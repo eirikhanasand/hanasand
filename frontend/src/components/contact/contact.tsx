@@ -3,6 +3,7 @@
 import { Mail, MessageSquareText, Send, UserRound } from 'lucide-react'
 import { useFormik } from 'formik'
 import * as Yup from 'yup'
+import ErrorNotice from '@/components/error/errorNotice'
 
 const fieldClassName = 'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-foreground outline-none transition focus:border-orange-300/45'
 
@@ -125,7 +126,7 @@ function Field({
                 {label}
             </span>
             {children}
-            {error && <p className='text-sm text-red-300'>{error}</p>}
+            {error && <ErrorNotice compact message={error} />}
         </label>
     )
 }

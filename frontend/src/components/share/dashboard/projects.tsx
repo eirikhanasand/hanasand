@@ -5,6 +5,7 @@ import { getUserShares } from '@/utils/share/getUserShares'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { DashboardPanel } from '@/components/dashboard/ui'
+import ErrorNotice from '@/components/error/errorNotice'
 
 export default async function Shares() {
     const Cookies = await cookies()
@@ -32,7 +33,7 @@ export default async function Shares() {
             </div>
             <div className='grid gap-1'>
                 {typeof shares === 'string'
-                    ? <p className='text-sm text-red-200/80'>{shares}</p>
+                    ? <ErrorNotice compact message={shares} />
                     : (shares as Share[]).length
                         ? (shares as Share[]).map((share) => <DashboardShare key={share.id} share={share} />)
                         : <p className='text-sm text-bright/42'>No shares yet.</p>}

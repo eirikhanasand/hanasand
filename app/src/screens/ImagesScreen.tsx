@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Animated, Dimensions, Image, PanResponder, Text, View } from 'react-native'
 import * as MediaLibrary from 'expo-media-library'
 import type { ImageReviewAsset, SwipeDecision } from '../types'
-import { GlassCard, PillButton, Screen, SectionTitle } from '../components/ui'
+import { GlassCard, InlineNotice, PillButton, Screen, SectionTitle } from '../components/ui'
 import { spacing } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
 
@@ -155,7 +155,7 @@ export function ImagesScreen() {
         <Screen title='Images' subtitle=''>
             <GlassCard>
                 <SectionTitle eyebrow='Review' title={current ? `${remaining} left` : 'Complete'} />
-                {!!loadError && <Text style={{ color: theme.danger, marginTop: spacing.sm }}>{loadError}</Text>}
+                <InlineNotice message={loadError} />
                 <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.md }}>
                     <PillButton label='Undo last' onPress={undoLast} small disabled={busy || !history.length} />
                     <PillButton label={busy ? 'Working...' : `Delete marked (${discardCount})`} onPress={() => void deleteDeferred()} tone='danger' small disabled={busy || !discardCount} />

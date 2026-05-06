@@ -5,8 +5,9 @@ import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
-import { ArrowUp, Check, Code2, Loader2, Sparkles } from 'lucide-react'
+import { ArrowUp, Check, Code2, ExternalLink, Globe2, Loader2, Sparkles } from 'lucide-react'
 import { Dispatch, FormEvent, SetStateAction, useMemo, useRef, useState } from 'react'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type ShareChatProps = {
     share: Share | null
@@ -14,6 +15,7 @@ type ShareChatProps = {
     tree?: Tree | null
     editingContent: string
     setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
+    mode?: 'panel' | 'workspace'
 }
 
 type Message = {
@@ -49,17 +51,24 @@ type ToolCall = {
     actions?: ToolCall[]
 }
 
+type BrowserTarget = {
+    url: string
+    title: string
+}
+
 export default function ShareChat({
     share,
     setShare,
     tree,
     editingContent,
     setEditorPatch,
+    mode = 'panel',
 }: ShareChatProps) {
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null)
+    const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 120), [tree])
     const canSend = input.trim().length > 0 && !loading && Boolean(share)
@@ -82,7 +91,7 @@ export default function ShareChat({
         setLoading(true)
 
         try {
-            const response = await aiClientRequest('/tools/ai', {
+            const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
                     prompt: buildPrompt(trimmed, share, editingContent, treePaths),
@@ -91,7 +100,15 @@ export default function ShareChat({
                 }),
             })
             const data = await response.json().catch(() => ({}))
-            const rawContent = data.message || data.suggestion || data.error || 'No response.'
+            const rawContent = response.ok
+                ? data.message || data.suggestion || 'No response.'
+                : friendlyChatError(response.status)
+            if (response.ok && data.intent === 'open_browser' && data.target?.url) {
+                setBrowserTarget({
+                    url: data.target.url,
+                    title: data.target.title || data.target.url,
+                })
+            }
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, share, tree || null, editingContent)
             const visibleContent = stripToolTags(rawContent).trim()
@@ -111,11 +128,11 @@ export default function ShareChat({
                     status: 'pending',
                 })
             }
-        } catch (error) {
+        } catch {
             setMessages((current) => [...current, {
                 id: randomId(),
                 role: 'tool',
-                content: error instanceof Error ? error.message : 'The chat request failed.',
+                content: 'Hanasand AI is reconnecting. Try the same message again in a moment.',
                 createdAt: new Date().toISOString(),
             }])
         } finally {
@@ -171,7 +188,9 @@ export default function ShareChat({
     }
 
     return (
-        <section className='flex h-[calc(100%-3.5rem)] min-h-[32rem] flex-col overflow-hidden rounded-lg border border-bright/8 bg-black/10'>
+        <section className={`flex flex-col overflow-hidden rounded-lg border border-bright/8 bg-black/10 ${
+            mode === 'workspace' ? 'h-full min-h-0 shadow-2xl shadow-black/20' : 'h-[calc(100%-3.5rem)] min-h-[32rem]'
+        }`}>
             <div className='flex items-center justify-between border-b border-bright/8 px-3 py-2'>
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
@@ -185,7 +204,7 @@ export default function ShareChat({
                 </span>
             </div>
 
-            <div className='flex-1 space-y-3 overflow-y-auto px-3 py-4'>
+            <div className={`flex-1 space-y-3 overflow-y-auto px-3 py-4 ${mode === 'workspace' ? 'lg:px-6 lg:py-5' : ''}`}>
                 {messages.length === 0 ? (
                     <div className='grid h-full place-items-center text-center'>
                         <div>
@@ -211,6 +230,28 @@ export default function ShareChat({
                     <div className='flex items-center gap-2 text-sm text-bright/55'>
                         <Loader2 className='h-4 w-4 animate-spin' />
                         Thinking
+                    </div>
+                ) : null}
+                {browserTarget ? (
+                    <div className='overflow-hidden rounded-2xl border border-bright/10 bg-black/24'>
+                        <div className='flex items-center justify-between gap-3 border-b border-bright/8 px-3 py-2'>
+                            <div className='flex min-w-0 items-center gap-2'>
+                                <Globe2 className='h-4 w-4 shrink-0 text-[#ffb15f]' />
+                                <div className='min-w-0'>
+                                    <p className='truncate text-sm font-semibold text-bright/82'>{browserTarget.title}</p>
+                                    <p className='truncate text-xs text-bright/42'>{browserTarget.url}</p>
+                                </div>
+                            </div>
+                            <a href={browserTarget.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open browser target in a new tab'>
+                                <ExternalLink className='h-4 w-4' />
+                            </a>
+                        </div>
+                        <iframe
+                            src={browserTarget.url}
+                            title={`Inline browser for ${browserTarget.title}`}
+                            className='h-[min(34rem,52vh)] w-full border-0 bg-white'
+                            sandbox='allow-forms allow-modals allow-popups allow-same-origin allow-scripts'
+                        />
                     </div>
                 ) : null}
             </div>
@@ -248,7 +289,7 @@ export default function ShareChat({
                             </details>
                         ))}
                     </div>
-                    {pendingEdit.error ? <p className='mt-2 text-xs text-red-300'>{pendingEdit.error}</p> : null}
+                    {pendingEdit.error ? <ErrorNotice compact className='mt-2' message={pendingEdit.error} /> : null}
                 </div>
             ) : null}
 
@@ -280,6 +321,40 @@ export default function ShareChat({
             </form>
         </section>
     )
+}
+
+async function requestShareChat(init: RequestInit & { body?: BodyInit | null }) {
+    let lastResponse: Response | null = null
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+            const response = await aiClientRequest('/tools/ai', init)
+            if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 429)) {
+                return response
+            }
+            lastResponse = response
+        } catch {
+            // Retry transient browser/network failures before surfacing a calm fallback.
+        }
+        await wait(Math.min(350 * 2 ** attempt, 3000))
+    }
+    if (lastResponse) {
+        return lastResponse
+    }
+    throw new Error('Chat connection failed.')
+}
+
+function friendlyChatError(status: number) {
+    if (status === 429) {
+        return 'The AI limit is cooling down. Try again in a moment.'
+    }
+    if (status === 401 || status === 403) {
+        return 'The chat session is reconnecting. Try again in a moment.'
+    }
+    return 'Hanasand AI is reconnecting. Try again in a moment.'
+}
+
+function wait(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[]) {

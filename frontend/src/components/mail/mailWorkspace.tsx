@@ -30,6 +30,7 @@ import {
 } from '@/utils/mail/client'
 import type { MailOverview } from '@/utils/mail/types'
 import { DashboardPage, dashboardPanelClass } from '@/components/dashboard/ui'
+import ErrorNotice from '@/components/error/errorNotice'
 import { Composer, MessageRow } from './mailWorkspaceParts'
 import {
     ActionIconButton,
@@ -240,16 +241,10 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                 )}
             </div>
 
-            {error && (
-                <div className='rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100'>
-                    {error}
-                </div>
-            )}
+            {error && <ErrorNotice compact message={error} />}
 
             {showStaleWarning && backgroundIssue && (
-                <div className='rounded-2xl border border-red-400/20 bg-red-500/8 px-3 py-2 text-[11px] text-red-100/90'>
-                    Background sync paused. Last successful update was {formatRelativeTime(lastSuccessAt!, now)} ago.
-                </div>
+                <ErrorNotice compact message={`Background sync paused. Last successful update was ${formatRelativeTime(lastSuccessAt!, now)} ago.`} />
             )}
 
             <div className={`grid gap-3 ${sidebarCompact ? '2xl:grid-cols-[80px_320px_minmax(0,1fr)]' : '2xl:grid-cols-[220px_320px_minmax(0,1fr)]'} xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)]`}>

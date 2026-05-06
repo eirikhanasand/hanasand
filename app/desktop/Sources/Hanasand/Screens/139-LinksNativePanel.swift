@@ -48,9 +48,11 @@ struct LinksNativePanel: View {
                 if let link = model.linkLookupResult {
                     linkResultCard(link)
                 } else {
-                    Text("No shortcut loaded yet.")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.textSecondary)
+                    NativeNotice(
+                        message: "Enter a shortcut id and run Lookup to inspect the destination, visits, and public URL.",
+                        title: "Ready to inspect",
+                        tone: .info
+                    )
                 }
             }
         }

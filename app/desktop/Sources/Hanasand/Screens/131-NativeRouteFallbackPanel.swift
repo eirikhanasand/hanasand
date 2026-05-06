@@ -15,12 +15,13 @@ struct NativeRouteFallbackPanel: View {
     @Environment(\.desktopTheme) var theme
 
     var body: some View {
-        NativeGroupPanel(title: "Native panel not mapped yet", subtitle: model.selectedDashboardPath ?? "Unknown route") {
+        NativeGroupPanel(title: model.selectedDashboardTitle, subtitle: model.selectedDashboardPath ?? "Dashboard route") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("This route is not part of the native dashboard set yet. You can jump back to the dashboard, open the workspace browser, or keep reviewing the available native panels.")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                NativeNotice(
+                    message: "This dashboard area is available in the embedded browser while the native panel is being prepared.",
+                    title: "Browser-backed workspace",
+                    tone: .info
+                )
 
                 HStack(spacing: 10) {
                     ActionButton(title: "Dashboard", icon: "square.grid.2x2") {

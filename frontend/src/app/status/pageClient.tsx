@@ -7,6 +7,7 @@ import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, Binoculars, CheckCircle, HeartPulse, ShieldAlert, Timer, XCircle } from 'lucide-react'
 import { toDomainTPS } from '@/utils/monitoring/domain'
 import Marquee from '@/components/shared/marquee'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type MetricSummary = {
     value: string
@@ -118,7 +119,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                                         <span className='ml-auto text-right font-medium text-bright'>{relativeTime(check.checked_at, now)}</span>
                                     </div>
                                 </div>
-                                {check.message && <p className='mt-3 rounded-lg bg-red-500/10 p-2 text-xs text-red-100'>{check.message}</p>}
+                                {check.message && <ErrorNotice compact className='mt-3' message={check.message} />}
                             </div>
                         )
                     })}

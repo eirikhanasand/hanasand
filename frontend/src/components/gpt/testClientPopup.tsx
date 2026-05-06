@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Send, X } from 'lucide-react'
 import Button from '../misc/button'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type TestClientPopupProps = {
     client: GPT_Client
@@ -177,9 +178,7 @@ function StatCard({ title, value, error = false }: { title: string, value: strin
             }`}
         >
             <div className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{title}</div>
-            <div className={`mt-2 text-sm font-semibold ${error ? 'text-red-100' : 'text-bright/90'}`}>
-                {value}
-            </div>
+            {error ? <ErrorNotice compact className='mt-2' message={value} /> : <div className='mt-2 text-sm font-semibold text-bright/90'>{value}</div>}
         </div>
     )
 }

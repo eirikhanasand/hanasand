@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type RegisterPageProps = {
     path: string | null
@@ -151,9 +152,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 </div>
 
                 <div className='grid w-full gap-3 rounded-lg border border-white/10 bg-dark/70 p-3 shadow-[0_14px_42px_rgba(0,0,0,0.24)] backdrop-blur-md'>
-                    {(internal && path) && <p className='rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100'>
-                        {path} is internal. Please log in.
-                    </p>}
+                    {(internal && path) && <ErrorNotice message={`${path} is internal. Please log in.`} />}
 
                     <Notify message={error} />
                     <form

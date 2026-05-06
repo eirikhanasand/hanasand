@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { ArrowRight, Check, X } from 'lucide-react-native'
+import { ArrowRight, X } from 'lucide-react-native'
 import type { AppSettings, HanasandAuthSession } from '../types'
 import { completePasswordReset, createHanasandAccount, loginToHanasand, PendingDeletionError, requestPasswordResetCode, verifyPasswordResetCode } from '../lib/api'
 import { getThemePalette, spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
+import { InlineNotice } from '../components/ui'
 
 type AuthMode = 'login' | 'signup'
 type ResetStep = 'idle' | 'code' | 'password'
@@ -53,6 +54,7 @@ export function LoginScreen({
         && passwordCounts.uppercase >= 2
     const reservedUsername = reservedUsernames.has(cleanUsername.toLowerCase())
     const canCreateAccount = Boolean(cleanUsername && cleanName && passwordIsValid && !reservedUsername)
+    const statusTone = status.includes('accepted') || status.includes('Check') || status.includes('reset') ? 'success' : status.includes('Signing') || status.includes('Creating') || status.includes('Sending') || status.includes('Checking') || status.includes('Setting') ? 'info' : 'error'
 
     function setMode(nextMode: AuthMode) {
         setAuthMode(nextMode)
@@ -330,12 +332,7 @@ export function LoginScreen({
                         </View>
                     ) : null}
 
-                    {!!status && (
-                        <View style={styles.statusLine}>
-                            {status.includes('accepted') || status.includes('Check') || status.includes('reset') ? <Check color={theme.success} size={15} /> : null}
-                            <Text style={styles.statusText}>{status}</Text>
-                        </View>
-                    )}
+                    <InlineNotice message={status} tone={statusTone} />
                 </ScrollView>
             </KeyboardAvoidingView>
         </LinearGradient>
@@ -512,15 +509,6 @@ function createStyles(theme: ThemePalette) {
             flexDirection: 'row',
             gap: 8,
         },
-        statusLine: {
-            minHeight: 36,
-            borderRadius: 18,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            paddingHorizontal: 12,
-        },
-        statusText: { flex: 1, color: theme.textMuted, fontSize: 13, fontWeight: '700' },
         disabled: { opacity: 0.58 },
         pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
     })

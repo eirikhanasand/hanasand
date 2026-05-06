@@ -3,7 +3,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-nati
 import { CalendarClock, Play, RefreshCw } from 'lucide-react-native'
 import { createAutomation, deleteAutomation, fetchAutomationDetails, fetchAutomations, runAutomationNow, updateAutomation } from '../lib/api'
 import type { AgentAutomation, AgentAutomationPayload, AgentAutomationRun, AppSettings } from '../types'
-import { GlassCard, PillButton, Screen } from '../components/ui'
+import { GlassCard, InlineNotice, PillButton, Screen } from '../components/ui'
 import { spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
 
@@ -179,7 +179,7 @@ export function AutomationsScreen({ settings }: { settings: AppSettings }) {
                     {selected ? <PillButton label='Run' onPress={() => void runNow()} small /> : null}
                     {selected ? <PillButton label='Delete' onPress={() => void remove()} tone='danger' small /> : null}
                 </View>
-                {selected?.pausedReason ? <Text style={styles.warningText}>{selected.pausedReason}</Text> : null}
+                <InlineNotice message={selected?.pausedReason || undefined} tone='info' />
             </GlassCard>
 
             <GlassCard>
@@ -191,7 +191,9 @@ export function AutomationsScreen({ settings }: { settings: AppSettings }) {
                 {runs.map(run => (
                     <View key={run.id} style={styles.runRow}>
                         <Text style={styles.cardMeta}>{formatDate(run.startedAt)} · {run.status}</Text>
-                        <Text style={run.status === 'failed' ? styles.errorText : styles.cardBody}>{run.result || run.error || 'Running...'}</Text>
+                        {run.status === 'failed'
+                            ? <InlineNotice message={run.error || run.result || 'Run failed.'} />
+                            : <Text style={styles.cardBody}>{run.result || 'Running...'}</Text>}
                     </View>
                 ))}
                 {!runs.length && <Text style={styles.cardBody}>No runs recorded yet.</Text>}
@@ -277,7 +279,5 @@ function createStyles(theme: ThemePalette) {
             gap: spacing.xs,
             paddingVertical: spacing.sm,
         },
-        errorText: { color: theme.danger, fontSize: 13, lineHeight: 20 },
-        warningText: { color: theme.warning, fontSize: 13, lineHeight: 20 },
     })
 }

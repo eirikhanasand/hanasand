@@ -6,6 +6,7 @@ import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
+import ShareChat from '@/components/share/shareChat'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Search from '@/components/share/search/search'
 import OpenFiles from '@/components/share/files/openFiles'
@@ -18,6 +19,7 @@ import syncAgentTargetAccess from '@/utils/vms/fetch/syncAgentTargetAccess'
 import postVM from '@/utils/vms/fetch/postVM'
 import type { TerminalCredentials } from '@/hooks/useTerminal'
 import { getShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
+import { Code2, MessageSquare } from 'lucide-react'
 
 type ClientPageProps = {
     id: string
@@ -61,6 +63,7 @@ export default function ClientPage({
     const [openFiles, setOpenFiles] = useState(serverOpenFiles)
     const [workspaceCreated, setWorkspaceCreated] = useState(!autoCreate)
     const [editorPatch, setEditorPatch] = useState<{ value: string; nonce: number } | null>(null)
+    const [chatOpen, setChatOpen] = useState(false)
     const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const maxWidth = 'max-w-full'
@@ -153,22 +156,54 @@ export default function ClientPage({
                 setError={setError}
             />
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
-                <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
-                <Code
-                    id={share?.id || id}
-                    setParticipants={setParticipants}
-                    setIsConnected={setIsConnected}
-                    editingContent={editingContent}
-                    setEditingContent={setEditingContent}
-                    share={share}
-                    setShare={setShare}
-                    setClickedWord={setClickedWord}
-                    displayLineNumbers={displayLineNumbers}
-                    syntaxHighlighting={syntaxHighlighting}
-                    setError={setError}
-                    connect={workspaceCreated}
-                    editorPatch={editorPatch}
-                />
+                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/72 px-2 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-md'>
+                    <div className='min-w-0 flex-1'>
+                        {chatOpen ? (
+                            <div className='flex items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
+                                <MessageSquare className='h-4 w-4 text-[#ffb15f]' />
+                                <span className='truncate'>Chat workspace</span>
+                            </div>
+                        ) : (
+                            <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
+                        )}
+                    </div>
+                    <button
+                        type='button'
+                        onClick={() => setChatOpen(prev => !prev)}
+                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#e25822]/35 hover:bg-[#e25822]/12 hover:text-bright'
+                    >
+                        {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
+                        {chatOpen ? 'Back to code' : 'Open Chat'}
+                    </button>
+                </div>
+                {chatOpen ? (
+                    <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-background/48 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
+                        <ShareChat
+                            share={share}
+                            setShare={setShare}
+                            tree={tree}
+                            editingContent={editingContent}
+                            setEditorPatch={setEditorPatch}
+                            mode='workspace'
+                        />
+                    </div>
+                ) : (
+                    <Code
+                        id={share?.id || id}
+                        setParticipants={setParticipants}
+                        setIsConnected={setIsConnected}
+                        editingContent={editingContent}
+                        setEditingContent={setEditingContent}
+                        share={share}
+                        setShare={setShare}
+                        setClickedWord={setClickedWord}
+                        displayLineNumbers={displayLineNumbers}
+                        syntaxHighlighting={syntaxHighlighting}
+                        setError={setError}
+                        connect={workspaceCreated}
+                        editorPatch={editorPatch}
+                    />
+                )}
             </div>
             <Metadata
                 shareRouteId={id}

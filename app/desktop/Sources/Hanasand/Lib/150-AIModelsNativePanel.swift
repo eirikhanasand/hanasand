@@ -69,10 +69,7 @@ struct AIModelsNativePanel: View {
                             }
 
                             if let error = client.model?.lastError, !error.isEmpty {
-                                Text(error)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(theme.danger)
-                                    .lineLimit(3)
+                                NativeNotice(message: error, title: "Last model error")
                             }
                         }
                         .padding(13)

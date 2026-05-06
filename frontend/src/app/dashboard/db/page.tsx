@@ -2,6 +2,7 @@ import { Database, HardDrive, PlayCircle, Server, TimerReset } from 'lucide-reac
 import Link from 'next/link'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getDatabaseOverview } from '@/utils/db/internal'
+import ErrorNotice from '@/components/error/errorNotice'
 
 export default async function DatabasePage() {
     const overview = await getDatabaseOverview()
@@ -10,7 +11,7 @@ export default async function DatabasePage() {
         return (
             <DashboardPage>
                 <DashboardHeader eyebrow='Operations' title='Database' />
-                <DashboardPanel className='p-5 text-sm text-red-100'>{overview}</DashboardPanel>
+                <DashboardPanel className='p-5'><ErrorNotice message={overview} /></DashboardPanel>
             </DashboardPage>
         )
     }
@@ -116,7 +117,7 @@ export default async function DatabasePage() {
                             </div>
                         </div>
                         {cluster.error ? (
-                            <div className='mt-4 rounded-2xl bg-red-500/10 p-4 text-sm text-red-100'>{cluster.error}</div>
+                            <ErrorNotice className='mt-4' message={cluster.error} />
                         ) : (
                             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                                 {cluster.databases.map((database) => (

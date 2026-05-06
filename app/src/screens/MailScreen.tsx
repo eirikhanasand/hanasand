@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, Text, TextInput, View } from 'react-native'
 import type { AppSettings, MailOverview, SavedMailboxConnection } from '../types'
 import { createMailbox, fetchMailOverview, postMailAction, sendMailMessage } from '../lib/api'
-import { GlassCard, LabeledInput, PillButton, Screen, SectionTitle } from '../components/ui'
+import { GlassCard, InlineNotice, LabeledInput, PillButton, Screen, SectionTitle } from '../components/ui'
 import { spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
 
@@ -189,7 +189,12 @@ export function MailScreen({ settings, mailboxConnections, onSaveMailboxConnecti
             </GlassCard>
 
             <GlassCard>
-                <SectionTitle eyebrow='Inbox' title={loading ? 'Refreshing...' : overview.mailboxAddress} body={error} />
+                <SectionTitle eyebrow='Inbox' title={loading ? 'Refreshing...' : overview.mailboxAddress} />
+                {!!error && (
+                    <View style={{ marginTop: spacing.md }}>
+                        <InlineNotice message={error} />
+                    </View>
+                )}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md }}>
                     {overview.accessibleAccounts.map(account => (
                         <Pressable

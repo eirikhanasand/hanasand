@@ -11,6 +11,8 @@ import {
     type AutomationRunRow,
 } from '#utils/automations.ts'
 
+const MAX_ACTIVE_AUTOMATIONS = 10
+
 export async function getAutomations(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
     if (!valid || !id) {
@@ -54,6 +56,13 @@ export async function postAutomation(req: FastifyRequest<{ Body: AutomationInput
         input = normalizeAutomationInput(req.body)
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid automation.' })
+    }
+
+    if (input.status === 'active') {
+        const limitError = await activeAutomationLimitError(ownerId)
+        if (limitError) {
+            return res.status(409).send({ error: limitError })
+        }
     }
 
     const id = crypto.randomUUID()
@@ -110,6 +119,13 @@ export async function putAutomation(req: FastifyRequest<{ Params: { id: string }
         input = normalizeAutomationInput(req.body, existing)
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid automation.' })
+    }
+
+    if (input.status === 'active') {
+        const limitError = await activeAutomationLimitError(ownerId, req.params.id)
+        if (limitError) {
+            return res.status(409).send({ error: limitError })
+        }
     }
 
     const result = await run(`
@@ -221,4 +237,21 @@ async function loadRuns(automationId: string, ownerId: string) {
     `, [automationId, ownerId])
 
     return result.rows as AutomationRunRow[]
+}
+
+async function activeAutomationLimitError(ownerId: string, excludeId?: string) {
+    const result = await run(`
+        SELECT COUNT(*)::INT AS active_count
+        FROM agent_automations
+        WHERE owner_id = $1
+          AND status = 'active'
+          AND ($2::TEXT IS NULL OR id <> $2)
+    `, [ownerId, excludeId || null])
+
+    const count = Number(result.rows[0]?.active_count || 0)
+    if (count >= MAX_ACTIVE_AUTOMATIONS) {
+        return `You can have up to ${MAX_ACTIVE_AUTOMATIONS} active automations. Pause or delete one before activating another.`
+    }
+
+    return null
 }
