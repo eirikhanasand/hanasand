@@ -15,8 +15,9 @@ export default async function ensureAlwaysRunningVms() {
         FROM vms v
         LEFT JOIN vm_details d ON LOWER(d.name) = LOWER(v.name)
         WHERE v.always_running_enabled IS TRUE
+          AND LOWER(v.primary_host) = LOWER($1)
           AND LOWER(COALESCE(d.status, 'unknown')) IN ('stopped', 'unknown', 'error')
-    `)
+    `, [config.vm_host_id])
 
     await Promise.all(result.rows.map(row => startVm(row as AlwaysRunningRow)))
 }

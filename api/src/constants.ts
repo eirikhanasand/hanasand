@@ -35,6 +35,7 @@ const config = {
     CACHE_TTL_HOT: 5000,
     CACHE_TTL_COLD: 300000,
     vm_api_token: process.env.VM_API_TOKEN,
+    vm_host_id: process.env.VM_HOST_ID || 'ovhcloud',
     pwned: 'http://pwned:8080/api/pwned',
     pwned_ws: 'ws://pwned:8080/api/pwned/ws',
     // pwned_ws: 'ws://localhost:8201/api/pwned/ws',
