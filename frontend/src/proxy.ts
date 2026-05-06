@@ -14,14 +14,6 @@ export async function proxy(req: NextRequest) {
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
     const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
 
-    if ((requiresAuth || path === '/s') && requestHostname(req) === 'hanasand.com') {
-        const url = req.nextUrl.clone()
-        url.protocol = 'https'
-        url.hostname = 'www.hanasand.com'
-        url.port = ''
-        return NextResponse.redirect(url)
-    }
-
     requestHeaders.set('x-theme', theme)
     requestHeaders.set('x-current-path', path)
     if (impersonatingId) {
@@ -101,10 +93,4 @@ export async function proxy(req: NextRequest) {
     response.headers.set('x-theme', theme)
     response.headers.set('x-current-path', path)
     return response
-}
-
-function requestHostname(req: NextRequest) {
-    const forwardedHost = req.headers.get('x-forwarded-host')
-    const host = forwardedHost || req.headers.get('host') || req.nextUrl.hostname
-    return host.split(':')[0]
 }

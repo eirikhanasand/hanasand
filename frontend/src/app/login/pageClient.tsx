@@ -193,7 +193,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
         setCookieWithExpiresAt('access_token', data.token, data.expires_at)
         setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-        window.location.assign(appRoute(path || '/dashboard'))
+        window.location.assign(path || '/dashboard')
     }
 
     function changeMode(nextMode: typeof mode) {
@@ -208,9 +208,9 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (token && id) {
-            window.location.assign(appRoute('/dashboard'))
+            router.push('/dashboard')
         }
-    }, [])
+    }, [router])
 
     return (
         <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
@@ -460,14 +460,6 @@ function ResetCodeInput({
             </div>
         </div>
     )
-}
-
-function appRoute(path: string) {
-    if (typeof window === 'undefined' || window.location.hostname !== 'hanasand.com') {
-        return path
-    }
-
-    return new URL(path, 'https://www.hanasand.com').toString()
 }
 
 function countPassword(password: string) {

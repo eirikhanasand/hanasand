@@ -79,7 +79,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
                 setCookieWithExpiresAt('access_token', data.token, data.expires_at)
                 setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-                window.location.assign(appRoute(path || '/dashboard'))
+                router.push(path || '/dashboard')
                 return
             }
 
@@ -111,7 +111,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (token && id) {
-            window.location.assign(appRoute('/dashboard'))
+            router.push('/dashboard')
             return
         }
 
@@ -225,12 +225,4 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
             </div>
         </section>
     )
-}
-
-function appRoute(path: string) {
-    if (typeof window === 'undefined' || window.location.hostname !== 'hanasand.com') {
-        return path
-    }
-
-    return new URL(path, 'https://www.hanasand.com').toString()
 }
