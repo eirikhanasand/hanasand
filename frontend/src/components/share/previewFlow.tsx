@@ -146,7 +146,7 @@ export default function PreviewFlow({
                     <a
                         href={previewUrl}
                         target='_blank'
-                        rel='noreferrer'
+                        rel='noopener noreferrer'
                         aria-label='Open preview in a new tab'
                         title='Open preview in new tab'
                         className='grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/[0.045] text-bright/58 transition hover:border-bright/20 hover:bg-bright/9 hover:text-bright'
