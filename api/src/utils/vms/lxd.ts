@@ -161,7 +161,7 @@ function mapDetails(instance: LxdInstance, state: LxdState | null) {
         ephemeral: Boolean(instance.ephemeral),
         stateful: Boolean(instance.stateful),
         description: instance.description || '',
-        profiles: JSON.stringify(instance.profiles || []),
+        profiles: instance.profiles || [],
         last_checked: now,
     }
 }
@@ -188,7 +188,7 @@ async function upsertVmDetails(details: ReturnType<typeof mapDetails>) {
             $21, $22,
             $23, $24,
             $25, $26, $27,
-            $28, $29, $30, $31, $32::jsonb,
+            $28, $29, $30, $31, $32,
             $33
         ) ON CONFLICT (name) DO UPDATE SET
             status = EXCLUDED.status,

@@ -14,7 +14,7 @@ export async function proxy(req: NextRequest) {
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
     const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
 
-    if (requiresAuth && requestHostname(req) === 'hanasand.com') {
+    if ((requiresAuth || path === '/s') && requestHostname(req) === 'hanasand.com') {
         const url = req.nextUrl.clone()
         url.protocol = 'https'
         url.hostname = 'www.hanasand.com'
