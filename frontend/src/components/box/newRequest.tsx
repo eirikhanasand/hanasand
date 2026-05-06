@@ -9,7 +9,7 @@ import {
     sendViaShareVm,
     withRequestDetails,
 } from '@/utils/box/requestTool'
-import { Bot, ChevronDown, Clock3, ImageIcon, Play, Plus, Server, Trash2 } from 'lucide-react'
+import { Bot, ChevronDown, Clock3, ImageIcon, Play, Plus, Search, Server, Trash2 } from 'lucide-react'
 import type { ClipboardEvent, FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadScopedRequestVariables, saveScopedRequestVariables } from './storage'
@@ -53,6 +53,7 @@ export default function NewRequest({
     const [runs, setRuns] = useState<RequestRun[]>([])
     const [activeRunId, setActiveRunId] = useState<string | null>(null)
     const [variables, setVariables] = useState<VariableRow[]>([{ key: 'baseUrl', value: 'https://api.hanasand.com' }])
+    const [treeFilter, setTreeFilter] = useState('')
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
     const [aiLoading, setAiLoading] = useState(false)
@@ -394,9 +395,21 @@ export default function NewRequest({
                     )}
 
                     {responseTab === 'tree' && (
-                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
-                            {activeRun?.loading ? 'Request is running...' : response ? formatJsonTree(response) : 'JSON paths will appear here.'}
-                        </pre>
+                        <div className='grid min-h-32 grid-rows-[auto_minmax(0,1fr)] overflow-hidden'>
+                            <label className='flex h-10 items-center gap-2 border-b border-bright/8 px-3 text-bright/45'>
+                                <Search className='h-3.5 w-3.5 shrink-0' />
+                                <span className='sr-only'>Filter JSON paths</span>
+                                <input
+                                    value={treeFilter}
+                                    onChange={(event) => setTreeFilter(event.target.value)}
+                                    placeholder='Filter paths or values'
+                                    className='min-w-0 flex-1 bg-transparent text-xs text-bright/78 outline-none placeholder:text-bright/32'
+                                />
+                            </label>
+                            <pre className='min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
+                                {activeRun?.loading ? 'Request is running...' : response ? formatJsonTree(response, treeFilter) : 'JSON paths will appear here.'}
+                            </pre>
+                        </div>
                     )}
 
                     {responseTab === 'preview' && (
@@ -809,7 +822,7 @@ function formatPrettyResponseBody(response: ToolResponse) {
     }
 }
 
-function formatJsonTree(response: ToolResponse) {
+function formatJsonTree(response: ToolResponse, filter = '') {
     if (response.error) {
         return response.error
     }
@@ -821,7 +834,12 @@ function formatJsonTree(response: ToolResponse) {
     try {
         const parsed = JSON.parse(response.body) as unknown
         const rows = flattenJson(parsed)
-        return rows.length ? rows.join('\n') : '$ = ' + formatJsonTreeValue(parsed)
+        const formattedRows = rows.length ? rows : ['$ = ' + formatJsonTreeValue(parsed)]
+        const normalizedFilter = filter.trim().toLowerCase()
+        const visibleRows = normalizedFilter
+            ? formattedRows.filter((row) => row.toLowerCase().includes(normalizedFilter))
+            : formattedRows
+        return visibleRows.length ? visibleRows.join('\n') : 'No JSON paths match this filter.'
     } catch {
         return 'Tree view is available for JSON responses.'
     }
