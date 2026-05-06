@@ -223,14 +223,14 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     type='text'
                                     name='username'
                                     placeholder='Username'
-                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                     required
                                 />
                                 <input
                                     type='password'
                                     name='password'
                                     placeholder='Password'
-                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                     required
                                 />
                                 <div className='mt-1 flex items-center gap-3'>
@@ -271,7 +271,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 value={signupUsername}
                                 onChange={(e) => setSignupUsername(e.target.value)}
                                 placeholder='Username'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                 required
                             />
                             {reservedUsername && <p className='px-1 text-xs font-semibold text-orange-100/70'>Reserved username.</p>}
@@ -281,7 +281,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 value={signupName}
                                 onChange={(e) => setSignupName(e.target.value)}
                                 placeholder='Name'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                 required
                             />
                             <input
@@ -290,7 +290,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 value={signupPassword}
                                 onChange={(e) => setSignupPassword(e.target.value)}
                                 placeholder='Password'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                 required
                             />
                             {signupPassword && !signupPasswordIsValid && (
@@ -324,7 +324,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 type='text'
                                 name='resetUserId'
                                 placeholder='Username'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                 required
                             />
                             <div className='mt-1 flex items-center gap-3'>
@@ -352,7 +352,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 pattern='[0-9]{6}'
                                 maxLength={6}
                                 placeholder='6 digit code'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-center text-sm font-semibold text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-center text-sm font-semibold text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                                 required
                             />
                             <div className='mt-1 flex items-center gap-3'>

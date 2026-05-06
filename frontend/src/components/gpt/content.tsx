@@ -49,7 +49,7 @@ export default function GPT_Content({
                             <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Active clients</p>
                             <h2 className='mt-2 text-2xl font-semibold text-bright/90'>{clients.length}</h2>
                         </div>
-                        <div className='rounded-full bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
+                        <div className='rounded-full bg-[#f07d33]/12 p-3 text-[#f07d33] outline outline-[#f07d33]/20'>
                             <Bot className='h-5 w-5' />
                         </div>
                     </div>
@@ -63,7 +63,7 @@ export default function GPT_Content({
                 <div className='flex items-center justify-between'>
                     <h2 className='text-lg font-semibold text-bright/90'>Clients</h2>
                     <span
-                        className='rounded-full bg-[#fd8738]/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-[#fd8738] outline outline-[#fd8738]/20'
+                        className='rounded-full bg-[#f07d33]/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-[#f07d33] outline outline-[#f07d33]/20'
                     >
                         Live telemetry
                     </span>
@@ -93,7 +93,7 @@ function SummaryCard({ title, icon, metric }: { title: string, icon: ReactNode, 
                 <Metric metric={metric} size='lg' />
                 <div className='h-2 flex-1 rounded-full bg-bright/8'>
                     <div
-                        className='h-full rounded-full bg-[#fd8738] transition-[width]'
+                        className='h-full rounded-full bg-[#f07d33] transition-[width]'
                         style={{ width: `${Math.min(metric, 100)}%` }}
                     />
                 </div>

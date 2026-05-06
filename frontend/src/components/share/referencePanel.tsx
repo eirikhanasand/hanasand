@@ -106,7 +106,7 @@ export default function ReferencePanel({
                         className='mt-1 w-full bg-transparent text-sm font-semibold text-bright/90 outline-none placeholder:text-bright/35'
                     />
                 </div>
-                {loading ? <Loader2 className='h-4 w-4 animate-spin text-[#e25822]' /> : <SearchCode className='h-4 w-4 text-bright/45' />}
+                {loading ? <Loader2 className='h-4 w-4 animate-spin text-[#f07d33]' /> : <SearchCode className='h-4 w-4 text-bright/45' />}
             </header>
 
             <div className='border-b border-bright/10 bg-bright/[0.025] px-3 py-2'>
@@ -167,14 +167,14 @@ function ReferenceGroup({ title, matches, accent = false }: { title: string; mat
                     <Link
                         key={match.id}
                         href={`/s/${match.file.id}?line=${match.line}`}
-                        className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#e25822]/10'
+                        className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#f07d33]/10'
                     >
                         <span className='w-8 shrink-0 text-right font-mono text-bright/35'>{match.line}</span>
                         <span className='min-w-0 flex-1'>
-                            {match.functionName ? <span className='mb-1 block text-[10px] uppercase tracking-[0.16em] text-[#e25822]/75'>{match.functionName}</span> : null}
+                            {match.functionName ? <span className='mb-1 block text-[10px] uppercase tracking-[0.16em] text-[#f07d33]/75'>{match.functionName}</span> : null}
                             <span className='block truncate font-mono text-bright/65'>{match.preview}</span>
                         </span>
-                        <ArrowRight className='mt-0.5 h-3.5 w-3.5 shrink-0 text-bright/25 transition group-hover:text-[#e25822]' />
+                        <ArrowRight className='mt-0.5 h-3.5 w-3.5 shrink-0 text-bright/25 transition group-hover:text-[#f07d33]' />
                     </Link>
                 ))}
             </div>

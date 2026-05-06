@@ -13,8 +13,8 @@ type ButtonProps = {
 }
 
 const variants = {
-    primary: 'bg-[#fd8738]/70 outline-[#fd8738]/50 hover:bg-[#fd8738]/90',
-    secondary: 'bg-[#fd8738]/70 outline-[#fd8738] hover:bg-[#fd8738]/90',
+    primary: 'bg-[#f07d33]/70 outline-[#f07d33]/50 hover:bg-[#f07d33]/90',
+    secondary: 'bg-[#f07d33]/70 outline-[#f07d33] hover:bg-[#f07d33]/90',
     warning: 'bg-yellow-500/70 outline-yellow-500 hover:bg-yellow-500/90',
     danger: 'bg-red-600/70 outline-red-600 hover:bg-red-600/90',
     success: 'bg-green-600/70 outline-green-600 hover:bg-green-600/90',

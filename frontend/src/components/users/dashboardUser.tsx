@@ -79,7 +79,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                         type='button'
                         aria-label={`Impersonate ${user.id}`}
                         onClick={handleImpersonate}
-                        className='rounded-md border border-amber-200/14 bg-amber-300/8 px-2 py-1 text-[0.68rem] font-bold text-amber-100 transition hover:bg-amber-300/14'
+                        className='rounded-md border border-[#f07d33]/20 bg-[#f07d33]/10 px-2 py-1 text-[0.68rem] font-bold text-[#f07d33] transition hover:bg-[#f07d33]/16'
                         title={`Impersonate ${user.id}`}
                     >
                         Impersonate

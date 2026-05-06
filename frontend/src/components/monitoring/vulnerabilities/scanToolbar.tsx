@@ -34,7 +34,7 @@ export default function ScanToolbar(props: Props) {
                             type='button'
                             onClick={() => props.sorting.setSortMode(mode)}
                             className={`rounded-md px-3 py-1.5 transition ${
-                                props.sorting.sortMode === mode ? 'bg-[#e25822] text-white' : 'text-white/60 hover:bg-white/10'
+                                props.sorting.sortMode === mode ? 'bg-[#f07d33] text-white' : 'text-white/60 hover:bg-white/10'
                             }`}
                         >
                             {mode === 'impact' ? 'Impact' : 'A-Z'}
@@ -50,7 +50,7 @@ export default function ScanToolbar(props: Props) {
                             }
                         }}
                         className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
-                            !props.expansion.areAllExpanded ? 'bg-[#e25822] text-white' : 'text-white/60 hover:bg-white/10'
+                            !props.expansion.areAllExpanded ? 'bg-[#f07d33] text-white' : 'text-white/60 hover:bg-white/10'
                         }`}
                     >
                         <Rows3 className='h-4.5 w-4.5' />
@@ -64,7 +64,7 @@ export default function ScanToolbar(props: Props) {
                             }
                         }}
                         className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 transition ${
-                            props.expansion.areAllExpanded ? 'bg-[#e25822] text-white' : 'text-white/60 hover:bg-white/10'
+                            props.expansion.areAllExpanded ? 'bg-[#f07d33] text-white' : 'text-white/60 hover:bg-white/10'
                         }`}
                     >
                         <LayoutGrid className='h-4.5 w-4.5' />

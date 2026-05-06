@@ -54,5 +54,5 @@ export default metadata
 
 export const viewport: Viewport = {
     colorScheme: 'dark',
-    themeColor: '#e25822',
+    themeColor: '#f07d33',
 }

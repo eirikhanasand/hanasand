@@ -16,7 +16,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
     const label = disabled ? 'No deploy target' : terminalOpen ? 'Terminal open' : 'Deploy'
     const stateClass = disabled
         ? 'cursor-not-allowed border-bright/8 bg-black/36 text-bright/34'
-        : 'cursor-pointer border-[#fd8738]/25 bg-[#fd8738]/12 text-[#ffb77c] hover:border-[#fd8738]/45 hover:bg-[#fd8738]/18 hover:text-[#ffd5b4]'
+        : 'cursor-pointer border-[#f07d33]/25 bg-[#f07d33]/12 text-[#ffb77c] hover:border-[#f07d33]/45 hover:bg-[#f07d33]/18 hover:text-[#ffd5b4]'
 
     return (
         <button

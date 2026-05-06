@@ -309,7 +309,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
     return (
         <section className='rounded-lg bg-dark/35 p-3 outline outline-dark'>
             <div className='flex items-start gap-2'>
-                <div className='grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#fd8738]/12 text-[#fd8738] outline outline-[#fd8738]/18'>
+                <div className='grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#f07d33]/12 text-[#f07d33] outline outline-[#f07d33]/18'>
                     <GitBranch className='h-4 w-4' />
                 </div>
                 <div className='min-w-0'>
@@ -355,7 +355,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                         type='button'
                         onClick={() => void syncRepository('import')}
                         disabled={!isSignedIn || Boolean(pending)}
-                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#fd8738] px-2 text-xs font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-55'
+                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#f07d33] px-2 text-xs font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-55'
                     >
                         {pending === 'import' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitBranch className='h-3.5 w-3.5' />}
                         Load
@@ -364,7 +364,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                         type='button'
                         onClick={() => void syncRepository('pull')}
                         disabled={!isSignedIn || Boolean(pending) || !currentInput}
-                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-dark/45 px-2 text-xs font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#fd8738] disabled:opacity-55'
+                        className='inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-dark/45 px-2 text-xs font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
                     >
                         {pending === 'pull' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitPullRequestArrow className='h-3.5 w-3.5' />}
                         Pull
@@ -410,7 +410,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void loadGitStatus()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-dark/55 px-2 text-[11px] font-semibold text-bright/78 outline outline-dark transition-colors hover:text-[#fd8738] disabled:opacity-55'
+                            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-dark/55 px-2 text-[11px] font-semibold text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
                         >
                             {pending === 'status' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <RotateCcw className='h-3.5 w-3.5' />}
                             Status
@@ -420,7 +420,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                     {gitStatus?.files.length ? (
                         <div className='mt-2 space-y-1.5'>
                             <div className='flex items-center justify-between text-[10px] text-bright/42'>
-                                <button type='button' onClick={stageAll} className='font-semibold text-[#fd8738] hover:text-[#ffb080]'>
+                                <button type='button' onClick={stageAll} className='font-semibold text-[#f07d33] hover:text-[#ffb080]'>
                                     Stage all
                                 </button>
                                 <span>{selectedPaths.size}/{gitStatus.files.length} staged</span>
@@ -433,7 +433,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                                         onClick={() => togglePath(file.path)}
                                         className='flex min-h-8 w-full items-center gap-2 rounded-lg bg-dark/32 px-2 text-left text-[11px] text-bright/66 outline outline-dark/70 transition-colors hover:text-bright'
                                     >
-                                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selectedPaths.has(file.path) ? 'border-[#fd8738] bg-[#fd8738] text-black' : 'border-bright/18'}`}>
+                                        <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${selectedPaths.has(file.path) ? 'border-[#f07d33] bg-[#f07d33] text-black' : 'border-bright/18'}`}>
                                             {selectedPaths.has(file.path) ? <Check className='h-3 w-3' /> : null}
                                         </span>
                                         <span className='shrink-0 font-mono text-[10px] text-bright/38'>{file.index}{file.workingTree}</span>
@@ -460,7 +460,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void pullGitWorkspace()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-dark/45 px-2 text-[11px] font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#fd8738] disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-dark/45 px-2 text-[11px] font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
                         >
                             {pending === 'pull' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitPullRequestArrow className='h-3.5 w-3.5' />}
                             Pull
@@ -469,7 +469,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void commitSelectedFiles()}
                             disabled={!isSignedIn || Boolean(pending) || !selectedPaths.size || !commitMessage.trim()}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-dark/45 px-2 text-[11px] font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#fd8738] disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-dark/45 px-2 text-[11px] font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-55'
                         >
                             {pending === 'commit' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <GitCommitHorizontal className='h-3.5 w-3.5' />}
                             Commit
@@ -478,7 +478,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             type='button'
                             onClick={() => void pushGitWorkspace()}
                             disabled={!isSignedIn || Boolean(pending)}
-                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#fd8738] px-2 text-[11px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-55'
+                            className='inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#f07d33] px-2 text-[11px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-55'
                         >
                             {pending === 'push' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <SendHorizontal className='h-3.5 w-3.5' />}
                             Push
@@ -520,7 +520,7 @@ function SyncProgressMeter({ progress, startedAt }: { progress: AISyncProgress, 
                 <span>{progress.syncedFiles}/{progress.totalFiles} files</span>
             </div>
             <div className='mt-2 h-2 overflow-hidden rounded-full bg-dark/70 outline outline-dark'>
-                <div className='h-full rounded-full bg-[#fd8738]' style={{ width: `${percentage}%` }} />
+                <div className='h-full rounded-full bg-[#f07d33]' style={{ width: `${percentage}%` }} />
             </div>
             <div className='mt-1.5 flex items-center justify-between gap-2 text-[10px] leading-4 text-bright/40'>
                 <span className='min-w-0 truncate'>{progress.currentPath || 'Preparing files...'}</span>

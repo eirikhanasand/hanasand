@@ -94,7 +94,7 @@ export default function TestStatsPageClient() {
                 )}
                 <div className='mt-auto flex justify-end'>
                     <Link href='/test' className='group rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                        <ArrowLeft className='group-hover:stroke-[#e25822]' />
+                        <ArrowLeft className='group-hover:stroke-[#f07d33]' />
                     </Link>
                 </div>
             </section>

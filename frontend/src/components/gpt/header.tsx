@@ -12,7 +12,7 @@ export default function GPT_Header({
             <div className='rounded-xl bg-dark/35 p-5 outline outline-dark'>
                 <div>
                     <div className='flex items-center gap-3'>
-                        <div className='rounded-full bg-[#fd8738]/12 p-3 text-[#fd8738] outline outline-[#fd8738]/20'>
+                        <div className='rounded-full bg-[#f07d33]/12 p-3 text-[#f07d33] outline outline-[#f07d33]/20'>
                             <Bot className='h-5 w-5' />
                         </div>
                         <div>

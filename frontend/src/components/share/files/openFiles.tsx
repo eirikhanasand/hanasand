@@ -56,7 +56,7 @@ export default function OpenFiles({ openFiles, setOpenFiles }: OpenFilesProps) {
 
 function File({ file, pathname, setOpenFiles }: FileProps) {
     const selected = pathname.includes(`/${file.id}`)
-    const color = selected ? 'text-bright/70' : 'text-bright/40 hover:text-[#e25822]'
+    const color = selected ? 'text-bright/70' : 'text-bright/40 hover:text-[#f07d33]'
 
     function handleClose(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         e.stopPropagation()

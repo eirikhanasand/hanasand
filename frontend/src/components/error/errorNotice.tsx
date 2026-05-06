@@ -11,7 +11,7 @@ type ErrorNoticeProps = {
 const variants = {
     error: {
         icon: AlertCircle,
-        accent: 'bg-[#e25822]',
+        accent: 'bg-[#f07d33]',
         iconTone: 'text-[#f0a17a]',
     },
     info: {

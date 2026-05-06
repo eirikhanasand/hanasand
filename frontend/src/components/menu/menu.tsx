@@ -68,7 +68,7 @@ export default function Menu() {
                 </Link>
                 <Link href='/test' onClick={toggleOpen} className='flex pl-2 pr-5'>
                     <div className={baseStyles}>
-                        <Flame className={`group-hover:stroke-[#e25822] ${isTest && 'stroke-[#e25822]'}`} />
+                        <Flame className={`group-hover:stroke-[#f07d33] ${isTest && 'stroke-[#f07d33]'}`} />
                     </div>
                     <h1 className='self-center font-semibold'>Load test</h1>
                 </Link>

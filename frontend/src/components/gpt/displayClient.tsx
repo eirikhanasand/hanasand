@@ -64,7 +64,7 @@ export default function DisplayClient({
                         <button
                             type='button'
                             onClick={() => setOpen(prev => !prev)}
-                            className='flex h-9 w-9 items-center justify-center rounded-full bg-[#fd8738]/12 text-[#fd8738] outline outline-[#fd8738]/20'
+                            className='flex h-9 w-9 items-center justify-center rounded-full bg-[#f07d33]/12 text-[#f07d33] outline outline-[#f07d33]/20'
                         >
                             {open ? <ChevronUp className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
                         </button>
@@ -142,7 +142,7 @@ function MetricSection({ title, icon, items }: { title: string, icon: ReactNode,
 function StatPill({ label, value, icon }: { label: string, value: string, icon: ReactNode }) {
     return (
         <span
-            className='inline-flex items-center gap-2 rounded-full bg-[#fd8738]/12 px-3 py-1 text-sm font-semibold text-bright/90 outline outline-[#fd8738]/20'
+            className='inline-flex items-center gap-2 rounded-full bg-[#f07d33]/12 px-3 py-1 text-sm font-semibold text-bright/90 outline outline-[#f07d33]/20'
         >
             {icon}
             <span className='text-[10px] uppercase tracking-[0.18em] text-bright/35'>{label}</span>

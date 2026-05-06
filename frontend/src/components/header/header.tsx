@@ -47,7 +47,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-1.25 h-1.25 absolute z-100 self-center`} />
                     </Link>
                     <Link href='/test' className={baseStyles}>
-                        <Flame className={`group-hover:stroke-[#e25822] ${isTest && 'stroke-[#e25822]'}`} />
+                        <Flame className={`group-hover:stroke-[#f07d33] ${isTest && 'stroke-[#f07d33]'}`} />
                     </Link>
                     <Link href='/status' className={baseStyles}>
                         <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />

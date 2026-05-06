@@ -182,7 +182,7 @@ export function buildMailFrameHtml(html: string) {
       height: auto;
       border-radius: 14px;
     }
-    a { color: #f4a261; }
+    a { color: #f07d33; }
     table { max-width: 100%; }
     pre, code {
       white-space: pre-wrap;

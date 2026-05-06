@@ -225,7 +225,7 @@ button:not(:disabled),
 
 .group:hover .user-icon::before {
   animation: drop 0.2s ease;
-  border: 2px solid #e25822;
+  border: 2px solid #f07d33;
 }
 
 .upload {

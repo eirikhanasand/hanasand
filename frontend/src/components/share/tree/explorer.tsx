@@ -156,7 +156,7 @@ export default function Explorer({
                             }
                             setActivePanel('files')
                         }}
-                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'files' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
+                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'files' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                     >
                         <Files className='h-5 w-5' />
                     </button>
@@ -172,7 +172,7 @@ export default function Explorer({
                             }
                             setActivePanel('search')
                         }}
-                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'search' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
+                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'search' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                     >
                         <Search className='h-5 w-5' />
                     </button>

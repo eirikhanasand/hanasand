@@ -146,10 +146,10 @@ export default function Search({
                 {/* input */}
                 <div className='flex gap-2 p-1 px-2 w-full items-center bg-bright/2 rounded-lg justify-between'>
                     <div className='flex items-center w-full'>
-                        <SearchCode className='stroke-[#e25822]' />
+                        <SearchCode className='stroke-[#f07d33]' />
                         <input
                             ref={inputRef}
-                            className='w-full rounded-lg p-2 outline-none text-bright/60 caret-[#e25822] text-lg'
+                            className='w-full rounded-lg p-2 outline-none text-bright/60 caret-[#f07d33] text-lg'
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />

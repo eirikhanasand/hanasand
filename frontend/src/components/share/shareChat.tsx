@@ -194,7 +194,7 @@ export default function ShareChat({
             <div className='flex items-center justify-between border-b border-bright/8 px-3 py-2'>
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
-                        <Sparkles className='h-4 w-4 text-[#ffb15f]' />
+                        <Sparkles className='h-4 w-4 text-[#f07d33]' />
                         Chat
                     </div>
                     <p className='truncate text-xs text-bright/45'>{share?.path || 'Waiting for share...'}</p>
@@ -236,7 +236,7 @@ export default function ShareChat({
                     <div className='overflow-hidden rounded-2xl border border-bright/10 bg-black/24'>
                         <div className='flex items-center justify-between gap-3 border-b border-bright/8 px-3 py-2'>
                             <div className='flex min-w-0 items-center gap-2'>
-                                <Globe2 className='h-4 w-4 shrink-0 text-[#ffb15f]' />
+                                <Globe2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
                                 <div className='min-w-0'>
                                     <p className='truncate text-sm font-semibold text-bright/82'>{browserTarget.title}</p>
                                     <p className='truncate text-xs text-bright/42'>{browserTarget.url}</p>
@@ -260,7 +260,7 @@ export default function ShareChat({
                 <div className='border-t border-bright/8 bg-black/14 p-3'>
                     <div className='mb-2 flex items-center justify-between gap-3'>
                         <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-bright/82'>
-                            <Code2 className='h-4 w-4 text-[#ffb15f]' />
+                            <Code2 className='h-4 w-4 text-[#f07d33]' />
                             <span className='truncate'>
                                 {pendingEdit.changes.length === 1
                                     ? pendingEdit.changes[0].path

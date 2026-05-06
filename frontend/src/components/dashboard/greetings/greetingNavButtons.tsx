@@ -13,31 +13,31 @@ export default async function GreetingNavButtons({ id }: { id: string }) {
         <div className='flex md:hidden gap-2 w-full'>
             {isAdmin && <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
                 <Link href='/dashboard/management' className='flex justify-between w-full items-center gap-2'>
-                    <SquareChartGantt className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <SquareChartGantt className='w-5 h-5 group-hover:stroke-[#f07d33]' />
                     <h1 className='font-semibold text-base self-center'>Management</h1>
                 </Link>
             </div>}
             {isAdmin && <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
                 <Link href='/dashboard/overview' className='flex justify-between w-full items-center gap-2'>
-                    <Radar className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <Radar className='w-5 h-5 group-hover:stroke-[#f07d33]' />
                     <h1 className='font-semibold text-base self-center'>Overview</h1>
                 </Link>
             </div>}
             {isAdmin && <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
                 <Link href='/dashboard/logs' className='flex justify-between w-full items-center gap-2'>
-                    <FileWarning className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <FileWarning className='w-5 h-5 group-hover:stroke-[#f07d33]' />
                     <h1 className='font-semibold text-base self-center'>Logs</h1>
                 </Link>
             </div>}
             {isAdmin && <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
                 <Link href='/dashboard/vulnerabilities' className='flex justify-between w-full items-center gap-2'>
-                    <ShieldAlert className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <ShieldAlert className='w-5 h-5 group-hover:stroke-[#f07d33]' />
                     <h1 className='font-semibold text-base self-center'>Vulns</h1>
                 </Link>
             </div>}
             <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
                 <Link href='/dashboard/mail' className='flex justify-between w-full items-center gap-2'>
-                    <Inbox className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <Inbox className='w-5 h-5 group-hover:stroke-[#f07d33]' />
                     <h1 className='font-semibold text-base self-center'>Mail</h1>
                 </Link>
             </div>

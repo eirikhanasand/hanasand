@@ -32,7 +32,7 @@ export default function DomainSelector({ domains, selectedDomain }: DomainSelect
                 name='domain-select'
                 value={value}
                 onChange={(event) => handleChange(event.target.value)}
-                className='rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-bright outline-none transition focus:border-[#e25822]/50'
+                className='rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-bright outline-none transition focus:border-[#f07d33]/50'
             >
                 <option value=''>All Domains</option>
                 {domains.map((domain) => (

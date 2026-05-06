@@ -90,7 +90,7 @@ function OverviewCard({ title, value, icon }: { title: string, value: string, ic
 
 function ActionLink({ href, title, body }: { href: string, title: string, body: string }) {
     return (
-        <Link href={href} className='rounded-lg border border-white/8 bg-white/3 p-4 transition hover:border-[#e25822]/40 hover:bg-[#e25822]/8'>
+        <Link href={href} className='rounded-lg border border-white/8 bg-white/3 p-4 transition hover:border-[#f07d33]/40 hover:bg-[#f07d33]/8'>
             <div className='font-semibold text-bright'>{title}</div>
             <div className='mt-2 text-sm text-bright/55'>{body}</div>
         </Link>

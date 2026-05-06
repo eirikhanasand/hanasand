@@ -12,7 +12,7 @@ export default function MobileNav({ id }: { id: string }) {
             </div>
             <div className='grid h-fit px-2 py-1 outline-1 outline-dark w-full rounded-lg gap-2 group cursor-pointer'>
                 <Link href='/dashboard/traffic' className='flex justify-between w-full items-center gap-2'>
-                    <TrendingUp className='w-5 h-5 group-hover:stroke-[#e25822]' />
+                    <TrendingUp className='w-5 h-5 group-hover:stroke-[#f07d33]' />
                     <h1 className='font-semibold text-base self-center'>Traffic</h1>
                 </Link>
             </div>

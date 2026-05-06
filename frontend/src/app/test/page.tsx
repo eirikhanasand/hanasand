@@ -23,7 +23,7 @@ export default async function Page({
                     )}
                     <div className='grid place-items-center'>
                         <div className='flex gap-2'>
-                            <Flame className='stroke-[#e25822]' />
+                            <Flame className='stroke-[#f07d33]' />
                             <h1 className='text-xl'>{created ? 'Created test' : 'Create test'}</h1>
                         </div>
                     </div>
@@ -39,7 +39,7 @@ export default async function Page({
                         </h1>
                     </div>
                     <Link href='/test/stats' className='group absolute bottom-4 right-4 rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
-                        <ChartColumn className='stroke-bright/80 group-hover:stroke-[#e25822]' />
+                        <ChartColumn className='stroke-bright/80 group-hover:stroke-[#f07d33]' />
                     </Link>
                 </div>
             </div>

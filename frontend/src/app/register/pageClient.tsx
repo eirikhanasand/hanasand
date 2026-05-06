@@ -165,7 +165,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             placeholder='Username'
-                            className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                            className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                             required
                         />
                         {reservedUsername && <div className='rounded-lg border border-orange-300/15 bg-orange-400/10 p-3 text-sm leading-6 text-orange-100/80'>
@@ -178,7 +178,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder='Name'
-                            className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                            className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                             required
                         />
                         <input
@@ -187,7 +187,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder='Password'
-                            className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                            className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
                             required
                         />
                         {!passwordIsValid && <div className='rounded-lg border border-white/10 bg-white/4 p-3 text-xs leading-5 text-bright/52'>

@@ -23,8 +23,8 @@ type WorkspaceSearchPanelProps = {
     setError: Dispatch<SetStateAction<string | boolean | null>>
 }
 
-const inputClass = 'w-full rounded-lg border border-bright/10 bg-black/25 px-3 py-2 text-sm text-bright/90 outline-none transition focus:border-[#e25822]/70 focus:bg-black/35'
-const iconButtonClass = 'grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/3 text-bright/60 transition hover:border-[#e25822]/40 hover:text-bright'
+const inputClass = 'w-full rounded-lg border border-bright/10 bg-black/25 px-3 py-2 text-sm text-bright/90 outline-none transition focus:border-[#f07d33]/70 focus:bg-black/35'
+const iconButtonClass = 'grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/3 text-bright/60 transition hover:border-[#f07d33]/40 hover:text-bright'
 
 export default function WorkspaceSearchPanel({
     tree,
@@ -169,7 +169,7 @@ export default function WorkspaceSearchPanel({
                     <h2 className='text-sm font-semibold text-bright/90'>Workspace search</h2>
                 </div>
                 <div className='flex items-center gap-1'>
-                    <Sparkles className='h-4 w-4 text-[#e25822]' />
+                    <Sparkles className='h-4 w-4 text-[#f07d33]' />
                     <span className='rounded-full border border-bright/10 px-2 py-1 text-[11px] text-bright/55'>
                         {files.length} files
                     </span>
@@ -209,7 +209,7 @@ export default function WorkspaceSearchPanel({
                         type='button'
                         disabled={!resultCount || replacing}
                         onClick={replaceAll}
-                        className='inline-flex items-center gap-2 rounded-lg border border-[#e25822]/35 bg-[#e25822]/10 px-3 py-2 text-xs font-semibold text-[#ffd3bd] transition hover:bg-[#e25822]/20 disabled:cursor-not-allowed disabled:opacity-40'
+                        className='inline-flex items-center gap-2 rounded-lg border border-[#f07d33]/35 bg-[#f07d33]/10 px-3 py-2 text-xs font-semibold text-[#ffd3bd] transition hover:bg-[#f07d33]/20 disabled:cursor-not-allowed disabled:opacity-40'
                     >
                         {replacing ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Replace className='h-3.5 w-3.5' />}
                         Replace all
@@ -221,7 +221,7 @@ export default function WorkspaceSearchPanel({
                 <span>
                     {loading ? 'Indexing workspace...' : `${resultCount} results in ${results.length} files`}
                 </span>
-                {loading ? <Loader2 className='h-4 w-4 animate-spin text-[#e25822]' /> : <Files className='h-4 w-4' />}
+                {loading ? <Loader2 className='h-4 w-4 animate-spin text-[#f07d33]' /> : <Files className='h-4 w-4' />}
             </div>
 
             <div className='min-h-0 flex-1 overflow-auto p-2'>
@@ -249,14 +249,14 @@ export default function WorkspaceSearchPanel({
                                         <Link
                                             key={match.id}
                                             href={`/s/${match.file.id}?line=${match.line}&q=${encodeURIComponent(query)}`}
-                                            className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#e25822]/10'
+                                            className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#f07d33]/10'
                                         >
                                             <span className='w-8 shrink-0 text-right font-mono text-bright/35'>{match.line}</span>
                                             <span className='min-w-0 flex-1'>
-                                                {match.functionName ? <span className='mb-1 block text-[10px] uppercase tracking-[0.16em] text-[#e25822]/75'>{match.functionName}</span> : null}
+                                                {match.functionName ? <span className='mb-1 block text-[10px] uppercase tracking-[0.16em] text-[#f07d33]/75'>{match.functionName}</span> : null}
                                                 <HighlightedPreview preview={match.preview} query={query} caseSensitive={caseSensitive} />
                                             </span>
-                                            <ArrowRight className='mt-0.5 h-3.5 w-3.5 shrink-0 text-bright/25 transition group-hover:text-[#e25822]' />
+                                            <ArrowRight className='mt-0.5 h-3.5 w-3.5 shrink-0 text-bright/25 transition group-hover:text-[#f07d33]' />
                                         </Link>
                                     ))}
                                 </div>
@@ -275,7 +275,7 @@ function Toggle({ active, onClick, label, title }: { active: boolean; onClick: (
             type='button'
             title={title}
             onClick={onClick}
-            className={`${iconButtonClass} ${active ? 'border-[#e25822]/60 bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+            className={`${iconButtonClass} ${active ? 'border-[#f07d33]/60 bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
         >
             <span className='text-xs font-bold'>{label}</span>
         </button>
@@ -305,7 +305,7 @@ function HighlightedPreview({ preview, query, caseSensitive }: { preview: string
     return (
         <span className='block truncate font-mono text-bright/65'>
             {preview.slice(0, index)}
-            <mark className='rounded bg-[#e25822]/35 px-0.5 text-[#fff1e8]'>{preview.slice(index, index + query.length)}</mark>
+            <mark className='rounded bg-[#f07d33]/35 px-0.5 text-[#fff1e8]'>{preview.slice(index, index + query.length)}</mark>
             {preview.slice(index + query.length)}
         </span>
     )

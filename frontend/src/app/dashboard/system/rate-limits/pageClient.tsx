@@ -437,7 +437,7 @@ export default function RateLimitsPageClient({
                             type='checkbox'
                             checked={settings.enabled}
                             onChange={(event) => setSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
-                            className='h-4 w-4 accent-[#fd8738]'
+                            className='h-4 w-4 accent-[#f07d33]'
                         />
                         Enabled
                     </label>
@@ -453,7 +453,7 @@ export default function RateLimitsPageClient({
                             type='button'
                             onClick={saveSettings}
                             disabled={saving || !overrideValidation.valid}
-                            className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                            className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
                         >
                             <Save className='h-4 w-4' />
                             {saving ? 'Saving...' : 'Save'}
@@ -523,7 +523,7 @@ export default function RateLimitsPageClient({
                                     type='checkbox'
                                     checked={override.enabled}
                                     onChange={(event) => updateOverride(override.id, 'enabled', event.target.checked)}
-                                    className='h-4 w-4 accent-[#fd8738]'
+                                    className='h-4 w-4 accent-[#f07d33]'
                                 />
                                 Enabled
                             </label>
@@ -599,7 +599,7 @@ export default function RateLimitsPageClient({
                                 type='checkbox'
                                 checked={draft.enabled}
                                 onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))}
-                                className='h-4 w-4 accent-[#fd8738]'
+                                className='h-4 w-4 accent-[#f07d33]'
                             />
                             Enabled
                         </label>
@@ -649,7 +649,7 @@ export default function RateLimitsPageClient({
                             type='button'
                             onClick={createKey}
                             disabled={saving || !draftScopeValidation.valid}
-                            className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                            className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
                         >
                             <Save className='h-4 w-4' />
                             {saving ? 'Issuing...' : 'Issue API key'}
@@ -754,7 +754,7 @@ function ApiKeyCard({
                             type='checkbox'
                             checked={apiKey.enabled}
                             onChange={(event) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, enabled: event.target.checked } : entry))}
-                            className='h-4 w-4 accent-[#fd8738]'
+                            className='h-4 w-4 accent-[#f07d33]'
                         />
                         Enabled
                     </label>
@@ -762,7 +762,7 @@ function ApiKeyCard({
                         type='button'
                         onClick={() => updateKey(apiKey)}
                         disabled={saving || !scopeValidation.valid}
-                        className='inline-flex items-center gap-2 rounded-xl border border-[#fd8738]/25 bg-[#fd8738]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#fd8738]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                        className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
                     >
                         <Save className='h-4 w-4' />
                         Save key
@@ -910,7 +910,7 @@ function ApiKeyScopeEditor({
                         type='checkbox'
                         checked={scope.enabled}
                         onChange={(event) => onChange({ ...scope, enabled: event.target.checked })}
-                        className='h-4 w-4 accent-[#fd8738]'
+                        className='h-4 w-4 accent-[#f07d33]'
                     />
                     Enabled
                 </label>
@@ -977,7 +977,7 @@ function TextField({
             <input
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
             />
         </label>
     )
@@ -1002,7 +1002,7 @@ function NumberField({
                 min={min}
                 value={value}
                 onChange={(event) => onChange(Number(event.target.value || 0))}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
             />
         </label>
     )
@@ -1025,7 +1025,7 @@ function SelectField({
             <select
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
             >
                 {options.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
@@ -1052,7 +1052,7 @@ function RouteChooser({
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={routeOptions[0] || 'GET /api/'}
-                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#fd8738]/35'
+                className='rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
             />
         </label>
     )

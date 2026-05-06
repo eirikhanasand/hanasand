@@ -233,7 +233,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             type='button'
                             onClick={() => void onInviteCollaborator({ userId: collaboratorUserId, role: collaboratorRole })}
                             disabled={collaboratorPending || (activeConversation.collaboration.remainingSeats <= 0 && !activeConversation.collaboration.collaborators.some((collaborator) => collaborator.userId === collaboratorUserId.trim()))}
-                            className='rounded-xl bg-dark/35 px-3 py-2 text-sm font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#fd8738] disabled:opacity-60'
+                            className='rounded-xl bg-dark/35 px-3 py-2 text-sm font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
                         >
                             {collaboratorPending ? 'Inviting...' : 'Invite collaborator'}
                         </button>
@@ -327,7 +327,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                         type='button'
                                         onClick={() => void onRollbackRelease(release.id)}
                                         disabled={rollbackPendingId === release.id}
-                                        className='mt-3 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#fd8738] disabled:opacity-60'
+                                        className='mt-3 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
                                     >
                                         {rollbackPendingId === release.id ? 'Marking...' : 'Mark rollback target'}
                                     </button>
@@ -345,7 +345,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <div className='flex gap-2'>
                     <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-[#fd8738] px-3 py-2 text-sm font-semibold text-black transition-opacity disabled:opacity-60'>
+                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity disabled:opacity-60'>
                         {importPending ? 'Importing' : 'Import'}
                     </button>
                 </div>
@@ -370,7 +370,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 subtitle='Create a Docker-ready Next.js workspace.'
             >
                 <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-[#fd8738] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90'>
+                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90'>
                     Create Next.js + Docker workspace
                 </button>
             </Panel>
@@ -387,7 +387,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 key={target.id}
                                 type='button'
                                 onClick={() => setDeployVmName(target.name)}
-                                className={`rounded-full px-2.5 py-1 text-[11px] outline ${deployVmName === target.name ? 'bg-[#fd8738]/12 text-[#fd8738] outline-[#fd8738]/18' : 'bg-dark/28 text-bright/55 outline-dark hover:text-bright/80'}`}
+                                className={`rounded-full px-2.5 py-1 text-[11px] outline ${deployVmName === target.name ? 'bg-[#f07d33]/12 text-[#f07d33] outline-[#f07d33]/18' : 'bg-dark/28 text-bright/55 outline-dark hover:text-bright/80'}`}
                             >
                                 {target.name}
                             </button>
@@ -424,7 +424,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='button'
                     onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy })}
                     disabled={deployPending}
-                    className='rounded-xl bg-[#fd8738] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'
+                    className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
                     {deployPending ? 'Checking deploy...' : 'Start VM deploy check'}
                 </button>
@@ -465,7 +465,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 grow
             >
                 {importedRepos.length ? importedRepos.map((repo) => (
-                    <div key={repo.id} className={`rounded-xl px-3 py-3 outline ${repo.id === activeRepoId ? 'bg-[#fd8738]/10 outline-[#fd8738]/18' : 'bg-dark/22 outline-dark'}`}>
+                    <div key={repo.id} className={`rounded-xl px-3 py-3 outline ${repo.id === activeRepoId ? 'bg-[#f07d33]/10 outline-[#f07d33]/18' : 'bg-dark/22 outline-dark'}`}>
                         <div className='flex items-start justify-between gap-3'>
                             <div className='min-w-0'>
                                 <div className='truncate text-sm font-medium text-bright/88'>{repo.fullName}</div>
@@ -487,7 +487,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 ) : null}
                             </div>
                             <div className='flex items-center gap-2'>
-                                <button type='button' onClick={() => void onAttachRepo(repo.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/80 outline outline-dark hover:text-[#fd8738]'>
+                                <button type='button' onClick={() => void onAttachRepo(repo.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/80 outline outline-dark hover:text-[#f07d33]'>
                                     Attach
                                 </button>
                                 {repo.credential?.hasCredential ? (
@@ -495,7 +495,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                         Revoke
                                     </button>
                                 ) : null}
-                                <button type='button' onClick={() => void onRefreshRepo(repo.id)} className='grid h-8 w-8 place-items-center rounded-lg bg-dark/35 text-bright/70 outline outline-dark hover:text-[#fd8738]'>
+                                <button type='button' onClick={() => void onRefreshRepo(repo.id)} className='grid h-8 w-8 place-items-center rounded-lg bg-dark/35 text-bright/70 outline outline-dark hover:text-[#f07d33]'>
                                     <RefreshCcw className={`h-3.5 w-3.5 ${syncingRepoId === repo.id ? 'animate-spin' : ''}`} />
                                 </button>
                             </div>
@@ -503,7 +503,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         {repo.id === activeRepoId && repo.files.length ? (
                             <div className='mt-3 max-h-36 space-y-1 overflow-y-auto pr-1'>
                                 {repo.files.slice(0, 80).map((file) => (
-                                    <button key={file.path} type='button' onClick={() => void onSelectRepoFile(file.path)} className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedRepoFilePath === file.path ? 'bg-[#fd8738]/12 text-bright/90 outline-[#fd8738]/18' : 'bg-dark/30 text-bright/65 outline-transparent hover:outline-dark'}`}>
+                                    <button key={file.path} type='button' onClick={() => void onSelectRepoFile(file.path)} className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedRepoFilePath === file.path ? 'bg-[#f07d33]/12 text-bright/90 outline-[#f07d33]/18' : 'bg-dark/30 text-bright/65 outline-transparent hover:outline-dark'}`}>
                                         <div className='flex items-center justify-between gap-3'>
                                             <span className='truncate'>{file.path}</span>
                                             <PathBadge path={file.path} selected={selectedRepoFilePath === file.path} recentPaths={recentPaths} lastChangedPath={lastChangedPath} />
@@ -523,13 +523,13 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <div className='max-h-40 space-y-2 overflow-y-auto pr-1'>
                     {initialShares.length ? initialShares.slice(0, 40).map((share) => (
-                        <div key={share.id} className={`rounded-xl px-3 py-3 outline ${share.id === activeConversation?.workspaceId ? 'bg-[#fd8738]/10 outline-[#fd8738]/18' : 'bg-dark/22 outline-dark'}`}>
+                        <div key={share.id} className={`rounded-xl px-3 py-3 outline ${share.id === activeConversation?.workspaceId ? 'bg-[#f07d33]/10 outline-[#f07d33]/18' : 'bg-dark/22 outline-dark'}`}>
                             <div className='flex items-start justify-between gap-3'>
                                 <div className='min-w-0'>
                                     <div className='truncate text-sm text-bright/85'>{share.alias || share.id}</div>
                                     <div className='mt-1 truncate text-xs text-bright/35'>{share.path || share.id}</div>
                                 </div>
-                                <button type='button' onClick={() => void onAttachShare(share.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/80 outline outline-dark hover:text-[#fd8738]'>
+                                <button type='button' onClick={() => void onAttachShare(share.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/80 outline outline-dark hover:text-[#f07d33]'>
                                     Attach
                                 </button>
                             </div>
@@ -550,7 +550,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 key={path}
                                 type='button'
                                 onClick={() => void onSelectShareFile(path)}
-                                className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedPath === path ? 'bg-[#fd8738]/12 text-bright/90 outline-[#fd8738]/18' : 'bg-dark/30 text-bright/65 outline-transparent hover:outline-dark'}`}
+                                className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedPath === path ? 'bg-[#f07d33]/12 text-bright/90 outline-[#f07d33]/18' : 'bg-dark/30 text-bright/65 outline-transparent hover:outline-dark'}`}
                             >
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='truncate'>{path}</span>
@@ -592,7 +592,7 @@ function Panel({
     return (
         <section className={`rounded-2xl bg-dark/22 p-3 outline outline-dark ${grow ? 'min-h-0 flex-1' : ''}`}>
             <div className='flex items-start gap-3'>
-                <div className='mt-0.5 rounded-xl bg-[#fd8738]/12 p-2 text-[#fd8738] outline outline-[#fd8738]/18'>
+                <div className='mt-0.5 rounded-xl bg-[#f07d33]/12 p-2 text-[#f07d33] outline outline-[#f07d33]/18'>
                     {icon}
                 </div>
                 <div className='min-w-0'>
@@ -632,7 +632,7 @@ function PreviewLink({ href, emptyText }: { href: string | null | undefined, emp
             href={href}
             target='_blank'
             rel='noopener noreferrer'
-            className='mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-[#fd8738]/85 underline decoration-[#fd8738]/25 underline-offset-4 transition-colors hover:text-[#ffb27d]'
+            className='mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-[#f07d33]/85 underline decoration-[#f07d33]/25 underline-offset-4 transition-colors hover:text-[#ffb27d]'
             title={href}
         >
             <span className='truncate'>{href}</span>
@@ -653,7 +653,7 @@ function PathBadge({
     lastChangedPath: string | null
 }) {
     if (selected) {
-        return <span className='shrink-0 rounded-full bg-[#fd8738]/14 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[#fd8738]'>Open</span>
+        return <span className='shrink-0 rounded-full bg-[#f07d33]/14 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[#f07d33]'>Open</span>
     }
 
     if (lastChangedPath === path) {

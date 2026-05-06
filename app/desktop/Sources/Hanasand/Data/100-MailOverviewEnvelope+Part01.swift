@@ -169,7 +169,7 @@ extension MailOverviewEnvelope {
                 }
                 body { padding: 24px; overflow-wrap: anywhere; }
                 img, iframe, video { max-width: 100%; height: auto; border-radius: 14px; }
-                a { color: #f4a261; }
+                a { color: #f07d33; }
                 table { max-width: 100%; border-collapse: collapse; }
                 pre, code { white-space: pre-wrap; word-break: break-word; }
               </style>

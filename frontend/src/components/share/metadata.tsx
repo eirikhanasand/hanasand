@@ -124,7 +124,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Workspace status'
                         onClick={() => togglePanel('workspace')}
-                        className={`${baseButtonStyle} ${activePanel === 'workspace' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'workspace' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <Activity className='h-5 w-5' />
                     </button>
@@ -134,7 +134,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Share details'
                         onClick={() => togglePanel('info')}
-                        className={`${baseButtonStyle} ${activePanel === 'info' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'info' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <Eye className='h-5 w-5' />
                     </button>
@@ -144,7 +144,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Terminal access'
                         onClick={() => togglePanel('terminal')}
-                        className={`${baseButtonStyle} ${activePanel === 'terminal' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'terminal' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <TerminalSquare className='h-5 w-5' />
                     </button>
@@ -154,7 +154,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Symbols'
                         onClick={() => togglePanel('symbols')}
-                        className={`${baseButtonStyle} ${activePanel === 'symbols' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'symbols' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <ListOrdered className='h-5 w-5' />
                     </button>
@@ -195,7 +195,7 @@ export default function Metadata({
                             setBox(true)
                             togglePanel('box')
                         }}
-                        className={`${baseButtonStyle} ${activePanel === 'box' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'box' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <Package className={activePanel === 'box' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
                     </button>
@@ -205,7 +205,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Chat'
                         onClick={() => togglePanel('chat')}
-                        className={`${baseButtonStyle} ${activePanel === 'chat' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'chat' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <MessageSquare className={activePanel === 'chat' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
                     </button>
@@ -215,7 +215,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Git plugin'
                         onClick={() => togglePanel('git')}
-                        className={`${baseButtonStyle} ${activePanel === 'git' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'git' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <GitBranch className={activePanel === 'git' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
                     </button>
@@ -225,7 +225,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Phone simulator'
                         onClick={() => togglePanel('phone')}
-                        className={`${baseButtonStyle} ${activePanel === 'phone' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'phone' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
                     >
                         <Smartphone className={activePanel === 'phone' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
                     </button>
