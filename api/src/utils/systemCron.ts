@@ -13,6 +13,7 @@ export type ManagedCronDefinition = {
     description: string
     defaultSchedule: string
     command: string
+    legacyCommands?: string[]
     host: string
     logPath?: string
 }
@@ -33,7 +34,6 @@ export type ManagedCronUpdate = {
 const CRON_USER = process.env.MANAGED_CRON_USER || process.env.HOST_USER || 'hanasand'
 const CRON_SPOOL_DIR = process.env.MANAGED_CRON_SPOOL_DIR || '/host/cron/crontabs'
 const HOST_HOME_PREFIX = process.env.MANAGED_CRON_HOST_HOME_PREFIX || '/host/home'
-const HOST_VAR_LOG_PREFIX = process.env.MANAGED_CRON_HOST_VAR_LOG_PREFIX || '/host/var/log'
 
 export const managedCronDefinitions: ManagedCronDefinition[] = [
     {
@@ -41,9 +41,13 @@ export const managedCronDefinitions: ManagedCronDefinition[] = [
         name: 'Forgejo standby sync',
         description: 'Repairs Forgejo metadata, copies the active Git service to OVH standby, restores the database, and health-checks the standby.',
         defaultSchedule: '*/5 * * * *',
-        command: '/home/hanasand/git/sync-to-ovh.sh',
+        command: 'LOG=/home/hanasand/git/standby-sync.log /home/hanasand/git/sync-to-ovh.sh',
+        legacyCommands: [
+            '/home/hanasand/git/sync-to-ovh.sh',
+            'cd /home/hanasand/git && LOCK=/tmp/forgejo-standby-sync.lock LOG=/home/hanasand/git/standby-sync.log bash scripts/sync-to-ovh.sh',
+        ],
         host: 'inspur',
-        logPath: '/var/log/hanasand-forgejo-sync-to-ovh.log',
+        logPath: '/home/hanasand/git/standby-sync.log',
     },
     {
         id: 'forgejo-doctor',
@@ -195,7 +199,7 @@ function parseExistingCronEntries(crontab: string) {
 
         const schedule = parts.slice(0, 5).join(' ')
         const command = parts.slice(5).join(' ')
-        const definition = managedCronDefinitions.find(job => job.command === command)
+        const definition = managedCronDefinitions.find(job => job.command === command || job.legacyCommands?.includes(command))
         if (!definition) continue
 
         entries.set(definition.id, {
@@ -221,7 +225,7 @@ function replaceManagedBlock(crontab: string, entries: Map<string, { schedule: s
 }
 
 function removeManagedCronLines(crontab: string) {
-    const commands = new Set(managedCronDefinitions.map(job => job.command))
+    const commands = new Set(managedCronDefinitions.flatMap(job => [job.command, ...(job.legacyCommands || [])]))
     return crontab
         .split('\n')
         .filter(rawLine => {
@@ -277,9 +281,6 @@ async function readLastLogLine(logPath?: string) {
 function toHostPath(path: string) {
     if (path.startsWith('/home/')) {
         return `${HOST_HOME_PREFIX}${path.slice('/home'.length)}`
-    }
-    if (path.startsWith('/var/log/')) {
-        return `${HOST_VAR_LOG_PREFIX}${path.slice('/var/log'.length)}`
     }
     return path
 }
