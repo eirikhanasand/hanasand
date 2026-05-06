@@ -226,6 +226,7 @@ function isShellStartupNoise(line: string) {
     const trimmed = line.trim()
     return trimmed.includes('bash: cannot set terminal process group')
         || trimmed.includes('bash: no job control in this shell')
+        || trimmed.includes('sudo: unable to resolve host')
         || trimmed.startsWith('To run a command as administrator')
         || trimmed.startsWith('See "man sudo_root"')
 }

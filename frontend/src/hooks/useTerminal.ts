@@ -299,6 +299,7 @@ function statusFromTerminalUpdate(raw: string) {
             .replace(/\r/g, '\n')
             .split('\n')
             .map(line => line.replace(/^\[[+\-✓]\]\s*/, '').trim())
+            .filter(line => !isBenignTerminalNoise(line))
             .filter(Boolean)
             .at(-1)
 
@@ -342,7 +343,7 @@ function lifecycleFromTerminalUpdate(raw: string): TerminalLifecycle | null {
         return 'ready'
     }
 
-    if (content.includes('[!]') || content.includes('error') || content.includes('unable to')) {
+    if (content.includes('[!]') || content.includes('error')) {
         return 'error'
     }
 
@@ -352,10 +353,22 @@ function lifecycleFromTerminalUpdate(raw: string): TerminalLifecycle | null {
 function terminalContent(raw: string) {
     try {
         const parsed = JSON.parse(raw) as { content?: string }
-        return typeof parsed.content === 'string' ? parsed.content : ''
+        return typeof parsed.content === 'string' ? cleanTerminalContent(parsed.content) : ''
     } catch {
-        return raw
+        return cleanTerminalContent(raw)
     }
+}
+
+function cleanTerminalContent(content: string) {
+    return content
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .filter(line => !isBenignTerminalNoise(line.trim()))
+        .join('\n')
+}
+
+function isBenignTerminalNoise(line: string) {
+    return line.includes('sudo: unable to resolve host')
 }
 
 function isTerminalCredentials(value: unknown): value is TerminalCredentials {
