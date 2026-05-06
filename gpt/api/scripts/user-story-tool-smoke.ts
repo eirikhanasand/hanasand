@@ -115,12 +115,12 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 140 * 1000
+        return 130 * 1000
     }
     if (kind === 'postgres') {
-        return 18 * 1000
+        return 17 * 1000
     }
-    return 22 * 1000
+    return 20 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind) {
@@ -1358,6 +1358,240 @@ async function main() {
             run: () => scaffoldFastifyPostgresApp({
                 targetDir: rel('logistics-customs-api'),
                 appName: 'CustomsDesk API',
+            }),
+        },
+        {
+            id: 'designer-campaign-microsite',
+            title: 'Designer campaign microsite',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#101-designer-campaign-microsite',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('designer-campaign-microsite'),
+                appName: 'LaunchCanvas',
+                productType: 'campaign microsite',
+                productBrief: 'LaunchCanvas helps campaign designers present creative sections, launch metrics, package tiers, stakeholder quotes, task status, and concise self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'newbie-appointment-api',
+            title: 'Newbie appointment API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#102-newbie-appointment-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('newbie-appointment-api'),
+                appName: 'AppointmentLedger API',
+            }),
+        },
+        {
+            id: 'newbie-reminder-worker',
+            title: 'Newbie reminder worker',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#103-newbie-reminder-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('newbie-reminder-worker'),
+                appName: 'ReminderRun Queue',
+            }),
+        },
+        {
+            id: 'corporate-vendor-portal',
+            title: 'Corporate vendor portal',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#104-corporate-vendor-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('corporate-vendor-portal'),
+                appName: 'VendorGate',
+                productType: 'vendor onboarding portal',
+                productBrief: 'VendorGate helps procurement teams manage vendor risk categories, review metrics, package tiers, buyer quotes, readiness tasks, and controlled Docker deployment notes.',
+            }),
+        },
+        {
+            id: 'corporate-vendor-api',
+            title: 'Corporate vendor API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#105-corporate-vendor-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('corporate-vendor-api'),
+                appName: 'VendorLedger API',
+            }),
+        },
+        {
+            id: 'corporate-vendor-worker',
+            title: 'Corporate vendor worker',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#106-corporate-vendor-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('corporate-vendor-worker'),
+                appName: 'VendorReview Queue',
+            }),
+        },
+        {
+            id: 'designer-case-study-portal',
+            title: 'Designer case study portal',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#107-designer-case-study-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('designer-case-study-portal'),
+                appName: 'ImpactFrames',
+                productType: 'case study portal',
+                productBrief: 'ImpactFrames helps product designers present case studies, outcome metrics, service tiers, client quotes, handoff tasks, and portable deployment notes.',
+            }),
+        },
+        {
+            id: 'startup-usage-api',
+            title: 'Startup usage API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#108-startup-usage-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('startup-usage-api'),
+                appName: 'UsageLedger API',
+            }),
+        },
+        {
+            id: 'startup-billing-worker',
+            title: 'Startup billing worker',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#109-startup-billing-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('startup-billing-worker'),
+                appName: 'BillingQueue Worker',
+            }),
+        },
+        {
+            id: 'municipality-service-portal',
+            title: 'Municipality service portal',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#110-municipality-service-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('municipality-service-portal'),
+                appName: 'CivicSignal',
+                productType: 'municipal service portal',
+                productBrief: 'CivicSignal helps residents navigate service categories, response metrics, cost tiers, resident quotes, application tasks, and self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'municipality-request-api',
+            title: 'Municipality request API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#111-municipality-request-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('municipality-request-api'),
+                appName: 'RequestLedger API',
+            }),
+        },
+        {
+            id: 'municipality-dispatch-worker',
+            title: 'Municipality dispatch worker',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#112-municipality-dispatch-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('municipality-dispatch-worker'),
+                appName: 'DispatchQueue Worker',
+            }),
+        },
+        {
+            id: 'security-trust-center-site',
+            title: 'Security trust center site',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#113-security-trust-center-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('security-trust-center-site'),
+                appName: 'TrustSignal Center',
+                productType: 'security trust center',
+                productBrief: 'TrustSignal Center helps B2B buyers inspect control groups, assurance metrics, plan tiers, customer quotes, evidence tasks, and controlled Docker deployment.',
+            }),
+        },
+        {
+            id: 'security-exception-api',
+            title: 'Security exception API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#114-security-exception-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('security-exception-api'),
+                appName: 'ExceptionLedger API',
+            }),
+        },
+        {
+            id: 'security-exception-worker',
+            title: 'Security exception worker',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#115-security-exception-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('security-exception-worker'),
+                appName: 'ExceptionQueue Worker',
+            }),
+        },
+        {
+            id: 'creator-launch-hub',
+            title: 'Creator launch hub',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#116-creator-launch-hub',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('creator-launch-hub'),
+                appName: 'LaunchHearth',
+                productType: 'creator launch hub',
+                productBrief: 'LaunchHearth helps creators sell offers with revenue metrics, pricing levels, audience quotes, launch tasks, and beginner-safe self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'manufacturer-work-order-api',
+            title: 'Manufacturer work order API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#117-manufacturer-work-order-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('manufacturer-work-order-api'),
+                appName: 'WorkOrderLedger API',
+            }),
+        },
+        {
+            id: 'manufacturer-work-order-worker',
+            title: 'Manufacturer work order worker',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#118-manufacturer-work-order-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('manufacturer-work-order-worker'),
+                appName: 'WorkOrderQueue Worker',
+            }),
+        },
+        {
+            id: 'research-review-site',
+            title: 'Research review site',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#119-research-review-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('research-review-site'),
+                appName: 'ReviewSignal Lab',
+                productType: 'research review portal',
+                productBrief: 'ReviewSignal Lab helps research teams present themes, impact metrics, sponsor tiers, reviewer quotes, submission tasks, and self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'logistics-routing-api',
+            title: 'Logistics routing API',
+            storyPath: 'agents/training-scenarios/user_stories/101-120-advanced-user-stories.md#120-logistics-routing-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('logistics-routing-api'),
+                appName: 'RouteLedger API',
             }),
         },
     ]

@@ -8,6 +8,13 @@ type ScaffoldFastifyWorkerRedisAppArgs = {
     appName?: string
 }
 
+const bunHome = JSON.stringify(process.env.HOME || '')
+const installAndBuildCommand = [
+    `(command -v bun >/dev/null 2>&1 && mkdir -p .hanasand-tmp && HOME=${bunHome} TMPDIR="$PWD/.hanasand-tmp" bun install --offline && bun run build)`,
+    '||',
+    '(npm install --fetch-retries=1 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=5000 --fetch-timeout=5000 --no-audit --no-fund && npm run build)',
+].join(' ')
+
 function resolveTargetDir(targetDir: string) {
     const absolutePath = path.resolve(config.repo_root, targetDir)
     if (absolutePath !== config.repo_root && !absolutePath.startsWith(`${config.repo_root}${path.sep}`)) {
@@ -71,7 +78,7 @@ export default async function scaffoldFastifyWorkerRedisApp(args: ScaffoldFastif
         include: ['src/**/*.ts'],
     }, null, 2) + '\n')
 
-    await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\ndist\n.env\n')
+    await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\ndist\n.env\n.hanasand-tmp\n')
     await writeTemplateFile(absolutePath, '.dockerignore', 'node_modules\ndist\n.env\nnpm-debug.log\n.git\n')
     await writeTemplateFile(absolutePath, '.env.example', [
         'PORT=3001',
@@ -529,7 +536,7 @@ curl http://127.0.0.1:3001/api/jobs
 `)
 
     const installResult = await runCommand({
-        command: 'npm install && npm run build',
+        command: installAndBuildCommand,
         cwd: relativePath,
         timeoutMs: 10 * 60 * 1000,
     })

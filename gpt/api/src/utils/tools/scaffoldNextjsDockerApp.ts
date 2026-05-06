@@ -10,6 +10,13 @@ type ScaffoldNextjsDockerAppArgs = {
     productType?: string
 }
 
+const bunHome = JSON.stringify(process.env.HOME || '')
+const installAndBuildCommand = [
+    `(command -v bun >/dev/null 2>&1 && mkdir -p .hanasand-tmp && HOME=${bunHome} TMPDIR="$PWD/.hanasand-tmp" bun install --offline && bun run build)`,
+    '||',
+    '(npm install --fetch-retries=1 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=5000 --fetch-timeout=5000 --no-audit --no-fund && npm run build)',
+].join(' ')
+
 function resolveTargetDir(targetDir: string) {
     const absolutePath = path.resolve(config.repo_root, targetDir)
     if (absolutePath !== config.repo_root && !absolutePath.startsWith(`${config.repo_root}${path.sep}`)) {
@@ -112,7 +119,7 @@ export default async function scaffoldNextjsDockerApp(args: ScaffoldNextjsDocker
     await writeTemplateFile(absolutePath, 'next.config.ts', 'import type { NextConfig } from "next"\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n}\n\nexport default nextConfig\n')
     await writeTemplateFile(absolutePath, 'postcss.config.mjs', 'export default {\n  plugins: {},\n}\n')
     await writeTemplateFile(absolutePath, 'eslint.config.mjs', 'import { FlatCompat } from "@eslint/eslintrc"\n\nconst compat = new FlatCompat({ baseDirectory: import.meta.dirname })\n\nexport default [\n  ...compat.extends("next/core-web-vitals", "next/typescript"),\n]\n')
-    await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\n.next\n.env\n')
+    await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\n.next\n.env\n.hanasand-tmp\n')
     await writeTemplateFile(absolutePath, '.env.example', [
         'HOST_PORT=3000',
         'NEXT_PUBLIC_APP_ENV=production',
@@ -389,7 +396,7 @@ cp .env.example .env
 `)
 
     const installResult = await runCommand({
-        command: 'npm install && npm run build',
+        command: installAndBuildCommand,
         cwd: relativePath,
         timeoutMs: 10 * 60 * 1000,
     })
