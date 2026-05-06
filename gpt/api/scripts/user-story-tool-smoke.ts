@@ -44,6 +44,9 @@ process.env.API ||= 'https://api.hanasand.com/api'
 process.env.HANASAND_REPO_ROOT = smokeRoot
 process.env.HANASAND_DISABLE_SANDBOX_EXEC ||= '1'
 process.env.HANASAND_COMMAND_TIMEOUT_MS ||= String(10 * 60 * 1000)
+const casePattern = process.env.HANASAND_USER_STORY_CASE_PATTERN
+    ? new RegExp(process.env.HANASAND_USER_STORY_CASE_PATTERN, 'i')
+    : null
 
 function rel(name: string) {
     return `stories/${name}`
@@ -2559,11 +2562,272 @@ async function main() {
                 appName: 'FollowUpLedger API',
             }),
         },
+        {
+            id: 'plumber-lead-site',
+            title: 'Plumber lead site',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#381-make-the-old-site-stop-costing-me-leads',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('plumber-lead-site'),
+                appName: 'ClearPipe Service',
+                productType: 'trades lead generation site',
+                productBrief: 'ClearPipe Service turns a vague plumber site rescue into a practical service page with emergency/planned work separation, service area, trust proof, contact path, and no fake booking.',
+            }),
+        },
+        {
+            id: 'small-service-leads-api',
+            title: 'Small service leads API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#382-the-leads-are-in-four-places',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('small-service-leads-api'),
+                appName: 'LeadDesk API',
+            }),
+        },
+        {
+            id: 'callback-reminder-worker',
+            title: 'Callback reminder worker',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#383-call-people-back-without-forgetting',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            maxElapsedMs: 7 * 1000,
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('callback-reminder-worker'),
+                appName: 'CallbackQueue Worker',
+            }),
+        },
+        {
+            id: 'warehouse-demo-page',
+            title: 'Warehouse demo page',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#384-our-demo-is-tomorrow-and-the-page-is-embarrassing',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('warehouse-demo-page'),
+                appName: 'DockSignal',
+                productType: 'warehouse software demo page',
+                productBrief: 'DockSignal is a sharp operational demo page for warehouse software with receiving, exceptions, queue visibility, blocker metrics, role proof, and a realistic demo CTA.',
+            }),
+        },
+        {
+            id: 'warehouse-receiving-api-381',
+            title: 'Warehouse receiving API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#385-the-ops-team-wants-a-receiving-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('warehouse-receiving-api-381'),
+                appName: 'ReceivingLedger API',
+            }),
+        },
+        {
+            id: 'safe-label-worker',
+            title: 'Safe label worker',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#386-labels-print-twice-and-nobody-knows-why',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            maxElapsedMs: 7 * 1000,
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('safe-label-worker'),
+                appName: 'LabelGuard Worker',
+            }),
+        },
+        {
+            id: 'readable-policy-page',
+            title: 'Readable policy page',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#387-a-serious-policy-page-for-people-who-hate-policy-pages',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('readable-policy-page'),
+                appName: 'PolicyPlain',
+                productType: 'readable internal policy portal',
+                productBrief: 'PolicyPlain makes remote work policy readable with categories, recent changes, owner contacts, acknowledgements, employee questions, and a restrained internal interface.',
+            }),
+        },
+        {
+            id: 'policy-exception-api-381',
+            title: 'Policy exception API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#388-track-exceptions-before-audit-week',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('policy-exception-api-381'),
+                appName: 'ExceptionLedger API',
+            }),
+        },
+        {
+            id: 'exception-expiry-worker',
+            title: 'Exception expiry worker',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#389-nudge-owners-before-exceptions-expire',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            maxElapsedMs: 7 * 1000,
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('exception-expiry-worker'),
+                appName: 'ExceptionNudge Worker',
+            }),
+        },
+        {
+            id: 'calm-gallery-site',
+            title: 'Calm gallery site',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#390-a-gallery-page-that-does-not-feel-like-a-template',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('calm-gallery-site'),
+                appName: 'QuietRoom Gallery',
+                productType: 'artist show gallery site',
+                productBrief: 'QuietRoom Gallery is a calm artist show site with artwork availability, show details, inquiry path, visit/shipping notes, proof, and no fake checkout.',
+            }),
+        },
+        {
+            id: 'artwork-inventory-api',
+            title: 'Artwork inventory API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#391-artwork-inventory-without-the-spreadsheet-panic',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('artwork-inventory-api'),
+                appName: 'ArtworkLedger API',
+            }),
+        },
+        {
+            id: 'collector-followup-worker',
+            title: 'Collector followup worker',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#392-follow-up-with-collectors-later',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            maxElapsedMs: 7 * 1000,
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('collector-followup-worker'),
+                appName: 'CollectorFollowup Worker',
+            }),
+        },
+        {
+            id: 'cfo-one-screen-dashboard',
+            title: 'CFO one screen dashboard',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#393-the-cfo-wants-one-screen-not-a-bi-project',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('cfo-one-screen-dashboard'),
+                appName: 'CashBrief',
+                productType: 'finance executive dashboard',
+                productBrief: 'CashBrief gives a CFO one board-safe screen for cash, overdue invoices, risks, owners, weekly changes, and review tasks without pretending to connect live bank feeds.',
+            }),
+        },
+        {
+            id: 'invoice-exceptions-api',
+            title: 'Invoice exceptions API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#394-invoice-exceptions-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('invoice-exceptions-api'),
+                appName: 'InvoiceException API',
+            }),
+        },
+        {
+            id: 'safe-invoice-export-worker',
+            title: 'Safe invoice export worker',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#395-retry-invoice-exports-safely',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            maxElapsedMs: 7 * 1000,
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('safe-invoice-export-worker'),
+                appName: 'InvoiceExportGuard Worker',
+            }),
+        },
+        {
+            id: 'warm-clinic-site',
+            title: 'Warm clinic site',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#396-a-local-clinic-site-that-does-not-sound-like-a-hospital-chain',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('warm-clinic-site'),
+                appName: 'HarborCare Local',
+                productType: 'local clinic website',
+                productBrief: 'HarborCare Local is a warmer clinic site with services, hours, preparation notes, urgent-care caveats, contact path, accessibility, and no fake medical promises.',
+            }),
+        },
+        {
+            id: 'clinic-intake-tracker-api',
+            title: 'Clinic intake tracker API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#397-clinic-intake-tracker',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('clinic-intake-tracker-api'),
+                appName: 'IntakeTracker API',
+            }),
+        },
+        {
+            id: 'missing-doc-reminder-worker',
+            title: 'Missing document reminder worker',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#398-remind-staff-about-missing-documents',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            maxElapsedMs: 7 * 1000,
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('missing-doc-reminder-worker'),
+                appName: 'DocumentNudge Worker',
+            }),
+        },
+        {
+            id: 'tiny-internal-tool',
+            title: 'Tiny internal tool',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#399-a-tiny-internal-tool-for-a-boss-who-says-just-make-it-work',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            maxElapsedMs: 55 * 1000,
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('tiny-internal-tool'),
+                appName: 'WorkTiny',
+                productType: 'small internal work dashboard',
+                productBrief: 'WorkTiny gives a small company one useful internal screen for tasks, blockers, owners, shipped work, simple auth seams, and deployment notes without overbuilding.',
+            }),
+        },
+        {
+            id: 'internal-work-api',
+            title: 'Internal work API',
+            storyPath: 'agents/training-scenarios/user_stories/381-400-real-world-ambiguity-user-stories.md#400-turn-that-internal-tool-into-an-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            maxElapsedMs: 6 * 1000,
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('internal-work-api'),
+                appName: 'WorkTiny API',
+            }),
+        },
     ]
+
+    const selectedCases = casePattern
+        ? cases.filter((scenario) => casePattern.test(scenario.id) || casePattern.test(scenario.storyPath) || casePattern.test(scenario.title))
+        : cases
+    if (casePattern && selectedCases.length === 0) {
+        throw new Error(`No user story smoke cases matched ${casePattern}`)
+    }
 
     const results: CaseResult[] = []
 
-    for (const scenario of cases) {
+    for (const scenario of selectedCases) {
         const startedAt = Date.now()
         const toolResult = await scenario.run() as ToolResult
         const absolutePath = path.resolve(smokeRoot, toolResult.targetDir || rel(scenario.id))
@@ -2600,6 +2864,7 @@ async function main() {
         ok: results.every((result) => result.ok),
         createdAt: new Date().toISOString(),
         smokeRoot,
+        selectedCasePattern: casePattern?.source || null,
         results,
     }
 
