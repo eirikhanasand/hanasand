@@ -27,8 +27,22 @@ export async function listPrincipals(types?: string[]) {
 }
 
 export async function findPrincipalByName(name: string, type?: string) {
-    const principals = await listPrincipals(type ? [type] : undefined)
-    return principals.find(principal => principal.name === name && (!type || principal.type === type)) || null
+    let response: Response
+    try {
+        response = await adminFetch(`/api/principal/${encodeURIComponent(name)}`)
+    } catch (error) {
+        if (error instanceof Error && error.message.includes('notFound')) {
+            return null
+        }
+        throw error
+    }
+
+    const payload = await response.json() as { data?: PrincipalRecord | null }
+    const principal = payload.data || null
+    if (!principal || (type && principal.type !== type)) {
+        return null
+    }
+    return principal
 }
 
 export async function createPrincipal(body: Record<string, unknown>) {
@@ -41,12 +55,12 @@ export async function createPrincipal(body: Record<string, unknown>) {
     return payload.data || null
 }
 
-export async function patchPrincipal(principalId: number, patches: AdminPatch[]) {
+export async function patchPrincipal(principalName: string, patches: AdminPatch[]) {
     if (!patches.length) {
         return
     }
 
-    await adminFetch(`/api/principal/${principalId}`, {
+    await adminFetch(`/api/principal/${encodeURIComponent(principalName)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patches),
@@ -82,8 +96,23 @@ async function adminFetch(path: string, init: RequestInit = {}) {
         headers,
     })
 
+    const body = await response.text()
+
     if (!response.ok) {
         throw new Error(`Stalwart admin request failed (${response.status}) for ${path}`)
+    }
+
+    if (body) {
+        const payload = JSON.parse(body) as { error?: string, details?: string, reason?: string, item?: string }
+        if (payload.error) {
+            throw new Error(`Stalwart admin request failed (${payload.error}) for ${path}: ${payload.details || payload.reason || payload.item || 'No details'}`)
+        }
+
+        return new Response(body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+        })
     }
 
     return response

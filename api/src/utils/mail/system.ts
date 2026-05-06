@@ -59,7 +59,7 @@ async function ensureSystemSender() {
             patches.push({ action: 'addItem', field: 'emails', value: address })
         }
 
-        await patchPrincipal(principal.id, patches)
+        await patchPrincipal(principal.name, patches)
     }
 
     return { username, address, password }

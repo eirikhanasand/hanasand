@@ -84,7 +84,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             patches.splice(1, 1)
         }
 
-        await patchPrincipal(principal.id, patches)
+        await patchPrincipal(principal.name, patches)
     }
 
     await run(`
