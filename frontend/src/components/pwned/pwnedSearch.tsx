@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import randomId from '../../utils/random/randomId'
 import config from '@/config'
 import Marquee from '../marquee/marquee'
+import { CheckCircle2, FileText, LoaderCircle, ShieldAlert } from 'lucide-react'
 
 type PwnedSearchProps = {
     breached: boolean
@@ -98,42 +99,52 @@ export default function PwnedSearch({ breached, breachCount, password }: PwnedSe
         : `but the ${breachCount === 1 ? 'dataset is' : 'datasets are'} currently not publicly available.`
 
     const text = uniqueBreachFiles.length === 0 && loading
-        ? 'Loading...'
+        ? 'Searching indexed files...'
         : uniqueBreachFiles.length === 1
-            ? `The password exists in file '${formatBreachLocation(uniqueBreachFiles[0])}'.`
-            : `The password has been pwned ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
+            ? `Found in ${formatBreachLocation(uniqueBreachFiles[0])}.`
+            : `Found ${breachCount} ${breachCount === 1 ? 'time' : 'times'}, ${suffix}`
 
     return (
-        <div className='grid gap-2 place-items-center rounded-xl min-w-40'>
+        <div className='grid gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3'>
             {breached ? (
-                <div className='relative grid gap-4 place-items-center max-w-fit min-w-1/3'>
-                    <div className='flex gap-2 max-w-xs text-center'>
-                        <h1 className={breached ? 'text-red-500 text-xs md:text-base' : ''}>{text}</h1>
+                <div className='relative grid gap-3'>
+                    <div className='flex items-start gap-3 rounded-lg border border-red-400/15 bg-red-500/8 p-3 text-sm text-red-100'>
+                        <ShieldAlert className='mt-0.5 h-4 w-4 shrink-0 text-red-300' />
+                        <p className='min-w-0 leading-6'>{text}</p>
                     </div>
                     {uniqueBreachFiles.length > 0 && (
-                        <div className=' rounded-lg p-2 max-h-40 md:max-h-60 overflow-auto z-10 grid gap-1 w-full max-w-full'>
-                            <div className='flex gap-2 bg-dark/50 rounded-sm px-2 py-1'>
-                                <h1 className='text-bright/90 text-xs md:text-base break-all flex-1 font-bold'>File</h1>
-                                <h1 className='text-bright/90 text-xs md:text-base break-all text-right font-bold'>Line</h1>
+                        <div className='grid max-h-60 gap-1 overflow-auto rounded-lg border border-white/10 bg-black/12 p-2'>
+                            <div className='grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 px-2 py-1 text-xs font-medium uppercase tracking-[0.16em] text-bright/34'>
+                                <span>File</span>
+                                <span className='text-right'>Line</span>
                             </div>
-                            <div className='grid gap-1 w-full max-w-full overflow-hidden'>
-                                {uniqueBreachFiles.map((breach) => (<div key={`${breach.file}:${breach.line ?? ''}:${breach.offset ?? ''}`} className='flex gap-2 rounded-sm bg-dark/50 px-2 py-1 min-w-0 w-full max-w-full'>
-                                    <Marquee className='truncate flex-1 ' innerClassName='text-bright/80 text-xs md:text-base break-all' text={breach.file} />
-                                    <h1 className='text-bright/80 text-xs md:text-base break-all w-fit min-w-fit text-right'>
+                            <div className='grid gap-1'>
+                                {uniqueBreachFiles.map((breach) => (<div key={`${breach.file}:${breach.line ?? ''}:${breach.offset ?? ''}`} className='grid grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-2 rounded-md bg-white/[0.035] px-2 py-2 text-sm'>
+                                    <div className='flex min-w-0 items-center gap-2 text-bright/72'>
+                                        <FileText className='h-4 w-4 shrink-0 text-bright/35' />
+                                        <Marquee className='min-w-0 truncate' innerClassName='text-bright/72 text-sm break-all' text={breach.file} />
+                                    </div>
+                                    <span className='text-right font-mono text-xs text-bright/55'>
                                         {formatBreachLine(breach)}
-                                    </h1>
+                                    </span>
                                 </div>))}
                             </div>
                         </div>
                     )}
                     <div ref={ref} className='min-w-full grid place-items-center'>
                         {loading && (
-                            <div key={ref.current?.offsetWidth} className='h-0.5 bg-red-500 loading-line w-1/3' />
+                            <div key={ref.current?.offsetWidth} className='flex items-center gap-2 text-xs text-bright/38'>
+                                <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
+                                Checking detailed file matches
+                            </div>
                         )}
                     </div>
                 </div>
             ) : (
-                <h1 className='text-green-500 text-center w-full'>No hits found!</h1>
+                <div className='flex items-start gap-3 rounded-lg border border-emerald-400/15 bg-emerald-500/8 p-3 text-sm text-emerald-100'>
+                    <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-emerald-300' />
+                    <p className='leading-6'>No exact matches found in the indexed breach data.</p>
+                </div>
             )}
         </div>
     )
