@@ -1,6 +1,6 @@
 # Inspur GPU Model Host
 
-This host is intended to run the Hanasand model server directly on the machine, not inside Docker, so vLLM can use all 8 NVIDIA V100 GPUs through the host CUDA driver. Docker Compose can start only the Hanasand GPT worker that joins the public pool and forwards prompts to the host model endpoint.
+This host is intended to run the Hanasand model server directly on the machine, not inside Docker, so vLLM can use all 8 NVIDIA V100 GPUs through the host CUDA driver. The Hanasand GPT pool worker is started by the host launcher after vLLM is ready; the old Compose-only `gpt_worker` override has been removed so stale `hanasand_gpt_worker` containers do not linger.
 
 ## First-time host bootstrap
 
@@ -32,13 +32,7 @@ That launcher refuses to fall back to CPU. It requires exactly 8 NVIDIA GPUs and
 
 ## Join the Hanasand pool
 
-The systemd service already starts the pool worker after vLLM is ready. If you specifically want to run only the worker via Compose against an already-running host model endpoint:
-
-```sh
-docker compose -f docker-compose.yml -f docker-compose.inspur-gpu.yml up -d
-```
-
-The `gpt_worker` service uses host networking and connects to:
+The systemd service already starts the pool worker after vLLM is ready. The worker is launched by `gpt/run_model_inspur_vllm_gpu.sh`, uses host networking, and connects to:
 
 ```sh
 API=https://api.hanasand.com/api
