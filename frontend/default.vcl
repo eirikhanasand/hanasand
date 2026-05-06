@@ -6,7 +6,7 @@ backend default {
 }
 
 sub vcl_recv {
-    if (req.url ~ "^/s(?:[?#]|$)") {
+    if (req.url ~ "^/s(?:[/?#]|$)") {
         return (pass);
     }
 
