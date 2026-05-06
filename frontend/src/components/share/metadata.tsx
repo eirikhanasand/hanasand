@@ -363,7 +363,7 @@ function TerminalAccess({
                             className='flex w-full items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/5 px-3 py-2 text-left transition-colors hover:bg-bright/9'
                         >
                             <span className='min-w-0'>
-                                <span className='block text-[10px] uppercase tracking-[0.18em] text-bright/36'>Safe SSH command</span>
+                                <span className='block text-[10px] uppercase tracking-[0.18em] text-bright/36'>Copy SSH command</span>
                                 <span className='block truncate font-mono text-[11px] leading-4 text-bright/78'>{credentials.sshCommand}</span>
                             </span>
                             <Copy className='h-4 w-4 shrink-0 text-bright/48' />
@@ -373,8 +373,21 @@ function TerminalAccess({
                         <CredentialRow label='Domain' value={credentials.domain} setDidCopy={setDidCopy} />
                     </div>
                 ) : (
-                    <div className='rounded-lg border border-bright/8 bg-black/18 px-2.5 py-2 text-xs leading-5 text-bright/48'>
-                        SSH details appear here when the VM is reachable.
+                    <div className='space-y-2'>
+                        <button
+                            type='button'
+                            disabled
+                            className='flex w-full cursor-not-allowed items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/4 px-3 py-2 text-left opacity-55'
+                        >
+                            <span className='min-w-0'>
+                                <span className='block text-[10px] uppercase tracking-[0.18em] text-bright/36'>Copy SSH command</span>
+                                <span className='block truncate font-mono text-[11px] leading-4 text-bright/48'>Waiting for SSH details</span>
+                            </span>
+                            <Copy className='h-4 w-4 shrink-0 text-bright/36' />
+                        </button>
+                        <div className='rounded-lg border border-bright/8 bg-black/18 px-2.5 py-2 text-xs leading-5 text-bright/48'>
+                            SSH details appear here when the VM is reachable.
+                        </div>
                     </div>
                 )}
             </div>
