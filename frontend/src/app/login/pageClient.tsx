@@ -4,7 +4,7 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
 import login, { PendingDeletionError } from '@/utils/login/login'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
 import { ArrowRight } from 'lucide-react'
 import fetchWithRetry from '@/utils/fetchWithRetry'
@@ -21,6 +21,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const router = useRouter()
     const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>('login')
     const [resetUserId, setResetUserId] = useState('')
+    const [resetCode, setResetCode] = useState('')
     const [busy, setBusy] = useState(false)
     const [signupName, setSignupName] = useState('')
     const [signupUsername, setSignupUsername] = useState('')
@@ -149,12 +150,13 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         }
     }
 
-    async function handleResetVerify(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
+    async function verifyResetCode(code: string) {
+        if (busy) {
+            return
+        }
+
         setBusy(true)
         setError(null)
-        const formData = new FormData(e.currentTarget)
-        const code = String(formData.get('code') || '').trim()
         try {
             const response = await fetch(`${config.url.api}/auth/password-reset/verify`, {
                 method: 'POST',
@@ -174,6 +176,13 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         }
     }
 
+    async function handleResetVerify(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        if (resetCode.length === 6) {
+            await verifyResetCode(resetCode)
+        }
+    }
+
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
@@ -189,6 +198,9 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
 
     function changeMode(nextMode: typeof mode) {
         setError(null)
+        if (nextMode !== 'verify-reset') {
+            setResetCode('')
+        }
         setMode(nextMode)
     }
 
@@ -345,34 +357,108 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
 
                     {mode === 'verify-reset' && (
                         <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetVerify}>
-                            <input
-                                type='text'
-                                name='code'
-                                inputMode='numeric'
-                                pattern='[0-9]{6}'
-                                maxLength={6}
-                                placeholder='6 digit code'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-center text-sm font-semibold text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
-                                required
+                            <ResetCodeInput
+                                value={resetCode}
+                                setValue={setResetCode}
+                                disabled={busy}
+                                onComplete={verifyResetCode}
                             />
                             <div className='mt-1 flex items-center gap-3'>
-                                <button
-                                    type='submit'
-                                    disabled={busy}
-                                    className='group inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60'
-                                >
-                                    Continue
-                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
-                                </button>
                                 <button type='button' onClick={() => changeMode('request-reset')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
                                     Again
                                 </button>
+                                <p className='ml-auto text-xs font-medium text-bright/38'>
+                                    {busy ? 'Verifying...' : 'Verifies automatically'}
+                                </p>
                             </div>
                         </form>
                     )}
                 </div>
             </div>
         </section>
+    )
+}
+
+function ResetCodeInput({
+    value,
+    setValue,
+    disabled,
+    onComplete,
+}: {
+    value: string
+    setValue: (value: string) => void
+    disabled: boolean
+    onComplete: (code: string) => void | Promise<void>
+}) {
+    const inputsRef = useRef<Array<HTMLInputElement | null>>([])
+    const submittedCodeRef = useRef('')
+    const code = value.padEnd(6, ' ').slice(0, 6).split('')
+
+    useEffect(() => {
+        if (value.length < 6) {
+            submittedCodeRef.current = ''
+            return
+        }
+        if (disabled || submittedCodeRef.current === value) {
+            return
+        }
+
+        submittedCodeRef.current = value
+        void onComplete(value)
+    }, [disabled, onComplete, value])
+
+    function updateCode(nextValue: string, focusIndex?: number) {
+        const normalized = nextValue.replace(/\D/g, '').slice(0, 6)
+        setValue(normalized)
+        if (focusIndex !== undefined) {
+            requestAnimationFrame(() => inputsRef.current[Math.min(focusIndex, 5)]?.focus())
+        }
+    }
+
+    return (
+        <div className='grid gap-2'>
+            <div className='grid grid-cols-6 gap-1.5'>
+                {code.map((digit, index) => (
+                    <input
+                        key={index}
+                        ref={(element) => { inputsRef.current[index] = element }}
+                        type='text'
+                        inputMode='numeric'
+                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                        aria-label={`Reset code digit ${index + 1}`}
+                        value={digit.trim()}
+                        disabled={disabled}
+                        onChange={(event) => {
+                            const digits = event.target.value.replace(/\D/g, '')
+                            if (digits.length > 1) {
+                                updateCode(`${value.slice(0, index)}${digits}${value.slice(index + digits.length)}`, index + digits.length)
+                                return
+                            }
+                            updateCode(`${value.slice(0, index)}${digits}${value.slice(index + 1)}`, digits ? index + 1 : index)
+                        }}
+                        onPaste={(event) => {
+                            event.preventDefault()
+                            updateCode(event.clipboardData.getData('text'), 5)
+                        }}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Backspace' && !value[index] && index > 0) {
+                                event.preventDefault()
+                                updateCode(`${value.slice(0, index - 1)}${value.slice(index)}`, index - 1)
+                            }
+                            if (event.key === 'ArrowLeft' && index > 0) {
+                                event.preventDefault()
+                                inputsRef.current[index - 1]?.focus()
+                            }
+                            if (event.key === 'ArrowRight' && index < 5) {
+                                event.preventDefault()
+                                inputsRef.current[index + 1]?.focus()
+                            }
+                        }}
+                        className='h-11 rounded-lg border border-white/10 bg-white/[0.055] text-center text-base font-semibold text-bright outline-none transition focus:border-[#f07d33]/55 focus:bg-white/[0.075] disabled:cursor-not-allowed disabled:opacity-55'
+                    />
+                ))}
+            </div>
+        </div>
     )
 }
 
