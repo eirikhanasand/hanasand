@@ -12,7 +12,7 @@ export type TokenValidationResult = {
 
 export default async function tokenIsValid(token: string, id: string): Promise<TokenValidationResult> {
     try {
-        const response = await fetchWithRetry(`${config.url.api}/auth/token/${id}`, {
+        const response = await fetchWithRetry(`${config.url.auth}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
             timeoutMs: config.abortTimeout,
             retries: 2,

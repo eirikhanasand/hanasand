@@ -5,7 +5,7 @@ export default async function roles(token: string, id: string): Promise<boolean>
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
-        const response = await fetch(`${config.url.api}/auth/token/${id}`, {
+        const response = await fetch(`${config.url.auth}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
             signal: controller.signal
         })

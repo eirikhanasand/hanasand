@@ -9,6 +9,7 @@ const internalApiUrl =
 const config = {
     url: {
         api: resolveApiUrl(),
+        auth: process.env.FRONTEND_AUTH_API || process.env.NEXT_PUBLIC_API || publicApiUrl,
         api_wss: process.env.NEXT_PUBLIC_API_WS || 'wss://api.hanasand.com/api/ws',
         api_client_wss: toWsUrl(resolveApiUrl()),
         beekeeper: process.env.NEXT_PUBLIC_BEEKEEPER_API || process.env.BEEKEEPER_API_URL || 'https://beekeeper.login.no/api',
