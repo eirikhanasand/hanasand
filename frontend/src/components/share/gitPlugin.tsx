@@ -27,6 +27,8 @@ type StoredGitWorkspace = {
     branch: string
     sourcePath: string
     updatedAt: string
+    lastSyncedAt?: string
+    autoPullMinutes?: number
 }
 
 const storagePrefix = 'hanasand.share.git.'
@@ -63,6 +65,9 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
     useEffect(() => {
         const storedWorkspace = readStoredGitWorkspace(shareRouteId)
         setStored(storedWorkspace)
+        if (storedWorkspace?.autoPullMinutes !== undefined) {
+            setAutoPullMinutes(storedWorkspace.autoPullMinutes)
+        }
         if (storedWorkspace?.input) {
             setInput(storedWorkspace.input)
         } else if (share?.git) {
@@ -79,6 +84,10 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
     useEffect(() => {
         if (typeof window !== 'undefined') {
             window.localStorage.setItem(`${autoPullStoragePrefix}${shareRouteId}`, String(autoPullMinutes))
+        }
+        if (stored) {
+            rememberGitWorkspace(shareRouteId, { ...stored, autoPullMinutes })
+            setStored(prev => prev ? { ...prev, autoPullMinutes } : prev)
         }
         if (!autoPullMinutes || !isSignedIn || !currentInput) return
 
@@ -131,13 +140,16 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                 lastSyncedAt: new Date().toISOString(),
                 lastSyncError: null,
             }
+            const syncedAt = readyRepo.lastSyncedAt
             await persistGitHubRepository(readyRepo)
             rememberGitWorkspace(repo.id, {
                 input: repo.sourceUrl || currentInput,
                 fullName: repo.fullName,
                 branch: repo.branch,
                 sourcePath: repo.sourcePath || '',
-                updatedAt: new Date().toISOString(),
+                updatedAt: syncedAt,
+                lastSyncedAt: syncedAt,
+                autoPullMinutes,
             })
             setStored(readStoredGitWorkspace(repo.id))
             setGitHubToken('')
@@ -173,6 +185,12 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
             const nextStatus = await getRepositoryGitStatus(repositoryId, share?.id || shareRouteId)
             setGitStatus(nextStatus)
             setSelectedPaths(new Set(nextStatus.files.map(file => file.path)))
+            if (stored) {
+                const checkedAt = new Date().toISOString()
+                const nextStored = { ...stored, updatedAt: checkedAt, autoPullMinutes }
+                rememberGitWorkspace(shareRouteId, nextStored)
+                setStored(nextStored)
+            }
             setStatus(nextStatus.files.length ? `${nextStatus.files.length} changed file${nextStatus.files.length === 1 ? '' : 's'} ready to stage.` : 'No Git changes in the editor.')
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Failed to load Git status.')
@@ -195,7 +213,13 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
             const nextStatus = await pullRepositoryWorkspace(shareRouteId)
             setGitStatus(nextStatus)
             setSelectedPaths(new Set(nextStatus.files.map(file => file.path)))
-            setStatus('Git worktree pulled. Use Pull above to sync the editor from remote.')
+            const pulledAt = new Date().toISOString()
+            if (stored) {
+                const nextStored = { ...stored, updatedAt: pulledAt, lastSyncedAt: pulledAt, autoPullMinutes }
+                rememberGitWorkspace(shareRouteId, nextStored)
+                setStored(nextStored)
+            }
+            setStatus('Remote changes pulled into the Git worktree.')
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Failed to pull Git worktree.')
             setStatus(null)
@@ -241,6 +265,12 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
             const nextStatus = await pushRepositoryWorkspace(shareRouteId)
             setGitStatus(nextStatus)
             setSelectedPaths(new Set(nextStatus.files.map(file => file.path)))
+            if (stored) {
+                const pushedAt = new Date().toISOString()
+                const nextStored = { ...stored, updatedAt: pushedAt, lastSyncedAt: pushedAt, autoPullMinutes }
+                rememberGitWorkspace(shareRouteId, nextStored)
+                setStored(nextStored)
+            }
             setStatus('Pushed to the remote repository.')
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Failed to push repository.')
@@ -335,7 +365,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                     <div className='flex items-center justify-between gap-2'>
                         <div>
                             <div className='text-[11px] font-semibold text-bright/74'>Auto pull</div>
-                            <div className='text-[10px] leading-4 text-bright/38'>Checks this workspace on an interval.</div>
+                            <div className='text-[10px] leading-4 text-bright/38'>{autoPullMinutes ? `Enabled every ${autoPullMinutes} min` : 'Disabled for this workspace'}</div>
                         </div>
                         <select
                             value={autoPullMinutes}
@@ -442,6 +472,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             <RotateCcw className='h-3 w-3' />
                             {stored.branch}{stored.sourcePath ? ` / ${stored.sourcePath}` : ''}
                         </div>
+                        <div className='mt-1 text-bright/42'>Last synced {formatSyncTime(stored.lastSyncedAt || stored.updatedAt)}</div>
                     </div>
                 ) : null}
                 {status ? <div className='text-[11px] leading-4 text-emerald-200/80'>{status}</div> : null}
@@ -465,6 +496,8 @@ function readStoredGitWorkspace(shareId: string) {
             branch: parsed.branch,
             sourcePath: parsed.sourcePath || '',
             updatedAt: parsed.updatedAt || '',
+            lastSyncedAt: parsed.lastSyncedAt || parsed.updatedAt || '',
+            autoPullMinutes: typeof parsed.autoPullMinutes === 'number' ? parsed.autoPullMinutes : undefined,
         }
     } catch {
         return null
@@ -474,4 +507,17 @@ function readStoredGitWorkspace(shareId: string) {
 function rememberGitWorkspace(shareId: string, workspace: StoredGitWorkspace) {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(`${storagePrefix}${shareId}`, JSON.stringify(workspace))
+}
+
+function formatSyncTime(value?: string) {
+    if (!value) return 'never'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'never'
+
+    return date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    })
 }
