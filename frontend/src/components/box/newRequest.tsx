@@ -12,7 +12,8 @@ import {
 import { Bot, ChevronDown, Clock3, ImageIcon, Play, Plus, Server, Trash2 } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './types'
+import { loadScopedRequestVariables, saveScopedRequestVariables } from './storage'
+import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse, VariableRow } from './types'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 const SENSITIVE_HEADER_NAMES = new Set(['authorization', 'cookie', 'set-cookie', 'x-api-key', 'proxy-authorization'])
@@ -47,10 +48,11 @@ export default function NewRequest({
     const [url, setUrl] = useState(initialRequest.url)
     const [headers, setHeaders] = useState<HeaderRow[]>(normalizeHeaderRows(initialRequest.headers))
     const [body, setBody] = useState(initialRequest.body)
-    const [tab, setTab] = useState<'headers' | 'body' | 'ai'>('headers')
+    const [tab, setTab] = useState<'headers' | 'body' | 'vars' | 'ai'>('headers')
     const [responseTab, setResponseTab] = useState<ResponseTab>('response')
     const [runs, setRuns] = useState<RequestRun[]>([])
     const [activeRunId, setActiveRunId] = useState<string | null>(null)
+    const [variables, setVariables] = useState<VariableRow[]>([{ key: 'baseUrl', value: 'https://api.hanasand.com' }])
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
     const [aiLoading, setAiLoading] = useState(false)
@@ -64,8 +66,33 @@ export default function NewRequest({
         setBody(initialRequest.body)
     }, [initialRequest.body, initialRequest.headers, initialRequest.method, initialRequest.url, selectedRequestId])
 
+    useEffect(() => {
+        const loaded = loadScopedRequestVariables(share?.alias || share?.id || null)
+        setVariables(loaded.length ? loaded : [{ key: 'baseUrl', value: 'https://api.hanasand.com' }])
+    }, [share?.alias, share?.id])
+
     const normalizedHeaders = useMemo(() => normalizeHeaderRows(headers), [headers])
-    const headerPlan = useMemo(() => normalizeRequestHeaders(buildRequestHeaders(normalizedHeaders)), [normalizedHeaders])
+    const normalizedVariables = useMemo(() => normalizeVariableRows(variables), [variables])
+    const variablePlan = useMemo(() => buildVariablePlan(normalizedVariables), [normalizedVariables])
+    const resolvedUrl = useMemo(() => resolveTemplate(url, variablePlan.values), [url, variablePlan.values])
+    const resolvedBody = useMemo(() => resolveTemplate(body, variablePlan.values), [body, variablePlan.values])
+    const resolvedHeaders = useMemo(
+        () => buildRequestHeaders(normalizedHeaders, variablePlan.values),
+        [normalizedHeaders, variablePlan.values]
+    )
+    const templateWarnings = useMemo(
+        () => uniqueWarnings([
+            ...variablePlan.warnings,
+            ...findMissingVariables(url, variablePlan.values),
+            ...findMissingVariables(body, variablePlan.values),
+            ...normalizedHeaders.flatMap((header) => [
+                ...findMissingVariables(header.key, variablePlan.values),
+                ...findMissingVariables(header.value, variablePlan.values),
+            ]),
+        ]),
+        [body, normalizedHeaders, url, variablePlan.values, variablePlan.warnings]
+    )
+    const headerPlan = useMemo(() => normalizeRequestHeaders(resolvedHeaders), [resolvedHeaders])
     const usableHeaders = headerPlan.headers
 
     const activeRun = useMemo(
@@ -89,16 +116,16 @@ export default function NewRequest({
         const runId = randomId()
         const request = {
             method,
-            url,
+            url: resolvedUrl,
             headers: usableHeaders,
-            body,
+            body: resolvedBody,
         }
         const startedAt = new Date().toISOString()
 
         setRuns((current) => [{
             id: runId,
             method,
-            url,
+            url: resolvedUrl,
             startedAt,
             loading: true,
             response: null,
@@ -112,9 +139,9 @@ export default function NewRequest({
                 data = await sendViaShareVm({
                     shareAlias: share.alias,
                     method,
-                    url,
+                    url: resolvedUrl,
                     headers: usableHeaders,
-                    body,
+                    body: resolvedBody,
                 })
             } else if (token && id) {
                 const result = await fetch(`${config.url.api}/tools/http/request`, {
@@ -133,7 +160,7 @@ export default function NewRequest({
 
             const enrichedResponse = sanitizeToolResponse(withRequestDetails({
                 ...data,
-                warnings: uniqueWarnings([...headerPlan.warnings, ...(data.warnings || [])]),
+                warnings: uniqueWarnings([...templateWarnings, ...headerPlan.warnings, ...(data.warnings || [])]),
             }, request))
 
             setRuns((current) => current.map((run) => run.id === runId
@@ -156,12 +183,13 @@ export default function NewRequest({
         } catch (error) {
             const enrichedResponse = sanitizeToolResponse(withRequestDetails({
                 error: error instanceof Error ? error.message : String(error),
+                warnings: templateWarnings,
             }, request))
             setRuns((current) => current.map((run) => run.id === runId
                 ? { ...run, loading: false, response: enrichedResponse }
                 : run))
         }
-    }, [body, headerPlan.warnings, method, normalizedHeaders, onRequestComplete, selectedRequestId, share?.alias, usableHeaders, url])
+    }, [body, headerPlan.warnings, method, onRequestComplete, resolvedBody, resolvedUrl, selectedRequestId, share?.alias, templateWarnings, usableHeaders, url])
 
     useEffect(() => {
         if (runToken === lastRunTokenRef.current) {
@@ -185,9 +213,11 @@ export default function NewRequest({
                 activeRequest: {
                     method,
                     url,
+                    resolvedUrl,
                     headers: usableHeaders,
-                    body,
-                    warnings: headerPlan.warnings,
+                    body: resolvedBody,
+                    variables: normalizedVariables.filter((row) => row.key && row.value),
+                    warnings: uniqueWarnings([...templateWarnings, ...headerPlan.warnings]),
                 },
                 response: response ?? null,
                 recentRuns: runs.slice(0, 4).map((run) => ({
@@ -227,6 +257,20 @@ export default function NewRequest({
 
     function updateHeader(index: number, field: keyof HeaderRow, value: string) {
         setHeaders((prev) => normalizeHeaderRows(prev).map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row))
+    }
+
+    function updateVariable(index: number, field: keyof VariableRow, value: string) {
+        setVariables((prev) => {
+            const next = normalizeVariableRows(prev).map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row)
+            saveScopedRequestVariables(next, share?.alias || share?.id || null)
+            return next
+        })
+    }
+
+    function setAndSaveVariables(next: VariableRow[]) {
+        const normalized = normalizeVariableRows(next)
+        saveScopedRequestVariables(normalized, share?.alias || share?.id || null)
+        setVariables(normalized)
     }
 
     useEffect(() => {
@@ -269,14 +313,17 @@ export default function NewRequest({
                 <div className='min-w-0 rounded-lg border border-bright/8 bg-black/18 px-3 py-2 font-mono text-[11px] leading-4 text-bright/62'>
                     <span className='mr-2 text-bright/32'>URL</span>
                     <span className='mr-2 text-bright/45'>{method}</span>
-                    <span className='break-all' title={url}>{url || 'Enter a request URL.'}</span>
+                    <span className='break-all' title={resolvedUrl}>{resolvedUrl || 'Enter a request URL.'}</span>
+                    {resolvedUrl !== url ? (
+                        <span className='mt-1 block text-bright/35' title={url}>Template: {url}</span>
+                    ) : null}
                 </div>
 
                 <div className='flex flex-wrap items-center justify-between gap-2 px-1'>
                     <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                        {(['headers', 'body', 'ai'] as const).map((item) => (
+                        {(['headers', 'body', 'vars', 'ai'] as const).map((item) => (
                             <button key={item} type='button' onClick={() => setTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${tab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
-                                {item === 'ai' ? 'AI' : item}
+                                {item === 'ai' ? 'AI' : item === 'vars' ? 'Vars' : item}
                             </button>
                         ))}
                     </div>
@@ -374,9 +421,9 @@ export default function NewRequest({
                             <Plus className='h-3.5 w-3.5' />
                             Add header
                         </button>
-                        {headerPlan.warnings.length ? (
+                        {templateWarnings.length || headerPlan.warnings.length ? (
                             <div className='rounded-lg border border-amber-300/12 bg-amber-300/8 px-3 py-2 text-[11px] leading-4 text-amber-100/72'>
-                                {headerPlan.warnings.join(' ')}
+                                {uniqueWarnings([...templateWarnings, ...headerPlan.warnings]).join(' ')}
                             </div>
                         ) : null}
                     </div>
@@ -384,6 +431,27 @@ export default function NewRequest({
 
                 {tab === 'body' && (
                     <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder='JSON, text or form body' className='min-h-32 rounded-lg border border-bright/10 bg-white/[0.025] p-3 font-mono text-sm text-bright outline-none' />
+                )}
+
+                {tab === 'vars' && (
+                    <div className='grid min-h-0 content-start gap-2'>
+                        {normalizedVariables.map((variable, index) => (
+                            <div key={index} className='grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
+                                <input value={variable.key} onChange={(e) => updateVariable(index, 'key', e.target.value)} placeholder='baseUrl' className='min-w-0 rounded-lg border border-bright/10 bg-white/[0.025] px-3 py-2 text-sm outline-none' />
+                                <input value={variable.value} onChange={(e) => updateVariable(index, 'value', e.target.value)} placeholder='https://api.example.com' className='min-w-0 rounded-lg border border-bright/10 bg-white/[0.025] px-3 py-2 text-sm outline-none' />
+                                <button type='button' onClick={() => setAndSaveVariables(normalizedVariables.length === 1 ? [{ key: '', value: '' }] : normalizedVariables.filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-red-200/70 hover:bg-red-500/10 hover:text-red-100'>
+                                    <Trash2 className='h-4 w-4' />
+                                </button>
+                            </div>
+                        ))}
+                        <button type='button' onClick={() => setAndSaveVariables([...normalizedVariables, { key: '', value: '' }])} className='flex w-fit cursor-pointer items-center gap-2 rounded-full px-3 py-1.5 text-[11px] text-bright/60 hover:bg-white/8 hover:text-bright/80'>
+                            <Plus className='h-3.5 w-3.5' />
+                            Add variable
+                        </button>
+                        <div className='rounded-lg border border-bright/8 bg-black/14 px-3 py-2 text-[11px] leading-4 text-bright/48'>
+                            Use variables as {'{{baseUrl}}'} in URLs, headers, and bodies. They stay scoped to this share.
+                        </div>
+                    </div>
                 )}
 
                 {tab === 'ai' && (
@@ -448,13 +516,69 @@ function normalizeHeaderRows(value: unknown): HeaderRow[] {
     return rows.length ? rows : [{ key: '', value: '' }]
 }
 
-function buildRequestHeaders(rows: HeaderRow[]) {
+function normalizeVariableRows(value: unknown): VariableRow[] {
+    if (!Array.isArray(value)) {
+        return [{ key: '', value: '' }]
+    }
+
+    const rows = value.flatMap((row): VariableRow[] => {
+        if (!row || typeof row !== 'object') {
+            return []
+        }
+
+        const item = row as Partial<VariableRow>
+        return [{
+            key: typeof item.key === 'string' ? item.key : '',
+            value: typeof item.value === 'string' ? item.value : '',
+        }]
+    })
+
+    return rows.length ? rows : [{ key: '', value: '' }]
+}
+
+function buildRequestHeaders(rows: HeaderRow[], variables: Record<string, string>) {
     return Object.fromEntries(
         rows
-            .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
+            .map((row) => ({ key: resolveTemplate(row.key, variables).trim(), value: resolveTemplate(row.value, variables).trim() }))
             .filter((row) => row.key && row.value)
             .map((row) => [row.key, row.value])
     )
+}
+
+function buildVariablePlan(rows: VariableRow[]) {
+    const values: Record<string, string> = {}
+    const warnings: string[] = []
+
+    for (const row of rows) {
+        const key = row.key.trim()
+        if (!key && !row.value.trim()) {
+            continue
+        }
+
+        if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key)) {
+            warnings.push(`Skipped invalid variable name: ${key || '(empty)'}.`)
+            continue
+        }
+
+        values[key] = row.value.trim()
+    }
+
+    return { values, warnings }
+}
+
+function resolveTemplate(value: string, variables: Record<string, string>) {
+    return value.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g, (match, key: string) => variables[key] ?? match)
+}
+
+function findMissingVariables(value: string, variables: Record<string, string>) {
+    const missing = new Set<string>()
+    for (const match of value.matchAll(/\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g)) {
+        if (variables[match[1]] === undefined) {
+            missing.add(`Missing variable: ${match[1]}.`)
+        }
+    }
+
+    return Array.from(missing)
 }
 
 function headerRowsFromObject(headers: Record<string, string>): HeaderRow[] {

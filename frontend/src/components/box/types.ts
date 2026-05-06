@@ -1,4 +1,5 @@
 export type HeaderRow = { key: string, value: string }
+export type VariableRow = { key: string, value: string }
 
 export type ToolResponse = {
     status?: number

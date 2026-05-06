@@ -1,6 +1,7 @@
-import { HeaderRow, RequestHistoryEntry } from './types'
+import { HeaderRow, RequestHistoryEntry, VariableRow } from './types'
 
 export const REQUEST_HISTORY_STORAGE_KEY = 'hanasand.share.request-history.v1'
+export const REQUEST_VARIABLE_STORAGE_KEY = 'hanasand.share.request-variables.v1'
 
 export function loadRequestHistory(): RequestHistoryEntry[] {
     if (typeof window === 'undefined') {
@@ -64,6 +65,41 @@ export function saveScopedRequestHistory(history: RequestHistoryEntry[], shareId
     window.localStorage.setItem(shareRequestHistoryKey(shareId), JSON.stringify(history.slice(0, 30)))
 }
 
+export function shareRequestVariablesKey(shareId?: string | null) {
+    return shareId ? `${REQUEST_VARIABLE_STORAGE_KEY}.${shareId}` : REQUEST_VARIABLE_STORAGE_KEY
+}
+
+export function loadScopedRequestVariables(shareId?: string | null) {
+    if (typeof window === 'undefined') {
+        return []
+    }
+
+    try {
+        const raw = window.localStorage.getItem(shareRequestVariablesKey(shareId))
+        if (!raw) {
+            return []
+        }
+
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed)
+            ? parsed.map(normalizeVariableRow).filter(Boolean) as VariableRow[]
+            : []
+    } catch {
+        return []
+    }
+}
+
+export function saveScopedRequestVariables(variables: VariableRow[], shareId?: string | null) {
+    if (typeof window === 'undefined') {
+        return
+    }
+
+    window.localStorage.setItem(
+        shareRequestVariablesKey(shareId),
+        JSON.stringify(variables.map(normalizeVariableRow).filter(Boolean).slice(0, 24))
+    )
+}
+
 function normalizeRequestHistoryEntry(value: unknown): RequestHistoryEntry | null {
     if (!value || typeof value !== 'object') {
         return null
@@ -111,6 +147,23 @@ function normalizeHeaderRows(value: unknown): HeaderRow[] {
     })
 
     return rows.length ? rows : [{ key: '', value: '' }]
+}
+
+function normalizeVariableRow(value: unknown): VariableRow | null {
+    if (!value || typeof value !== 'object') {
+        return null
+    }
+
+    const item = value as Partial<VariableRow>
+    const key = typeof item.key === 'string' ? item.key.trim() : ''
+    if (!key) {
+        return null
+    }
+
+    return {
+        key,
+        value: typeof item.value === 'string' ? redactSensitiveText(item.value) : '',
+    }
 }
 
 function redactSensitiveText(value: string) {
