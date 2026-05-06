@@ -31,6 +31,7 @@ type Scenario = {
     storyPath: string
     kind: ScenarioKind
     tool: string
+    maxElapsedMs?: number
     run: () => Promise<unknown>
 }
 
@@ -107,6 +108,21 @@ async function fileIncludes(filePath: string, patterns: RegExp[]) {
     return patterns.every((pattern) => pattern.test(content))
 }
 
+async function wordCount(filePath: string) {
+    const content = await fs.readFile(filePath, 'utf8').catch(() => '')
+    return content.trim().split(/\s+/).filter(Boolean).length
+}
+
+function elapsedBudget(kind: ScenarioKind) {
+    if (kind === 'next') {
+        return 160 * 1000
+    }
+    if (kind === 'postgres') {
+        return 25 * 1000
+    }
+    return 30 * 1000
+}
+
 async function verifyProject(absolutePath: string, kind: ScenarioKind) {
     const [packageJson, dockerfile, composeFile, envExample, readme] = await Promise.all([
         exists(path.join(absolutePath, 'package.json')),
@@ -118,6 +134,7 @@ async function verifyProject(absolutePath: string, kind: ScenarioKind) {
     const build = packageJson ? await run('npm run build', absolutePath, 10 * 60 * 1000) : null
     const compose = composeFile ? await run('docker compose config', absolutePath, 2 * 60 * 1000) : null
     const readmeOps = await fileIncludes(path.join(absolutePath, 'README.md'), [/rollback/i, /metrics/i, /docker compose/i])
+    const readmeWords = await wordCount(path.join(absolutePath, 'README.md'))
 
     const kindChecks: Record<string, boolean> = {}
     if (kind === 'next') {
@@ -142,6 +159,7 @@ async function verifyProject(absolutePath: string, kind: ScenarioKind) {
             envExample,
             readme,
             readmeOps,
+            readmeConcise: readmeWords > 40 && readmeWords <= 320,
             build: build?.exitCode === 0,
             compose: compose?.exitCode === 0,
             ...kindChecks,
@@ -400,6 +418,242 @@ async function main() {
                 productBrief: 'Fireline Command helps operators coordinate incidents, customer updates, metrics, pricing impact, readiness tasks, and deployment confidence from one self-hosted UI.',
             }),
         },
+        {
+            id: 'designer-portfolio-booking-site',
+            title: 'Designer portfolio booking site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#21-designer-portfolio-booking-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('designer-portfolio-booking-site'),
+                appName: 'StudioLuma Portfolio',
+                productType: 'designer portfolio and booking dashboard',
+                productBrief: 'StudioLuma Portfolio helps a visual designer present case studies, availability, pricing, testimonials, launch tasks, and client inquiry readiness in a self-hosted Next.js site.',
+            }),
+        },
+        {
+            id: 'newbie-local-business-site',
+            title: 'Newbie local business site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#22-newbie-local-business-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('newbie-local-business-site'),
+                appName: 'CornerBakery Launch',
+                productType: 'local business website',
+                productBrief: 'CornerBakery Launch gives a nontechnical owner a polished website with opening hours, offers, pricing, testimonials, launch checklist, and Docker instructions that are short enough to follow.',
+            }),
+        },
+        {
+            id: 'enterprise-procurement-portal',
+            title: 'Enterprise procurement portal',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#23-enterprise-procurement-portal',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('enterprise-procurement-portal'),
+                appName: 'ProcureDesk API',
+            }),
+        },
+        {
+            id: 'corporate-approval-queue',
+            title: 'Corporate approval queue',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#24-corporate-approval-queue',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('corporate-approval-queue'),
+                appName: 'ApprovalFlow Queue',
+            }),
+        },
+        {
+            id: 'nonprofit-donor-dashboard',
+            title: 'Nonprofit donor dashboard',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#25-nonprofit-donor-dashboard',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('nonprofit-donor-dashboard'),
+                appName: 'DonorPulse',
+                productType: 'nonprofit donor dashboard',
+                productBrief: 'DonorPulse helps a small nonprofit show campaign progress, donor impact metrics, pricing-equivalent sponsorship tiers, testimonials, and volunteer launch tasks from a portable site.',
+            }),
+        },
+        {
+            id: 'healthcare-intake-api',
+            title: 'Healthcare intake API',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#26-healthcare-intake-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('healthcare-intake-api'),
+                appName: 'CareIntake API',
+            }),
+        },
+        {
+            id: 'education-assignment-worker',
+            title: 'Education assignment worker',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#27-education-assignment-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('education-assignment-worker'),
+                appName: 'ClassQueue Worker',
+            }),
+        },
+        {
+            id: 'real-estate-listing-site',
+            title: 'Real estate listing site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#28-real-estate-listing-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('real-estate-listing-site'),
+                appName: 'OpenHouse North',
+                productType: 'real estate listing dashboard',
+                productBrief: 'OpenHouse North lets a small brokerage present listings, viewing readiness, lead metrics, pricing, testimonials, and launch tasks without relying on a hosted frontend platform.',
+            }),
+        },
+        {
+            id: 'fleet-maintenance-api',
+            title: 'Fleet maintenance API',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#29-fleet-maintenance-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('fleet-maintenance-api'),
+                appName: 'FleetLedger API',
+            }),
+        },
+        {
+            id: 'legal-document-worker',
+            title: 'Legal document worker',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#30-legal-document-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('legal-document-worker'),
+                appName: 'ClauseRun Queue',
+            }),
+        },
+        {
+            id: 'founder-investor-update-site',
+            title: 'Founder investor update site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#31-founder-investor-update-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('founder-investor-update-site'),
+                appName: 'RunwayBrief',
+                productType: 'investor update dashboard',
+                productBrief: 'RunwayBrief helps founders show traction, runway, pricing, customer proof, delivery tasks, and launch risks in a concise self-hosted investor update.',
+            }),
+        },
+        {
+            id: 'municipal-service-api',
+            title: 'Municipal service API',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#32-municipal-service-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('municipal-service-api'),
+                appName: 'CivicDesk API',
+            }),
+        },
+        {
+            id: 'retail-inventory-worker',
+            title: 'Retail inventory worker',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#33-retail-inventory-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('retail-inventory-worker'),
+                appName: 'StockSweep Queue',
+            }),
+        },
+        {
+            id: 'restaurant-reservation-site',
+            title: 'Restaurant reservation site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#34-restaurant-reservation-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('restaurant-reservation-site'),
+                appName: 'TableNorth',
+                productType: 'restaurant reservation website',
+                productBrief: 'TableNorth helps a restaurant present availability, menu pricing, service metrics, testimonials, and opening launch tasks in a polished Dockerized site.',
+            }),
+        },
+        {
+            id: 'security-report-api',
+            title: 'Security report API',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#35-security-report-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('security-report-api'),
+                appName: 'RiskRegister API',
+            }),
+        },
+        {
+            id: 'support-ticket-triage-worker',
+            title: 'Support ticket triage worker',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#36-support-ticket-triage-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('support-ticket-triage-worker'),
+                appName: 'TriageFlow Queue',
+            }),
+        },
+        {
+            id: 'artist-shop-launch-site',
+            title: 'Artist shop launch site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#37-artist-shop-launch-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('artist-shop-launch-site'),
+                appName: 'EditionDrop',
+                productType: 'artist shop launch site',
+                productBrief: 'EditionDrop helps an artist launch limited editions with inventory metrics, pricing, collector proof, campaign tasks, and a portable Docker deployment.',
+            }),
+        },
+        {
+            id: 'manufacturing-quality-api',
+            title: 'Manufacturing quality API',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#38-manufacturing-quality-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('manufacturing-quality-api'),
+                appName: 'QualityLine API',
+            }),
+        },
+        {
+            id: 'finance-reconciliation-worker',
+            title: 'Finance reconciliation worker',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#39-finance-reconciliation-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('finance-reconciliation-worker'),
+                appName: 'ReconcileRun Queue',
+            }),
+        },
+        {
+            id: 'corporate-knowledge-base-site',
+            title: 'Corporate knowledge base site',
+            storyPath: 'agents/training-scenarios/user_stories/21-40-advanced-user-stories.md#40-corporate-knowledge-base-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('corporate-knowledge-base-site'),
+                appName: 'AtlasDesk',
+                productType: 'corporate knowledge base',
+                productBrief: 'AtlasDesk helps a corporation publish internal docs, onboarding metrics, readiness tasks, pricing impact, testimonials, and deployment guidance in a controlled self-hosted portal.',
+            }),
+        },
     ]
 
     const results: CaseResult[] = []
@@ -409,8 +663,10 @@ async function main() {
         const toolResult = await scenario.run() as ToolResult
         const absolutePath = path.resolve(smokeRoot, toolResult.targetDir || rel(scenario.id))
         const verification = await verifyProject(absolutePath, scenario.kind)
+        const elapsedMs = Date.now() - startedAt
         const checks = {
             ...verification.checks,
+            elapsedWithinBudget: elapsedMs <= (scenario.maxElapsedMs || elapsedBudget(scenario.kind)),
             toolSucceeded: toolResult.exitCode === 0,
         }
         results.push({
@@ -419,7 +675,7 @@ async function main() {
             tool: scenario.tool,
             storyPath: scenario.storyPath,
             ok: Object.values(checks).every(Boolean),
-            elapsedMs: Date.now() - startedAt,
+            elapsedMs,
             result: {
                 ...toolResult,
                 build: verification.build ? {
