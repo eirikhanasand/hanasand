@@ -14,7 +14,7 @@ export default async function tokenIsValid(token: string, id: string): Promise<T
     try {
         const response = await fetchWithRetry(`${config.url.auth}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
-            timeoutMs: config.abortTimeout,
+            timeoutMs: Math.max(config.abortTimeout, 10000),
             retries: 2,
         })
 
