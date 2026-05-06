@@ -1,4 +1,4 @@
-import { RequestHistoryEntry } from './types'
+import { HeaderRow, RequestHistoryEntry } from './types'
 
 export const REQUEST_HISTORY_STORAGE_KEY = 'hanasand.share.request-history.v1'
 
@@ -18,7 +18,7 @@ export function loadRequestHistory(): RequestHistoryEntry[] {
             return []
         }
 
-        return parsed
+        return parsed.map(normalizeRequestHistoryEntry).filter(Boolean) as RequestHistoryEntry[]
     } catch {
         return []
     }
@@ -48,7 +48,9 @@ export function loadScopedRequestHistory(shareId?: string | null) {
         }
 
         const parsed = JSON.parse(raw)
-        return Array.isArray(parsed) ? parsed : []
+        return Array.isArray(parsed)
+            ? parsed.map(normalizeRequestHistoryEntry).filter(Boolean) as RequestHistoryEntry[]
+            : []
     } catch {
         return []
     }
@@ -60,4 +62,57 @@ export function saveScopedRequestHistory(history: RequestHistoryEntry[], shareId
     }
 
     window.localStorage.setItem(shareRequestHistoryKey(shareId), JSON.stringify(history.slice(0, 30)))
+}
+
+function normalizeRequestHistoryEntry(value: unknown): RequestHistoryEntry | null {
+    if (!value || typeof value !== 'object') {
+        return null
+    }
+
+    const item = value as Partial<RequestHistoryEntry>
+    if (!item.method || !item.url) {
+        return null
+    }
+
+    return {
+        id: typeof item.id === 'string' ? item.id : `${item.method}-${item.url}`,
+        method: String(item.method).toUpperCase(),
+        url: String(item.url),
+        headers: normalizeHeaderRows(item.headers),
+        body: typeof item.body === 'string' ? item.body : '',
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+        status: typeof item.status === 'number' ? item.status : undefined,
+        statusText: typeof item.statusText === 'string' ? item.statusText : undefined,
+        elapsedMs: typeof item.elapsedMs === 'number' ? item.elapsedMs : undefined,
+        error: typeof item.error === 'string' ? redactSensitiveText(item.error) : undefined,
+        requestSource: item.requestSource === 'vm' || item.requestSource === 'browser' ? item.requestSource : undefined,
+    }
+}
+
+function normalizeHeaderRows(value: unknown): HeaderRow[] {
+    if (!Array.isArray(value)) {
+        return [{ key: '', value: '' }]
+    }
+
+    const rows = value.flatMap((row): HeaderRow[] => {
+        if (!row || typeof row !== 'object') {
+            return []
+        }
+
+        const item = row as Partial<HeaderRow>
+        if (typeof item.key !== 'string') {
+            return []
+        }
+
+        return [{
+            key: item.key,
+            value: typeof item.value === 'string' ? redactSensitiveText(item.value) : '',
+        }]
+    })
+
+    return rows.length ? rows : [{ key: '', value: '' }]
+}
+
+function redactSensitiveText(value: string) {
+    return value.replace(/\bBearer\s+[^'\s]+/gi, 'Bearer [redacted]')
 }
