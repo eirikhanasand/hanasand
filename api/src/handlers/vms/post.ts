@@ -33,6 +33,14 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     }
 
     try {
+        await run(`
+            UPDATE vms
+            SET name = $1
+            WHERE LOWER(name) = LOWER($1)
+              AND name <> $1
+              AND NOT EXISTS (SELECT 1 FROM vms WHERE name = $1)
+        `, [name])
+
         const query = await loadSQL('insertVM.sql')
         const result = await run(query, [name, owner, created_by, JSON.stringify(access_users ?? [])])
         if (!result.rows.length) {

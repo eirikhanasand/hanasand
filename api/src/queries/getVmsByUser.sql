@@ -1,5 +1,5 @@
 SELECT
-    v.name,
+    COALESCE(d.name, v.name) AS name,
     v.owner,
     v.created_by,
     v.access_users,
@@ -16,5 +16,5 @@ SELECT
     COALESCE(d.device_eth0_ipv4_address, '') AS device_eth0_ipv4_address,
     d.last_checked
 FROM vms v
-LEFT JOIN vm_details d ON d.name = v.name
+LEFT JOIN vm_details d ON LOWER(d.name) = LOWER(v.name)
 WHERE v.owner = $1
