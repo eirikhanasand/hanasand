@@ -6,6 +6,10 @@ backend default {
 }
 
 sub vcl_recv {
+    if (req.url ~ "^/s(?:[?#]|$)") {
+        return (pass);
+    }
+
     if (req.http.Cookie ~ "(^|; )access_token=" || req.http.Cookie ~ "(^|; )id=" || req.url ~ "^/(dashboard|profile|role|ai)(/|$)") {
         return (pass);
     }
