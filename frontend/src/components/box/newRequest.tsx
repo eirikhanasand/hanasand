@@ -10,7 +10,7 @@ import {
     withRequestDetails,
 } from '@/utils/box/requestTool'
 import { Bot, Clock3, ImageIcon, Play, Plus, Server, Trash2 } from 'lucide-react'
-import type { MouseEvent } from 'react'
+import type { FormEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './types'
 
@@ -81,7 +81,7 @@ export default function NewRequest({
             ? 'Workspace API'
             : 'Browser mode'
 
-    const send = useCallback(async (e?: MouseEvent<HTMLButtonElement>) => {
+    const send = useCallback(async (e?: FormEvent) => {
         e?.preventDefault()
         const token = getCookie('access_token')
         const id = getCookie('id')
@@ -101,7 +101,7 @@ export default function NewRequest({
             startedAt,
             loading: true,
             response: null,
-        }, ...current].slice(0, 12))
+        }, ...current].slice(0, 8))
         setActiveRunId(runId)
         setResponseTab('response')
 
@@ -204,28 +204,28 @@ export default function NewRequest({
                 : 'Not sent'
 
     return (
-        <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(360px,0.85fr)] xl:items-stretch'>
-            <section className='grid min-h-0 gap-3 self-start'>
-                <form className='grid gap-2'>
-                    <div className='grid gap-2 lg:grid-cols-[84px_minmax(0,1fr)_92px]'>
-                        <select value={method} onChange={(e) => setMethod(e.target.value)} className='cursor-pointer rounded-full border border-white/10 bg-white/4 px-3 py-2 text-[11px] font-semibold text-bright outline-none'>
+        <div className='grid min-h-0 gap-2 xl:grid-cols-[minmax(0,0.9fr)_minmax(360px,0.78fr)] xl:items-stretch'>
+            <section className='grid min-h-0 gap-2 self-start'>
+                <form onSubmit={send} className='grid gap-2 rounded-lg border border-bright/8 bg-black/12 p-2'>
+                    <div className='grid gap-2 lg:grid-cols-[78px_minmax(0,1fr)_84px]'>
+                        <select value={method} onChange={(e) => setMethod(e.target.value)} className='cursor-pointer rounded-full border border-bright/10 bg-white/[0.045] px-3 py-2 text-[11px] font-semibold text-bright outline-none'>
                             {METHODS.map((item) => <option key={item} value={item} className='bg-background'>{item}</option>)}
                         </select>
                         <input
                             ref={inputRef}
-                            className='min-w-0 rounded-full border border-white/10 bg-white/4 px-3 py-2 text-sm text-bright outline-none focus:border-orange-300/45'
+                            className='min-w-0 rounded-full border border-bright/10 bg-white/[0.045] px-3 py-2 text-sm text-bright outline-none focus:border-orange-300/45'
                             placeholder='https://api.example.com/v1/users'
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             required
                         />
-                        <button onClick={send} className='flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-orange-300 px-3 py-2 text-[11px] font-semibold text-background hover:bg-orange-200'>
+                        <button type='submit' className='flex cursor-pointer items-center justify-center gap-1.5 rounded-full bg-orange-300 px-3 py-2 text-[11px] font-semibold text-background hover:bg-orange-200'>
                             <Play className='h-3.5 w-3.5' />
                             Run
                         </button>
                     </div>
 
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='flex flex-wrap items-center justify-between gap-2 px-1'>
                         <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
                             {(['headers', 'body', 'ai'] as const).map((item) => (
                                 <button key={item} type='button' onClick={() => setTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${tab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
@@ -233,20 +233,20 @@ export default function NewRequest({
                                 </button>
                             ))}
                         </div>
-                        <div className='inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-[11px] text-bright/55'>
+                        <div className='inline-flex items-center gap-2 rounded-full border border-bright/10 px-3 py-1 text-[11px] text-bright/55'>
                             <Server className='h-3.5 w-3.5' />
                             {hasRunningRequests ? 'Running requests' : executionMode}
                         </div>
                     </div>
                 </form>
 
-                <div className='grid min-h-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-white/[0.035] p-3'>
+                <div className='grid min-h-0 gap-3 overflow-hidden rounded-lg border border-bright/8 bg-black/12 p-2'>
                     {tab === 'headers' && (
-                        <div className='grid max-h-44 min-h-0 content-start gap-2 overflow-auto pr-1'>
+                        <div className='grid max-h-40 min-h-0 content-start gap-2 overflow-auto pr-1'>
                             {headers.map((header, index) => (
                                 <div key={index} className='grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
-                                    <input value={header.key} onChange={(e) => updateHeader(index, 'key', e.target.value)} placeholder='Header' className='min-w-0 rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none' />
-                                    <input value={header.value} onChange={(e) => updateHeader(index, 'value', e.target.value)} placeholder='Value' className='min-w-0 rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none' />
+                                    <input value={header.key} onChange={(e) => updateHeader(index, 'key', e.target.value)} placeholder='Header' className='min-w-0 rounded-lg border border-bright/10 bg-white/[0.025] px-3 py-2 text-sm outline-none' />
+                                    <input value={header.value} onChange={(e) => updateHeader(index, 'value', e.target.value)} placeholder='Value' className='min-w-0 rounded-lg border border-bright/10 bg-white/[0.025] px-3 py-2 text-sm outline-none' />
                                     <button type='button' onClick={() => setHeaders((prev) => prev.length === 1 ? [{ key: '', value: '' }] : prev.filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-red-200/70 hover:bg-red-500/10 hover:text-red-100'>
                                         <Trash2 className='h-4 w-4' />
                                     </button>
@@ -260,17 +260,17 @@ export default function NewRequest({
                     )}
 
                     {tab === 'body' && (
-                        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder='JSON, text or form body' className='min-h-40 rounded-xl border border-white/10 bg-transparent p-4 font-mono text-sm text-bright outline-none' />
+                        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder='JSON, text or form body' className='min-h-40 rounded-lg border border-bright/10 bg-white/[0.025] p-3 font-mono text-sm text-bright outline-none' />
                     )}
 
                     {tab === 'ai' && (
                         <div className='grid min-h-0 gap-3 lg:grid-rows-[auto_auto_minmax(0,1fr)]'>
-                            <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} className='min-h-24 rounded-xl border border-white/10 bg-transparent p-4 text-sm text-bright outline-none' />
+                            <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} className='min-h-24 rounded-lg border border-bright/10 bg-white/[0.025] p-3 text-sm text-bright outline-none' />
                             <button type='button' onClick={askAi} className='flex w-fit cursor-pointer items-center gap-2 rounded-full bg-sky-400/12 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-400/20'>
                                 <Bot className='h-3.5 w-3.5' />
                                 Ask AI
                             </button>
-                            <pre className='max-h-32 min-h-0 overflow-auto whitespace-pre-wrap rounded-xl bg-black/20 p-4 text-sm text-bright/70'>
+                            <pre className='max-h-32 min-h-0 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-sm text-bright/70'>
                                 {aiResponse || 'AI notes will appear here.'}
                             </pre>
                         </div>
@@ -278,7 +278,7 @@ export default function NewRequest({
                 </div>
             </section>
 
-            <section className='grid min-h-0 gap-3 self-start rounded-xl border border-white/10 bg-white/[0.035] p-3 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]'>
+            <section className='grid min-h-0 gap-2 self-start rounded-lg border border-bright/8 bg-black/12 p-2 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]'>
                 <div className='grid gap-2 sm:grid-cols-3'>
                     <RequestMetricCard
                         label='Status'
@@ -294,13 +294,13 @@ export default function NewRequest({
                     />
                 </div>
 
-                <div className='flex max-w-full gap-2 overflow-x-auto pb-1'>
+                <div className='flex max-w-full gap-1.5 overflow-x-auto'>
                     {runs.length ? runs.map((run) => (
                         <button
                             key={run.id}
                             type='button'
                             onClick={() => setActiveRunId(run.id)}
-                            className={`grid w-44 shrink-0 gap-1 rounded-lg border px-2.5 py-2 text-left transition ${activeRun?.id === run.id ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
+                            className={`grid w-40 shrink-0 gap-1 rounded-lg border px-2.5 py-2 text-left transition ${activeRun?.id === run.id ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
                         >
                             <span className='flex min-w-0 items-center gap-2 text-[11px] text-bright/78'>
                                 <span className='font-semibold'>{run.method}</span>
@@ -309,7 +309,7 @@ export default function NewRequest({
                             <span className='text-[10px] text-bright/45'>{run.loading ? 'Running' : run.response?.status || run.response?.error || 'Done'}</span>
                         </button>
                     )) : (
-                        <div className='rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-bright/45'>
+                        <div className='rounded-lg border border-dashed border-bright/10 px-3 py-2 text-xs text-bright/45'>
                             Run a request to inspect the response.
                         </div>
                     )}
@@ -323,7 +323,7 @@ export default function NewRequest({
                     ))}
                 </div>
 
-                <div className='grid min-h-0 overflow-hidden rounded-xl bg-black/20'>
+                <div className='grid min-h-0 overflow-hidden rounded-lg bg-black/22'>
                     {responseTab === 'response' && (
                         <pre className='max-h-72 min-h-44 overflow-auto whitespace-pre-wrap p-4 text-xs text-bright/80'>
                             {activeRun?.loading ? 'Request is running...' : response ? response.error || response.body || 'No response body.' : 'Response will appear here.'}

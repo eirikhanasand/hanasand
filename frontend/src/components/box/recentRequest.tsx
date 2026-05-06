@@ -1,4 +1,3 @@
-import prettyDate from '@/utils/date/prettyDate'
 import { Play, Trash2 } from 'lucide-react'
 import requestColor from './requestColor'
 import { RequestHistoryEntry } from './types'
@@ -30,22 +29,14 @@ export default function RecentRequest({ req, active, onClick, onRun, onDelete }:
                     onClick()
                 }
             }}
-            className={`group grid w-[13.5rem] shrink-0 gap-1 rounded-lg border px-2.5 py-2 text-left transition ${active ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
+            className={`group flex h-8 w-[12rem] shrink-0 items-center gap-2 rounded-full border px-2 text-left transition ${active ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
         >
-            <div className='flex items-center justify-between gap-2'>
-                <div className='flex min-w-0 items-center gap-2'>
-                    <span className={`${color} rounded px-1.5 py-0.5 text-[10px] font-semibold text-white`}>{req.method}</span>
-                    <span className='truncate text-xs text-bright/82'>{req.url}</span>
-                </div>
-                <span className={`shrink-0 text-[11px] font-semibold ${statusColor}`}>
-                    {req.status ? req.status : req.error ? 'Error' : 'Draft'}
-                </span>
-            </div>
-            <div className='flex items-center justify-between gap-3 text-[11px] text-bright/45'>
-                <span>{prettyDate(req.createdAt)}</span>
-                <span>{req.elapsedMs !== undefined ? `${req.elapsedMs} ms` : req.requestSource === 'vm' ? 'Terminal' : 'Browser'}</span>
-            </div>
-            <div className='mt-1 flex items-center gap-1 opacity-80 transition group-hover:opacity-100'>
+            <span className={`${color} shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-white`}>{req.method}</span>
+            <span className='min-w-0 flex-1 truncate text-xs text-bright/78'>{req.url}</span>
+            <span className={`shrink-0 text-[10px] font-semibold ${statusColor}`}>
+                {req.status ? req.status : req.error ? 'ERR' : ''}
+            </span>
+            <div className='flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100'>
                 <span
                     role='button'
                     tabIndex={0}
@@ -60,10 +51,10 @@ export default function RecentRequest({ req, active, onClick, onRun, onDelete }:
                             onRun()
                         }
                     }}
-                    className='inline-flex h-6 items-center gap-1 rounded-full bg-white/7 px-2 text-[10px] text-bright/70 hover:bg-white/12 hover:text-bright'
+                    className='grid h-6 w-6 place-items-center rounded-full text-bright/50 hover:bg-white/10 hover:text-bright'
+                    aria-label={`Resend ${req.method} ${req.url}`}
                 >
                     <Play className='h-3 w-3' />
-                    Resend
                 </span>
                 <span
                     role='button'

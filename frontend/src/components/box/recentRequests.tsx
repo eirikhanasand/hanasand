@@ -18,14 +18,14 @@ export default function RecentRequests({
 }: RecentRequestsProps) {
     if (!recentRequests.length) {
         return (
-            <div className='rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-bright/45'>
-                Previous requests will appear here.
+            <div className='min-w-0 flex-1 truncate px-1 text-xs text-bright/38'>
+                No saved requests
             </div>
         )
     }
 
     return (
-        <div className='flex max-w-full gap-2 overflow-x-auto pb-1'>
+        <div className='flex min-w-0 flex-1 gap-1.5 overflow-x-auto'>
             {recentRequests.map((req) => (
                 <RecentRequest
                     key={req.id}
