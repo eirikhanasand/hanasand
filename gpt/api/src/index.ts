@@ -14,6 +14,31 @@ let interval: NodeJS.Timeout | null = null
 let connecting = false
 let socket: WebSocket | null = null
 
+async function verifyModelEndpoints() {
+    if (process.env.HANASAND_SKIP_MODEL_ENDPOINT_CHECK === '1') {
+        return
+    }
+
+    const endpoints = (config.model_apis.length ? config.model_apis : [config.model_api])
+        .map((url) => url.replace(/\/+$/, ''))
+
+    const checks = await Promise.allSettled(endpoints.map(async (endpoint) => {
+        const response = await fetch(`${endpoint}/v1/models`, { signal: AbortSignal.timeout(5000) })
+        if (!response.ok) {
+            throw new Error(`${endpoint} returned ${response.status}`)
+        }
+    }))
+
+    if (!checks.some((check) => check.status === 'fulfilled')) {
+        const failures = checks.map((check, index) => (
+            check.status === 'rejected'
+                ? `${endpoints[index]}: ${check.reason instanceof Error ? check.reason.message : String(check.reason)}`
+                : `${endpoints[index]}: ok`
+        ))
+        throw new Error(`No configured model endpoint is reachable. Refusing to register model worker. ${failures.join('; ')}`)
+    }
+}
+
 function getSocketUrls(baseUrl: string) {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
     const webSocketBaseUrl = normalizedBaseUrl.replace(/^http/, 'ws')
@@ -108,7 +133,12 @@ function connect() {
 
         function tryNextUrl() {
             if (index + 1 >= socketUrls.length) {
-                scheduleRetry()
+                void verifyModelEndpoints()
+                    .then(scheduleRetry)
+                    .catch((error) => {
+                        console.error(error instanceof Error ? error.message : error)
+                        process.exit(1)
+                    })
                 return
             }
 
@@ -172,4 +202,9 @@ function connect() {
     attemptConnection(0)
 }
 
-connect()
+verifyModelEndpoints()
+    .then(connect)
+    .catch((error) => {
+        console.error(error instanceof Error ? error.message : error)
+        process.exit(1)
+    })
