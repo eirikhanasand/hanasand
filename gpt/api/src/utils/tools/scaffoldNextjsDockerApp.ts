@@ -12,7 +12,7 @@ type ScaffoldNextjsDockerAppArgs = {
 
 const bunHome = JSON.stringify(process.env.HOME || '')
 const installAndBuildCommand = [
-    `(command -v bun >/dev/null 2>&1 && mkdir -p .hanasand-tmp && HOME=${bunHome} TMPDIR="$PWD/.hanasand-tmp" bun install --offline && bun run build)`,
+    `(command -v bun >/dev/null 2>&1 && mkdir -p .hanasand-tmp && HOME=${bunHome} TMPDIR="$PWD/.hanasand-tmp" bun install --offline && NEXT_TELEMETRY_DISABLED=1 ./node_modules/.bin/next build)`,
     '||',
     '(npm install --fetch-retries=1 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=5000 --fetch-timeout=5000 --no-audit --no-fund && npm run build)',
 ].join(' ')
