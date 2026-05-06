@@ -131,7 +131,7 @@ function isValidHeaderValue(value: string) {
         if (code === 9) {
             continue
         }
-        if (code < 32 || code > 255 || code === 127) {
+        if (code < 32 || code > 126 || code === 127) {
             return false
         }
     }
