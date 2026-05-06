@@ -1,5 +1,4 @@
 import config from '@/config'
-import RequestMetricCard from '@/components/box/requestMetricCard'
 import { getCookie } from '@/utils/cookies/cookies'
 import randomId from '@/utils/random/randomId'
 import {
@@ -134,7 +133,7 @@ export default function NewRequest({
 
             const enrichedResponse = sanitizeToolResponse(withRequestDetails({
                 ...data,
-                warnings: [...headerPlan.warnings, ...(data.warnings || [])],
+                warnings: uniqueWarnings([...headerPlan.warnings, ...(data.warnings || [])]),
             }, request))
 
             setRuns((current) => current.map((run) => run.id === runId
@@ -145,7 +144,7 @@ export default function NewRequest({
                 id: selectedRequestId ?? runId,
                 method,
                 url,
-                headers: normalizedHeaders,
+                headers: headerRowsFromObject(usableHeaders),
                 body,
                 createdAt: new Date().toISOString(),
                 status: enrichedResponse.status,
@@ -243,9 +242,9 @@ export default function NewRequest({
                 : 'Not sent'
 
     return (
-        <div className='grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-2 overflow-hidden'>
+        <div className='grid h-full min-h-0 gap-2 overflow-auto pr-1'>
             <form onSubmit={send} className='grid gap-2 rounded-lg border border-bright/8 bg-black/12 p-2'>
-                <div className='grid gap-2 md:grid-cols-[86px_minmax(0,1fr)_74px]'>
+                <div className='grid gap-2 sm:grid-cols-[86px_minmax(0,1fr)_74px]'>
                     <label className='relative min-w-0'>
                         <span className='sr-only'>Method</span>
                         <select value={method} onChange={(e) => setMethod(e.target.value)} className='h-10 w-full cursor-pointer appearance-none rounded-full border border-bright/10 bg-white/[0.045] px-3 pr-8 text-xs font-semibold text-bright outline-none focus:border-orange-300/45'>
@@ -267,16 +266,17 @@ export default function NewRequest({
                     </button>
                 </div>
 
-                <div className='min-w-0 rounded-lg border border-bright/8 bg-black/18 px-3 py-2 font-mono text-[11px] leading-4 text-bright/60'>
-                    <span className='mr-2 text-bright/32'>{method}</span>
-                    <span className='break-all'>{url || 'Enter a request URL.'}</span>
+                <div className='min-w-0 rounded-lg border border-bright/8 bg-black/18 px-3 py-2 font-mono text-[11px] leading-4 text-bright/62'>
+                    <span className='mr-2 text-bright/32'>URL</span>
+                    <span className='mr-2 text-bright/45'>{method}</span>
+                    <span className='break-all' title={url}>{url || 'Enter a request URL.'}</span>
                 </div>
 
                 <div className='flex flex-wrap items-center justify-between gap-2 px-1'>
                     <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
                         {(['headers', 'body', 'ai'] as const).map((item) => (
                             <button key={item} type='button' onClick={() => setTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${tab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
-                                {item}
+                                {item === 'ai' ? 'AI' : item}
                             </button>
                         ))}
                     </div>
@@ -287,31 +287,38 @@ export default function NewRequest({
                 </div>
             </form>
 
-            <section className='grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-bright/8 bg-black/12 p-2'>
-                <div className='grid gap-2 sm:grid-cols-3'>
-                    <RequestMetricCard
-                        label='Status'
-                        value={responseStatus}
-                        tone={response?.ok ? 'good' : response?.error ? 'bad' : 'neutral'}
-                    />
-                    <RequestMetricCard label='Source' value={executionMode} tone='neutral' />
-                    <RequestMetricCard
-                        label='Latency'
-                        value={response?.elapsed_ms !== undefined ? `${response.elapsed_ms} ms` : activeRun?.loading ? 'Running' : 'Pending'}
-                        tone='neutral'
-                        icon={<Clock3 className='h-3.5 w-3.5' />}
-                    />
+            <section className='grid min-h-0 gap-2 rounded-lg border border-bright/8 bg-black/12 p-2'>
+                <div className='flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-bright/8 bg-black/16 px-3 py-2 text-[11px] text-bright/50'>
+                    <span className='inline-flex min-w-0 items-center gap-1.5'>
+                        <span>Status</span>
+                        <strong className={`truncate font-semibold ${response?.ok ? 'text-emerald-300' : response?.error ? 'text-red-300' : 'text-bright/82'}`}>{responseStatus}</strong>
+                    </span>
+                    <span className='inline-flex min-w-0 items-center gap-1.5'>
+                        <span>Source</span>
+                        <strong className='truncate font-semibold text-bright/82'>{executionMode}</strong>
+                    </span>
+                    <span className='inline-flex min-w-0 items-center gap-1.5'>
+                        <Clock3 className='h-3 w-3 text-bright/35' />
+                        <strong className='truncate font-semibold text-bright/82'>{response?.elapsed_ms !== undefined ? `${response.elapsed_ms} ms` : activeRun?.loading ? 'Running' : 'Pending'}</strong>
+                    </span>
                 </div>
 
-                <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                    {(['response', 'preview', 'headers', 'request'] as const).map((item) => (
-                        <button key={item} type='button' onClick={() => setResponseTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${responseTab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
-                            {item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item}
-                        </button>
-                    ))}
+                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                    <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
+                        {(['response', 'preview', 'headers', 'request'] as const).map((item) => (
+                            <button key={item} type='button' onClick={() => setResponseTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${responseTab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
+                                {item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item}
+                            </button>
+                        ))}
+                    </div>
+                    {response?.warnings?.length ? (
+                        <span className='max-w-full truncate rounded-full bg-amber-300/10 px-2.5 py-1 text-[11px] text-amber-100/72' title={response.warnings.join('\n')}>
+                            {response.warnings.length} warning{response.warnings.length === 1 ? '' : 's'}
+                        </span>
+                    ) : null}
                 </div>
 
-                <div className='grid min-h-0 overflow-hidden rounded-lg bg-black/22'>
+                <div className='grid min-h-44 overflow-hidden rounded-lg bg-black/22'>
                     {responseTab === 'response' && (
                         <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
                             {activeRun?.loading ? 'Request is running...' : response ? formatResponseBody(response) : 'Response will appear here.'}
@@ -351,11 +358,11 @@ export default function NewRequest({
                 </div>
             </section>
 
-            <section className='grid min-h-0 gap-2 overflow-hidden rounded-lg border border-bright/8 bg-black/12 p-2'>
+            <section className='grid min-h-0 gap-2 rounded-lg border border-bright/8 bg-black/12 p-2'>
                 {tab === 'headers' && (
-                    <div className='grid max-h-40 min-h-0 content-start gap-2 overflow-auto pr-1'>
+                    <div className='grid min-h-0 content-start gap-2'>
                         {normalizedHeaders.map((header, index) => (
-                            <div key={index} className='grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
+                            <div key={index} className='grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_36px]'>
                                 <input value={header.key} onChange={(e) => updateHeader(index, 'key', e.target.value)} placeholder='Header' className='min-w-0 rounded-lg border border-bright/10 bg-white/[0.025] px-3 py-2 text-sm outline-none' />
                                 <input value={header.value} onChange={(e) => updateHeader(index, 'value', e.target.value)} placeholder='Value' className='min-w-0 rounded-lg border border-bright/10 bg-white/[0.025] px-3 py-2 text-sm outline-none' />
                                 <button type='button' onClick={() => setHeaders((prev) => normalizeHeaderRows(prev).length === 1 ? [{ key: '', value: '' }] : normalizeHeaderRows(prev).filter((_, rowIndex) => rowIndex !== index))} className='grid cursor-pointer place-items-center rounded-lg text-red-200/70 hover:bg-red-500/10 hover:text-red-100'>
@@ -367,6 +374,11 @@ export default function NewRequest({
                             <Plus className='h-3.5 w-3.5' />
                             Add header
                         </button>
+                        {headerPlan.warnings.length ? (
+                            <div className='rounded-lg border border-amber-300/12 bg-amber-300/8 px-3 py-2 text-[11px] leading-4 text-amber-100/72'>
+                                {headerPlan.warnings.join(' ')}
+                            </div>
+                        ) : null}
                     </div>
                 )}
 
@@ -443,6 +455,15 @@ function buildRequestHeaders(rows: HeaderRow[]) {
             .filter((row) => row.key && row.value)
             .map((row) => [row.key, row.value])
     )
+}
+
+function headerRowsFromObject(headers: Record<string, string>): HeaderRow[] {
+    const rows = Object.entries(headers).map(([key, value]) => ({ key, value }))
+    return rows.length ? rows : [{ key: '', value: '' }]
+}
+
+function uniqueWarnings(warnings: string[]) {
+    return Array.from(new Set(warnings.filter(Boolean)))
 }
 
 function sanitizeToolResponse(response: ToolResponse): ToolResponse {

@@ -29,10 +29,11 @@ export default function RecentRequest({ req, active, onClick, onRun, onDelete }:
                     onClick()
                 }
             }}
-            className={`group flex h-8 w-[12rem] shrink-0 items-center gap-2 rounded-full border px-2 text-left transition ${active ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
+            className={`group flex h-8 w-[min(18rem,72vw)] shrink-0 items-center gap-2 rounded-full border px-2 text-left transition ${active ? 'border-orange-300/35 bg-orange-300/8' : 'border-white/8 bg-white/3 hover:bg-white/6'}`}
+            title={`${req.method} ${req.url}`}
         >
             <span className={`${color} shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-white`}>{req.method}</span>
-            <span className='min-w-0 flex-1 truncate text-xs text-bright/78'>{req.url}</span>
+            <span className='min-w-0 flex-1 truncate text-xs text-bright/78'>{shortUrlLabel(req.url)}</span>
             <span className={`shrink-0 text-[10px] font-semibold ${statusColor}`}>
                 {req.status ? req.status : req.error ? 'ERR' : ''}
             </span>
@@ -78,4 +79,13 @@ export default function RecentRequest({ req, active, onClick, onRun, onDelete }:
             </div>
         </div>
     )
+}
+
+function shortUrlLabel(value: string) {
+    try {
+        const url = new URL(value)
+        return `${url.host}${url.pathname}${url.search}`
+    } catch {
+        return value
+    }
 }
