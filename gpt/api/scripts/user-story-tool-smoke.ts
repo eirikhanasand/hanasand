@@ -118,9 +118,9 @@ function elapsedBudget(kind: ScenarioKind) {
         return 140 * 1000
     }
     if (kind === 'postgres') {
-        return 20 * 1000
+        return 18 * 1000
     }
-    return 24 * 1000
+    return 22 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind) {
@@ -1124,6 +1124,240 @@ async function main() {
                 appName: 'PolicyAtlas AI',
                 productType: 'corporate AI policy portal',
                 productBrief: 'PolicyAtlas AI helps a corporation publish AI policy guidance, adoption metrics, pricing impact, testimonials, readiness tasks, and controlled deployment notes.',
+            }),
+        },
+        {
+            id: 'designer-asset-approval-site',
+            title: 'Designer asset approval site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#81-designer-asset-approval-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('designer-asset-approval-site'),
+                appName: 'ProofDeck',
+                productType: 'creative asset approval portal',
+                productBrief: 'ProofDeck helps design teams present campaign assets, approval metrics, package tiers, stakeholder quotes, review tasks, and concise self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'agency-retainer-api',
+            title: 'Agency retainer API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#82-agency-retainer-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('agency-retainer-api'),
+                appName: 'RetainerLedger API',
+            }),
+        },
+        {
+            id: 'agency-report-worker',
+            title: 'Agency report worker',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#83-agency-report-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('agency-report-worker'),
+                appName: 'ReportQueue Worker',
+            }),
+        },
+        {
+            id: 'newbie-service-directory-site',
+            title: 'Newbie service directory site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#84-newbie-service-directory-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('newbie-service-directory-site'),
+                appName: 'LocalList Starter',
+                productType: 'local service directory',
+                productBrief: 'LocalList Starter helps a nontechnical founder publish service categories, lead metrics, pricing cards, testimonials, onboarding tasks, and short Docker deployment notes.',
+            }),
+        },
+        {
+            id: 'clinic-referral-api',
+            title: 'Clinic referral API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#85-clinic-referral-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('clinic-referral-api'),
+                appName: 'ReferralDesk API',
+            }),
+        },
+        {
+            id: 'clinic-reminder-worker',
+            title: 'Clinic reminder worker',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#86-clinic-reminder-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('clinic-reminder-worker'),
+                appName: 'CareReminder Queue',
+            }),
+        },
+        {
+            id: 'enterprise-risk-briefing-site',
+            title: 'Enterprise risk briefing site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#87-enterprise-risk-briefing-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('enterprise-risk-briefing-site'),
+                appName: 'RiskBrief HQ',
+                productType: 'executive risk briefing portal',
+                productBrief: 'RiskBrief HQ helps executives scan risk categories, mitigation metrics, investment tiers, board quotes, readiness tasks, and controlled deployment notes.',
+            }),
+        },
+        {
+            id: 'fintech-dispute-api',
+            title: 'Fintech dispute API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#88-fintech-dispute-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('fintech-dispute-api'),
+                appName: 'DisputeLedger API',
+            }),
+        },
+        {
+            id: 'fintech-reconciliation-worker',
+            title: 'Fintech reconciliation worker',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#89-fintech-reconciliation-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('fintech-reconciliation-worker'),
+                appName: 'ReconcileQueue Worker',
+            }),
+        },
+        {
+            id: 'municipal-permit-site',
+            title: 'Municipal permit site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#90-municipal-permit-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('municipal-permit-site'),
+                appName: 'PermitPath',
+                productType: 'municipal permit guidance site',
+                productBrief: 'PermitPath helps residents understand permit categories, service metrics, pricing impact, citizen quotes, application tasks, and self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'municipal-casework-api',
+            title: 'Municipal casework API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#91-municipal-casework-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('municipal-casework-api'),
+                appName: 'CaseworkLedger API',
+            }),
+        },
+        {
+            id: 'municipal-notification-worker',
+            title: 'Municipal notification worker',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#92-municipal-notification-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('municipal-notification-worker'),
+                appName: 'NoticeQueue Worker',
+            }),
+        },
+        {
+            id: 'b2b-security-comparison-site',
+            title: 'B2B security comparison site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#93-b2b-security-comparison-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('b2b-security-comparison-site'),
+                appName: 'SecureCompare',
+                productType: 'B2B security comparison site',
+                productBrief: 'SecureCompare helps a vendor compare security controls, trust metrics, plan tiers, customer quotes, procurement tasks, and Docker deployment notes.',
+            }),
+        },
+        {
+            id: 'security-questionnaire-api',
+            title: 'Security questionnaire API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#94-security-questionnaire-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('security-questionnaire-api'),
+                appName: 'QuestionnaireVault API',
+            }),
+        },
+        {
+            id: 'security-evidence-worker',
+            title: 'Security evidence worker',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#95-security-evidence-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('security-evidence-worker'),
+                appName: 'EvidenceQueue Worker',
+            }),
+        },
+        {
+            id: 'creator-membership-site',
+            title: 'Creator membership site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#96-creator-membership-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('creator-membership-site'),
+                appName: 'MemberForge',
+                productType: 'creator membership site',
+                productBrief: 'MemberForge helps creators show member benefits, revenue metrics, pricing levels, subscriber quotes, launch tasks, and beginner-safe deployment notes.',
+            }),
+        },
+        {
+            id: 'manufacturer-quality-api',
+            title: 'Manufacturer quality API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#97-manufacturer-quality-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('manufacturer-quality-api'),
+                appName: 'QualityLedger API',
+            }),
+        },
+        {
+            id: 'manufacturer-inspection-worker',
+            title: 'Manufacturer inspection worker',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#98-manufacturer-inspection-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('manufacturer-inspection-worker'),
+                appName: 'InspectionQueue Worker',
+            }),
+        },
+        {
+            id: 'research-lab-grant-site',
+            title: 'Research lab grant site',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#99-research-lab-grant-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('research-lab-grant-site'),
+                appName: 'GrantSignal Lab',
+                productType: 'research grant showcase',
+                productBrief: 'GrantSignal Lab helps a research team present funding themes, impact metrics, sponsor tiers, collaborator quotes, submission tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'logistics-customs-api',
+            title: 'Logistics customs API',
+            storyPath: 'agents/training-scenarios/user_stories/81-100-advanced-user-stories.md#100-logistics-customs-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('logistics-customs-api'),
+                appName: 'CustomsDesk API',
             }),
         },
     ]
