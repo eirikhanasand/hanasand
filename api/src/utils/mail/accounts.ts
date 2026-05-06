@@ -111,6 +111,10 @@ export async function syncMailPasswordForUser(userId: string, displayName: strin
     return ensureMailAccountForUser(userId, displayName, password)
 }
 
+export async function rotateMailPasswordForUser(userId: string, displayName: string) {
+    return ensureMailAccountForUser(userId, displayName, generateMailSecret())
+}
+
 export async function getMailAccess(actorId: string, mailboxUser?: string) {
     const targetUser = mailboxUser || actorId
     const canAccessAnyMailbox = mailConfig.privilegedMailboxUsers.has(actorId)

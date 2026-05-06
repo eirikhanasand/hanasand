@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { getMailAccess, listAccessibleMailAccounts } from '#utils/mail/accounts.ts'
+import { getMailAccess, listAccessibleMailAccounts, rotateMailPasswordForUser } from '#utils/mail/accounts.ts'
 import { applyMailRules, listMailRules } from '#utils/mail/filters.ts'
 import { getMailHealth } from '#utils/mail/health.ts'
 import { getMailboxList, getMessage, listMessages } from '#utils/mail/jmap.ts'
@@ -22,16 +22,19 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
             req.log.warn({ error }, 'Failed to collect mail health checks')
             return null
         })
-        const mailboxData = await getMailboxList(access.username, access.password)
+        const repairedAccess = await repairMailAccessIfNeeded(access, error => {
+            req.log.warn({ error, userId: access.targetUser }, 'Stored mail credentials failed; rotating mailbox secret')
+        })
+        const mailboxData = await getMailboxList(repairedAccess.username, repairedAccess.password)
         const inboxMailbox = mailboxData.mailboxes.find(mailbox => mailbox.role === 'inbox') || mailboxData.mailboxes[0]
         if (!inboxMailbox) {
             return res
                 .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
                 .send({
                     actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
-                    mailboxUser: access.targetUser,
-                    mailboxAddress: access.address,
-                    mailPassword: access.password,
+                    mailboxUser: repairedAccess.targetUser,
+                    mailboxAddress: repairedAccess.address,
+                    mailPassword: repairedAccess.password,
                     accessibleAccounts,
                     mailboxes: [],
                     selectedMailboxId: null,
@@ -40,36 +43,36 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
                     filters: [],
                     recentRecipients,
                     health,
-                    settings: settingsFor(access),
+                    settings: settingsFor(repairedAccess),
                 })
         }
 
         await applyMailRules({
-            userId: access.targetUser,
-            username: access.username,
-            password: access.password,
+            userId: repairedAccess.targetUser,
+            username: repairedAccess.username,
+            password: repairedAccess.password,
             inboxMailboxId: inboxMailbox.id,
             junkMailboxId: mailboxData.mailboxes.find(mailbox => mailbox.role === 'junk')?.id || null,
-            mailboxAddress: access.address,
+            mailboxAddress: repairedAccess.address,
         }).catch(error => req.log.warn({ error }, 'Failed to apply mail rules'))
 
-        const refreshedMailboxData = await getMailboxList(access.username, access.password)
+        const refreshedMailboxData = await getMailboxList(repairedAccess.username, repairedAccess.password)
         const selectedMailboxId = query.mailboxId
             || refreshedMailboxData.mailboxes.find(mailbox => mailbox.role === 'inbox')?.id
             || refreshedMailboxData.mailboxes[0]?.id
             || null
-        const messages = selectedMailboxId ? await listMessages(access.username, access.password, selectedMailboxId) : []
+        const messages = selectedMailboxId ? await listMessages(repairedAccess.username, repairedAccess.password, selectedMailboxId) : []
         const selectedMessageId = query.messageId || messages[0]?.id
-        const selectedMessage = selectedMessageId ? await getMessage(access.username, access.password, selectedMessageId) : null
-        const filters = await listMailRules(access.targetUser)
+        const selectedMessage = selectedMessageId ? await getMessage(repairedAccess.username, repairedAccess.password, selectedMessageId) : null
+        const filters = await listMailRules(repairedAccess.targetUser)
 
         return res
             .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
             .send({
-                actor: { id, canAccessAnyMailbox: access.canAccessAnyMailbox },
-                mailboxUser: access.targetUser,
-                mailboxAddress: access.address,
-                mailPassword: access.password,
+                actor: { id, canAccessAnyMailbox: repairedAccess.canAccessAnyMailbox },
+                mailboxUser: repairedAccess.targetUser,
+                mailboxAddress: repairedAccess.address,
+                mailPassword: repairedAccess.password,
                 accessibleAccounts,
                 mailboxes: refreshedMailboxData.mailboxes,
                 selectedMailboxId,
@@ -78,12 +81,32 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
                 filters,
                 recentRecipients,
                 health,
-                settings: settingsFor(access),
+                settings: settingsFor(repairedAccess),
             })
     } catch (error) {
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to load mailbox.' })
     }
+}
+
+type MailAccess = Awaited<ReturnType<typeof getMailAccess>>
+
+async function repairMailAccessIfNeeded(access: MailAccess, onRepair: (error: Error) => void) {
+    try {
+        await getMailboxList(access.username, access.password)
+        return access
+    } catch (error) {
+        if (!isMailAuthError(error)) {
+            throw error
+        }
+        onRepair(error as Error)
+        const repaired = await rotateMailPasswordForUser(access.targetUser, access.targetUser)
+        return { ...access, username: repaired.username, address: repaired.address, password: repaired.password }
+    }
+}
+
+function isMailAuthError(error: unknown) {
+    return error instanceof Error && /\b401\b/.test(error.message)
 }
 
 function settingsFor(access: { username: string, address: string }) {
