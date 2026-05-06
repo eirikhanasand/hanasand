@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { CalendarClock, Play, RefreshCw } from 'lucide-react-native'
-import { createAutomation, deleteAutomation, fetchAutomationDetails, fetchAutomations, runAutomationNow, updateAutomation } from '../lib/api'
-import type { AgentAutomation, AgentAutomationPayload, AgentAutomationRun, AppSettings } from '../types'
+import { createAutomation, deleteAutomation, fetchAutomationDetails, fetchAutomations, fetchManagedCronJobs, runAutomationNow, updateAutomation, updateManagedCronJob } from '../lib/api'
+import type { AgentAutomation, AgentAutomationPayload, AgentAutomationRun, AppSettings, ManagedCronJob } from '../types'
 import { GlassCard, InlineNotice, PillButton, Screen } from '../components/ui'
 import { spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
@@ -15,6 +15,7 @@ export function AutomationsScreen({ settings }: { settings: AppSettings }) {
     const styles = useMemo(() => createStyles(theme), [theme])
     const [automations, setAutomations] = useState<AgentAutomation[]>([])
     const [runs, setRuns] = useState<AgentAutomationRun[]>([])
+    const [cronJobs, setCronJobs] = useState<ManagedCronJob[]>([])
     const [selectedId, setSelectedId] = useState('')
     const [busy, setBusy] = useState('')
     const [draft, setDraft] = useState<AgentAutomationPayload>({
@@ -34,7 +35,16 @@ export function AutomationsScreen({ settings }: { settings: AppSettings }) {
 
     useEffect(() => {
         void load()
+        void loadCronJobs()
     }, [])
+
+    async function loadCronJobs() {
+        try {
+            setCronJobs(await fetchManagedCronJobs(settings))
+        } catch {
+            setCronJobs([])
+        }
+    }
 
     async function load(selectId = selectedId) {
         setBusy('load')
@@ -113,6 +123,17 @@ export function AutomationsScreen({ settings }: { settings: AppSettings }) {
         }
     }
 
+    async function toggleCron(job: ManagedCronJob) {
+        setBusy(`cron-${job.id}`)
+        try {
+            setCronJobs(await updateManagedCronJob(settings, job.id, { schedule: job.schedule, enabled: !job.enabled }))
+        } catch (error) {
+            Alert.alert('Unable to update cron job', error instanceof Error ? error.message : 'Request failed.')
+        } finally {
+            setBusy('')
+        }
+    }
+
     function newAutomation() {
         setSelectedId('')
         setRuns([])
@@ -136,6 +157,23 @@ export function AutomationsScreen({ settings }: { settings: AppSettings }) {
                 <PillButton label='New' onPress={newAutomation} small />
                 <PillButton label={busy === 'load' ? 'Loading' : 'Refresh'} onPress={() => void load()} small />
             </View>
+
+            {!!cronJobs.length && (
+                <GlassCard style={styles.editor}>
+                    <View style={styles.editorHeader}>
+                        <CalendarClock color={theme.textMuted} size={18} />
+                        <Text style={styles.sectionTitle}>System cron</Text>
+                    </View>
+                    {cronJobs.map(job => (
+                        <View key={job.id} style={styles.runRow}>
+                            <Text style={styles.cardTitle}>{job.name}</Text>
+                            <Text style={styles.cardMeta}>{job.host} · {job.enabled ? 'enabled' : 'paused'} · {job.schedule}</Text>
+                            <Text style={styles.cardBody}>{job.lastLogLine || 'No log line found.'}</Text>
+                            <PillButton label={job.enabled ? 'Pause' : 'Enable'} onPress={() => void toggleCron(job)} small />
+                        </View>
+                    ))}
+                </GlassCard>
+            )}
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.automationRail}>
                 {automations.map(automation => (

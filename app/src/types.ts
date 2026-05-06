@@ -304,3 +304,18 @@ export type AgentAutomationPayload = {
     modelName?: string | null
     notifyOn?: 'never' | 'failure' | 'always'
 }
+
+export type ManagedCronJob = {
+    id: string
+    name: string
+    description: string
+    defaultSchedule: string
+    command: string
+    host: string
+    logPath?: string
+    schedule: string
+    enabled: boolean
+    installed: boolean
+    lastLogLine: string | null
+    lastLogAt: string | null
+}

@@ -110,6 +110,7 @@ import putApiKeyHandler from './handlers/rateLimit/putApiKey.ts'
 import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
 import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/desktopAgent/presence.ts'
 import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
+import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
 
 /**
  * Defines the routes available in the API.
@@ -248,6 +249,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Docker stats
     fastify.get('/docker', getDocker)
+    fastify.get('/system/cron', getSystemCronJobs)
+    fastify.put('/system/cron/:id', putSystemCronJob)
 
     // Rate limiting
     fastify.get('/rate-limit/settings', getRateLimitSettingsHandler)

@@ -1,4 +1,4 @@
-import type { AgentAutomation, AgentAutomationPayload, AgentAutomationRun, AiFileSummary, AiRunDetails, AiToolUseSummary, AppSettings, DashboardRole, DashboardUser, DashboardUserRoleAssignment, DesktopAgentPresence, DesktopAgentStatus, GptClient, HanasandAuthSession, MailAddress, MailboxItem, MailMessage, MailMessageSummary, MailOverview, MailSendResult, Note, ShareSummary, ShareTreeItem } from '../types'
+import type { AgentAutomation, AgentAutomationPayload, AgentAutomationRun, AiFileSummary, AiRunDetails, AiToolUseSummary, AppSettings, DashboardRole, DashboardUser, DashboardUserRoleAssignment, DesktopAgentPresence, DesktopAgentStatus, GptClient, HanasandAuthSession, MailAddress, MailboxItem, MailMessage, MailMessageSummary, MailOverview, MailSendResult, ManagedCronJob, Note, ShareSummary, ShareTreeItem } from '../types'
 
 export class PendingDeletionError extends Error {
     id: string
@@ -1132,6 +1132,38 @@ export async function runAutomationNow(settings: AppSettings, id: string) {
     }
 }
 
+export async function fetchManagedCronJobs(settings: AppSettings) {
+    requireAppAuth(settings, 'load system cron jobs')
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'system/cron'), {
+        headers: headers(settings),
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to load cron jobs.'))
+    }
+
+    const jobs = asRecord(body).jobs
+    return Array.isArray(jobs) ? jobs.map(normalizeManagedCronJob).filter(Boolean) as ManagedCronJob[] : []
+}
+
+export async function updateManagedCronJob(settings: AppSettings, id: string, payload: { schedule?: string, enabled?: boolean }) {
+    requireAppAuth(settings, 'update system cron jobs')
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, `system/cron/${segment(id)}`), {
+        method: 'PUT',
+        headers: headers(settings),
+        body: JSON.stringify(payload),
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to update cron job.'))
+    }
+
+    const jobs = asRecord(body).jobs
+    return Array.isArray(jobs) ? jobs.map(normalizeManagedCronJob).filter(Boolean) as ManagedCronJob[] : []
+}
+
 async function mutateAutomation(settings: AppSettings, path: string, method: 'POST' | 'PUT' | 'DELETE', payload?: AgentAutomationPayload) {
     requireAppAuth(settings, 'save automations')
 
@@ -1195,5 +1227,26 @@ function normalizeAutomationRun(value: unknown): AgentAutomationRun | null {
         startedAt: stringValue(entry.startedAt),
         completedAt: stringValue(entry.completedAt) || null,
         durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : null,
+    }
+}
+
+function normalizeManagedCronJob(value: unknown): ManagedCronJob | null {
+    const entry = asRecord(value)
+    const id = stringValue(entry.id)
+    if (!id) return null
+
+    return {
+        id,
+        name: stringValue(entry.name) || id,
+        description: stringValue(entry.description),
+        defaultSchedule: stringValue(entry.defaultSchedule),
+        command: stringValue(entry.command),
+        host: stringValue(entry.host),
+        logPath: stringValue(entry.logPath) || undefined,
+        schedule: stringValue(entry.schedule),
+        enabled: booleanValue(entry.enabled) ?? false,
+        installed: booleanValue(entry.installed) ?? false,
+        lastLogLine: stringValue(entry.lastLogLine) || null,
+        lastLogAt: stringValue(entry.lastLogAt) || null,
     }
 }
