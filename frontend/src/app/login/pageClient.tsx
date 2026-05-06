@@ -184,7 +184,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
         setCookieWithExpiresAt('access_token', data.token, data.expires_at)
         setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-        router.push(path || '/dashboard')
+        window.location.assign(path || '/dashboard')
     }
 
     function changeMode(nextMode: typeof mode) {
