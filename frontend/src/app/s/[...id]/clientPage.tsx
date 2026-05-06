@@ -5,6 +5,7 @@ import Terminal from '@/components/share/terminal'
 import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
+import PreviewFlow from '@/components/share/previewFlow'
 import RenderSite from '@/components/share/renderSite'
 import ShareChat from '@/components/share/shareChat'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -263,6 +264,18 @@ export default function ClientPage({
                             setSaveState('saving')
                             setEditorPatch({ value: editingContent, nonce: Date.now() })
                         }}
+                    />
+                )}
+                {!chatOpen && (
+                    <PreviewFlow
+                        share={share}
+                        tree={workspaceTree}
+                        activePath={activePath}
+                        activeContent={editingContent}
+                        capability={runtimeCapability}
+                        renderSite={renderSite}
+                        setTriggerSiteChange={setTriggerSiteChange}
+                        setTriggerTerminalChange={setTriggerTerminalChange}
                     />
                 )}
                 {chatOpen ? (
