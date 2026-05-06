@@ -1,43 +1,57 @@
 import fetchThoughts from '@/utils/thoughts/fetchThoughts'
 import prettyDate from '@/utils/date/prettyDate'
 import Link from 'next/link'
+import { ArrowRight, Lightbulb } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
     const thoughts = await fetchThoughts()
 
-    if (!thoughts.length) {
-        return (
-            <div className='w-full h-full grid place-items-center'>
-                <h1 className='font-semibold text-xl text-glow'>No thoughts yet.</h1>
-            </div>
-        )
-    }
-
     return (
-        <div className='h-full'>
-            <div className='p-8 md:px-16 lg:px-32 xl:px-64'>
-                <div className='grid gap-4'>
-                    <h1 className='text-foreground text-2xl font-semibold'>Thoughts</h1>
-                    <p className='text-gray-500 text-sm'>A collection of thoughts and ideas.</p>
+        <main className='min-h-[90.5vh] px-4 py-8 md:px-12 lg:px-16'>
+            <section className='mx-auto grid max-w-5xl gap-6'>
+                <div className='grid gap-2'>
+                    <div className='flex items-center gap-3 text-bright'>
+                        <Lightbulb className='h-5 w-5 text-[#f0a17a]' />
+                        <h1 className='text-2xl font-semibold tracking-[-0.02em]'>Thoughts</h1>
+                    </div>
+                    <p className='max-w-2xl text-sm leading-6 text-bright/50'>
+                        Short notes and ideas, kept lightweight on purpose.
+                    </p>
+                </div>
+
+                {!thoughts.length ? (
+                    <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-center'>
+                        <div className='grid gap-3'>
+                            <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/4'>
+                                <Lightbulb className='h-5 w-5 text-[#f0a17a]' />
+                            </div>
+                            <p className='text-sm text-bright/50'>No thoughts are published here yet.</p>
+                        </div>
+                    </div>
+                ) : (
                     <div className='grid gap-2'>
                         {(thoughts as Thought[]).map((thought) => (
-                            <Link key={thought.id} href={`/thoughts/${thought.id}`} className='group'>
-                                <div className='flex justify-between items-center p-3 rounded-lg outline-1 outline-dark hover:bg-dark hover:scale-[1.005] transition-1000'>
-                                    <div className='flex flex-col'>
-                                        <span className='font-medium'>{thought.title}</span>
-                                        <span className='text-xs text-gray-500 mt-1'>
+                            <Link
+                                key={thought.id}
+                                href={`/thoughts/${thought.id}`}
+                                className='group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#f0a17a]/55'
+                            >
+                                <article className='flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-4 transition hover:border-white/16 hover:bg-white/[0.055]'>
+                                    <div className='min-w-0'>
+                                        <h2 className='truncate text-base font-semibold text-bright/88'>{thought.title}</h2>
+                                        <p className='mt-1 text-xs text-bright/38'>
                                             {prettyDate(new Date(thought.created_at).toISOString())}
-                                        </span>
+                                        </p>
                                     </div>
-                                    <span className='text-xs text-gray-500 group-hover:text-foreground'>View →</span>
-                                </div>
+                                    <ArrowRight className='h-4 w-4 shrink-0 text-bright/34 transition group-hover:translate-x-0.5 group-hover:text-bright/72' />
+                                </article>
                             </Link>
                         ))}
                     </div>
-                </div>
-            </div>
-        </div>
+                )}
+            </section>
+        </main>
     )
 }
