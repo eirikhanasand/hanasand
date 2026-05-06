@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import parseCookie from '@/utils/cookies/parseCookie'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
@@ -7,10 +7,11 @@ import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const cookieStore = await cookies()
+    const headerStore = await headers()
     const id = cookieStore.get('id')?.value
     const token = cookieStore.get('access_token')?.value
-    const impersonatingId = cookieStore.get('impersonating_id')?.value
-    const impersonatingName = cookieStore.get('impersonating_name')?.value
+    const impersonatingId = cookieStore.get('impersonating_id')?.value || headerStore.get('x-impersonating-id') || ''
+    const impersonatingName = cookieStore.get('impersonating_name')?.value || headerStore.get('x-impersonating-name') || ''
     const rolesCookie = cookieStore.get('roles')?.value
     const roles = parseCookie<Role[]>(rolesCookie, [])
     const isAdmin = roles.some((role) => role.id.includes('admin'))

@@ -35,7 +35,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
         }
     }
 
-    function handleImpersonate(e: React.MouseEvent<HTMLElement, MouseEvent>) {
+    function handleImpersonate(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
         startImpersonating(user.id, user.name)

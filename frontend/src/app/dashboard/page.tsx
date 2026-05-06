@@ -2,17 +2,18 @@ import VMs from '@/components/profile/vms'
 import Projects from '@/components/projects/projects'
 import Shares from '@/components/share/dashboard/projects'
 import getVMs from '@/utils/vms/fetch/getVMs'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 
 export default async function Page() {
     const Cookies = await cookies()
+    const Headers = await headers()
     const name = Cookies.get('name')?.value
     const id = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
-    const impersonatingId = Cookies.get('impersonating_id')?.value
-    const impersonatingName = Cookies.get('impersonating_name')?.value
+    const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
+    const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
 
     if (!name || !id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
