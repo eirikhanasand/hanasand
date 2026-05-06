@@ -115,12 +115,12 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 145 * 1000
+        return 140 * 1000
     }
     if (kind === 'postgres') {
-        return 22 * 1000
+        return 20 * 1000
     }
-    return 26 * 1000
+    return 24 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind) {
@@ -888,6 +888,242 @@ async function main() {
                 appName: 'BoardBrief Portal',
                 productType: 'board report portal',
                 productBrief: 'BoardBrief Portal helps executives publish concise board metrics, risk notes, pricing impact, testimonials, readiness tasks, and auditable Docker deployment.',
+            }),
+        },
+        {
+            id: 'design-system-preview-site',
+            title: 'Design system preview site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#61-design-system-preview-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('design-system-preview-site'),
+                appName: 'PatternRoom',
+                productType: 'design system preview site',
+                productBrief: 'PatternRoom helps a product designer present components, usage metrics, package tiers, testimonials, release tasks, and self-hosted deployment without bloated docs.',
+            }),
+        },
+        {
+            id: 'newbie-course-sales-site',
+            title: 'Newbie course sales site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#62-newbie-course-sales-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('newbie-course-sales-site'),
+                appName: 'CourseNest Launch',
+                productType: 'course sales site',
+                productBrief: 'CourseNest Launch helps a first-time creator sell a course with learning metrics, pricing, testimonials, launch checklist, and short Docker deployment steps.',
+            }),
+        },
+        {
+            id: 'enterprise-change-request-api',
+            title: 'Enterprise change request API',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#63-enterprise-change-request-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('enterprise-change-request-api'),
+                appName: 'ChangeDesk API',
+            }),
+        },
+        {
+            id: 'enterprise-change-approval-worker',
+            title: 'Enterprise change approval worker',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#64-enterprise-change-approval-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('enterprise-change-approval-worker'),
+                appName: 'ChangeQueue Worker',
+            }),
+        },
+        {
+            id: 'boutique-fitness-membership-site',
+            title: 'Boutique fitness membership site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#65-boutique-fitness-membership-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('boutique-fitness-membership-site'),
+                appName: 'PulseStudio Membership',
+                productType: 'fitness membership site',
+                productBrief: 'PulseStudio Membership helps a fitness studio present classes, membership pricing, usage metrics, testimonials, onboarding tasks, and portable hosting.',
+            }),
+        },
+        {
+            id: 'compliance-training-api',
+            title: 'Compliance training API',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#66-compliance-training-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('compliance-training-api'),
+                appName: 'TrainingLedger API',
+            }),
+        },
+        {
+            id: 'compliance-certificate-worker',
+            title: 'Compliance certificate worker',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#67-compliance-certificate-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('compliance-certificate-worker'),
+                appName: 'CertificateQueue Worker',
+            }),
+        },
+        {
+            id: 'architect-project-showcase-site',
+            title: 'Architect project showcase site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#68-architect-project-showcase-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('architect-project-showcase-site'),
+                appName: 'FormaWorks Showcase',
+                productType: 'architect project showcase',
+                productBrief: 'FormaWorks Showcase helps an architect present projects, inquiry metrics, service pricing, testimonials, delivery tasks, and concise Docker deployment.',
+            }),
+        },
+        {
+            id: 'restaurant-supplier-api',
+            title: 'Restaurant supplier API',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#69-restaurant-supplier-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('restaurant-supplier-api'),
+                appName: 'SupplierDesk API',
+            }),
+        },
+        {
+            id: 'restaurant-order-sync-worker',
+            title: 'Restaurant order sync worker',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#70-restaurant-order-sync-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('restaurant-order-sync-worker'),
+                appName: 'OrderSync Queue',
+            }),
+        },
+        {
+            id: 'enterprise-data-room-site',
+            title: 'Enterprise data room site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#71-enterprise-data-room-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('enterprise-data-room-site'),
+                appName: 'VaultBrief',
+                productType: 'enterprise data room portal',
+                productBrief: 'VaultBrief helps corporate teams summarize due diligence materials, access metrics, pricing impact, testimonial proof, readiness tasks, and controlled deployment.',
+            }),
+        },
+        {
+            id: 'iot-device-registry-api',
+            title: 'IoT device registry API',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#72-iot-device-registry-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('iot-device-registry-api'),
+                appName: 'DeviceLedger API',
+            }),
+        },
+        {
+            id: 'iot-telemetry-worker',
+            title: 'IoT telemetry worker',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#73-iot-telemetry-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('iot-telemetry-worker'),
+                appName: 'TelemetryQueue Worker',
+            }),
+        },
+        {
+            id: 'freelancer-client-handoff-site',
+            title: 'Freelancer client handoff site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#74-freelancer-client-handoff-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('freelancer-client-handoff-site'),
+                appName: 'HandoffKit',
+                productType: 'client handoff site',
+                productBrief: 'HandoffKit helps freelancers deliver project assets, launch metrics, pricing scope, testimonials, handoff tasks, and portable deployment notes.',
+            }),
+        },
+        {
+            id: 'property-maintenance-api',
+            title: 'Property maintenance API',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#75-property-maintenance-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('property-maintenance-api'),
+                appName: 'PropertyDesk API',
+            }),
+        },
+        {
+            id: 'property-maintenance-worker',
+            title: 'Property maintenance worker',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#76-property-maintenance-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('property-maintenance-worker'),
+                appName: 'MaintenanceQueue Worker',
+            }),
+        },
+        {
+            id: 'premium-product-waitlist-site',
+            title: 'Premium product waitlist site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#77-premium-product-waitlist-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('premium-product-waitlist-site'),
+                appName: 'VelvetWaitlist',
+                productType: 'premium product waitlist',
+                productBrief: 'VelvetWaitlist helps a product team launch a premium waitlist with demand metrics, pricing tiers, testimonials, launch tasks, and self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'ngo-field-report-api',
+            title: 'NGO field report API',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#78-ngo-field-report-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('ngo-field-report-api'),
+                appName: 'FieldReport API',
+            }),
+        },
+        {
+            id: 'ngo-field-upload-worker',
+            title: 'NGO field upload worker',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#79-ngo-field-upload-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('ngo-field-upload-worker'),
+                appName: 'FieldUpload Queue',
+            }),
+        },
+        {
+            id: 'corporate-ai-policy-site',
+            title: 'Corporate AI policy site',
+            storyPath: 'agents/training-scenarios/user_stories/61-80-advanced-user-stories.md#80-corporate-ai-policy-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('corporate-ai-policy-site'),
+                appName: 'PolicyAtlas AI',
+                productType: 'corporate AI policy portal',
+                productBrief: 'PolicyAtlas AI helps a corporation publish AI policy guidance, adoption metrics, pricing impact, testimonials, readiness tasks, and controlled deployment notes.',
             }),
         },
     ]
