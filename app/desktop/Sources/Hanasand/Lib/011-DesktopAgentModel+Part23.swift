@@ -14,7 +14,7 @@ extension DesktopAgentModel {
 
     func setRateLimitOverride(_ override: DashboardRateLimitOverride, enabled: Bool? = nil, remove: Bool = false) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "Rate limits", body: nativeDashboardStatus, kind: .error)
             return
         }
@@ -61,7 +61,7 @@ extension DesktopAgentModel {
 
     func addRateLimitOverride() async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "Rate limits", body: nativeDashboardStatus, kind: .error)
             return
         }

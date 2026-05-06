@@ -1484,8 +1484,8 @@ function buildFailedToolResult(
     emitToolProgress?.({
         toolId,
         toolLabel,
-        toolState: 'error',
-        toolDetail: message,
+        toolState: 'running',
+        toolDetail: 'The tool hit a temporary issue. Feeding the result back into the agent and trying another route.',
     })
 
     return {
@@ -1663,6 +1663,28 @@ function describeToolCall(toolCall: ToolCall) {
     return 'Executed tool'
 }
 
+function describeToolRunningDetail(toolCall: ToolCall) {
+    if (toolCall.name === 'run_command') return `Command: ${toolCall.arguments.command}`
+    if (toolCall.name === 'start_process') return `Command: ${toolCall.arguments.command}`
+    if (toolCall.name === 'read_file') return `Reading ${toolCall.arguments.path}`
+    if (toolCall.name === 'write_file') return `Writing ${toolCall.arguments.path}`
+    if (toolCall.name === 'edit_file') return `Patching ${toolCall.arguments.path}`
+    if (toolCall.name === 'batch_edit_files') return `Patching ${toolCall.arguments.edits.length} file${toolCall.arguments.edits.length === 1 ? '' : 's'}`
+    if (toolCall.name === 'grep_repo') return `Searching for "${toolCall.arguments.query}"`
+    if (toolCall.name === 'list_files') return `Listing ${toolCall.arguments.path || 'project files'}`
+    if (toolCall.name === 'scaffold_nextjs_app') {
+        const packageManager = toolCall.arguments.packageManager || 'npm'
+        const command = packageManager === 'bun' ? 'bun install && bun run build' : 'npm install && npm run build'
+        return [
+            `Creating files in ${toolCall.arguments.targetDir}`,
+            'Writing package.json, tsconfig.json, next.config.ts, Dockerfile, docker-compose.yml, src/app/layout.tsx, src/app/page.tsx, and src/app/globals.css',
+            `Command: ${command}`,
+        ].join('\n')
+    }
+    if (toolCall.name === 'generate_nextjs_marketing_site') return `Writing src/app/page.tsx, src/app/layout.tsx, and src/app/globals.css in ${toolCall.arguments.appDir}`
+    return null
+}
+
 async function executeToolCall(
     toolCall: ToolCall,
     iteration: number,
@@ -1676,6 +1698,7 @@ async function executeToolCall(
         toolId,
         toolLabel: describeToolCall(toolCall),
         toolState: 'running',
+        toolDetail: describeToolRunningDetail(toolCall),
     })
     if (toolCall.name === 'search_web') {
         const result = await searchWeb({
@@ -1947,7 +1970,12 @@ async function executeToolCall(
             toolId,
             toolLabel: describeToolCall(toolCall),
             toolState: 'completed',
-            toolDetail: `Scaffolded app in ${result.absolutePath}.`,
+            toolDetail: [
+                `Scaffolded app in ${result.absolutePath}`,
+                'Wrote package.json, tsconfig.json, next.config.ts, Dockerfile, docker-compose.yml, src/app/layout.tsx, src/app/page.tsx, and src/app/globals.css',
+                `Command: ${result.command}`,
+                `Exit code: ${result.exitCode ?? 'null'}`,
+            ].join('\n'),
         })
         return {
             message: {
@@ -2062,7 +2090,7 @@ async function executeToolCall(
             toolId,
             toolLabel: describeToolCall(toolCall),
             toolState: 'completed',
-            toolDetail: `Generated ${result.files.length} files.`,
+            toolDetail: `Wrote ${result.files.join(', ')}`,
         })
         return {
             message: {

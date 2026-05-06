@@ -19,13 +19,24 @@ struct AIWorkspace: View {
     var body: some View {
         VStack(spacing: 0) {
             TopBar()
-            ZStack(alignment: .topTrailing) {
+            aiHeader
+            HStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    aiHeader
-                    chatPane
-                    composer
+                    if model.aiInlineBrowserVisible, let tab = model.aiBrowserTab {
+                        AIChatBrowserPreview(tab: tab)
+                            .frame(height: 260)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    Transcript()
+                    ChangedFilesDock()
+                    CommandDock(commandFocused: commandFocused)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if model.aiRightRailMode != .hidden {
+                    AIRightRail(mode: model.aiRightRailMode)
+                        .frame(width: model.aiRightRailMode == .compact ? 62 : 292)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -41,9 +52,6 @@ struct AIWorkspace: View {
                     showImportHint = false
                 }
             }
-        }
-        .onDisappear {
-            model.disconnectAISocket()
         }
     }
 

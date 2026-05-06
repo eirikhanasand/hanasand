@@ -30,8 +30,9 @@ struct AIModelsNativePanel: View {
                 ActionButton(title: "Refresh models", icon: "arrow.clockwise") {
                     Task { await model.loadNativeDashboardData() }
                 }
-                ActionButton(title: "Open AI chat", icon: "sparkles") {
-                    model.selectedSection = .ai
+                ActionButton(title: "Open Chat", icon: "sparkles") {
+                    model.selectedSection = .command
+                    Task { await model.loadAIPage() }
                 }
             }
 

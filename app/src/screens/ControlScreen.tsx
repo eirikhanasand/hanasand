@@ -45,11 +45,13 @@ function tokenForEntry(entry: AuthenticatorEntry) {
 export function ControlScreen({
     settings,
     onSaveSettings,
+    onImpersonate,
     authenticatorEntries,
     onSaveAuthenticatorEntries,
 }: {
     settings: AppSettings
     onSaveSettings: (next: AppSettings) => Promise<void> | void
+    onImpersonate: (user: DashboardUser) => Promise<void> | void
     authenticatorEntries: AuthenticatorEntry[]
     onSaveAuthenticatorEntries: (next: AuthenticatorEntry[]) => Promise<void>
 }) {
@@ -602,6 +604,7 @@ export function ControlScreen({
                     <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
                         <PillButton label={loadingRoles ? 'Loading...' : 'Load users'} onPress={() => void loadRoleAdmin()} tone='accent' disabled={loadingRoles || !appConfigured} />
                         {!!selectedUser && <PillButton label={roleActionBusy === `active-${selectedUser.id}` ? 'Updating...' : selectedUser.active === false ? 'Activate user' : 'Deactivate user'} onPress={() => void toggleUserActive(selectedUser)} tone={selectedUser.active === false ? 'default' : 'danger'} disabled={!!roleActionBusy || !appConfigured} />}
+                        {!!selectedUser && selectedUser.id !== settings.userId && <PillButton label={`Impersonate ${selectedUser.id}`} onPress={() => void onImpersonate(selectedUser)} disabled={!!roleActionBusy || !appConfigured} />}
                     </View>
                     <View style={{ gap: spacing.sm }}>
                         {users.slice(0, 6).map(user => (
@@ -626,6 +629,7 @@ export function ControlScreen({
                     {!!selectedUser && (
                         <View style={{ gap: spacing.sm }}>
                             <SectionTitle eyebrow='Selected user' title={selectedUser.name || selectedUser.id} body={`${selectedUserRoles.length} assigned roles`} />
+                            {selectedUser.id !== settings.userId && <PillButton label={`Impersonate ${selectedUser.id}`} onPress={() => void onImpersonate(selectedUser)} tone='accent' small disabled={!!roleActionBusy || !appConfigured} />}
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                                 {roles.map(role => {
                                     const assigned = selectedUserRoles.some(item => item.roleId === role.id || item.id === role.id || item.name === role.name)

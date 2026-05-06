@@ -16,10 +16,11 @@ struct HanasandDesktopSettings: Codable, Equatable {
     var websiteBaseURL = "https://hanasand.com"
     var apiBaseURL = "https://api.hanasand.com/api"
     var internalAPIBaseURL = "https://internal.hanasand.com/api"
-    var beekeeperAPIBaseURL = "https://beekeeper.login.no/api"
     var cdnBaseURL = "https://cdn.hanasand.com/api"
     var authToken = ""
     var userID = ""
+    var impersonatingUserID = ""
+    var impersonatingUserName = ""
     var codexAPIPath = "/tools/ai"
     var aiAPIURL = "https://api.hanasand.com/api/tools/ai"
     var desktopAgentBaseURL = "http://localhost:45731"
@@ -37,10 +38,11 @@ struct HanasandDesktopSettings: Codable, Equatable {
         case websiteBaseURL
         case apiBaseURL
         case internalAPIBaseURL
-        case beekeeperAPIBaseURL
         case cdnBaseURL
         case authToken
         case userID
+        case impersonatingUserID
+        case impersonatingUserName
         case codexAPIPath
         case aiAPIURL
         case desktopAgentBaseURL
@@ -62,10 +64,11 @@ struct HanasandDesktopSettings: Codable, Equatable {
         websiteBaseURL = try container.decodeIfPresent(String.self, forKey: .websiteBaseURL) ?? websiteBaseURL
         apiBaseURL = try container.decodeIfPresent(String.self, forKey: .apiBaseURL) ?? apiBaseURL
         internalAPIBaseURL = try container.decodeIfPresent(String.self, forKey: .internalAPIBaseURL) ?? internalAPIBaseURL
-        beekeeperAPIBaseURL = try container.decodeIfPresent(String.self, forKey: .beekeeperAPIBaseURL) ?? beekeeperAPIBaseURL
         cdnBaseURL = try container.decodeIfPresent(String.self, forKey: .cdnBaseURL) ?? cdnBaseURL
         authToken = try container.decodeIfPresent(String.self, forKey: .authToken) ?? authToken
         userID = try container.decodeIfPresent(String.self, forKey: .userID) ?? userID
+        impersonatingUserID = try container.decodeIfPresent(String.self, forKey: .impersonatingUserID) ?? impersonatingUserID
+        impersonatingUserName = try container.decodeIfPresent(String.self, forKey: .impersonatingUserName) ?? impersonatingUserName
         codexAPIPath = try container.decodeIfPresent(String.self, forKey: .codexAPIPath) ?? codexAPIPath
         aiAPIURL = try container.decodeIfPresent(String.self, forKey: .aiAPIURL) ?? aiAPIURL
         desktopAgentBaseURL = try container.decodeIfPresent(String.self, forKey: .desktopAgentBaseURL) ?? desktopAgentBaseURL

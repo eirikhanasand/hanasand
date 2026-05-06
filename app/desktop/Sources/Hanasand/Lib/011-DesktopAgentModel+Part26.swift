@@ -38,6 +38,16 @@ extension DesktopAgentModel {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
             let decoded = try? JSONDecoder().decode(HanasandLoginResponse.self, from: data)
 
+            if statusCode == 423, decoded?.pendingDeletion == true {
+                pendingDeletionUserID = decoded?.id ?? username
+                pendingDeletionRestoreToken = decoded?.restoreToken ?? ""
+                pendingDeletionScheduledAt = decoded?.deletionScheduledAt ?? ""
+                pendingDeletionStatus = ""
+                loginPassword = ""
+                loginStatus = ""
+                return
+            }
+
             guard (200..<300).contains(statusCode), let token = decoded?.token, !token.isEmpty else {
                 let message = decoded?.error
                     ?? String(data: data, encoding: .utf8)
@@ -48,6 +58,8 @@ extension DesktopAgentModel {
 
             settings.authToken = token
             settings.userID = decoded?.id ?? username
+            settings.impersonatingUserID = ""
+            settings.impersonatingUserName = ""
             loginUsername = ""
             loginPassword = ""
             loginStatus = ""
@@ -55,6 +67,119 @@ extension DesktopAgentModel {
             await publishDesktopAgentPresence()
         } catch {
             loginStatus = error.localizedDescription
+        }
+    }
+
+    func restorePendingDeletionAccount() async {
+        let userID = pendingDeletionUserID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let restoreToken = pendingDeletionRestoreToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userID.isEmpty, !restoreToken.isEmpty, !isRestoringPendingDeletion else {
+            pendingDeletionStatus = "Restore details are missing."
+            return
+        }
+
+        isRestoringPendingDeletion = true
+        pendingDeletionStatus = "Restoring"
+        defer { isRestoringPendingDeletion = false }
+
+        do {
+            let body = try JSONEncoder().encode(["id": userID, "restoreToken": restoreToken])
+            let url = settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("user/restore")
+            let (data, response) = try await URLSession.shared.data(for: request(url, method: "POST", body: body, authenticated: false))
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+            let decoded = try? JSONDecoder().decode(HanasandLoginResponse.self, from: data)
+            guard (200..<300).contains(statusCode), let token = decoded?.token, !token.isEmpty else {
+                pendingDeletionStatus = decoded?.error ?? String(data: data, encoding: .utf8) ?? "Unable to restore account."
+                return
+            }
+
+            clearPendingDeletionState()
+            settings.authToken = token
+            settings.userID = decoded?.id ?? userID
+            settings.impersonatingUserID = ""
+            settings.impersonatingUserName = ""
+            loginUsername = ""
+            loginPassword = ""
+            loginStatus = ""
+            append(meta: "Account restored", body: "Signed in as \(settings.userID).", kind: .change)
+            await publishDesktopAgentPresence()
+        } catch {
+            pendingDeletionStatus = error.localizedDescription
+        }
+    }
+
+    func clearPendingDeletionState() {
+        pendingDeletionUserID = ""
+        pendingDeletionRestoreToken = ""
+        pendingDeletionScheduledAt = ""
+        pendingDeletionStatus = ""
+    }
+
+    func logoutFromHanasand(revokeRemoteSession: Bool = true) async {
+        let currentUserID = userIDForRequests.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hadAuth = hasHanasandAuth
+
+        if revokeRemoteSession, hadAuth {
+            do {
+                let body = (try? JSONEncoder().encode(["keep_current": false])) ?? Data("{}".utf8)
+                _ = try await requestPrettyText(
+                    settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("auth/sessions/revoke"),
+                    method: "POST",
+                    body: body,
+                    authenticated: true
+                )
+            } catch {
+                append(meta: "Logout revoke failed", body: error.localizedDescription, kind: .error)
+            }
+        }
+
+        clearLocalHanasandSession()
+        let label = currentUserID.isEmpty ? "current account" : currentUserID
+        append(meta: "Logout", body: "Signed out \(label).", kind: .change)
+    }
+
+    func clearLocalHanasandSession() {
+        settings.authToken = ""
+        settings.userID = ""
+        settings.impersonatingUserID = ""
+        settings.impersonatingUserName = ""
+        loginUsername = ""
+        loginPassword = ""
+        loginStatus = ""
+        clearPendingDeletionState()
+        cancelPasswordReset()
+        selectedSection = .control
+        disconnectAISocket()
+        aiSummary = "Ready to connect"
+        aiClients = []
+        aiSocketConnected = false
+        mailOverview = nil
+        mailSummary = "Ready to load inbox"
+        selectedMailAccountUser = ""
+        selectedMailMessageID = ""
+        selectedMailboxID = ""
+        profile = nil
+        profileSessions = []
+        profileCertificates = []
+        nativeDashboardStatus = "Logged out"
+    }
+
+    func scheduleAccountDeletion() async {
+        guard hasHanasandAuth else {
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
+            return
+        }
+
+        do {
+            _ = try await requestPrettyText(
+                settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("user/self"),
+                method: "DELETE",
+                authenticated: true
+            )
+            await logoutFromHanasand(revokeRemoteSession: false)
+        } catch {
+            nativeDashboardStatus = error.localizedDescription
+            append(meta: "Account deletion failed", body: error.localizedDescription, kind: .error)
         }
     }
 

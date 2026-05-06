@@ -37,12 +37,18 @@ struct Transcript: View {
                 .padding(.bottom, 190)
             }
             .onChange(of: model.aiMessages.count) {
-                if let last = model.aiMessages.last {
-                    withAnimation(.snappy(duration: 0.18)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
+                scrollToLatest(proxy)
             }
+            .onChange(of: model.aiTrace.count) {
+                scrollToLatest(proxy)
+            }
+        }
+    }
+
+    func scrollToLatest(_ proxy: ScrollViewProxy) {
+        guard let last = model.aiMessages.last else { return }
+        withAnimation(.snappy(duration: 0.18)) {
+            proxy.scrollTo(last.id, anchor: .bottom)
         }
     }
 }

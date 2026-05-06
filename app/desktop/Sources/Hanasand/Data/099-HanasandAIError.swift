@@ -12,16 +12,20 @@ import WebKit
 
 enum HanasandAIError: LocalizedError {
     case invalidPayload
-    case missingToken(String)
-    case httpStatus(Int, String?)
+    case httpStatus(Int, String?, AIRateLimitSnapshot?)
 
     var errorDescription: String? {
         switch self {
         case .invalidPayload:
             return "Could not encode the Hanasand AI request."
-        case .missingToken(let endpoint):
-            return "The Hanasand AI endpoint at \(endpoint) needs your Hanasand login session. Sign in again to refresh it."
-        case .httpStatus(let status, let error):
+        case .httpStatus(let status, let error, _):
+            if status == 401 {
+                _ = error
+                return "Refreshing the Hanasand session in the background. Try again in a moment if this message stays visible."
+            }
+            if status == 429 {
+                return "Limit reached. Hanasand will try again when capacity returns."
+            }
             if [502, 503, 504].contains(status) {
                 return error ?? "The AI service is taking longer than expected. I’ll keep trying in the background."
             }

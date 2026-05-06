@@ -14,7 +14,7 @@ extension DesktopAgentModel {
 
     func deleteSelectedArticle(_ article: DashboardArticle) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -55,6 +55,24 @@ extension DesktopAgentModel {
         Task { await loadSelectedUserRoles() }
     }
 
+    func impersonateDashboardUser(_ user: DashboardUser) {
+        guard user.id != userIDForRequests else { return }
+        settings.impersonatingUserID = user.id
+        settings.impersonatingUserName = user.displayName
+        nativeDashboardStatus = "Impersonating \(user.id)"
+        append(meta: "Impersonation", body: "Viewing portal as \(user.id).", kind: .change)
+        Task { await loadNativeDashboardData() }
+    }
+
+    func returnToOwnDashboardView() {
+        let target = settings.impersonatingUserID
+        settings.impersonatingUserID = ""
+        settings.impersonatingUserName = ""
+        nativeDashboardStatus = target.isEmpty ? "Viewing own account" : "Returned from \(target)"
+        append(meta: "Impersonation", body: "Returned to own view.", kind: .change)
+        Task { await loadNativeDashboardData() }
+    }
+
     func loadSelectedUserRoles() async {
         guard !selectedUserID.isEmpty else {
             selectedUserRoles = []
@@ -75,7 +93,7 @@ extension DesktopAgentModel {
 
     func setDashboardUser(_ user: DashboardUser, active: Bool) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -102,7 +120,7 @@ extension DesktopAgentModel {
 
     func setRole(_ role: DashboardRole, assigned: Bool, for user: DashboardUser) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -132,7 +150,7 @@ extension DesktopAgentModel {
 
     func deleteDashboardUser(_ user: DashboardUser) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 

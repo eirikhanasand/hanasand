@@ -140,16 +140,42 @@ extension DesktopAgentModel {
     func queuePrompt() {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        promptQueue.append(QueuedPrompt(text: trimmed))
+        schedulePrompt(trimmed)
         prompt = ""
+        if !isRunning && !isAIRateLimited {
+            runNextQueuedPrompt()
+        }
+    }
+
+    func schedulePrompt(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        promptQueue.append(QueuedPrompt(text: trimmed))
         append(meta: "Queued", body: trimmed, kind: .note)
-        if !isRunning {
+    }
+
+    func updateQueuedPrompt(_ item: QueuedPrompt, text: String) {
+        guard let index = promptQueue.firstIndex(where: { $0.id == item.id }) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            promptQueue.remove(at: index)
+        } else {
+            promptQueue[index].text = trimmed
+        }
+    }
+
+    func promoteQueuedPromptAfterNextTool(_ item: QueuedPrompt) {
+        guard let index = promptQueue.firstIndex(where: { $0.id == item.id }) else { return }
+        let next = promptQueue.remove(at: index)
+        promptQueue.insert(next, at: 0)
+        append(meta: "Scheduled next", body: next.text, kind: .note)
+        if !isRunning && !isAIRateLimited {
             runNextQueuedPrompt()
         }
     }
 
     func runNextQueuedPrompt() {
-        guard !isRunning, let next = promptQueue.first else { return }
+        guard !isRunning, !isAIRateLimited, let next = promptQueue.first else { return }
         promptQueue.removeFirst()
         submitAIChatPrompt(next.text)
         if !isRunning {
@@ -164,7 +190,11 @@ extension DesktopAgentModel {
             promptQueue.insert(next, at: 0)
             append(meta: "Queued next", body: next.text, kind: .note)
         } else {
-            submitAIChatPrompt(next.text)
+            if isAIRateLimited {
+                promptQueue.insert(next, at: 0)
+            } else {
+                submitAIChatPrompt(next.text)
+            }
         }
     }
 

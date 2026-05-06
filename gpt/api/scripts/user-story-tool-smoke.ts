@@ -117,12 +117,12 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 110 * 1000
+        return 90 * 1000
     }
     if (kind === 'postgres') {
-        return 13 * 1000
+        return 10 * 1000
     }
-    return 16 * 1000
+    return 12 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind, buildAlreadyPassed: boolean) {
@@ -2070,6 +2070,242 @@ async function main() {
                 appName: 'DataRoomSignal',
                 productType: 'investor data room',
                 productBrief: 'DataRoomSignal helps CFOs present document sections, KPI metrics, access tiers, investor quotes, diligence tasks, and concise self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'design-qa-portal',
+            title: 'Design QA portal',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#161-design-qa-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('design-qa-portal'),
+                appName: 'DesignQASignal',
+                productType: 'design QA portal',
+                productBrief: 'DesignQASignal helps design QA teams present review findings, defect metrics, service tiers, stakeholder quotes, handoff tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'beginner-cleaning-service-site',
+            title: 'Beginner cleaning service site',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#162-beginner-cleaning-service-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('beginner-cleaning-service-site'),
+                appName: 'CleanLocal',
+                productType: 'cleaning service website',
+                productBrief: 'CleanLocal helps a new cleaning business present services, response metrics, pricing packages, customer quotes, launch tasks, and beginner-safe deployment notes.',
+            }),
+        },
+        {
+            id: 'enterprise-asset-inventory-api',
+            title: 'Enterprise asset inventory API',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#163-enterprise-asset-inventory-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('enterprise-asset-inventory-api'),
+                appName: 'AssetLedger API',
+            }),
+        },
+        {
+            id: 'enterprise-asset-audit-worker',
+            title: 'Enterprise asset audit worker',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#164-enterprise-asset-audit-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('enterprise-asset-audit-worker'),
+                appName: 'AssetAudit Queue',
+            }),
+        },
+        {
+            id: 'retail-returns-portal',
+            title: 'Retail returns portal',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#165-retail-returns-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('retail-returns-portal'),
+                appName: 'ReturnSignal',
+                productType: 'retail returns portal',
+                productBrief: 'ReturnSignal helps support teams manage return sections, resolution metrics, policy tiers, customer quotes, processing tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'retail-returns-api',
+            title: 'Retail returns API',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#166-retail-returns-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('retail-returns-api'),
+                appName: 'ReturnLedger API',
+            }),
+        },
+        {
+            id: 'retail-refund-worker',
+            title: 'Retail refund worker',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#167-retail-refund-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('retail-refund-worker'),
+                appName: 'RefundQueue Worker',
+            }),
+        },
+        {
+            id: 'museum-exhibit-site',
+            title: 'Museum exhibit site',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#168-museum-exhibit-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('museum-exhibit-site'),
+                appName: 'ExhibitSignal',
+                productType: 'museum exhibit site',
+                productBrief: 'ExhibitSignal helps museums present exhibit sections, visitor metrics, ticket tiers, curator quotes, accessibility tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'museum-collection-api',
+            title: 'Museum collection API',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#169-museum-collection-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('museum-collection-api'),
+                appName: 'CollectionLedger API',
+            }),
+        },
+        {
+            id: 'museum-digitization-worker',
+            title: 'Museum digitization worker',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#170-museum-digitization-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('museum-digitization-worker'),
+                appName: 'DigitizeQueue Worker',
+            }),
+        },
+        {
+            id: 'security-incident-portal',
+            title: 'Security incident portal',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#171-security-incident-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('security-incident-portal'),
+                appName: 'IncidentSignal',
+                productType: 'security incident portal',
+                productBrief: 'IncidentSignal helps security teams present incident sections, response metrics, severity tiers, stakeholder quotes, action tasks, and controlled deployment notes.',
+            }),
+        },
+        {
+            id: 'security-incident-api',
+            title: 'Security incident API',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#172-security-incident-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('security-incident-api'),
+                appName: 'IncidentLedger API',
+            }),
+        },
+        {
+            id: 'security-notification-worker',
+            title: 'Security notification worker',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#173-security-notification-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('security-notification-worker'),
+                appName: 'IncidentNotify Queue',
+            }),
+        },
+        {
+            id: 'agency-client-health-board',
+            title: 'Agency client health board',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#174-agency-client-health-board',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('agency-client-health-board'),
+                appName: 'ClientHealthSignal',
+                productType: 'agency client health board',
+                productBrief: 'ClientHealthSignal helps agencies inspect client sections, health metrics, retainer tiers, client quotes, action tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'agency-client-api',
+            title: 'Agency client API',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#175-agency-client-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('agency-client-api'),
+                appName: 'ClientHealthLedger API',
+            }),
+        },
+        {
+            id: 'agency-client-report-worker',
+            title: 'Agency client report worker',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#176-agency-report-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('agency-client-report-worker'),
+                appName: 'ClientReport Queue',
+            }),
+        },
+        {
+            id: 'farmer-csa-membership-site',
+            title: 'Farmer CSA membership site',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#177-farmer-csa-membership-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('farmer-csa-membership-site'),
+                appName: 'HarvestSignal',
+                productType: 'CSA membership site',
+                productBrief: 'HarvestSignal helps small farms present share sections, harvest metrics, membership tiers, member quotes, pickup tasks, and beginner-safe deployment notes.',
+            }),
+        },
+        {
+            id: 'farm-subscription-api',
+            title: 'Farm subscription API',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#178-farm-subscription-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('farm-subscription-api'),
+                appName: 'HarvestLedger API',
+            }),
+        },
+        {
+            id: 'farm-reminder-worker',
+            title: 'Farm reminder worker',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#179-farm-reminder-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('farm-reminder-worker'),
+                appName: 'HarvestQueue Worker',
+            }),
+        },
+        {
+            id: 'executive-decision-log',
+            title: 'Executive decision log',
+            storyPath: 'agents/training-scenarios/user_stories/161-180-advanced-user-stories.md#180-executive-decision-log',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('executive-decision-log'),
+                appName: 'DecisionSignal',
+                productType: 'executive decision log',
+                productBrief: 'DecisionSignal helps chiefs of staff present decision sections, follow-up metrics, governance tiers, stakeholder quotes, action tasks, and deployment notes.',
             }),
         },
     ]

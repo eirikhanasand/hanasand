@@ -28,7 +28,7 @@ struct TrafficNativePanel: View {
                 }
             }
         } else {
-            NativeEmptyState(title: "Traffic metrics not loaded", message: "Use Refresh to load traffic metrics from Beekeeper. VPN/internal connectivity may be required.")
+            NativeEmptyState(title: "Traffic metrics not loaded", message: "Use Refresh to load traffic metrics from Hanasand.")
         }
     }
 }

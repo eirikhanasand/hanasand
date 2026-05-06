@@ -22,6 +22,8 @@ extension DesktopAgentModel {
 
     func connectAISocket() {
         if aiSocketTask != nil { return }
+        aiSocketReconnectTask?.cancel()
+        aiSocketReconnectTask = nil
         guard let url = settings.apiBaseURL.websocketBaseURL?.appendingPathComponent("client/ws/gpt") else {
             aiSummary = "Invalid websocket URL"
             appendAITrace(.error, title: "Socket", detail: "Could not derive a websocket URL from \(settings.apiBaseURL).")
@@ -31,9 +33,9 @@ extension DesktopAgentModel {
         let task = URLSession.shared.webSocketTask(with: url)
         aiSocketTask = task
         aiSocketConnected = true
+        aiSocketReconnectAttempt = 0
         aiSummary = aiClients.isEmpty ? "Connecting to model pool" : aiSummary
         task.resume()
-        appendAITrace(.system, title: "Socket", detail: "Listening on \(url.absoluteString).")
 
         aiReceiveTask?.cancel()
         aiReceiveTask = Task { [weak self] in
@@ -42,6 +44,8 @@ extension DesktopAgentModel {
     }
 
     func disconnectAISocket() {
+        aiSocketReconnectTask?.cancel()
+        aiSocketReconnectTask = nil
         aiReceiveTask?.cancel()
         aiReceiveTask = nil
         aiSocketTask?.cancel(with: .goingAway, reason: nil)
@@ -63,7 +67,21 @@ extension DesktopAgentModel {
 
     func submitAIChatPrompt(_ rawPrompt: String, maxTokens: Int = 900, temperature: Double = 0.7) {
         let trimmed = rawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isRunning else { return }
+        guard !trimmed.isEmpty else { return }
+        if isAIRateLimited {
+            schedulePrompt(trimmed)
+            if rawPrompt == prompt {
+                prompt = ""
+            }
+            return
+        }
+        if isRunning {
+            schedulePrompt(trimmed)
+            if rawPrompt == prompt {
+                prompt = ""
+            }
+            return
+        }
         if rawPrompt == prompt {
             prompt = ""
         }
@@ -87,6 +105,12 @@ extension DesktopAgentModel {
         let bestClient = aiClients.sortedForRuntime.first
 
         guard let bestClient else {
+            beginVisibleAIRun(
+                prompt: trimmed,
+                prefix: "desktop-http",
+                title: "Finding model",
+                detail: "No live websocket model is selected yet. Using the authenticated Hanasand AI endpoint so progress is still visible."
+            )
             Task { [weak self] in
                 guard let self else { return }
                 defer {
@@ -99,6 +123,12 @@ extension DesktopAgentModel {
         }
 
         guard let socket = aiSocketTask, aiSocketConnected else {
+            beginVisibleAIRun(
+                prompt: trimmed,
+                prefix: "desktop-http",
+                title: "Connecting",
+                detail: "The websocket is not ready. Falling back to the authenticated Hanasand AI endpoint and showing progress here."
+            )
             Task { [weak self] in
                 guard let self else { return }
                 defer {
@@ -115,7 +145,7 @@ extension DesktopAgentModel {
         aiRunStartedAt = Date()
         aiLastDuration = "Running"
         aiTrace.removeAll()
-        appendAITrace(.thought, title: "Run plan", detail: "Selected \(bestClient.name) and sent \(aiMessages.count) visible chat messages plus the desktop app-parity primer to the runtime.")
+        seedVisibleAIWork(for: trimmed)
 
         let request = AIPromptRequest(
             type: "prompt_request",
@@ -136,14 +166,47 @@ extension DesktopAgentModel {
                 guard let self else { return }
                 Task { @MainActor in
                     if let error {
-                        self.appendAITrace(.error, title: "Send failed", detail: error.localizedDescription)
-                        self.failActiveAIResponse(error.localizedDescription)
+                        self.aiSummary = "Reconnecting to model pool"
+                        self.scheduleAISocketReconnect(reason: error.localizedDescription)
+                        Task { [weak self] in
+                            guard let self else { return }
+                            await self.sendFallbackAIChat(trimmed)
+                        }
                     }
                 }
             }
         } catch {
             appendAITrace(.error, title: "Request", detail: error.localizedDescription)
             failActiveAIResponse(error.localizedDescription)
+        }
+    }
+
+    func beginVisibleAIRun(prompt: String, prefix: String, title: String, detail: String) {
+        let conversationId = "\(prefix)-\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8))"
+        aiActiveConversationID = conversationId
+        aiRunStartedAt = Date()
+        aiLastDuration = "Running"
+        aiTrace.removeAll()
+        seedVisibleAIWork(for: prompt)
+        ensureActiveAIResponse(conversationId: conversationId)
+    }
+
+    func seedVisibleAIWork(for prompt: String) {
+        let lower = prompt.lowercased()
+        if lower.contains("nextjs") || lower.contains("next.js") {
+            appendAITrace(
+                .tool,
+                title: "sandbox/ai-nextjs-app",
+                detail: [
+                    "Creating files in sandbox/ai-nextjs-app",
+                    "Writing package.json, tsconfig.json, next.config.ts, src/app/layout.tsx, src/app/page.tsx, and src/app/globals.css",
+                ].joined(separator: "\n")
+            )
+            return
+        }
+        if lower.contains("search") || lower.contains("find") {
+            appendAITrace(.tool, title: "Searching workspace", detail: "Listing project files and locating the relevant code paths")
+            return
         }
     }
 

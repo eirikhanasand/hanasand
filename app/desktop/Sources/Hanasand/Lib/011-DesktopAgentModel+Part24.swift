@@ -14,7 +14,7 @@ extension DesktopAgentModel {
 
     func revokeProfileSession(_ session: DashboardAuthSession) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -39,7 +39,7 @@ extension DesktopAgentModel {
 
     func revokeOtherProfileSessions() async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -66,7 +66,7 @@ extension DesktopAgentModel {
 
     func deleteProfileCertificate(_ certificate: DashboardCertificate) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -91,7 +91,7 @@ extension DesktopAgentModel {
 
     func restartDockerContainer(_ container: DashboardDockerContainer) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -115,7 +115,7 @@ extension DesktopAgentModel {
 
     func runVirtualMachineAction(_ vm: DashboardVM, action: String) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "VM action failed", body: nativeDashboardStatus, kind: .error)
             return
         }

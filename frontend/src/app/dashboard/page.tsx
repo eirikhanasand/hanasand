@@ -11,13 +11,17 @@ export default async function Page() {
     const name = Cookies.get('name')?.value
     const id = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
+    const impersonatingId = Cookies.get('impersonating_id')?.value
+    const impersonatingName = Cookies.get('impersonating_name')?.value
 
     if (!name || !id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
     }
 
-    const text = timeBasedGreeting({ name })
-    const vms = await getVMs(id, token, id)
+    const displayName = impersonatingName || impersonatingId || name
+    const effectiveId = impersonatingId || id
+    const text = timeBasedGreeting({ name: displayName })
+    const vms = await getVMs(effectiveId, token, id, impersonatingId)
 
     return (
         <DashboardPage>

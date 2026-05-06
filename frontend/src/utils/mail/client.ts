@@ -2,6 +2,7 @@
 
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
+import { impersonationHeaders } from '@/utils/impersonation/client'
 import type { MailOverview } from './types'
 
 export type DraftAttachment = {
@@ -23,6 +24,7 @@ function authHeaders() {
         'Content-Type': 'application/json',
         id,
         Authorization: `Bearer ${token}`,
+        ...impersonationHeaders(),
     }
 }
 

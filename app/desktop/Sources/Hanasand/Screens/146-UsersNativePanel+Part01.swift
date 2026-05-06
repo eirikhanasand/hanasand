@@ -66,6 +66,14 @@ extension UsersNativePanel {
                                 .buttonStyle(.plain)
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(theme.textSecondary)
+                                if user.id != model.userIDForRequests {
+                                    Button("Impersonate") {
+                                        model.impersonateDashboardUser(user)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(theme.accent)
+                                }
                                 Button(user.active == false ? "Activate" : "Deactivate") {
                                     pendingStatusUser = user
                                 }

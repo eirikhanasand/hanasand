@@ -31,14 +31,14 @@ extension DesktopAgentModel {
             beginAutomaticUpdateCheck()
             append(meta: "Update", body: "/api/app", kind: .command)
         } else if command == "ai_train_app_parity" {
-            selectedSection = .ai
+            selectedSection = .command
             append(meta: "AI training", body: "Queued app-parity drill through the Desktop app runtime.", kind: .command)
             Task { @MainActor in
                 await loadAIPage()
                 submitAppParityTrainingPrompt()
             }
         } else if command == "ai_audit_desktop_ui" {
-            selectedSection = .ai
+            selectedSection = .command
             append(meta: "AI training", body: "Queued Desktop UI audit through the Desktop app runtime.", kind: .command)
             Task { @MainActor in
                 await loadAIPage()
@@ -106,6 +106,9 @@ extension DesktopAgentModel {
         } else if command == "open_dashboard_mail" {
             openNativeDashboard(path: "/dashboard/mail", label: "Mail")
             append(meta: "Dashboard", body: "Opened native Mail panel.", kind: .command)
+        } else if command == "open_dashboard_automations" {
+            openNativeDashboard(path: "/dashboard/automations", label: "Automations")
+            append(meta: "Dashboard", body: "Opened Automations panel.", kind: .command)
         } else if command == "open_dashboard_articles" {
             openNativeDashboard(path: "/dashboard/articles", label: "Articles")
             append(meta: "Dashboard", body: "Opened native Articles panel.", kind: .command)

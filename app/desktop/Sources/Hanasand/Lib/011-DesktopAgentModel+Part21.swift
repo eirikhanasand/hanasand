@@ -34,6 +34,10 @@ extension DesktopAgentModel {
 
     func loadNativeDashboardData() async {
         guard let path = selectedDashboardPath else { return }
+        if path == "/dashboard/traffic" {
+            await loadHanasandTrafficMetrics()
+            return
+        }
         guard let endpoint = nativeEndpoint(for: path) else {
             nativeDashboardStatus = "Native controls"
             nativeDashboardPayload = nativeFallbackDescription(for: path)
@@ -103,7 +107,7 @@ extension DesktopAgentModel {
 
     func setRateLimitApiKey(_ key: DashboardApiKeySummary, enabled: Bool) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "API key", body: nativeDashboardStatus, kind: .error)
             return
         }
@@ -132,7 +136,7 @@ extension DesktopAgentModel {
 
     func deleteRateLimitApiKey(_ key: DashboardApiKeySummary) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "API key", body: nativeDashboardStatus, kind: .error)
             return
         }

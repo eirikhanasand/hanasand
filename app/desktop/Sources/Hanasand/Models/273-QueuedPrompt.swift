@@ -12,6 +12,6 @@ import WebKit
 
 struct QueuedPrompt: Identifiable {
     let id = UUID()
-    let text: String
+    var text: String
     let createdAt = Date()
 }

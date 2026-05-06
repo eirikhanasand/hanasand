@@ -22,7 +22,7 @@ extension DesktopAgentModel {
             await MainActor.run {
                 guard result.exitCode == 0 else {
                     changedFileSummary = []
-                    changedFileSummaryStatus = "No Git repository here"
+                    changedFileSummaryStatus = "Changes"
                     return
                 }
                 let changes = result.output
@@ -35,7 +35,7 @@ extension DesktopAgentModel {
                         return ChangedFileSummary(id: path, status: status.isEmpty ? "M" : status, path: path)
                     }
                 changedFileSummary = changes
-                changedFileSummaryStatus = changes.isEmpty ? "Working tree clean" : "\(changes.count) files changed"
+                changedFileSummaryStatus = "Changes"
             }
         }
     }
@@ -87,7 +87,6 @@ extension DesktopAgentModel {
         let cleanPath = dashboardPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let api = settings.apiBaseURL.normalizedBaseURL
         let internalAPI = settings.internalAPIBaseURL.normalizedBaseURL
-        let beekeeper = settings.beekeeperAPIBaseURL.normalizedBaseURL
         let auth = hasHanasandAuth
 
         switch cleanPath {
@@ -97,8 +96,6 @@ extension DesktopAgentModel {
             return NativeEndpoint(label: "mail overview", baseURL: api, path: "mail/overview", authenticated: true, userAgent: nil)
         case "dashboard/notes":
             return NativeEndpoint(label: "notes", baseURL: api, path: "notes", authenticated: true, userAgent: nil)
-        case "dashboard/traffic":
-            return NativeEndpoint(label: "traffic metrics", baseURL: beekeeper, path: "traffic/metrics", authenticated: true, userAgent: nil)
         case "dashboard/system":
             return NativeEndpoint(label: "docker metrics", baseURL: api, path: "docker", authenticated: auth, userAgent: nil)
         case "dashboard/system/ai":
@@ -106,7 +103,7 @@ extension DesktopAgentModel {
         case "dashboard/system/rate-limits":
             return NativeEndpoint(label: "rate limits", baseURL: api, path: "rate-limit/settings", authenticated: true, userAgent: nil)
         case "dashboard/vms":
-            let userPath = userIDForRequests.isEmpty ? "vms" : "vms/access/\(userIDForRequests)"
+            let userPath = effectiveUserIDForRequests.isEmpty ? "vms" : "vms/access/\(effectiveUserIDForRequests)"
             return NativeEndpoint(label: "virtual machines", baseURL: api, path: userPath, authenticated: auth, userAgent: nil)
         case "dashboard/tests":
             return NativeEndpoint(label: "recent tests", baseURL: api, path: "tests/recent", authenticated: auth, userAgent: nil)
@@ -129,11 +126,11 @@ extension DesktopAgentModel {
         case "dashboard/thoughts":
             return NativeEndpoint(label: "thoughts", baseURL: api, path: "thoughts", authenticated: auth, userAgent: nil)
         case "profile":
-            guard !userIDForRequests.isEmpty else { return nil }
-            return NativeEndpoint(label: "profile", baseURL: api, path: "user/full/\(userIDForRequests)", authenticated: true, userAgent: nil)
+            guard !effectiveUserIDForRequests.isEmpty else { return nil }
+            return NativeEndpoint(label: "profile", baseURL: api, path: "user/full/\(effectiveUserIDForRequests)", authenticated: true, userAgent: nil)
         case "s":
-            guard !userIDForRequests.isEmpty else { return nil }
-            return NativeEndpoint(label: "shares", baseURL: settings.cdnBaseURL.normalizedBaseURL, path: "share/user/\(userIDForRequests)", authenticated: true, userAgent: nil)
+            guard !effectiveUserIDForRequests.isEmpty else { return nil }
+            return NativeEndpoint(label: "shares", baseURL: settings.cdnBaseURL.normalizedBaseURL, path: "share/user/\(effectiveUserIDForRequests)", authenticated: true, userAgent: nil)
         case "g":
             return nil
         default:
@@ -148,9 +145,9 @@ extension DesktopAgentModel {
         case "/upload", "/dashboard/files":
             return "Native uploader is ready. Choose a file, optionally reserve a path, then upload directly to the CDN."
         case "/profile":
-            return "Configure auth token and user id in Settings to load the native profile data."
+            return "Hanasand session is not ready yet. Log in again if profile data does not load."
         case "/s":
-            return "Configure auth token and user id in Settings to load and create shares natively."
+            return "Hanasand session is not ready yet. Log in again if shares do not load."
         default:
             return "No direct API-backed native panel is registered for \(dashboardPath) yet."
         }

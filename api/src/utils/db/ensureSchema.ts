@@ -36,6 +36,8 @@ export default async function ensureSchema() {
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_enabled BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS primary_host TEXT NOT NULL DEFAULT $$ovhcloud$$')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_host TEXT')
+    await run('ALTER TABLE vm_details DROP CONSTRAINT IF EXISTS vm_details_name_fkey')
+    await run('ALTER TABLE vm_details ADD CONSTRAINT vm_details_name_fkey FOREIGN KEY (name) REFERENCES vms(name) ON DELETE CASCADE ON UPDATE CASCADE')
     await run(`
         INSERT INTO users (id, name, password, avatar, active, reserved)
         SELECT id, name, crypt(gen_random_uuid()::text, gen_salt('bf')), '', FALSE, TRUE
@@ -216,6 +218,57 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_ai_conversations_owner_updated_at ON ai_conversations(owner_id, updated_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation_created_at ON ai_messages(conversation_id, created_at ASC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_repositories_owner_imported_at ON ai_imported_repositories(owner_id, imported_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS agent_automations (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            schedule_kind TEXT NOT NULL CHECK (schedule_kind IN ('once', 'interval')),
+            interval_minutes INT,
+            run_at TIMESTAMPTZ,
+            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
+            action_type TEXT NOT NULL DEFAULT 'agent_prompt' CHECK (action_type IN ('agent_prompt', 'echo')),
+            timezone TEXT NOT NULL DEFAULT 'UTC',
+            model_name TEXT,
+            notify_on TEXT NOT NULL DEFAULT 'failure' CHECK (notify_on IN ('never', 'failure', 'always')),
+            next_run_at TIMESTAMPTZ,
+            last_run_at TIMESTAMPTZ,
+            last_completed_at TIMESTAMPTZ,
+            last_status TEXT,
+            last_result TEXT,
+            last_error TEXT,
+            consecutive_failures INT NOT NULL DEFAULT 0,
+            paused_reason TEXT,
+            run_count INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT \'UTC\'')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS model_name TEXT')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_on TEXT NOT NULL DEFAULT \'failure\'')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS consecutive_failures INT NOT NULL DEFAULT 0')
+    await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS paused_reason TEXT')
+    await run('CREATE INDEX IF NOT EXISTS idx_agent_automations_owner_updated ON agent_automations(owner_id, updated_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_agent_automations_due ON agent_automations(status, next_run_at)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS agent_automation_runs (
+            id TEXT PRIMARY KEY,
+            automation_id TEXT NOT NULL REFERENCES agent_automations(id) ON DELETE CASCADE,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+            result TEXT,
+            error TEXT,
+            provider TEXT,
+            model TEXT,
+            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            completed_at TIMESTAMPTZ,
+            duration_ms INT
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_automation_started ON agent_automation_runs(automation_id, started_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_agent_automation_runs_owner_started ON agent_automation_runs(owner_id, started_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS ai_deployments (
             id TEXT PRIMARY KEY,

@@ -41,6 +41,8 @@ struct HanasandAIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "local"
+        request.setValue("Hanasand Desktop/\(version)", forHTTPHeaderField: "User-Agent")
         if !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -57,10 +59,7 @@ struct HanasandAIClient {
         let payload = try? JSONDecoder().decode(AIToolPayload.self, from: data)
 
         guard (200..<300).contains(status) else {
-            if status == 401 {
-                throw HanasandAIError.missingToken(apiURL.absoluteString)
-            }
-            throw HanasandAIError.httpStatus(status, payload?.error)
+            throw HanasandAIError.httpStatus(status, payload?.error, rateLimitSnapshot(response: response, payload: payload))
         }
 
         let text = payload?.message
@@ -83,5 +82,79 @@ struct HanasandAIClient {
         let message: String?
         let suggestion: String?
         let error: String?
+        let retryAfterMs: Double?
+        let resetAt: String?
+    }
+
+    func rateLimitSnapshot(response: URLResponse, payload: AIToolPayload?) -> AIRateLimitSnapshot? {
+        guard let http = response as? HTTPURLResponse else { return nil }
+
+        let hourlyLimit = http.intHeader("x-api-key-rate-limit-hour") ?? http.intHeader("x-rate-limit-limit")
+        let hourlyRemaining = http.intHeader("x-api-key-rate-limit-hour-remaining") ?? http.intHeader("x-rate-limit-remaining")
+        let hourlyResetAt = http.dateHeader("x-api-key-rate-limit-hour-reset") ?? http.dateHeader("x-rate-limit-reset")
+        let dailyLimit = http.intHeader("x-api-key-rate-limit-day")
+        let dailyRemaining = http.intHeader("x-api-key-rate-limit-day-remaining")
+        let dailyResetAt = http.dateHeader("x-api-key-rate-limit-day-reset")
+
+        let retryAfterSeconds = http.doubleHeader("retry-after")
+        var blockedUntil = payload?.resetDate
+        if blockedUntil == nil, let retryAfterMs = payload?.retryAfterMs {
+            blockedUntil = Date().addingTimeInterval(max(1, retryAfterMs / 1000))
+        }
+        if blockedUntil == nil, let retryAfterSeconds {
+            blockedUntil = Date().addingTimeInterval(max(1, retryAfterSeconds))
+        }
+        if blockedUntil == nil, http.statusCode == 429 {
+            blockedUntil = hourlyResetAt ?? dailyResetAt ?? Date().addingTimeInterval(15 * 60)
+        }
+
+        let snapshot = AIRateLimitSnapshot(
+            blockedUntil: blockedUntil,
+            hourlyLimit: hourlyLimit,
+            hourlyRemaining: hourlyRemaining,
+            hourlyResetAt: hourlyResetAt,
+            dailyLimit: dailyLimit,
+            dailyRemaining: dailyRemaining,
+            dailyResetAt: dailyResetAt
+        )
+        return snapshot.hasQuotaDetails ? snapshot : nil
+    }
+}
+
+private extension HanasandAIClient.AIToolPayload {
+    var resetDate: Date? {
+        guard let resetAt else { return nil }
+        return ISO8601DateFormatter().date(from: resetAt)
+    }
+}
+
+private extension HTTPURLResponse {
+    func header(_ name: String) -> String? {
+        for (key, value) in allHeaderFields {
+            guard String(describing: key).caseInsensitiveCompare(name) == .orderedSame else { continue }
+            return String(describing: value)
+        }
+        return nil
+    }
+
+    func intHeader(_ name: String) -> Int? {
+        guard let value = header(name)?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        return Int(value)
+    }
+
+    func doubleHeader(_ name: String) -> Double? {
+        guard let value = header(name)?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        return Double(value)
+    }
+
+    func dateHeader(_ name: String) -> Date? {
+        guard let value = header(name)?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        if let milliseconds = Double(value), milliseconds > 1_000_000_000_000 {
+            return Date(timeIntervalSince1970: milliseconds / 1000)
+        }
+        if let seconds = Double(value), seconds > 1_000_000_000 {
+            return Date(timeIntervalSince1970: seconds)
+        }
+        return ISO8601DateFormatter().date(from: value)
     }
 }

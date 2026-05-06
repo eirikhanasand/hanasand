@@ -7,8 +7,10 @@ import config from '#constants'
 
 const SANDBOX_EXECUTABLE = process.env.HANASAND_SANDBOX_EXEC || 'sandbox-exec'
 const SANDBOX_APPLY_ERROR = 'sandbox-exec: sandbox_apply: Operation not permitted'
-const SHELL_PATH = process.env.HANASAND_COMMAND_SHELL
-    || (existsSync('/bin/zsh') ? '/bin/zsh' : existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh')
+const configuredShell = process.env.HANASAND_COMMAND_SHELL
+const SHELL_PATH = configuredShell && existsSync(configuredShell)
+    ? configuredShell
+    : existsSync('/bin/zsh') ? '/bin/zsh' : existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh'
 let sandboxUsable: boolean | null = null
 
 type StartManagedProcessArgs = {

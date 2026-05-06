@@ -6,6 +6,7 @@ import { provisionExistingMailAccounts } from './mail/accounts.ts'
 import { mailConfig } from './mail/config.ts'
 import purgeDeletedAccounts from './auth/purgeDeletedAccounts.ts'
 import ensureAlwaysRunningVms from './vms/ensureAlwaysRunning.ts'
+import { runDueAutomations } from './automations.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
@@ -16,6 +17,7 @@ export default function cron() {
                 purgeDeletedAccounts(),
                 runSyntheticMonitor(),
                 ensureAlwaysRunningVms(),
+                runDueAutomations(),
             ]
 
             if (mailConfig.adminPassword) {

@@ -4,6 +4,7 @@ import { aiClientRequest } from '@/utils/ai/client'
 import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
+import postShare from '@/utils/share/post'
 import { ArrowUp, Check, Code2, Loader2, Sparkles } from 'lucide-react'
 import { Dispatch, FormEvent, SetStateAction, useMemo, useRef, useState } from 'react'
 
@@ -24,19 +25,28 @@ type Message = {
 
 type PendingEdit = {
     id: string
-    shareId: string
-    path: string
-    beforeContent: string
-    content: string
+    changes: PendingShareChange[]
     status: 'pending' | 'applying' | 'applied' | 'error'
     error?: string
 }
 
+type PendingShareChange = {
+    id: string
+    action: 'update_share' | 'upsert_share'
+    shareId?: string
+    path: string
+    beforeContent: string
+    content: string
+    created?: boolean
+}
+
 type ToolCall = {
-    action?: string
+    action?: 'update_share' | 'upsert_share' | 'create_share'
     shareId?: string
     path?: string
     content?: string
+    type?: 'file' | 'folder'
+    actions?: ToolCall[]
 }
 
 export default function ShareChat({
@@ -83,8 +93,9 @@ export default function ShareChat({
             const data = await response.json().catch(() => ({}))
             const rawContent = data.message || data.suggestion || data.error || 'No response.'
             const toolCalls = parseToolCalls(rawContent)
-            const nextEdit = toolCalls.find((call) => call.action === 'update_share' && call.content)
-            const visibleContent = stripToolTags(rawContent).trim() || (nextEdit ? 'Prepared a change.' : rawContent)
+            const pendingChanges = buildPendingChanges(toolCalls, share, tree || null, editingContent)
+            const visibleContent = stripToolTags(rawContent).trim()
+                || (pendingChanges.length ? `Prepared ${pendingChanges.length} file change${pendingChanges.length === 1 ? '' : 's'}.` : rawContent)
 
             setMessages((current) => [...current, {
                 id: randomId(),
@@ -93,14 +104,10 @@ export default function ShareChat({
                 createdAt: new Date().toISOString(),
             }])
 
-            if (nextEdit?.content) {
-                const targetShareId = nextEdit.shareId || (nextEdit.path ? findTreeFileId(tree || null, nextEdit.path) : null) || share.id
+            if (pendingChanges.length) {
                 setPendingEdit({
                     id: randomId(),
-                    shareId: targetShareId,
-                    path: nextEdit.path || share.path,
-                    beforeContent: targetShareId === share.id ? editingContent : '',
-                    content: nextEdit.content,
+                    changes: pendingChanges,
                     status: 'pending',
                 })
             }
@@ -123,26 +130,44 @@ export default function ShareChat({
         }
 
         setPendingEdit((current) => current ? { ...current, status: 'applying', error: undefined } : current)
-        const updated = await updateShare(pendingEdit.shareId, {
-            content: pendingEdit.content,
-            path: pendingEdit.path,
-        })
-        if (!updated) {
-            setPendingEdit((current) => current ? { ...current, status: 'error', error: 'Unable to update the share.' } : current)
-            return
+        const applied: Share[] = []
+        for (const change of pendingEdit.changes) {
+            const updated = change.shareId
+                ? await updateShare(change.shareId, {
+                    content: change.content,
+                    path: change.path,
+                })
+                : await postShare({
+                    includeTree: true,
+                    id: randomId(),
+                    content: change.content,
+                    name: fileNameFromPath(change.path),
+                    path: change.path,
+                    parent: parentIdForPath(tree || null, change.path) || share.parent || undefined,
+                    type: 'file',
+                })
+            if (!updated) {
+                setPendingEdit((current) => current ? { ...current, status: 'error', error: `Unable to apply ${change.path}.` } : current)
+                return
+            }
+            applied.push(updated)
         }
 
-        if (pendingEdit.shareId === share.id) {
-            setShare(updated)
-            setEditorPatch({ value: updated.content, nonce: Date.now() })
+        const activeUpdate = applied.find((updated) => updated.id === share.id)
+        if (activeUpdate) {
+            setShare(activeUpdate)
+            setEditorPatch({ value: activeUpdate.content, nonce: Date.now() })
         }
         setPendingEdit((current) => current ? { ...current, status: 'applied' } : current)
         setMessages((current) => [...current, {
             id: randomId(),
             role: 'tool',
-            content: `Applied ${updated.path || pendingEdit.path}.`,
+            content: `Applied ${pendingEdit.changes.length} file change${pendingEdit.changes.length === 1 ? '' : 's'}.`,
             createdAt: new Date().toISOString(),
         }])
+        if (pendingEdit.changes.some((change) => !change.shareId)) {
+            window.setTimeout(() => window.location.reload(), 500)
+        }
     }
 
     return (
@@ -195,7 +220,11 @@ export default function ShareChat({
                     <div className='mb-2 flex items-center justify-between gap-3'>
                         <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-bright/82'>
                             <Code2 className='h-4 w-4 text-[#ffb15f]' />
-                            <span className='truncate'>{pendingEdit.path}</span>
+                            <span className='truncate'>
+                                {pendingEdit.changes.length === 1
+                                    ? pendingEdit.changes[0].path
+                                    : `${pendingEdit.changes.length} file changes`}
+                            </span>
                         </div>
                         <button
                             type='button'
@@ -207,9 +236,18 @@ export default function ShareChat({
                             {pendingEdit.status === 'applied' ? 'Applied' : 'Apply'}
                         </button>
                     </div>
-                    <pre className='max-h-44 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2 text-xs leading-5 text-bright/68'>
-                        {buildDiff(pendingEdit.beforeContent, pendingEdit.content)}
-                    </pre>
+                    <div className='max-h-56 space-y-2 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2'>
+                        {pendingEdit.changes.map((change) => (
+                            <details key={change.id} open={pendingEdit.changes.length === 1} className='rounded-md border border-bright/8 bg-black/18 p-2'>
+                                <summary className='cursor-pointer text-xs font-semibold text-bright/72'>
+                                    {change.shareId ? 'Update' : 'Create'} {change.path}
+                                </summary>
+                                <pre className='mt-2 whitespace-pre-wrap text-xs leading-5 text-bright/68'>
+                                    {buildDiff(change.beforeContent, change.content)}
+                                </pre>
+                            </details>
+                        ))}
+                    </div>
                     {pendingEdit.error ? <p className='mt-2 text-xs text-red-300'>{pendingEdit.error}</p> : null}
                 </div>
             ) : null}
@@ -247,9 +285,11 @@ export default function ShareChat({
 function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[]) {
     return [
         'You are Hanasand AI in a browser chat panel for the active /s share.',
-        'Help like a coding agent. Be concise. When the user asks for an edit, return the complete updated file using exactly one update_share tool tag.',
+        'Help like a coding agent. Be concise. For pure conversation, answer normally.',
+        'When the user asks for project changes, return complete replacement content for every changed or new file using Hanasand tool tags.',
         'Tool format:',
-        '<hanasand-tool>{"action":"update_share","path":"current path","content":"complete updated file content"}</hanasand-tool>',
+        '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
+        'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
         `Current share: ${share.id} (${share.path})`,
         treePaths.length ? `Project files:\n${treePaths.join('\n')}` : null,
         `Current file content:\n${editingContent.slice(0, 22000)}`,
@@ -269,11 +309,60 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
 function parseToolCalls(content: string): ToolCall[] {
     return [...content.matchAll(/<hanasand-tool>([\s\S]*?)<\/hanasand-tool>/g)].flatMap((match) => {
         try {
-            return [JSON.parse(match[1]) as ToolCall]
+            const parsed = JSON.parse(match[1]) as ToolCall
+            return Array.isArray(parsed.actions) ? parsed.actions : [parsed]
         } catch {
             return []
         }
     })
+}
+
+function buildPendingChanges(toolCalls: ToolCall[], share: Share, tree: Tree | null, editingContent: string): PendingShareChange[] {
+    return toolCalls.flatMap((call) => {
+        if (!call.content || !['update_share', 'upsert_share', 'create_share'].includes(call.action || '')) {
+            return []
+        }
+        const path = normalizeSharePath(call.path || share.path || 'index.html')
+        const existingShareId = call.shareId || findTreeFileId(tree, path) || (path === share.path ? share.id : undefined)
+        return [{
+            id: randomId(),
+            action: call.action === 'update_share' ? 'update_share' : 'upsert_share',
+            shareId: existingShareId,
+            path,
+            beforeContent: existingShareId === share.id ? editingContent : '',
+            content: call.content,
+            created: !existingShareId,
+        }]
+    })
+}
+
+function normalizeSharePath(path: string) {
+    return path.replace(/^\/+/, '').trim() || 'index.html'
+}
+
+function fileNameFromPath(path: string) {
+    return normalizeSharePath(path).split('/').filter(Boolean).pop() || 'index.html'
+}
+
+function parentIdForPath(tree: Tree | null, filePath: string) {
+    const folders = normalizeSharePath(filePath).split('/').filter(Boolean).slice(0, -1)
+    if (!tree || folders.length === 0) {
+        return undefined
+    }
+
+    function walk(items: Tree, depth: number): string | undefined {
+        const name = folders[depth]
+        const folder = items.find((item) => item.type === 'folder' && item.name === name)
+        if (!folder || folder.type !== 'folder') {
+            return undefined
+        }
+        if (depth === folders.length - 1) {
+            return folder.id
+        }
+        return walk(folder.children, depth + 1)
+    }
+
+    return walk(tree, 0)
 }
 
 function stripToolTags(content: string) {

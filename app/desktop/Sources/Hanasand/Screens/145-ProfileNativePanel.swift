@@ -16,6 +16,8 @@ struct ProfileNativePanel: View {
     @State var pendingSessionRevoke: DashboardAuthSession?
     @State var pendingCertificateDelete: DashboardCertificate?
     @State var confirmRevokeOtherSessions = false
+    @State var confirmLogout = false
+    @State var confirmDeleteAccount = false
 
     var body: some View {
         if let profile = model.profile {
@@ -34,6 +36,14 @@ struct ProfileNativePanel: View {
                         "ID: \(profile.id)",
                         "Avatar: \(profile.avatar ?? "none")",
                     ])
+                    HStack(spacing: 10) {
+                        ActionButton(title: "Log out", icon: "rectangle.portrait.and.arrow.right") {
+                            confirmLogout = true
+                        }
+                        ActionButton(title: "Delete account", icon: "trash", tone: .danger) {
+                            confirmDeleteAccount = true
+                        }
+                    }
                     if let roles = profile.roles, !roles.isEmpty {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 10)], spacing: 10) {
                             ForEach(roles) { role in
@@ -152,8 +162,24 @@ struct ProfileNativePanel: View {
             } message: {
                 Text("This keeps the current token and revokes other active sessions for this account.")
             }
+            .alert("Log out of Hanasand?", isPresented: $confirmLogout) {
+                Button("Log out", role: .destructive) {
+                    Task { await model.logoutFromHanasand() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This clears the desktop app session and returns to the login screen.")
+            }
+            .alert("Delete account?", isPresented: $confirmDeleteAccount) {
+                Button("Delete", role: .destructive) {
+                    Task { await model.scheduleAccountDeletion() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This logs out every device and schedules permanent deletion after 30 days.")
+            }
         } else {
-            NativeEmptyState(title: "Profile not loaded", message: "Configure auth token and user id in Settings, then refresh this native profile panel.")
+            NativeEmptyState(title: "Profile not loaded", message: "Hanasand session is not ready yet. Log in again if this profile does not load.")
         }
     }
 

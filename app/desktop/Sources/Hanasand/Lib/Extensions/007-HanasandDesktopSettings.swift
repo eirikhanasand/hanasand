@@ -26,12 +26,12 @@ extension HanasandDesktopSettings {
             "website=\(websiteBaseURL)",
             "api=\(apiBaseURL)",
             "internal=\(internalAPIBaseURL)",
-            "beekeeper=\(beekeeperAPIBaseURL)",
             "ai=\(resolvedAIEndpoint.absoluteString)",
             "desktopAgent=\(desktopAgentBaseURL)",
             "server=\(serverBaseURL)",
             "auth=\(authToken.isEmpty ? "missing" : "configured")",
             "userId=\(userID.isEmpty ? "missing" : "configured")",
+            "impersonating=\(impersonatingUserID.isEmpty ? "none" : impersonatingUserID)",
         ].joined(separator: "\n")
     }
 
@@ -40,7 +40,6 @@ extension HanasandDesktopSettings {
             validateURLField("Website", websiteBaseURL, optional: false),
             validateURLField("API", apiBaseURL, optional: false),
             validateURLField("Internal API", internalAPIBaseURL, optional: false),
-            validateURLField("Beekeeper API", beekeeperAPIBaseURL, optional: false),
             validateURLField("CDN", cdnBaseURL, optional: false),
             validateURLField("AI endpoint", aiAPIURL, optional: false),
             validateURLField("Desktop agent", desktopAgentBaseURL, optional: false),

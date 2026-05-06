@@ -14,7 +14,7 @@ extension DesktopAgentModel {
 
     func issueRateLimitApiKey() async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "API key", body: nativeDashboardStatus, kind: .error)
             return
         }
@@ -65,7 +65,7 @@ extension DesktopAgentModel {
 
     func setRateLimitEnforcement(enabled: Bool) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "Rate limits", body: nativeDashboardStatus, kind: .error)
             return
         }
@@ -99,7 +99,7 @@ extension DesktopAgentModel {
 
     func setRateLimitDefault(scope: String, maxRequests: Int) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             append(meta: "Rate limits", body: nativeDashboardStatus, kind: .error)
             return
         }

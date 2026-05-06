@@ -85,7 +85,7 @@ extension DesktopAgentModel {
             return "Hanasand Server: \(serverSummary)"
         case .mac:
             return "\(status.hostname) \(status.platform) \(status.cwd)"
-        case .ai:
+        case .command:
             return "Hanasand AI: \(aiSummary)"
         case .updates:
             return "Hanasand Desktop \(Self.appVersion): \(updateStatus.title) \(updateStatus.message)"

@@ -14,7 +14,7 @@ extension DesktopAgentModel {
 
     func updateSelectedThought() async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 
@@ -51,7 +51,7 @@ extension DesktopAgentModel {
 
     func deleteSelectedThought(_ thought: DashboardThought) async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 

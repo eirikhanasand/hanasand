@@ -102,7 +102,7 @@ extension DesktopAgentModel {
             aiBrowserTab = BrowserTabState(label: title, url: resolved.url)
         }
         aiInlineBrowserVisible = true
-        selectedSection = .ai
+        selectedSection = .command
         append(meta: "AI browser", body: "\(source) opened \(resolved.url) inline.", kind: .command)
     }
 

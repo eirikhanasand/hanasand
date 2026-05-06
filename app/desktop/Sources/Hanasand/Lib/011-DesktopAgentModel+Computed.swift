@@ -45,6 +45,7 @@ extension DesktopAgentModel {
         [
             .route("Overview", "Main dashboard and service overview.", "gauge.with.dots.needle", "/dashboard"),
             .route("Mail", "Open Mail.", "envelope", "/dashboard/mail"),
+            .route("Automations", "Schedule agent check-ins and inspect completed runs.", "alarm.waves.left.and.right", "/dashboard/automations"),
             .route("Notes", "Shared notes and operational memory.", "note.text", "/dashboard/notes"),
             .route("Traffic", "Live traffic, records, and maps.", "point.3.connected.trianglepath.dotted", "/dashboard/traffic"),
             .route("AI Metrics", "Model pool and system AI telemetry.", "sparkles", "/dashboard/system/ai"),

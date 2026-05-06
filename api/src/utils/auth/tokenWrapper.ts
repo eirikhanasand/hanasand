@@ -4,7 +4,28 @@ import { validateSession } from './session.ts'
 type Valid = {
     valid: boolean
     id?: string
+    authenticatedId?: string
+    impersonating?: boolean
     error?: string
+}
+
+type RoleRow = {
+    id: string
+    name?: string
+}
+
+function headerValue(value: string | string[] | undefined) {
+    return Array.isArray(value) ? value[0] : value
+}
+
+function isAdminRole(role: RoleRow) {
+    const id = role.id.toLowerCase()
+    const name = (role.name || '').toLowerCase()
+    return id === 'administrator'
+        || id === 'system_admin'
+        || id === 'user_admin'
+        || id.includes('admin')
+        || name.includes('admin')
 }
 
 /**
@@ -20,7 +41,8 @@ type Valid = {
  */
 export default async function tokenWrapper(req: FastifyRequest, res: FastifyReply): Promise<Valid> {
     const authHeader = req.headers['authorization']
-    const id = req.headers['id']
+    const id = headerValue(req.headers['id'])
+    const impersonateId = headerValue(req.headers['x-impersonate-id'])
     const cachedSession = (req as FastifyRequest & {
         rateLimitSession?: Awaited<ReturnType<typeof validateSession>>
         apiKeyAuth?: {
@@ -32,14 +54,6 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
             ownerId: string
         }
     }).apiKeyAuth
-
-    if (Array.isArray(id)) {
-        return {
-            valid: false,
-            id: id[0],
-            error: 'Unauthorized.'
-        }
-    }
 
     if (apiKeyAuth?.ownerId) {
         req.headers.id = apiKeyAuth.ownerId
@@ -71,10 +85,33 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
             }
         }
 
-        req.headers.id = session.user.id
+        let effectiveId = session.user.id
+        let impersonating = false
+        if (impersonateId && impersonateId !== session.user.id) {
+            if (!session.roles.some(isAdminRole)) {
+                return {
+                    valid: false,
+                    id: session.user.id,
+                    authenticatedId: session.user.id,
+                    error: 'Only admins can impersonate users.'
+                }
+            }
+
+            effectiveId = impersonateId
+            impersonating = true
+        }
+
+        req.headers.id = effectiveId
+        if (impersonating) {
+            req.headers['x-authenticated-id'] = session.user.id
+        }
         res.header('x-access-token', session.refreshed.token)
         res.header('x-access-token-expires-at', session.refreshed.expires_at)
-        return { valid: true, id: session.user.id }
+        if (impersonating) {
+            res.header('x-impersonating-id', effectiveId)
+            res.header('x-authenticated-id', session.user.id)
+        }
+        return { valid: true, id: effectiveId, authenticatedId: session.user.id, impersonating }
     } catch (error) {
         res.log.error(error)
         res.status(500).send({

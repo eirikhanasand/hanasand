@@ -20,7 +20,6 @@ enum DesktopSection: String, CaseIterable, Identifiable {
     case mail
     case documents
     case images
-    case ai
     case server
     case updates
     case settings
@@ -38,7 +37,6 @@ enum DesktopSection: String, CaseIterable, Identifiable {
         case .mail: return "Mail"
         case .documents: return "Documents"
         case .images: return "Images"
-        case .ai: return "Hanasand AI"
         case .server: return "Server"
         case .updates: return "Updates"
         case .settings: return "Settings"
@@ -47,7 +45,7 @@ enum DesktopSection: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .command: return "message"
+        case .command: return "sparkles"
         case .control: return "slider.horizontal.3"
         case .dashboard: return "square.grid.2x2"
         case .browser: return "rectangle.3.group"
@@ -56,7 +54,6 @@ enum DesktopSection: String, CaseIterable, Identifiable {
         case .mail: return "envelope"
         case .documents: return "doc.viewfinder"
         case .images: return "photo.on.rectangle.angled"
-        case .ai: return "sparkles"
         case .server: return "server.rack"
         case .updates: return "arrow.triangle.2.circlepath"
         case .settings: return "gearshape"
@@ -74,7 +71,6 @@ enum DesktopSection: String, CaseIterable, Identifiable {
         case .mail: return "7"
         case .documents: return "8"
         case .images: return "9"
-        case .ai: return "a"
         case .server: return "r"
         case .updates: return "u"
         case .settings: return ","

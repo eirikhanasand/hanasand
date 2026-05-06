@@ -101,8 +101,8 @@ struct ControlPlaneWorkspace: View {
                             model.selectedSection = .dashboard
                             model.openNativeDashboard(path: "/dashboard/vms", label: "VMs")
                         }
-                        ActionButton(title: "AI models", icon: "sparkles") {
-                            model.selectedSection = .ai
+                        ActionButton(title: "Chat", icon: "sparkles") {
+                            model.selectedSection = .command
                             Task { await model.loadAIPage() }
                         }
                         ActionButton(title: "Settings", icon: "gearshape") {

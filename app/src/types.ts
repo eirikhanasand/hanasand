@@ -7,10 +7,12 @@ export type RouteShortcut = {
 
 export type RootTabParamList = {
     Home: undefined
+    Profile: undefined
     Mail: undefined
     Scan: undefined
     Notes: undefined
     Images: undefined
+    Automations: undefined
     Control: undefined
 }
 
@@ -22,6 +24,8 @@ export type AppSettings = {
     cdnBaseUrl: string
     authToken: string
     userId: string
+    impersonatingUserId: string
+    impersonatingUserName: string
     codexUrl: string
     codexApiPath: string
     desktopAgentBaseUrl: string
@@ -248,4 +252,55 @@ export type DesktopScreenshot = {
     message?: string
     mimeType?: string
     imageBase64?: string
+}
+
+export type AgentAutomation = {
+    id: string
+    name: string
+    prompt: string
+    scheduleKind: 'once' | 'interval'
+    intervalMinutes: number | null
+    runAt: string | null
+    status: 'active' | 'paused' | 'archived'
+    actionType: 'agent_prompt' | 'echo'
+    timezone: string
+    modelName: string | null
+    notifyOn: 'never' | 'failure' | 'always'
+    nextRunAt: string | null
+    lastRunAt: string | null
+    lastCompletedAt: string | null
+    lastStatus: string | null
+    lastResult: string | null
+    lastError: string | null
+    consecutiveFailures: number
+    pausedReason: string | null
+    runCount: number
+    createdAt: string
+    updatedAt: string
+}
+
+export type AgentAutomationRun = {
+    id: string
+    automationId: string
+    status: 'running' | 'completed' | 'failed'
+    result: string | null
+    error: string | null
+    provider: string | null
+    model: string | null
+    startedAt: string
+    completedAt: string | null
+    durationMs: number | null
+}
+
+export type AgentAutomationPayload = {
+    name: string
+    prompt: string
+    scheduleKind: 'once' | 'interval'
+    intervalMinutes?: number | null
+    runAt?: string | null
+    status: 'active' | 'paused'
+    actionType: 'agent_prompt' | 'echo'
+    timezone?: string
+    modelName?: string | null
+    notifyOn?: 'never' | 'failure' | 'always'
 }

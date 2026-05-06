@@ -3,8 +3,9 @@
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import useKeyPress from '@/hooks/keyPressed'
 import deleteUser from '@/utils/users/deleteUser'
+import { startImpersonating } from '@/utils/impersonation/client'
 import setUserActive from '@/utils/users/setUserActive'
-import { Ban, CheckCircle2, Crown, Pencil, Trash2, X } from 'lucide-react'
+import { Ban, CheckCircle2, Crown, Pencil, Trash2, UserRoundCheck, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import Notify from '../notify/notify'
@@ -32,6 +33,13 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
         } else {
             setError(result.message || 'Unable to update user.')
         }
+    }
+
+    function handleImpersonate(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
+        e.stopPropagation()
+        e.preventDefault()
+        startImpersonating(user.id, user.name)
+        router.refresh()
     }
 
     async function handleClick() {
@@ -67,6 +75,15 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                         }
                     </div>
                     {user.highest_role_priority === 0 && <Crown className='w-5 h-5 stroke-amber-300' />}
+                    <div
+                        aria-label={`Impersonate ${user.id}`}
+                        onClick={handleImpersonate}
+                        role='button'
+                        className='hidden group-hover:grid rounded-lg hover:bg-amber-300/12 h-7 w-7 place-items-center cursor-pointer'
+                        title={`Impersonate ${user.id}`}
+                    >
+                        <UserRoundCheck className='w-4 h-4 self-center stroke-amber-200' />
+                    </div>
                     <div
                         aria-label={`Manage roles for ${user.id}`}
                         onClick={handleRoles}

@@ -1,11 +1,29 @@
-import type { AiFileSummary, AiRunDetails, AiToolUseSummary, AppSettings, DashboardRole, DashboardUser, DashboardUserRoleAssignment, DesktopAgentPresence, DesktopAgentStatus, GptClient, HanasandAuthSession, MailAddress, MailboxItem, MailMessage, MailMessageSummary, MailOverview, MailSendResult, Note, ShareSummary, ShareTreeItem } from '../types'
+import type { AgentAutomation, AgentAutomationPayload, AgentAutomationRun, AiFileSummary, AiRunDetails, AiToolUseSummary, AppSettings, DashboardRole, DashboardUser, DashboardUserRoleAssignment, DesktopAgentPresence, DesktopAgentStatus, GptClient, HanasandAuthSession, MailAddress, MailboxItem, MailMessage, MailMessageSummary, MailOverview, MailSendResult, Note, ShareSummary, ShareTreeItem } from '../types'
+
+export class PendingDeletionError extends Error {
+    id: string
+    deletionScheduledAt: string
+    restoreToken: string
+
+    constructor(payload: Record<string, unknown>) {
+        super(stringValue(payload.error) || 'Account pending deletion.')
+        this.name = 'PendingDeletionError'
+        this.id = stringValue(payload.id)
+        this.deletionScheduledAt = stringValue(payload.deletion_scheduled_at)
+        this.restoreToken = stringValue(payload.restore_token)
+    }
+}
 
 function headers(settings: AppSettings) {
-    return {
+    const next: Record<string, string> = {
         'Content-Type': 'application/json',
         Authorization: settings.authToken ? `Bearer ${settings.authToken}` : '',
         id: settings.userId || '',
     }
+    if (settings.impersonatingUserId) {
+        next['x-impersonate-id'] = settings.impersonatingUserId
+    }
+    return next
 }
 
 function requireAppAuth(settings: AppSettings, purpose: string) {
@@ -252,8 +270,12 @@ function normalizeAuthSession(value: unknown): HanasandAuthSession {
 
 async function readJsonResponse(response: Response) {
     const payload = await response.json().catch(() => null)
+    const entry = asRecord(payload)
+    if (response.status === 423 && entry.pending_deletion === true) {
+        throw new PendingDeletionError(entry)
+    }
     if (response.ok) return payload
-    const message = stringValue(asRecord(payload).error) || `Request failed with HTTP ${response.status}.`
+    const message = stringValue(entry.error) || `Request failed with HTTP ${response.status}.`
     throw new Error(message)
 }
 
@@ -266,6 +288,20 @@ export async function loginToHanasand(settings: AppSettings, username: string, p
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ password }),
+    })
+    return normalizeAuthSession(await readJsonResponse(response))
+}
+
+export async function createHanasandAccount(settings: AppSettings, username: string, name: string, password: string) {
+    const id = username.trim()
+    const displayName = name.trim()
+    if (!id || !displayName || !password) {
+        throw new Error('Enter username, name, and password.')
+    }
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'user'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id, name: displayName, password }),
     })
     return normalizeAuthSession(await readJsonResponse(response))
 }
@@ -313,6 +349,24 @@ export async function completePasswordReset(settings: AppSettings, username: str
         body: JSON.stringify({ id, resetToken, password }),
     })
     await readJsonResponse(response)
+}
+
+export async function deleteHanasandAccount(settings: AppSettings) {
+    requireAppAuth(settings, 'delete your account')
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'user/self'), {
+        method: 'DELETE',
+        headers: headers(settings),
+    })
+    await readJsonResponse(response)
+}
+
+export async function restoreHanasandAccount(settings: AppSettings, id: string, restoreToken: string) {
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'user/restore'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id, restoreToken }),
+    })
+    return normalizeAuthSession(await readJsonResponse(response))
 }
 
 function normalizeToolUses(value: unknown): AiToolUseSummary[] | undefined {
@@ -1019,4 +1073,127 @@ async function mutateDashboardUserRole(settings: AppSettings, userId: string, ro
     }
 
     return body
+}
+
+export async function fetchAutomations(settings: AppSettings) {
+    requireAppAuth(settings, 'load automations')
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'automations'), {
+        headers: headers(settings),
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to load automations.'))
+    }
+
+    const automations = asRecord(body).automations
+    return Array.isArray(automations) ? automations.map(normalizeAutomation).filter(Boolean) as AgentAutomation[] : []
+}
+
+export async function fetchAutomationDetails(settings: AppSettings, id: string) {
+    requireAppAuth(settings, 'load automation runs')
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, `automations/${segment(id)}`), {
+        headers: headers(settings),
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to load automation.'))
+    }
+
+    const entry = asRecord(body)
+    const automation = normalizeAutomation(entry.automation)
+    const runs = Array.isArray(entry.runs) ? entry.runs.map(normalizeAutomationRun).filter(Boolean) as AgentAutomationRun[] : []
+    return { automation, runs }
+}
+
+export async function createAutomation(settings: AppSettings, payload: AgentAutomationPayload) {
+    return mutateAutomation(settings, 'automations', 'POST', payload)
+}
+
+export async function updateAutomation(settings: AppSettings, id: string, payload: AgentAutomationPayload) {
+    return mutateAutomation(settings, `automations/${segment(id)}`, 'PUT', payload)
+}
+
+export async function deleteAutomation(settings: AppSettings, id: string) {
+    return mutateAutomation(settings, `automations/${segment(id)}`, 'DELETE')
+}
+
+export async function runAutomationNow(settings: AppSettings, id: string) {
+    requireAppAuth(settings, 'run automations')
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, `automations/${segment(id)}/run`), {
+        method: 'POST',
+        headers: headers(settings),
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to run automation.'))
+    }
+}
+
+async function mutateAutomation(settings: AppSettings, path: string, method: 'POST' | 'PUT' | 'DELETE', payload?: AgentAutomationPayload) {
+    requireAppAuth(settings, 'save automations')
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, path), {
+        method,
+        headers: headers(settings),
+        body: payload ? JSON.stringify(payload) : undefined,
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to save automation.'))
+    }
+
+    return normalizeAutomation(asRecord(body).automation)
+}
+
+function normalizeAutomation(value: unknown): AgentAutomation | null {
+    const entry = asRecord(value)
+    const id = stringValue(entry.id)
+    if (!id) return null
+
+    return {
+        id,
+        name: stringValue(entry.name) || 'Automation',
+        prompt: stringValue(entry.prompt),
+        scheduleKind: stringValue(entry.scheduleKind) === 'once' ? 'once' : 'interval',
+        intervalMinutes: typeof entry.intervalMinutes === 'number' ? entry.intervalMinutes : null,
+        runAt: stringValue(entry.runAt) || null,
+        status: stringValue(entry.status) === 'paused' ? 'paused' : stringValue(entry.status) === 'archived' ? 'archived' : 'active',
+        actionType: stringValue(entry.actionType) === 'echo' ? 'echo' : 'agent_prompt',
+        timezone: stringValue(entry.timezone) || 'UTC',
+        modelName: stringValue(entry.modelName) || null,
+        notifyOn: stringValue(entry.notifyOn) === 'always' ? 'always' : stringValue(entry.notifyOn) === 'never' ? 'never' : 'failure',
+        nextRunAt: stringValue(entry.nextRunAt) || null,
+        lastRunAt: stringValue(entry.lastRunAt) || null,
+        lastCompletedAt: stringValue(entry.lastCompletedAt) || null,
+        lastStatus: stringValue(entry.lastStatus) || null,
+        lastResult: stringValue(entry.lastResult) || null,
+        lastError: stringValue(entry.lastError) || null,
+        consecutiveFailures: Number(entry.consecutiveFailures) || 0,
+        pausedReason: stringValue(entry.pausedReason) || null,
+        runCount: Number(entry.runCount) || 0,
+        createdAt: stringValue(entry.createdAt),
+        updatedAt: stringValue(entry.updatedAt),
+    }
+}
+
+function normalizeAutomationRun(value: unknown): AgentAutomationRun | null {
+    const entry = asRecord(value)
+    const id = stringValue(entry.id)
+    if (!id) return null
+
+    return {
+        id,
+        automationId: stringValue(entry.automationId),
+        status: stringValue(entry.status) === 'failed' ? 'failed' : stringValue(entry.status) === 'completed' ? 'completed' : 'running',
+        result: stringValue(entry.result) || null,
+        error: stringValue(entry.error) || null,
+        provider: stringValue(entry.provider) || null,
+        model: stringValue(entry.model) || null,
+        startedAt: stringValue(entry.startedAt),
+        completedAt: stringValue(entry.completedAt) || null,
+        durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : null,
+    }
 }

@@ -99,6 +99,15 @@ extension DesktopAgentModel {
         return ProcessInfo.processInfo.environment["HANASAND_USER_ID"] ?? ""
     }
 
+    var impersonatingUserIDForRequests: String {
+        settings.impersonatingUserID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var effectiveUserIDForRequests: String {
+        let target = impersonatingUserIDForRequests
+        return target.isEmpty ? userIDForRequests : target
+    }
+
     func saveSettings() {
         guard let data = try? JSONEncoder().encode(settings) else { return }
         UserDefaults.standard.set(data, forKey: Self.settingsKey)
@@ -114,12 +123,13 @@ extension DesktopAgentModel {
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        if let userAgent {
-            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        }
+        request.setValue(userAgent ?? "Hanasand Desktop/\(Self.appVersion)", forHTTPHeaderField: "User-Agent")
         if authenticated {
             request.setValue("Bearer \(authTokenForRequests)", forHTTPHeaderField: "Authorization")
             request.setValue(userIDForRequests, forHTTPHeaderField: "id")
+            if !impersonatingUserIDForRequests.isEmpty {
+                request.setValue(impersonatingUserIDForRequests, forHTTPHeaderField: "x-impersonate-id")
+            }
         }
         return request
     }

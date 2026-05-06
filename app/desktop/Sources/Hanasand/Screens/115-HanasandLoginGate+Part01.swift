@@ -26,9 +26,14 @@ extension HanasandLoginGate {
             theme.background
             VStack(alignment: .leading, spacing: 16) {
                 masthead
-                loginCard
-                if model.passwordResetStep != .idle {
-                    recoveryCard
+                if model.pendingDeletionUserID.isEmpty {
+                    loginCard
+                    if model.passwordResetStep != .idle {
+                        recoveryCard
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                } else {
+                    pendingDeletionCard
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -101,5 +106,63 @@ extension HanasandLoginGate {
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(theme.isLight ? 0.08 : 0.24), radius: 22, x: 0, y: 14)
+    }
+
+    var pendingDeletionCard: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Account pending deletion")
+                    .font(.system(size: 17, weight: .semibold, design: .serif))
+                    .foregroundStyle(theme.text)
+                Text("@\(model.pendingDeletionUserID) is scheduled to be permanently deleted on \(pendingDeletionDateText).")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
+                        model.clearPendingDeletionState()
+                    }
+                } label: {
+                    Text("Go back")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.textTertiary)
+                        .frame(height: 36)
+                        .padding(.horizontal, 8)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                primaryButton(
+                    title: model.isRestoringPendingDeletion ? "Restoring" : "Restore",
+                    busy: model.isRestoringPendingDeletion,
+                    action: { Task { await model.restorePendingDeletionAccount() } }
+                )
+                .disabled(model.isRestoringPendingDeletion)
+            }
+            if !model.pendingDeletionStatus.isEmpty {
+                statusText(model.pendingDeletionStatus, isSuccess: model.pendingDeletionStatus.lowercased().contains("restored"))
+            }
+        }
+        .padding(14)
+        .background(theme.card)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(theme.divider, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(theme.isLight ? 0.08 : 0.24), radius: 22, x: 0, y: 14)
+    }
+
+    var pendingDeletionDateText: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallbackFormatter = ISO8601DateFormatter()
+        guard let date = formatter.date(from: model.pendingDeletionScheduledAt) ?? fallbackFormatter.date(from: model.pendingDeletionScheduledAt) else {
+            return "the scheduled deletion time"
+        }
+        return date.formatted(date: .complete, time: .shortened)
     }
 }

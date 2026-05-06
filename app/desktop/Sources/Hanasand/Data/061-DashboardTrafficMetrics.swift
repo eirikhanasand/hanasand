@@ -29,3 +29,28 @@ struct DashboardTrafficMetrics: Decodable {
         case topDomains = "top_domains"
     }
 }
+
+struct HanasandTrafficSummaryMetric: Decodable {
+    let value: String
+    let hitsHour: Int?
+    let hitsToday: Int?
+    let hitsLastWeek: Int?
+    let hitsTotal: Int?
+
+    var bestCount: Int {
+        hitsToday ?? hitsHour ?? hitsLastWeek ?? hitsTotal ?? 0
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case value
+        case hitsHour = "hits_hour"
+        case hitsToday = "hits_today"
+        case hitsLastWeek = "hits_last_week"
+        case hitsTotal = "hits_total"
+    }
+}
+
+struct HanasandTrafficDomainTPS: Decodable {
+    let name: String
+    let tps: Double?
+}

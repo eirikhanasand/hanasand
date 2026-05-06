@@ -109,6 +109,7 @@ import postApiKeyHandler from './handlers/rateLimit/postApiKey.ts'
 import putApiKeyHandler from './handlers/rateLimit/putApiKey.ts'
 import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
 import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/desktopAgent/presence.ts'
+import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
 
 /**
  * Defines the routes available in the API.
@@ -260,6 +261,14 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/tools/execution-targets', getExecutionTargets)
     fastify.post('/tools/http/request', httpRequestTool)
     fastify.post('/tools/ai', aiTool)
+
+    // Agent automations
+    fastify.get('/automations', getAutomations)
+    fastify.post('/automations', postAutomation)
+    fastify.get('/automations/:id', getAutomation)
+    fastify.put('/automations/:id', putAutomation)
+    fastify.delete('/automations/:id', deleteAutomation)
+    fastify.post('/automations/:id/run', postAutomationRunNow)
 
     // AI workspace
     fastify.get('/ai/workspace', getAiWorkspace)

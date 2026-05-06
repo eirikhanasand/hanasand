@@ -22,6 +22,8 @@ final class DesktopAgentModel: ObservableObject {
 
     @Published var passwordResetNewPassword = ""; @Published var passwordResetConfirmPassword = ""; @Published var passwordResetStatus = ""; @Published var passwordResetStep: PasswordResetStep = .idle
 
+    @Published var pendingDeletionUserID = ""; @Published var pendingDeletionRestoreToken = ""; @Published var pendingDeletionScheduledAt = ""; @Published var pendingDeletionStatus = ""; @Published var isRestoringPendingDeletion = false
+
     @Published var isResettingPassword = false; @Published var promptQueue: [QueuedPrompt] = []; @Published var changedFileSummary: [ChangedFileSummary] = []; @Published var changedFileSummaryStatus = "Git not checked"
 
     @Published var events: [AgentEvent] = []; @Published var status = AgentStatus.ready(); @Published var selectedProject = "Hanasand Desktop"
@@ -67,6 +69,8 @@ final class DesktopAgentModel: ObservableObject {
     @Published var aiLastDuration = "No run yet"; @Published var browserOpenRequest: BrowserOpenRequest?; @Published var browserActiveAddress = "https://hanasand.com"; @Published var browserActiveTitle = "Hanasand"
 
     @Published var ideOpenRequest: IDEOpenRequest?; @Published var pendingIDEEdit: IDEPendingEdit?; @Published var serverSummary = "Not checked"; @Published var serverReachability: [ServerEndpointStatus] = []
+
+    @Published var aiRateLimit: AIRateLimitSnapshot?; @Published var aiRateLimitClock = Date()
 
     @Published var isCheckingServerReachability = false; @Published var isRunningServerAction = false; @Published var serverActionStatus = "No server action running"; @Published var selectedDashboardPath: String?
 
@@ -141,6 +145,9 @@ final class DesktopAgentModel: ObservableObject {
     var desktopPresenceTask: Task<Void, Never>?
     var aiSocketTask: URLSessionWebSocketTask?
     var aiReceiveTask: Task<Void, Never>?
+    var aiSocketReconnectTask: Task<Void, Never>?
+    var aiRateLimitTask: Task<Void, Never>?
+    var aiSocketReconnectAttempt = 0
     var lastAutoVerifiedPasswordResetCode = ""
 
     init() {
@@ -152,12 +159,19 @@ final class DesktopAgentModel: ObservableObject {
         } else {
             settings = HanasandDesktopSettings()
         }
+        if let apiBaseURL = ProcessInfo.processInfo.environment["HANASAND_DESKTOP_API_BASE_URL"],
+           !apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            settings.apiBaseURL = apiBaseURL
+        }
         if UserDefaults.standard.object(forKey: Self.sidebarVisibleKey) != nil {
             sidebarVisible = UserDefaults.standard.bool(forKey: Self.sidebarVisibleKey)
         }
-        if let savedSection = UserDefaults.standard.string(forKey: Self.selectedSectionKey),
-           let section = DesktopSection(rawValue: savedSection) {
-            selectedSection = section
+        if let savedSection = UserDefaults.standard.string(forKey: Self.selectedSectionKey) {
+            if savedSection == "ai" {
+                selectedSection = .command
+            } else if let section = DesktopSection(rawValue: savedSection) {
+                selectedSection = section
+            }
         }
         customProjectTitles = UserDefaults.standard.stringArray(forKey: Self.customProjectsKey) ?? []
         let storedInstalledUpdateVersion = UserDefaults.standard.string(forKey: Self.backgroundInstalledUpdateVersionKey) ?? ""

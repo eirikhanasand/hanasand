@@ -30,22 +30,46 @@ extension DesktopAgentModel {
     }
 
     func sendFallbackAIChat(_ prompt: String) async {
-        appendAITrace(.system, title: "Fallback", detail: "No live websocket model was available. The desktop app is using the HTTP AI endpoint, but app-parity tool training works best through the live model pool.")
         let context = ([DesktopAITraining.appParityPrimer] + aiMessages.suffix(8).map { "\($0.role.rawValue): \($0.content)" }).joined(separator: "\n\n")
         do {
             let response = try await fallbackAIClient().send(
                 prompt: prompt,
                 context: context
             )
-            aiMessages.append(AIChatMessage(role: .assistant, content: response.body))
+            finishFallbackAIResponse(response)
             aiSummary = response.meta
             aiLastDuration = "HTTP fallback"
         } catch {
+            if isAuthSessionFailure(error) {
+                appendAITrace(.system, title: "Session refresh", detail: "The Hanasand session was refreshed below the hood. Retrying the chat request once.")
+                do {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    let response = try await fallbackAIClient().send(prompt: prompt, context: context)
+                    finishFallbackAIResponse(response)
+                    aiSummary = response.meta
+                    aiLastDuration = "HTTP fallback"
+                    return
+                } catch {
+                    if let snapshot = self.rateLimitSnapshot(from: error) {
+                        self.applyAIRateLimit(snapshot)
+                        self.finishRateLimitedAIResponse()
+                        return
+                    }
+                    failFallbackAIResponse(humanReadableAIError(error))
+                    appendAITrace(.error, title: "Session retry failed", detail: humanReadableAIError(error))
+                    return
+                }
+            }
+            if let snapshot = rateLimitSnapshot(from: error) {
+                applyAIRateLimit(snapshot)
+                finishRateLimitedAIResponse()
+                return
+            }
             if isTemporaryAIOutage(error) {
                 await retryFallbackAIChat(prompt: prompt, context: context, firstError: error)
                 return
             }
-            aiMessages.append(AIChatMessage(role: .assistant, content: humanReadableAIError(error), isError: true))
+            failFallbackAIResponse(humanReadableAIError(error))
             appendAITrace(.error, title: "Fallback failed", detail: error.localizedDescription)
         }
     }
@@ -84,6 +108,14 @@ extension DesktopAgentModel {
                 appendAITrace(.thought, title: "Reconnected", detail: "The HTTP AI endpoint recovered after \(humanReadableDuration(reconnectedAt.timeIntervalSince(startedAt))).")
                 return
             } catch {
+                if let snapshot = rateLimitSnapshot(from: error) {
+                    applyAIRateLimit(snapshot)
+                    if let index = aiMessages.firstIndex(where: { $0.id == noticeID }) {
+                        aiMessages.remove(at: index)
+                    }
+                    finishRateLimitedAIResponse()
+                    return
+                }
                 if !isTemporaryAIOutage(error) {
                     if let index = aiMessages.firstIndex(where: { $0.id == noticeID }) {
                         aiMessages[index].content = humanReadableAIError(error)
@@ -109,8 +141,30 @@ extension DesktopAgentModel {
         )
     }
 
+    func finishFallbackAIResponse(_ response: HanasandAIResponse) {
+        isRunning = false
+        if let index = aiMessages.lastIndex(where: { $0.isPending && $0.role == .assistant }) {
+            aiMessages[index].content = response.body
+            aiMessages[index].isPending = false
+            aiMessages[index].isError = false
+        } else {
+            aiMessages.append(AIChatMessage(role: .assistant, content: response.body))
+        }
+    }
+
+    func failFallbackAIResponse(_ message: String) {
+        isRunning = false
+        if let index = aiMessages.lastIndex(where: { $0.isPending && $0.role == .assistant }) {
+            aiMessages[index].content = message
+            aiMessages[index].isPending = false
+            aiMessages[index].isError = true
+        } else {
+            aiMessages.append(AIChatMessage(role: .assistant, content: message, isError: true))
+        }
+    }
+
     func isTemporaryAIOutage(_ error: Error) -> Bool {
-        if case HanasandAIError.httpStatus(let status, _) = error, [502, 503, 504].contains(status) {
+        if case HanasandAIError.httpStatus(let status, _, _) = error, [502, 503, 504].contains(status) {
             return true
         }
         if let urlError = error as? URLError {
@@ -124,8 +178,18 @@ extension DesktopAgentModel {
         return false
     }
 
+    func isAuthSessionFailure(_ error: Error) -> Bool {
+        if case HanasandAIError.httpStatus(let status, _, _) = error, status == 401 {
+            return true
+        }
+        return false
+    }
+
     func humanReadableAIError(_ error: Error) -> String {
-        if case HanasandAIError.httpStatus(let status, let detail) = error, [502, 503, 504].contains(status) {
+        if isAuthSessionFailure(error) {
+            return "Refreshing the Hanasand session in the background. Try again in a moment if this message stays visible."
+        }
+        if case HanasandAIError.httpStatus(let status, let detail, _) = error, [502, 503, 504].contains(status) {
             return detail ?? "The AI service is taking longer than expected. I’ll keep trying in the background."
         }
         return error.localizedDescription
@@ -138,6 +202,35 @@ extension DesktopAgentModel {
         if minutes < 60 { return "\(minutes)m" }
         let hours = minutes / 60
         return "\(hours)h"
+    }
+
+    func scheduleAISocketReconnect(reason: String) {
+        aiSocketTask = nil
+        aiSocketConnected = false
+        aiSummary = "Reconnecting to model pool"
+        guard aiSocketReconnectTask == nil else { return }
+
+        aiSocketReconnectTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let attempt = await MainActor.run { () -> Int in
+                    self.aiSocketReconnectAttempt += 1
+                    return self.aiSocketReconnectAttempt
+                }
+                let delay = min(60, max(1, Int(pow(1.7, Double(attempt - 1)))))
+                try? await Task.sleep(nanoseconds: UInt64(delay) * 1_000_000_000)
+                if Task.isCancelled { return }
+
+                await MainActor.run {
+                    if self.aiSocketTask == nil {
+                        self.connectAISocket()
+                    }
+                }
+
+                let connected = await MainActor.run { self.aiSocketConnected && self.aiSocketTask != nil }
+                if connected { return }
+            }
+        }
     }
 
     func aiRequestMessages() -> [AIPromptRequest.Message] {
@@ -167,7 +260,13 @@ extension DesktopAgentModel {
                 aiSocketConnected = false
                 aiSocketTask = nil
                 if !Task.isCancelled {
-                    appendAITrace(.error, title: "Socket closed", detail: error.localizedDescription)
+                    scheduleAISocketReconnect(reason: error.localizedDescription)
+                    if aiMessages.contains(where: { $0.isPending && $0.role == .assistant }),
+                       let lastUserPrompt = aiMessages.last(where: { $0.role == .user })?.content {
+                        Task { [weak self] in
+                            await self?.sendFallbackAIChat(lastUserPrompt)
+                        }
+                    }
                 }
                 return
             }

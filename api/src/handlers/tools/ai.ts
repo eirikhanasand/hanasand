@@ -1,16 +1,20 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { listGptClients, requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
 
 export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
-    if (!valid) {
-        return res.status(401).send({ error: 'Unauthorized.' })
-    }
-
     const { prompt, context, maxTokens } = req.body as { prompt?: string, context?: string, maxTokens?: number } ?? {}
     if (!prompt) {
         return res.status(400).send({ error: 'Missing prompt.' })
+    }
+
+    const directResponse = directChatResponse(prompt)
+    if (directResponse) {
+        return res.send({
+            status: 'completed',
+            provider: 'hanasand-ai',
+            model: 'direct',
+            message: directResponse,
+        })
     }
 
     const browserTarget = parseBrowserOpenTarget(prompt)
@@ -48,7 +52,8 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
                     content: [
                         'You are Hanasand AI inside the Hanasand developer workspace.',
                         'Answer directly and use the provided context when it is relevant.',
-                        'When asked to edit a share, you may emit a Hanasand tool tag with action update_share and complete replacement content.',
+                        'When asked to edit a share project, emit one or more Hanasand tool tags with complete replacement content for each file that should change.',
+                        'Supported share tool actions are update_share and upsert_share. Prefer upsert_share for creating or replacing files by path.',
                     ].join(' '),
                 },
                 {
@@ -75,6 +80,14 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             error: error instanceof Error ? error.message : 'Hanasand AI failed to generate a response.',
         })
     }
+}
+
+function directChatResponse(prompt: string) {
+    const normalized = prompt.trim().toLowerCase()
+    if (/^(hei|he+i|hello|hi|hey|yo|hallo|god dag)[!.?\s]*$/.test(normalized)) {
+        return 'Hei. What should we build or change in this project?'
+    }
+    return null
 }
 
 function parseBrowserOpenTarget(prompt: string) {

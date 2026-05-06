@@ -70,7 +70,7 @@ extension DesktopAgentModel {
 
     func createNativeShare() async {
         guard hasHanasandAuth else {
-            nativeDashboardStatus = "Configure auth token and user id first."
+            nativeDashboardStatus = "Hanasand session is not ready. Log in again if this persists."
             return
         }
 

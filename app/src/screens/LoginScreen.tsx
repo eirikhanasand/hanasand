@@ -3,22 +3,35 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { LinearGradient } from 'expo-linear-gradient'
 import { ArrowRight, Check, X } from 'lucide-react-native'
 import type { AppSettings, HanasandAuthSession } from '../types'
-import { completePasswordReset, loginToHanasand, requestPasswordResetCode, verifyPasswordResetCode } from '../lib/api'
+import { completePasswordReset, createHanasandAccount, loginToHanasand, PendingDeletionError, requestPasswordResetCode, verifyPasswordResetCode } from '../lib/api'
 import { getThemePalette, spacing, type ThemePalette } from '../theme/tokens'
 import { useAppTheme } from '../theme/context'
 
+type AuthMode = 'login' | 'signup'
 type ResetStep = 'idle' | 'code' | 'password'
+
+const reservedUsernames = new Set([
+    'abuse', 'admin', 'administrator', 'billing', 'bookkeeper', 'cdc', 'ceo', 'cfo', 'chairman', 'compliance',
+    'contact', 'controller', 'coo', 'cto', 'director', 'eirikhanasand', 'executive', 'facebook', 'finance',
+    'google', 'hanasand', 'help', 'hr', 'legal', 'management', 'manager', 'meta', 'microsoft', 'noreply',
+    'owner', 'paypal', 'postmaster', 'president', 'root', 'security', 'soc', 'spam', 'staff', 'support',
+    'sysadmin', 'treasurer', 'trust', 'twitter', 'x',
+])
 
 export function LoginScreen({
     settings,
     onAuthenticated,
+    onPendingDeletion,
 }: {
     settings: AppSettings
     onAuthenticated: (session: HanasandAuthSession) => Promise<void>
+    onPendingDeletion: (details: { id: string, restoreToken: string, deletionScheduledAt: string }) => Promise<void>
 }) {
     const theme = getThemePalette(settings.themeMode)
     const styles = useMemo(() => createStyles(theme), [theme])
+    const [authMode, setAuthMode] = useState<AuthMode>('login')
     const [username, setUsername] = useState('')
+    const [name, setName] = useState('')
     const [password, setPassword] = useState('')
     const [busy, setBusy] = useState(false)
     const [status, setStatus] = useState('')
@@ -30,6 +43,22 @@ export function LoginScreen({
     const codeInputRef = useRef<TextInput | null>(null)
 
     const cleanUsername = username.trim()
+    const cleanName = name.trim()
+    const passwordCounts = countPassword(password)
+    const passwordIsValid =
+        password.length >= 16
+        && passwordCounts.numbers >= 2
+        && passwordCounts.symbols >= 2
+        && passwordCounts.lowercase >= 2
+        && passwordCounts.uppercase >= 2
+    const reservedUsername = reservedUsernames.has(cleanUsername.toLowerCase())
+    const canCreateAccount = Boolean(cleanUsername && cleanName && passwordIsValid && !reservedUsername)
+
+    function setMode(nextMode: AuthMode) {
+        setAuthMode(nextMode)
+        setResetStep('idle')
+        setStatus('')
+    }
 
     async function submitLogin() {
         if (busy) return
@@ -40,13 +69,45 @@ export function LoginScreen({
             setStatus('')
             await onAuthenticated(session)
         } catch (error) {
+            if (error instanceof PendingDeletionError) {
+                await onPendingDeletion({
+                    id: error.id,
+                    restoreToken: error.restoreToken,
+                    deletionScheduledAt: error.deletionScheduledAt,
+                })
+                return
+            }
             setStatus(error instanceof Error ? error.message : 'Login failed.')
         } finally {
             setBusy(false)
         }
     }
 
+    async function submitSignup() {
+        if (busy) return
+        if (reservedUsername) {
+            setStatus('This username is reserved.')
+            return
+        }
+        if (!passwordIsValid) {
+            setStatus('Choose a stronger password.')
+            return
+        }
+        setBusy(true)
+        setStatus('Creating account')
+        try {
+            const session = await createHanasandAccount(settings, cleanUsername, cleanName, password)
+            setStatus('')
+            await onAuthenticated(session)
+        } catch (error) {
+            setStatus(error instanceof Error ? error.message : 'Signup failed.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
     function beginReset() {
+        setAuthMode('login')
         setResetStep('code')
         setResetCode('')
         setResetToken('')
@@ -145,6 +206,18 @@ export function LoginScreen({
                             textContentType='username'
                             returnKeyType='next'
                         />
+                        {authMode === 'signup' ? (
+                            <>
+                                {reservedUsername ? <Text style={styles.inlineHint}>Reserved username.</Text> : null}
+                                <LoginField
+                                    value={name}
+                                    onChangeText={setName}
+                                    placeholder='Name'
+                                    textContentType='name'
+                                    returnKeyType='next'
+                                />
+                            </>
+                        ) : null}
                         <LoginField
                             value={password}
                             onChangeText={setPassword}
@@ -152,16 +225,34 @@ export function LoginScreen({
                             secureTextEntry
                             textContentType='password'
                             returnKeyType='send'
-                            onSubmitEditing={() => void submitLogin()}
+                            onSubmitEditing={() => void (authMode === 'signup' ? submitSignup() : submitLogin())}
                         />
+                        {authMode === 'signup' && password && !passwordIsValid ? (
+                            <Text style={styles.inlineHint}>16 chars, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.</Text>
+                        ) : null}
                         <View style={styles.actionRow}>
-                            <Pressable disabled={busy} onPress={() => void submitLogin()} style={({ pressed }) => [styles.primaryButton, busy && styles.disabled, pressed && !busy && styles.pressed]}>
-                                <Text style={styles.primaryText}>{busy && resetStep === 'idle' ? 'Logging in' : 'Log in'}</Text>
+                            <Pressable
+                                disabled={busy || (authMode === 'signup' && !canCreateAccount)}
+                                onPress={() => void (authMode === 'signup' ? submitSignup() : submitLogin())}
+                                style={({ pressed }) => [styles.primaryButton, (busy || (authMode === 'signup' && !canCreateAccount)) && styles.disabled, pressed && !busy && styles.pressed]}
+                            >
+                                <Text style={styles.primaryText}>
+                                    {authMode === 'signup'
+                                        ? busy ? 'Creating' : 'Create account'
+                                        : busy && resetStep === 'idle' ? 'Logging in' : 'Log in'}
+                                </Text>
                             </Pressable>
                             {resetStep === 'idle' ? (
-                                <Pressable onPress={beginReset} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
-                                    <Text style={styles.linkText}>Forgot password?</Text>
-                                </Pressable>
+                                <>
+                                    <Pressable onPress={() => setMode(authMode === 'signup' ? 'login' : 'signup')} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
+                                        <Text style={styles.linkText}>{authMode === 'signup' ? 'Log in' : 'Sign up'}</Text>
+                                    </Pressable>
+                                    {authMode === 'login' ? (
+                                        <Pressable onPress={beginReset} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
+                                            <Text style={styles.linkText}>Forgot?</Text>
+                                        </Pressable>
+                                    ) : null}
+                                </>
                             ) : null}
                         </View>
                     </View>
@@ -267,6 +358,30 @@ function LoginField({
     )
 }
 
+function countPassword(value: string) {
+    let numbers = 0
+    let symbols = 0
+    let lowercase = 0
+    let uppercase = 0
+
+    for (const char of value) {
+        if (!isNaN(Number(char))) {
+            numbers++
+        }
+        if (/[^a-zA-Z0-9]/.test(char)) {
+            symbols++
+        }
+        if (/[a-z]/.test(char)) {
+            lowercase++
+        }
+        if (/[A-Z]/.test(char)) {
+            uppercase++
+        }
+    }
+
+    return { numbers, symbols, lowercase, uppercase }
+}
+
 const loginFieldStyles = StyleSheet.create({
     input: {
         minHeight: 58,
@@ -324,8 +439,9 @@ function createStyles(theme: ThemePalette) {
             paddingHorizontal: 24,
         },
         primaryText: { color: theme.background, fontSize: 16, fontWeight: '800' },
-        linkButton: { marginLeft: 'auto', minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
+        linkButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
         linkText: { color: theme.textSoft, fontSize: 13, fontWeight: '700' },
+        inlineHint: { color: theme.textMuted, fontSize: 12, fontWeight: '700', lineHeight: 18, paddingHorizontal: 4 },
         recoveryCard: {
             gap: 16,
             borderRadius: 26,

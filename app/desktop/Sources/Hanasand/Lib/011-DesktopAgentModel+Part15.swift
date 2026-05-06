@@ -29,7 +29,6 @@ extension DesktopAgentModel {
             }
         case "prompt_started":
             guard isActiveAIEvent(event) else { return }
-            appendAITrace(.thought, title: "Thinking", detail: "The runtime accepted the prompt and prepared context for \(event.clientName ?? "the selected model").")
             ensureActiveAIResponse(conversationId: event.conversationId)
         case "prompt_tool":
             guard isActiveAIEvent(event) else { return }
@@ -45,6 +44,11 @@ extension DesktopAgentModel {
         case "prompt_error":
             guard isActiveAIEvent(event) else { return }
             let message = event.error ?? "The model failed to answer this prompt."
+            if let snapshot = rateLimitSnapshot(from: message) {
+                applyAIRateLimit(snapshot)
+                finishRateLimitedAIResponse()
+                return
+            }
             appendAITrace(.error, title: "Model error", detail: message)
             failActiveAIResponse(message)
         default:
@@ -78,14 +82,10 @@ extension DesktopAgentModel {
             aiMessages.append(AIChatMessage(role: .assistant, content: content))
         }
 
-        let toolCount = aiTrace.filter { $0.kind == .tool }.count
-        appendAITrace(.thought, title: "Run summary", detail: "Worked for \(aiLastDuration), used \(toolCount) surfaced tool event\(toolCount == 1 ? "" : "s"), and streamed the answer back into chat.")
         if !artifacts.isEmpty {
             for artifact in artifacts.prefix(8) {
                 appendAITrace(.file, title: artifact.displayTitle, detail: artifact.displayDetail)
             }
-        } else {
-            appendAITrace(.file, title: "Files", detail: "No file artifacts or changed-file summaries were reported by this model run.")
         }
         runNextQueuedPrompt()
     }

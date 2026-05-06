@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BrainCircuit, Database, DatabaseBackup, FileWarning, Gauge, Inbox, LayoutDashboard, Network, NotebookText, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
+import { AlarmClockCheck, BrainCircuit, Database, DatabaseBackup, FileWarning, Gauge, Inbox, LayoutDashboard, Network, NotebookText, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -36,6 +36,7 @@ export default function DashboardSidebar({
     const items: Item[] = [
         { href: '/dashboard', label: 'Overview', icon: <LayoutDashboard className='h-4 w-4' /> },
         { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
+        { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
         { href: '/dashboard/traffic', label: 'Traffic', icon: <Network className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> },
