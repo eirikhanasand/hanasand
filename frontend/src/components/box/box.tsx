@@ -80,17 +80,20 @@ export default function Box({ box, setBox, share, detached = false }: BoxProps) 
         : 'relative h-full min-h-0 w-full'
 
     const panelClass = detached
-        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-background/96 p-3 shadow-2xl shadow-black/45 backdrop-blur-md'
-        : 'grid h-full min-h-[34rem] min-w-0 gap-3 overflow-hidden rounded-xl border border-white/10 bg-background/70 p-3'
+        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-xl border border-bright/10 bg-background/96 p-2 shadow-2xl shadow-black/45 backdrop-blur-md'
+        : 'grid h-[calc(100%-3.5rem)] min-h-[32rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-bright/8 bg-black/10 p-2'
 
     return (
         <div className={wrapperClass}>
             <section className={panelClass}>
-                <div className='flex items-center justify-between gap-3'>
-                    <div className='min-w-0'>
-                        <h1 className='text-sm font-semibold text-bright'>Requests</h1>
-                        <p className='truncate text-xs text-bright/45'>Runs through the connected terminal when a share VM is available.</p>
-                    </div>
+                <div className='flex min-w-0 items-center justify-between gap-2 rounded-lg border border-bright/8 bg-black/12 px-2 py-1.5'>
+                    <RecentRequests
+                        recentRequests={recentRequests}
+                        activeRequestId={selectedRequestId ?? selectedRequest?.id ?? null}
+                        onSelect={(request) => setSelectedRequestId(request.id)}
+                        onRun={handleHistoryRun}
+                        onDelete={handleHistoryDelete}
+                    />
                     <div className='flex shrink-0 items-center gap-1'>
                         <button
                             type='button'
@@ -118,13 +121,6 @@ export default function Box({ box, setBox, share, detached = false }: BoxProps) 
                         </button>
                     </div>
                 </div>
-                <RecentRequests
-                    recentRequests={recentRequests}
-                    activeRequestId={selectedRequestId ?? selectedRequest?.id ?? null}
-                    onSelect={(request) => setSelectedRequestId(request.id)}
-                    onRun={handleHistoryRun}
-                    onDelete={handleHistoryDelete}
-                />
                 <NewRequest
                     initialRequest={requestDraft}
                     selectedRequestId={selectedRequest?.id ?? null}
