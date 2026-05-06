@@ -1,6 +1,7 @@
 'use client'
 
-import { Check, Copy, ExternalLink, ImageIcon, Upload } from 'lucide-react'
+import ErrorNotice from '@/components/error/errorNotice'
+import { Check, Copy, ExternalLink, ImageIcon, LoaderCircle, Upload } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { loadRecentUploads, RecentUpload } from '@/utils/upload/storage'
@@ -11,6 +12,8 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 
 export default function Page() {
     const [uploads, setUploads] = useState<RecentUpload[]>([])
+    const [loading, setLoading] = useState(true)
+    const [loadError, setLoadError] = useState<string | null>(null)
     const { condition: copiedUrl, setCondition: setCopiedUrl } = useClearStateAfter({
         initialState: null,
         timeout: 1000,
@@ -21,18 +24,30 @@ export default function Page() {
         let mounted = true
 
         async function loadUploads() {
-            const localUploads = loadRecentUploads()
-            const serverUploads = await getUserFiles()
-            const mappedServerUploads = serverUploads.map((upload) => ({
-                url: `${config.url.cdn}/files/${upload.path ? `path/${upload.path}` : upload.id}`,
-                createdAt: upload.uploaded_at
-            }))
-            const mergedUploads = [...mappedServerUploads, ...localUploads]
-                .filter((upload, index, list) => list.findIndex((item) => item.url === upload.url) === index)
-                .slice(0, 60)
+            setLoading(true)
+            setLoadError(null)
+            try {
+                const localUploads = loadRecentUploads()
+                const serverUploads = await getUserFiles()
+                const mappedServerUploads = serverUploads.map((upload) => ({
+                    url: `${config.url.cdn}/files/${upload.path ? `path/${upload.path}` : upload.id}`,
+                    createdAt: upload.uploaded_at
+                }))
+                const mergedUploads = [...mappedServerUploads, ...localUploads]
+                    .filter((upload, index, list) => list.findIndex((item) => item.url === upload.url) === index)
+                    .slice(0, 60)
 
-            if (mounted) {
-                setUploads(mergedUploads)
+                if (mounted) {
+                    setUploads(mergedUploads)
+                }
+            } catch (error) {
+                if (mounted) {
+                    setLoadError(error instanceof Error ? error.message : 'Unable to load upload history.')
+                }
+            } finally {
+                if (mounted) {
+                    setLoading(false)
+                }
             }
         }
 
@@ -65,18 +80,37 @@ export default function Page() {
                 </Link>
             </div>
 
-            {!uploads.length && (
+            {loadError ? <ErrorNotice compact message={loadError} /> : null}
+
+            {loading && (
+                <div className='grid min-h-64 place-items-center rounded-xl border border-white/10 bg-white/[0.025] text-center'>
+                    <div className='grid gap-3'>
+                        <div className='mx-auto grid h-12 w-12 place-items-center rounded-lg border border-white/10 bg-white/5'>
+                            <LoaderCircle className='h-5 w-5 animate-spin text-orange-300' />
+                        </div>
+                        <p className='text-sm text-bright/55'>Loading upload history...</p>
+                    </div>
+                </div>
+            )}
+
+            {!loading && !uploads.length && (
                 <div className='grid min-h-64 place-items-center rounded-xl border border-dashed border-white/10 bg-white/4 text-center'>
                     <div className='grid gap-3'>
                         <div className='mx-auto grid h-12 w-12 place-items-center rounded-lg border border-white/10 bg-white/5'>
                             <ImageIcon className='h-5 w-5 text-orange-300' />
                         </div>
-                        <p className='text-sm text-bright/55'>No uploads saved here yet.</p>
+                        <div className='grid gap-2'>
+                            <p className='text-sm text-bright/55'>No uploads saved here yet.</p>
+                            <Link href='/upload' className='mx-auto inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-medium text-bright/65 transition hover:bg-white/8 hover:text-bright'>
+                                <Upload className='h-4 w-4' />
+                                Upload a file
+                            </Link>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {uploads.length > 0 && (
+            {!loading && uploads.length > 0 && (
                 <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-3'>
                     {uploads.map((upload) => (
                         <article
