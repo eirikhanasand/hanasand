@@ -5,6 +5,7 @@ import randomId from '@/utils/random/randomId'
 import {
     formatHeaders,
     formatRequestLine,
+    normalizeRequestHeaders,
     sendFromBrowser,
     sendViaShareVm,
     withRequestDetails,
@@ -16,7 +17,6 @@ import { HeaderRow, RequestDraft, RequestHistoryEntry, ToolResponse } from './ty
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 const SENSITIVE_HEADER_NAMES = new Set(['authorization', 'cookie', 'set-cookie', 'x-api-key', 'proxy-authorization'])
-const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
 type NewRequestProps = {
     initialRequest: RequestDraft
@@ -54,6 +54,7 @@ export default function NewRequest({
     const [activeRunId, setActiveRunId] = useState<string | null>(null)
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
+    const [aiLoading, setAiLoading] = useState(false)
     const inputRef = useRef<HTMLInputElement | null>(null)
     const lastRunTokenRef = useRef(runToken)
 
@@ -65,7 +66,8 @@ export default function NewRequest({
     }, [initialRequest.body, initialRequest.headers, initialRequest.method, initialRequest.url, selectedRequestId])
 
     const normalizedHeaders = useMemo(() => normalizeHeaderRows(headers), [headers])
-    const usableHeaders = useMemo(() => buildRequestHeaders(normalizedHeaders), [normalizedHeaders])
+    const headerPlan = useMemo(() => normalizeRequestHeaders(buildRequestHeaders(normalizedHeaders)), [normalizedHeaders])
+    const usableHeaders = headerPlan.headers
 
     const activeRun = useMemo(
         () => runs.find((run) => run.id === activeRunId) || runs[0] || null,
@@ -130,7 +132,10 @@ export default function NewRequest({
                 data = await sendFromBrowser(request)
             }
 
-            const enrichedResponse = sanitizeToolResponse(withRequestDetails(data, request))
+            const enrichedResponse = sanitizeToolResponse(withRequestDetails({
+                ...data,
+                warnings: [...headerPlan.warnings, ...(data.warnings || [])],
+            }, request))
 
             setRuns((current) => current.map((run) => run.id === runId
                 ? { ...run, loading: false, response: enrichedResponse }
@@ -157,7 +162,7 @@ export default function NewRequest({
                 ? { ...run, loading: false, response: enrichedResponse }
                 : run))
         }
-    }, [body, method, normalizedHeaders, onRequestComplete, selectedRequestId, share?.alias, usableHeaders, url])
+    }, [body, headerPlan.warnings, method, normalizedHeaders, onRequestComplete, selectedRequestId, share?.alias, usableHeaders, url])
 
     useEffect(() => {
         if (runToken === lastRunTokenRef.current) {
@@ -174,17 +179,51 @@ export default function NewRequest({
             return setAiResponse('Login required.')
         }
 
-        const result = await fetch(`${config.url.api}/tools/ai`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                id,
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ prompt: aiPrompt, context: JSON.stringify(response ?? {}) }),
-        })
-        const data = await result.json().catch(() => ({}))
-        setAiResponse(redactSensitiveText(data.message || data.suggestion || data.error || 'No AI response.'))
+        setAiLoading(true)
+        setAiResponse('')
+        try {
+            const context = {
+                activeRequest: {
+                    method,
+                    url,
+                    headers: usableHeaders,
+                    body,
+                    warnings: headerPlan.warnings,
+                },
+                response: response ?? null,
+                recentRuns: runs.slice(0, 4).map((run) => ({
+                    method: run.method,
+                    url: run.url,
+                    loading: run.loading,
+                    status: run.response?.status,
+                    statusText: run.response?.statusText,
+                    error: run.response?.error,
+                    warnings: run.response?.warnings,
+                })),
+            }
+            const result = await fetch(`${config.url.api}/tools/ai`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    id,
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    prompt: [
+                        aiPrompt,
+                        'Use the request context below. Explain what happened in plain language, suggest the next request or UI action, and call out likely tool issues separately from target-service issues.',
+                    ].join('\n\n'),
+                    context: JSON.stringify(context, null, 2),
+                    maxTokens: 1200,
+                }),
+            })
+            const data = await result.json().catch(() => ({}))
+            setAiResponse(redactSensitiveText(data.message || data.suggestion || data.error || 'No AI response.'))
+        } catch (error) {
+            setAiResponse(error instanceof Error ? error.message : String(error))
+        } finally {
+            setAiLoading(false)
+        }
     }
 
     function updateHeader(index: number, field: keyof HeaderRow, value: string) {
@@ -226,6 +265,11 @@ export default function NewRequest({
                         <Play className='h-3.5 w-3.5' />
                         Run
                     </button>
+                </div>
+
+                <div className='min-w-0 rounded-lg border border-bright/8 bg-black/18 px-3 py-2 font-mono text-[11px] leading-4 text-bright/60'>
+                    <span className='mr-2 text-bright/32'>{method}</span>
+                    <span className='break-all'>{url || 'Enter a request URL.'}</span>
                 </div>
 
                 <div className='flex flex-wrap items-center justify-between gap-2 px-1'>
@@ -270,7 +314,7 @@ export default function NewRequest({
                 <div className='grid min-h-0 overflow-hidden rounded-lg bg-black/22'>
                     {responseTab === 'response' && (
                         <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
-                            {activeRun?.loading ? 'Request is running...' : response ? response.error || response.body || 'No response body.' : 'Response will appear here.'}
+                            {activeRun?.loading ? 'Request is running...' : response ? formatResponseBody(response) : 'Response will appear here.'}
                         </pre>
                     )}
 
@@ -333,12 +377,12 @@ export default function NewRequest({
                 {tab === 'ai' && (
                     <div className='grid min-h-0 gap-3 lg:grid-rows-[auto_auto_minmax(0,1fr)]'>
                         <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} className='min-h-24 rounded-lg border border-bright/10 bg-white/[0.025] p-3 text-sm text-bright outline-none' />
-                        <button type='button' onClick={askAi} className='flex w-fit cursor-pointer items-center gap-2 rounded-full bg-sky-400/12 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-400/20'>
+                        <button type='button' onClick={askAi} disabled={aiLoading} className='flex w-fit cursor-pointer items-center gap-2 rounded-full bg-sky-400/12 px-3 py-1.5 text-[11px] font-semibold text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-60'>
                             <Bot className='h-3.5 w-3.5' />
-                            Ask AI
+                            {aiLoading ? 'Asking...' : 'Ask AI'}
                         </button>
                         <pre className='max-h-32 min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word rounded-lg bg-black/20 p-3 text-sm text-bright/70'>
-                            {aiResponse || 'AI notes will appear here.'}
+                            {aiLoading ? 'Thinking through the request and response...' : aiResponse || 'AI notes will appear here.'}
                         </pre>
                     </div>
                 )}
@@ -354,7 +398,7 @@ export default function NewRequest({
                     >
                         <span className='flex min-w-0 items-center gap-2 text-[11px] text-bright/78'>
                             <span className='font-semibold'>{run.method}</span>
-                            <span className='truncate'>{run.url}</span>
+                            <span className='truncate' title={run.url}>{shortUrlLabel(run.url)}</span>
                         </span>
                         <span className='truncate text-[10px] text-bright/45'>{run.loading ? 'Running' : run.response?.status || (run.response?.error ? 'Error' : 'Done')}</span>
                     </button>
@@ -396,7 +440,7 @@ function buildRequestHeaders(rows: HeaderRow[]) {
     return Object.fromEntries(
         rows
             .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
-            .filter((row) => row.key && row.value && HEADER_NAME_PATTERN.test(row.key))
+            .filter((row) => row.key && row.value)
             .map((row) => [row.key, row.value])
     )
 }
@@ -434,6 +478,27 @@ function redactHeaders(headers?: Record<string, string>) {
 
 function redactSensitiveText(value: string) {
     return value.replace(/\bBearer\s+[^'\s]+/gi, 'Bearer [redacted]')
+}
+
+function formatResponseBody(response: ToolResponse) {
+    const warnings = response.warnings?.length
+        ? `Warnings:\n${response.warnings.join('\n')}\n\n`
+        : ''
+
+    if (response.error) {
+        return `${warnings}${response.error}`
+    }
+
+    return `${warnings}${response.body || 'No response body.'}`
+}
+
+function shortUrlLabel(value: string) {
+    try {
+        const url = new URL(value)
+        return `${url.host}${url.pathname}${url.search}`
+    } catch {
+        return value
+    }
 }
 
 function getImagePreviewUrl(response: ToolResponse | null, requestUrl: string) {

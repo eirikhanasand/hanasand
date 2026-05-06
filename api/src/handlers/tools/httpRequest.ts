@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
+const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
 export default async function httpRequestTool(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -33,11 +34,12 @@ export default async function httpRequestTool(req: FastifyRequest, res: FastifyR
     const started = performance.now()
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 12000)
+    const normalizedHeaders = normalizeRequestHeaders(headers)
 
     try {
         const response = await fetch(target, {
             method: normalizedMethod,
-            headers,
+            headers: normalizedHeaders.headers,
             body: ['GET', 'HEAD'].includes(normalizedMethod) ? undefined : body,
             signal: controller.signal,
         })
@@ -51,13 +53,56 @@ export default async function httpRequestTool(req: FastifyRequest, res: FastifyR
             elapsed_ms: Math.round(performance.now() - started),
             headers: responseHeaders,
             body: text,
+            warnings: normalizedHeaders.warnings,
         })
     } catch (error) {
         return res.status(502).send({
             error: error instanceof Error ? error.message : String(error),
             elapsed_ms: Math.round(performance.now() - started),
+            warnings: normalizedHeaders.warnings,
         })
     } finally {
         clearTimeout(timeout)
     }
+}
+
+function normalizeRequestHeaders(headers: Record<string, string>) {
+    const normalized: Record<string, string> = {}
+    const warnings: string[] = []
+
+    for (const [rawKey, rawValue] of Object.entries(headers || {})) {
+        const key = rawKey.trim()
+        const value = String(rawValue ?? '').trim()
+        if (!key || !value) {
+            continue
+        }
+
+        if (!HEADER_NAME_PATTERN.test(key)) {
+            warnings.push(`Skipped invalid header name: ${key}`)
+            continue
+        }
+
+        if (!isValidHeaderValue(value)) {
+            warnings.push(`Skipped invalid header value for ${key}.`)
+            continue
+        }
+
+        normalized[key] = value
+    }
+
+    return { headers: normalized, warnings }
+}
+
+function isValidHeaderValue(value: string) {
+    for (let index = 0; index < value.length; index += 1) {
+        const code = value.charCodeAt(index)
+        if (code === 9) {
+            continue
+        }
+        if (code < 32 || code > 255 || code === 127) {
+            return false
+        }
+    }
+
+    return true
 }

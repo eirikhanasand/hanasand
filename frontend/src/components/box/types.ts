@@ -9,6 +9,7 @@ export type ToolResponse = {
     body?: string
     raw?: string
     error?: string
+    warnings?: string[]
     request?: {
         method: string
         url: string
