@@ -115,12 +115,12 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 160 * 1000
+        return 145 * 1000
     }
     if (kind === 'postgres') {
-        return 25 * 1000
+        return 22 * 1000
     }
-    return 30 * 1000
+    return 26 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind) {
@@ -652,6 +652,242 @@ async function main() {
                 appName: 'AtlasDesk',
                 productType: 'corporate knowledge base',
                 productBrief: 'AtlasDesk helps a corporation publish internal docs, onboarding metrics, readiness tasks, pricing impact, testimonials, and deployment guidance in a controlled self-hosted portal.',
+            }),
+        },
+        {
+            id: 'ux-audit-landing-site',
+            title: 'UX audit landing site',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#41-ux-audit-landing-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('ux-audit-landing-site'),
+                appName: 'FlowAudit Studio',
+                productType: 'UX audit landing site',
+                productBrief: 'FlowAudit Studio helps a senior designer sell UX audits with proof, package pricing, project metrics, testimonial trust, and a compact Docker deployment path.',
+            }),
+        },
+        {
+            id: 'first-time-saas-admin',
+            title: 'First-time SaaS admin',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#42-first-time-saas-admin',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('first-time-saas-admin'),
+                appName: 'LaunchRoom Admin',
+                productType: 'beginner SaaS admin dashboard',
+                productBrief: 'LaunchRoom Admin gives a first-time founder a clear SaaS control panel with signups, pricing, testimonials, launch tasks, and concise self-hosting instructions.',
+            }),
+        },
+        {
+            id: 'enterprise-risk-register-api',
+            title: 'Enterprise risk register API',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#43-enterprise-risk-register-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('enterprise-risk-register-api'),
+                appName: 'EnterpriseRisk API',
+            }),
+        },
+        {
+            id: 'enterprise-contract-review-worker',
+            title: 'Enterprise contract review worker',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#44-enterprise-contract-review-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('enterprise-contract-review-worker'),
+                appName: 'ContractQueue Worker',
+            }),
+        },
+        {
+            id: 'agency-white-label-portal',
+            title: 'Agency white-label portal',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#45-agency-white-label-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('agency-white-label-portal'),
+                appName: 'BrandDock Portal',
+                productType: 'white-label agency portal',
+                productBrief: 'BrandDock Portal lets an agency ship a white-label client dashboard with metrics, pricing, delivery tasks, testimonials, and fast Docker portability.',
+            }),
+        },
+        {
+            id: 'solo-consultant-crm-api',
+            title: 'Solo consultant CRM API',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#46-solo-consultant-crm-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('solo-consultant-crm-api'),
+                appName: 'ClientTrail API',
+            }),
+        },
+        {
+            id: 'podcast-publishing-worker',
+            title: 'Podcast publishing worker',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#47-podcast-publishing-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('podcast-publishing-worker'),
+                appName: 'CastQueue Worker',
+            }),
+        },
+        {
+            id: 'hotel-event-booking-site',
+            title: 'Hotel event booking site',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#48-hotel-event-booking-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('hotel-event-booking-site'),
+                appName: 'VenueNorth Events',
+                productType: 'hotel event booking site',
+                productBrief: 'VenueNorth Events helps a hotel sell event spaces with package pricing, inquiry metrics, testimonials, launch readiness, and a concise portable deploy path.',
+            }),
+        },
+        {
+            id: 'insurance-claims-api',
+            title: 'Insurance claims API',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#49-insurance-claims-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('insurance-claims-api'),
+                appName: 'ClaimDesk API',
+            }),
+        },
+        {
+            id: 'insurance-claims-worker',
+            title: 'Insurance claims worker',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#50-insurance-claims-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('insurance-claims-worker'),
+                appName: 'ClaimQueue Worker',
+            }),
+        },
+        {
+            id: 'open-source-sponsor-site',
+            title: 'Open-source sponsor site',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#51-open-source-sponsor-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('open-source-sponsor-site'),
+                appName: 'SponsorForge',
+                productType: 'open-source sponsor site',
+                productBrief: 'SponsorForge helps maintainers present roadmap metrics, sponsor tiers, testimonials, release tasks, and cheap self-hosted deployment in one focused site.',
+            }),
+        },
+        {
+            id: 'hr-onboarding-api',
+            title: 'HR onboarding API',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#52-hr-onboarding-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('hr-onboarding-api'),
+                appName: 'OnboardLedger API',
+            }),
+        },
+        {
+            id: 'hr-onboarding-worker',
+            title: 'HR onboarding worker',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#53-hr-onboarding-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('hr-onboarding-worker'),
+                appName: 'OnboardQueue Worker',
+            }),
+        },
+        {
+            id: 'sports-club-membership-site',
+            title: 'Sports club membership site',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#54-sports-club-membership-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('sports-club-membership-site'),
+                appName: 'ClubPulse',
+                productType: 'sports club membership site',
+                productBrief: 'ClubPulse helps a sports club present membership tiers, activity metrics, testimonials, launch tasks, and self-hosted deployment without platform lock-in.',
+            }),
+        },
+        {
+            id: 'lab-sample-tracking-api',
+            title: 'Lab sample tracking API',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#55-lab-sample-tracking-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('lab-sample-tracking-api'),
+                appName: 'SampleTrack API',
+            }),
+        },
+        {
+            id: 'lab-result-processing-worker',
+            title: 'Lab result processing worker',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#56-lab-result-processing-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('lab-result-processing-worker'),
+                appName: 'ResultQueue Worker',
+            }),
+        },
+        {
+            id: 'conference-call-for-papers-site',
+            title: 'Conference call for papers site',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#57-conference-call-for-papers-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('conference-call-for-papers-site'),
+                appName: 'PaperCall North',
+                productType: 'conference CFP site',
+                productBrief: 'PaperCall North helps organizers publish tracks, submission metrics, sponsor pricing, testimonials, readiness tasks, and Docker deployment notes.',
+            }),
+        },
+        {
+            id: 'warehouse-receiving-api',
+            title: 'Warehouse receiving API',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#58-warehouse-receiving-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('warehouse-receiving-api'),
+                appName: 'DockLedger API',
+            }),
+        },
+        {
+            id: 'warehouse-label-worker',
+            title: 'Warehouse label worker',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#59-warehouse-label-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('warehouse-label-worker'),
+                appName: 'LabelQueue Worker',
+            }),
+        },
+        {
+            id: 'board-report-portal',
+            title: 'Board report portal',
+            storyPath: 'agents/training-scenarios/user_stories/41-60-advanced-user-stories.md#60-board-report-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('board-report-portal'),
+                appName: 'BoardBrief Portal',
+                productType: 'board report portal',
+                productBrief: 'BoardBrief Portal helps executives publish concise board metrics, risk notes, pricing impact, testimonials, readiness tasks, and auditable Docker deployment.',
             }),
         },
     ]
