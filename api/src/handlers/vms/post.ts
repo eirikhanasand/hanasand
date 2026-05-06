@@ -5,6 +5,8 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import hasInternalToken from '#utils/auth/internalToken.ts'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
+import config from '#constants'
+import { canUseLocalLxd, provisionLocalLxdInstance } from '#utils/vms/lxd.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const body = req.body as {
@@ -17,15 +19,16 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     let owner = body.owner
     let created_by = body.created_by
 
-    if (!hasInternalToken(req)) {
+    const internal = hasInternalToken(req)
+    if (!internal) {
         const { valid, id } = await tokenWrapper(req, res)
         const { valid: validRole } = await hasRole(req, res, 'system_admin')
-        if (!valid || !validRole || !id) {
+        if (!valid || !id) {
             return res.status(401).send({ error: 'Unauthorized.' })
         }
 
-        owner = owner || id
-        created_by = created_by || id
+        owner = validRole ? owner || id : id
+        created_by = validRole ? created_by || id : id
     }
 
     if (!name || !owner || !created_by) {
@@ -72,10 +75,13 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
                 SET name = $1,
                     owner = $2,
                     created_by = $3,
-                    access_users = $4
+                    access_users = $4,
+                    primary_host = $6
                 WHERE name = $5
                 RETURNING *
-            `, [name, nextOwner, nextCreatedBy, JSON.stringify(nextAccessUsers ?? []), existing.name])
+            `, [name, nextOwner, nextCreatedBy, JSON.stringify(nextAccessUsers ?? []), existing.name, config.vm_host_id])
+
+            await provisionIfLocal(name, req)
 
             return res.status(201).send(result.rows[0])
         }
@@ -94,6 +100,9 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
             return res.status(409).send({ error: 'VM already exists' })
         }
 
+        await run('UPDATE vms SET primary_host = $2 WHERE name = $1', [name, config.vm_host_id])
+        await provisionIfLocal(name, req)
+
         await syncUserCertificatesToVm({
             vmName: name,
             userIds: [owner, created_by, ...(access_users ?? [])]
@@ -106,4 +115,17 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         console.log(error)
         return res.status(500).send({ error: 'Internal server error' })
     }
+}
+
+async function provisionIfLocal(name: string, req: FastifyRequest) {
+    if (config.vm_host_id !== 'inspur') {
+        return
+    }
+
+    if (!await canUseLocalLxd()) {
+        req.log.warn({ vmName: name }, 'Local LXD socket is not available; VM row was recorded without local provisioning.')
+        return
+    }
+
+    await provisionLocalLxdInstance(name)
 }

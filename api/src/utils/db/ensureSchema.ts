@@ -36,6 +36,14 @@ export default async function ensureSchema() {
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_enabled BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS primary_host TEXT NOT NULL DEFAULT $$ovhcloud$$')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_host TEXT')
+    if ((process.env.VM_HOST_ID || '') === 'inspur') {
+        await run(`
+            UPDATE vms v
+            SET primary_host = 'inspur'
+            WHERE LOWER(COALESCE(v.primary_host, '')) = 'ovhcloud'
+              AND EXISTS (SELECT 1 FROM vm_details d WHERE LOWER(d.name) = LOWER(v.name))
+        `)
+    }
     await run('ALTER TABLE vm_details DROP CONSTRAINT IF EXISTS vm_details_name_fkey')
     await run('ALTER TABLE vm_details ADD CONSTRAINT vm_details_name_fkey FOREIGN KEY (name) REFERENCES vms(name) ON DELETE CASCADE ON UPDATE CASCADE')
     await run(`
