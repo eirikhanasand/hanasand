@@ -54,6 +54,7 @@ export default function NewRequest({
     const [activeRunId, setActiveRunId] = useState<string | null>(null)
     const [variables, setVariables] = useState<VariableRow[]>([{ key: 'baseUrl', value: 'https://api.hanasand.com' }])
     const [treeFilter, setTreeFilter] = useState('')
+    const [headerFilter, setHeaderFilter] = useState('')
     const [aiPrompt, setAiPrompt] = useState('Explain this response and suggest a next request.')
     const [aiResponse, setAiResponse] = useState('')
     const [aiLoading, setAiLoading] = useState(false)
@@ -421,9 +422,21 @@ export default function NewRequest({
                     )}
 
                     {responseTab === 'headers' && (
-                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/75'>
-                            {response?.headers ? formatHeaders(response.headers) : 'Response headers will appear here.'}
-                        </pre>
+                        <div className='grid min-h-32 grid-rows-[auto_minmax(0,1fr)] overflow-hidden'>
+                            <label className='flex h-10 items-center gap-2 border-b border-bright/8 px-3 text-bright/45'>
+                                <Search className='h-3.5 w-3.5 shrink-0' />
+                                <span className='sr-only'>Filter response headers</span>
+                                <input
+                                    value={headerFilter}
+                                    onChange={(event) => setHeaderFilter(event.target.value)}
+                                    placeholder='Filter response headers'
+                                    className='min-w-0 flex-1 bg-transparent text-xs text-bright/78 outline-none placeholder:text-bright/32'
+                                />
+                            </label>
+                            <pre className='min-h-0 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/75'>
+                                {response?.headers ? formatFilteredHeaders(response.headers, headerFilter) : 'Response headers will appear here.'}
+                            </pre>
+                        </div>
                     )}
 
                     {responseTab === 'request' && (
@@ -868,6 +881,22 @@ function flattenJson(value: unknown, path = '$'): string[] {
 
 function formatJsonTreeValue(value: unknown) {
     return typeof value === 'string' ? JSON.stringify(value) : String(value)
+}
+
+function formatFilteredHeaders(headers: Record<string, string>, filter = '') {
+    const rows = Object.entries(headers)
+    if (!rows.length) {
+        return 'No headers.'
+    }
+
+    const normalizedFilter = filter.trim().toLowerCase()
+    const visibleRows = normalizedFilter
+        ? rows.filter(([key, value]) => `${key}: ${value}`.toLowerCase().includes(normalizedFilter))
+        : rows
+
+    return visibleRows.length
+        ? visibleRows.map(([key, value]) => `${key}: ${value}`).join('\n')
+        : 'No response headers match this filter.'
 }
 
 function formatCurlCommand(request: NonNullable<ToolResponse['request']>) {
