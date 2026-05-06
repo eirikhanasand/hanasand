@@ -34,6 +34,7 @@ export type ManagedCronUpdate = {
 const CRON_USER = process.env.MANAGED_CRON_USER || process.env.HOST_USER || 'hanasand'
 const CRON_SPOOL_DIR = process.env.MANAGED_CRON_SPOOL_DIR || '/host/cron/crontabs'
 const HOST_HOME_PREFIX = process.env.MANAGED_CRON_HOST_HOME_PREFIX || '/host/home'
+const CRON_WRITE_USER = process.env.MANAGED_CRON_WRITE_USER || 'bun'
 
 export const managedCronDefinitions: ManagedCronDefinition[] = [
     {
@@ -146,8 +147,13 @@ async function writeCrontab(content: string) {
             uid = current.uid
             gid = current.gid
         }
-        await writeFile(spoolPath, normalized, 'utf8')
-        await chmod(spoolPath, 0o600)
+        try {
+            await writeFile(spoolPath, normalized, 'utf8')
+        } catch (error) {
+            if (!isAccessError(error)) throw error
+            await writeFileAsOwner(spoolPath, normalized)
+        }
+        await chmod(spoolPath, 0o600).catch(() => undefined)
         await chown(spoolPath, uid, gid).catch(() => undefined)
         return
     }
@@ -303,4 +309,32 @@ function writeCrontabCommand(content: string) {
         })
         child.stdin.end(content)
     })
+}
+
+function writeFileAsOwner(path: string, content: string) {
+    return new Promise<void>((resolve, reject) => {
+        const child = spawn('su', [CRON_WRITE_USER, '-s', '/bin/sh', '-c', `umask 077; cat > ${shellQuote(path)}`], {
+            stdio: ['pipe', 'ignore', 'pipe'],
+        })
+        const stderr: Buffer[] = []
+
+        child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)))
+        child.on('error', reject)
+        child.on('close', code => {
+            if (code === 0) {
+                resolve()
+                return
+            }
+            reject(new Error(Buffer.concat(stderr).toString('utf8').trim() || `owner write exited with status ${code}`))
+        })
+        child.stdin.end(content)
+    })
+}
+
+function shellQuote(value: string) {
+    return `'${value.replaceAll('\'', '\'\\\'\'')}'`
+}
+
+function isAccessError(error: unknown) {
+    return error && typeof error === 'object' && 'code' in error && error.code === 'EACCES'
 }
