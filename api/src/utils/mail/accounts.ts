@@ -74,17 +74,24 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             { action: 'set', field: 'secrets', value: [secret] },
         ]
 
-        for (const address of allAddresses) {
-            if (!principalEmails.has(address)) {
-                patches.push({ action: 'addItem', field: 'emails', value: address })
-            }
-        }
-
         if (!preferredSecret && inheritedSecret && !existing) {
             patches.splice(1, 1)
         }
 
         await patchPrincipal(principal.name, patches)
+
+        for (const address of allAddresses) {
+            if (principalEmails.has(address)) {
+                continue
+            }
+
+            await patchPrincipal(principal.name, [{ action: 'addItem', field: 'emails', value: address }])
+                .catch(error => {
+                    if (!isAlreadyAttachedError(error)) {
+                        throw error
+                    }
+                })
+        }
     }
 
     await run(`
@@ -202,4 +209,8 @@ async function ensureDomainPrincipal() {
             externalMembers: [],
         })
     }
+}
+
+function isAlreadyAttachedError(error: unknown) {
+    return error instanceof Error && error.message.includes('fieldAlreadyExists')
 }
