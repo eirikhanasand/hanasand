@@ -29,11 +29,11 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
     })
 
     fastify.addHook('preHandler', async (req: FastifyRequest, res: FastifyReply) => {
-        if (req.headers.upgrade?.toLowerCase() === 'websocket') {
+        const path = normalizeRequestPath(req)
+        if (req.headers.upgrade?.toLowerCase() === 'websocket' || isInfrastructureWebSocketPath(path)) {
             return
         }
 
-        const path = normalizeRequestPath(req)
         if (!path.startsWith('/api')) {
             return
         }
@@ -102,6 +102,10 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         }
     })
 })
+
+function isInfrastructureWebSocketPath(path: string) {
+    return path.startsWith('/api/client/ws/')
+}
 
 function resolveRouteRule(settings: RateLimitSettings, method: string, route: string, scope: RateLimitScope) {
     const override = settings.overrides.find((entry) =>
