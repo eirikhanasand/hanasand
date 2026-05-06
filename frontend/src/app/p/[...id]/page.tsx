@@ -6,8 +6,10 @@ import { getShare } from '@/utils/share/get'
 
 export default async function Page(props: {
     params: Promise<{ id: string[] }>
+    searchParams: Promise<{ file?: string }>
 }) {
     const params = await props.params
+    const searchParams = await props.searchParams
     const alias = params.id[0]
     const Cookies = await cookies()
     const openFoldersCookie = Cookies.get('openFolders')
@@ -19,6 +21,9 @@ export default async function Page(props: {
     const openFolders = parseCookieJson<string[]>(openFoldersCookie?.value, [])
     const openFiles = parseCookieJson<OpenFile[]>(openFilesCookie?.value, [])
     const project = await getProject({ alias, token, userId })
+    const activeShare = searchParams.file
+        ? await getShare({ id: searchParams.file, token, userId })
+        : null
 
     if (!project) {
         const share = await getShare({ id: alias, token, userId })
@@ -35,7 +40,7 @@ export default async function Page(props: {
         <div className='w-full h-[92.5vh]'>
             <SharePageClient
                 id={project.share.id}
-                share={project.share}
+                share={typeof activeShare === 'string' || !activeShare ? project.share : activeShare}
                 openFolders={openFolders}
                 tree={project.tree}
                 sharePageWidth={sharePageWidth}

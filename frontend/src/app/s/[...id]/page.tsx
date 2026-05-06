@@ -32,7 +32,7 @@ export default async function Page(props: {
     const isProject = safeShare && safeShare.alias !== safeShare.id && Array.isArray(tree) && flattenTree(tree).length > 1
 
     if (!isNewWorkspace && isProject) {
-        redirect(`/p/${safeShare.alias}`)
+        redirect(`/p/${safeShare.alias}?file=${safeShare.id}`)
     }
 
     if (!isNewWorkspace && !safeShare) {
