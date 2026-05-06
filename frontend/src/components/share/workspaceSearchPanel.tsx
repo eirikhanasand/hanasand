@@ -248,6 +248,7 @@ export default function WorkspaceSearchPanel({
                                     {group.matches.slice(0, 80).map(match => (
                                         <Link
                                             key={match.id}
+                                            prefetch={false}
                                             href={`/s/${match.file.id}?line=${match.line}&q=${encodeURIComponent(query)}`}
                                             className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#f07d33]/10'
                                         >

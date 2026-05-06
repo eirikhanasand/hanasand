@@ -6,6 +6,7 @@ import { removeClient } from '#utils/ws/removeClient.ts'
 import config from '#constants'
 import followTest from '../handlers/test/follow.ts'
 import { gpt, handleGptMessage, sendGptSnapshot, unregisterGptSocket } from '#utils/ws/handleGptMessage.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 
 type PendingUpdates = {
     content: string
@@ -53,8 +54,16 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             try {
                 connection.close()
             } catch (error) {
-                console.log(`Error occured while closing connection for id ${id}: ${error}`)
+                void recordWebsocketFailure('pwned', id, error)
             }
+        })
+
+        internalWs.on('error', (error) => {
+            void recordWebsocketFailure('pwned-internal', id, error)
+        })
+
+        connection.on('error', (error) => {
+            void recordWebsocketFailure('pwned-client', id, error)
         })
     })
 
@@ -72,8 +81,12 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
                     followTest(id, true)
                 }
             } catch (error) {
-                console.log(`Invalid test socket message for ${id}: ${error}`)
+                void recordWebsocketFailure('test-message', id, error)
             }
+        })
+
+        connection.on('error', (error) => {
+            void recordWebsocketFailure('test-client', id, error)
         })
 
         connection.on('close', () => {
@@ -95,5 +108,21 @@ export default fp(async function wsPlugin(fastify: FastifyInstance) {
             unregisterGptSocket(id, connection)
             removeClient(id, connection, gpt)
         })
+
+        connection.on('error', (error) => {
+            void recordWebsocketFailure('gpt-client', id, error)
+        })
     })
 })
+
+async function recordWebsocketFailure(kind: string, id: string, error: unknown) {
+    await recordLog({
+        level: 'warn',
+        message: `Websocket ${kind} failure for ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+            category: 'websocket_failure',
+            kind,
+            id,
+        },
+    }).catch(() => {})
+}

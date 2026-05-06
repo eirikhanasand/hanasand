@@ -7,6 +7,7 @@ import { mailConfig } from './mail/config.ts'
 import purgeDeletedAccounts from './auth/purgeDeletedAccounts.ts'
 import ensureAlwaysRunningVms from './vms/ensureAlwaysRunning.ts'
 import { runDueAutomations } from './automations.ts'
+import runProductionLogMonitors from './status/logMonitors.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
@@ -16,6 +17,7 @@ export default function cron() {
                 invalidateOldAttempts(),
                 purgeDeletedAccounts(),
                 runSyntheticMonitor(),
+                runProductionLogMonitors(),
                 ensureAlwaysRunningVms(),
                 runDueAutomations(),
             ]

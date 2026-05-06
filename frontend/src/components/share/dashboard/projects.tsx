@@ -26,7 +26,7 @@ export default async function Shares() {
                         {typeof shares === 'string' ? 'Unavailable' : `${shares.length} shared spaces`}
                     </p>
                 </div>
-                <Link href='/s' className='inline-flex h-8 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-bright/70 transition hover:bg-white/9 hover:text-bright'>
+                <Link prefetch={false} href='/s' className='inline-flex h-8 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-bright/70 transition hover:bg-white/9 hover:text-bright'>
                     <Plus className='h-4 w-4' />
                     <span>Create</span>
                 </Link>

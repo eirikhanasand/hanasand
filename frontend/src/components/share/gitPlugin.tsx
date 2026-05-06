@@ -327,7 +327,7 @@ export default function GitPlugin({ shareRouteId, share }: GitPluginProps) {
                             <LockKeyhole className='h-3.5 w-3.5' />
                             Sign in for Git access
                         </div>
-                        <Link href='/login' className='mt-2 inline-block underline-offset-4 hover:underline'>
+                        <Link prefetch={false} href='/login' className='mt-2 inline-block underline-offset-4 hover:underline'>
                             Log in to pull public repositories and private GitHub repositories
                         </Link>
                     </div>

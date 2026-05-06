@@ -235,7 +235,7 @@ export default function FileNode({
                         />
                     </>
                 ) : (
-                    <Link href={`/s/${file.id}`} className='flex min-w-0 flex-1 items-center gap-2'>
+                    <Link prefetch={false} href={`/s/${file.id}`} className='flex min-w-0 flex-1 items-center gap-2'>
                         <File size={14} className={`${isActive ? 'text-[#f07d33]' : 'text-bright/80'}`} />
                         <span className={`truncate text-sm ${isActive ? 'font-semibold text-bright' : 'text-bright/80'}`}>{file.name}</span>
                     </Link>

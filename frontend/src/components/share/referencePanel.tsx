@@ -166,6 +166,7 @@ function ReferenceGroup({ title, matches, accent = false }: { title: string; mat
                 {matches.map(match => (
                     <Link
                         key={match.id}
+                        prefetch={false}
                         href={`/s/${match.file.id}?line=${match.line}`}
                         className='group flex gap-2 px-3 py-2 text-xs transition hover:bg-[#f07d33]/10'
                     >

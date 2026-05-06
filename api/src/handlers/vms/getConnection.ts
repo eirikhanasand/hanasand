@@ -3,6 +3,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import config from '#constants'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 
 const publicSshHost = process.env.VM_PUBLIC_SSH_HOST || process.env.VM_PUBLIC_HOST || 'hanasand.com'
 
@@ -37,6 +38,7 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
 
         const vmPayload = await vmResponse.json().catch(() => ({} as { vm_ip?: string }))
         if (!vmResponse.ok) {
+            void recordTerminalFailure(vmName, `Internal VM lookup returned ${vmResponse.status}.`)
             return res.status(vmResponse.status).send(vmPayload)
         }
 
@@ -45,6 +47,7 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
             userIds: [id]
         }).catch((error) => {
             req.log.warn({ err: error, vmName, userId: id }, 'Unable to refresh user certificates on VM connection lookup.')
+            void recordTerminalFailure(vmName, error)
         })
 
         const vmIp = typeof vmPayload.vm_ip === 'string' ? vmPayload.vm_ip : ''
@@ -60,6 +63,18 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
         })
     } catch (error) {
         req.log.error(error)
+        void recordTerminalFailure(vmName, error)
         return res.status(500).send({ error: 'Unable to load VM connection details.' })
     }
+}
+
+async function recordTerminalFailure(vmName: string, error: unknown) {
+    await recordLog({
+        level: 'warn',
+        message: `Terminal connection failed for ${vmName}: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+            category: 'terminal_failure',
+            vmName,
+        },
+    }).catch(() => {})
 }

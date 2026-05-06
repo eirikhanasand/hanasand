@@ -161,7 +161,7 @@ export default function Metadata({
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label='Reload' side='left'>
-                    <Link href={`/s/${share?.id || shareRouteId}`} aria-label='Reload current share workspace' className={baseButtonStyle}>
+                    <Link prefetch={false} href={`/s/${share?.id || shareRouteId}`} aria-label='Reload current share workspace' className={baseButtonStyle}>
                         <RefreshCw className='h-5 w-5' />
                     </Link>
                 </SidebarTooltip>

@@ -4,6 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 
 type VMRow = {
     name: string
@@ -93,6 +94,15 @@ export default async function postAgentTargetSyncAccess(req: FastifyRequest, res
         })
     } catch (error) {
         req.log.error({ err: error, vmId: id, userId, scope }, 'Unable to synchronize VM access.')
+        void recordLog({
+            level: 'warn',
+            message: `Terminal access sync failed for ${id}: ${error instanceof Error ? error.message : String(error)}`,
+            metadata: {
+                category: 'terminal_failure',
+                vmName: id,
+                scope,
+            },
+        }).catch(() => {})
         return res.status(500).send({ error: 'Unable to synchronize VM access.' })
     }
 }

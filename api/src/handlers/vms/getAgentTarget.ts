@@ -4,6 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { buildAgentTarget } from '#utils/vms/buildAgentTarget.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 
 type VMRow = {
     name: string
@@ -65,6 +66,14 @@ export default async function getAgentTarget(req: FastifyRequest, res: FastifyRe
         }))
     } catch (error) {
         req.log.error(error)
+        void recordLog({
+            level: 'warn',
+            message: `Terminal agent target lookup failed for ${id}: ${error instanceof Error ? error.message : String(error)}`,
+            metadata: {
+                category: 'terminal_failure',
+                vmName: id,
+            },
+        }).catch(() => {})
         return res.status(500).send({ error: 'Unable to load VM agent target.' })
     }
 }

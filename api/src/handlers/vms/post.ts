@@ -7,6 +7,7 @@ import hasInternalToken from '#utils/auth/internalToken.ts'
 import syncUserCertificatesToVm from '#utils/vms/syncUserCertificatesToVm.ts'
 import config from '#constants'
 import { canUseLocalLxd, provisionLocalLxdInstance } from '#utils/vms/lxd.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 
 export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const body = req.body as {
@@ -109,11 +110,13 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
             userIds: [owner, created_by, ...(access_users ?? [])]
         }).catch((error) => {
             req.log.warn({ err: error, vmName: name }, 'Unable to synchronize user certificates to the VM after creation.')
+            void recordVmProvisioningError(name, error, 'certificate_sync')
         })
 
         return res.status(201).send(result.rows[0])
     } catch (error) {
-        console.log(error)
+        req.log.error({ err: error, vmName: name }, 'Unable to create or provision VM.')
+        void recordVmProvisioningError(name || 'unknown', error, 'create_or_provision')
         return res.status(500).send({ error: 'Internal server error' })
     }
 }
@@ -129,8 +132,21 @@ async function provisionIfLocal(name: string, req: FastifyRequest, shouldProvisi
 
     if (!await canUseLocalLxd()) {
         req.log.warn({ vmName: name }, 'Local LXD socket is not available; VM row was recorded without local provisioning.')
+        void recordVmProvisioningError(name, 'Local LXD socket is not available.', 'lxd_unavailable')
         return
     }
 
     await provisionLocalLxdInstance(name)
+}
+
+async function recordVmProvisioningError(vmName: string, error: unknown, phase: string) {
+    await recordLog({
+        level: 'error',
+        message: `VM provisioning ${phase} failed for ${vmName}: ${error instanceof Error ? error.message : String(error)}`,
+        metadata: {
+            category: 'vm_provisioning_error',
+            vmName,
+            phase,
+        },
+    }).catch(() => {})
 }

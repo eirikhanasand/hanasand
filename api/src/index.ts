@@ -30,6 +30,40 @@ fastify.register(ws)
 fastify.register(rateLimit)
 fastify.register(apiRoutes, { prefix: '/api' })
 fastify.get('/', IndexHandler)
+fastify.addHook('onResponse', async (req, res) => {
+    if (res.statusCode < 400) {
+        return
+    }
+
+    const referer = req.headers.referer || req.headers.referrer || ''
+    const refererText = Array.isArray(referer) ? referer.join(', ') : referer
+    const isSharePageRequest = /\/(?:s|p)\//.test(refererText)
+    const isVmRequest = req.url.startsWith('/api/vms')
+    const category = isSharePageRequest
+        ? 'share_page_http'
+        : isVmRequest && /(?:connection|agent-target|sync-access)/.test(req.url)
+            ? 'terminal_failure'
+            : isVmRequest
+                ? 'vm_provisioning_error'
+                : null
+
+    if (!category) {
+        return
+    }
+
+    await recordLog({
+        service: category === 'share_page_http' ? 'hanasand-frontend' : 'hanasand-api',
+        level: res.statusCode >= 500 ? 'error' : 'warn',
+        message: `${req.method} ${req.url} returned ${res.statusCode}`,
+        metadata: {
+            category,
+            method: req.method,
+            url: req.url,
+            statusCode: res.statusCode,
+            referer: refererText,
+        },
+    }).catch(error => fastify.log.error(error, 'Failed to persist production monitor signal'))
+})
 fastify.addHook('onError', async (req, _res, error) => {
     await recordLog({
         level: 'error',

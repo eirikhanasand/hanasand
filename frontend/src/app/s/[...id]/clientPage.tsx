@@ -15,9 +15,6 @@ import useClearStateAfter from '@/hooks/useClearStateAfter'
 import DisplayError from '@/components/share/search/displayError'
 import { getCookie } from '@/utils/cookies/cookies'
 import postShare from '@/utils/share/post'
-import getAgentTarget from '@/utils/vms/fetch/getAgentTarget'
-import syncAgentTargetAccess from '@/utils/vms/fetch/syncAgentTargetAccess'
-import postVM from '@/utils/vms/fetch/postVM'
 import type { TerminalCredentials } from '@/hooks/useTerminal'
 import { getShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
 import { CheckCircle2, CloudOff, Code2, FileCode2, Loader2, MessageSquare, Radio, TerminalSquare } from 'lucide-react'
@@ -113,11 +110,6 @@ export default function ClientPage({
             const token = getCookie('access_token')
             const userId = getCookie('id')
             const normalizedName = id
-            const vmName = normalizedName
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-+|-+$/g, '')
-                .slice(0, 48) || `vm-${id.toLowerCase()}`
 
             const createdShare = await postShare({
                 includeTree: true,
@@ -138,27 +130,6 @@ export default function ClientPage({
             setWorkspaceCreated(true)
             if (replaceUrlOnCreate) {
                 window.history.replaceState(window.history.state, '', `/s/${id}`)
-            }
-
-            if (!token || !userId) {
-                return
-            }
-
-            const vmResult = await postVM({ name: vmName })
-            if (vmResult.status >= 400 && vmResult.status !== 409) {
-                setError(vmResult.message)
-                return
-            }
-
-            const syncResult = await syncAgentTargetAccess(vmName, 'current_user')
-            if (syncResult.status >= 400 || !syncResult.body?.ok) {
-                setError(syncResult.message)
-                return
-            }
-
-            const targetResult = await getAgentTarget(vmName)
-            if (targetResult.status >= 400 || !targetResult.target) {
-                setError(targetResult.message)
             }
         }
 
