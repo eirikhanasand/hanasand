@@ -62,13 +62,12 @@ async function sampleNvidiaGpus(): Promise<NvidiaGpuSample[]> {
         return []
     }
 
-    let stdout = ''
     try {
         const result = await execFileAsync('nvidia-smi', [
             '--query-gpu=index,name,utilization.gpu,memory.total,memory.used,power.draw,power.limit,temperature.gpu',
             '--format=csv,noheader,nounits',
         ])
-        stdout = result.stdout
+        return parseNvidiaGpuSamples(result.stdout)
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             nvidiaSmiUnavailable = true
@@ -81,7 +80,9 @@ async function sampleNvidiaGpus(): Promise<NvidiaGpuSample[]> {
         }
         return []
     }
+}
 
+function parseNvidiaGpuSamples(stdout: string): NvidiaGpuSample[] {
     return stdout.trim().split('\n').filter(Boolean).map((line) => {
         const [index, name, utilizationGpu, memoryTotalMb, memoryUsedMb, powerDrawWatts, powerLimitWatts, temperatureC] = line
             .split(',')
