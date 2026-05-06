@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS users (
     avatar TEXT NOT NULL,
     active BOOLEAN NOT NULL DEFAULT TRUE,
     deactivated_at TIMESTAMPTZ,
-    deactivated_by TEXT
+    deactivated_by TEXT,
+    deletion_requested_at TIMESTAMPTZ,
+    deletion_scheduled_at TIMESTAMPTZ,
+    deletion_restore_token_hash TEXT
 );
 
 -- Token table

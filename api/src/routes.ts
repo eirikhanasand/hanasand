@@ -24,6 +24,7 @@ import getRolesForUser from './handlers/roles/getRolesForUser.ts'
 import putUser from './handlers/user/putUser.ts'
 import deleteUser from './handlers/user/deleteUser.ts'
 import deleteSelf from './handlers/user/deleteSelf.ts'
+import restoreSelf from './handlers/user/restoreSelf.ts'
 import authorizedUserHandler from './handlers/user/fullUser.ts'
 import getUsers from './handlers/user/getUsers.ts'
 import deleteArticle from './handlers/articles/delete.ts'
@@ -146,6 +147,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.put('/user/:id', putUser)
     fastify.put('/user/:id/active', deactivateUser)
     fastify.put('/user/self', putSelf)
+    fastify.post('/user/restore', restoreSelf)
     fastify.delete('/user/:id', deleteUser)
     fastify.delete('/user/self', deleteSelf)
 

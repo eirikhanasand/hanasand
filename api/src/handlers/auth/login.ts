@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import bcrypt from 'bcrypt'
 import run from '#db'
 import login from '#utils/auth/login.ts'
+import { createAccountRestoreToken } from '#utils/auth/accountDeletion.ts'
 
 export default async function loginHandler(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string } ?? {}
@@ -15,7 +16,7 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
 
     try {
         const query = `
-            SELECT u.id, u.name, u.password, u.avatar, u.active
+            SELECT u.id, u.name, u.password, u.avatar, u.active, u.deletion_scheduled_at
             FROM users u
             LEFT JOIN mail_accounts ma ON ma.user_id = u.id
             WHERE u.id = $1
@@ -59,6 +60,29 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
             return res.status(401).send({ error: 'Incorrect username or password.' })
         }
 
+        if (user.deletion_scheduled_at && new Date(user.deletion_scheduled_at).getTime() <= Date.now()) {
+            await run('DELETE FROM users WHERE id = $1', [userId])
+            await recordLoginEvent(userId, ip, userAgent, 'deleted')
+            return res.status(404).send({ error: 'Incorrect username or password.' })
+        }
+
+        if (user.deletion_scheduled_at) {
+            const restore = createAccountRestoreToken()
+            await run(
+                'UPDATE users SET deletion_restore_token_hash = $2 WHERE id = $1',
+                [userId, restore.hash]
+            )
+            await revokeAllUserTokens(userId)
+            await recordLoginEvent(userId, ip, userAgent, 'pending_deletion')
+            return res.status(423).send({
+                error: 'Account pending deletion.',
+                pending_deletion: true,
+                id: userId,
+                deletion_scheduled_at: user.deletion_scheduled_at,
+                restore_token: restore.token,
+            })
+        }
+
         await run('DELETE FROM attempts WHERE id = $1', [userId])
         const { password: ignoredPassword, ...userWithoutPassword } = user
         void ignoredPassword
@@ -84,6 +108,16 @@ export default async function loginHandler(req: FastifyRequest, res: FastifyRepl
         await recordLoginEvent(identifier, ip, userAgent, 'unexpected_error')
         return res.status(500).send({ error: 'Unable to login. Please try again later.' })
     }
+}
+
+async function revokeAllUserTokens(userId: string) {
+    await run(`
+        UPDATE tokens
+        SET revoked_at = NOW(),
+            revoked_by = $1
+        WHERE id = $1
+          AND revoked_at IS NULL
+    `, [userId]).catch(() => {})
 }
 
 async function recordLoginEvent(userId: string, ip: string, userAgent: string, reason: string) {

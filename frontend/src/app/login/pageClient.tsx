@@ -2,12 +2,13 @@
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
-import login from '@/utils/login/login'
-import Link from 'next/link'
+import login, { PendingDeletionError } from '@/utils/login/login'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import config from '@/config'
 import { ArrowRight } from 'lucide-react'
+import fetchWithRetry from '@/utils/fetchWithRetry'
+import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 
 type LoginPageProps = {
     path: string | null
@@ -17,9 +18,21 @@ type LoginPageProps = {
 
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
     const router = useRouter()
-    const [mode, setMode] = useState<'login' | 'request-reset' | 'verify-reset'>('login')
+    const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>('login')
     const [resetUserId, setResetUserId] = useState('')
     const [busy, setBusy] = useState(false)
+    const [signupName, setSignupName] = useState('')
+    const [signupUsername, setSignupUsername] = useState('')
+    const [signupPassword, setSignupPassword] = useState('')
+    const passwordCounts = countPassword(signupPassword)
+    const signupPasswordIsValid =
+        signupPassword.length >= 16
+        && passwordCounts.numbers >= 2
+        && passwordCounts.symbols >= 2
+        && passwordCounts.lowercase >= 2
+        && passwordCounts.uppercase >= 2
+    const reservedUsername = reservedUsernames.includes(signupUsername.trim().toLowerCase())
+    const canCreateAccount = signupName.trim() && signupUsername.trim() && signupPasswordIsValid && !reservedUsername
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -30,12 +43,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         try {
             const data = await login(id, password)
             if (data) {
-                setCookieWithExpiresAt('name', data.name, data.expires_at)
-                setCookieWithExpiresAt('id', data.id, data.expires_at)
-                setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
-                setCookieWithExpiresAt('access_token', data.token, data.expires_at)
-                setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-                router.push(path || '/dashboard')
+                completeAuth(data)
                 return
             }
 
@@ -43,6 +51,15 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                 setError('Please try again later.')
             }
         } catch (error) {
+            if (error instanceof PendingDeletionError) {
+                const params = new URLSearchParams({
+                    id: error.id,
+                    restoreToken: error.restoreToken,
+                    deletionScheduledAt: error.deletionScheduledAt,
+                })
+                router.push(`/account-pending-deletion?${params.toString()}`)
+                return
+            }
             if ('message' in (error as { message: string })) {
                 const message = (error as { message: string }).message
                 try {
@@ -62,6 +79,46 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     ? 'Unauthorized.'
                     : error.message
                 : 'Unknown error! Please contact @eirikhanasand.')
+        }
+    }
+
+    async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        setError(null)
+        if (!signupPasswordIsValid) {
+            return setError('Choose a stronger password.')
+        }
+        if (reservedUsername) {
+            return setError('This username is reserved.')
+        }
+
+        const formData = new FormData(e.currentTarget)
+        const name = String(formData.get('name') || '').trim()
+        const id = String(formData.get('username') || '').trim()
+        const password = String(formData.get('password') || '')
+        setBusy(true)
+        try {
+            const response = await fetchWithRetry(`${config.url.api}/user`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, id, password }),
+                timeoutMs: config.abortTimeout,
+                retries: 2,
+            })
+            const responseText = await response.text()
+            const data = parseSignupResponse(responseText)
+            if (!response.ok || data.error) {
+                return setError(data.error || 'Unable to create account.')
+            }
+            if (!data.token) {
+                return setError('Account created, but login could not be completed.')
+            }
+
+            completeAuth(data)
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Unable to create account.')
+        } finally {
+            setBusy(false)
         }
     }
 
@@ -120,6 +177,20 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
 
+    function completeAuth(data: { name: string, id: string, avatar?: string | null, token: string, expires_at?: string | null, roles?: unknown[] }) {
+        setCookieWithExpiresAt('name', data.name, data.expires_at)
+        setCookieWithExpiresAt('id', data.id, data.expires_at)
+        setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
+        setCookieWithExpiresAt('access_token', data.token, data.expires_at)
+        setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
+        router.push(path || '/dashboard')
+    }
+
+    function changeMode(nextMode: typeof mode) {
+        setError(null)
+        setMode(nextMode)
+    }
+
     useEffect(() => {
         const token = getCookie('access_token')
         const id = getCookie('id')
@@ -169,15 +240,16 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                         Log in
                                         <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                     </button>
-                                    <Link
-                                        href='/register'
+                                    <button
+                                        type='button'
+                                        onClick={() => changeMode('signup')}
                                         className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'
                                     >
                                         Sign up
-                                    </Link>
+                                    </button>
                                     <button
                                         type='button'
-                                        onClick={() => setMode('request-reset')}
+                                        onClick={() => changeMode('request-reset')}
                                         className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-bright/42 transition hover:bg-white/6 hover:text-bright/72'
                                     >
                                         Forgot?
@@ -185,6 +257,64 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 </div>
                             </form>
                         </div>
+                    )}
+
+                    {mode === 'signup' && (
+                        <form
+                            className='flex w-full flex-col gap-2 self-center'
+                            onSubmit={handleSignup}
+                        >
+                            <input
+                                type='text'
+                                name='username'
+                                value={signupUsername}
+                                onChange={(e) => setSignupUsername(e.target.value)}
+                                placeholder='Username'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                required
+                            />
+                            {reservedUsername && <p className='px-1 text-xs font-semibold text-orange-100/70'>Reserved username.</p>}
+                            <input
+                                type='text'
+                                name='name'
+                                value={signupName}
+                                onChange={(e) => setSignupName(e.target.value)}
+                                placeholder='Name'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                required
+                            />
+                            <input
+                                type='password'
+                                name='password'
+                                value={signupPassword}
+                                onChange={(e) => setSignupPassword(e.target.value)}
+                                placeholder='Password'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#e25822]/55 focus:bg-white/[0.075]'
+                                required
+                            />
+                            {signupPassword && !signupPasswordIsValid && (
+                                <p className='px-1 text-xs leading-5 text-bright/45'>
+                                    16 chars, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.
+                                </p>
+                            )}
+                            <div className='mt-1 flex items-center gap-3'>
+                                <button
+                                    type='submit'
+                                    disabled={busy || !canCreateAccount}
+                                    className='group inline-flex h-9 min-w-36 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
+                                >
+                                    {busy ? 'Creating' : 'Create account'}
+                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => changeMode('login')}
+                                    className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'
+                                >
+                                    Log in
+                                </button>
+                            </div>
+                        </form>
                     )}
 
                     {mode === 'request-reset' && (
@@ -205,7 +335,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     {busy ? 'Sending' : 'Send code'}
                                     <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                 </button>
-                                <button type='button' onClick={() => setMode('login')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
+                                <button type='button' onClick={() => changeMode('login')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
                                     Back
                                 </button>
                             </div>
@@ -233,7 +363,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     Continue
                                     <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                 </button>
-                                <button type='button' onClick={() => setMode('request-reset')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
+                                <button type='button' onClick={() => changeMode('request-reset')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
                                     Again
                                 </button>
                             </div>
@@ -243,4 +373,36 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
             </div>
         </section>
     )
+}
+
+function countPassword(password: string) {
+    let numbers = 0
+    let symbols = 0
+    let lowercase = 0
+    let uppercase = 0
+
+    for (const char of password) {
+        if (!isNaN(Number(char))) {
+            numbers++
+        }
+        if (/[^a-zA-Z0-9]/.test(char)) {
+            symbols++
+        }
+        if (/[a-z]/.test(char)) {
+            lowercase++
+        }
+        if (/[A-Z]/.test(char)) {
+            uppercase++
+        }
+    }
+
+    return { numbers, symbols, lowercase, uppercase }
+}
+
+function parseSignupResponse(responseText: string) {
+    try {
+        return JSON.parse(responseText)
+    } catch {
+        return { error: responseText || 'Unable to create account.' }
+    }
 }

@@ -1,6 +1,20 @@
 import config from '@/config'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 
+export class PendingDeletionError extends Error {
+    id: string
+    deletionScheduledAt: string
+    restoreToken: string
+
+    constructor(data: { id?: string, deletion_scheduled_at?: string, restore_token?: string, error?: string }) {
+        super(data.error || 'Account pending deletion.')
+        this.name = 'PendingDeletionError'
+        this.id = data.id || ''
+        this.deletionScheduledAt = data.deletion_scheduled_at || ''
+        this.restoreToken = data.restore_token || ''
+    }
+}
+
 export default async function login(id: string, password: string) {
     const response = await fetchWithRetry(`${config.url.api}/auth/login/${id}`, {
         method: 'POST',
@@ -12,12 +26,26 @@ export default async function login(id: string, password: string) {
         retries: 2,
     })
 
-    if (!response.ok) {
-        throw new Error(normalizeLoginError(await response.text()))
+    const responseText = await response.text()
+    const data = parseResponse(responseText)
+
+    if (response.status === 423 && data?.pending_deletion) {
+        throw new PendingDeletionError(data)
     }
 
-    const data = await response.json()
+    if (!response.ok) {
+        throw new Error(normalizeLoginError(responseText))
+    }
+
     return data
+}
+
+function parseResponse(responseText: string) {
+    try {
+        return JSON.parse(responseText)
+    } catch {
+        return null
+    }
 }
 
 function normalizeLoginError(errorText: string) {

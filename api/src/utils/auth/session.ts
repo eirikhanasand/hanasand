@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import run from '#db'
 
 const SESSION_TTL_HOURS = 24
+const DESKTOP_SESSION_TTL_HOURS = 24 * 30
 
 type SessionRow = {
     token_id: number
@@ -18,6 +19,7 @@ type SessionUser = {
     name: string
     avatar: string
     active: boolean
+    deletion_scheduled_at?: string | null
 }
 
 type SessionRole = {
@@ -27,8 +29,25 @@ type SessionRole = {
     priority: number
 }
 
+function sessionTTLHours(userAgent = '') {
+    return userAgent.startsWith('Hanasand Desktop/')
+        ? DESKTOP_SESSION_TTL_HOURS
+        : SESSION_TTL_HOURS
+}
+
+function isSessionFresh(session: SessionRow) {
+    const lastSeen = new Date(session.timestamp).getTime()
+    if (!Number.isFinite(lastSeen)) {
+        return false
+    }
+
+    const ttlMs = sessionTTLHours(session.user_agent) * 60 * 60 * 1000
+    return Date.now() - lastSeen <= ttlMs
+}
+
 export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: string, userAgent?: string }) {
     const token = `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`
+    const ttlHours = sessionTTLHours(userAgent)
 
     const loginResult = await run(
         'INSERT INTO tokens (id, token, ip, user_agent) VALUES ($1, $2, $3, $4) RETURNING token_id, token, timestamp;',
@@ -46,7 +65,7 @@ export async function issueToken({ id, ip, userAgent = '' }: { id: string, ip: s
 
     return {
         token,
-        expires_at: new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString(),
+        expires_at: new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString(),
     }
 }
 
@@ -57,7 +76,6 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         WHERE ($1::text IS NULL OR id = $1)
           AND token = $2
           AND revoked_at IS NULL
-          AND timestamp >= NOW() - INTERVAL '${SESSION_TTL_HOURS} hours'
         LIMIT 1
     `, [id ?? null, token])
 
@@ -66,13 +84,19 @@ export async function validateSession({ id, token }: { id?: string, token: strin
     }
 
     const session = tokenResult.rows[0] as SessionRow
+    if (!isSessionFresh(session)) {
+        return null
+    }
+
     const userId = session.id
+    const ttlHours = sessionTTLHours(session.user_agent)
 
     const userResult = await run(`
-        SELECT id, name, avatar, active
+        SELECT id, name, avatar, active, deletion_scheduled_at
         FROM users
         WHERE id = $1
           AND active IS TRUE
+          AND deletion_scheduled_at IS NULL
         LIMIT 1
     `, [userId])
 
@@ -101,7 +125,7 @@ export async function validateSession({ id, token }: { id?: string, token: strin
         session,
         refreshed: {
             token,
-            expires_at: new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString(),
+            expires_at: new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString(),
         }
     }
 }
