@@ -5,13 +5,14 @@ import GitPlugin from '@/components/share/gitPlugin'
 import Info from '@/components/share/info'
 import Lock from '@/components/share/lock'
 import ReferencePanel from '@/components/share/referencePanel'
+import ShareChat from '@/components/share/shareChat'
 import WordControl from '@/components/share/wordControl'
 import type { TerminalCredentials } from '@/hooks/useTerminal'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import HideIfLittleSpace from '@/hooks/useHideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
-import { Copy, Eye, GitBranch, Highlighter, Info as InfoIcon, KeyRound, ListOrdered, Package, RefreshCw, Smartphone, TerminalSquare, X } from 'lucide-react'
+import { Copy, Eye, GitBranch, Highlighter, Info as InfoIcon, KeyRound, ListOrdered, MessageSquare, Package, RefreshCw, Smartphone, TerminalSquare, X } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useState } from 'react'
 import Box from '../box/box'
@@ -36,9 +37,10 @@ type MetadataProps = {
     terminalStatus: string
     terminalCredentials: TerminalCredentials | null
     tree?: Tree | null
+    setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
 }
 
-type MetadataPanel = 'info' | 'terminal' | 'symbols' | 'git' | 'phone' | 'box' | null
+type MetadataPanel = 'info' | 'terminal' | 'symbols' | 'git' | 'phone' | 'box' | 'chat' | null
 
 const sharedStyles = 'absolute bg-background/80 hover:bg-bright/8 grid place-items-center rounded-lg cursor-move z-100 select-none p-5 border border-bright/10 backdrop-blur-md'
 const baseButtonStyle = 'grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'
@@ -46,6 +48,7 @@ const baseButtonStyle = 'grid h-10 w-10 place-items-center rounded-lg text-brigh
 export default function Metadata({
     shareRouteId,
     share,
+    setShare,
     isConnected,
     showMetadata,
     setShowMetadata,
@@ -61,6 +64,7 @@ export default function Metadata({
     terminalStatus,
     terminalCredentials,
     tree,
+    setEditorPatch,
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const { condition: error, setCondition: setError } = useClearStateAfter()
@@ -113,7 +117,9 @@ export default function Metadata({
                         ? 'Phone preview'
                         : activePanel === 'box'
                             ? 'Tool box'
-                            : ''
+                            : activePanel === 'chat'
+                                ? 'Chat'
+                                : ''
 
     return (
         <div className='flex h-full min-w-fit gap-2'>
@@ -176,6 +182,14 @@ export default function Metadata({
                 </button>
                 <button
                     type='button'
+                    aria-label='Chat'
+                    onClick={() => togglePanel('chat')}
+                    className={`${baseButtonStyle} ${activePanel === 'chat' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                >
+                    <MessageSquare className={activePanel === 'chat' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                </button>
+                <button
+                    type='button'
                     aria-label='Git plugin'
                     onClick={() => togglePanel('git')}
                     className={`${baseButtonStyle} ${activePanel === 'git' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
@@ -194,9 +208,11 @@ export default function Metadata({
             {panelVisible ? (
                 <div className={`min-w-0 h-full ${activePanel === 'box'
                     ? 'w-[min(72rem,calc(100vw-5.5rem))] lg:w-[min(72rem,56vw)]'
-                    : activePanel === 'phone'
-                        ? 'w-[min(30rem,calc(100vw-5.5rem))]'
-                        : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'
+                    : activePanel === 'chat'
+                        ? 'w-[min(42rem,calc(100vw-5.5rem))] lg:w-[min(42rem,34vw)]'
+                        : activePanel === 'phone'
+                            ? 'w-[min(30rem,calc(100vw-5.5rem))]'
+                            : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'
                 }`}>
                     <div className='h-full w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                         <header className='flex items-center justify-between rounded-lg border border-bright/8 bg-black/14 px-3 py-2 text-bright/80'>
@@ -231,6 +247,15 @@ export default function Metadata({
                             </>
                         ) : null}
                         {activePanel === 'box' ? <Box box={box} setBox={setBox} share={share} /> : null}
+                        {activePanel === 'chat' ? (
+                            <ShareChat
+                                share={share}
+                                setShare={setShare}
+                                tree={tree}
+                                editingContent={editingContent}
+                                setEditorPatch={setEditorPatch}
+                            />
+                        ) : null}
                     </div>
                 </div>
             ) : null}
