@@ -189,6 +189,7 @@ export default function ClientPage({
                 terminalStatus={terminalStatus}
                 terminalCredentials={terminalCredentials}
                 tree={tree}
+                setEditorPatch={setEditorPatch}
             />
             <Terminal
                 share={share}

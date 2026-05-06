@@ -8,7 +8,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
 
-    const { prompt, context } = req.body as { prompt?: string, context?: string } ?? {}
+    const { prompt, context, maxTokens } = req.body as { prompt?: string, context?: string, maxTokens?: number } ?? {}
     if (!prompt) {
         return res.status(400).send({ error: 'Missing prompt.' })
     }
@@ -40,12 +40,16 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         const completion = await requestGptCompletion('gpt', {
             conversationId,
             clientName: preferredClient.name,
-            maxTokens: 900,
+            maxTokens: Math.min(Math.max(Number(maxTokens) || 900, 300), 4200),
             temperature: 0.2,
             messages: [
                 {
                     role: 'system',
-                    content: 'You are Hanasand AI inside the Hanasand developer workspace. Answer directly and use the provided context when it is relevant.',
+                    content: [
+                        'You are Hanasand AI inside the Hanasand developer workspace.',
+                        'Answer directly and use the provided context when it is relevant.',
+                        'When asked to edit a share, you may emit a Hanasand tool tag with action update_share and complete replacement content.',
+                    ].join(' '),
                 },
                 {
                     role: 'user',
