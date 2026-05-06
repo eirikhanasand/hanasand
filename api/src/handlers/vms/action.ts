@@ -32,10 +32,13 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
         })
 
         const text = await internalRes.text()
-        const payload = text ? JSON.parse(text) : {}
+        const payload = parseInternalPayload(text)
 
         if (!internalRes.ok) {
-            return res.status(internalRes.status).send(payload)
+            return res.status(internalRes.status).send({
+                error: describeVmActionError(payload, action, id),
+                details: payload,
+            })
         }
 
         const nextStatus = action === 'stop' ? 'stopped' : 'running'
@@ -54,4 +57,23 @@ export default async function vmAction(req: FastifyRequest, res: FastifyReply) {
         req.log.error(error)
         return res.status(500).send({ error: 'Unable to contact internal VM API.' })
     }
+}
+
+function parseInternalPayload(text: string) {
+    if (!text) {
+        return {}
+    }
+
+    try {
+        return JSON.parse(text) as Record<string, unknown>
+    } catch {
+        return { error: text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || 'Internal VM API returned an unreadable response.' }
+    }
+}
+
+function describeVmActionError(payload: Record<string, unknown>, action: string, id: string) {
+    const error = typeof payload.error === 'string' ? payload.error : ''
+    const stderr = typeof payload.stderr === 'string' ? payload.stderr : ''
+    const detail = error || stderr || 'No details returned.'
+    return `Unable to ${action} virtual machine ${id}: ${detail}`
 }

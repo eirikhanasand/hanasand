@@ -400,6 +400,8 @@ type VM = {
     created: string
     last_used: string
     config_image_description: string
+    config_image_os: string
+    config_image_version: string
     limits_cpu: string
     limits_memory: string
     device_eth0_ipv4_address: string

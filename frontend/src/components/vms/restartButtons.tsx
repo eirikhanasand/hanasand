@@ -10,7 +10,8 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const [loading, setLoading] = useState(false)
     const status = (vm.status || '').toLowerCase()
-    const isRunning = status !== '' && status !== 'stopped'
+    const isRunning = status !== '' && status !== 'stopped' && status !== 'unknown'
+    const canManage = Boolean(vm.name)
 
     async function handleClick(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         e.preventDefault()
@@ -18,6 +19,10 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     }
 
     async function handleRestart() {
+        if (!canManage) {
+            setMessage('This virtual machine is missing its instance name.')
+            return
+        }
         setLoading(true)
         const response = await manageVM(vm.name, 'restart')
         setMessage(response)
@@ -28,6 +33,10 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     }
 
     async function handleStart() {
+        if (!canManage) {
+            setMessage('This virtual machine is missing its instance name.')
+            return
+        }
         setLoading(true)
         const response = await manageVM(vm.name, 'start')
         setMessage(response)
@@ -38,6 +47,10 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     }
 
     async function handleStop() {
+        if (!canManage) {
+            setMessage('This virtual machine is missing its instance name.')
+            return
+        }
         setLoading(true)
         const response = await manageVM(vm.name, 'stop')
         setMessage(response)
@@ -48,17 +61,19 @@ export default function RestartButtons({ vm, forceVisible = false }: { vm: VM, f
     }
 
     return (
-        <div onClick={handleClick} className={`${forceVisible ? 'flex' : 'hidden group-hover:flex'} h-9 items-center justify-end gap-1 rounded-md group cursor-pointer`}>
-            {!isRunning && <button onClick={handleStart} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-green-400 group-hover:cursor-pointer hover:bg-bright/3'>
-                <Play className='w-5 h-5' />
-            </button>}
-            {isRunning && <button onClick={handleRestart} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-blue-400 group-hover:cursor-pointer hover:bg-bright/3'>
-                <RefreshCcw className='w-5 h-5' />
-            </button>}
-            {isRunning && <button onClick={handleStop} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-red-400 group-hover:cursor-pointer hover:bg-bright/3'>
-                <StopCircle className='w-5 h-5' />
-            </button>}
-            <Notify absolute className='px-8' color='bg-blue-500' background='bg-dark/40 outline outline-dark text-bright/80' message={message} />
+        <div onClick={handleClick} className={`${forceVisible ? 'flex' : 'flex'} min-w-0 flex-col items-end gap-2 rounded-md`}>
+            <div className='flex h-9 items-center justify-end gap-1'>
+                {!isRunning && <button onClick={handleStart} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-green-300 transition hover:bg-bright/5 disabled:cursor-wait disabled:opacity-50'>
+                    <Play className='w-4 h-4' />
+                </button>}
+                {isRunning && <button onClick={handleRestart} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-blue-300 transition hover:bg-bright/5 disabled:cursor-wait disabled:opacity-50'>
+                    <RefreshCcw className='w-4 h-4' />
+                </button>}
+                {isRunning && <button onClick={handleStop} disabled={loading} className='grid h-9 w-9 place-items-center rounded-md text-red-300 transition hover:bg-bright/5 disabled:cursor-wait disabled:opacity-50'>
+                    <StopCircle className='w-4 h-4' />
+                </button>}
+            </div>
+            <Notify fullWidth className='max-w-sm text-xs text-bright/82' color='bg-blue-500' background='bg-dark/80 border border-white/10' message={message} />
         </div>
     )
 }
