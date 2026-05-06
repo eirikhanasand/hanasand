@@ -2,11 +2,10 @@
 import useKeyPress from '@/hooks/keyPressed'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import deleteVM from '@/utils/vms/fetch/deleteVM'
-import { Trash2 } from 'lucide-react'
+import { Cpu, HardDrive, Network, Trash2 } from 'lucide-react'
 import Notify from '../notify/notify'
 import prettyDate from '@/utils/date/prettyDate'
 import formatDescription from '@/utils/vms/formatDescription'
-import Tag from '../tags/tag'
 import formatStatus from '@/utils/vms/formatStatus'
 import { useRouter } from 'next/navigation'
 import RestartButtons from '../vms/restartButtons'
@@ -16,6 +15,12 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const keys = useKeyPress('shift')
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
+    const name = vm.name || vm.config_image_description || vm.device_eth0_ipv4_address || 'Unnamed machine'
+    const ip = vm.device_eth0_ipv4_address || 'No IP yet'
+    const status = formatStatus(vm.status)
+    const image = formatDescription(vm.config_image_description)
+    const lastUsed = vm.last_used ? prettyDate(vm.last_used) : 'Never used'
+    const editors = vm.access_users?.length || 0
 
     async function handleClick() {
         if (keys['shift']) {
@@ -34,56 +39,45 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
         <>
             <div
                 onClick={handleClick}
-                className={`rounded-lg group ${keys['shift']
-                    ? 'hover:bg-red-500/10 hover:outline hover:outline-red-500/20 select-none'
-                    : 'hover:bg-dark/45'
-                } cursor-pointer border border-white/8 bg-black/10 p-3 max-w-full overflow-hidden group gap-2 w-full justify-between items-center`}
+                className={`group cursor-pointer rounded-lg border border-white/8 bg-white/[0.025] p-3 transition ${keys['shift']
+                    ? 'select-none hover:border-red-400/30 hover:bg-red-500/10'
+                    : 'hover:border-white/14 hover:bg-white/[0.045]'
+                }`}
             >
-                <div className='flex w-full items-center gap-2 h-full'>
-                    <div className='flex-1 min-w-0 grid gap-2'>
-                        <div className='flex flex-wrap gap-2 items-center justify-between'>
-                            <div className='flex min-w-0 gap-2 items-center'>
-                                <div className='flex min-w-0 flex-wrap gap-2 items-center'>
-                                    <h1 className='truncate text-sm font-semibold text-bright/70'>{vm.name}</h1>
-                                    <h1 className='truncate text-almostbright text-xs pt-1'>
-                                        {vm.device_eth0_ipv4_address}
-                                    </h1>
-                                </div>
-                            </div>
-                            <div className='flex flex-wrap gap-1 items-center w-fit'>
-                                <Tag color='orange' text={formatDescription(vm.config_image_description)} />
-                                <Tag color='green' icon='cpu' text={vm.limits_cpu} />
-                                <Tag color='green' icon='ram' text={vm.limits_memory} />
-                                <Tag color='blue' text={type} />
-                            </div>
+                <div className='grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
+                    <div className='min-w-0'>
+                        <div className='flex min-w-0 flex-wrap items-center gap-2'>
+                            <h3 className='truncate text-sm font-medium text-bright/88'>{name}</h3>
+                            <span className='rounded-md border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-[0.08em] text-bright/48'>{type}</span>
+                            <span className={`rounded-md px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-[0.08em] ${status === 'Running'
+                                ? 'border border-green-300/20 bg-green-400/10 text-green-200/82'
+                                : status === 'Stopped'
+                                    ? 'border border-red-300/18 bg-red-400/10 text-red-200/78'
+                                    : 'border border-yellow-300/18 bg-yellow-400/10 text-yellow-100/76'
+                            }`}>{status}</span>
                         </div>
-                        <div className='flex flex-wrap gap-2 text-almostbright/70 text-xs justify-between items-center'>
-                            <div className='flex min-w-0 flex-wrap gap-1 items-center'>
-                                <span>Owner: {vm.owner || 'Unknown'}</span>
-                                <span className='font-bold'>·</span>
-                                <span>Last used</span>
-                                <span>{prettyDate(vm.last_used)}</span>
-                                <span>{vm.access_users?.length || 0}</span>
-                                <span>editors.</span>
-                            </div>
-                            <div className='flex w-fit gap-1 items-center'>
-                                <Tag
-                                    color='dynamic'
-                                    text={formatStatus(vm.status)}
-                                    map={{
-                                        'stopped': { color: 'red', icon: 'error' },
-                                        'idle': { color: 'yellow', icon: 'warning' },
-                                        'running': { color: 'green', icon: 'success' },
-                                    }}
-                                />
-                                <Tag color='blue' icon='refresh' text={vm.last_checked} date='minimal' />
-                            </div>
+                        <p className='mt-1 truncate text-xs text-bright/42'>
+                            {ip} · Owner {vm.owner || vm.created_by || 'Unknown'} · Last used {lastUsed} · {editors} editor{editors === 1 ? '' : 's'}
+                        </p>
+                        <div className='mt-3 flex min-w-0 flex-wrap gap-2 text-[0.72rem] text-bright/48'>
+                            <span className='inline-flex items-center gap-1 rounded-md bg-white/[0.035] px-2 py-1'>
+                                <HardDrive className='h-3 w-3' />
+                                <span className='truncate'>{image}</span>
+                            </span>
+                            <span className='inline-flex items-center gap-1 rounded-md bg-white/[0.035] px-2 py-1'>
+                                <Cpu className='h-3 w-3' />
+                                <span>{vm.limits_cpu || 'CPU n/a'}</span>
+                            </span>
+                            <span className='inline-flex items-center gap-1 rounded-md bg-white/[0.035] px-2 py-1'>
+                                <Network className='h-3 w-3' />
+                                <span>{vm.limits_memory || 'Memory n/a'}</span>
+                            </span>
                         </div>
                     </div>
-                    {!keys['shift'] && <RestartButtons vm={vm} />}
+                    {!keys['shift'] && <div className='justify-self-start sm:justify-self-end'><RestartButtons vm={vm} /></div>}
                     {keys['shift'] && (
-                        <div className='hidden group-hover:grid hover:bg-bright/3 rounded-md h-full px-3 place-items-center'>
-                            <Trash2 className='stroke-red-500 w-5 h-5' />
+                        <div className='hidden rounded-md px-3 py-2 group-hover:grid hover:bg-bright/3 sm:place-items-center'>
+                            <Trash2 className='h-5 w-5 stroke-red-500' />
                         </div>
                     )}
                 </div>

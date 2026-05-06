@@ -20,8 +20,11 @@ export default async function Projects() {
     return (
         <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
             <div className='flex items-center justify-between gap-3'>
-                <h2 className='text-base font-semibold text-bright/90'>Projects</h2>
-                <Link href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/78 transition hover:bg-white/9 hover:text-bright'>
+                <div>
+                    <h2 className='text-base font-medium text-bright/90'>Projects</h2>
+                    <p className='mt-1 text-xs text-bright/38'>{(projects as Project[]).length} workspaces</p>
+                </div>
+                <Link href='/s' className='inline-flex h-8 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-bright/70 transition hover:bg-white/9 hover:text-bright'>
                     <Plus className='h-4 w-4' />
                     <span>Create</span>
                 </Link>
