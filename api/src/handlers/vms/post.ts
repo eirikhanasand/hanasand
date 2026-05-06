@@ -34,6 +34,53 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
 
     try {
         await run(`
+            DELETE FROM vms
+            WHERE name = $1
+              AND owner = 'ownerless'
+              AND EXISTS (
+                  SELECT 1
+                  FROM vms owned
+                  WHERE LOWER(owned.name) = LOWER($1)
+                    AND owned.name <> $1
+                    AND owned.owner <> 'ownerless'
+              )
+        `, [name])
+
+        const existingResult = await run(`
+            SELECT name, owner, created_by, access_users
+            FROM vms
+            WHERE LOWER(name) = LOWER($1)
+            ORDER BY
+                CASE WHEN owner = 'ownerless' THEN 1 ELSE 0 END,
+                CASE WHEN name = $1 THEN 0 ELSE 1 END
+            LIMIT 1
+        `, [name])
+        const existing = existingResult.rows[0] as {
+            name: string
+            owner: string
+            created_by: string
+            access_users: string[]
+        } | undefined
+
+        if (existing) {
+            const nextOwner = owner === 'ownerless' ? existing.owner : owner
+            const nextCreatedBy = created_by === 'unknown' ? existing.created_by : created_by
+            const nextAccessUsers = (access_users ?? []).length ? access_users : existing.access_users
+
+            const result = await run(`
+                UPDATE vms
+                SET name = $1,
+                    owner = $2,
+                    created_by = $3,
+                    access_users = $4
+                WHERE name = $5
+                RETURNING *
+            `, [name, nextOwner, nextCreatedBy, JSON.stringify(nextAccessUsers ?? []), existing.name])
+
+            return res.status(201).send(result.rows[0])
+        }
+
+        await run(`
             UPDATE vms
             SET name = $1
             WHERE LOWER(name) = LOWER($1)

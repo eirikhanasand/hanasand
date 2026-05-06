@@ -40,6 +40,33 @@ export default async function postVMDetails(req: FastifyRequest, res: FastifyRep
     }
 
     try {
+        await run(`
+            DELETE FROM vms
+            WHERE name = $1
+              AND owner = 'ownerless'
+              AND EXISTS (
+                  SELECT 1
+                  FROM vms owned
+                  WHERE LOWER(owned.name) = LOWER($1)
+                    AND owned.name <> $1
+                    AND owned.owner <> 'ownerless'
+              )
+        `, [name])
+
+        await run(`
+            UPDATE vms
+            SET name = $1
+            WHERE LOWER(name) = LOWER($1)
+              AND name <> $1
+              AND NOT EXISTS (SELECT 1 FROM vms WHERE name = $1)
+        `, [name])
+
+        await run(`
+            INSERT INTO vms (name, owner, created_by, access_users)
+            VALUES ($1, 'ownerless', 'unknown', '[]'::jsonb)
+            ON CONFLICT (name) DO NOTHING
+        `, [name])
+
         const ephemeralBool = ephemeral === 'true'
         const statefulBool = stateful === 'true'
         const result = await run(
