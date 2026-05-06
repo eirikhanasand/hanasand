@@ -90,6 +90,7 @@ function parseGenericGitUrl(input: string): ParsedGitRepo | null {
             repositoryUrl: `git@${scpLikeMatch[1]}:${repoPath}`,
             branch: scpLikeMatch[3],
             sourcePath: scpLikeMatch[4] || '',
+            webBaseUrl: `https://${scpLikeMatch[1]}/${repoPath.replace(/\.git$/i, '')}`,
         })
     }
 
@@ -155,7 +156,11 @@ function buildGenericGitRepo({
         owner,
         repo,
         fullName: normalizedHost === 'github.com' && parts.length >= 2 ? `${owner}/${repo}` : `${normalizedHost}/${cleanRepoPath}`,
-        repositoryUrl: repositoryUrl.endsWith('.git') ? repositoryUrl : `${repositoryUrl}.git`,
+        repositoryUrl: normalizedHost === 'github.com'
+            ? `https://github.com/${cleanRepoPath}.git`
+            : repositoryUrl.endsWith('.git')
+                ? repositoryUrl
+                : `${repositoryUrl}.git`,
         branch,
         sourcePath: sourcePath.replace(/^\/+|\/+$/g, ''),
         webBaseUrl,
@@ -172,7 +177,7 @@ function buildCloneUrl(url: URL, repoParts: string[]) {
     return `${url.protocol}//${url.host}/${cleanPath}${cleanPath.endsWith('.git') ? '' : '.git'}`
 }
 
-function runGit(args: string[], cwd?: string, env?: NodeJS.ProcessEnv) {
+function runGit(args: string[], cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs = 120_000) {
     return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
         const child = spawn('git', args, {
             cwd,
@@ -182,6 +187,14 @@ function runGit(args: string[], cwd?: string, env?: NodeJS.ProcessEnv) {
 
         let stdout = ''
         let stderr = ''
+        let settled = false
+
+        const timeout = setTimeout(() => {
+            if (settled) return
+            settled = true
+            child.kill('SIGTERM')
+            reject(new Error(`git ${args.join(' ')} timed out. Check the repository URL or credentials.`))
+        }, timeoutMs)
 
         child.stdout.on('data', (chunk) => {
             stdout += chunk.toString()
@@ -191,8 +204,16 @@ function runGit(args: string[], cwd?: string, env?: NodeJS.ProcessEnv) {
             stderr += chunk.toString()
         })
 
-        child.on('error', (error) => reject(error))
+        child.on('error', (error) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timeout)
+            reject(error)
+        })
         child.on('close', (code) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timeout)
             if (code !== 0) {
                 reject(new Error(stderr.trim() || `git ${args.join(' ')} failed with code ${code}`))
                 return

@@ -25,4 +25,12 @@ assert.equal(github.branch, 'main')
 assert.equal(github.sourcePath, 'frontend')
 assert.equal(github.isGitHub, true)
 
+const githubSsh = parseGitInput('git@github.com:eirikhanasand/hanasand.git')
+assert.equal(githubSsh.host, 'github.com')
+assert.equal(githubSsh.fullName, 'eirikhanasand/hanasand')
+assert.equal(githubSsh.repositoryUrl, 'https://github.com/eirikhanasand/hanasand.git')
+assert.equal(githubSsh.sourcePath, '')
+assert.equal(githubSsh.webBaseUrl, 'https://github.com/eirikhanasand/hanasand')
+assert.equal(githubSsh.isGitHub, true)
+
 console.log('git import parser smoke passed')
