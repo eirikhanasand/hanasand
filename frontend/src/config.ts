@@ -1,11 +1,17 @@
 import packagejson from '../package.json'
 
 const defaultPublicApiUrl = 'https://api.hanasand.com/api'
+const defaultPublicCdnUrl = 'https://cdn.hanasand.com/api'
 const publicApiUrl = process.env.NEXT_PUBLIC_API || defaultPublicApiUrl
+const publicCdnUrl = process.env.NEXT_PUBLIC_CDN || defaultPublicCdnUrl
 const internalApiUrl =
     process.env.FRONTEND_INTERNAL_API ||
     process.env.INTERNAL_API ||
     publicApiUrl
+const internalCdnUrl =
+    process.env.FRONTEND_INTERNAL_CDN ||
+    process.env.INTERNAL_CDN ||
+    publicCdnUrl
 
 const config = {
     url: {
@@ -15,7 +21,7 @@ const config = {
         api_client_wss: toWsUrl(resolveApiUrl()),
         beekeeper: process.env.NEXT_PUBLIC_BEEKEEPER_API || process.env.BEEKEEPER_API_URL || 'https://beekeeper.login.no/api',
         cdn_wss: process.env.NEXT_PUBLIC_CDN_WS || 'wss://cdn.hanasand.com/api/ws',
-        cdn: process.env.NEXT_PUBLIC_CDN || 'https://cdn.hanasand.com/api',
+        cdn: resolveCdnUrl(),
         internal: process.env.NEXT_PUBLIC_INTERNAL_API || process.env.INTERNAL_API || 'https://internal.hanasand.com/api',
         link: process.env.NEXT_PUBLIC_LINK || 'https://hanasand.com/g',
     },
@@ -24,6 +30,14 @@ const config = {
 }
 
 export default config
+
+function resolveCdnUrl() {
+    if (typeof window === 'undefined') {
+        return internalCdnUrl
+    }
+
+    return publicCdnUrl
+}
 
 function resolveApiUrl() {
     if (typeof window === 'undefined') {

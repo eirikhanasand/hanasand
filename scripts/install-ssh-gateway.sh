@@ -223,7 +223,9 @@ SH
     cat >/usr/local/sbin/hanasand-sync-ssh-users <<SH
 #!/usr/bin/env bash
 set -euo pipefail
+STATE_DIR="/var/lib/hanasand-ssh-gateway/state"
 groupadd -f "${VM_GROUP}"
+install -d -m 0750 -o root -g "${VM_GROUP}" "\$STATE_DIR"
 sync_one() {
     local name="\$1"
     [ -n "\$name" ] || return 0
@@ -232,17 +234,31 @@ sync_one() {
     "${LXC_BIN}" info "\$name" >/dev/null 2>&1 || return 0
     if ! id "\$name" >/dev/null 2>&1; then
         useradd -M -N -g "${VM_GROUP}" -s /bin/bash "\$name"
-    else
+    elif ! id -nG "\$name" | grep -qw "${VM_GROUP}"; then
         usermod -aG "${VM_GROUP}" "\$name"
     fi
-    install -d -m 0750 -o "\$name" -g "${VM_GROUP}" "/var/lib/hanasand-ssh-gateway/home/\$name"
-    usermod -g "${VM_GROUP}" -d "/var/lib/hanasand-ssh-gateway/home/\$name" -s /bin/bash "\$name"
+    local home="/var/lib/hanasand-ssh-gateway/home/\$name"
+    install -d -m 0750 -o "\$name" -g "${VM_GROUP}" "\$home"
+    local passwd_entry
+    passwd_entry=\$(getent passwd "\$name" || true)
+    if [ "\$(cut -d: -f4 <<<"\$passwd_entry")" != "\$(getent group "${VM_GROUP}" | cut -d: -f3)" ] \
+        || [ "\$(cut -d: -f6 <<<"\$passwd_entry")" != "\$home" ] \
+        || [ "\$(cut -d: -f7 <<<"\$passwd_entry")" != "/bin/bash" ]; then
+        usermod -g "${VM_GROUP}" -d "\$home" -s /bin/bash "\$name"
+    fi
     local password
     password=\$("${LXC_BIN}" config get "\$name" user.hanasand.sudo_password 2>/dev/null || true)
+    local password_state="\$STATE_DIR/\$name.password"
     if [ -n "\$password" ]; then
-        printf '%s:%s\\n' "\$name" "\$password" | chpasswd
+        local password_hash
+        password_hash=\$(printf '%s' "\$password" | sha256sum | awk '{print \$1}')
+        if [ "\$(cat "\$password_state" 2>/dev/null || true)" != "\$password_hash" ]; then
+            printf '%s:%s\\n' "\$name" "\$password" | chpasswd
+            printf '%s\\n' "\$password_hash" >"\$password_state"
+        fi
     else
         usermod -p '!' "\$name" >/dev/null 2>&1 || true
+        rm -f "\$password_state"
     fi
 }
 write_sudoers() {
@@ -302,8 +318,8 @@ Description=Periodically synchronize Hanasand LXD instance SSH gateway users
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=2min
-AccuracySec=20s
+OnUnitActiveSec=30min
+AccuracySec=2min
 Unit=hanasand-sync-ssh-users.service
 
 [Install]
