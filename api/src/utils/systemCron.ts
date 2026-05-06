@@ -33,16 +33,17 @@ export type ManagedCronUpdate = {
 const CRON_USER = process.env.MANAGED_CRON_USER || process.env.HOST_USER || 'hanasand'
 const CRON_SPOOL_DIR = process.env.MANAGED_CRON_SPOOL_DIR || '/host/cron/crontabs'
 const HOST_HOME_PREFIX = process.env.MANAGED_CRON_HOST_HOME_PREFIX || '/host/home'
+const HOST_VAR_LOG_PREFIX = process.env.MANAGED_CRON_HOST_VAR_LOG_PREFIX || '/host/var/log'
 
 export const managedCronDefinitions: ManagedCronDefinition[] = [
     {
         id: 'forgejo-standby-sync',
         name: 'Forgejo standby sync',
         description: 'Repairs Forgejo metadata, copies the active Git service to OVH standby, restores the database, and health-checks the standby.',
-        defaultSchedule: '*/15 * * * *',
-        command: 'cd /home/hanasand/git && LOCK=/tmp/forgejo-standby-sync.lock LOG=/home/hanasand/git/standby-sync.log bash scripts/sync-to-ovh.sh',
+        defaultSchedule: '*/5 * * * *',
+        command: '/home/hanasand/git/sync-to-ovh.sh',
         host: 'inspur',
-        logPath: '/home/hanasand/git/standby-sync.log',
+        logPath: '/var/log/hanasand-forgejo-sync-to-ovh.log',
     },
     {
         id: 'forgejo-doctor',
@@ -276,6 +277,9 @@ async function readLastLogLine(logPath?: string) {
 function toHostPath(path: string) {
     if (path.startsWith('/home/')) {
         return `${HOST_HOME_PREFIX}${path.slice('/home'.length)}`
+    }
+    if (path.startsWith('/var/log/')) {
+        return `${HOST_VAR_LOG_PREFIX}${path.slice('/var/log'.length)}`
     }
     return path
 }

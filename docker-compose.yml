@@ -43,6 +43,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/spool/cron/crontabs:/host/cron/crontabs
       - ${HANASAND_HOST_HOME:-/home/hanasand}:/host/home/hanasand:ro
+      - /var/log:/host/var/log:ro
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates
     environment:
       MAIL_INTERNAL_URL: ${MAIL_INTERNAL_URL:-http://stalwart:8080}
