@@ -80,8 +80,8 @@ export default function Box({ box, setBox, share, detached = false }: BoxProps) 
         : 'relative h-full min-h-0 w-full'
 
     const panelClass = detached
-        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-xl border border-bright/10 bg-background/96 p-2 shadow-2xl shadow-black/45 backdrop-blur-md'
-        : 'grid h-[calc(100%-3.5rem)] min-h-[32rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-bright/8 bg-black/10 p-2'
+        ? 'grid max-h-[min(48rem,calc(100vh-7rem))] min-h-[30rem] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-xl border border-bright/10 bg-background/96 p-2 shadow-2xl shadow-black/45 backdrop-blur-md'
+        : 'grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden rounded-lg border border-bright/8 bg-black/10 p-2'
 
     return (
         <div className={wrapperClass}>
