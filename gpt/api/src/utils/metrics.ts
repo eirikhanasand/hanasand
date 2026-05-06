@@ -29,6 +29,8 @@ let powerState: {
     kwh: number
     sampledAt: number
 } | null = null
+let nvidiaSmiUnavailable = false
+let nvidiaSmiWarningEmitted = false
 
 async function readPowerState() {
     if (powerState) {
@@ -56,10 +58,29 @@ function currentMonth() {
 }
 
 async function sampleNvidiaGpus(): Promise<NvidiaGpuSample[]> {
-    const { stdout } = await execFileAsync('nvidia-smi', [
-        '--query-gpu=index,name,utilization.gpu,memory.total,memory.used,power.draw,power.limit,temperature.gpu',
-        '--format=csv,noheader,nounits',
-    ])
+    if (nvidiaSmiUnavailable) {
+        return []
+    }
+
+    let stdout = ''
+    try {
+        const result = await execFileAsync('nvidia-smi', [
+            '--query-gpu=index,name,utilization.gpu,memory.total,memory.used,power.draw,power.limit,temperature.gpu',
+            '--format=csv,noheader,nounits',
+        ])
+        stdout = result.stdout
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            nvidiaSmiUnavailable = true
+            return []
+        }
+
+        if (!nvidiaSmiWarningEmitted) {
+            nvidiaSmiWarningEmitted = true
+            console.warn('Unable to sample NVIDIA GPU metrics:', error)
+        }
+        return []
+    }
 
     return stdout.trim().split('\n').filter(Boolean).map((line) => {
         const [index, name, utilizationGpu, memoryTotalMb, memoryUsedMb, powerDrawWatts, powerLimitWatts, temperatureC] = line
@@ -139,12 +160,7 @@ export default async function metrics(): Promise<GPT_Client> {
             metrics: gpuMetrics || undefined,
         }))
     } else {
-        let nvidiaGpus: NvidiaGpuSample[] = []
-        try {
-            nvidiaGpus = await sampleNvidiaGpus()
-        } catch (error) {
-            console.warn('Unable to sample NVIDIA GPU metrics:', error)
-        }
+        const nvidiaGpus = await sampleNvidiaGpus()
 
         gpu = nvidiaGpus.length
             ? nvidiaGpus.map((g) => ({
