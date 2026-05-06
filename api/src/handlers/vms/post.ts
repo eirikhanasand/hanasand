@@ -14,6 +14,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         owner?: string
         created_by?: string
         access_users?: string[]
+        provision_local?: boolean
     } ?? {}
     const { name, access_users } = body
     let owner = body.owner
@@ -81,7 +82,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
                 RETURNING *
             `, [name, nextOwner, nextCreatedBy, JSON.stringify(nextAccessUsers ?? []), existing.name, config.vm_host_id])
 
-            await provisionIfLocal(name, req)
+            await provisionIfLocal(name, req, body.provision_local !== false)
 
             return res.status(201).send(result.rows[0])
         }
@@ -101,7 +102,7 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
         }
 
         await run('UPDATE vms SET primary_host = $2 WHERE name = $1', [name, config.vm_host_id])
-        await provisionIfLocal(name, req)
+        await provisionIfLocal(name, req, body.provision_local !== false)
 
         await syncUserCertificatesToVm({
             vmName: name,
@@ -117,7 +118,11 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     }
 }
 
-async function provisionIfLocal(name: string, req: FastifyRequest) {
+async function provisionIfLocal(name: string, req: FastifyRequest, shouldProvision: boolean) {
+    if (!shouldProvision) {
+        return
+    }
+
     if (config.vm_host_id !== 'inspur') {
         return
     }
