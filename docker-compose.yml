@@ -12,7 +12,6 @@ services:
       .env
     environment:
       FRONTEND_INTERNAL_API: ${FRONTEND_INTERNAL_API:-http://api:8080/api}
-      FRONTEND_INTERNAL_CDN: ${FRONTEND_INTERNAL_CDN:-http://cdn:8080/api}
       MAIL_JMAP_INTERNAL_URL: ${MAIL_JMAP_INTERNAL_URL:-http://stalwart:8080}
       MAIL_PUBLIC_BASE_URL: ${MAIL_PUBLIC_BASE_URL:-https://mail.hanasand.com}
       MAIL_INBOX_USERNAME: ${MAIL_INBOX_USERNAME:-eirik}
