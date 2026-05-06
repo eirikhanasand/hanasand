@@ -114,7 +114,7 @@ function parseGenericGitUrl(input: string): ParsedGitRepo | null {
         return null
     }
 
-    if (!['http:', 'https:', 'git:', 'ssh:'].includes(url.protocol)) {
+    if (!['http:', 'https:', 'git:', 'ssh:', 'git+ssh:'].includes(url.protocol)) {
         return null
     }
 
@@ -183,7 +183,11 @@ function buildGenericGitRepo({
 
 function buildCloneUrl(url: URL, repoParts: string[]) {
     const cleanPath = repoParts.join('/')
-    if (url.protocol === 'ssh:' && url.username) {
+    if ((url.protocol === 'ssh:' || url.protocol === 'git+ssh:') && url.username === 'git') {
+        return `https://${url.host}/${cleanPath}${cleanPath.endsWith('.git') ? '' : '.git'}`
+    }
+
+    if ((url.protocol === 'ssh:' || url.protocol === 'git+ssh:') && url.username) {
         return `${url.username}@${url.host}:${cleanPath}${cleanPath.endsWith('.git') ? '' : '.git'}`
     }
 
@@ -277,7 +281,7 @@ async function resolveDefaultBranch(repositoryUrl: string, gitEnv?: NodeJS.Proce
     return match[1]
 }
 
-function describeImportError(error: unknown) {
+export function describeImportError(error: unknown) {
     if (!(error instanceof Error)) {
         return { status: 502, message: 'Failed to import repository.' }
     }
