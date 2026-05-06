@@ -7,10 +7,10 @@ import DashboardUser from './dashboardUser'
 export default function UsersList({ users, roles }: { users: UserWithRole[], roles: Role[] }) {
     const [showReserved, setShowReserved] = useState(false)
     const reservedSet = useMemo(() => new Set(reservedUsernames), [])
+    const reservedCount = users.filter((user) => reservedSet.has(user.id.toLowerCase())).length
     const visibleUsers = showReserved
         ? users
         : users.filter((user) => !reservedSet.has(user.id.toLowerCase()))
-    const reservedCount = users.length - visibleUsers.length
 
     return (
         <>
