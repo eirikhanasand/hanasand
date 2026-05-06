@@ -115,12 +115,12 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 130 * 1000
+        return 120 * 1000
     }
     if (kind === 'postgres') {
-        return 17 * 1000
+        return 15 * 1000
     }
-    return 20 * 1000
+    return 18 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind) {
@@ -1592,6 +1592,242 @@ async function main() {
             run: () => scaffoldFastifyPostgresApp({
                 targetDir: rel('logistics-routing-api'),
                 appName: 'RouteLedger API',
+            }),
+        },
+        {
+            id: 'designer-handoff-portal',
+            title: 'Designer handoff portal',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#121-designer-handoff-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('designer-handoff-portal'),
+                appName: 'HandoffNorth',
+                productType: 'design handoff portal',
+                productBrief: 'HandoffNorth helps design systems teams publish component groups, release metrics, service tiers, stakeholder quotes, implementation tasks, and concise self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'beginner-trades-website',
+            title: 'Beginner trades website',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#122-beginner-trades-website',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('beginner-trades-website'),
+                appName: 'VoltLocal',
+                productType: 'local trades website',
+                productBrief: 'VoltLocal helps an electrician show services, response metrics, simple pricing bands, customer quotes, launch tasks, and beginner-safe Docker deployment notes.',
+            }),
+        },
+        {
+            id: 'enterprise-access-request-api',
+            title: 'Enterprise access request API',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#123-enterprise-access-request-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('enterprise-access-request-api'),
+                appName: 'AccessLedger API',
+            }),
+        },
+        {
+            id: 'enterprise-provisioning-worker',
+            title: 'Enterprise provisioning worker',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#124-enterprise-provisioning-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('enterprise-provisioning-worker'),
+                appName: 'ProvisionQueue Worker',
+            }),
+        },
+        {
+            id: 'compliance-evidence-room',
+            title: 'Compliance evidence room',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#125-compliance-evidence-room',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('compliance-evidence-room'),
+                appName: 'EvidenceRoom',
+                productType: 'compliance evidence portal',
+                productBrief: 'EvidenceRoom helps compliance teams present control families, audit metrics, assurance tiers, reviewer quotes, evidence tasks, and controlled self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'compliance-finding-api',
+            title: 'Compliance finding API',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#126-compliance-finding-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('compliance-finding-api'),
+                appName: 'FindingLedger API',
+            }),
+        },
+        {
+            id: 'compliance-remediation-worker',
+            title: 'Compliance remediation worker',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#127-compliance-remediation-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('compliance-remediation-worker'),
+                appName: 'RemediateQueue Worker',
+            }),
+        },
+        {
+            id: 'marketplace-seller-console',
+            title: 'Marketplace seller console',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#128-marketplace-seller-console',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('marketplace-seller-console'),
+                appName: 'SellerSignal',
+                productType: 'marketplace seller console',
+                productBrief: 'SellerSignal helps marketplace sellers track listings, payout metrics, pricing plans, seller proof, onboarding tasks, and portable Docker deployment.',
+            }),
+        },
+        {
+            id: 'marketplace-order-api',
+            title: 'Marketplace order API',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#129-marketplace-order-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('marketplace-order-api'),
+                appName: 'OrderLedger API',
+            }),
+        },
+        {
+            id: 'marketplace-fulfillment-worker',
+            title: 'Marketplace fulfillment worker',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#130-marketplace-fulfillment-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('marketplace-fulfillment-worker'),
+                appName: 'FulfillQueue Worker',
+            }),
+        },
+        {
+            id: 'hospital-staffing-board',
+            title: 'Hospital staffing board',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#131-hospital-staffing-board',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('hospital-staffing-board'),
+                appName: 'ShiftSignal',
+                productType: 'hospital staffing board',
+                productBrief: 'ShiftSignal helps hospital operations teams inspect unit coverage, staffing metrics, escalation tiers, coordinator quotes, task status, and controlled deployment notes.',
+            }),
+        },
+        {
+            id: 'hospital-credential-api',
+            title: 'Hospital credential API',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#132-hospital-credential-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('hospital-credential-api'),
+                appName: 'CredentialLedger API',
+            }),
+        },
+        {
+            id: 'hospital-credential-worker',
+            title: 'Hospital credential worker',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#133-hospital-credential-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('hospital-credential-worker'),
+                appName: 'CredentialQueue Worker',
+            }),
+        },
+        {
+            id: 'school-enrollment-portal',
+            title: 'School enrollment portal',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#134-school-enrollment-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('school-enrollment-portal'),
+                appName: 'EnrollNorth',
+                productType: 'school enrollment portal',
+                productBrief: 'EnrollNorth helps schools guide families through programs, application metrics, fee tiers, parent quotes, document tasks, and beginner-safe deployment notes.',
+            }),
+        },
+        {
+            id: 'school-enrollment-api',
+            title: 'School enrollment API',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#135-school-enrollment-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('school-enrollment-api'),
+                appName: 'EnrollmentLedger API',
+            }),
+        },
+        {
+            id: 'school-notification-worker',
+            title: 'School notification worker',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#136-school-notification-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('school-notification-worker'),
+                appName: 'EnrollmentQueue Worker',
+            }),
+        },
+        {
+            id: 'data-team-quality-dashboard',
+            title: 'Data team quality dashboard',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#137-data-team-quality-dashboard',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('data-team-quality-dashboard'),
+                appName: 'FreshnessBoard',
+                productType: 'data quality dashboard',
+                productBrief: 'FreshnessBoard helps analytics engineers monitor pipeline freshness, quality metrics, support tiers, stakeholder quotes, incident tasks, and self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'data-contract-api',
+            title: 'Data contract API',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#138-data-contract-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('data-contract-api'),
+                appName: 'ContractLedger API',
+            }),
+        },
+        {
+            id: 'data-sync-worker',
+            title: 'Data sync worker',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#139-data-sync-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('data-sync-worker'),
+                appName: 'SyncQueue Worker',
+            }),
+        },
+        {
+            id: 'executive-board-pack-site',
+            title: 'Executive board pack site',
+            storyPath: 'agents/training-scenarios/user_stories/121-140-advanced-user-stories.md#140-executive-board-pack-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('executive-board-pack-site'),
+                appName: 'BoardSignal',
+                productType: 'executive board pack site',
+                productBrief: 'BoardSignal helps strategy teams present decisions, KPI metrics, investment tiers, stakeholder quotes, action tasks, and sober self-hosted deployment notes.',
             }),
         },
     ]
