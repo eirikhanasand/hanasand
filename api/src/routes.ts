@@ -62,6 +62,8 @@ import getAgentTargets from './handlers/vms/getAgentTargets.ts'
 import postAgentTargetSyncAccess from './handlers/vms/postAgentTargetSyncAccess.ts'
 import postAgentTargetRequest from './handlers/vms/postAgentTargetRequest.ts'
 import stopVms from './handlers/vms/stopVms.ts'
+import putVmHostFeatures from './handlers/vms/putHostFeatures.ts'
+import postVmFailover from './handlers/vms/postFailover.ts'
 import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDocker from './handlers/docker/getDocker.ts'
 import vmAction from './handlers/vms/action.ts'
@@ -208,6 +210,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/vm/:id/request', postAgentTargetRequest)
     fastify.get('/vm/:id', getVM)
     fastify.get('/vm/:id/connection', getVmConnection)
+    fastify.put('/vm/:id/host-features', putVmHostFeatures)
+    fastify.post('/vm/:id/failover', postVmFailover)
     fastify.get('/vm/details/:name', getVMDetails)
     fastify.get('/vms', getVM)
     fastify.get('/vms/stop', stopVms)

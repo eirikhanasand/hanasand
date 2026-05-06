@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation'
 import getVMDetails from '@/utils/vms/fetch/metrics/getVMDetails'
 import getVMMetrics from '@/utils/vms/fetch/metrics/getVMMetrics'
 import VMMetrics from '@/components/vms/vmMetrics'
+import VMHostOptions from '@/components/vms/vmHostOptions'
 
 type VMClientProps = {
     vm: VM
@@ -79,6 +80,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
                 <VMDetails boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
             </div>
             <div className='grid gap-3'>
+                <VMHostOptions boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} onUpdate={setVM} />
                 <VMAccess boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} connection={connection} />
             </div>
             <div className='grid gap-3'>

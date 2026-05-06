@@ -394,6 +394,12 @@ type VM = {
     owner: string
     created_by: string
     access_users: string[]
+    always_running_premium: boolean
+    always_running_enabled: boolean
+    failover_premium: boolean
+    failover_enabled: boolean
+    primary_host: string
+    failover_host: string | null
     status: string
     type: string
     architecture: string

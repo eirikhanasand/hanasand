@@ -4,6 +4,7 @@ import invalidateOldAttempts from './auth/invalidateOldAttempts.ts'
 import runSyntheticMonitor from './status/monitor.ts'
 import { provisionExistingMailAccounts } from './mail/accounts.ts'
 import { mailConfig } from './mail/config.ts'
+import ensureAlwaysRunningVms from './vms/ensureAlwaysRunning.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
@@ -12,6 +13,7 @@ export default function cron() {
                 invalidateOldTokens(),
                 invalidateOldAttempts(),
                 runSyntheticMonitor(),
+                ensureAlwaysRunningVms(),
             ]
 
             if (mailConfig.adminPassword) {

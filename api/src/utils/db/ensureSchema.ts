@@ -27,6 +27,12 @@ export default async function ensureSchema() {
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_by TEXT')
     await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS reserved BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS always_running_premium BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS always_running_enabled BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_premium BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_enabled BOOLEAN NOT NULL DEFAULT FALSE')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS primary_host TEXT NOT NULL DEFAULT \\'ovhcloud\\'')
+    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_host TEXT')
     await run(`
         INSERT INTO users (id, name, password, avatar, active, reserved)
         SELECT id, name, crypt(gen_random_uuid()::text, gen_salt('bf')), '', FALSE, TRUE

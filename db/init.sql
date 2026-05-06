@@ -237,7 +237,13 @@ CREATE TABLE IF NOT EXISTS vms (
     name TEXT PRIMARY KEY,
     owner TEXT NOT NULL,
     created_by TEXT NOT NULL,
-    access_users JSONB DEFAULT '[]'::jsonb
+    access_users JSONB DEFAULT '[]'::jsonb,
+    always_running_premium BOOLEAN NOT NULL DEFAULT FALSE,
+    always_running_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    failover_premium BOOLEAN NOT NULL DEFAULT FALSE,
+    failover_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    primary_host TEXT NOT NULL DEFAULT 'ovhcloud',
+    failover_host TEXT
 );
 
 CREATE TABLE IF NOT EXISTS vm_shutdown (
