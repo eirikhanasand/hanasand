@@ -23,8 +23,8 @@ export default async function postVM(vm: Partial<VM>): Promise<{ status: number,
                 id
             },
             body: JSON.stringify({ ...vm }),
-            timeoutMs: config.abortTimeout,
-            retries: 2,
+            timeoutMs: Math.max(config.abortTimeout, 180000),
+            retries: 0,
         })
 
         if (response.status === 409) {
