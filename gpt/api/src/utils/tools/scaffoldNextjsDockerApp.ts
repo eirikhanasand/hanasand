@@ -116,7 +116,7 @@ export default async function scaffoldNextjsDockerApp(args: ScaffoldNextjsDocker
     }, null, 2) + '\n')
 
     await writeTemplateFile(absolutePath, 'next-env.d.ts', '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n\n// This file is managed by Next.js.\n')
-    await writeTemplateFile(absolutePath, 'next.config.ts', 'import type { NextConfig } from "next"\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n}\n\nexport default nextConfig\n')
+    await writeTemplateFile(absolutePath, 'next.config.ts', 'import type { NextConfig } from "next"\n\nconst nextConfig: NextConfig = {\n  output: "standalone",\n  experimental: {\n    cpus: 4,\n  },\n}\n\nexport default nextConfig\n')
     await writeTemplateFile(absolutePath, 'postcss.config.mjs', 'export default {\n  plugins: {},\n}\n')
     await writeTemplateFile(absolutePath, 'eslint.config.mjs', 'import { FlatCompat } from "@eslint/eslintrc"\n\nconst compat = new FlatCompat({ baseDirectory: import.meta.dirname })\n\nexport default [\n  ...compat.extends("next/core-web-vitals", "next/typescript"),\n]\n')
     await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\n.next\n.env\n.hanasand-tmp\n')

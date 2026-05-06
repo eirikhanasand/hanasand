@@ -64,6 +64,7 @@ async function run(command: string, cwd: string, timeoutMs: number) {
         const child = spawn('/bin/sh', ['-lc', command], {
             cwd,
             env: process.env,
+            detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
         })
         let stdout = ''
@@ -71,7 +72,23 @@ async function run(command: string, cwd: string, timeoutMs: number) {
         let timedOut = false
         const timer = setTimeout(() => {
             timedOut = true
-            child.kill('SIGTERM')
+            const pid = child.pid
+            if (pid) {
+                try {
+                    process.kill(-pid, 'SIGTERM')
+                    setTimeout(() => {
+                        try {
+                            process.kill(-pid, 'SIGKILL')
+                        } catch {
+                            // The process group exited after SIGTERM.
+                        }
+                    }, 5000).unref()
+                } catch {
+                    child.kill('SIGTERM')
+                }
+            } else {
+                child.kill('SIGTERM')
+            }
         }, timeoutMs)
 
         child.stdout.on('data', (chunk) => {
