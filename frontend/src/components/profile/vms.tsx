@@ -31,7 +31,10 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     return (
         <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
             <div className='mb-1 flex items-center justify-between gap-3'>
-                <h2 className='text-base font-semibold text-bright/90'>Virtual Machines</h2>
+                <div>
+                    <h2 className='text-base font-medium text-bright/90'>Virtual Machines</h2>
+                    <p className='mt-1 text-xs text-bright/38'>{vms.length} managed targets</p>
+                </div>
                 <Tooltip
                     align='right'
                     content={
@@ -42,7 +45,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     }
                 >
                     <div className='p-px'>
-                        <div className='flex min-w-full items-center gap-1 rounded-md border border-blue-300/30 bg-blue-400/12 px-2.5 py-1'>
+                        <div className='flex min-w-full items-center gap-1 rounded-md border border-blue-300/25 bg-blue-400/10 px-2.5 py-1'>
                             <Info className='h-3 w-3 stroke-blue-400' />
                             <span className='text-[0.7rem] text-bright/62'>Managed</span>
                         </div>

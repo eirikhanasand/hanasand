@@ -26,12 +26,12 @@ export default async function Page() {
                 title={text}
                 description='Projects, shares, machines, mail, logs, and system metrics.'
             />
-            <div className='grid gap-3 lg:grid-cols-2'>
-                <div className='grid content-start gap-3'>
-                    <VMs vms={vms} />
-                    <Shares />
-                </div>
+            <div className='grid gap-3 xl:grid-cols-2'>
                 <div className='min-w-0'>
+                    <VMs vms={vms} />
+                </div>
+                <div className='grid min-w-0 content-start gap-3'>
+                    <Shares />
                     <Projects />
                 </div>
             </div>
