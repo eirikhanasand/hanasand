@@ -4,7 +4,7 @@ import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
 import '@styles/github.css'
 import Editor from '@/components/share/editor'
 import { applyHighlightedCode } from './codeUtils'
-import { useShareCodeSocket } from './useShareCodeSocket'
+import { type ShareConflict, type SharePresenceUser, useShareCodeSocket } from './useShareCodeSocket'
 
 type CodeProps = {
     id: string
@@ -19,6 +19,11 @@ type CodeProps = {
     syntaxHighlighting: boolean
     setError: Dispatch<SetStateAction<string | boolean | null>>
     setSaveState: Dispatch<SetStateAction<'saved' | 'saving' | 'queued'>>
+    saveState: 'saved' | 'saving' | 'queued'
+    setPresenceUsers: Dispatch<SetStateAction<SharePresenceUser[]>>
+    setSelfClientId: Dispatch<SetStateAction<string | null>>
+    setRemoteNotice: Dispatch<SetStateAction<string | null>>
+    setConflict: Dispatch<SetStateAction<ShareConflict | null>>
     connect?: boolean
     editorPatch?: { value: string; nonce: number } | null
 }
@@ -36,12 +41,17 @@ export default function Code({
     syntaxHighlighting,
     setError,
     setSaveState,
+    saveState,
+    setPresenceUsers,
+    setSelfClientId,
+    setRemoteNotice,
+    setConflict,
     connect = true,
     editorPatch,
 }: CodeProps) {
     const [lastEdit, setLastEdit] = useState(new Date().getTime())
     const codeRef = useRef<HTMLPreElement>(null)
-    const { sendEdit } = useShareCodeSocket({
+    const { sendEdit, sendCursor, sendEditing } = useShareCodeSocket({
         id,
         share,
         editingContent,
@@ -50,7 +60,12 @@ export default function Code({
         setIsConnected,
         setParticipants,
         setShare,
+        setPresenceUsers,
+        setSelfClientId,
+        setRemoteNotice,
+        setConflict,
         onSaveStateChange: setSaveState,
+        saveState,
         enabled: connect,
     })
 
@@ -113,6 +128,8 @@ export default function Code({
             codeRef={codeRef}
             editingContent={editingContent}
             handleChange={handleChange}
+            onCursorChange={sendCursor}
+            onEditingChange={sendEditing}
             setClickedWord={setClickedWord}
             displayLineNumbers={displayLineNumbers}
             syntaxHighlighting={syntaxHighlighting}

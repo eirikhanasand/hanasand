@@ -7,6 +7,8 @@ type EditorProps = {
     codeRef: RefObject<HTMLPreElement | null>
     editingContent: string
     handleChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+    onCursorChange: (selectionStart: number, selectionEnd: number, content: string) => void
+    onEditingChange: (editing: boolean) => void
     setClickedWord: (word: string) => void
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
@@ -18,6 +20,8 @@ export default function Editor({
     codeRef,
     editingContent,
     handleChange,
+    onCursorChange,
+    onEditingChange,
     setClickedWord,
     displayLineNumbers,
     syntaxHighlighting,
@@ -27,6 +31,7 @@ export default function Editor({
     const [history, setHistory] = useState<string[]>([])
     const [historyIndex, setHistoryIndex] = useState(-1)
     const lineNumberRef = useRef<HTMLElement | null>(null)
+    const editingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [lineNumberWidth, setLineNumberWidth] = useState(0)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const searchParams = useSearchParams()
@@ -41,9 +46,20 @@ export default function Editor({
     function handleSelection(e: React.SyntheticEvent<HTMLTextAreaElement>) {
         const textarea = e.currentTarget
         const selected = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim()
+        onCursorChange(textarea.selectionStart, textarea.selectionEnd, textarea.value)
         if (selected) {
             setClickedWord(selected)
         }
+    }
+
+    function handleEditorChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+        handleChange(e)
+        onEditingChange(true)
+        onCursorChange(e.currentTarget.selectionStart, e.currentTarget.selectionEnd, e.currentTarget.value)
+        if (editingTimeoutRef.current) {
+            clearTimeout(editingTimeoutRef.current)
+        }
+        editingTimeoutRef.current = setTimeout(() => onEditingChange(false), 1400)
     }
 
     function getTokenAtPosition(value: string, cursorPos: number) {
@@ -102,6 +118,14 @@ export default function Editor({
     }, [])
 
     useEffect(() => {
+        return () => {
+            if (editingTimeoutRef.current) {
+                clearTimeout(editingTimeoutRef.current)
+            }
+        }
+    }, [])
+
+    useEffect(() => {
         const targetLine = Number(searchParams.get('line'))
         if (!targetLine || !inputRef.current) {
             return
@@ -155,9 +179,10 @@ export default function Editor({
             <textarea
                 ref={inputRef}
                 value={editingContent}
-                onChange={handleChange}
+                onChange={handleEditorChange}
                 onClick={handleWordClick}
                 onSelect={handleSelection}
+                onKeyUp={(e) => onCursorChange(e.currentTarget.selectionStart, e.currentTarget.selectionEnd, e.currentTarget.value)}
                 onScroll={(e) => {
                     const lineNumbers = lineNumberRef.current
                     if (lineNumbers) {

@@ -21,6 +21,7 @@ import type { TerminalCredentials } from '@/hooks/useTerminal'
 import { getShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
 import { CheckCircle2, CloudOff, Code2, FileCode2, Loader2, MessageSquare, Radio, TerminalSquare } from 'lucide-react'
 import { countTreeItems, findPath, getVisibleWorkspaceTree, getWorkspaceName, isWorkspaceRootItem } from '@/components/share/workspaceTree'
+import type { ShareConflict, SharePresenceUser } from '@/components/share/useShareCodeSocket'
 
 type ClientPageProps = {
     id: string
@@ -50,6 +51,10 @@ export default function ClientPage({
     const [participants, setParticipants] = useState(1)
     const [isConnected, setIsConnected] = useState(false)
     const [saveState, setSaveState] = useState<'saved' | 'saving' | 'queued'>('saved')
+    const [presenceUsers, setPresenceUsers] = useState<SharePresenceUser[]>([])
+    const [selfClientId, setSelfClientId] = useState<string | null>(null)
+    const [remoteNotice, setRemoteNotice] = useState<string | null>(null)
+    const [conflict, setConflict] = useState<ShareConflict | null>(null)
     const [clickedWord, setClickedWord] = useState<string | null>(null)
     const [editingContent, setEditingContent] = useState<string>('')
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
@@ -85,6 +90,8 @@ export default function ClientPage({
             ? 'Root note'
             : 'Open a file from the left sidebar'
         : `${editingContent.split(/\s+/).filter(Boolean).length} words`
+    const otherUsers = presenceUsers.filter(user => user.clientId !== selfClientId)
+    const remoteEditors = otherUsers.filter(user => user.editing)
 
     useEffect(() => {
         if (!runtimeCapability.hasHttpSurface && renderSite) {
@@ -207,7 +214,7 @@ export default function ClientPage({
                         <div className='flex shrink-0 flex-wrap items-center justify-end gap-1.5'>
                             <StatusPill
                                 icon={isConnected ? <Radio className='h-3.5 w-3.5' /> : <CloudOff className='h-3.5 w-3.5' />}
-                                label={isConnected ? 'Connected' : workspaceCreated ? 'Reconnecting' : 'Preparing'}
+                                label={isConnected ? `${participants} live` : workspaceCreated ? 'Reconnecting' : 'Preparing'}
                                 tone={isConnected ? 'good' : 'warn'}
                             />
                             <StatusPill
@@ -222,6 +229,29 @@ export default function ClientPage({
                             />
                         </div>
                     </div>
+                )}
+                {!chatOpen && (
+                    <CollaborationStatus
+                        users={presenceUsers}
+                        otherUsers={otherUsers}
+                        editors={remoteEditors}
+                        notice={remoteNotice}
+                        conflict={conflict}
+                        onDismissNotice={() => setRemoteNotice(null)}
+                        onUseRemote={() => {
+                            if (!conflict) return
+                            setEditingContent(conflict.remoteContent)
+                            setEditorPatch({ value: conflict.remoteContent, nonce: Date.now() })
+                            setConflict(null)
+                            setRemoteNotice('Remote update applied.')
+                        }}
+                        onKeepMine={() => {
+                            setConflict(null)
+                            setRemoteNotice('Kept your local version.')
+                            setSaveState('saving')
+                            setEditorPatch({ value: editingContent, nonce: Date.now() })
+                        }}
+                    />
                 )}
                 {chatOpen ? (
                     <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-background/48 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
@@ -248,6 +278,11 @@ export default function ClientPage({
                         syntaxHighlighting={syntaxHighlighting}
                         setError={setError}
                         setSaveState={setSaveState}
+                        saveState={saveState}
+                        setPresenceUsers={setPresenceUsers}
+                        setSelfClientId={setSelfClientId}
+                        setRemoteNotice={setRemoteNotice}
+                        setConflict={setConflict}
                         connect={workspaceCreated}
                         editorPatch={editorPatch}
                     />
@@ -309,6 +344,89 @@ export default function ClientPage({
             <DisplayError error={error} />
         </div>
     )
+}
+
+function CollaborationStatus({
+    users,
+    otherUsers,
+    editors,
+    notice,
+    conflict,
+    onDismissNotice,
+    onUseRemote,
+    onKeepMine,
+}: {
+    users: SharePresenceUser[]
+    otherUsers: SharePresenceUser[]
+    editors: SharePresenceUser[]
+    notice: string | null
+    conflict: ShareConflict | null
+    onDismissNotice: () => void
+    onUseRemote: () => void
+    onKeepMine: () => void
+}) {
+    if (!users.length && !notice && !conflict) {
+        return null
+    }
+
+    return (
+        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/50 px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/10 backdrop-blur-md'>
+            <div className='flex min-w-0 flex-wrap items-center gap-2'>
+                {otherUsers.length ? (
+                    <div className='flex items-center gap-1.5'>
+                        <div className='flex -space-x-1.5'>
+                            {otherUsers.slice(0, 5).map(user => (
+                                <span
+                                    key={user.clientId}
+                                    title={user.displayName}
+                                    className='grid h-6 w-6 place-items-center rounded-full border border-background text-[10px] font-bold text-black'
+                                    style={{ backgroundColor: user.color }}
+                                >
+                                    {initialsFor(user.displayName)}
+                                </span>
+                            ))}
+                        </div>
+                        <span className='text-[11px] text-bright/48'>{otherUsers.length === 1 ? '1 other user' : `${otherUsers.length} other users`}</span>
+                    </div>
+                ) : users.length ? (
+                    <span className='rounded-lg border border-bright/10 bg-bright/[0.035] px-2 py-1 text-[11px] text-bright/45'>Only you here</span>
+                ) : null}
+                {editors.length ? (
+                    <span className='rounded-lg border border-[#f07d33]/18 bg-[#f07d33]/8 px-2 py-1 text-[11px] font-semibold text-[#ffd0b5]'>
+                        {formatEditors(editors)} editing{formatCursor(editors[0])}
+                    </span>
+                ) : null}
+                {notice && !conflict ? (
+                    <button type='button' onClick={onDismissNotice} className='rounded-lg border border-bright/10 bg-bright/[0.035] px-2 py-1 text-[11px] text-bright/58 transition hover:bg-bright/8 hover:text-bright'>
+                        {notice}
+                    </button>
+                ) : null}
+            </div>
+            {conflict ? (
+                <div className='flex flex-wrap items-center gap-2 rounded-lg border border-amber-300/18 bg-amber-300/8 px-2 py-1.5 text-[11px] text-amber-100/82'>
+                    <span>{conflict.author?.displayName || 'Someone'} edited this while your change was unsaved.</span>
+                    <button type='button' onClick={onUseRemote} className='rounded-md bg-amber-100/14 px-2 py-1 font-semibold hover:bg-amber-100/22'>Use theirs</button>
+                    <button type='button' onClick={onKeepMine} className='rounded-md bg-bright/10 px-2 py-1 font-semibold hover:bg-bright/16'>Keep mine</button>
+                </div>
+            ) : null}
+        </div>
+    )
+}
+
+function initialsFor(name: string) {
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+    return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)).toUpperCase()
+}
+
+function formatEditors(editors: SharePresenceUser[]) {
+    if (editors.length === 1) return editors[0].displayName
+    if (editors.length === 2) return `${editors[0].displayName} and ${editors[1].displayName}`
+    return `${editors[0].displayName} and ${editors.length - 1} others`
+}
+
+function formatCursor(user: SharePresenceUser | undefined) {
+    if (!user?.cursorLine) return ''
+    return ` · line ${user.cursorLine}`
 }
 
 function StatusPill({
