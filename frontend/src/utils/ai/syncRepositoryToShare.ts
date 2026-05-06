@@ -9,12 +9,14 @@ type SyncRepositoryToShareProps = {
     repo: AIImportedRepo
     token?: string | null
     userId?: string | null
+    onProgress?: (progress: AISyncProgress) => void
 }
 
 export async function syncRepositoryToShare({
     repo,
     token,
     userId,
+    onProgress,
 }: SyncRepositoryToShareProps) {
     if (!token || !userId) {
         throw new Error('You must be signed in to sync a repository into the editor.')
@@ -22,12 +24,14 @@ export async function syncRepositoryToShare({
 
     const tree = await getTree({ id: repo.id, token, userId })
     if (!tree) {
-        return importRepositoryToShareFallback({ repo, token, userId })
+        return importRepositoryToShareFallback({ repo, token, userId, onProgress })
     }
 
     const folderIds = new Map<string, string>([['', repo.id]])
     registerFolders(tree, '', folderIds)
 
+    let syncedFiles = 0
+    onProgress?.({ syncedFiles, totalFiles: repo.files.length, currentPath: null })
     for (const file of repo.files) {
         const parentId = await ensureParentFolder({
             folderIds,
@@ -39,6 +43,8 @@ export async function syncRepositoryToShare({
         const fileId = findTreeFileId(tree, file.path)
         if (fileId) {
             await updateShare(fileId, { content: file.content })
+            syncedFiles += 1
+            onProgress?.({ syncedFiles, totalFiles: repo.files.length, currentPath: file.path })
             continue
         }
 
@@ -60,6 +66,8 @@ export async function syncRepositoryToShare({
         if (!created) {
             throw new Error(`Failed to create file ${file.path}.`)
         }
+        syncedFiles += 1
+        onProgress?.({ syncedFiles, totalFiles: repo.files.length, currentPath: file.path })
     }
 
     await pruneRemovedEntries({
@@ -187,11 +195,13 @@ async function importRepositoryToShareFallback({
     repo,
     token,
     userId,
+    onProgress,
 }: {
     repo: AIImportedRepo
     token: string
     userId: string
+    onProgress?: (progress: AISyncProgress) => void
 }) {
     const { importRepositoryToShare } = await import('./importRepositoryToShare')
-    return importRepositoryToShare({ repo, token, userId })
+    return importRepositoryToShare({ repo, token, userId, onProgress })
 }

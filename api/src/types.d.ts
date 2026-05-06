@@ -294,6 +294,12 @@ type AIImportedRepoFile = {
     content: string
 }
 
+type AISyncProgress = {
+    syncedFiles: number
+    totalFiles: number
+    currentPath: string | null
+}
+
 type AIRepositorySyncEvent = {
     timestamp: string
     status: 'ready' | 'syncing' | 'error'
