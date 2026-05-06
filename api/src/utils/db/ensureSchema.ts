@@ -31,7 +31,7 @@ export default async function ensureSchema() {
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS always_running_enabled BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_premium BOOLEAN NOT NULL DEFAULT FALSE')
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_enabled BOOLEAN NOT NULL DEFAULT FALSE')
-    await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS primary_host TEXT NOT NULL DEFAULT \\'ovhcloud\\'')
+    await run("ALTER TABLE vms ADD COLUMN IF NOT EXISTS primary_host TEXT NOT NULL DEFAULT 'ovhcloud'")
     await run('ALTER TABLE vms ADD COLUMN IF NOT EXISTS failover_host TEXT')
     await run(`
         INSERT INTO users (id, name, password, avatar, active, reserved)
