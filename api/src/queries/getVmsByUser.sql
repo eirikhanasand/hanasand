@@ -24,3 +24,4 @@ SELECT
 FROM vms v
 LEFT JOIN vm_details d ON LOWER(d.name) = LOWER(v.name)
 WHERE v.owner = $1
+  AND d.name IS NOT NULL
