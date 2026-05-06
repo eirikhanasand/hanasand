@@ -5,12 +5,14 @@ type ImportRepositoryToShareProps = {
     repo: AIImportedRepo
     token?: string | null
     userId?: string | null
+    onProgress?: (progress: AISyncProgress) => void
 }
 
 export async function importRepositoryToShare({
     repo,
     token,
     userId,
+    onProgress,
 }: ImportRepositoryToShareProps) {
     if (!token || !userId) {
         throw new Error('You must be signed in to sync a repository into the editor.')
@@ -31,6 +33,8 @@ export async function importRepositoryToShare({
     }
 
     const folderIds = new Map<string, string>([['', repo.id]])
+    let syncedFiles = 0
+    onProgress?.({ syncedFiles, totalFiles: repo.files.length, currentPath: null })
     for (const file of repo.files) {
         const segments = file.path.split('/').filter(Boolean)
         const directories = segments.slice(0, -1)
@@ -82,6 +86,9 @@ export async function importRepositoryToShare({
         if (!fileResponse) {
             throw new Error(`Failed to create file ${file.path}.`)
         }
+
+        syncedFiles += 1
+        onProgress?.({ syncedFiles, totalFiles: repo.files.length, currentPath: file.path })
     }
 
     return repo.id
