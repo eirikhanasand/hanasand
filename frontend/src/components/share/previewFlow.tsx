@@ -58,10 +58,14 @@ export default function PreviewFlow({
         setHealth('checking')
 
         async function probePreview() {
+            const controller = new AbortController()
+            const timeout = window.setTimeout(() => controller.abort(), 5000)
+
             try {
                 await fetch(url, {
                     mode: 'no-cors',
                     cache: 'no-store',
+                    signal: controller.signal,
                 })
                 if (!cancelled) {
                     setHealth('reachable')
@@ -74,6 +78,8 @@ export default function PreviewFlow({
                         ? `Nothing answered at the preview URL. Start the app with ${runtime.command}.`
                         : runtime.action)
                 }
+            } finally {
+                window.clearTimeout(timeout)
             }
         }
 
