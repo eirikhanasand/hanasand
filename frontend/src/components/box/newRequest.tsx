@@ -26,7 +26,7 @@ type NewRequestProps = {
     share: Share | null
 }
 
-type ResponseTab = 'response' | 'raw' | 'preview' | 'headers' | 'request' | 'curl' | 'http'
+type ResponseTab = 'response' | 'raw' | 'tree' | 'preview' | 'headers' | 'request' | 'curl' | 'http'
 
 type RequestRun = {
     id: string
@@ -367,7 +367,7 @@ export default function NewRequest({
 
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <div className='flex flex-wrap gap-2 text-xs font-medium text-bright/70'>
-                        {(['response', 'raw', 'preview', 'headers', 'request', 'curl', 'http'] as const).map((item) => (
+                        {(['response', 'raw', 'tree', 'preview', 'headers', 'request', 'curl', 'http'] as const).map((item) => (
                             <button key={item} type='button' onClick={() => setResponseTab(item)} className={`cursor-pointer rounded-full px-2.5 py-1 text-[11px] capitalize ${responseTab === item ? 'bg-white/12 text-bright' : 'text-bright/50 hover:bg-white/7 hover:text-bright/75'}`}>
                                 {item === 'response' ? 'Pretty' : item === 'preview' ? <span className='inline-flex items-center gap-1'><ImageIcon className='h-3 w-3' /> Preview</span> : item === 'curl' ? 'cURL' : item === 'http' ? 'HTTP' : item}
                             </button>
@@ -390,6 +390,12 @@ export default function NewRequest({
                     {responseTab === 'raw' && (
                         <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
                             {activeRun?.loading ? 'Request is running...' : response ? formatRawResponseBody(response) : 'Raw response will appear here.'}
+                        </pre>
+                    )}
+
+                    {responseTab === 'tree' && (
+                        <pre className='min-h-32 overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-bright/80'>
+                            {activeRun?.loading ? 'Request is running...' : response ? formatJsonTree(response) : 'JSON paths will appear here.'}
                         </pre>
                     )}
 
@@ -801,6 +807,49 @@ function formatPrettyResponseBody(response: ToolResponse) {
     } catch {
         return raw
     }
+}
+
+function formatJsonTree(response: ToolResponse) {
+    if (response.error) {
+        return response.error
+    }
+
+    if (!response.body) {
+        return 'No response body.'
+    }
+
+    try {
+        const parsed = JSON.parse(response.body) as unknown
+        const rows = flattenJson(parsed)
+        return rows.length ? rows.join('\n') : '$ = ' + formatJsonTreeValue(parsed)
+    } catch {
+        return 'Tree view is available for JSON responses.'
+    }
+}
+
+function flattenJson(value: unknown, path = '$'): string[] {
+    if (Array.isArray(value)) {
+        if (!value.length) {
+            return [`${path} = []`]
+        }
+
+        return value.flatMap((item, index) => flattenJson(item, `${path}[${index}]`))
+    }
+
+    if (value && typeof value === 'object') {
+        const entries = Object.entries(value as Record<string, unknown>)
+        if (!entries.length) {
+            return [`${path} = {}`]
+        }
+
+        return entries.flatMap(([key, item]) => flattenJson(item, `${path}.${key}`))
+    }
+
+    return [`${path} = ${formatJsonTreeValue(value)}`]
+}
+
+function formatJsonTreeValue(value: unknown) {
+    return typeof value === 'string' ? JSON.stringify(value) : String(value)
 }
 
 function formatCurlCommand(request: NonNullable<ToolResponse['request']>) {

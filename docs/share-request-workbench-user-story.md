@@ -2,7 +2,7 @@
 
 ## Reddit-Derived Story
 
-As a developer who likes Postman for quick API work but dislikes account gates, bloat, and unreliable duplication, I want a lightweight request workbench inside the share page where I can paste a cURL command from browser devtools, keep a small set of share-scoped variables, send the request through the connected terminal, inspect pretty or raw responses with headers and previews, export the executed request back to cURL or `.http` text, and resend or delete prior requests without losing the exact working setup.
+As a developer debugging an unfamiliar service through a shared terminal, I may only have a copied browser cURL, a vague error report, and a deeply nested JSON response where the important id or status is buried several levels down. I want a lightweight request workbench inside the share page where I can paste the cURL, keep share-scoped variables, send the request through the connected terminal, inspect pretty, raw, tree, header, and preview views, export the exact executed request back to cURL or `.http` text, and resend or delete prior requests without turning the tool into a cloud-synced API platform.
 
 Acceptance:
 - `/s` opens a stable `/s/{shareId}` URL so the workspace is recoverable.
@@ -14,6 +14,7 @@ Acceptance:
 - After a request runs, the response inspector exposes a `cURL` view with a self-contained cURL command for the exact executed method, URL, headers, and body.
 - After a request runs, the response inspector exposes an `HTTP` view that can be pasted into a repo-owned `.http` request file.
 - JSON responses render in a readable `Pretty` view while the exact body remains available in `Raw`.
+- Nested JSON responses expose a `Tree` view with stable paths for leaf values, such as `$.data.items[0].id`.
 - The response body and headers remain inspectable, and image previews still appear for image responses or image URLs.
 - Request history can resend the same templated request and delete entries without corrupting the original request.
 - Invalid headers or missing variables surface as warnings instead of breaking the workbench.
@@ -25,3 +26,4 @@ E2E check:
 - Run that request, open the `cURL` response view, and verify the exported command includes the same method, URL, header, and body.
 - Open the `HTTP` response view and verify it includes the request line, header, blank separator, and body as plain text suitable for a committed `.http` file.
 - Verify the `Pretty` view formats JSON responses while `Raw` keeps the exact original response body.
+- Verify the `Tree` view flattens a nested JSON response into useful paths without changing the raw response or request exports.
