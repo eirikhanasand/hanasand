@@ -11,6 +11,12 @@ if [ -n "${API_SSH_KEY:-}" ]; then
     chmod 600 /root/.ssh/id_ed25519
 fi
 
+CRON_GID="${MANAGED_CRON_GID:-990}"
+if [ -n "$CRON_GID" ]; then
+    addgroup -g "$CRON_GID" host-cron 2>/dev/null || true
+    addgroup bun host-cron 2>/dev/null || true
+fi
+
 # Starts cron
 crond -f &
 

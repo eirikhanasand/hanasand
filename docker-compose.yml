@@ -58,6 +58,7 @@ services:
       MAIL_IMAP_PORT: ${MAIL_IMAP_PORT:-993}
       MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
       MAIL_MANAGESIEVE_PORT: ${MAIL_MANAGESIEVE_PORT:-4190}
+      MANAGED_CRON_GID: ${MANAGED_CRON_GID:-990}
       VM_HOST_ID: ${VM_HOST_ID:-ovhcloud}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
