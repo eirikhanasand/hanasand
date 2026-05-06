@@ -149,7 +149,13 @@ export default function useTerminal({ share, active }: TerminalProps) {
                             }
                             const nextLifecycle = lifecycleFromTerminalUpdate(msg.content)
                             if (nextLifecycle) {
-                                setLifecycle(nextLifecycle)
+                                setLifecycle((currentLifecycle) => {
+                                    if (currentLifecycle === 'ready' && nextLifecycle === 'preparing') {
+                                        return currentLifecycle
+                                    }
+
+                                    return nextLifecycle
+                                })
                             }
                             setChunks((prev) => [...prev, msg.content])
                         }
