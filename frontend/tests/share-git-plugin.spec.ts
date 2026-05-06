@@ -9,7 +9,7 @@ test('share editor exposes git import and pull from the right panel', async () =
     const plugin = await readFile(path.join(root, 'src/components/share/gitPlugin.tsx'), 'utf8')
     const github = await readFile(path.join(root, 'src/components/ai/github.ts'), 'utf8')
 
-    expect(metadata).toContain("aria-label='Git plugin'")
+    expect(metadata).toContain('aria-label=\'Git plugin\'')
     expect(metadata).toContain('<GitPlugin shareRouteId={shareRouteId} share={share} />')
 
     expect(plugin).toContain('importGitHubRepository(currentInput, existingId, githubToken)')
