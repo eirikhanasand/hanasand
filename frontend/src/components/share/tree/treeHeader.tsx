@@ -1,4 +1,5 @@
 import useFolderState from '@/hooks/useFolderState'
+import { countTreeItems } from '@/components/share/workspaceTree'
 import { FilePlus, FolderPlus, Maximize2, Minimize2, RefreshCw } from 'lucide-react'
 import { Dispatch, SetStateAction } from 'react'
 
@@ -8,14 +9,11 @@ type TreeHeaderProps = {
     refreshing: boolean
     onRefresh: () => void
     setIsCreatingNewFile: Dispatch<SetStateAction<'file' | 'folder' | null>>
+    filter: string
+    setFilter: Dispatch<SetStateAction<string>>
 }
 
-type TreeCounts = {
-    files: number
-    folders: number
-}
-
-export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCreatingNewFile }: TreeHeaderProps) {
+export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCreatingNewFile, filter, setFilter }: TreeHeaderProps) {
     const { setOpenFolders } = useFolderState()
     const buttonStyle = 'rounded-sm h-6 w-6 hover:bg-extralight/80 grid place-items-center cursor-pointer'
     const counts = countTreeItems(tree)
@@ -61,6 +59,12 @@ export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCr
                     <FolderPlus className='stroke-bright/80 w-4 h-4' />
                 </button>
             </div>
+            <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder='Filter files...'
+                className='mt-2 w-full rounded-md border border-bright/8 bg-black/18 px-2 py-1.5 text-xs text-bright/76 outline-none placeholder:text-bright/34 focus:border-[#f07d33]/40'
+            />
         </div>
     )
 }
@@ -73,21 +77,4 @@ function collectFolderIds(tree: Tree) {
         }
     }
     return ids
-}
-
-function countTreeItems(tree: Tree): TreeCounts {
-    return tree.reduce((counts, file) => {
-        if (file.type === 'folder') {
-            const childCounts = countTreeItems(file.children)
-            return {
-                files: counts.files + childCounts.files,
-                folders: counts.folders + childCounts.folders + 1,
-            }
-        }
-
-        return {
-            files: counts.files + 1,
-            folders: counts.folders,
-        }
-    }, { files: 0, folders: 0 })
 }

@@ -23,6 +23,7 @@ type ExplorerProps = {
     editingContent: string
     setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
     setError: Dispatch<SetStateAction<string | boolean | null>>
+    setPageTree: Dispatch<SetStateAction<Tree | null>>
 }
 
 export default function Explorer({
@@ -35,6 +36,7 @@ export default function Explorer({
     editingContent,
     setEditorPatch,
     setError,
+    setPageTree,
 }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
     const [activePanel, setActivePanel] = useState<'files' | 'search'>('files')
@@ -43,9 +45,21 @@ export default function Explorer({
     const [selectedFolder, setSelectedFolder] = useState('')
     const [tree, setTree] = useState(serverTree)
     const [treeLoading, setTreeLoading] = useState(false)
+    const [filter, setFilter] = useState('')
     const rootFolder = getProjectRoot(tree, share)
     const visibleTree = rootFolder ? rootFolder.children : tree
+    const filteredTree = filter.trim() && visibleTree ? filterTree(visibleTree, filter) : visibleTree
     useHideIfLittleSpace({ set: setShowExplorer })
+
+    const setSyncedTree: Dispatch<SetStateAction<Tree | null>> = useCallback((value) => {
+        setTree((current) => {
+            const next = typeof value === 'function'
+                ? (value as (previous: Tree | null) => Tree | null)(current)
+                : value
+            setPageTree(next)
+            return next
+        })
+    }, [setPageTree])
 
     const recoverTree = useCallback(async (shareId: string) => {
         setTreeLoading(true)
@@ -53,16 +67,17 @@ export default function Explorer({
             const userId = getCookie('id') ?? undefined
             const token = getCookie('access_token') ?? undefined
             const nextTree = await getTree({ id: shareId, token, userId })
-            setTree(nextTree)
+            setSyncedTree(nextTree)
             return nextTree
         } finally {
             setTreeLoading(false)
         }
-    }, [])
+    }, [setSyncedTree])
 
     useEffect(() => {
         setTree(serverTree)
-    }, [serverTree])
+        setPageTree(serverTree)
+    }, [serverTree, setPageTree])
 
     useEffect(() => {
         const shareId = share?.id
@@ -77,7 +92,7 @@ export default function Explorer({
             const nextTree = await recoverTreeOnce(currentShareId)
 
             if (!cancelled) {
-                setTree(nextTree)
+                setSyncedTree(nextTree)
             }
         }
 
@@ -97,7 +112,7 @@ export default function Explorer({
         return () => {
             cancelled = true
         }
-    }, [share?.id, tree])
+    }, [share?.id, setSyncedTree, tree])
 
     if (!showExplorer) {
         return (
@@ -216,6 +231,8 @@ export default function Explorer({
                                 refreshing={treeLoading}
                                 onRefresh={() => void recoverTree(share.id)}
                                 setIsCreatingNewFile={setIsCreatingNewFile}
+                                filter={filter}
+                                setFilter={setFilter}
                             />
                             {rootFolder && visibleTree.length === 0 && (
                                 <NewFile
@@ -226,20 +243,26 @@ export default function Explorer({
                                     setIsCreatingNewFile={setIsCreatingNewFile}
                                     file={rootFolder}
                                     tree={visibleTree}
-                                    setTree={setTree}
+                                    setTree={setSyncedTree}
                                     setShare={setShare}
                                 />
                             )}
+                            {filteredTree && filteredTree.length === 0 && filter.trim() ? (
+                                <div className='px-2 py-4 text-xs text-bright/45'>No files match "{filter.trim()}".</div>
+                            ) : null}
                             <Tree
-                                tree={visibleTree}
+                                tree={filteredTree || []}
                                 newFileName={newFileName}
                                 setNewFileName={setNewFileName}
                                 isCreatingNewFile={isCreatingNewFile}
                                 setIsCreatingNewFile={setIsCreatingNewFile}
                                 selectedFolder={selectedFolder}
                                 setSelectedFolder={setSelectedFolder}
-                                setTree={setTree}
+                                setTree={setSyncedTree}
                                 setShare={setShare}
+                                rootTree={visibleTree}
+                                share={share}
+                                onTreeRefresh={() => recoverTree(share.id)}
                             />
                         </OpenFoldersProvider>
                     )}
@@ -250,3 +273,23 @@ export default function Explorer({
 }
 
 const getProjectRoot = getWorkspaceRoot
+
+function filterTree(tree: Tree, query: string): Tree {
+    const normalizedQuery = query.trim().toLowerCase()
+    if (!normalizedQuery) {
+        return tree
+    }
+
+    return tree.flatMap((item): FileItem[] => {
+        const ownMatch = item.name.toLowerCase().includes(normalizedQuery)
+        if (item.type === 'folder') {
+            const children = filterTree(item.children, query)
+            if (ownMatch || children.length) {
+                return [{ ...item, children }]
+            }
+            return []
+        }
+
+        return ownMatch ? [item] : []
+    })
+}

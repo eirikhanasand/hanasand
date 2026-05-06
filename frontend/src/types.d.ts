@@ -205,6 +205,7 @@ type Role = {
 type Updates = {
     path?: string
     content?: string
+    name?: string
 }
 
 type LoadTestTimePoint = {

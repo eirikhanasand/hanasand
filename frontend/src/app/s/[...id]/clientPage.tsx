@@ -64,6 +64,7 @@ export default function ClientPage({
     const [terminalOpen, setTerminalOpen] = useState(shareTerminalHeight > 0)
     const [terminalStatus, setTerminalStatus] = useState('Terminal closed.')
     const [terminalCredentials, setTerminalCredentials] = useState<TerminalCredentials | null>(null)
+    const [workspaceTree, setWorkspaceTree] = useState<Tree | null>(tree)
     const [renderSite, setRenderSite] = useState<boolean>(sharePageWidth > 0)
     const [triggerSiteChange, setTriggerSiteChange] = useState<boolean | 'close'>(false)
     const [triggerTerminalChange, setTriggerTerminalChange] = useState<boolean | 'close'>(false)
@@ -76,14 +77,15 @@ export default function ClientPage({
     const maxWidth = 'max-w-full'
     const runtimeCapability = useMemo(() => getShareRuntimeCapability({
         share,
-        tree,
+        tree: workspaceTree,
         activeContent: editingContent,
-    }), [editingContent, share, tree])
-    const visibleTree = useMemo(() => getVisibleWorkspaceTree(tree, share), [share, tree])
+    }), [editingContent, share, workspaceTree])
+    const visibleTree = useMemo(() => getVisibleWorkspaceTree(workspaceTree, share), [share, workspaceTree])
     const workspaceCounts = useMemo(() => countTreeItems(visibleTree), [visibleTree])
-    const activePath = useMemo(() => findPath(tree, share?.id || id), [id, share?.id, tree])
-    const activeIsRoot = isWorkspaceRootItem(tree, share, share?.id || id)
-    const workspaceName = getWorkspaceName(tree, share, id)
+    const activePath = useMemo(() => findPath(workspaceTree, share?.id || id), [id, share?.id, workspaceTree])
+    const activeIsRoot = isWorkspaceRootItem(workspaceTree, share, share?.id || id)
+    const workspaceName = getWorkspaceName(workspaceTree, share, id)
+    const breadcrumbs = useMemo(() => buildBreadcrumbs(workspaceName, activePath, activeIsRoot), [activeIsRoot, activePath, workspaceName])
     const activeLabel = activeIsRoot ? 'Workspace root' : activePath || share?.alias || 'Loading file'
     const activeDetail = activeIsRoot
         ? editingContent.trim().length > 0
@@ -168,12 +170,13 @@ export default function ClientPage({
                 showExplorer={showExplorer}
                 setShowExplorer={setShowExplorer}
                 openFolders={openFolders}
-                tree={tree}
+                tree={workspaceTree}
                 share={share}
                 setShare={setShare}
                 editingContent={editingContent}
                 setEditorPatch={setEditorPatch}
                 setError={setError}
+                setPageTree={setWorkspaceTree}
             />
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
                 <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/72 px-2 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-md'>
@@ -208,7 +211,16 @@ export default function ClientPage({
                             <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
                             <div className='min-w-0'>
                                 <div className='truncate font-semibold text-bright/84'>{activeLabel}</div>
-                                <div className='truncate text-[11px] leading-4 text-bright/42'>{activeDetail}</div>
+                                <div className='flex min-w-0 flex-wrap items-center gap-1 text-[11px] leading-4 text-bright/42'>
+                                    {breadcrumbs.map((crumb, index) => (
+                                        <span key={`${crumb}-${index}`} className='flex min-w-0 items-center gap-1'>
+                                            {index > 0 ? <span className='text-bright/24'>/</span> : null}
+                                            <span className={index === breadcrumbs.length - 1 ? 'truncate text-bright/62' : 'truncate'}>{crumb}</span>
+                                        </span>
+                                    ))}
+                                    <span className='text-bright/24'>·</span>
+                                    <span>{activeDetail}</span>
+                                </div>
                             </div>
                         </div>
                         <div className='flex shrink-0 flex-wrap items-center justify-end gap-1.5'>
@@ -258,7 +270,7 @@ export default function ClientPage({
                         <ShareChat
                             share={share}
                             setShare={setShare}
-                            tree={tree}
+                            tree={workspaceTree}
                             editingContent={editingContent}
                             setEditorPatch={setEditorPatch}
                             mode='workspace'
@@ -306,7 +318,7 @@ export default function ClientPage({
                 setBox={setBox}
                 terminalStatus={terminalStatus}
                 terminalCredentials={terminalCredentials}
-                tree={tree}
+                tree={workspaceTree}
                 setEditorPatch={setEditorPatch}
                 setTriggerTerminalChange={setTriggerTerminalChange}
             />
@@ -460,4 +472,13 @@ function normalizeTerminalStatus(status: string) {
     if (normalized.toLowerCase().includes('preparing')) return 'Terminal preparing'
     if (normalized.toLowerCase().includes('connecting')) return 'Terminal connecting'
     return normalized.length > 22 ? `${normalized.slice(0, 19)}...` : normalized
+}
+
+function buildBreadcrumbs(workspaceName: string, activePath: string | null, activeIsRoot: boolean) {
+    if (activeIsRoot || !activePath) {
+        return [workspaceName]
+    }
+
+    const parts = activePath.split('/').filter(Boolean)
+    return [workspaceName, ...parts]
 }
