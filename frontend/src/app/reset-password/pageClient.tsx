@@ -1,8 +1,8 @@
 'use client'
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { ArrowRight, KeyRound, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, KeyRound } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -61,57 +61,59 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
 
     return (
         <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
-            <div className='grid w-full max-w-[420px] gap-5'>
-                <div className='grid justify-items-center text-center'>
-                    <div className='icon-tile bg-orange-500/15 text-orange-300'>
-                        <Sparkles className='h-5 w-5' />
-                    </div>
-                    <p className='mt-5 text-xs uppercase tracking-[0.35em] text-orange-200/80'>hanasand.com</p>
+            <div className='grid w-full max-w-[392px] gap-4'>
+                <div className='grid justify-items-center gap-2 pb-3 text-center'>
+                    <h1 className='font-serif text-[46px] font-semibold leading-none tracking-normal text-bright md:text-[54px]'>Hanasand</h1>
+                    <div className='h-px w-12 rounded-full bg-orange-300/60' />
                 </div>
 
-                <div className='glass-panel spawn grid w-full overflow-hidden rounded-4xl p-5 md:p-8'>
-                    <div className='mx-auto grid w-full max-w-[340px] gap-6'>
-                        <div className='text-center'>
-                            <div className='mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-amber-500/12 text-amber-300'>
-                                <KeyRound className='h-5 w-5' />
-                            </div>
-                            <p className='mt-5 text-xs uppercase tracking-[0.35em] text-bright/35'>Reset password</p>
-                            <h1 className='mt-3 text-3xl font-semibold tracking-[-0.04em] text-bright md:text-4xl'>New password</h1>
+                <div className='grid w-full gap-4 rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl md:p-5'>
+                    <div className='grid gap-1 px-1'>
+                        <div className='flex items-center justify-center gap-2 text-bright'>
+                            <KeyRound className='h-4 w-4 text-orange-200/80' />
+                            <h2 className='text-base font-medium tracking-normal'>New password</h2>
                         </div>
+                        <p className='text-center text-xs leading-5 text-bright/50'>Choose a new password for your Hanasand account.</p>
+                    </div>
 
-                        <Notify message={error as string | null} />
-                        {done && <div className='rounded-xl border border-emerald-400/20 bg-emerald-500/12 p-3 text-sm text-emerald-100'>Password updated.</div>}
-                        {!tokenLoaded ? null : missingResetSession ? (
-                            <Link href='/login' className='w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-semibold text-bright/80 transition hover:bg-white/10'>
+                    <ErrorNotice compact message={error as string | null} />
+                    {done ? <ErrorNotice compact variant='success' message='Password updated. Redirecting to login.' /> : null}
+                    {!tokenLoaded ? (
+                        <p className='rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-center text-xs text-bright/52'>Preparing reset session...</p>
+                    ) : missingResetSession ? (
+                        <div className='grid gap-3'>
+                            <ErrorNotice compact variant='info' message='This reset link is missing or expired. Request a new code from the login page.' />
+                            <Link href='/login' className='flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm font-medium text-bright/78 transition hover:bg-white/[0.075]'>
+                                <ArrowLeft className='h-4 w-4' />
                                 Back to login
                             </Link>
-                        ) : (
-                            <form className='flex w-full flex-col gap-3 self-center' onSubmit={handleSubmit}>
-                                <input
-                                    type='password'
-                                    name='password'
-                                    placeholder='New password'
-                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
-                                    required
-                                />
-                                <input
-                                    type='password'
-                                    name='confirmPassword'
-                                    placeholder='Confirm password'
-                                    className='rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-sm font-medium text-bright outline-none transition focus:border-orange-300/50 focus:bg-white/9'
-                                    required
-                                />
-                                <button
-                                    type='submit'
-                                    disabled={busy || done}
-                                    className='group flex w-full items-center justify-between rounded-2xl bg-bright/86 px-4 py-3 text-sm font-semibold text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/92 disabled:cursor-not-allowed disabled:opacity-60'
-                                >
-                                    Set password
-                                    <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
-                                </button>
-                            </form>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <form className='flex w-full flex-col gap-3 self-center' onSubmit={handleSubmit}>
+                            <input
+                                type='password'
+                                name='password'
+                                placeholder='New password'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm font-normal text-bright outline-none transition placeholder:text-bright/32 focus:border-orange-300/50 focus:bg-white/[0.075]'
+                                required
+                            />
+                            <input
+                                type='password'
+                                name='confirmPassword'
+                                placeholder='Confirm password'
+                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm font-normal text-bright outline-none transition placeholder:text-bright/32 focus:border-orange-300/50 focus:bg-white/[0.075]'
+                                required
+                            />
+                            <button
+                                type='submit'
+                                disabled={busy || done}
+                                className='group flex h-10 w-full items-center justify-between rounded-lg bg-bright/88 px-3 text-sm font-medium text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/94 disabled:cursor-not-allowed disabled:opacity-60'
+                            >
+                                {busy ? 'Saving...' : 'Set password'}
+                                <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />
+                            </button>
+                        </form>
+                    )}
                 </div>
             </div>
         </section>
