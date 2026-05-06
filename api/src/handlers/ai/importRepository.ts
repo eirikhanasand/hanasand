@@ -87,10 +87,23 @@ function parseGenericGitUrl(input: string): ParsedGitRepo | null {
         return buildGenericGitRepo({
             host: scpLikeMatch[1],
             repoPath,
-            repositoryUrl: `git@${scpLikeMatch[1]}:${repoPath}`,
+            repositoryUrl: `https://${scpLikeMatch[1]}/${repoPath}`,
             branch: scpLikeMatch[3],
             sourcePath: scpLikeMatch[4] || '',
             webBaseUrl: `https://${scpLikeMatch[1]}/${repoPath.replace(/\.git$/i, '')}`,
+        })
+    }
+
+    const sshSlashMatch = input.match(/^git@([^/\s]+)\/(.+?)(?:#([^\s:]+))?(?::(.+))?$/i)
+    if (sshSlashMatch) {
+        const repoPath = sshSlashMatch[2].replace(/^\/+|\/+$/g, '')
+        return buildGenericGitRepo({
+            host: sshSlashMatch[1],
+            repoPath,
+            repositoryUrl: `https://${sshSlashMatch[1]}/${repoPath}`,
+            branch: sshSlashMatch[3],
+            sourcePath: sshSlashMatch[4] || '',
+            webBaseUrl: `https://${sshSlashMatch[1]}/${repoPath.replace(/\.git$/i, '')}`,
         })
     }
 
@@ -264,6 +277,38 @@ async function resolveDefaultBranch(repositoryUrl: string, gitEnv?: NodeJS.Proce
     return match[1]
 }
 
+function describeImportError(error: unknown) {
+    if (!(error instanceof Error)) {
+        return { status: 502, message: 'Failed to import repository.' }
+    }
+
+    const message = error.message
+    if (message.includes('Use a Git URL')) {
+        return { status: 400, message }
+    }
+
+    if (
+        message.includes('The requested URL returned error: 502')
+        || message.includes('The requested URL returned error: 503')
+        || message.includes('The requested URL returned error: 504')
+        || message.includes('Could not resolve host')
+        || message.includes('Failed to connect')
+        || message.includes('Connection refused')
+    ) {
+        return { status: 503, message: 'Git server unavailable. Try again when the remote is reachable.' }
+    }
+
+    if (message.includes('Authentication failed') || message.includes('could not read Username') || message.includes('Could not read from remote repository')) {
+        return { status: 401, message: 'Git authentication failed. Check the repository visibility or attach a valid token.' }
+    }
+
+    if (message.includes('Repository not found') || message.includes('not found')) {
+        return { status: 404, message: 'Repository not found. Check the URL and repository visibility.' }
+    }
+
+    return { status: 502, message }
+}
+
 export default async function importRepository(req: FastifyRequest, res: FastifyReply) {
     const userId = await requireAiUser(req, res)
     if (!userId) {
@@ -275,18 +320,19 @@ export default async function importRepository(req: FastifyRequest, res: Fastify
         return res.status(400).send({ error: 'Missing repository input.' })
     }
 
-    const parsed = parseGitInput(input)
-    const repositoryUrl = parsed.repositoryUrl
-    const savedCredential = existingId ? await getRepoCredential(existingId, userId).catch(() => null) : null
-    const token = parsed.isGitHub ? githubToken?.trim() || savedCredential?.token || '' : ''
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'hanasand-import-'))
-    const askPassPath = token ? await createGitAskPass(tempDir) : undefined
-    const gitEnv = buildGitEnv(token || undefined, askPassPath)
-    const defaultBranch = await resolveDefaultBranch(repositoryUrl, gitEnv)
-    const branch = parsed.branch || defaultBranch
-    const cloneDir = path.join(tempDir, parsed.repo)
 
     try {
+        const parsed = parseGitInput(input)
+        const repositoryUrl = parsed.repositoryUrl
+        const savedCredential = existingId ? await getRepoCredential(existingId, userId).catch(() => null) : null
+        const token = parsed.isGitHub ? githubToken?.trim() || savedCredential?.token || '' : ''
+        const askPassPath = token ? await createGitAskPass(tempDir) : undefined
+        const gitEnv = buildGitEnv(token || undefined, askPassPath)
+        const defaultBranch = await resolveDefaultBranch(repositoryUrl, gitEnv)
+        const branch = parsed.branch || defaultBranch
+        const cloneDir = path.join(tempDir, parsed.repo)
+
         await runGit(['clone', '--depth', '1', '--branch', branch, repositoryUrl, cloneDir], undefined, gitEnv)
         const pathspec = parsed.sourcePath || '.'
         const { stdout } = await runGit(['-C', cloneDir, 'ls-files', '--', pathspec], undefined, gitEnv)
@@ -368,13 +414,8 @@ export default async function importRepository(req: FastifyRequest, res: Fastify
             importedAt: new Date().toISOString(),
         } satisfies AIImportedRepo)
     } catch (error) {
-        return res.status(502).send({
-            error: error instanceof Error
-                ? error.message.includes('Authentication failed') || error.message.includes('could not read Username')
-                    ? 'Git authentication failed. Check the repository visibility or attach a valid token.'
-                    : error.message
-                : 'Failed to import repository.',
-        })
+        const { status, message } = describeImportError(error)
+        return res.status(status).send({ error: message })
     } finally {
         await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
     }
