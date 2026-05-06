@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
