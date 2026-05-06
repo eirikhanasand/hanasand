@@ -1,22 +1,59 @@
-import { FilePlus, FolderPlus } from 'lucide-react'
+import useFolderState from '@/hooks/useFolderState'
+import { FilePlus, FolderPlus, Maximize2, Minimize2, RefreshCw } from 'lucide-react'
 import { Dispatch, SetStateAction } from 'react'
 
 type TreeHeaderProps = {
     share: Share
+    tree: Tree
+    refreshing: boolean
+    onRefresh: () => void
     setIsCreatingNewFile: Dispatch<SetStateAction<'file' | 'folder' | null>>
 }
 
-export default function TreeHeader({ share, setIsCreatingNewFile }: TreeHeaderProps) {
+type TreeCounts = {
+    files: number
+    folders: number
+}
+
+export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCreatingNewFile }: TreeHeaderProps) {
+    const { setOpenFolders } = useFolderState()
     const buttonStyle = 'rounded-sm h-6 w-6 hover:bg-extralight/80 grid place-items-center cursor-pointer'
+    const counts = countTreeItems(tree)
 
     function handleClick(type: 'file' | 'folder') {
         setIsCreatingNewFile(prev => prev === type ? null : type)
     }
 
+    function expandAll() {
+        setOpenFolders(collectFolderIds(tree))
+    }
+
+    function collapseAll() {
+        setOpenFolders([])
+    }
+
     return (
-        <div className='bg-light rounded-md w-full p-1 px-2 flex gap-2 items-center justify-between'>
-            <h1 className='text-sm text-bright/80'>{share.alias}</h1>
-            <div className='flex gap-2'>
+        <div className='rounded-md bg-light p-1 px-2'>
+            <div className='flex w-full items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <h1 className='truncate text-sm text-bright/80'>{share.alias}</h1>
+                    <p className='text-[10px] leading-4 text-bright/42'>
+                        {counts.files} files · {counts.folders} folders
+                    </p>
+                </div>
+                <div className='flex shrink-0 gap-1'>
+                    <button type='button' aria-label='Refresh file tree' onClick={onRefresh} disabled={refreshing} className={buttonStyle}>
+                        <RefreshCw className={`h-4 w-4 stroke-bright/80 ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button type='button' aria-label='Expand all folders' onClick={expandAll} className={buttonStyle}>
+                        <Maximize2 className='h-4 w-4 stroke-bright/80' />
+                    </button>
+                    <button type='button' aria-label='Collapse all folders' onClick={collapseAll} className={buttonStyle}>
+                        <Minimize2 className='h-4 w-4 stroke-bright/80' />
+                    </button>
+                </div>
+            </div>
+            <div className='mt-1 flex justify-end gap-1'>
                 <button type='button' aria-label='Create file' onClick={() => handleClick('file')} className={buttonStyle}>
                     <FilePlus className='stroke-bright/80 w-4 h-4' />
                 </button>
@@ -26,4 +63,31 @@ export default function TreeHeader({ share, setIsCreatingNewFile }: TreeHeaderPr
             </div>
         </div>
     )
+}
+
+function collectFolderIds(tree: Tree) {
+    const ids: string[] = []
+    for (const file of tree) {
+        if (file.type === 'folder') {
+            ids.push(file.id, ...collectFolderIds(file.children))
+        }
+    }
+    return ids
+}
+
+function countTreeItems(tree: Tree): TreeCounts {
+    return tree.reduce((counts, file) => {
+        if (file.type === 'folder') {
+            const childCounts = countTreeItems(file.children)
+            return {
+                files: counts.files + childCounts.files,
+                folders: counts.folders + childCounts.folders + 1,
+            }
+        }
+
+        return {
+            files: counts.files + 1,
+            folders: counts.folders,
+        }
+    }, { files: 0, folders: 0 })
 }

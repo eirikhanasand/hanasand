@@ -10,7 +10,9 @@ test('share editor exposes git import and pull from the right panel', async () =
     const github = await readFile(path.join(root, 'src/components/ai/github.ts'), 'utf8')
 
     expect(metadata).toContain('aria-label=\'Git plugin\'')
+    expect(metadata).toContain('aria-label=\'Workspace status\'')
     expect(metadata).toContain('<GitPlugin shareRouteId={shareRouteId} share={share} />')
+    expect(metadata).toContain('<WorkspaceStatus')
 
     expect(plugin).toContain('importGitHubRepository(currentInput, existingId, githubToken)')
     expect(plugin).toContain('persistGitHubRepository(persistedRepo)')
@@ -30,4 +32,18 @@ test('share editor exposes git import and pull from the right panel', async () =
     expect(github).toContain('/git/status?shareId=')
     expect(github).toContain('/git/commit')
     expect(github).toContain('/git/push')
+})
+
+test('share editor exposes IDE explorer and workspace status controls', async () => {
+    const explorer = await readFile(path.join(root, 'src/components/share/tree/explorer.tsx'), 'utf8')
+    const treeHeader = await readFile(path.join(root, 'src/components/share/tree/treeHeader.tsx'), 'utf8')
+    const workspaceStatus = await readFile(path.join(root, 'src/components/share/workspaceStatus.tsx'), 'utf8')
+
+    expect(explorer).toContain('onRefresh={() => void recoverTree(share.id)}')
+    expect(treeHeader).toContain('aria-label=\'Refresh file tree\'')
+    expect(treeHeader).toContain('aria-label=\'Expand all folders\'')
+    expect(treeHeader).toContain('aria-label=\'Collapse all folders\'')
+    expect(workspaceStatus).toContain('Current file')
+    expect(workspaceStatus).toContain('Open terminal')
+    expect(workspaceStatus).toContain('hanasand.share.git.')
 })

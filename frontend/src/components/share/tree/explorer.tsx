@@ -47,12 +47,15 @@ export default function Explorer({
 
     const recoverTree = useCallback(async (shareId: string) => {
         setTreeLoading(true)
-        const userId = getCookie('id') ?? undefined
-        const token = getCookie('access_token') ?? undefined
-        const nextTree = await getTree({ id: shareId, token, userId })
-        setTree(nextTree)
-        setTreeLoading(false)
-        return nextTree
+        try {
+            const userId = getCookie('id') ?? undefined
+            const token = getCookie('access_token') ?? undefined
+            const nextTree = await getTree({ id: shareId, token, userId })
+            setTree(nextTree)
+            return nextTree
+        } finally {
+            setTreeLoading(false)
+        }
     }, [])
 
     useEffect(() => {
@@ -205,6 +208,9 @@ export default function Explorer({
                         <OpenFoldersProvider serverOpenFolders={openFolders}>
                             <TreeHeader
                                 share={share}
+                                tree={visibleTree}
+                                refreshing={treeLoading}
+                                onRefresh={() => void recoverTree(share.id)}
                                 setIsCreatingNewFile={setIsCreatingNewFile}
                             />
                             {rootFolder && visibleTree.length === 0 && (

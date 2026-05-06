@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, Dispatch, SetStateAction, useContext, useEffect, useState } from 'react'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 
 type OpenFoldersContextType = {
     openFolders: string[]
+    setOpenFolders: Dispatch<SetStateAction<string[]>>
     toggleFolder: (id: string) => void
     isOpen: (id: string) => boolean
 }
@@ -50,7 +51,7 @@ export function OpenFoldersProvider({ children, serverOpenFolders }: { children:
     }
 
     return (
-        <OpenFoldersContext.Provider value={{ openFolders, toggleFolder, isOpen }}>
+        <OpenFoldersContext.Provider value={{ openFolders, setOpenFolders, toggleFolder, isOpen }}>
             {children}
         </OpenFoldersContext.Provider>
     )

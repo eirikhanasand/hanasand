@@ -7,12 +7,13 @@ import Lock from '@/components/share/lock'
 import ReferencePanel from '@/components/share/referencePanel'
 import ShareChat from '@/components/share/shareChat'
 import WordControl from '@/components/share/wordControl'
+import WorkspaceStatus from '@/components/share/workspaceStatus'
 import type { TerminalCredentials } from '@/hooks/useTerminal'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import HideIfLittleSpace from '@/hooks/useHideIfLittleSpace'
 import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
-import { Copy, Eye, GitBranch, Highlighter, Info as InfoIcon, KeyRound, ListOrdered, MessageSquare, Package, RefreshCw, Smartphone, TerminalSquare, X } from 'lucide-react'
+import { Activity, Copy, Eye, GitBranch, Highlighter, Info as InfoIcon, KeyRound, ListOrdered, MessageSquare, Package, RefreshCw, Smartphone, TerminalSquare, X } from 'lucide-react'
 import Link from 'next/link'
 import { Dispatch, SetStateAction, useState } from 'react'
 import Box from '../box/box'
@@ -39,9 +40,10 @@ type MetadataProps = {
     terminalCredentials: TerminalCredentials | null
     tree?: Tree | null
     setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
+    setTriggerTerminalChange: Dispatch<SetStateAction<boolean | 'close'>>
 }
 
-type MetadataPanel = 'info' | 'terminal' | 'symbols' | 'git' | 'phone' | 'box' | 'chat' | null
+type MetadataPanel = 'workspace' | 'info' | 'terminal' | 'symbols' | 'git' | 'phone' | 'box' | 'chat' | null
 
 const sharedStyles = 'absolute bg-background/80 hover:bg-bright/8 grid place-items-center rounded-lg cursor-move z-100 select-none p-5 border border-bright/10 backdrop-blur-md'
 const baseButtonStyle = 'grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'
@@ -66,10 +68,11 @@ export default function Metadata({
     terminalCredentials,
     tree,
     setEditorPatch,
+    setTriggerTerminalChange,
 }: MetadataProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const { condition: error, setCondition: setError } = useClearStateAfter()
-    const [activePanel, setActivePanel] = useState<MetadataPanel>('info')
+    const [activePanel, setActivePanel] = useState<MetadataPanel>('workspace')
     HideIfLittleSpace({ set: setShowMetadata })
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
         initialState: false,
@@ -106,21 +109,7 @@ export default function Metadata({
     }
 
     const panelVisible = activePanel !== null
-    const panelTitle = activePanel === 'info'
-        ? 'Share details'
-        : activePanel === 'terminal'
-            ? 'Terminal access'
-            : activePanel === 'symbols'
-                ? 'Symbols'
-                : activePanel === 'git'
-                    ? 'Git'
-                    : activePanel === 'phone'
-                        ? 'Phone preview'
-                        : activePanel === 'box'
-                            ? 'Tool box'
-                            : activePanel === 'chat'
-                                ? 'Chat'
-                                : ''
+    const panelTitle = getPanelTitle(activePanel)
 
     return (
         <div className='flex h-full min-w-fit flex-row-reverse gap-2'>
@@ -128,6 +117,16 @@ export default function Metadata({
                 <SidebarTooltip label='Close' side='left'>
                     <button type='button' aria-label='Close metadata' onClick={() => setShowMetadata(false)} className={baseButtonStyle}>
                         <X className='h-5 w-5' />
+                    </button>
+                </SidebarTooltip>
+                <SidebarTooltip label='Status' side='left'>
+                    <button
+                        type='button'
+                        aria-label='Workspace status'
+                        onClick={() => togglePanel('workspace')}
+                        className={`${baseButtonStyle} ${activePanel === 'workspace' ? 'bg-[#e25822]/15 text-[#ffd3bd]' : ''}`}
+                    >
+                        <Activity className='h-5 w-5' />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label='Details' side='left'>
@@ -249,6 +248,15 @@ export default function Metadata({
                             </button>
                         </header>
                         <Notify message={error} />
+                        {activePanel === 'workspace' ? (
+                            <WorkspaceStatus
+                                shareRouteId={shareRouteId}
+                                share={share}
+                                tree={tree || null}
+                                terminalStatus={terminalStatus}
+                                setTriggerTerminalChange={setTriggerTerminalChange}
+                            />
+                        ) : null}
                         {activePanel === 'git' ? <GitPlugin shareRouteId={shareRouteId} share={share} /> : null}
                         {activePanel === 'phone' ? <PhoneSimulator share={share} open /> : null}
                         {activePanel === 'info' ? (
@@ -288,6 +296,29 @@ export default function Metadata({
             ) : null}
         </div>
     )
+}
+
+function getPanelTitle(panel: MetadataPanel) {
+    switch (panel) {
+        case 'workspace':
+            return 'Workspace status'
+        case 'info':
+            return 'Share details'
+        case 'terminal':
+            return 'Terminal access'
+        case 'symbols':
+            return 'Symbols'
+        case 'git':
+            return 'Git'
+        case 'phone':
+            return 'Phone preview'
+        case 'box':
+            return 'Tool box'
+        case 'chat':
+            return 'Chat'
+        default:
+            return ''
+    }
 }
 
 function TerminalAccess({
