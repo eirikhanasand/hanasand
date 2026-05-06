@@ -58,7 +58,7 @@ export async function provisionLocalLxdInstance(name: string) {
                 source: {
                     type: 'image',
                     mode: 'pull',
-                    server: 'https://images.linuxcontainers.org',
+                    server: config.lxd_image_server,
                     protocol: 'simplestreams',
                     alias: config.lxd_image_alias,
                 },
