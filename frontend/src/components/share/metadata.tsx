@@ -118,7 +118,7 @@ export default function Metadata({
 
     return (
         <div className='flex h-full min-w-fit flex-row-reverse gap-2'>
-            <nav className='flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
+            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                 <SidebarTooltip label='Close' side='left'>
                     <button type='button' aria-label='Close metadata' onClick={() => setShowMetadata(false)} className={baseButtonStyle}>
                         <X className='h-5 w-5' />
@@ -217,7 +217,7 @@ export default function Metadata({
                 </SidebarTooltip>
             </nav>
             {panelVisible ? (
-                <div className={`min-w-0 h-full ${activePanel === 'box'
+                <div className={`relative z-10 min-w-0 h-full ${activePanel === 'box'
                     ? 'w-[min(72rem,calc(100vw-5.5rem))] lg:w-[min(72rem,56vw)]'
                     : activePanel === 'phone'
                         ? 'w-[min(30rem,calc(100vw-5.5rem))]'
