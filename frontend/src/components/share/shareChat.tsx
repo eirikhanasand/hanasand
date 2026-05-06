@@ -179,7 +179,7 @@ export default function ShareChat({
                                 ? 'border border-bright/8 bg-black/18 text-bright/62'
                                 : 'bg-white/[0.055] text-bright/82'
                     }`}>
-                        <p className='whitespace-pre-wrap break-words'>{message.content}</p>
+                        <p className='whitespace-pre-wrap wrap-break-word'>{message.content}</p>
                     </article>
                 ))}
                 {loading ? (
