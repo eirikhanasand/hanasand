@@ -76,6 +76,14 @@ export default function NewRequest({
     const hasRunningRequests = runs.some((run) => run.loading)
     const previewUrl = getImagePreviewUrl(response, activeRun?.url || url)
 
+    const activeRun = useMemo(
+        () => runs.find((run) => run.id === activeRunId) || runs[0] || null,
+        [activeRunId, runs]
+    )
+    const response = activeRun?.response ?? null
+    const hasRunningRequests = runs.some((run) => run.loading)
+    const previewUrl = getImagePreviewUrl(response, activeRun?.url || url)
+
     const executionMode = share?.alias
         ? 'Share VM'
         : getCookie('access_token')
