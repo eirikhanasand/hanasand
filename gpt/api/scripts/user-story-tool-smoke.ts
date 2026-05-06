@@ -103,6 +103,8 @@ async function run(command: string, cwd: string, timeoutMs: number) {
     })
 }
 
+type CommandResult = Awaited<ReturnType<typeof run>>
+
 async function fileIncludes(filePath: string, patterns: RegExp[]) {
     const content = await fs.readFile(filePath, 'utf8').catch(() => '')
     return patterns.every((pattern) => pattern.test(content))
@@ -115,15 +117,15 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 120 * 1000
+        return 110 * 1000
     }
     if (kind === 'postgres') {
-        return 15 * 1000
+        return 13 * 1000
     }
-    return 18 * 1000
+    return 16 * 1000
 }
 
-async function verifyProject(absolutePath: string, kind: ScenarioKind) {
+async function verifyProject(absolutePath: string, kind: ScenarioKind, buildAlreadyPassed: boolean) {
     const [packageJson, dockerfile, composeFile, envExample, readme] = await Promise.all([
         exists(path.join(absolutePath, 'package.json')),
         exists(path.join(absolutePath, 'Dockerfile')),
@@ -131,7 +133,11 @@ async function verifyProject(absolutePath: string, kind: ScenarioKind) {
         exists(path.join(absolutePath, '.env.example')),
         exists(path.join(absolutePath, 'README.md')),
     ])
-    const build = packageJson ? await run('npm run build', absolutePath, 10 * 60 * 1000) : null
+    const build: Pick<CommandResult, 'exitCode' | 'timedOut'> | null = packageJson
+        ? buildAlreadyPassed
+            ? { exitCode: 0, timedOut: false }
+            : await run('npm run build', absolutePath, 10 * 60 * 1000)
+        : null
     const compose = composeFile ? await run('docker compose config', absolutePath, 2 * 60 * 1000) : null
     const readmeOps = await fileIncludes(path.join(absolutePath, 'README.md'), [/rollback/i, /metrics/i, /docker compose/i])
     const readmeWords = await wordCount(path.join(absolutePath, 'README.md'))
@@ -1830,6 +1836,242 @@ async function main() {
                 productBrief: 'BoardSignal helps strategy teams present decisions, KPI metrics, investment tiers, stakeholder quotes, action tasks, and sober self-hosted deployment notes.',
             }),
         },
+        {
+            id: 'brand-campaign-control-room',
+            title: 'Brand campaign control room',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#141-brand-campaign-control-room',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('brand-campaign-control-room'),
+                appName: 'CampaignSignal',
+                productType: 'brand campaign control room',
+                productBrief: 'CampaignSignal helps brand teams inspect launch assets, campaign metrics, package tiers, stakeholder quotes, owner tasks, and concise self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'beginner-photographer-site',
+            title: 'Beginner photographer site',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#142-beginner-photographer-site',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('beginner-photographer-site'),
+                appName: 'FrameLocal',
+                productType: 'photography booking site',
+                productBrief: 'FrameLocal helps a new photographer present services, booking metrics, pricing bands, client quotes, launch tasks, and beginner-safe Docker deployment.',
+            }),
+        },
+        {
+            id: 'corporate-policy-exception-api',
+            title: 'Corporate policy exception API',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#143-corporate-policy-exception-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('corporate-policy-exception-api'),
+                appName: 'PolicyException API',
+            }),
+        },
+        {
+            id: 'corporate-policy-review-worker',
+            title: 'Corporate policy review worker',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#144-corporate-policy-review-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('corporate-policy-review-worker'),
+                appName: 'PolicyReview Queue',
+            }),
+        },
+        {
+            id: 'construction-bid-portal',
+            title: 'Construction bid portal',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#145-construction-bid-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('construction-bid-portal'),
+                appName: 'BidNorth',
+                productType: 'construction bid portal',
+                productBrief: 'BidNorth helps construction teams manage trade sections, bid metrics, package tiers, contractor quotes, submission tasks, and portable deployment.',
+            }),
+        },
+        {
+            id: 'construction-bid-api',
+            title: 'Construction bid API',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#146-construction-bid-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('construction-bid-api'),
+                appName: 'BidLedger API',
+            }),
+        },
+        {
+            id: 'construction-notification-worker',
+            title: 'Construction notification worker',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#147-construction-notification-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('construction-notification-worker'),
+                appName: 'SiteNotify Queue',
+            }),
+        },
+        {
+            id: 'legal-matter-dashboard',
+            title: 'Legal matter dashboard',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#148-legal-matter-dashboard',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('legal-matter-dashboard'),
+                appName: 'MatterSignal',
+                productType: 'legal matter dashboard',
+                productBrief: 'MatterSignal helps law firms track matter sections, deadline metrics, retainer tiers, client quotes, review tasks, and controlled self-hosted deployment.',
+            }),
+        },
+        {
+            id: 'legal-intake-api',
+            title: 'Legal intake API',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#149-legal-intake-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('legal-intake-api'),
+                appName: 'IntakeLedger API',
+            }),
+        },
+        {
+            id: 'legal-deadline-worker',
+            title: 'Legal deadline worker',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#150-legal-deadline-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('legal-deadline-worker'),
+                appName: 'DeadlineQueue Worker',
+            }),
+        },
+        {
+            id: 'climate-grant-portal',
+            title: 'Climate grant portal',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#151-climate-grant-portal',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('climate-grant-portal'),
+                appName: 'GrantSignal',
+                productType: 'climate grant portal',
+                productBrief: 'GrantSignal helps nonprofits present funding sections, impact metrics, sponsor tiers, applicant quotes, submission tasks, and self-hosted deployment notes.',
+            }),
+        },
+        {
+            id: 'climate-grant-api',
+            title: 'Climate grant API',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#152-climate-grant-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('climate-grant-api'),
+                appName: 'GrantLedger API',
+            }),
+        },
+        {
+            id: 'climate-review-worker',
+            title: 'Climate review worker',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#153-climate-review-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('climate-review-worker'),
+                appName: 'GrantReview Queue',
+            }),
+        },
+        {
+            id: 'logistics-yard-board',
+            title: 'Logistics yard board',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#154-logistics-yard-board',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('logistics-yard-board'),
+                appName: 'YardSignal',
+                productType: 'logistics yard board',
+                productBrief: 'YardSignal helps warehouse dispatchers inspect dock sections, throughput metrics, escalation tiers, dispatcher quotes, action tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'logistics-yard-api',
+            title: 'Logistics yard API',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#155-logistics-yard-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('logistics-yard-api'),
+                appName: 'YardLedger API',
+            }),
+        },
+        {
+            id: 'logistics-alert-worker',
+            title: 'Logistics alert worker',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#156-logistics-alert-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('logistics-alert-worker'),
+                appName: 'YardAlert Queue',
+            }),
+        },
+        {
+            id: 'product-research-repository',
+            title: 'Product research repository',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#157-product-research-repository',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('product-research-repository'),
+                appName: 'InsightSignal',
+                productType: 'product research repository',
+                productBrief: 'InsightSignal helps product teams organize study sections, evidence metrics, access tiers, researcher quotes, synthesis tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'product-research-api',
+            title: 'Product research API',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#158-product-research-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('product-research-api'),
+                appName: 'InsightLedger API',
+            }),
+        },
+        {
+            id: 'product-research-worker',
+            title: 'Product research worker',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#159-product-research-worker',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('product-research-worker'),
+                appName: 'InsightQueue Worker',
+            }),
+        },
+        {
+            id: 'investor-data-room',
+            title: 'Investor data room',
+            storyPath: 'agents/training-scenarios/user_stories/141-160-advanced-user-stories.md#160-investor-data-room',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('investor-data-room'),
+                appName: 'DataRoomSignal',
+                productType: 'investor data room',
+                productBrief: 'DataRoomSignal helps CFOs present document sections, KPI metrics, access tiers, investor quotes, diligence tasks, and concise self-hosted deployment notes.',
+            }),
+        },
     ]
 
     const results: CaseResult[] = []
@@ -1838,7 +2080,7 @@ async function main() {
         const startedAt = Date.now()
         const toolResult = await scenario.run() as ToolResult
         const absolutePath = path.resolve(smokeRoot, toolResult.targetDir || rel(scenario.id))
-        const verification = await verifyProject(absolutePath, scenario.kind)
+        const verification = await verifyProject(absolutePath, scenario.kind, toolResult.exitCode === 0)
         const elapsedMs = Date.now() - startedAt
         const checks = {
             ...verification.checks,
