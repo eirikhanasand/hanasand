@@ -4,7 +4,7 @@ import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import TestContent from './testContent'
-import Notify from '../notify/notify'
+import ErrorNotice from '../error/errorNotice'
 
 type ContentProps = {
     test: Test
@@ -88,9 +88,9 @@ export default function Content({
     }, [id, setTest, reconnect, setIsConnected, setParticipants, setRerun, setError])
 
     return (
-        <div className='min-h-[30rem] min-w-0 max-w-full space-y-4 overflow-hidden rounded-lg outline-1 outline-dark p-2 md:h-full'>
+        <div className='min-h-[30rem] min-w-0 max-w-full space-y-3 overflow-hidden rounded-lg border border-white/10 bg-white/[0.025] p-3 md:h-full'>
             <TestContent test={test} showLogs={showLogs} showErrors={showErrors} />
-            <Notify message={error} />
+            <ErrorNotice compact message={error as string | null} />
         </div>
     )
 }
