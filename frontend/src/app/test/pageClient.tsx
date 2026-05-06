@@ -1,6 +1,6 @@
 'use client'
 
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 import RecentScans from '@/components/test/recentScans'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
@@ -8,17 +8,17 @@ import copy from '@/utils/copy'
 import { fetchRecentTests } from '@/utils/test/fetchRecentTests'
 import { postTest } from '@/utils/test/postTest'
 import { Copy } from 'lucide-react'
-import { redirect } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
+    const router = useRouter()
     const [path, setPath] = useState('')
     const [recentScans, setRecentScans] = useState<Test[]>([])
     const [myScans, setMyScans] = useState<Test[]>([])
     const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
-    const color = isValidLink ? 'bg-orange-500/80 cursor-pointer glow-orange-small' : path.length > 0 ? 'bg-red-500 cursor-not-allowed glow-red' : 'outline outline-dark cursor-not-allowed'
     const fullUrl = `${config.url.link}/${serverId}`
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
@@ -51,41 +51,41 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
     }, [])
 
     async function handleSubmit(e: FormEvent<HTMLElement>) {
+        e.preventDefault()
         if (!isValidLink) {
             return
         }
 
-        e.preventDefault()
         const result = await postTest({ url: path })
         if (!result) {
             return setError('Please try again later.')
         }
 
         if (result.id) {
-            redirect(`/test/${result.id}`)
+            router.push(`/test/${result.id}`)
         }
     }
 
     if (created) {
         return (
-            <div onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex max-w-full cursor-pointer items-center gap-2 rounded-xl bg-dark px-4 py-1'>
+            <button type='button' onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2 text-left transition hover:bg-white/[0.07]'>
                 <Copy height={15} width={15} className={`shrink-0 ${didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'}`} />
-                <h1 className='min-w-0 break-all'>{serverId}</h1>
-            </div>
+                <span className='min-w-0 break-all text-sm text-bright/78'>{fullUrl}</span>
+            </button>
         )
     }
 
     return (
-        <div className='grid h-full w-full min-w-0 grid-rows-[minmax(0,0.34fr)_minmax(0,0.33fr)_minmax(0,0.33fr)] items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.74fr)_minmax(20rem,0.9fr)] lg:grid-rows-1 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.78fr)_minmax(24rem,0.92fr)]'>
-            <section className='grid min-h-0 min-w-0 content-center gap-4 rounded-2xl border border-white/10 bg-white/4 p-5 sm:p-6'>
+        <div className='grid h-full w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] items-stretch gap-3 lg:grid-cols-[minmax(20rem,0.78fr)_minmax(18rem,0.74fr)_minmax(20rem,0.9fr)] lg:grid-rows-1 xl:grid-cols-[minmax(22rem,0.72fr)_minmax(22rem,0.82fr)_minmax(24rem,0.94fr)]'>
+            <section className='grid min-h-0 min-w-0 content-center gap-4 rounded-lg border border-white/10 bg-white/[0.035] p-4 sm:p-5'>
                 <div>
-                    <h2 className='text-xl font-semibold text-bright'>Load Test Launcher</h2>
-                    <p className='mt-2 max-w-2xl text-sm leading-6 text-bright/55'>Create a fresh scan every time, then revisit or rerun from its result page.</p>
+                    <h2 className='text-lg font-medium text-bright/92'>Load test launcher</h2>
+                    <p className='mt-1.5 max-w-2xl text-sm leading-6 text-bright/52'>Start a scan, share the generated test link, then revisit the result when the run finishes.</p>
                 </div>
                 <form onSubmit={handleSubmit} className='grid gap-4'>
-                    <Notify message={error} />
+                    <ErrorNotice compact message={error as string | null} />
                     <input
-                        className='outline outline-dark z-10 w-full rounded-xl px-4 py-3 focus:outline-hidden'
+                        className='z-10 h-11 w-full rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm font-normal text-bright outline-none transition placeholder:text-bright/30 focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
                         placeholder='https://example.com'
                         onChange={(e) => setPath(e.target.value)}
                         value={path}
@@ -94,9 +94,10 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                     <div className='flex flex-wrap gap-3'>
                         <button
                             type='submit'
-                            className={`${color} rounded-xl px-4 py-2.5 text-sm font-medium text-gray-300`}
+                            disabled={!isValidLink}
+                            className='h-10 rounded-lg bg-bright/88 px-3.5 text-sm font-medium text-background/90 transition hover:bg-bright disabled:cursor-not-allowed disabled:bg-white/[0.055] disabled:text-bright/34'
                         >
-                            Start Scan
+                            Start scan
                         </button>
                     </div>
                 </form>
