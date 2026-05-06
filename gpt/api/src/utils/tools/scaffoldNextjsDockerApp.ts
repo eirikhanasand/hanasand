@@ -113,6 +113,11 @@ export default async function scaffoldNextjsDockerApp(args: ScaffoldNextjsDocker
     await writeTemplateFile(absolutePath, 'postcss.config.mjs', 'export default {\n  plugins: {},\n}\n')
     await writeTemplateFile(absolutePath, 'eslint.config.mjs', 'import { FlatCompat } from "@eslint/eslintrc"\n\nconst compat = new FlatCompat({ baseDirectory: import.meta.dirname })\n\nexport default [\n  ...compat.extends("next/core-web-vitals", "next/typescript"),\n]\n')
     await writeTemplateFile(absolutePath, '.gitignore', 'node_modules\n.next\n.env\n')
+    await writeTemplateFile(absolutePath, '.env.example', [
+        'HOST_PORT=3000',
+        'NEXT_PUBLIC_APP_ENV=production',
+        '',
+    ].join('\n'))
     await writeTemplateFile(absolutePath, '.dockerignore', 'node_modules\n.next\nnpm-debug.log\n.git\n.gitignore\nREADME.md\n')
     await writeTemplateFile(absolutePath, 'Dockerfile', `FROM node:20-alpine AS deps
 WORKDIR /app
