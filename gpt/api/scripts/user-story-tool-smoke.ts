@@ -134,12 +134,12 @@ async function wordCount(filePath: string) {
 
 function elapsedBudget(kind: ScenarioKind) {
     if (kind === 'next') {
-        return 90 * 1000
+        return 75 * 1000
     }
     if (kind === 'postgres') {
-        return 10 * 1000
+        return 8 * 1000
     }
-    return 12 * 1000
+    return 10 * 1000
 }
 
 async function verifyProject(absolutePath: string, kind: ScenarioKind, buildAlreadyPassed: boolean) {
@@ -2323,6 +2323,240 @@ async function main() {
                 appName: 'DecisionSignal',
                 productType: 'executive decision log',
                 productBrief: 'DecisionSignal helps chiefs of staff present decision sections, follow-up metrics, governance tiers, stakeholder quotes, action tasks, and deployment notes.',
+            }),
+        },
+        {
+            id: 'agency-less-embarrassing-site',
+            title: 'Agency less embarrassing site',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#181-make-my-agency-site-less-embarrassing',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('agency-less-embarrassing-site'),
+                appName: 'Small Proof Studio',
+                productType: 'small agency site',
+                productBrief: 'Small Proof Studio turns a vague founder request into a concise agency site for brand work, Webflow cleanup, launch help, proof, service packages, and a non-cringey contact path.',
+            }),
+        },
+        {
+            id: 'messy-orders-api',
+            title: 'Messy orders API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#182-orders-are-everywhere',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('messy-orders-api'),
+                appName: 'OrderTriage API',
+            }),
+        },
+        {
+            id: 'forgotten-email-worker',
+            title: 'Forgotten email worker',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#183-email-keeps-getting-lost',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('forgotten-email-worker'),
+                appName: 'LaunchMail Queue',
+            }),
+        },
+        {
+            id: 'board-pack-command-center',
+            title: 'Board pack command center',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#184-the-ceo-wants-a-board-pack-thing',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('board-pack-command-center'),
+                appName: 'BoardBrief',
+                productType: 'executive board pack dashboard',
+                productBrief: 'BoardBrief gives executives a restrained board-ready surface for initiatives, blockers, decisions, owner asks, timeline risk, and status metrics without startup-style fluff.',
+            }),
+        },
+        {
+            id: 'finance-csv-reconciliation-api',
+            title: 'Finance CSV reconciliation API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#185-finance-csv-mess',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('finance-csv-reconciliation-api'),
+                appName: 'LedgerMatch API',
+            }),
+        },
+        {
+            id: 'idempotent-import-worker',
+            title: 'Idempotent import worker',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#186-the-import-job-duplicates-stuff',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('idempotent-import-worker'),
+                appName: 'ImportGuard Worker',
+            }),
+        },
+        {
+            id: 'artist-print-drop-page',
+            title: 'Artist print drop page',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#187-artist-drop-page-but-not-cringe',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('artist-print-drop-page'),
+                appName: 'EditionWindow',
+                productType: 'artist print drop page',
+                productBrief: 'EditionWindow presents a premium but plainspoken print release with edition details, launch timing, shipping notes, proof, FAQ, and purchase intent without luxury nonsense.',
+            }),
+        },
+        {
+            id: 'clinic-intake-api',
+            title: 'Clinic intake API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#188-clinic-intake-maybe-hipaa-later',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('clinic-intake-api'),
+                appName: 'CareIntake API',
+            }),
+        },
+        {
+            id: 'appointment-reminder-worker',
+            title: 'Appointment reminder worker',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#189-patients-forget-appointments',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('appointment-reminder-worker'),
+                appName: 'CareReminder Queue',
+            }),
+        },
+        {
+            id: 'plain-permit-service-page',
+            title: 'Plain permit service page',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#190-nobody-reads-the-permit-page',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('plain-permit-service-page'),
+                appName: 'PermitPlain',
+                productType: 'municipal permit service page',
+                productBrief: 'PermitPlain turns a confusing municipal permit page into plain-language permit types, timelines, fees, document checklists, office hours, status actions, and accessible FAQ.',
+            }),
+        },
+        {
+            id: 'permit-status-api',
+            title: 'Permit status API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#191-permit-status-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('permit-status-api'),
+                appName: 'PermitLedger API',
+            }),
+        },
+        {
+            id: 'permit-notification-worker',
+            title: 'Permit notification worker',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#192-tell-people-when-their-permit-changes',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('permit-notification-worker'),
+                appName: 'PermitNotice Worker',
+            }),
+        },
+        {
+            id: 'family-chores-first-version',
+            title: 'Family chores first version',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#193-i-need-a-chores-app-i-think',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('family-chores-first-version'),
+                appName: 'ChoreKind',
+                productType: 'family chores dashboard',
+                productBrief: 'ChoreKind is a beginner-friendly household dashboard for chores, assignments, allowance progress, reminders, empty states, and simple setup for a non-technical family.',
+            }),
+        },
+        {
+            id: 'tenant-maintenance-api',
+            title: 'Tenant maintenance API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#194-maintenance-requests-are-in-texts',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('tenant-maintenance-api'),
+                appName: 'RepairLedger API',
+            }),
+        },
+        {
+            id: 'repair-dispatch-worker',
+            title: 'Repair dispatch worker',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#195-dispatch-the-repair-jobs',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('repair-dispatch-worker'),
+                appName: 'RepairDispatch Worker',
+            }),
+        },
+        {
+            id: 'policy-portal-first-screen',
+            title: 'Policy portal first screen',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#196-policy-portal-that-people-might-actually-use',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('policy-portal-first-screen'),
+                appName: 'PolicySignal',
+                productType: 'internal policy portal',
+                productBrief: 'PolicySignal gives employees a restrained internal portal for policy categories, recent changes, owners, acknowledgements, question paths, and searchable structure.',
+            }),
+        },
+        {
+            id: 'legal-hold-tracker-api',
+            title: 'Legal hold tracker API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#197-legal-hold-tracker',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('legal-hold-tracker-api'),
+                appName: 'HoldLedger API',
+            }),
+        },
+        {
+            id: 'legal-export-worker',
+            title: 'Legal export worker',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#198-exports-cannot-fail-silently',
+            kind: 'redis',
+            tool: 'scaffoldFastifyWorkerRedisApp',
+            run: () => scaffoldFastifyWorkerRedisApp({
+                targetDir: rel('legal-export-worker'),
+                appName: 'ExportProof Worker',
+            }),
+        },
+        {
+            id: 'ugly-spreadsheet-crm',
+            title: 'Ugly spreadsheet CRM',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#199-ugly-spreadsheet-crm',
+            kind: 'next',
+            tool: 'scaffoldNextjsDockerApp',
+            run: () => scaffoldNextjsDockerApp({
+                targetDir: rel('ugly-spreadsheet-crm'),
+                appName: 'FollowUpTiny',
+                productType: 'simple freelancer CRM',
+                productBrief: 'FollowUpTiny turns an ugly lead spreadsheet into a low-friction freelancer CRM with leads, next follow-up, deal stage, notes, metrics, empty states, and import/export cues.',
+            }),
+        },
+        {
+            id: 'small-crm-api',
+            title: 'Small CRM API',
+            storyPath: 'agents/training-scenarios/user_stories/181-200-ambiguous-production-user-stories.md#200-turn-that-crm-into-an-api',
+            kind: 'postgres',
+            tool: 'scaffoldFastifyPostgresApp',
+            run: () => scaffoldFastifyPostgresApp({
+                targetDir: rel('small-crm-api'),
+                appName: 'FollowUpLedger API',
             }),
         },
     ]

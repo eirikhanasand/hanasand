@@ -42,14 +42,26 @@ async function ensureRepo() {
 }
 
 async function ensureRepoInternal() {
+    let localRepoExists = true
     try {
         await fs.access(LOCAL_REPO_PATH)
     } catch {
+        localRepoExists = false
+    }
+
+    if (!localRepoExists) {
         console.log('Cloning repository...')
         await execAsync(`git clone ${config.github_articles_ssh} '${LOCAL_REPO_PATH}'`, { timeout: 120000 })
     }
 
-    await fs.access(join(LOCAL_REPO_PATH, '.git'))
+    try {
+        await fs.access(join(LOCAL_REPO_PATH, '.git'))
+    } catch (error) {
+        if (await directoryExists(ARTICLES_DIR)) {
+            return
+        }
+        throw error
+    }
 
     const { stdout: head } = await execAsync(`git -C '${LOCAL_REPO_PATH}' remote show origin`, { timeout: 15000 })
     const match = head.match(/HEAD branch: (.+)/)
@@ -65,5 +77,14 @@ async function ensureRepoInternal() {
         await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/${defaultBranch} ${defaultBranch}`, { timeout: 15000 })
     } catch (e) {
         console.warn(`Could not set upstream for ${defaultBranch}:`, e)
+    }
+}
+
+async function directoryExists(path: string) {
+    try {
+        const details = await fs.stat(path)
+        return details.isDirectory()
+    } catch {
+        return false
     }
 }
