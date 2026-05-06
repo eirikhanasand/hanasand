@@ -10,6 +10,7 @@ import Tree from './tree'
 import NewFile from './newFile'
 import WorkspaceSearchPanel from '../workspaceSearchPanel'
 import SidebarTooltip from '../sidebarTooltip'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type ExplorerProps = {
     showExplorer: boolean
@@ -156,7 +157,7 @@ export default function Explorer({
                             }
                             setActivePanel('files')
                         }}
-                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'files' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
+                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'files' ? 'text-[#f07d33] hover:bg-bright/8' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                     >
                         <Files className='h-5 w-5' />
                     </button>
@@ -172,7 +173,7 @@ export default function Explorer({
                             }
                             setActivePanel('search')
                         }}
-                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'search' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
+                        className={`grid h-10 w-10 place-items-center rounded-lg transition ${activePanel === 'search' ? 'text-[#f07d33] hover:bg-bright/8' : 'text-bright/55 hover:bg-bright/10 hover:text-bright'}`}
                     >
                         <Search className='h-5 w-5' />
                     </button>
@@ -189,16 +190,18 @@ export default function Explorer({
                 />
             ) : (
                 <div className='relative z-10 h-full w-[15vw] min-w-60 overflow-auto rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
-                    {(!tree || !share) && <div className='w-full rounded-lg bg-red-500/20 p-2 outline outline-red-500/30'>
-                        <h1 className='text-sm text-bright/85'>
-                            {treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
-                        </h1>
+                    {(!tree || !share) && <div className='w-full'>
+                        <ErrorNotice
+                            compact
+                            message={treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
+                            variant={treeLoading && share ? 'info' : 'error'}
+                        />
                         {!treeLoading && share ? (
                             <button
                                 type='button'
                                 aria-label='Retry loading file tree'
                                 onClick={() => void recoverTree(share.id)}
-                                className='mt-3 inline-flex rounded-lg bg-bright/10 px-3 py-2 text-xs font-medium text-bright/85 outline outline-bright/10 transition-colors hover:bg-bright/15'
+                                className='mt-3 inline-flex rounded-lg border border-bright/10 bg-bright/[0.045] px-3 py-2 text-xs font-medium text-bright/70 transition hover:bg-bright/8 hover:text-bright'
                             >
                                 Retry
                             </button>

@@ -1,4 +1,4 @@
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 
 export default function DisplayError({ error }: { error: string | boolean | null }) {
     if (!error) {
@@ -8,21 +8,22 @@ export default function DisplayError({ error }: { error: string | boolean | null
     const isCmdW = error === 'cmdw'
 
     return (
-        <div className='absolute top-0 left-0 z-20 w-full h-full grid place-items-center text-bright/80'>
-            <div className='flex flex-col items-center gap-2 text-center px-4 min-h-[85%]'>
+        <div className='pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-center px-4 text-bright/80'>
+            <div className='pointer-events-auto w-full max-w-md'>
                 {isCmdW ? (
-                    <div className='block bg-bright/8 backdrop-blur-md rounded-lg p-2 px-8'>
-                        <div className='flex gap-1'>
+                    <div className='rounded-lg border border-bright/10 bg-background/82 px-4 py-3 text-center text-sm font-normal text-bright/68 shadow-2xl shadow-black/20 backdrop-blur-md'>
+                        <div className='flex flex-wrap justify-center gap-1'>
                             <span>You can use </span>
-                            <span className='-mt-0.5 rounded bg-bright/10 px-2 py-0.5 font-mono'>⌥ + W</span>
+                            <span className='-mt-0.5 rounded bg-bright/10 px-2 py-0.5 font-mono text-xs text-bright/82'>⌥ + W</span>
                             <span> to close files.</span>
                         </div>
                         <div className={'h-1 bg-bright/5 w-0 my-1 animate-slide-line rounded-lg'} />
                     </div>
                 ) : (
-                    <div className='w-80'>
-                        <Notify fullWidth message={error} />
-                    </div>
+                    <ErrorNotice
+                        message={error}
+                        title='Workspace notice'
+                    />
                 )}
             </div>
         </div>

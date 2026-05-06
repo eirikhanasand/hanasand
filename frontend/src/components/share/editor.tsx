@@ -1,6 +1,7 @@
 import { Dispatch, RefObject, SetStateAction, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { handleEditorKeyDown } from './editorKeybindings'
+import { Braces, FileCode2, PanelsTopLeft, TerminalSquare } from 'lucide-react'
 
 type EditorProps = {
     codeRef: RefObject<HTMLPreElement | null>
@@ -10,6 +11,7 @@ type EditorProps = {
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
     setError: Dispatch<SetStateAction<string | boolean | null>>
+    onInsertTemplate?: (value: string) => void
 }
 
 export default function Editor({
@@ -19,7 +21,8 @@ export default function Editor({
     setClickedWord,
     displayLineNumbers,
     syntaxHighlighting,
-    setError
+    setError,
+    onInsertTemplate,
 }: EditorProps) {
     const [history, setHistory] = useState<string[]>([])
     const [historyIndex, setHistoryIndex] = useState(-1)
@@ -122,9 +125,12 @@ export default function Editor({
 
     return (
         <main className='w-full h-full relative overflow-hidden outline outline-dark rounded-lg'>
-            <h1 className={`absolute top-[6.7px] z-50 left-4 ${displayLineNumbers && 'pl-4'} pointer-events-none select-none text-gray-500`}>
-                {editingContent.trim().length <= 0 && 'Hello world...'}
-            </h1>
+            {editingContent.trim().length <= 0 && (
+                <EmptyEditorState
+                    displayLineNumbers={displayLineNumbers}
+                    onInsertTemplate={onInsertTemplate}
+                />
+            )}
             <div className={'hljs relative w-full h-full flex'}>
                 {displayLineNumbers && (
                     <div
@@ -178,6 +184,89 @@ export default function Editor({
         </main>
     )
 }
+
+function EmptyEditorState({
+    displayLineNumbers,
+    onInsertTemplate,
+}: {
+    displayLineNumbers: boolean
+    onInsertTemplate?: (value: string) => void
+}) {
+    const insetForLeftRail = displayLineNumbers ? 'pl-24 sm:pl-14' : 'pl-20 sm:pl-4'
+
+    return (
+        <div className={`pointer-events-none absolute inset-0 z-20 flex items-start ${insetForLeftRail} pr-3 pt-3`}>
+            <div className='pointer-events-auto w-full max-w-2xl rounded-xl border border-bright/10 bg-background/72 p-3 shadow-2xl shadow-black/20 backdrop-blur-md'>
+                <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                        <h2 className='text-sm font-medium text-bright/82'>Start with a file</h2>
+                        <p className='mt-1 text-xs leading-5 text-bright/42'>Choose a clean starting point or type directly in the editor.</p>
+                    </div>
+                    <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                </div>
+                <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                    {starterTemplates.map((template) => {
+                        const Icon = template.icon
+
+                        return (
+                            <button
+                                key={template.label}
+                                type='button'
+                                onClick={() => onInsertTemplate?.(template.content)}
+                                className='group flex min-h-11 items-center gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-3 text-left transition hover:border-[#f07d33]/32 hover:bg-[#f07d33]/8'
+                            >
+                                <Icon className='h-4 w-4 shrink-0 text-bright/42 transition group-hover:text-[#f07d33]' />
+                                <span className='min-w-0 truncate text-xs font-medium text-bright/68 group-hover:text-bright/86'>{template.label}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+const starterTemplates = [
+    {
+        label: 'Minimal page',
+        icon: PanelsTopLeft,
+        content: `export default function Page() {
+    return (
+        <main>
+            <h1>Hanasand</h1>
+        </main>
+    )
+}
+`,
+    },
+    {
+        label: 'API handler',
+        icon: Braces,
+        content: `export async function GET() {
+    return Response.json({ ok: true })
+}
+`,
+    },
+    {
+        label: 'Runbook',
+        icon: TerminalSquare,
+        content: `# Runbook
+
+## Check
+
+## Fix
+
+## Verify
+`,
+    },
+    {
+        label: 'Blank markdown',
+        icon: FileCode2,
+        content: `# Notes
+
+`,
+    },
+]
 
 function getLineOffset(value: string, line: number) {
     if (line <= 1) {

@@ -1,5 +1,5 @@
 import useKeyPress from '@/hooks/keyPressed'
-import { SearchCode } from 'lucide-react'
+import { SearchCode, X } from 'lucide-react'
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
 import interpretQuery from './interpretQuery'
 import Result from './result'
@@ -141,30 +141,44 @@ export default function Search({
     }
 
     return (
-        <div onClick={() => setVisible(false)} className='absolute top-0 left-0 w-full h-full z-80 grid place-items-center backdrop-blur-xs'>
-            <div onClick={(e) => e.stopPropagation()} className=' rounded-lg p-2 md:h-120 overflow-hidden z-10 w-[80vw] md:w-200 bg-bright/3 outline outline-bright/10 space-y-2'>
-                {/* input */}
-                <div className='flex gap-2 p-1 px-2 w-full items-center bg-bright/2 rounded-lg justify-between'>
-                    <div className='flex items-center w-full'>
-                        <SearchCode className='stroke-[#f07d33]' />
+        <div onClick={() => setVisible(false)} className='absolute inset-0 z-80 grid place-items-start justify-center bg-background/28 px-3 pt-[12vh] backdrop-blur-md'>
+            <div onClick={(e) => e.stopPropagation()} className='z-10 grid max-h-[72vh] w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-bright/10 bg-background/88 p-2 shadow-2xl shadow-black/35'>
+                <div className='flex min-h-12 items-center justify-between gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-3'>
+                    <div className='flex min-w-0 flex-1 items-center gap-2'>
+                        <SearchCode className='h-4 w-4 shrink-0 stroke-[#f07d33]' />
                         <input
                             ref={inputRef}
-                            className='w-full rounded-lg p-2 outline-none text-bright/60 caret-[#f07d33] text-lg'
+                            aria-label='Command search'
+                            placeholder='Search commands'
+                            className='h-10 min-w-0 flex-1 bg-transparent text-sm font-normal text-bright/76 caret-[#f07d33] outline-none placeholder:text-bright/32'
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
-                    <Button className='cursor-pointer' onClick={() => setVisible(false)} text='esc' />
+                    <Button className='hidden sm:inline-flex' onClick={() => setVisible(false)} text='esc' />
+                    <button
+                        type='button'
+                        aria-label='Close command search'
+                        onClick={() => setVisible(false)}
+                        className='grid h-8 w-8 place-items-center rounded-lg text-bright/45 transition hover:bg-bright/8 hover:text-bright sm:hidden'
+                    >
+                        <X className='h-4 w-4' />
+                    </button>
                 </div>
-                {/* results */}
-                <div className='w-full grid gap-2'>
-                    {results?.map((result, id) => <Result
-                        key={id}
-                        id={id}
-                        result={result}
-                        selectedResult={selectedResult}
-                        setAction={setAction}
-                    />)}
+                <div className='mt-2 grid min-h-0 content-start gap-1 overflow-y-auto'>
+                    {results?.length ? (
+                        results.map((result, id) => <Result
+                            key={id}
+                            id={id}
+                            result={result}
+                            selectedResult={selectedResult}
+                            setAction={setAction}
+                        />)
+                    ) : (
+                        <div className='rounded-lg border border-bright/8 bg-bright/[0.025] px-3 py-4 text-sm font-normal text-bright/42'>
+                            Start typing to filter workspace actions.
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

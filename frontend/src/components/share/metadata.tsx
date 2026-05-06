@@ -47,6 +47,7 @@ type MetadataPanel = 'workspace' | 'info' | 'terminal' | 'symbols' | 'git' | 'ph
 
 const sharedStyles = 'absolute bg-background/80 hover:bg-bright/8 grid place-items-center rounded-lg cursor-move z-100 select-none p-5 border border-bright/10 backdrop-blur-md'
 const baseButtonStyle = 'grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'
+const activeButtonStyle = 'text-[#f07d33] hover:bg-bright/8 hover:text-[#f07d33]'
 
 export default function Metadata({
     shareRouteId,
@@ -73,7 +74,7 @@ export default function Metadata({
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const [activePanel, setActivePanel] = useState<MetadataPanel>('workspace')
-    HideIfLittleSpace({ set: setShowMetadata })
+    HideIfLittleSpace({ set: setShowMetadata, minWidth: 1180 })
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
         initialState: false,
         timeout: 350,
@@ -124,7 +125,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Workspace status'
                         onClick={() => togglePanel('workspace')}
-                        className={`${baseButtonStyle} ${activePanel === 'workspace' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'workspace' ? activeButtonStyle : ''}`}
                     >
                         <Activity className='h-5 w-5' />
                     </button>
@@ -134,7 +135,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Share details'
                         onClick={() => togglePanel('info')}
-                        className={`${baseButtonStyle} ${activePanel === 'info' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'info' ? activeButtonStyle : ''}`}
                     >
                         <Eye className='h-5 w-5' />
                     </button>
@@ -144,7 +145,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Terminal access'
                         onClick={() => togglePanel('terminal')}
-                        className={`${baseButtonStyle} ${activePanel === 'terminal' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'terminal' ? activeButtonStyle : ''}`}
                     >
                         <TerminalSquare className='h-5 w-5' />
                     </button>
@@ -154,7 +155,7 @@ export default function Metadata({
                         type='button'
                         aria-label='Symbols'
                         onClick={() => togglePanel('symbols')}
-                        className={`${baseButtonStyle} ${activePanel === 'symbols' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'symbols' ? activeButtonStyle : ''}`}
                     >
                         <ListOrdered className='h-5 w-5' />
                     </button>
@@ -195,9 +196,9 @@ export default function Metadata({
                             setBox(true)
                             togglePanel('box')
                         }}
-                        className={`${baseButtonStyle} ${activePanel === 'box' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'box' ? activeButtonStyle : ''}`}
                     >
-                        <Package className={activePanel === 'box' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                        <Package height={20} width={20} />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label='Chat' side='left'>
@@ -205,9 +206,9 @@ export default function Metadata({
                         type='button'
                         aria-label='Chat'
                         onClick={() => togglePanel('chat')}
-                        className={`${baseButtonStyle} ${activePanel === 'chat' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'chat' ? activeButtonStyle : ''}`}
                     >
-                        <MessageSquare className={activePanel === 'chat' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                        <MessageSquare height={20} width={20} />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label='Git' side='left'>
@@ -215,9 +216,9 @@ export default function Metadata({
                         type='button'
                         aria-label='Git plugin'
                         onClick={() => togglePanel('git')}
-                        className={`${baseButtonStyle} ${activePanel === 'git' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'git' ? activeButtonStyle : ''}`}
                     >
-                        <GitBranch className={activePanel === 'git' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                        <GitBranch height={20} width={20} />
                     </button>
                 </SidebarTooltip>
                 <SidebarTooltip label='Phone' side='left'>
@@ -225,9 +226,9 @@ export default function Metadata({
                         type='button'
                         aria-label='Phone simulator'
                         onClick={() => togglePanel('phone')}
-                        className={`${baseButtonStyle} ${activePanel === 'phone' ? 'bg-[#f07d33]/15 text-[#ffd3bd]' : ''}`}
+                        className={`${baseButtonStyle} ${activePanel === 'phone' ? activeButtonStyle : ''}`}
                     >
-                        <Smartphone className={activePanel === 'phone' ? 'stroke-rgb' : 'stroke-bright'} height={20} width={20} />
+                        <Smartphone height={20} width={20} />
                     </button>
                 </SidebarTooltip>
             </nav>

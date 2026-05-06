@@ -81,6 +81,10 @@ export default function Code({
 
     function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
         const value = e.target.value
+        applyContentChange(value)
+    }
+
+    function applyContentChange(value: string) {
         setEditingContent(value)
         applyHighlightedCode(codeRef.current, value, syntaxHighlighting)
         setLastEdit(new Date().getTime())
@@ -109,6 +113,7 @@ export default function Code({
             displayLineNumbers={displayLineNumbers}
             syntaxHighlighting={syntaxHighlighting}
             setError={setError}
+            onInsertTemplate={applyContentChange}
         />
     )
 }
