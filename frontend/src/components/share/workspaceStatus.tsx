@@ -2,6 +2,7 @@
 
 import { Dispatch, SetStateAction, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FileCode2, FolderTree, GitBranch, MonitorUp, TerminalSquare } from 'lucide-react'
+import { countTreeItems, findPath, getVisibleWorkspaceTree, getWorkspaceName, isWorkspaceRootItem } from './workspaceTree'
 
 type WorkspaceStatusProps = {
     shareRouteId: string
@@ -20,11 +21,6 @@ type StoredGitWorkspace = {
     lastSyncedAt?: string
 }
 
-type TreeCounts = {
-    files: number
-    folders: number
-}
-
 const storagePrefix = 'hanasand.share.git.'
 
 export default function WorkspaceStatus({
@@ -35,8 +31,10 @@ export default function WorkspaceStatus({
     setTriggerTerminalChange,
 }: WorkspaceStatusProps) {
     const [storedGit, setStoredGit] = useState<StoredGitWorkspace | null>(null)
-    const counts = useMemo(() => countTreeItems(tree || []), [tree])
+    const visibleTree = useMemo(() => getVisibleWorkspaceTree(tree, share), [share, tree])
+    const counts = useMemo(() => countTreeItems(visibleTree), [visibleTree])
     const activePath = useMemo(() => findPath(tree || [], share?.id || shareRouteId), [share?.id, shareRouteId, tree])
+    const activeIsRoot = isWorkspaceRootItem(tree, share, share?.id || shareRouteId)
 
     useEffect(() => {
         function refreshStoredGit() {
@@ -49,7 +47,15 @@ export default function WorkspaceStatus({
         return () => window.removeEventListener('storage', refreshStoredGit)
     }, [share?.id, shareRouteId])
 
-    const workspaceName = getWorkspaceName(tree, share) || share?.alias || shareRouteId
+    const workspaceName = getWorkspaceName(tree, share, shareRouteId)
+    const currentValue = activeIsRoot ? 'Workspace root' : activePath || share?.alias || 'No file open'
+    const currentDetail = activeIsRoot
+        ? share && share.wordCount > 0
+            ? `Folder workspace · ${share.wordCount} words in root note`
+            : 'Folder workspace · open or create a file'
+        : share
+            ? `${share.wordCount} words`
+            : 'Waiting for workspace'
 
     return (
         <section className='space-y-2 rounded-lg border border-bright/8 bg-black/16 p-3 text-bright/72'>
@@ -62,8 +68,8 @@ export default function WorkspaceStatus({
             <StatusRow
                 icon={<FileCode2 className='h-4 w-4' />}
                 label='Current file'
-                value={activePath || share?.alias || 'No file open'}
-                detail={share ? `${share.wordCount} words` : 'Waiting for workspace'}
+                value={currentValue}
+                detail={currentDetail}
             />
             <StatusRow
                 icon={<GitBranch className='h-4 w-4' />}
@@ -125,52 +131,4 @@ function readStoredGitWorkspace(shareId: string) {
     } catch {
         return null
     }
-}
-
-function countTreeItems(tree: Tree): TreeCounts {
-    return tree.reduce((counts, file) => {
-        if (file.type === 'folder') {
-            const childCounts = countTreeItems(file.children)
-            return {
-                files: counts.files + childCounts.files,
-                folders: counts.folders + childCounts.folders + 1,
-            }
-        }
-
-        return {
-            files: counts.files + 1,
-            folders: counts.folders,
-        }
-    }, { files: 0, folders: 0 })
-}
-
-function findPath(tree: Tree, id: string, parents: string[] = []): string | null {
-    for (const file of tree) {
-        const path = [...parents, file.name]
-        if (file.id === id) {
-            return path.join('/')
-        }
-
-        if (file.type === 'folder') {
-            const childPath = findPath(file.children, id, path)
-            if (childPath) {
-                return childPath
-            }
-        }
-    }
-
-    return null
-}
-
-function getWorkspaceName(tree: Tree | null, share: Share | null) {
-    if (!tree || tree.length !== 1) {
-        return null
-    }
-
-    const [root] = tree
-    if (root.type === 'folder' && (root.id === share?.id || root.parent === null)) {
-        return root.name
-    }
-
-    return null
 }

@@ -18,6 +18,7 @@ type CodeProps = {
     displayLineNumbers: boolean
     syntaxHighlighting: boolean
     setError: Dispatch<SetStateAction<string | boolean | null>>
+    setSaveState: Dispatch<SetStateAction<'saved' | 'saving' | 'queued'>>
     connect?: boolean
     editorPatch?: { value: string; nonce: number } | null
 }
@@ -34,6 +35,7 @@ export default function Code({
     displayLineNumbers,
     syntaxHighlighting,
     setError,
+    setSaveState,
     connect = true,
     editorPatch,
 }: CodeProps) {
@@ -48,6 +50,7 @@ export default function Code({
         setIsConnected,
         setParticipants,
         setShare,
+        onSaveStateChange: setSaveState,
         enabled: connect,
     })
 
@@ -88,6 +91,7 @@ export default function Code({
         setEditingContent(value)
         applyHighlightedCode(codeRef.current, value, syntaxHighlighting)
         setLastEdit(new Date().getTime())
+        setSaveState('saving')
         sendEdit(value)
     }
 

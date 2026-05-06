@@ -12,6 +12,7 @@ type UseShareCodeSocketProps = {
     setIsConnected: Dispatch<SetStateAction<boolean>>
     setParticipants: Dispatch<SetStateAction<number>>
     setShare: Dispatch<SetStateAction<Share | null>>
+    onSaveStateChange?: (state: 'saved' | 'saving' | 'queued') => void
     enabled?: boolean
 }
 
@@ -24,6 +25,7 @@ export function useShareCodeSocket({
     setIsConnected,
     setParticipants,
     setShare,
+    onSaveStateChange,
     enabled = true,
 }: UseShareCodeSocketProps) {
     const [reconnect, setReconnect] = useState(false)
@@ -82,6 +84,7 @@ export function useShareCodeSocket({
                     content: pendingEditRef.current,
                 }))
                 pendingEditRef.current = null
+                onSaveStateChange?.('saved')
             }
         }
 
@@ -115,13 +118,14 @@ export function useShareCodeSocket({
         return () => {
             ws.close()
         }
-    }, [enabled, reconnect, setEditingContent, setIsConnected, setParticipants, setShare, shareId])
+    }, [enabled, onSaveStateChange, reconnect, setEditingContent, setIsConnected, setParticipants, setShare, shareId])
 
     function sendEdit(content: string) {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
             pendingEditRef.current = content
             setReconnect(true)
-            return
+            onSaveStateChange?.('queued')
+            return 'queued'
         }
 
         wsRef.current.send(JSON.stringify({
@@ -130,6 +134,8 @@ export function useShareCodeSocket({
             content,
         }))
         pendingEditRef.current = null
+        onSaveStateChange?.('saved')
+        return 'sent'
     }
 
     return { sendEdit }

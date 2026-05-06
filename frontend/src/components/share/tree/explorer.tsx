@@ -11,6 +11,7 @@ import NewFile from './newFile'
 import WorkspaceSearchPanel from '../workspaceSearchPanel'
 import SidebarTooltip from '../sidebarTooltip'
 import ErrorNotice from '@/components/error/errorNotice'
+import { getWorkspaceRoot } from '../workspaceTree'
 
 type ExplorerProps = {
     showExplorer: boolean
@@ -248,19 +249,4 @@ export default function Explorer({
     )
 }
 
-function getProjectRoot(tree: Tree | null, share: Share | null): FileFolder | null {
-    if (!tree || !share || tree.length !== 1) {
-        return null
-    }
-
-    const [root] = tree
-    if (root.type !== 'folder') {
-        return null
-    }
-
-    if (root.id === share.id || (root.parent === null && root.name.startsWith('project-'))) {
-        return root
-    }
-
-    return null
-}
+const getProjectRoot = getWorkspaceRoot

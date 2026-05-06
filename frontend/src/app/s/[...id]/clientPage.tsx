@@ -7,7 +7,7 @@ import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
 import RenderSite from '@/components/share/renderSite'
 import ShareChat from '@/components/share/shareChat'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Search from '@/components/share/search/search'
 import OpenFiles from '@/components/share/files/openFiles'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
@@ -19,7 +19,8 @@ import syncAgentTargetAccess from '@/utils/vms/fetch/syncAgentTargetAccess'
 import postVM from '@/utils/vms/fetch/postVM'
 import type { TerminalCredentials } from '@/hooks/useTerminal'
 import { getShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
-import { Code2, MessageSquare } from 'lucide-react'
+import { CheckCircle2, CloudOff, Code2, FileCode2, Loader2, MessageSquare, Radio, TerminalSquare } from 'lucide-react'
+import { countTreeItems, findPath, getVisibleWorkspaceTree, getWorkspaceName, isWorkspaceRootItem } from '@/components/share/workspaceTree'
 
 type ClientPageProps = {
     id: string
@@ -45,9 +46,10 @@ export default function ClientPage({
     replaceUrlOnCreate,
 }: ClientPageProps) {
     const [showExplorer, setShowExplorer] = useState(true)
-    const [showMetadata, setShowMetaData] = useState(true)
+    const [showMetadata, setShowMetaData] = useState(false)
     const [participants, setParticipants] = useState(1)
     const [isConnected, setIsConnected] = useState(false)
+    const [saveState, setSaveState] = useState<'saved' | 'saving' | 'queued'>('saved')
     const [clickedWord, setClickedWord] = useState<string | null>(null)
     const [editingContent, setEditingContent] = useState<string>('')
     const [displayLineNumbers, setDisplayLineNumbers] = useState(true)
@@ -72,6 +74,17 @@ export default function ClientPage({
         tree,
         activeContent: editingContent,
     }), [editingContent, share, tree])
+    const visibleTree = useMemo(() => getVisibleWorkspaceTree(tree, share), [share, tree])
+    const workspaceCounts = useMemo(() => countTreeItems(visibleTree), [visibleTree])
+    const activePath = useMemo(() => findPath(tree, share?.id || id), [id, share?.id, tree])
+    const activeIsRoot = isWorkspaceRootItem(tree, share, share?.id || id)
+    const workspaceName = getWorkspaceName(tree, share, id)
+    const activeLabel = activeIsRoot ? 'Workspace root' : activePath || share?.alias || 'Loading file'
+    const activeDetail = activeIsRoot
+        ? editingContent.trim().length > 0
+            ? 'Root note'
+            : 'Open a file from the left sidebar'
+        : `${editingContent.split(/\s+/).filter(Boolean).length} words`
 
     useEffect(() => {
         if (!runtimeCapability.hasHttpSurface && renderSite) {
@@ -157,14 +170,20 @@ export default function ClientPage({
             />
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
                 <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/72 px-2 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-md'>
-                    <div className='min-w-0 flex-1'>
+                    <div className='min-w-0 flex flex-1 items-center gap-3'>
+                        <div className='hidden min-w-0 border-r border-bright/10 pr-3 md:block'>
+                            <div className='truncate text-sm font-semibold text-bright/84'>{workspaceName}</div>
+                            <div className='text-[11px] leading-4 text-bright/42'>{workspaceCounts.files} files · {workspaceCounts.folders} folders</div>
+                        </div>
                         {chatOpen ? (
                             <div className='flex items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
                                 <MessageSquare className='h-4 w-4 text-[#f07d33]' />
                                 <span className='truncate'>Chat workspace</span>
                             </div>
                         ) : (
-                            <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
+                            <div className='min-w-0 flex-1'>
+                                <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
+                            </div>
                         )}
                     </div>
                     <button
@@ -176,6 +195,34 @@ export default function ClientPage({
                         {chatOpen ? 'Back to code' : 'Open Chat'}
                     </button>
                 </div>
+                {!chatOpen && (
+                    <div className='flex min-h-10 flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/58 px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/10 backdrop-blur-md'>
+                        <div className='flex min-w-0 items-center gap-2'>
+                            <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                            <div className='min-w-0'>
+                                <div className='truncate font-semibold text-bright/84'>{activeLabel}</div>
+                                <div className='truncate text-[11px] leading-4 text-bright/42'>{activeDetail}</div>
+                            </div>
+                        </div>
+                        <div className='flex shrink-0 flex-wrap items-center justify-end gap-1.5'>
+                            <StatusPill
+                                icon={isConnected ? <Radio className='h-3.5 w-3.5' /> : <CloudOff className='h-3.5 w-3.5' />}
+                                label={isConnected ? 'Connected' : workspaceCreated ? 'Reconnecting' : 'Preparing'}
+                                tone={isConnected ? 'good' : 'warn'}
+                            />
+                            <StatusPill
+                                icon={saveState === 'saving' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <CheckCircle2 className='h-3.5 w-3.5' />}
+                                label={saveState === 'saving' ? 'Saving' : saveState === 'queued' ? 'Queued' : 'Saved'}
+                                tone={saveState === 'saved' ? 'good' : 'warn'}
+                            />
+                            <StatusPill
+                                icon={<TerminalSquare className='h-3.5 w-3.5' />}
+                                label={normalizeTerminalStatus(terminalStatus)}
+                                tone={terminalStatus.toLowerCase().includes('ready') ? 'good' : 'neutral'}
+                            />
+                        </div>
+                    </div>
+                )}
                 {chatOpen ? (
                     <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-background/48 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                         <ShareChat
@@ -200,6 +247,7 @@ export default function ClientPage({
                         displayLineNumbers={displayLineNumbers}
                         syntaxHighlighting={syntaxHighlighting}
                         setError={setError}
+                        setSaveState={setSaveState}
                         connect={workspaceCreated}
                         editorPatch={editorPatch}
                     />
@@ -261,4 +309,37 @@ export default function ClientPage({
             <DisplayError error={error} />
         </div>
     )
+}
+
+function StatusPill({
+    icon,
+    label,
+    tone,
+}: {
+    icon: ReactNode
+    label: string
+    tone: 'good' | 'warn' | 'neutral'
+}) {
+    const toneClass = tone === 'good'
+        ? 'border-emerald-400/18 bg-emerald-400/8 text-emerald-200/82'
+        : tone === 'warn'
+            ? 'border-amber-300/18 bg-amber-300/8 text-amber-100/82'
+            : 'border-bright/10 bg-bright/[0.045] text-bright/62'
+
+    return (
+        <span className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[11px] font-semibold ${toneClass}`}>
+            {icon}
+            {label}
+        </span>
+    )
+}
+
+function normalizeTerminalStatus(status: string) {
+    const normalized = status.trim().replace(/\.$/, '')
+    if (!normalized) return 'Terminal unknown'
+    if (normalized.toLowerCase().includes('ready')) return 'Terminal ready'
+    if (normalized.toLowerCase().includes('closed')) return 'Terminal closed'
+    if (normalized.toLowerCase().includes('preparing')) return 'Terminal preparing'
+    if (normalized.toLowerCase().includes('connecting')) return 'Terminal connecting'
+    return normalized.length > 22 ? `${normalized.slice(0, 19)}...` : normalized
 }
