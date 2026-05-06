@@ -1,6 +1,6 @@
 'use client'
 
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { setCookieWithExpiresAt } from '@/utils/cookies/cookies'
@@ -20,6 +20,7 @@ export default function PendingDeletionPage({
     const router = useRouter()
     const [busy, setBusy] = useState(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
+    const canRestore = Boolean(id && restoreToken)
     const deletionDate = useMemo(() => {
         if (!deletionScheduledAt) return 'the scheduled deletion time'
         return new Intl.DateTimeFormat('en', { dateStyle: 'full', timeStyle: 'short' }).format(new Date(deletionScheduledAt))
@@ -68,10 +69,17 @@ export default function PendingDeletionPage({
                     <div className='grid gap-2 px-1 py-1'>
                         <h2 className='text-base font-semibold text-bright'>Account pending deletion</h2>
                         <p className='text-sm leading-6 text-bright/52'>
-                            @{id} is scheduled to be permanently deleted on {deletionDate}.
+                            {id ? `@${id}` : 'This account'} is scheduled to be permanently deleted on {deletionDate}.
                         </p>
                     </div>
-                    <Notify message={error} />
+                    <ErrorNotice compact message={error} />
+                    {!canRestore ? (
+                        <ErrorNotice
+                            compact
+                            variant='info'
+                            message='This restore link is missing account recovery details. Go back to login and request a fresh sign-in.'
+                        />
+                    ) : null}
                     <div className='mt-1 flex items-center gap-3'>
                         <button
                             type='button'
@@ -83,7 +91,7 @@ export default function PendingDeletionPage({
                         </button>
                         <button
                             type='button'
-                            disabled={busy || !id || !restoreToken}
+                            disabled={busy || !canRestore}
                             onClick={() => void restore()}
                             className='ml-auto inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60'
                         >
