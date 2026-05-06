@@ -20,28 +20,28 @@ Then inspect each target repo independently with `git -C <repo> status --short`.
 
 Infer "Hanasand server" from local context before asking the parent agent:
 
-- shell alias: `hanasand="ssh ubuntu@hanasand"` in `~/.zshrc`
+- shell alias: `ssh hanasand`
 - SSH config host: `Host hanasand`
-- current target: `ubuntu@192.99.32.185`, port `222`
-- app path: `/home/ubuntu/hanasand`
-- OpenResty path: `/home/ubuntu/openresty`
-- expected app restart from `/home/ubuntu/hanasand`: `docker compose up -d --build`
+- current target: `hanasand@hanasand.com`, port `222`
+- app path: `/home/hanasand/hanasand`
+- OpenResty path: `/home/hanasand/openresty`
+- expected app restart from `/home/hanasand/hanasand`: `docker compose up -d --build`
 - active web server: Docker container `openresty`
-- expected OpenResty verification: `cd /home/ubuntu/openresty && docker compose exec -T openresty openresty -t`
+- expected OpenResty verification: `cd /home/hanasand/openresty && docker compose exec -T openresty openresty -t`
 
-For upload-limit changes, update the local `/Users/eirikhanasand/Desktop/personal/openresty` repo, push it, deploy `/home/ubuntu/openresty`, then verify the CDN server block contains `client_max_body_size 50M;`.
+For upload-limit changes, update the local `/Users/eirikhanasand/Desktop/personal/openresty` repo, push it, deploy `/home/hanasand/openresty`, then verify the CDN server block contains `client_max_body_size 50M;`.
 
 ## Remote deploy execution mode
 
 Codex sandboxed executions can allow simple read-only SSH commands while blocking copy/write-style invocations such as `scp`, `tar | ssh`, `ssh ... < script`, or long local-stdin SSH pipelines with:
 
 ```text
-ssh: connect to host 192.99.32.185 port 222: Operation not permitted
+ssh: connect to host hanasand.com port 222: Operation not permitted
 ```
 
 When that happens, do not keep retrying `scp` or piped SSH. Use a remote-capable execution mode that permits outbound SSH without local stdin/copy restrictions, or open an interactive SSH session with `ssh -o BatchMode=yes hanasand` and apply scoped patches or heredocs through the already-established session. Keep remote deploys narrow: patch only the intended files, avoid private media uploads, then run the active OpenResty and Docker checks.
 
-On this host, do not edit `/etc/nginx/sites-available/internal` for live changes. The active OpenResty config is owned by `/home/ubuntu/openresty` and loaded through Docker with host networking so existing `localhost` upstreams keep working.
+On this host, do not edit `/etc/nginx/sites-available/internal` for live changes. The active OpenResty config is owned by `/home/hanasand/openresty` and loaded through Docker with host networking so existing `localhost` upstreams keep working.
 
 ## Failure handling rule
 
