@@ -242,7 +242,11 @@ export default function ShareChat({
                 </div>
                 <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
                     <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                    <span className='truncate'>Review gate</span>
+                    <span className='truncate'>
+                        {pendingEdit?.status === 'pending'
+                            ? `${pendingEdit.changes.length} pending change${pendingEdit.changes.length === 1 ? '' : 's'}`
+                            : 'No auto-apply'}
+                    </span>
                 </div>
             </div>
 
