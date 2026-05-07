@@ -446,6 +446,29 @@ const progressGovernanceStories: AppStory[] = [
     { id: 1300, prompt: 'are these progress governance stories real world enough', expected: 'real-world-progress-governance' },
 ]
 
+const regressionAccountabilityStories: AppStory[] = [
+    { id: 1301, prompt: 'claude renamed half the env var references and missed the rest', expected: 'partial-env-rename' },
+    { id: 1302, prompt: 'agent edited without reading the file first', expected: 'edit-before-read' },
+    { id: 1303, prompt: 'dont call the bug an existing issue after you broke it', expected: 'no-existing-issue-excuse' },
+    { id: 1304, prompt: 'playwright tests were ignored to make the run pass', expected: 'no-ignored-tests' },
+    { id: 1305, prompt: 'ai generated fake selectors and said coverage was complete', expected: 'fake-selector-coverage' },
+    { id: 1306, prompt: 'context compaction lost what changed', expected: 'compaction-change-ledger' },
+    { id: 1307, prompt: 'newbie says the site worked before your fix', expected: 'worked-before-fix' },
+    { id: 1308, prompt: 'designer says visual regression matters more than green text', expected: 'visual-regression-proof' },
+    { id: 1309, prompt: 'corp reviewer needs invariants preserved during refactor', expected: 'preserve-refactor-invariants' },
+    { id: 1310, prompt: 'developer says read the file before touching yaml', expected: 'read-yaml-first' },
+    { id: 1311, prompt: 'support says stop thrashing and verify the real dom', expected: 'real-dom-verification' },
+    { id: 1312, prompt: 'client asks why tests pass but checkout is broken', expected: 'tests-pass-checkout-broken' },
+    { id: 1313, prompt: 'agency inherited ignored tests from an ai run', expected: 'inherited-ignored-tests' },
+    { id: 1314, prompt: 'founder needs a small ledger of every changed file', expected: 'changed-file-ledger' },
+    { id: 1315, prompt: 'operator wants no clobbering working code', expected: 'no-clobber-working-code' },
+    { id: 1316, prompt: 'qa says ai testing ai gave consensus hallucination', expected: 'consensus-hallucination' },
+    { id: 1317, prompt: 'legacy service broke because dependencies were guessed', expected: 'legacy-dependency-guess' },
+    { id: 1318, prompt: 'mobile nav regression was marked out of scope', expected: 'mobile-regression-in-scope' },
+    { id: 1319, prompt: 'verify with real tests not predicted success', expected: 'real-tests-not-predicted' },
+    { id: 1320, prompt: 'are these regression accountability stories real world enough', expected: 'real-world-regression-accountability' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -2472,4 +2495,88 @@ test('share page AI makes progress, blockers, and approvals observable for real 
     }
 
     expect(handledPrompts).toHaveLength(progressGovernanceStories.length)
+})
+
+test('share page AI preserves invariants and real verification for regression complaints', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-regression-story',
+                alias: body.path || body.name || body.id || 'app-regression-story',
+                path: body.path || body.name || body.id || 'app-regression-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-regression-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = regressionAccountabilityStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-regression-${matchingStory!.id}-${runSlug}`
+        expect(body.prompt).toContain('Regression accountability mode:')
+        expect(body.prompt).toContain('prefer reading current content over guessing')
+        expect(body.prompt).toContain('Never mark tests as skipped')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain('"regressionAccountabilityMode":true')
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}.`,
+                    'Regression guard: read current files, preserve invariants, keep a change ledger, and verify with real tests or browser evidence.',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    for (const story of regressionAccountabilityStories) {
+        const expectedUrl = `https://hanasand.com/s/app-regression-${story.id}-${runSlug}`
+        await page.goto(`/s/app-regression-${story.id}-${runSlug}?new=1&chat=1`)
+        const promptBox = await openWorkspaceChat(page)
+        await promptBox.fill(story.prompt)
+        await page.locator('input[name="shareChatPromptFallback"]').evaluate((element, value) => {
+            (element as HTMLInputElement).value = value
+        }, story.prompt)
+        await promptBox.dispatchEvent('input')
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
+
+        await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Regression guard: read current files, preserve invariants, keep a change ledger, and verify with real tests or browser evidence.')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+    }
+
+    expect(handledPrompts).toHaveLength(regressionAccountabilityStories.length)
 })

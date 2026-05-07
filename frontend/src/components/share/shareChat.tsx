@@ -668,6 +668,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     const costControlMode = isCostControlPrompt(prompt)
     const maintainabilityMode = isMaintainabilityPrompt(prompt)
     const progressGovernanceMode = isProgressGovernancePrompt(prompt)
+    const regressionAccountabilityMode = isRegressionAccountabilityPrompt(prompt)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -709,6 +710,14 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             '- If blocked, say the exact blocker and the next observable evidence needed. Prefer partial working output, logs, screenshots, or runtime errors over vague progress updates.',
             '- For runtime or deploy issues, keep the observe-and-react loop alive: collect stdout/stderr, browser console, screenshots, or deployment logs before claiming success.',
         ].join('\n') : null,
+        regressionAccountabilityMode ? [
+            'Regression accountability mode:',
+            '- Users may be reacting to agents that edit before reading, miss repeated references, hallucinate test coverage, ignore failing tests, or call newly broken behavior an existing issue after context loss.',
+            '- Before changing files, restate the exact regression or invariant to preserve, name the files/surfaces that must stay working, and prefer reading current content over guessing.',
+            '- Never mark tests as skipped, ignored, or out of scope to make a run pass unless the user explicitly asks. Treat failing tests and browser evidence as product signals, not obstacles.',
+            '- If verification is incomplete, say what was not verified. Do not claim full success from AI-generated checks alone; prefer real build output, real tests, real DOM selectors, and browser proof.',
+            '- When context may be stale or compacted, compare against the current file/tree and keep a small change ledger so regressions remain attributable.',
+        ].join('\n') : null,
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
@@ -726,6 +735,7 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
         costControlMode: isCostControlPrompt(prompt),
         maintainabilityMode: isMaintainabilityPrompt(prompt),
         progressGovernanceMode: isProgressGovernancePrompt(prompt),
+        regressionAccountabilityMode: isRegressionAccountabilityPrompt(prompt),
         browserEvidenceTargets: {
             previewUrl,
             sharePageUrl: buildShareEvidenceUrl(share),
@@ -947,16 +957,22 @@ function isProgressGovernancePrompt(prompt: string) {
     return /\b(permission|permissions|approve|approval|deny|autopilot|auto.?approve|bypass|waiting|wait|stuck|almost done|no progress|progress|governance|partial|intermediate|logs|stdout|stderr|runtime|stacktrace|console|screenshot|screenshots|observable|proof|claim|claimed|blocked|blocker|meaningful|confirm|confirmation|ask me|question|proceed|validation|fixed|reversible|early abort|abort|progress update|tool call|tool calls|failed tool|timeout|session|sessions|needs action|three days|hours)\b/i.test(prompt)
 }
 
+function isRegressionAccountabilityPrompt(prompt: string) {
+    return /\b(regression|regressions|broke|broken|break|worked before|clobber|clobbering|clobbered|wrong files|wrong file|read before edit|read the file|without reading|missed half|references|env var|yaml|hallucinated|hallucination|fake selector|fake selectors|fake tests|ignored|ignored test|ignored tests|ignore tests|skipped test|skip tests|test coverage|coverage|existing issue|existing error|context loss|compaction|compact|lost context|drift|thrash|thrashing|verify|verified|verification|real test|real tests|dom|selector|selectors|invariant|invariants|ledger|attributable)\b/i.test(prompt)
+}
+
 function getComposerHint(prompt: string) {
     const deploymentDiagnostic = isDeploymentDiagnosticPrompt(prompt)
     const costControl = isCostControlPrompt(prompt)
     const maintainability = isMaintainabilityPrompt(prompt)
     const progressGovernance = isProgressGovernancePrompt(prompt)
+    const regressionAccountability = isRegressionAccountabilityPrompt(prompt)
     const hints = [
         deploymentDiagnostic ? 'Diagnostic mode: collect deploy evidence.' : null,
         costControl ? 'Cost control mode: preserve scope and make the smallest useful edit.' : null,
         maintainability ? 'Maintainability mode: keep code owned, small, fast, and editable.' : null,
         progressGovernance ? 'Progress mode: show blockers, evidence, and meaningful approvals.' : null,
+        regressionAccountability ? 'Regression mode: read first, preserve invariants, and verify with real evidence.' : null,
     ].filter(Boolean)
     if (hints.length) {
         return hints.join(' ')
