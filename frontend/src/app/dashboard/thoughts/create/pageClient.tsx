@@ -1,11 +1,11 @@
 'use client'
 
 import Editor from '@/components/editor/editor'
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import fetchThoughtByTitle from '@/utils/thoughts/fetchThoughtByTitle'
 import { postThought } from '@/utils/thoughts/postThought'
-import { Plus } from 'lucide-react'
+import { BrainCircuit, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -47,30 +47,36 @@ export default function CreateClient() {
     }, [title])
 
     return (
-        <div className={`relative grid gap-2 ${editing ? '' : 'px-10 md:px-[20vw]'}`}>
-            {error && (
-                <div className='w-full rounded-lg grid place-items-center'>
-                    <div className='glow-red-small w-fit rounded-lg'>
-                        <Notify message={error} className=' min-w-full px-4 bg-light' />
+        <div className={`relative grid gap-4 ${editing ? '' : 'px-4 md:px-[18vw]'}`}>
+            <div className='flex items-center justify-between gap-3'>
+                <div>
+                    <div className='flex items-center gap-2 text-orange-200/78'>
+                        <BrainCircuit className='h-4 w-4' />
+                        <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/38'>Thought editor</p>
                     </div>
+                    <h1 className='mt-2 text-xl font-medium text-bright/92'>{text}</h1>
                 </div>
-            )}
-            <h1 className='font-semibold text-2xl'>{text}</h1>
-            <div className='grid gap-5 w-full'>
+                <button
+                    type='button'
+                    onClick={handleCreate}
+                    className='inline-flex h-9 items-center gap-2 rounded-lg bg-bright/88 px-3.5 text-sm font-medium text-background/90 transition hover:bg-bright'
+                >
+                    <Plus className='h-4 w-4' />
+                    Create
+                </button>
+            </div>
+            <ErrorNotice compact message={error as string | null} />
+            <div className='grid w-full gap-5'>
                 <Editor
                     editing={editing}
                     setEditing={setEditing}
                     customSaveLogic={true}
                     hideSaveButton
-                    className='bg-light rounded-lg p-2 glow-blue-small'
+                    className='rounded-lg border border-white/10 bg-white/[0.035] p-2'
                     id={title || ''}
                     content={title.split('\n')}
                     onChange={setTitle}
                 />
-            </div>
-            <div onClick={handleCreate} className='bg-light hover:bg-green-500/20 outline-green-500/35 cursor-pointer py-2 px-6 flex gap-2 rounded-lg w-fit place-self-end mt-10'>
-                <Plus />
-                <h1 className='font-semibold select-none'>Create</h1>
             </div>
         </div>
     )
