@@ -42,6 +42,11 @@ const cases: Case[] = [
         expected: 'allowed',
         input: { action: 'browser_task', method: 'GET', target: 'https://example.com' },
     },
+    {
+        name: 'allows safe documentation about secrets',
+        expected: 'allowed',
+        input: { action: 'generated_tool_call', path: 'docs/security.md', content: 'Do not print secrets or ask users to paste tokens into support tickets.' },
+    },
 ]
 
 for (const testCase of cases) {

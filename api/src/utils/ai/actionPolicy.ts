@@ -35,6 +35,7 @@ type AgentPolicyDecision = {
 const SECRET_PATH_PATTERN = /(^|\/)(\.env$|\.env\.(?!example$)[^/]+|\.ssh($|\/)|id_rsa$|id_dsa$|id_ed25519$|authorized_keys$|known_hosts$|.*\.(pem|key|p12|pfx)$)/i
 const SECRET_CONTENT_PATTERN = /(-----BEGIN (?:OPENSSH |RSA |EC |DSA |PRIVATE )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?[A-Za-z0-9_./+=-]{24,})/i
 const SECRET_EXFIL_PATTERN = /\b(print|show|dump|cat|read|exfiltrate|send|display|reveal)\b[\s\S]{0,80}\b(secret|secrets|token|tokens|password|passwords|api key|api keys|ssh key|private key|\.env|credentials)\b/i
+const SECRET_COMMAND_PATTERN = /(^|\n)\s*(cat|printenv|env|grep|awk|sed|curl)\b[^\n]{0,100}\b(secret|secrets|token|tokens|password|passwords|api key|api keys|ssh key|private key|\.env|credentials)\b/i
 const PRODUCTION_DB_PATTERN = /\b(production|prod|live)\b[\s\S]{0,80}\b(database|db|postgres|mysql|redis|backup|backups|customer data)\b/i
 const BROAD_DELETE_PATTERN = /\b(rm\s+-rf|delete\s+(?:everything|all|the database|db|backups?|production|prod)|drop\s+(?:database|schema|table)|truncate\s+table|wipe|nuke|destroy)\b/i
 const DESTRUCTIVE_METHODS = new Set(['DELETE', 'PATCH', 'PUT', 'POST'])
@@ -51,6 +52,14 @@ export async function evaluateAgentActionPolicy(input: AgentPolicyInput): Promis
         input.content,
         JSON.stringify(input.metadata || {}),
     ].filter(Boolean).join('\n')
+    const intentHaystack = [
+        input.target,
+        input.method,
+        input.path,
+        input.prompt,
+        input.context,
+        JSON.stringify(input.metadata || {}),
+    ].filter(Boolean).join('\n')
 
     const path = input.path || input.target || ''
     const method = (input.method || '').toUpperCase()
@@ -59,7 +68,7 @@ export async function evaluateAgentActionPolicy(input: AgentPolicyInput): Promis
         return blocked('critical', 'The requested action targets an environment file, SSH key, or private key path.', 'Use a redacted .env.example placeholder or a scoped secret manager reference instead.')
     }
 
-    if (SECRET_EXFIL_PATTERN.test(haystack) || SECRET_CONTENT_PATTERN.test(input.content || '')) {
+    if (SECRET_EXFIL_PATTERN.test(intentHaystack) || SECRET_COMMAND_PATTERN.test(input.content || '') || SECRET_CONTENT_PATTERN.test(input.content || '')) {
         return blocked('critical', 'The requested action would expose or print secret material.', 'Return only variable names, placeholders, or rotation instructions. Never echo secret values.')
     }
 
