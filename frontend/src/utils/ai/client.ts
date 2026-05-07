@@ -1,8 +1,6 @@
 'use client'
 
-import config from '@/config'
 import { getCookie, setCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
-import { impersonationHeaders } from '@/utils/impersonation/client'
 
 type RequestInitWithBody = RequestInit & {
     body?: BodyInit | null
@@ -11,13 +9,12 @@ type RequestInitWithBody = RequestInit & {
 export async function aiClientRequest(path: string, init: RequestInitWithBody = {}) {
     const token = getCookie('access_token')
     const id = getCookie('id')
-    const response = await fetch(`${config.url.api}${path}`, {
+    const response = await fetch(`/api/backend${path}`, {
         ...init,
         headers: {
             ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
             Authorization: `Bearer ${token || ''}`,
             id: id || '',
-            ...impersonationHeaders(),
             ...(init.headers || {}),
         },
     })
