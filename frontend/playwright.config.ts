@@ -11,8 +11,8 @@ const appPort = new URL(baseUrl).port || (new URL(baseUrl).protocol === 'https:'
 const apiPort = new URL(apiBaseUrl).port || (new URL(apiBaseUrl).protocol === 'https:' ? '443' : '80')
 const sharedEnv = {
     ...process.env,
-    DB_HOST: process.env.DB_HOST || '127.0.0.1',
-    DB_PORT: process.env.DB_PORT || '8503',
+    DB_HOST: process.env.PLAYWRIGHT_DB_HOST || '127.0.0.1',
+    DB_PORT: process.env.PLAYWRIGHT_DB_PORT || '8503',
     SKIP_MAIL_PROVISIONING: '1',
     SKIP_REPOSITORY_SYNC: '1',
     NEXT_PUBLIC_API: apiBaseUrl,
