@@ -308,6 +308,29 @@ const proofRecoveryStories: AppStory[] = [
     { id: 1180, prompt: 'are we still removing friction without lying', expected: 'production-recovery-truth' },
 ]
 
+const pendingCheckpointStories: AppStory[] = [
+    { id: 1181, prompt: 'dont lose the edit if I type another thing', expected: 'pending-checkpoint' },
+    { id: 1182, prompt: 'designer wants review before next request', expected: 'designer-review-first' },
+    { id: 1183, prompt: 'newbie will keep typing instead of applying', expected: 'newbie-apply-or-discard' },
+    { id: 1184, prompt: 'corporate reviewer needs no hidden overwrite', expected: 'corporate-no-overwrite' },
+    { id: 1185, prompt: 'ops says pending work should be a checkpoint', expected: 'ops-checkpoint' },
+    { id: 1186, prompt: 'agency client changes mind mid-review', expected: 'agency-discard-path' },
+    { id: 1187, prompt: 'support says users lose pending diffs', expected: 'support-pending-diff' },
+    { id: 1188, prompt: 'founder keeps sending rapid followups', expected: 'founder-followup-guard' },
+    { id: 1189, prompt: 'accessibility reviewer wants no accidental replace', expected: 'a11y-no-replace' },
+    { id: 1190, prompt: 'pricing edit is ready but user asks more', expected: 'pricing-checkpoint' },
+    { id: 1191, prompt: 'mobile review pending then another request', expected: 'mobile-pending-guard' },
+    { id: 1192, prompt: 'compliance needs explicit discard', expected: 'compliance-discard' },
+    { id: 1193, prompt: 'investor page ready, dont clobber it', expected: 'investor-no-clobber' },
+    { id: 1194, prompt: 'restaurant owner types twice by mistake', expected: 'restaurant-double-send' },
+    { id: 1195, prompt: 'terminal agents make pending state too easy to miss', expected: 'terminal-pending-visible' },
+    { id: 1196, prompt: 'handoff agent needs one clear checkpoint', expected: 'handoff-checkpoint' },
+    { id: 1197, prompt: 'client asks how to start over safely', expected: 'client-safe-startover' },
+    { id: 1198, prompt: 'designer rejects the draft and wants another', expected: 'designer-discard-draft' },
+    { id: 1199, prompt: 'beginner says I dont want that change', expected: 'beginner-discard-change' },
+    { id: 1200, prompt: 'are we still prioritizing safe fast progress', expected: 'safe-fast-progress' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1770,4 +1793,105 @@ test('share page AI lets users retry failed browser proof without rerunning the 
     }
 
     expect(handledPrompts).toHaveLength(proofRecoveryStories.length)
+})
+
+test('share page AI treats unapplied edits as a checkpoint before another run', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-pending-checkpoint-story',
+                alias: body.path || body.name || body.id || 'app-pending-checkpoint-story',
+                path: body.path || body.name || body.id || 'app-pending-checkpoint-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-pending-checkpoint-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = pendingCheckpointStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-pending-checkpoint-${matchingStory!.id}-${runSlug}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Pending work must be resolved before the next run.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Pending checkpoint protects this draft.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of pendingCheckpointStories) {
+        const expectedUrl = `https://hanasand.com/s/app-pending-checkpoint-${story.id}-${runSlug}`
+        await page.goto(`/s/app-pending-checkpoint-${story.id}-${runSlug}?new=1`)
+        const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
+        await expect(chatButton).toBeVisible({ timeout: 2500 })
+        await chatButton.click()
+        const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
+        await expect(promptBox).toBeVisible({ timeout: 2500 })
+        await promptBox.fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Pending work must be resolved before the next run.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Review', { exact: true })).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('Resolve the pending change before starting another AI run.')).toBeVisible()
+        await expect(page.getByText('Apply or discard the pending change before asking for another edit.')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Apply' })).toBeEnabled()
+        await expect(page.getByRole('button', { name: 'Discard' })).toBeVisible()
+
+        await promptBox.fill('actually do something else')
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled()
+        await page.getByRole('button', { name: 'Discard' }).click()
+        await expect(page.getByText('1 pending change')).not.toBeVisible()
+        await expect(page.getByText('Resolve the pending change before starting another AI run.')).not.toBeVisible()
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeEnabled()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(pendingCheckpointStories.length)
 })

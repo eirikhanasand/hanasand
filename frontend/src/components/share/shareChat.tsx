@@ -114,7 +114,8 @@ export default function ShareChat({
         : share
             ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
             : null
-    const canSend = input.trim().length > 0 && !loading && Boolean(share)
+    const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
+    const canSend = input.trim().length > 0 && !loading && Boolean(share) && !pendingEditBlocksNewRun
     const phaseLabel = loading
         ? elapsedSeconds < 4
             ? 'Scoping'
@@ -330,6 +331,13 @@ export default function ShareChat({
         }
     }
 
+    function discardPendingEdit() {
+        if (pendingEdit?.status === 'applying') {
+            return
+        }
+        setPendingEdit(null)
+    }
+
     return (
         <section className={`flex flex-col overflow-hidden rounded-lg border border-bright/8 bg-black/10 ${
             mode === 'workspace' ? 'h-full min-h-0 shadow-2xl shadow-black/20' : 'h-[calc(100%-3.5rem)] min-h-[32rem]'
@@ -482,16 +490,32 @@ export default function ShareChat({
                                     : `${pendingEdit.changes.length} file changes`}
                             </span>
                         </div>
-                        <button
-                            type='button'
-                            disabled={pendingEdit.status === 'applying' || pendingEdit.status === 'applied' || proofApplyBlocked}
-                            onClick={applyPendingEdit}
-                            className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-bright/10 px-3 text-xs font-medium text-bright/72 transition hover:bg-bright/8 disabled:cursor-default disabled:opacity-55'
-                        >
-                            {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
-                            {proofApplyBlocked ? 'Retry proof first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply'}
-                        </button>
+                        <div className='flex shrink-0 items-center gap-1.5'>
+                            {pendingEdit.status === 'pending' ? (
+                                <button
+                                    type='button'
+                                    onClick={discardPendingEdit}
+                                    className='inline-flex h-8 cursor-pointer items-center rounded-full border border-bright/10 px-3 text-xs font-medium text-bright/52 transition hover:bg-bright/8 hover:text-bright/72'
+                                >
+                                    Discard
+                                </button>
+                            ) : null}
+                            <button
+                                type='button'
+                                disabled={pendingEdit.status === 'applying' || pendingEdit.status === 'applied' || proofApplyBlocked}
+                                onClick={applyPendingEdit}
+                                className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-bright/10 px-3 text-xs font-medium text-bright/72 transition hover:bg-bright/8 disabled:cursor-default disabled:opacity-55'
+                            >
+                                {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
+                                {proofApplyBlocked ? 'Retry proof first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply'}
+                            </button>
+                        </div>
                     </div>
+                    {pendingEditBlocksNewRun ? (
+                        <div className='mb-2 rounded-lg border border-amber-200/10 bg-amber-950/12 px-2 py-1.5 text-xs text-amber-50/68'>
+                            Resolve the pending change before starting another AI run.
+                        </div>
+                    ) : null}
                     {proofApplyBlocked ? (
                         <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
                             <span>Browser proof needs retry before these changes can be applied.</span>
@@ -549,6 +573,11 @@ export default function ShareChat({
                         <ArrowUp className='h-4 w-4' />
                     </button>
                 </div>
+                {pendingEditBlocksNewRun ? (
+                    <p className='mt-2 text-xs text-bright/42'>
+                        Apply or discard the pending change before asking for another edit.
+                    </p>
+                ) : null}
             </form>
         </section>
     )
