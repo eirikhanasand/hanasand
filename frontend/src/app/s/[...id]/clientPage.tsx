@@ -86,6 +86,7 @@ export default function ClientPage({
     const workspaceName = getWorkspaceName(workspaceTree, share, id)
     const breadcrumbs = useMemo(() => buildBreadcrumbs(workspaceName, activePath, activeIsRoot), [activeIsRoot, activePath, workspaceName])
     const activeLabel = activeIsRoot ? 'Workspace root' : activePath || share?.alias || 'Loading file'
+    const previewEvidenceUrl = share?.alias && runtimeCapability.canPreview ? `https://${share.alias}.hanasand.com/` : null
     const activeDetail = activeIsRoot
         ? editingContent.trim().length > 0
             ? 'Root note'
@@ -296,6 +297,7 @@ export default function ClientPage({
                             editingContent={editingContent}
                             setEditorPatch={setEditorPatch}
                             mode='workspace'
+                            previewUrl={previewEvidenceUrl}
                         />
                     </div>
                 ) : (

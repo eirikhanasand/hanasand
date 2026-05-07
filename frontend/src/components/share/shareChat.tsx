@@ -16,6 +16,7 @@ type ShareChatProps = {
     editingContent: string
     setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
     mode?: 'panel' | 'workspace'
+    previewUrl?: string | null
 }
 
 type Message = {
@@ -85,6 +86,7 @@ export default function ShareChat({
     editingContent,
     setEditorPatch,
     mode = 'panel',
+    previewUrl,
 }: ShareChatProps) {
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState('')
@@ -144,8 +146,8 @@ export default function ShareChat({
             const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
-                    prompt: buildPrompt(trimmed, share, editingContent, treePaths),
-                    context: buildContext(share, editingContent, treePaths, messages),
+                    prompt: buildPrompt(trimmed, share, editingContent, treePaths, previewUrl || null),
+                    context: buildContext(share, editingContent, treePaths, messages, previewUrl || null),
                     maxTokens: 2200,
                 }),
             })
@@ -455,15 +457,21 @@ function wait(ms: number) {
     return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[]) {
+function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null) {
+    const shareEvidenceUrl = buildShareEvidenceUrl(share)
+    const evidenceTargets = [
+        previewUrl ? `Runnable preview: ${previewUrl}` : null,
+        shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
+    ].filter(Boolean)
     return [
         'You are Hanasand AI in a browser chat panel for the active /s share.',
         'Help like a coding agent. Be concise. For pure conversation, answer normally.',
         'For project changes, move directly to useful files. Do not ask for a full brief unless the request is impossible or unsafe.',
         'Keep visible prose to at most 5 short sentences. Spend tokens on complete file contents, not meta commentary.',
         'When the user asks for project changes, return complete replacement content for every changed or new file using Hanasand tool tags.',
-        'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, also request browser evidence with:',
-        '<hanasand-tool>{"action":"browser_task","url":"https://example.com","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>',
+        evidenceTargets.length ? `Browser evidence targets:\n${evidenceTargets.join('\n')}` : 'Browser evidence target: use the current share or preview URL once it exists.',
+        'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, request browser evidence using the best target above, for example:',
+        `<hanasand-tool>{"action":"browser_task","url":"${previewUrl || shareEvidenceUrl || 'https://hanasand.com/s'}","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>`,
         'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport proof.',
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
@@ -475,13 +483,22 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     ].filter(Boolean).join('\n\n')
 }
 
-function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[]) {
+function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null) {
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
+        browserEvidenceTargets: {
+            previewUrl,
+            sharePageUrl: buildShareEvidenceUrl(share),
+        },
         tree: treePaths,
         currentContent: editingContent.slice(0, 6000),
         recentMessages: messages.slice(-3).map(({ role, content }) => ({ role, content })),
     })
+}
+
+function buildShareEvidenceUrl(share: Share | null) {
+    const slug = share?.alias || share?.path || share?.id
+    return slug ? `https://hanasand.com/s/${encodeURIComponent(slug)}` : null
 }
 
 function parseToolCalls(content: string): ToolCall[] {

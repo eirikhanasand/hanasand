@@ -147,6 +147,29 @@ const shareBrowserEvidenceStories: AppStory[] = [
     { id: 1040, prompt: 'are we still building the best autonomous website builder', expected: 'drift-proof' },
 ]
 
+const shareEvidenceTargetStories: AppStory[] = [
+    { id: 1041, prompt: 'look at the actual page, not a sample site', expected: 'actual-page' },
+    { id: 1042, prompt: 'client says preview is broken, use the right link', expected: 'right-link' },
+    { id: 1043, prompt: 'newbie says where am i supposed to click', expected: 'current-share-clicks' },
+    { id: 1044, prompt: 'designer says inspect the page i am on', expected: 'current-page-design' },
+    { id: 1045, prompt: 'corporate review wants proof from this share', expected: 'share-proof' },
+    { id: 1046, prompt: 'do not hallucinate the preview url', expected: 'no-hallucinated-url' },
+    { id: 1047, prompt: 'support says blank page on this exact share', expected: 'exact-share-blank' },
+    { id: 1048, prompt: 'ops wants evidence attached to this workspace', expected: 'workspace-evidence' },
+    { id: 1049, prompt: 'agency handoff needs the visible share url', expected: 'handoff-url' },
+    { id: 1050, prompt: 'pricing needs proof from our page', expected: 'our-pricing-proof' },
+    { id: 1051, prompt: 'mobile complaint is about this share only', expected: 'share-mobile-proof' },
+    { id: 1052, prompt: 'accessibility pass on the current page', expected: 'current-accessibility' },
+    { id: 1053, prompt: 'investor opens the share link today', expected: 'investor-share-link' },
+    { id: 1054, prompt: 'compliance asks what public users see here', expected: 'public-share-compliance' },
+    { id: 1055, prompt: 'restaurant owner says booking is hidden here', expected: 'booking-current-share' },
+    { id: 1056, prompt: 'founder says it looks scammy here', expected: 'claims-current-share' },
+    { id: 1057, prompt: 'another agent must continue from this url', expected: 'handoff-current-url' },
+    { id: 1058, prompt: 'terminal agents lose the page context, dont', expected: 'terminal-context-proof' },
+    { id: 1059, prompt: 'prove this is still about shipping websites', expected: 'shipping-proof' },
+    { id: 1060, prompt: 'ambiguous: fix the thing users see', expected: 'visible-thing' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -767,4 +790,124 @@ test('share page AI shows browser proof in the website UI for ambiguous build st
     }
 
     expect(handledPrompts).toHaveLength(shareBrowserEvidenceStories.length)
+})
+
+test('share page AI uses the current share URL for browser evidence instead of generic examples', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-share-evidence-target-story',
+                alias: body.path || body.name || body.id || 'app-share-evidence-target-story',
+                path: body.path || body.name || body.id || 'app-share-evidence-target-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-share-evidence-target-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        expect(body.url).toContain('https://hanasand.com/s/app-share-target-')
+        expect(body.url).not.toBe('https://example.com')
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url: body.url,
+                title: 'Current Share Evidence',
+                textExcerpt: 'Current share proof with visible navigation and no generic sample target.',
+                structure: {
+                    headings: ['Current share proof', 'Visible next step'],
+                    links: [{ text: 'Open share', href: body.url }],
+                    buttons: ['Apply after review'],
+                    inputs: [],
+                    forms: [],
+                    hasViewportMeta: true,
+                },
+                screenshotPath: null,
+                consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
+                pageErrors: [],
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
+        const matchingStory = shareEvidenceTargetStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-share-target-${matchingStory!.id}`
+        expect(body.prompt).toContain('Browser evidence targets:')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.prompt).toContain(`"url":"${expectedUrl}"`)
+        expect(body.prompt).not.toContain('"url":"https://example.com"')
+        expect(body.context).toContain(expectedUrl)
+        expect(body.context?.length || 0).toBeLessThan(9_500)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. I checked the current share URL, not a sample page.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Current-share evidence first, then manual apply.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of shareEvidenceTargetStories) {
+        await page.goto(`/s/app-share-target-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. I checked the current share URL, not a sample page.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText(`Browser proof visible for https://hanasand.com/s/app-share-target-${story.id}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Current share proof').last()).toBeVisible()
+        await expect(page.getByText(`Open share -> https://hanasand.com/s/app-share-target-${story.id}`).last()).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('Create app/page.tsx')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(shareEvidenceTargetStories.length)
 })
