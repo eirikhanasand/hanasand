@@ -7,7 +7,7 @@ const MAX_STRUCTURE_ITEMS = 20
 const MAX_EXCERPT_LENGTH = 5000
 const MAX_CONCURRENT_JOBS = Number(process.env.VERIFICATION_JOB_CONCURRENCY || 2)
 
-type VerificationKind = 'browser' | 'build' | 'deploy'
+type VerificationKind = 'browser' | 'build' | 'deploy' | 'design'
 type VerificationStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 type VerificationJobRow = {
@@ -61,12 +61,12 @@ export async function postVerificationJob(req: FastifyRequest, res: FastifyReply
 
     const body = (req.body || {}) as CreateJobBody
     const kind = body.kind || 'browser'
-    if (!['browser', 'build', 'deploy'].includes(kind)) {
+    if (!['browser', 'build', 'deploy', 'design'].includes(kind)) {
         return res.status(400).send({ error: 'Unsupported verification kind.' })
     }
 
     const targetUrl = typeof body.targetUrl === 'string' ? body.targetUrl.trim() : ''
-    if (kind === 'browser') {
+    if (kind === 'browser' || kind === 'design') {
         const validation = validateHttpUrl(targetUrl)
         if (validation) {
             return res.status(400).send({ error: validation })
@@ -226,6 +226,8 @@ async function runJob(job: VerificationJobRow) {
     try {
         if (job.kind === 'browser') {
             await runBrowserJob(job)
+        } else if (job.kind === 'design') {
+            await runDesignJob(job)
         } else {
             await completeNonBrowserJob(job)
         }
@@ -338,6 +340,103 @@ async function runBrowserJob(job: VerificationJobRow) {
                 requestId: job.request_id,
                 targetUrl: job.target_url,
                 status: response.status,
+                elapsedMs: Math.round(performance.now() - started),
+            },
+        })
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
+async function runDesignJob(job: VerificationJobRow) {
+    if (!job.target_url) {
+        throw new Error('Missing target URL.')
+    }
+    const current = await getJob(job.id)
+    if (current?.status === 'cancelled') {
+        return
+    }
+    await updateStep(job.id, 'Fetching design target')
+    const started = performance.now()
+    const controller = new AbortController()
+    const metadata = job.metadata || {}
+    const timeoutMs = Math.max(1000, Math.min(Number(metadata.timeoutMs || 16000), 30000))
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+        const response = await fetch(job.target_url, {
+            headers: {
+                Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5',
+                'User-Agent': 'HanasandAI-DesignQualityJob/1.0',
+            },
+            signal: controller.signal,
+        })
+        await updateStep(job.id, 'Scoring design quality')
+        const text = await response.text()
+        const structure = extractStructure(text)
+        const excerpt = extractTextExcerpt(text)
+        const review = reviewDesignQuality(text, excerpt, structure)
+        const passed = response.ok && review.score >= 72 && review.criticalIssues.length === 0
+        const artifact = {
+            id: crypto.randomUUID(),
+            type: 'design_quality_report',
+            name: 'Design quality report',
+            createdAt: new Date().toISOString(),
+            data: {
+                ok: response.ok,
+                passed,
+                score: review.score,
+                status: passed ? 'passed' : 'failed',
+                elapsed_ms: Math.round(performance.now() - started),
+                url: response.url || job.target_url,
+                title: extractTitle(text),
+                checks: review.checks,
+                issues: review.issues,
+                criticalIssues: review.criticalIssues,
+                repeatedPatternCount: review.repeatedPatternCount,
+                genericPhraseCount: review.genericPhraseCount,
+                screenshotPath: null,
+                notVerified: [
+                    'Static design QA does not execute client-side JavaScript.',
+                    'Screenshot diffing requires a browser worker attachment.',
+                ],
+            },
+        }
+        await run(`
+            UPDATE ai_verification_jobs
+            SET status = $2,
+                current_step = $3,
+                artifacts = artifacts || $4::jsonb,
+                error = $5,
+                completed_at = NOW(),
+                updated_at = NOW()
+            WHERE id = $1
+        `, [
+            job.id,
+            passed ? 'completed' : 'failed',
+            passed ? 'Design QA passed' : 'Design QA failed',
+            JSON.stringify([artifact]),
+            passed ? null : `Design QA score ${review.score}: ${review.issues.slice(0, 2).join('; ') || 'review failed'}`,
+        ])
+        await recordAiUsageEvent({
+            ownerId: job.owner_id,
+            actorId: job.owner_id,
+            workspaceKind: cleanWorkspaceKind(job.workspace_kind),
+            workspaceId: job.workspace_id,
+            kind: 'browser_proof_completed',
+            units: 1,
+            billableUnits: passed ? 1 : 0,
+            estimatedCostNok: passed ? 0.06 : 0,
+            billingMode: job.lane,
+            outcome: passed ? 'verified' : 'failed',
+            metadata: {
+                proofType: 'design_quality',
+                jobId: job.id,
+                requestId: job.request_id,
+                targetUrl: job.target_url,
+                status: response.status,
+                score: review.score,
+                genericPhraseCount: review.genericPhraseCount,
+                repeatedPatternCount: review.repeatedPatternCount,
                 elapsedMs: Math.round(performance.now() - started),
             },
         })
@@ -574,6 +673,81 @@ function extractFormSummaries(html: string) {
         })
         .filter(Boolean)
         .slice(0, 8)
+}
+
+function reviewDesignQuality(html: string, excerpt: string, structure: ReturnType<typeof extractStructure>) {
+    const lowerHtml = html.toLowerCase()
+    const lowerText = excerpt.toLowerCase()
+    const genericPhrases = [
+        'unlock your potential',
+        'transform your business',
+        'seamless experience',
+        'elevate your brand',
+        'innovative solutions',
+        'cutting edge',
+        'all-in-one platform',
+        'beautiful and modern',
+        'powerful and easy',
+        'next generation',
+        'lorem ipsum',
+    ]
+    const genericPhraseCount = genericPhrases.filter((phrase) => lowerText.includes(phrase)).length
+    const repeatedPatternCount = Math.max(
+        countMatches(lowerHtml, /rounded-[a-z0-9/[\].-]+/g),
+        countMatches(lowerHtml, /class=["'][^"']*(card|shadow|gradient)[^"']*["']/g),
+    )
+    const hasViewport = structure.hasViewportMeta
+    const headingCount = structure.headings.length
+    const hasForms = structure.forms.length > 0
+    const hasSpecificCopy = excerpt.length > 260 && /\b(price|booking|client|case|service|team|deadline|location|domain|shipping|invoice|clinic|studio|restaurant|agency|project|portfolio)\b/i.test(excerpt)
+    const hasDesignTokens = /--[a-z0-9-]+|design token|brand kit|palette|type scale|theme|style guide/i.test(html)
+    const hasAssets = /<img\b|picture\b|svg\b|lucide|icon|asset|photo|image direction|brand asset/i.test(html)
+    const hasMobileCare = /clamp\(|minmax\(|@media|viewport|flex-wrap|grid-template-columns/i.test(html)
+    const issues = [
+        genericPhraseCount ? 'Copy contains generic AI-builder phrases.' : null,
+        repeatedPatternCount > 24 ? 'Layout may rely on repeated rounded cards, shadows, or gradient/card patterns.' : null,
+        !hasViewport ? 'Missing viewport metadata for mobile proof.' : null,
+        headingCount < 2 ? 'Page hierarchy is too thin to review confidently.' : null,
+        !hasSpecificCopy ? 'Copy lacks business-specific detail.' : null,
+        !hasDesignTokens ? 'No visible design-token, theme, palette, or style-guide direction.' : null,
+        !hasAssets ? 'No asset, image, icon, or brand-media direction found.' : null,
+        !hasMobileCare ? 'No clear responsive layout signals found.' : null,
+        hasForms && !excerpt.match(/email|name|phone|message|booking|checkout|sign in|log in/i) ? 'Form purpose is unclear from visible copy.' : null,
+    ].filter(Boolean) as string[]
+    const criticalIssues = [
+        !hasViewport ? 'mobile_viewport_missing' : null,
+        genericPhraseCount >= 3 ? 'generic_copy_excessive' : null,
+        repeatedPatternCount > 42 ? 'repeated_template_pattern_excessive' : null,
+    ].filter(Boolean) as string[]
+    const score = Math.max(0, Math.min(100, 100
+        - genericPhraseCount * 9
+        - Math.max(0, repeatedPatternCount - 16)
+        - (hasViewport ? 0 : 16)
+        - (headingCount >= 2 ? 0 : 10)
+        - (hasSpecificCopy ? 0 : 12)
+        - (hasDesignTokens ? 0 : 8)
+        - (hasAssets ? 0 : 8)
+        - (hasMobileCare ? 0 : 10)))
+    return {
+        score,
+        issues,
+        criticalIssues,
+        repeatedPatternCount,
+        genericPhraseCount,
+        checks: {
+            hasViewport,
+            headingCount,
+            hasSpecificCopy,
+            hasDesignTokens,
+            hasAssets,
+            hasMobileCare,
+            hasClearFormPurpose: !hasForms || !issues.includes('Form purpose is unclear from visible copy.'),
+        },
+    }
+}
+
+function countMatches(value: string, pattern: RegExp) {
+    return [...value.matchAll(pattern)].length
 }
 
 function extractAttribute(attributes: string, name: string) {

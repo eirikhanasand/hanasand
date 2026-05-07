@@ -47,6 +47,13 @@ type BuildDeployRow = {
     total: string | number
 }
 
+type DesignQualityRow = {
+    completed: string | number
+    failed: string | number
+    total: string | number
+    avg_score: string | number | null
+}
+
 type FailedProofRow = {
     category: string
     kind: string
@@ -80,7 +87,7 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
 
     const days = clampDays(Number((req.query as { days?: string })?.days) || 30)
     const since = `${days} days`
-    const [summaryResult, trendResult, recentResult, cacheResult, queueResult, verificationLatencyResult, buildDeployResult, failedProofResult, firstOutputResult, deployTimingResult, deploymentReadinessResult, releaseReadinessResult] = await Promise.all([
+    const [summaryResult, trendResult, recentResult, cacheResult, queueResult, verificationLatencyResult, buildDeployResult, designQualityResult, failedProofResult, firstOutputResult, deployTimingResult, deploymentReadinessResult, releaseReadinessResult] = await Promise.all([
         run(`
             SELECT
                 COUNT(*)::int AS event_count,
@@ -165,8 +172,21 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         `, [userId, since]),
         run(`
             SELECT
+                COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+                COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+                COUNT(*)::int AS total,
+                AVG(NULLIF(artifacts #>> '{0,data,score}', '')::float) AS avg_score
+            FROM ai_verification_jobs
+            WHERE owner_id = $1
+              AND kind = 'design'
+              AND created_at >= NOW() - $2::interval
+        `, [userId, since]),
+        run(`
+            SELECT
                 CASE
                     WHEN status = 'cancelled' THEN 'cancelled'
+                    WHEN kind = 'design' AND COALESCE(error, '') ILIKE '%generic%' THEN 'generic_design'
+                    WHEN kind = 'design' AND COALESCE(error, '') ILIKE 'Design QA score %' THEN 'design_quality'
                     WHEN COALESCE(error, '') ILIKE 'HTTP %' THEN 'http_error'
                     WHEN COALESCE(error, '') ILIKE '%timeout%' OR COALESCE(error, '') ILIKE '%abort%' THEN 'timeout'
                     WHEN COALESCE(error, '') ILIKE '%missing target%' THEN 'missing_target'
@@ -249,11 +269,11 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         reliability,
         deployment: deploymentReadinessResult.rows[0] as DeploymentReadinessRow | undefined,
         release: releaseReadinessResult.rows[0] as ReleaseReadinessRow | undefined,
+        designQuality: designQualityResult.rows[0] as DesignQualityRow | undefined,
         eventCount,
         verifiedUnits,
         costNok,
         productiveMinutes,
-        cacheableEvents: numberValue(cache.cacheable_events),
     })
 
     return res.send({
@@ -303,27 +323,32 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
     })
 }
 
-function buildCommercialReadiness({ reliability, deployment, release, eventCount, verifiedUnits, costNok, productiveMinutes, cacheableEvents }: {
+function buildCommercialReadiness({ reliability, deployment, release, designQuality, eventCount, verifiedUnits, costNok, productiveMinutes }: {
     reliability: ReturnType<typeof buildReliability>
     deployment?: DeploymentReadinessRow
     release?: ReleaseReadinessRow
+    designQuality?: DesignQualityRow
     eventCount: number
     verifiedUnits: number
     costNok: number
     productiveMinutes: number
-    cacheableEvents: number
 }) {
     const deploymentCount = numberValue(deployment?.deployment_count)
     const completedDeployments = numberValue(deployment?.completed_deployments)
     const healthcheckedDeployments = numberValue(deployment?.healthchecked_deployments)
     const releaseCount = numberValue(release?.release_count)
     const rollbackReadyReleases = numberValue(release?.rollback_ready_releases)
+    const designCompleted = numberValue(designQuality?.completed)
+    const designFailed = numberValue(designQuality?.failed)
+    const designTotal = numberValue(designQuality?.total)
+    const designAvgScore = numberValue(designQuality?.avg_score)
     const hasVerificationSamples = reliability.verificationLatency.some((row) => row.sampleCount > 0) || reliability.buildDeploy.some((row) => row.total > 0)
     const hasQueueTelemetry = reliability.queueDepth.length > 0 || reliability.capacity.totalAvailableSessions > 0
     const hasMeasuredEconomics = eventCount > 0 && (verifiedUnits > 0 || costNok > 0 || productiveMinutes > 0)
     const hasDeploymentOwnership = deploymentCount > 0 && (completedDeployments > 0 || healthcheckedDeployments > 0 || releaseCount > 0)
     const hasTrustRecovery = releaseCount > 0 && rollbackReadyReleases > 0
-    const hasDesignProof = cacheableEvents > 0 || reliability.failedProofCategories.some((row) => row.category === 'browser_console')
+    const hasDesignProof = designTotal > 0
+    const designPassRate = designTotal > 0 ? designCompleted / designTotal : 0
     const items = [
         readinessItem({
             id: 'durable_async_verification',
@@ -397,14 +422,14 @@ function buildCommercialReadiness({ reliability, deployment, release, eventCount
             id: 'design_quality',
             priority: 6,
             label: 'Better design QA and less generic output',
-            achieved: false,
+            achieved: hasDesignProof && designPassRate >= 0.8 && designAvgScore >= 72,
             partial: true,
             evidence: [
-                'Design memory and anti-generic review prompts are present in the AI workflow.',
-                'Generated checks cover spacing, hierarchy, contrast, mobile overflow, generic copy, and repeated patterns.',
-                'This is not yet as measurable as build/deploy proof.',
+                `${designTotal} durable design QA jobs, ${designCompleted} passed, ${designFailed} failed in this window.`,
+                `Average design QA score is ${formatNumber(designAvgScore)} out of 100.`,
+                'Checks cover spacing signals, hierarchy, mobile viewport, generic copy, repeated patterns, asset direction, and design-token evidence.',
             ],
-            next: 'Promote design QA to scored browser/visual jobs with screenshots and before/after evidence.',
+            next: hasDesignProof ? 'Attach screenshot diffing to the design worker for stronger visual proof.' : 'Run design QA verification jobs on generated pages before calling visual work ready.',
             measurable: hasDesignProof,
         }),
         readinessItem({

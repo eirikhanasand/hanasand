@@ -436,7 +436,7 @@ export default async function ensureSchema() {
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             workspace_kind TEXT,
             workspace_id TEXT,
-            kind TEXT NOT NULL CHECK (kind IN ('browser', 'build', 'deploy')),
+            kind TEXT NOT NULL CHECK (kind IN ('browser', 'build', 'deploy', 'design')),
             status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
             priority INT NOT NULL DEFAULT 0,
             lane TEXT NOT NULL DEFAULT 'standard',
@@ -457,6 +457,8 @@ export default async function ensureSchema() {
             cancelled_at TIMESTAMPTZ
         )
     `)
+    await run('ALTER TABLE ai_verification_jobs DROP CONSTRAINT IF EXISTS ai_verification_jobs_kind_check')
+    await run('ALTER TABLE ai_verification_jobs ADD CONSTRAINT ai_verification_jobs_kind_check CHECK (kind IN (\'browser\', \'build\', \'deploy\', \'design\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_verification_jobs_owner_created ON ai_verification_jobs(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_verification_jobs_workspace_created ON ai_verification_jobs(owner_id, workspace_kind, workspace_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_verification_jobs_queue ON ai_verification_jobs(status, priority DESC, created_at ASC)')
