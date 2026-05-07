@@ -666,6 +666,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     const shareEvidenceUrl = buildShareEvidenceUrl(share)
     const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
     const costControlMode = isCostControlPrompt(prompt)
+    const maintainabilityMode = isMaintainabilityPrompt(prompt)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -692,6 +693,13 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             '- Preserve the current project shape. Prefer the smallest cohesive edit, name the intended files before tool tags, and avoid replacing unrelated files.',
             '- If the prompt says the AI made it worse, first identify what should be restored or preserved. Do not rebuild a different site unless the user explicitly asks.',
         ].join('\n') : null,
+        maintainabilityMode ? [
+            'Maintainability mode:',
+            '- Users may be worried about AI-builder lock-in, messy generated code, missing CMS/content ownership, slow pages, browser/device edge cases, or redundant CSS/assets.',
+            '- Prefer plain owned code, minimal dependencies, accessible semantic markup, and a structure a developer can maintain later.',
+            '- Do not hide core content in platform-specific magic. If the user needs editing or CMS behavior, propose the smallest durable content model instead of hard-coding everything.',
+            '- Treat performance and ownership as acceptance criteria: avoid giant generated styles, unused assets, opaque widgets, and unnecessary client-side code.',
+        ].join('\n') : null,
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
@@ -707,6 +715,7 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
         diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
         costControlMode: isCostControlPrompt(prompt),
+        maintainabilityMode: isMaintainabilityPrompt(prompt),
         browserEvidenceTargets: {
             previewUrl,
             sharePageUrl: buildShareEvidenceUrl(share),
@@ -920,17 +929,21 @@ function isCostControlPrompt(prompt: string) {
     return /\b(cost|credit|credits|budget|spend|spent|paid|pricing|limit|limits|usage|retry|retrying|rerun|rerunning|burn|burns|again|fix|fixed|worse|break|broke|broken|restore|revert|minimal|small|smallest|tiny|simple|only|preserve|scope|unrelated|related|file edits|version|versions|rewrite|rewrote|surprise|different site|wrong secret|secrets)\b/i.test(prompt)
 }
 
+function isMaintainabilityPrompt(prompt: string) {
+    return /\b(maintain|maintainable|maintenance|messy|mess|refactor|technical debt|debt|slow|slower|performance|perf|crawl|bloated|bloat|redundant|css|asset|assets|cms|content management|ownership|own the code|export|lock-in|locked in|platform|vendor|portable|handoff|developer later|edge case|browser|device|mobile safari|checkout|integration|weird bug|scalability|scale)\b/i.test(prompt)
+}
+
 function getComposerHint(prompt: string) {
     const deploymentDiagnostic = isDeploymentDiagnosticPrompt(prompt)
     const costControl = isCostControlPrompt(prompt)
-    if (deploymentDiagnostic && costControl) {
-        return 'Diagnostic mode: collect deploy evidence. Cost control mode: preserve scope and make the smallest useful edit.'
-    }
-    if (costControl) {
-        return 'Cost control mode: preserve scope, name files, and make the smallest useful edit.'
-    }
-    if (deploymentDiagnostic) {
-        return 'Diagnostic mode: collect target, logs, env scope, and preview evidence before editing.'
+    const maintainability = isMaintainabilityPrompt(prompt)
+    const hints = [
+        deploymentDiagnostic ? 'Diagnostic mode: collect deploy evidence.' : null,
+        costControl ? 'Cost control mode: preserve scope and make the smallest useful edit.' : null,
+        maintainability ? 'Maintainability mode: keep code owned, small, fast, and editable.' : null,
+    ].filter(Boolean)
+    if (hints.length) {
+        return hints.join(' ')
     }
     return null
 }

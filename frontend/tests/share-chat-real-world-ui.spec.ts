@@ -400,6 +400,29 @@ const costControlStories: AppStory[] = [
     { id: 1260, prompt: 'are these cost control stories real world enough', expected: 'real-world-cost-control' },
 ]
 
+const maintainabilityStories: AppStory[] = [
+    { id: 1261, prompt: 'ai builder made messy code no one can maintain', expected: 'messy-code-maintainability' },
+    { id: 1262, prompt: 'local shop needs content they can edit later', expected: 'editable-content-ownership' },
+    { id: 1263, prompt: 'founder wants owned code not platform lock-in', expected: 'owned-code-no-lockin' },
+    { id: 1264, prompt: 'site got slow from generated css bloat', expected: 'generated-css-bloat' },
+    { id: 1265, prompt: 'agency needs a clean handoff to developer later', expected: 'developer-handoff' },
+    { id: 1266, prompt: 'corporate team asks if this scales past a landing page', expected: 'scale-past-landing' },
+    { id: 1267, prompt: 'designer says dont bury layout in opaque widgets', expected: 'no-opaque-widgets' },
+    { id: 1268, prompt: 'restaurant owner wants menu cms not hard coded forever', expected: 'menu-content-model' },
+    { id: 1269, prompt: 'checkout integration will need custom flow later', expected: 'custom-checkout-later' },
+    { id: 1270, prompt: 'mobile safari has a weird bug the ai keeps missing', expected: 'mobile-safari-edge' },
+    { id: 1271, prompt: 'newbie asks can I export and keep this code', expected: 'export-owned-code' },
+    { id: 1272, prompt: 'startup says avoid dependencies we cannot support', expected: 'avoid-unsupportable-deps' },
+    { id: 1273, prompt: 'support says assets are huge and page crawls', expected: 'huge-assets-slow-page' },
+    { id: 1274, prompt: 'compliance needs semantic accessible markup', expected: 'semantic-a11y-markup' },
+    { id: 1275, prompt: 'freelancer inherited a vibe coded mess', expected: 'inherited-vibe-mess' },
+    { id: 1276, prompt: 'operator wants less client side code', expected: 'less-client-code' },
+    { id: 1277, prompt: 'product owner needs maintainable content sections', expected: 'maintainable-sections' },
+    { id: 1278, prompt: 'client asks why ai code is hard to refactor', expected: 'hard-to-refactor' },
+    { id: 1279, prompt: 'business says weird browser bugs matter more than fancy visuals', expected: 'browser-bugs-over-flair' },
+    { id: 1280, prompt: 'are these maintainability stories real world enough', expected: 'real-world-maintainability' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -2258,4 +2281,88 @@ test('share page AI protects budget and scope for real product-regression prompt
     }
 
     expect(handledPrompts).toHaveLength(costControlStories.length)
+})
+
+test('share page AI flags maintainability and ownership risks from real AI-builder complaints', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-maintainability-story',
+                alias: body.path || body.name || body.id || 'app-maintainability-story',
+                path: body.path || body.name || body.id || 'app-maintainability-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-maintainability-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = maintainabilityStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-maintainability-${matchingStory!.id}-${runSlug}`
+        expect(body.prompt).toContain('Maintainability mode:')
+        expect(body.prompt).toContain('owned code')
+        expect(body.prompt).toContain('performance and ownership as acceptance criteria')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain('"maintainabilityMode":true')
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}.`,
+                    'Maintainability guard: keep owned code, small dependencies, editable content, and no generated bloat.',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    for (const story of maintainabilityStories) {
+        const expectedUrl = `https://hanasand.com/s/app-maintainability-${story.id}-${runSlug}`
+        await page.goto(`/s/app-maintainability-${story.id}-${runSlug}?new=1&chat=1`)
+        const promptBox = await openWorkspaceChat(page)
+        await promptBox.fill(story.prompt)
+        await page.locator('input[name="shareChatPromptFallback"]').evaluate((element, value) => {
+            (element as HTMLInputElement).value = value
+        }, story.prompt)
+        await promptBox.dispatchEvent('input')
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
+
+        await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Maintainability guard: keep owned code, small dependencies, editable content, and no generated bloat.')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+    }
+
+    expect(handledPrompts).toHaveLength(maintainabilityStories.length)
 })
