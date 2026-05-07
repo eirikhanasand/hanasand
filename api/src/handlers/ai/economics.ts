@@ -200,6 +200,10 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
     const costNok = numberValue(summary.estimated_cost_nok)
     const eventCount = numberValue(summary.event_count)
     const denominator = costNok > 0 ? costNok : 1
+    const productiveMinutes = numberValue(summary.build_minutes) + numberValue(summary.deploy_minutes)
+    const verifiedProgressPerMinutePerNok = productiveMinutes > 0 && costNok > 0
+        ? verifiedUnits / productiveMinutes / costNok
+        : 0
     const reliability = buildReliability({
         estimatedCostNok: costNok,
         queueRows: queueResult.rows as QueueDepthRow[],
@@ -220,6 +224,8 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
             estimatedCostNok: costNok,
             verifiedUnits,
             verifiedProgressPerNok: verifiedUnits / denominator,
+            verifiedProgressPerMinutePerNok,
+            productiveMinutes,
             platformErrorUnits: numberValue(summary.platform_error_units),
             browserProofs: numberValue(summary.browser_proofs),
             buildMinutes: numberValue(summary.build_minutes),

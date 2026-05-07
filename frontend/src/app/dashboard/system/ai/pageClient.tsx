@@ -20,6 +20,8 @@ type AIEconomics = {
         estimatedCostNok: number
         verifiedUnits: number
         verifiedProgressPerNok: number
+        verifiedProgressPerMinutePerNok: number
+        productiveMinutes: number
         platformErrorUnits: number
         browserProofs: number
         buildMinutes: number
@@ -239,7 +241,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
 
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Estimated cost' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable units`} />
-                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified progress' value={formatCompact(summary.verifiedUnits)} detail={`${summary.verifiedProgressPerNok.toFixed(1)} verified units / NOK`} />
+                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified progress / min / NOK' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
                 <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token usage' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units discounted`} />
                 <EconomicsStat icon={<Layers3 className='h-4 w-4' />} label='Cached work' value={`${cacheRate}%`} detail={`${summary.cacheHits} cache hits from ${summary.cacheableEvents} cacheable events`} />
             </div>
@@ -524,6 +526,13 @@ function formatNok(value: number) {
 
 function formatCompact(value: number) {
     return Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+}
+
+function formatMetric(value: number) {
+    if (!value) return '0'
+    if (value < 0.01) return value.toFixed(4)
+    if (value < 1) return value.toFixed(2)
+    return value.toFixed(1)
 }
 
 function formatKind(kind: string) {
