@@ -10,12 +10,12 @@ function bearerToken(req: FastifyRequest) {
 }
 
 export async function getSessions(req: FastifyRequest, res: FastifyReply) {
-    const { valid, id } = await tokenWrapper(req, res)
-    if (!valid || !id) {
-        return res.status(401).send({ error: 'Unauthorized.' })
+    const auth = await tokenWrapper(req, res)
+    if (!auth.valid || !auth.id) {
+        return res.status(auth.impersonating ? 403 : 401).send({ error: auth.error || 'Unauthorized.' })
     }
 
-    const sessions = await listSessions(id)
+    const sessions = await listSessions(auth.id)
     return res.send({
         sessions: sessions.map(session => ({
             ...session,
@@ -25,23 +25,23 @@ export async function getSessions(req: FastifyRequest, res: FastifyReply) {
 }
 
 export async function revokeSession(req: FastifyRequest, res: FastifyReply) {
-    const { valid, id } = await tokenWrapper(req, res)
-    if (!valid || !id) {
-        return res.status(401).send({ error: 'Unauthorized.' })
+    const auth = await tokenWrapper(req, res)
+    if (!auth.valid || !auth.id) {
+        return res.status(auth.impersonating ? 403 : 401).send({ error: auth.error || 'Unauthorized.' })
     }
 
     const { token_id } = req.params as { token_id: string }
-    const revoked = await revokeToken({ tokenId: Number(token_id), userId: id, revokedBy: id })
+    const revoked = await revokeToken({ tokenId: Number(token_id), userId: auth.id, revokedBy: auth.id })
     return res.send({ revoked, token_id: Number(token_id) })
 }
 
 export async function revokeSessions(req: FastifyRequest, res: FastifyReply) {
-    const { valid, id } = await tokenWrapper(req, res)
-    if (!valid || !id) {
-        return res.status(401).send({ error: 'Unauthorized.' })
+    const auth = await tokenWrapper(req, res)
+    if (!auth.valid || !auth.id) {
+        return res.status(auth.impersonating ? 403 : 401).send({ error: auth.error || 'Unauthorized.' })
     }
 
     const { keep_current = true } = req.body as { keep_current?: boolean } ?? {}
-    const count = await revokeAllTokens({ userId: id, revokedBy: id, exceptToken: keep_current ? bearerToken(req) : undefined })
+    const count = await revokeAllTokens({ userId: auth.id, revokedBy: auth.id, exceptToken: keep_current ? bearerToken(req) : undefined })
     return res.send({ revoked: count })
 }
