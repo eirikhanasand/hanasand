@@ -314,7 +314,7 @@ export default function useAiWorkbench({
     }, [clients, isAuthenticated])
 
     useEffect(() => {
-        if (!isAuthenticated || bootstrappedRef.current || conversations.some((conversation) => !conversation.archivedAt)) {
+        if (bootstrappedRef.current || conversations.some((conversation) => !conversation.archivedAt)) {
             return
         }
 
@@ -324,7 +324,7 @@ export default function useAiWorkbench({
         }, 0)
 
         return () => clearTimeout(timer)
-    }, [conversations, isAuthenticated])
+    }, [conversations])
 
     useEffect(() => {
         shouldReconnectRef.current = true
@@ -1510,7 +1510,10 @@ export default function useAiWorkbench({
                     content: result.message,
                     error: !result.ok,
                     createdAt: new Date().toISOString(),
-                    metadata: { tool: toolCall.action },
+                    metadata: {
+                        tool: toolCall.action,
+                        toolState: result.ok ? 'completed' : 'error',
+                    },
                 }
 
                 setConversations((prev) => prev.map((entry) => entry.id === conversation.id

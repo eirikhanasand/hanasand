@@ -22,7 +22,7 @@ export default async function page() {
             initialShares={initialShares}
             initialRuntimeState={workspace.runtimeState}
             isAuthenticated={Boolean(id && token)}
-            mode='landing'
+            mode='workspace'
         />
     )
 }

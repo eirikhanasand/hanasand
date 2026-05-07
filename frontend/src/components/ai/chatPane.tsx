@@ -230,16 +230,7 @@ export default function ChatPane({
 }
 
 function EmptyComposerState({ tooltip }: { tooltip: string }) {
-    const [greeting] = useState(() => {
-        const greetings = [
-            'What can I help you with?',
-            'What are we working on?',
-            'What do you want to tackle?',
-            'What should we look at first?',
-            'What can I help fix or build?',
-        ]
-        return greetings[Math.floor(Math.random() * greetings.length)]
-    })
+    const greeting = 'What can I help you with?'
 
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>

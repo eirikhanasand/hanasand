@@ -16,10 +16,12 @@ async function createAiWorkspacePage({
     browser,
     baseURL,
     promptCompleteContent,
+    promptResponses = [],
 }: {
     browser: Browser
     baseURL: string | undefined
     promptCompleteContent: string
+    promptResponses?: { match: string, content: string }[]
 }) {
     const shareState = new Map<string, {
         id: string
@@ -49,11 +51,15 @@ async function createAiWorkspacePage({
         },
     ])
 
-    await context.addInitScript((content: string) => {
+    await context.addInitScript(({ content, responses }: { content: string, responses: { match: string, content: string }[] }) => {
         ;(window as typeof window & {
             __lastTerminalCommand?: string
+            __lastAiPromptRequest?: unknown
             __HANASAND_CREATE_SOCKET__?: (url: string) => WebSocket
         }).__lastTerminalCommand = ''
+        ;(window as typeof window & {
+            __lastAiPromptRequest?: unknown
+        }).__lastAiPromptRequest = null
 
         class MockHanasandSocket {
             static OPEN = 1
@@ -100,8 +106,13 @@ async function createAiWorkspacePage({
 
             send(data: string) {
                 if (this.url.includes('/client/ws/gpt')) {
-                    const payload = JSON.parse(data) as { conversationId?: string }
+                    const payload = JSON.parse(data) as { conversationId?: string, messages?: { role: string, content: string }[] }
+                    ;(window as typeof window & {
+                        __lastAiPromptRequest?: unknown
+                    }).__lastAiPromptRequest = payload
                     const conversationId = payload.conversationId || 'unknown'
+                    const userPrompt = [...(payload.messages || [])].reverse().find((message) => message.role === 'user')?.content || ''
+                    const selectedContent = responses.find((response) => userPrompt.toLowerCase().includes(response.match.toLowerCase()))?.content || content
                     this.emit({
                         type: 'prompt_started',
                         conversationId,
@@ -125,7 +136,7 @@ async function createAiWorkspacePage({
                             type: 'prompt_complete',
                             conversationId,
                             clientName: 'local-32b',
-                            content,
+                            content: selectedContent,
                             metrics: {
                                 conversationId,
                                 status: 'idle',
@@ -172,7 +183,7 @@ async function createAiWorkspacePage({
         ;(window as typeof window & {
             __HANASAND_CREATE_SOCKET__?: (url: string) => WebSocket
         }).__HANASAND_CREATE_SOCKET__ = (url: string) => new MockHanasandSocket(url) as unknown as WebSocket
-    }, promptCompleteContent)
+    }, { content: promptCompleteContent, responses: promptResponses })
 
     const page = await context.newPage()
 
@@ -197,6 +208,21 @@ async function createAiWorkspacePage({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({ ok: true }),
+        })
+    })
+
+    await page.route('**/api/tools/http/request', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string, method?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                ok: true,
+                status: 200,
+                url: body.url,
+                method: body.method || 'GET',
+                body: '<html><title>Preview OK</title><main>Ready</main></html>',
+            }),
         })
     })
 
@@ -341,9 +367,11 @@ async function createAiWorkspacePage({
     })
 
     await page.goto('/ai')
-    await expect(page.getByText('Your chats stay attached to repos and shares.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible()
-    await expect(page.getByText('1 model connected')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('No workspace attached')).toBeVisible()
+    await expect(page.getByText('Starter', { exact: true })).toBeVisible()
+    await expect(page.getByText('Deploy', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'local-32b' })).toBeVisible({ timeout: 15000 })
 
     return {
         context,
@@ -471,3 +499,116 @@ test('AI workspace can scaffold a Next.js and Docker starter directly into the a
 
     await context.close()
 })
+
+test('AI website workbench handles stricter ambiguous product-building stories without hiding the tools', async ({ browser, baseURL }) => {
+    const stories = [
+        ['motion designer', 'Portfolio direction set.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Motion Designer Portfolio"}</hanasand-tool>'],
+        ['uptime product', 'Waitlist shell ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Uptime Waitlist"}</hanasand-tool>'],
+        ['restaurant booking', 'Booking preview path chosen.\n<hanasand-tool>{"action":"create_project","projectName":"Restaurant Booking Preview","vmName":"restaurant-preview"}</hanasand-tool>'],
+        ['compliance dashboard', 'Enterprise dashboard skeleton created.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Vendor Compliance Dashboard"}</hanasand-tool>'],
+        ['repo is broken', 'I need the repository URL or owner/name to import it; then I will inspect env and config before editing.'],
+        ['cramped on mobile', 'Responsive pass started.\n<hanasand-tool>{"action":"run_terminal_command","command":"npm run lint","timeoutMs":12000}</hanasand-tool>'],
+        ['pricing page', 'Pricing page workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Pricing Page"}</hanasand-tool>'],
+        ['reviewers to understand', 'Review handoff should stay visible in Workspace, Ownership, Deploy, and Release history before the summary.'],
+        ['meeting notes product', 'Demo shell workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Meeting Notes Demo"}</hanasand-tool>'],
+        ['actually run', 'Checking the attached workspace now.\n<hanasand-tool>{"action":"run_terminal_command","command":"pwd && ls","timeoutMs":8000}</hanasand-tool>'],
+        ['handmade lamps', 'Product page workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Handmade Lamps Product Page"}</hanasand-tool>'],
+        ['docker compose', 'Docker check queued.\n<hanasand-tool>{"action":"run_terminal_command","command":"docker compose config","timeoutMs":12000}</hanasand-tool>'],
+        ['schools and teachers', 'Admin prototype workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"School Admin Prototype"}</hanasand-tool>'],
+        ['norwegian coffee', 'Campaign workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Norwegian Coffee Campaign"}</hanasand-tool>'],
+        ['prod db', 'I cannot connect to or mutate production data from a vague prompt. Share a staging export or migration goal and I will build the safe review path first.'],
+        ['angry tickets', 'Support triage board workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Support Triage Board"}</hanasand-tool>'],
+        ['book shoots', 'Booking funnel workspace ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Photography Booking Funnel"}</hanasand-tool>'],
+        ['less templatey', 'I will make the current workspace more editorial, keep the conversion path, and verify the result.\n<hanasand-tool>{"action":"run_terminal_command","command":"npm run lint","timeoutMs":12000}</hanasand-tool>'],
+        ['preview link', 'Preview healthcheck requested.\n<hanasand-tool>{"action":"http_request","url":"https://example.com","method":"GET"}</hanasand-tool>'],
+        ['homepage', 'Homepage fix path: edit, check, summarize compactly.\n<hanasand-tool>{"action":"run_terminal_command","command":"npm run lint","timeoutMs":12000}</hanasand-tool>'],
+    ] as const
+
+    const prompts = [
+        'make me a sharp little portfolio for a motion designer, dark but not boring, with a case study and contact.',
+        'i need a landing page for an uptime product. make it feel legit and collect emails somehow.',
+        'client needs a preview by lunch for a restaurant booking site, not a blog.',
+        'mock an internal compliance dashboard for vendors. should look enterprise, not startup toy.',
+        'my repo is broken after i changed env stuff, can you look?',
+        'this page feels cramped on mobile. make it breathe but keep the desktop dense.',
+        'pricing page please. make the middle plan sell without being cheesy.',
+        'we need reviewers to understand what changed and who deployed it.',
+        'build a realistic ai meeting notes product demo, but no login yet.',
+        'does this app actually run? check it, don\'t just say it should.',
+        'make a premium product page for handmade lamps, needs variants and shipping info.',
+        'docker compose is annoying here, make it deployable.',
+        'prototype the admin area for managing schools and teachers.',
+        'we\'re launching a norwegian coffee thing, make a campaign page with signup.',
+        'connect to our prod db and fix the users table.',
+        'make a customer support triage board for angry tickets.',
+        'i need people to book shoots and see packages, make it classy.',
+        'less templatey, more editorial, but still converts.',
+        'ship a preview link my cofounder can open.',
+        'fix the homepage and don\'t write me an essay.',
+    ]
+
+    const { context, page } = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: 'Default compact progress update.',
+        promptResponses: stories.map(([match, content]) => ({ match, content })),
+    })
+
+    await expect(page.getByText('No workspace attached')).toBeVisible()
+    await expect(page.getByText('Review handoff', { exact: true })).toBeVisible()
+    await expect(page.getByText('Release history', { exact: true })).toBeVisible()
+    await expect(page.getByText('Create Next.js + Docker workspace')).toBeVisible()
+    await expect(page.getByText('Start VM deploy check')).toBeVisible()
+
+    for (const [index, prompt] of prompts.entries()) {
+        await test.step(`story ${901 + index}`, async () => {
+            const storyContent = stories[index][1]
+            await page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill(prompt)
+            await page.getByRole('button', { name: 'Send' }).click()
+            await expect(page.getByText(storyContent.split('\n')[0])).toBeVisible({ timeout: 10000 })
+            const toolText = expectedToolCompletionText(storyContent)
+            if (toolText) {
+                await expect(page.getByText(toolText).last()).toBeVisible({ timeout: 10000 })
+            }
+        })
+    }
+
+    const lastPromptRequest = await page.evaluate(() => (window as typeof window & {
+        __lastAiPromptRequest?: { messages?: { role: string, content: string }[] }
+    }).__lastAiPromptRequest)
+    const systemPrompt = lastPromptRequest?.messages?.find((message) => message.role === 'system')?.content || ''
+    expect(systemPrompt).toContain('Optimize for fast product progress')
+    expect(systemPrompt).toContain('Keep visible replies compact')
+    expect(systemPrompt).toContain('scaffold or attach workspace -> implement files -> run a focused terminal check -> verify UI in browser')
+
+    await expect(page.getByText(/Scaffolded a Next\.js \+ Docker workspace/).first()).toBeVisible()
+    await expect(page.getByText(/Ran terminal command on share/).first()).toBeVisible()
+    await expect(page.getByText(/HTTP GET https:\/\/example\.com/).first()).toBeVisible()
+    await expect(page.getByText('I cannot connect to or mutate production data from a vague prompt.')).toBeVisible()
+
+    await context.close()
+})
+
+function expectedToolCompletionText(content: string) {
+    if (content.includes('"action":"scaffold_nextjs_docker"')) {
+        const projectName = content.match(/"projectName":"([^"]+)"/)?.[1]
+        return projectName ? `Scaffolded a Next.js + Docker workspace for ${projectName}. The workspace is attached and ready for follow-up edits.` : null
+    }
+
+    if (content.includes('"action":"create_project"')) {
+        const projectName = content.match(/"projectName":"([^"]+)"/)?.[1]
+        return projectName ? `Created project workspace for ${projectName}` : null
+    }
+
+    if (content.includes('"action":"run_terminal_command"')) {
+        const command = content.match(/"command":"([^"]+)"/)?.[1]
+        return command ? `Command: ${command}` : null
+    }
+
+    if (content.includes('"action":"http_request"')) {
+        const url = content.match(/"url":"([^"]+)"/)?.[1]
+        return url ? `HTTP GET ${url}` : null
+    }
+
+    return null
+}
