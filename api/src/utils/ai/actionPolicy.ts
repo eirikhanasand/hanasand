@@ -38,20 +38,12 @@ const SECRET_EXFIL_PATTERN = /\b(print|show|dump|cat|read|exfiltrate|send|displa
 const SECRET_COMMAND_PATTERN = /(^|\n)\s*(cat|printenv|env|grep|awk|sed|curl)\b[^\n]{0,100}\b(secret|secrets|token|tokens|password|passwords|api key|api keys|ssh key|private key|\.env|credentials)\b/i
 const PRODUCTION_DB_PATTERN = /\b(production|prod|live)\b[\s\S]{0,80}\b(database|db|postgres|mysql|redis|backup|backups|customer data)\b/i
 const BROAD_DELETE_PATTERN = /\b(rm\s+-rf|delete\s+(?:everything|all|the database|db|backups?|production|prod)|drop\s+(?:database|schema|table)|truncate\s+table|wipe|nuke|destroy)\b/i
+const DESTRUCTIVE_COMMAND_PATTERN = /(^|\n)\s*(rm\s+-rf|drop\s+(database|schema|table)|truncate\s+table|delete\s+from|terraform\s+destroy)\b/i
 const DESTRUCTIVE_METHODS = new Set(['DELETE', 'PATCH', 'PUT', 'POST'])
 
 let ensuredAuditTable = false
 
 export async function evaluateAgentActionPolicy(input: AgentPolicyInput): Promise<AgentPolicyDecision> {
-    const haystack = [
-        input.target,
-        input.method,
-        input.path,
-        input.prompt,
-        input.context,
-        input.content,
-        JSON.stringify(input.metadata || {}),
-    ].filter(Boolean).join('\n')
     const intentHaystack = [
         input.target,
         input.method,
@@ -72,11 +64,11 @@ export async function evaluateAgentActionPolicy(input: AgentPolicyInput): Promis
         return blocked('critical', 'The requested action would expose or print secret material.', 'Return only variable names, placeholders, or rotation instructions. Never echo secret values.')
     }
 
-    if (PRODUCTION_DB_PATTERN.test(haystack)) {
+    if (PRODUCTION_DB_PATTERN.test(intentHaystack)) {
         return blocked('critical', 'The requested action appears to write to production data or backups.', 'Use a read-only inspection, staging database, or dry-run migration plan with restore proof.')
     }
 
-    if (BROAD_DELETE_PATTERN.test(haystack)) {
+    if (BROAD_DELETE_PATTERN.test(intentHaystack) || DESTRUCTIVE_COMMAND_PATTERN.test(input.content || '')) {
         return blocked('critical', 'The requested action is a broad or irreversible delete.', 'Create a checkpoint, list exact targets, and provide a dry-run delete plan instead.')
     }
 

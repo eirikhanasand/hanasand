@@ -47,6 +47,11 @@ const cases: Case[] = [
         expected: 'allowed',
         input: { action: 'generated_tool_call', path: 'docs/security.md', content: 'Do not print secrets or ask users to paste tokens into support tickets.' },
     },
+    {
+        name: 'allows safe production-readiness documentation',
+        expected: 'allowed',
+        input: { action: 'generated_tool_call', path: 'docs/production-readiness.md', content: 'Document production data backups, restore drills, and customer data handling. Do not run destructive commands.' },
+    },
 ]
 
 for (const testCase of cases) {
