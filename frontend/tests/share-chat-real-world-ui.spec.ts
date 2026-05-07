@@ -211,11 +211,11 @@ test('share chat keeps the mobile chat viewport unobscured by the explorer rail'
     })
 
     await page.goto('/s/app-mobile-chat-861?new=1')
-    await expect(page.getByRole('button', { name: 'Files' })).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Open file explorer' })).toHaveCount(1)
     await page.getByRole('button', { name: 'Open workspace chat' }).click()
 
     await expect(page.getByText('Chat workspace')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Files' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Open file explorer' })).toHaveCount(0)
     await expect(page.getByPlaceholder('Ask Hanasand AI to change this project...')).toBeVisible()
     await expect(page.getByText('No auto-apply')).toBeVisible()
 })
