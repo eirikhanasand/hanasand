@@ -19,6 +19,7 @@ struct HanasandDesktopSettings: Codable, Equatable {
     var cdnBaseURL = "https://cdn.hanasand.com/api"
     var authToken = ""
     var userID = ""
+    var impersonationToken = ""
     var impersonatingUserID = ""
     var impersonatingUserName = ""
     var codexAPIPath = "/tools/ai"
@@ -41,6 +42,7 @@ struct HanasandDesktopSettings: Codable, Equatable {
         case cdnBaseURL
         case authToken
         case userID
+        case impersonationToken
         case impersonatingUserID
         case impersonatingUserName
         case codexAPIPath
@@ -67,6 +69,7 @@ struct HanasandDesktopSettings: Codable, Equatable {
         cdnBaseURL = try container.decodeIfPresent(String.self, forKey: .cdnBaseURL) ?? cdnBaseURL
         authToken = try container.decodeIfPresent(String.self, forKey: .authToken) ?? authToken
         userID = try container.decodeIfPresent(String.self, forKey: .userID) ?? userID
+        impersonationToken = try container.decodeIfPresent(String.self, forKey: .impersonationToken) ?? impersonationToken
         impersonatingUserID = try container.decodeIfPresent(String.self, forKey: .impersonatingUserID) ?? impersonatingUserID
         impersonatingUserName = try container.decodeIfPresent(String.self, forKey: .impersonatingUserName) ?? impersonatingUserName
         codexAPIPath = try container.decodeIfPresent(String.self, forKey: .codexAPIPath) ?? codexAPIPath

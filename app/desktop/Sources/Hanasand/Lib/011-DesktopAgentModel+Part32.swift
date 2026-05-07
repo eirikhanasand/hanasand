@@ -55,17 +55,65 @@ extension DesktopAgentModel {
         Task { await loadSelectedUserRoles() }
     }
 
+    struct DesktopImpersonationStartPayload: Encodable {
+        let target_id: String
+    }
+
+    struct DesktopImpersonationTarget: Decodable {
+        let id: String
+        let name: String?
+    }
+
+    struct DesktopImpersonationSession: Decodable {
+        let target: DesktopImpersonationTarget
+    }
+
+    struct DesktopImpersonationStartResponse: Decodable {
+        let token: String
+        let session: DesktopImpersonationSession
+    }
+
     func impersonateDashboardUser(_ user: DashboardUser) {
         guard user.id != userIDForRequests else { return }
-        settings.impersonatingUserID = user.id
-        settings.impersonatingUserName = user.displayName
-        nativeDashboardStatus = "Impersonating \(user.id)"
-        append(meta: "Impersonation", body: "Viewing portal as \(user.id).", kind: .change)
-        Task { await loadNativeDashboardData() }
+        Task {
+            do {
+                let body = try JSONEncoder().encode(DesktopImpersonationStartPayload(target_id: user.id))
+                let response: DesktopImpersonationStartResponse = try await requestJSON(
+                    settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("impersonation/start"),
+                    method: "POST",
+                    body: body,
+                    authenticated: true
+                )
+                settings.impersonationToken = response.token
+                settings.impersonatingUserID = response.session.target.id
+                settings.impersonatingUserName = response.session.target.name ?? user.displayName
+                nativeDashboardStatus = "Impersonating \(response.session.target.id)"
+                append(meta: "Impersonation", body: "Viewing portal as \(response.session.target.id).", kind: .change)
+                await loadNativeDashboardData()
+            } catch {
+                nativeDashboardStatus = "Impersonation failed"
+                append(meta: "Impersonation failed", body: error.localizedDescription, kind: .error)
+            }
+        }
     }
 
     func returnToOwnDashboardView() {
         let target = settings.impersonatingUserID
+        let token = settings.impersonationToken
+        let actorID = userIDForRequests
+        let authToken = authTokenForRequests
+        if !token.isEmpty {
+            Task {
+                var request = URLRequest(url: settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("impersonation"))
+                request.httpMethod = "DELETE"
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+                request.setValue(actorID, forHTTPHeaderField: "id")
+                request.setValue(token, forHTTPHeaderField: "x-impersonation-token")
+                _ = try? await URLSession.shared.data(for: request)
+            }
+        }
+        settings.impersonationToken = ""
         settings.impersonatingUserID = ""
         settings.impersonatingUserName = ""
         nativeDashboardStatus = target.isEmpty ? "Viewing own account" : "Returned from \(target)"

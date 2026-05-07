@@ -14,6 +14,7 @@ export default async function Page() {
     const token = Cookies.get('access_token')?.value
     const impersonatingId = Cookies.get('impersonating_id')?.value || Headers.get('x-impersonating-id') || ''
     const impersonatingName = Cookies.get('impersonating_name')?.value || Headers.get('x-impersonating-name') || ''
+    const impersonationToken = Cookies.get('impersonation_token')?.value || Headers.get('x-impersonation-token') || ''
 
     if (!name || !id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
@@ -22,7 +23,7 @@ export default async function Page() {
     const displayName = impersonatingName || impersonatingId || name
     const effectiveId = impersonatingId || id
     const text = timeBasedGreeting({ name: displayName })
-    const vms = await getVMs(effectiveId, token, id, impersonatingId)
+    const vms = await getVMs(effectiveId, token, id, impersonationToken)
 
     return (
         <DashboardPage>

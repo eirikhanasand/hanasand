@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, BrainCircuit, CalendarClock, Database, DatabaseBackup, FileWarning, Gauge, Inbox, LayoutDashboard, Network, NotebookText, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
+import { AlarmClockCheck, BrainCircuit, CalendarClock, Database, DatabaseBackup, FileWarning, Gauge, Inbox, LayoutDashboard, Network, NotebookText, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -53,6 +53,7 @@ export default function DashboardSidebar({
         items.splice(6, 0, { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> })
         items.splice(8, 0, { href: '/dashboard/system/rate-limits', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> })
         items.splice(9, 0, { href: '/dashboard/system/cron', label: 'Cron Jobs', icon: <CalendarClock className='h-4 w-4' /> })
+        items.splice(10, 0, { href: '/dashboard/system/impersonation', label: 'Impersonation', icon: <UserRoundCheck className='h-4 w-4' /> })
         items.push({ href: '/dashboard/management', label: 'Management', icon: <ShieldCheck className='h-4 w-4' /> })
     }
 

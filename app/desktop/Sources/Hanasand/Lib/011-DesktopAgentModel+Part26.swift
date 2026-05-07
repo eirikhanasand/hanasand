@@ -58,6 +58,7 @@ extension DesktopAgentModel {
 
             settings.authToken = token
             settings.userID = decoded?.id ?? username
+            settings.impersonationToken = ""
             settings.impersonatingUserID = ""
             settings.impersonatingUserName = ""
             loginUsername = ""
@@ -96,6 +97,7 @@ extension DesktopAgentModel {
             clearPendingDeletionState()
             settings.authToken = token
             settings.userID = decoded?.id ?? userID
+            settings.impersonationToken = ""
             settings.impersonatingUserID = ""
             settings.impersonatingUserName = ""
             loginUsername = ""
@@ -141,6 +143,7 @@ extension DesktopAgentModel {
     func clearLocalHanasandSession() {
         settings.authToken = ""
         settings.userID = ""
+        settings.impersonationToken = ""
         settings.impersonatingUserID = ""
         settings.impersonatingUserName = ""
         loginUsername = ""

@@ -28,16 +28,14 @@ export default async function authorizedUserHandler(req: FastifyRequest, res: Fa
     const token = authHeader.split(' ')[1]
 
     try {
-        const impersonating = req.headers['x-impersonate-id']
-        const session = impersonating
-            ? null
-            : await validateSession({ id, token })
+        const session = await validateSession({ id, token })
         if (!session) {
             const auth = await tokenWrapper(req, res)
             if (!auth.valid || auth.id !== id) {
                 const status = auth.error === 'Impersonated user not found.'
                     ? 404
                     : auth.error === 'Only admins can impersonate users.'
+                        || auth.error === 'Return to own view before changing account, security, or system settings.'
                         ? 403
                         : 401
                 return res.status(status).send({ error: auth.error || 'Invalid token.' })

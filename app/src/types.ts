@@ -24,6 +24,7 @@ export type AppSettings = {
     cdnBaseUrl: string
     authToken: string
     userId: string
+    impersonationToken: string
     impersonatingUserId: string
     impersonatingUserName: string
     codexUrl: string
