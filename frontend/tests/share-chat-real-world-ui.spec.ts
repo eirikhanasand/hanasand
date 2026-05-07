@@ -101,6 +101,29 @@ const toolFrictionStories: AppStory[] = [
     { id: 880, prompt: 'the user is lost. show what happens next.', expected: 'next-steps' },
 ]
 
+const contextBudgetStories: AppStory[] = [
+    { id: 881, prompt: 'this is too much, make the page obvious', expected: 'obvious' },
+    { id: 882, prompt: 'client asked "more premium" and left', expected: 'premium' },
+    { id: 883, prompt: 'small clinic, but dont collect anything weird', expected: 'clinic' },
+    { id: 884, prompt: 'enterprise buyer skim only, make it survive', expected: 'enterprise-skim' },
+    { id: 885, prompt: 'my cousin needs a portfolio by tonight', expected: 'portfolio' },
+    { id: 886, prompt: 'make the home page stop wasting words', expected: 'concise-home' },
+    { id: 887, prompt: 'founder is panicking, calm landing page', expected: 'calm-launch' },
+    { id: 888, prompt: 'we got burned by hidden changes before', expected: 'visible-changes' },
+    { id: 889, prompt: 'nonprofit page, honest ask, no fake donate', expected: 'nonprofit' },
+    { id: 890, prompt: 'security vendor page. no badges we dont have', expected: 'vendor-security' },
+    { id: 891, prompt: 'make it clear what I do. I fix bikes.', expected: 'bike-repair' },
+    { id: 892, prompt: 'law office but careful, no advice', expected: 'law-office' },
+    { id: 893, prompt: 'architect site. designer will judge it.', expected: 'architect' },
+    { id: 894, prompt: 'ops wants proof, users want simple', expected: 'ops-proof' },
+    { id: 895, prompt: 'make it good for a boring B2B thing', expected: 'b2b' },
+    { id: 896, prompt: 'course page. no fake enrollment.', expected: 'course' },
+    { id: 897, prompt: 'pricing page but we dont know prices yet', expected: 'pricing' },
+    { id: 898, prompt: 'status page copy, no fake uptime', expected: 'status-copy' },
+    { id: 899, prompt: 'portfolio for a photographer, no gallery backend', expected: 'photographer' },
+    { id: 900, prompt: 'make next step dead obvious for a total beginner', expected: 'beginner-next-step' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -502,4 +525,94 @@ test('share chat avoids bloat and exposes review controls for tool-friction stor
     }
 
     expect(handledPrompts).toHaveLength(toolFrictionStories.length)
+})
+
+test('share chat keeps context lean while resolving context-budget stories', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-context-budget-story',
+                alias: body.path || body.name || body.id || 'app-context-budget-story',
+                path: body.path || body.name || body.id || 'app-context-budget-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-context-budget-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
+        const matchingStory = contextBudgetStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        expect(body.maxTokens).toBeLessThanOrEqual(2200)
+        expect(body.context?.length || 0).toBeLessThan(9_000)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Review the files, then apply.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Plain next step, careful scope, and no invented system behind it.</p></main> }`,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/decision.ts',
+                        content: `export const decision = { changed: '${matchingStory!.expected}', mode: 'lean context', apply: 'manual' }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of contextBudgetStories) {
+        await page.goto(`/s/app-context-budget-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+        await expect(page.getByText('No auto-apply')).toBeVisible()
+
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Review the files, then apply.`)).toBeVisible({ timeout: 2200 })
+        await expect(page.getByText('2 pending changes')).toBeVisible()
+        await expect(page.getByText('Create app/page.tsx')).toBeVisible()
+        await expect(page.getByText('Create app/decision.ts')).toBeVisible()
+        await expect(page.getByText('lean context')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2200)
+    }
+
+    expect(handledPrompts).toHaveLength(contextBudgetStories.length)
 })

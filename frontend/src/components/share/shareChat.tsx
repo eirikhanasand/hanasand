@@ -72,7 +72,7 @@ export default function ShareChat({
     const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null)
     const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
-    const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 120), [tree])
+    const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
     const canSend = input.trim().length > 0 && !loading && Boolean(share)
     const phaseLabel = loading
         ? elapsedSeconds < 4
@@ -123,7 +123,7 @@ export default function ShareChat({
                 body: JSON.stringify({
                     prompt: buildPrompt(trimmed, share, editingContent, treePaths),
                     context: buildContext(share, editingContent, treePaths, messages),
-                    maxTokens: 2600,
+                    maxTokens: 2200,
                 }),
             })
             const data = await response.json().catch(() => ({}))
@@ -415,7 +415,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
         `Current share: ${share.id} (${share.path})`,
         treePaths.length ? `Project files:\n${treePaths.join('\n')}` : null,
-        `Current file content:\n${editingContent.slice(0, 16000)}`,
+        `Current file content:\n${editingContent.slice(0, 12000)}`,
         `User request:\n${prompt}`,
     ].filter(Boolean).join('\n\n')
 }
@@ -424,8 +424,8 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
         tree: treePaths,
-        currentContent: editingContent.slice(0, 8000),
-        recentMessages: messages.slice(-4).map(({ role, content }) => ({ role, content })),
+        currentContent: editingContent.slice(0, 6000),
+        recentMessages: messages.slice(-3).map(({ role, content }) => ({ role, content })),
     })
 }
 
