@@ -148,6 +148,8 @@ type PlainProjectState = {
     tone: 'neutral' | 'working' | 'attention' | 'success' | 'danger'
 }
 
+type ShareChatWorkflow = 'ask' | 'build'
+
 export default function ShareChat({
     share,
     setShare,
@@ -181,7 +183,8 @@ export default function ShareChat({
         : share
             ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
             : null
-    const composerHint = getComposerHint(input)
+    const activeWorkflow: ShareChatWorkflow = builderWorkflowOpen ? 'build' : 'ask'
+    const composerHint = activeWorkflow === 'build' ? getComposerHint(input) : null
     const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
     const canSend = hydrated && !loading && !pendingEditBlocksNewRun
     const proofApplyBlocked = pendingEdit?.status === 'pending' && Boolean(lastRun?.browserProofs) && lastRun?.status !== 'completed'
@@ -225,8 +228,12 @@ export default function ShareChat({
                     onClick: () => inputRef.current?.focus(),
                 }
                 : {
-                    label: messages.length ? 'Ask for another change' : 'Describe what to build',
-                    detail: 'Tell Hanasand what you want in everyday language.',
+                    label: activeWorkflow === 'build'
+                        ? messages.length ? 'Ask for another change' : 'Describe what to build'
+                        : messages.length ? 'Ask another question' : 'Ask about this project',
+                    detail: activeWorkflow === 'build'
+                        ? 'Tell Hanasand what you want in everyday language.'
+                        : 'Ask mode answers without changing files.',
                     disabled: loading,
                     onClick: () => inputRef.current?.focus(),
                 }
@@ -276,6 +283,7 @@ export default function ShareChat({
         setBrowserProofJobs([])
         const runStartedAt = Date.now()
         const proofRunId = randomId()
+        const workflow = activeWorkflow
         proofQueueRunRef.current = proofRunId
 
         try {
@@ -283,8 +291,8 @@ export default function ShareChat({
             const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
-                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null),
-                    context: buildContext(activeShare, editingContent, treePaths, messages, previewUrl || null, trimmed),
+                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null, workflow),
+                    context: buildContext(activeShare, editingContent, treePaths, messages, previewUrl || null, trimmed, workflow),
                     maxTokens: tokenCap,
                 }),
             })
@@ -297,6 +305,22 @@ export default function ShareChat({
                     url: data.target.url,
                     title: data.target.title || data.target.url,
                 })
+            }
+            if (workflow === 'ask') {
+                setMessages((current) => [...current, {
+                    id: randomId(),
+                    role: response.ok ? 'assistant' : 'tool',
+                    content: stripToolTags(rawContent).trim() || rawContent,
+                    createdAt: new Date().toISOString(),
+                }])
+                setLastRun({
+                    durationMs: Date.now() - runStartedAt,
+                    pendingChanges: 0,
+                    browserProofs: 0,
+                    tokenCap,
+                    status: response.ok ? 'completed' : 'error',
+                })
+                return
             }
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, activeShare, tree || null, editingContent)
@@ -583,7 +607,9 @@ export default function ShareChat({
                         <Sparkles className='h-4 w-4 text-[#f07d33]' />
                         AI assistant
                     </div>
-                    <p className='truncate text-xs text-bright/45'>{showBuilderWorkflow ? 'Optional builder workflow is open.' : 'Ask questions or open the builder when you want it.'}</p>
+                    <p className='truncate text-xs text-bright/45'>
+                        {showBuilderWorkflow ? 'Optional builder workflow is open.' : 'Ask mode will not change files.'}
+                    </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 p-1 text-[11px]'>
                     <button
@@ -734,8 +760,12 @@ export default function ShareChat({
                             <div className='mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-bright/7 text-bright/70'>
                                 <Sparkles className='h-5 w-5' />
                             </div>
-                            <h3 className='text-base font-semibold text-bright/90'>Ready when you are.</h3>
-                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>Ask normally, or switch to Build when you want Hanasand to prepare project changes.</p>
+                            <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build.' : 'Ask without changing files.'}</h3>
+                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>
+                                {showBuilderWorkflow
+                                    ? 'Describe the result you want, then review the summary before anything lands.'
+                                    : 'Use Ask for explanations. Switch to Build only when you want reviewable project changes.'}
+                            </p>
                         </div>
                     </div>
                 ) : messages.map((message) => {
@@ -872,7 +902,7 @@ export default function ShareChat({
                                 event.currentTarget.form?.requestSubmit()
                             }
                         }}
-                        placeholder='Describe what you want to build or change...'
+                        placeholder={showBuilderWorkflow ? 'Describe what you want to build or change...' : 'Ask about this project...'}
                         className='max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-bright outline-none placeholder:text-bright/35'
                         rows={1}
                     />
@@ -1111,7 +1141,7 @@ function beginnerActionFailure(error?: string) {
     return 'Review the summary and try the smallest safer change.'
 }
 
-function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null) {
+function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null, workflow: ShareChatWorkflow) {
     const shareEvidenceUrl = buildShareEvidenceUrl(share)
     const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
     const costControlMode = isCostControlPrompt(prompt)
@@ -1123,6 +1153,19 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
     ].filter(Boolean)
+    if (workflow === 'ask') {
+        return [
+            'You are Hanasand AI in Ask mode for the active /s share.',
+            'Ask mode is for normal developers and curious users who do not want AI edits.',
+            'Answer the user clearly and concisely. Do not emit Hanasand tool tags. Do not create, update, or delete files.',
+            'If the user asks you to change, build, publish, deploy, or rewrite the project, explain that they should switch to Build mode for reviewable changes.',
+            'Use beginner language for deploy, environment, domain, and build failures. Keep advanced terminology secondary and explain it briefly if needed.',
+            `Current share: ${share.id} (${share.path})`,
+            treePaths.length ? `Project files:\n${treePaths.join('\n')}` : null,
+            `Current file content:\n${editingContent.slice(0, 6000)}`,
+            `User request:\n${prompt}`,
+        ].filter(Boolean).join('\n\n')
+    }
     return [
         'You are Hanasand AI in a browser chat panel for the active /s share.',
         'Help like a coding agent. Be concise. For pure conversation, answer normally.',
@@ -1194,9 +1237,11 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     ].filter(Boolean).join('\n\n')
 }
 
-function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null, prompt: string) {
+function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null, prompt: string, workflow: ShareChatWorkflow) {
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
+        workflow,
+        writesAllowed: workflow === 'build',
         diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
         costControlMode: isCostControlPrompt(prompt),
         maintainabilityMode: isMaintainabilityPrompt(prompt),

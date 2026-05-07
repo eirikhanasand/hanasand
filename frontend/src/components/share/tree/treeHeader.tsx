@@ -15,8 +15,9 @@ type TreeHeaderProps = {
 
 export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCreatingNewFile, filter, setFilter }: TreeHeaderProps) {
     const { setOpenFolders } = useFolderState()
-    const buttonStyle = 'rounded-sm h-6 w-6 hover:bg-extralight/80 grid place-items-center cursor-pointer'
+    const buttonStyle = 'grid h-6 w-6 cursor-pointer place-items-center rounded-md text-bright/56 transition hover:bg-bright/8 hover:text-bright'
     const counts = countTreeItems(tree)
+    const canFoldTree = counts.folders > 0
 
     function handleClick(type: 'file' | 'folder') {
         setIsCreatingNewFile(prev => prev === type ? null : type)
@@ -31,7 +32,7 @@ export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCr
     }
 
     return (
-        <div className='rounded-md bg-light p-1 px-2'>
+        <div className='rounded-md p-1 px-2'>
             <div className='flex w-full items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <h1 className='truncate text-sm text-bright/80'>{share.alias}</h1>
@@ -41,22 +42,26 @@ export default function TreeHeader({ share, tree, refreshing, onRefresh, setIsCr
                 </div>
                 <div className='flex shrink-0 gap-1'>
                     <button type='button' aria-label='Refresh file tree' onClick={onRefresh} disabled={refreshing} className={buttonStyle}>
-                        <RefreshCw className={`h-4 w-4 stroke-bright/80 ${refreshing ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     </button>
-                    <button type='button' aria-label='Expand all folders' onClick={expandAll} className={buttonStyle}>
-                        <Maximize2 className='h-4 w-4 stroke-bright/80' />
-                    </button>
-                    <button type='button' aria-label='Collapse all folders' onClick={collapseAll} className={buttonStyle}>
-                        <Minimize2 className='h-4 w-4 stroke-bright/80' />
-                    </button>
+                    {canFoldTree ? (
+                        <>
+                            <button type='button' aria-label='Expand all folders' onClick={expandAll} className={buttonStyle}>
+                                <Maximize2 className='h-4 w-4' />
+                            </button>
+                            <button type='button' aria-label='Collapse all folders' onClick={collapseAll} className={buttonStyle}>
+                                <Minimize2 className='h-4 w-4' />
+                            </button>
+                        </>
+                    ) : null}
                 </div>
             </div>
             <div className='mt-1 flex justify-end gap-1'>
                 <button type='button' aria-label='Create file' onClick={() => handleClick('file')} className={buttonStyle}>
-                    <FilePlus className='stroke-bright/80 w-4 h-4' />
+                    <FilePlus className='h-4 w-4' />
                 </button>
                 <button type='button' aria-label='Create folder' onClick={() => handleClick('folder')} className={buttonStyle}>
-                    <FolderPlus className='stroke-bright/80 w-4 h-4' />
+                    <FolderPlus className='h-4 w-4' />
                 </button>
             </div>
             <input

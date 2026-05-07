@@ -79,6 +79,11 @@ export function useShareCodeSocket({
             return
         }
 
+        if (share) {
+            setError(null)
+            return
+        }
+
         async function fetchShareState() {
             try {
                 const userId = getCookie('id') ?? undefined
@@ -99,7 +104,7 @@ export function useShareCodeSocket({
         }
 
         fetchShareState()
-    }, [enabled, id, setEditingContent, setError, setShare])
+    }, [enabled, id, setEditingContent, setError, setShare, share])
 
     useEffect(() => {
         if (!enabled || !shareId) {

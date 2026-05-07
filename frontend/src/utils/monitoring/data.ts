@@ -22,7 +22,7 @@ export async function triggerVulnerabilityScan() {
 }
 
 export async function getTrafficDomains() {
-    return await requestService<TrafficDomains>('beekeeper', 'traffic/domains')
+    return await requestService<TrafficDomains>('cdn', 'traffic/domains')
 }
 
 export async function getTrafficMetrics(domain?: string) {
@@ -31,7 +31,7 @@ export async function getTrafficMetrics(domain?: string) {
         params.set('domain', domain)
     }
 
-    return await requestService<TrafficMetrics>('beekeeper', `traffic/metrics?${params.toString()}`)
+    return await requestService<TrafficMetrics>('cdn', `traffic/metrics?${params.toString()}`)
 }
 
 export async function getTrafficRecords(domain?: string, limit = 12, page = 1) {
@@ -43,7 +43,7 @@ export async function getTrafficRecords(domain?: string, limit = 12, page = 1) {
         params.set('domain', domain)
     }
 
-    return await requestService<TrafficRecords>('beekeeper', `traffic/records?${params.toString()}`)
+    return await requestService<TrafficRecords>('cdn', `traffic/records?${params.toString()}`)
 }
 
 export async function getMonitoringOverview(): Promise<MonitoringOverview> {

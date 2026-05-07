@@ -3,10 +3,10 @@
 import config from '@/config'
 import { cookies } from 'next/headers'
 
-type ServiceName = 'beekeeper' | 'internal'
+type ServiceName = 'cdn' | 'internal'
 
 function getBaseUrl(service: ServiceName) {
-    return service === 'beekeeper' ? config.url.beekeeper : config.url.internal
+    return service === 'cdn' ? config.url.cdn : config.url.internal
 }
 
 export async function requestService<T>(service: ServiceName, path: string, init?: RequestInit): Promise<T | string> {

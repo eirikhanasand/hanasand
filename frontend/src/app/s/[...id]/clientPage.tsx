@@ -142,7 +142,8 @@ export default function ClientPage({
         }
 
         hasCreatedWorkspace.current = true
-        setWorkspaceCreated(true)
+        setWorkspaceCreated(false)
+        setSaveState('saving')
 
         async function createWorkspace() {
             const token = getCookie('access_token')
@@ -162,11 +163,17 @@ export default function ClientPage({
             if (!createdShare) {
                 hasCreatedWorkspace.current = false
                 setWorkspaceCreated(false)
+                setSaveState('queued')
                 setError('Unable to save this workspace yet. Your editor stays open so you can retry.')
                 return
             }
 
             setShare(createdShare)
+            if ('tree' in createdShare && Array.isArray(createdShare.tree)) {
+                setWorkspaceTree(createdShare.tree)
+            }
+            setWorkspaceCreated(true)
+            setSaveState('saved')
             if (replaceUrlOnCreate) {
                 window.history.replaceState(window.history.state, '', `/s/${id}${chatOpen ? '?chat=1' : ''}`)
             }
