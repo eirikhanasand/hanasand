@@ -76,7 +76,33 @@ type BrowserEvidence = {
     }
     consoleMessages?: string[]
     pageErrors?: string[]
+    quality?: BrowserQuality
     fetchedAt: string
+}
+
+type BrowserQuality = {
+    accessibilityBasics?: {
+        hasTitle?: boolean
+        hasH1?: boolean
+        hasViewportMeta?: boolean
+        unlabeledControls?: string[]
+        imagesWithoutAlt?: string[]
+    }
+    brokenLinkBasics?: {
+        checked?: number
+        issues?: string[]
+    }
+    criticalJourneySignals?: {
+        forms?: number
+        buttons?: number
+        auth?: boolean
+        checkout?: boolean
+        booking?: boolean
+        dashboardCrud?: boolean
+        liveDataClaim?: boolean
+        sampleDataClaim?: boolean
+    }
+    notVerified?: string[]
 }
 
 type RunSummary = {
@@ -85,6 +111,28 @@ type RunSummary = {
     browserProofs: number
     tokenCap: number
     status: 'completed' | 'error' | 'queued'
+}
+
+type GateStatus = 'passed' | 'failed' | 'not_verified' | 'running'
+
+type QualityGate = {
+    id: string
+    label: string
+    status: GateStatus
+    detail: string
+}
+
+type AcceptanceCriterion = {
+    id: string
+    label: string
+    reason: string
+}
+
+type QualityReport = {
+    criteria: AcceptanceCriterion[]
+    gates: QualityGate[]
+    notVerified: string[]
+    fakeSuccessWarnings: string[]
 }
 
 type BrowserProofJob = {
@@ -114,6 +162,7 @@ export default function ShareChat({
     const [lastRun, setLastRun] = useState<RunSummary | null>(null)
     const [lastBrowserCalls, setLastBrowserCalls] = useState<ToolCall[]>([])
     const [browserProofJobs, setBrowserProofJobs] = useState<BrowserProofJob[]>([])
+    const [qualityReport, setQualityReport] = useState<QualityReport | null>(null)
     const [retryingProof, setRetryingProof] = useState(false)
     const [hydrated, setHydrated] = useState(false)
     const proofQueueRunRef = useRef<string | null>(null)
@@ -182,6 +231,7 @@ export default function ShareChat({
         setStartedAt(Date.now())
         setPendingEdit(null)
         setLastRun(null)
+        setQualityReport(null)
         setBrowserProofJobs([])
         const runStartedAt = Date.now()
         const proofRunId = randomId()
@@ -209,7 +259,8 @@ export default function ShareChat({
             }
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, activeShare, tree || null, editingContent)
-            const browserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
+            const requestedBrowserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
+            const browserCalls = ensureBrowserProofCalls(requestedBrowserCalls, Boolean(pendingChanges.length), proofTarget?.url || null)
             const boundedBrowserCalls = browserCalls.slice(0, 3)
             const visibleContent = stripToolTags(rawContent).trim()
                 || (pendingChanges.length ? `Prepared ${pendingChanges.length} file change${pendingChanges.length === 1 ? '' : 's'}.` : rawContent)
@@ -228,6 +279,14 @@ export default function ShareChat({
                     status: 'pending',
                 })
             }
+            setQualityReport(buildQualityReport({
+                prompt: trimmed,
+                pendingChanges,
+                browserEvidence: [],
+                browserJobs: boundedBrowserCalls.map((call) => ({ id: randomId(), url: call.url || 'about:blank', status: 'queued' as const })),
+                responseOk: response.ok,
+                runStatus: browserCalls.length ? 'queued' : response.ok ? 'completed' : 'error',
+            }))
             setLastBrowserCalls(boundedBrowserCalls)
             if (browserCalls.length) {
                 const jobs = boundedBrowserCalls.map((call) => ({
@@ -236,6 +295,15 @@ export default function ShareChat({
                     status: 'queued' as const,
                 }))
                 setBrowserProofJobs(jobs)
+                setQualityReport((current) => buildQualityReport({
+                    prompt: trimmed,
+                    pendingChanges,
+                    browserEvidence: [],
+                    browserJobs: jobs,
+                    responseOk: response.ok,
+                    runStatus: 'queued',
+                    previous: current,
+                }))
                 setMessages((current) => [...current, {
                     id: randomId(),
                     role: 'tool',
@@ -260,6 +328,15 @@ export default function ShareChat({
                     tokenCap,
                     status: response.ok ? 'completed' : 'error',
                 })
+                setQualityReport((current) => buildQualityReport({
+                    prompt: trimmed,
+                    pendingChanges,
+                    browserEvidence: [],
+                    browserJobs: [],
+                    responseOk: response.ok,
+                    runStatus: response.ok ? 'completed' : 'error',
+                    previous: current,
+                }))
             }
         } catch {
             setMessages((current) => [...current, {
@@ -275,6 +352,14 @@ export default function ShareChat({
                 tokenCap: 2200,
                 status: 'error',
             })
+            setQualityReport(buildQualityReport({
+                prompt: trimmed,
+                pendingChanges: [],
+                browserEvidence: [],
+                browserJobs: [],
+                responseOk: false,
+                runStatus: 'error',
+            }))
         } finally {
             setLoading(false)
             setStartedAt(null)
@@ -300,6 +385,15 @@ export default function ShareChat({
                 const issue = result.pageErrors?.filter(Boolean)[0]
                 hadIssues = hadIssues || Boolean(issue)
                 setBrowserEvidence((current) => [result, ...current].slice(0, 5))
+                setQualityReport((current) => buildQualityReport({
+                    prompt: current?.criteria.map((criterion) => criterion.label).join(' ') || '',
+                    pendingChanges: [],
+                    browserEvidence: [result],
+                    browserJobs: browserProofJobs,
+                    responseOk: true,
+                    runStatus: issue ? 'error' : 'completed',
+                    previous: current,
+                }))
                 setMessages((current) => [...current, {
                     id: randomId(),
                     role: 'tool',
@@ -322,6 +416,15 @@ export default function ShareChat({
             tokenCap,
             status: hadIssues || results.length !== calls.length ? 'error' : 'completed',
         })
+        setQualityReport((current) => buildQualityReport({
+            prompt: current?.criteria.map((criterion) => criterion.label).join(' ') || '',
+            pendingChanges: [],
+            browserEvidence: results,
+            browserJobs: [],
+            responseOk: true,
+            runStatus: hadIssues || results.length !== calls.length ? 'error' : 'completed',
+            previous: current,
+        }))
     }
 
     function readSubmittedPrompt(form?: HTMLFormElement) {
@@ -509,6 +612,10 @@ export default function ShareChat({
                         </div>
                     </div>
                 </div>
+            ) : null}
+
+            {qualityReport ? (
+                <QualityGatePanel report={qualityReport} />
             ) : null}
 
             {proofTarget?.url ? (
@@ -816,6 +923,12 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, request browser evidence using the best target above, for example:',
         `<hanasand-tool>{"action":"browser_task","url":"${previewUrl || shareEvidenceUrl || 'https://hanasand.com/s'}","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>`,
         'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport proof.',
+        'Quality gates:',
+        '- Define acceptance criteria from the user request before claiming success.',
+        '- Treat build, smoke, browser proof, mobile viewport, accessibility basics, broken links, and critical journeys as separate gates.',
+        '- Say exactly what was not verified. Never turn a missing check into success wording.',
+        '- Prevent silent fake success: do not use fallback/sample/mock/demo data while claiming live production behavior.',
+        '- For forms, checkout, auth, booking, and dashboard CRUD, include a concrete critical journey test or state that it remains unverified.',
         diagnosticMode ? [
             'Deployment diagnostic mode:',
             '- For build failures, missing logs, env variable mismatch, preview vs production drift, or deploy queue/runtime issues, do not guess and do not edit first.',
@@ -1010,6 +1123,72 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
     )
 }
 
+function QualityGatePanel({ report }: { report: QualityReport }) {
+    const counts = {
+        passed: report.gates.filter((gate) => gate.status === 'passed').length,
+        failed: report.gates.filter((gate) => gate.status === 'failed').length,
+        running: report.gates.filter((gate) => gate.status === 'running').length,
+        notVerified: report.gates.filter((gate) => gate.status === 'not_verified').length,
+    }
+    return (
+        <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
+            <div className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-2 text-[11px] text-bright/62'>
+                <div className='flex flex-wrap items-center gap-1.5'>
+                    <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                    <span className='font-semibold text-bright/72'>Quality gates</span>
+                    <span className='rounded-full border border-emerald-300/15 px-2 py-0.5 text-emerald-100/62'>{counts.passed} passed</span>
+                    {counts.running ? <span className='rounded-full border border-amber-200/15 px-2 py-0.5 text-amber-50/70'>{counts.running} running</span> : null}
+                    {counts.failed ? <span className='rounded-full border border-red-300/15 px-2 py-0.5 text-red-100/70'>{counts.failed} failed</span> : null}
+                    <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/45'>{counts.notVerified} not verified</span>
+                </div>
+                <div className='grid gap-1 sm:grid-cols-2'>
+                    {report.gates.map((gate) => (
+                        <div key={gate.id} className='rounded-md border border-bright/8 bg-black/18 px-2 py-1.5'>
+                            <div className='flex items-center justify-between gap-2'>
+                                <span className='truncate font-medium text-bright/70'>{gate.label}</span>
+                                <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${
+                                    gate.status === 'passed'
+                                        ? 'border-emerald-300/15 text-emerald-100/62'
+                                        : gate.status === 'failed'
+                                            ? 'border-red-300/15 text-red-100/70'
+                                            : gate.status === 'running'
+                                                ? 'border-amber-200/15 text-amber-50/70'
+                                                : 'border-bright/8 text-bright/42'
+                                }`}>
+                                    {gate.status === 'not_verified' ? 'Not verified' : gate.status === 'running' ? 'Running' : gate.status === 'passed' ? 'Passed' : 'Failed'}
+                                </span>
+                            </div>
+                            <p className='mt-1 line-clamp-2 text-bright/42'>{gate.detail}</p>
+                        </div>
+                    ))}
+                </div>
+                <details className='rounded-md border border-bright/8 bg-black/18 px-2 py-1.5'>
+                    <summary className='cursor-pointer font-medium text-bright/70'>Acceptance criteria and unknowns</summary>
+                    <div className='mt-2 grid gap-2 sm:grid-cols-2'>
+                        <div>
+                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>Criteria</p>
+                            <ul className='mt-1 space-y-1 text-bright/58'>
+                                {report.criteria.map((criterion) => <li key={criterion.id}>{criterion.label}</li>)}
+                            </ul>
+                        </div>
+                        <div>
+                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>Not verified</p>
+                            <ul className='mt-1 space-y-1 text-bright/58'>
+                                {report.notVerified.map((item) => <li key={item}>{item}</li>)}
+                            </ul>
+                        </div>
+                    </div>
+                    {report.fakeSuccessWarnings.length ? (
+                        <div className='mt-2 rounded-md border border-amber-200/10 bg-amber-950/12 p-2 text-amber-50/70'>
+                            {report.fakeSuccessWarnings.join(' ')}
+                        </div>
+                    ) : null}
+                </details>
+            </div>
+        </div>
+    )
+}
+
 function EvidenceList({ title, items }: { title: string, items?: string[] }) {
     const visible = (items || []).filter(Boolean).slice(0, 4)
     return (
@@ -1020,6 +1199,176 @@ function EvidenceList({ title, items }: { title: string, items?: string[] }) {
             </ul>
         </div>
     )
+}
+
+function ensureBrowserProofCalls(calls: ToolCall[], hasPendingChanges: boolean, fallbackUrl: string | null): ToolCall[] {
+    if (calls.length || !hasPendingChanges || !fallbackUrl) {
+        return calls
+    }
+    return [{
+        action: 'browser_task',
+        url: fallbackUrl,
+        captureScreenshot: true,
+        timeoutMs: 16000,
+    }]
+}
+
+function buildQualityReport({
+    prompt,
+    pendingChanges,
+    browserEvidence,
+    browserJobs,
+    responseOk,
+    runStatus,
+    previous,
+}: {
+    prompt: string
+    pendingChanges: PendingShareChange[]
+    browserEvidence: BrowserEvidence[]
+    browserJobs: BrowserProofJob[]
+    responseOk: boolean
+    runStatus: 'completed' | 'error' | 'queued'
+    previous?: QualityReport | null
+}): QualityReport {
+    const criteria = previous?.criteria?.length ? previous.criteria : acceptanceCriteriaForPrompt(prompt)
+    const latestEvidence = browserEvidence[0]
+    const quality = latestEvidence?.quality
+    const a11y = quality?.accessibilityBasics
+    const broken = quality?.brokenLinkBasics
+    const journey = quality?.criticalJourneySignals
+    const proofRunning = browserJobs.some((job) => job.status === 'queued' || job.status === 'running') || runStatus === 'queued'
+    const pageErrors = browserEvidence.flatMap((evidence) => evidence.pageErrors || []).filter(Boolean)
+    const content = pendingChanges.map((change) => change.content).join('\n')
+    const fakeSuccessWarnings = fakeSuccessWarningsFor(content, quality)
+    const gates: QualityGate[] = [
+        {
+            id: 'acceptance',
+            label: 'Acceptance criteria',
+            status: criteria.length ? 'passed' : 'failed',
+            detail: criteria.length ? `${criteria.length} criteria defined from the request.` : 'No criteria were derived from the request.',
+        },
+        {
+            id: 'build',
+            label: 'Build output',
+            status: 'not_verified',
+            detail: 'No backend build runner is attached to this share edit yet.',
+        },
+        {
+            id: 'smoke',
+            label: 'Smoke run',
+            status: responseOk ? 'passed' : 'failed',
+            detail: responseOk ? 'AI response and tool parsing completed.' : 'The AI response failed before a runnable smoke check.',
+        },
+        {
+            id: 'browser',
+            label: 'Browser proof',
+            status: proofRunning ? 'running' : pageErrors.length ? 'failed' : latestEvidence ? 'passed' : 'not_verified',
+            detail: latestEvidence ? `Fetched ${latestEvidence.url}.` : proofRunning ? 'Browser evidence is queued.' : 'No browser evidence has run for this response.',
+        },
+        {
+            id: 'mobile',
+            label: 'Mobile viewport',
+            status: a11y?.hasViewportMeta ? 'passed' : latestEvidence ? 'failed' : 'not_verified',
+            detail: latestEvidence ? (a11y?.hasViewportMeta ? 'Viewport meta is present.' : 'Viewport meta is missing or unknown.') : 'Mobile rendered viewport was not checked.',
+        },
+        {
+            id: 'a11y',
+            label: 'Accessibility basics',
+            status: a11y ? basicA11yStatus(a11y) : 'not_verified',
+            detail: a11y ? basicA11yDetail(a11y) : 'Title, H1, labels, and image alt text were not checked.',
+        },
+        {
+            id: 'links',
+            label: 'Broken-link basics',
+            status: broken ? (broken.issues?.length ? 'failed' : 'passed') : 'not_verified',
+            detail: broken ? `${broken.checked || 0} links inspected; ${(broken.issues || []).length} obvious issue${(broken.issues || []).length === 1 ? '' : 's'}.` : 'Links were not inspected.',
+        },
+        {
+            id: 'critical-journeys',
+            label: 'Critical journeys',
+            status: criticalJourneyStatus(criteria, journey),
+            detail: criticalJourneyDetail(criteria, journey),
+        },
+    ]
+    return {
+        criteria,
+        gates,
+        notVerified: [...new Set([
+            ...gates.filter((gate) => gate.status === 'not_verified').map((gate) => gate.label),
+            ...(quality?.notVerified || []),
+        ])],
+        fakeSuccessWarnings,
+    }
+}
+
+function acceptanceCriteriaForPrompt(prompt: string): AcceptanceCriterion[] {
+    const lower = prompt.toLowerCase()
+    const criteria: AcceptanceCriterion[] = [
+        { id: 'request-match', label: 'Matches the requested use case', reason: 'The output must solve the user request, not a generic template.' },
+        { id: 'owned-files', label: 'Files are explicit and reviewable', reason: 'Users need to see what changed before trusting it.' },
+        { id: 'no-fake-success', label: 'No fake live data or swallowed errors', reason: 'Unverified integrations must stay visibly stubbed.' },
+    ]
+    if (/\b(form|lead|contact|signup|intake|support)\b/.test(lower)) criteria.push({ id: 'form-journey', label: 'Form validation and submit journey works', reason: 'Forms are common launch blockers.' })
+    if (/\b(checkout|payment|subscription|billing|invoice|cart)\b/.test(lower)) criteria.push({ id: 'checkout-journey', label: 'Checkout or billing journey has real failure states', reason: 'Payment paths cannot be cosmetic.' })
+    if (/\b(auth|login|session|password|account|permission)\b/.test(lower)) criteria.push({ id: 'auth-journey', label: 'Auth/session states are represented and testable', reason: 'Auth bugs create high support load.' })
+    if (/\b(book|booking|reservation|appointment|calendar|availability)\b/.test(lower)) criteria.push({ id: 'booking-journey', label: 'Booking flow covers availability and confirmation', reason: 'Booking UX must prove the primary task.' })
+    if (/\b(dashboard|crud|admin|table|records|edit|delete|archive)\b/.test(lower)) criteria.push({ id: 'dashboard-crud', label: 'Dashboard CRUD path is testable', reason: 'Operational users need create, read, update, and safe delete proof.' })
+    return criteria
+}
+
+function basicA11yStatus(a11y: NonNullable<BrowserQuality['accessibilityBasics']>): GateStatus {
+    return a11y.hasTitle && a11y.hasH1 && a11y.hasViewportMeta && !(a11y.unlabeledControls || []).length && !(a11y.imagesWithoutAlt || []).length
+        ? 'passed'
+        : 'failed'
+}
+
+function basicA11yDetail(a11y: NonNullable<BrowserQuality['accessibilityBasics']>) {
+    const issues = [
+        !a11y.hasTitle ? 'missing title' : null,
+        !a11y.hasH1 ? 'missing H1' : null,
+        !a11y.hasViewportMeta ? 'missing viewport' : null,
+        (a11y.unlabeledControls || []).length ? `${a11y.unlabeledControls?.length} unlabeled control${a11y.unlabeledControls?.length === 1 ? '' : 's'}` : null,
+        (a11y.imagesWithoutAlt || []).length ? `${a11y.imagesWithoutAlt?.length} image${a11y.imagesWithoutAlt?.length === 1 ? '' : 's'} without alt` : null,
+    ].filter(Boolean)
+    return issues.length ? issues.join(', ') : 'Title, H1, viewport, labels, and image alt basics passed.'
+}
+
+function criticalJourneyStatus(criteria: AcceptanceCriterion[], journey?: BrowserQuality['criticalJourneySignals']): GateStatus {
+    if (!journey) return 'not_verified'
+    const labels = criteria.map((criterion) => criterion.id)
+    const failed =
+        (labels.includes('form-journey') && !journey.forms)
+        || (labels.includes('checkout-journey') && !journey.checkout)
+        || (labels.includes('auth-journey') && !journey.auth)
+        || (labels.includes('booking-journey') && !journey.booking)
+        || (labels.includes('dashboard-crud') && !journey.dashboardCrud)
+    return failed ? 'failed' : 'passed'
+}
+
+function criticalJourneyDetail(criteria: AcceptanceCriterion[], journey?: BrowserQuality['criticalJourneySignals']) {
+    if (!journey) {
+        return 'Forms, checkout, auth, booking, and dashboard CRUD were not exercised.'
+    }
+    const expected = criteria
+        .filter((criterion) => ['form-journey', 'checkout-journey', 'auth-journey', 'booking-journey', 'dashboard-crud'].includes(criterion.id))
+        .map((criterion) => criterion.label)
+    return expected.length
+        ? `Expected: ${expected.join(', ')}. Signals: ${journey.forms || 0} form(s), ${journey.buttons || 0} button(s).`
+        : `No special critical journey requested; found ${journey.forms || 0} form(s) and ${journey.buttons || 0} button(s).`
+}
+
+function fakeSuccessWarningsFor(content: string, quality?: BrowserQuality) {
+    const warnings: string[] = []
+    if (/\b(live|real-time|realtime|production|connected|synced)\b/i.test(content) && /\b(mock|sample|demo|placeholder|fake|stub)\b/i.test(content)) {
+        warnings.push('Possible fake success: generated content mixes live/connected claims with mock or placeholder data.')
+    }
+    if (quality?.criticalJourneySignals?.liveDataClaim && quality.criticalJourneySignals.sampleDataClaim) {
+        warnings.push('Possible fake success: page copy suggests live data while also exposing sample/demo language.')
+    }
+    if (/\bcatch\s*\([^)]*\)\s*{\s*}\b|\bcatch\s*{\s*}\b/.test(content)) {
+        warnings.push('Possible swallowed error: generated code contains an empty catch block.')
+    }
+    return warnings
 }
 
 function emptyBrowserStructure() {

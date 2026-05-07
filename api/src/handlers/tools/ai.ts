@@ -171,7 +171,8 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
 }
 
 async function optionalToolAuth(req: FastifyRequest, res: FastifyReply) {
-    if (!req.headers.authorization) {
+    const authHeader = headerString(req.headers.authorization)
+    if (!authHeader || authHeader === 'Bearer ') {
         return { valid: false, id: null as string | null }
     }
 
