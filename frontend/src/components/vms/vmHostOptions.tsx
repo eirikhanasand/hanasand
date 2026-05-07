@@ -3,7 +3,7 @@
 import { Activity, ArrowLeftRight, Crown, Server } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
-import Notify from '@/components/notify/notify'
+import ErrorNotice from '@/components/error/errorNotice'
 import { failoverVm, updateHostFeatures } from '@/utils/vms/fetch/updateHostFeatures'
 
 type VMHostOptionsProps = {
@@ -86,6 +86,7 @@ export default function VMHostOptions({ boxStyle, boxTitleStyle, vm, onUpdate }:
             />
             {vm.failover_enabled && vm.failover_host && (
                 <button
+                    type='button'
                     onClick={runFailover}
                     disabled={loading === 'swap'}
                     className='h-9 rounded-lg border border-white/10 bg-white/4 px-3 text-left text-sm text-bright/75 transition hover:bg-white/7 disabled:cursor-wait disabled:opacity-55'
@@ -93,7 +94,7 @@ export default function VMHostOptions({ boxStyle, boxTitleStyle, vm, onUpdate }:
                     Fail over to {vm.failover_host}
                 </button>
             )}
-            <Notify fullWidth className='text-xs text-bright/82' color='bg-blue-500' background='bg-dark/80 border border-white/10' message={message} />
+            <ErrorNotice compact variant='info' message={message} />
         </section>
     )
 }
@@ -117,6 +118,7 @@ function FeatureToggle({
 }) {
     return (
         <button
+            type='button'
             onClick={onClick}
             disabled={loading || !premium}
             className='grid min-h-16 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/3 p-3 text-left transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60'

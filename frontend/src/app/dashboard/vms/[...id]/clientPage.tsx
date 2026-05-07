@@ -30,7 +30,7 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
     const [connection] = useState(serverConnection)
     const router = useRouter()
     const boxStyle = 'w-full rounded-xl border border-white/10 bg-white/[0.035] p-4'
-    const boxTitleStyle = 'text-base font-semibold text-bright'
+    const boxTitleStyle = 'text-base font-medium text-bright'
 
     async function handleRefresh() {
         const token = getCookie('access_token')
@@ -61,17 +61,16 @@ export default function VMClient({ vm: serverVM, details: serverDetails, metrics
             <div className='flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div>
                     <p className='text-[10px] font-semibold uppercase tracking-[0.28em] text-bright/32'>Virtual machine</p>
-                    <h1 className='mt-1.5 text-xl font-semibold text-bright sm:text-2xl'>{vm.name}</h1>
+                    <h1 className='mt-1.5 text-xl font-medium text-bright sm:text-2xl'>{vm.name}</h1>
                 </div>
-                <div
-                    className='group flex h-9 cursor-pointer items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-bright/70 hover:bg-white/10'
+                <button
+                    type='button'
+                    className='group flex h-9 items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-bright/70 transition hover:bg-white/10 hover:text-bright'
                     onClick={handleRefresh}
                 >
-                    <h1 className='text-sm'>Last checked {smallDate(vm.last_checked)}</h1>
-                    <button className='group-hover:cursor-pointer group-hover:text-bright'>
-                        <RefreshCcw className='w-4 h-4' />
-                    </button>
-                </div>
+                    <span className='text-sm'>Last checked {smallDate(vm.last_checked)}</span>
+                    <RefreshCcw className='w-4 h-4' />
+                </button>
             </div>
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
                 <VMOverview boxStyle={boxStyle} boxTitleStyle={boxTitleStyle} vm={vm} details={details} />
