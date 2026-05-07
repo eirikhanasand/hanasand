@@ -73,6 +73,21 @@ export default async function ensureSchema() {
         )
     `)
     await run(`
+        CREATE TABLE IF NOT EXISTS impersonation_events (
+            id BIGSERIAL PRIMARY KEY,
+            actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            method TEXT NOT NULL DEFAULT '',
+            path TEXT NOT NULL DEFAULT '',
+            ip TEXT NOT NULL DEFAULT '',
+            user_agent TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_actor_created ON impersonation_events(actor_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(target_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, target_id, method, path, created_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS password_reset_codes (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
