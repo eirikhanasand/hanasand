@@ -17,6 +17,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
     const keys = useKeyPress('shift')
     const router = useRouter()
     const { condition: error, setCondition: setError } = useClearStateAfter()
+    const [impersonationPending, setImpersonationPending] = useState(false)
 
     async function handleRoles(e: React.MouseEvent<HTMLDivElement, MouseEvent>) {
         e.stopPropagation()
@@ -35,11 +36,18 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
         }
     }
 
-    function handleImpersonate(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
+    async function handleImpersonate(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
         e.stopPropagation()
         e.preventDefault()
-        startImpersonating(user.id, user.name)
-        router.refresh()
+        setImpersonationPending(true)
+        try {
+            await startImpersonating(user.id, user.name)
+            router.refresh()
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Unable to start impersonation.')
+        } finally {
+            setImpersonationPending(false)
+        }
     }
 
     async function handleClick() {
@@ -79,10 +87,11 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                         type='button'
                         aria-label={`Impersonate ${user.id}`}
                         onClick={handleImpersonate}
+                        disabled={impersonationPending}
                         className='rounded-md border border-[#f07d33]/20 bg-[#f07d33]/10 px-2 py-1 text-[0.68rem] font-bold text-[#f07d33] transition hover:bg-[#f07d33]/16'
                         title={`Impersonate ${user.id}`}
                     >
-                        Impersonate
+                        {impersonationPending ? 'Checking' : 'Impersonate'}
                     </button>
                     <div
                         aria-label={`Manage roles for ${user.id}`}

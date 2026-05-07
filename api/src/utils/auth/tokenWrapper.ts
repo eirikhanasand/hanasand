@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { validateSession } from './session.ts'
+import run from '#db'
 
 type Valid = {
     valid: boolean
@@ -14,6 +15,11 @@ type RoleRow = {
     name?: string
 }
 
+type ImpersonationTarget = {
+    id: string
+    name: string
+}
+
 function headerValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] : value
 }
@@ -26,6 +32,39 @@ function isAdminRole(role: RoleRow) {
         || id === 'user_admin'
         || id.includes('admin')
         || name.includes('admin')
+}
+
+async function getImpersonationTarget(id: string): Promise<ImpersonationTarget | null> {
+    const result = await run(`
+        SELECT id, name
+        FROM users
+        WHERE id = $1
+          AND active IS TRUE
+          AND deletion_scheduled_at IS NULL
+        LIMIT 1
+    `, [id])
+    return result.rows[0] as ImpersonationTarget | undefined ?? null
+}
+
+async function auditImpersonationRequest(req: FastifyRequest, actorId: string, targetId: string) {
+    const method = req.method || ''
+    const path = (req.url || '').split('?')[0] || ''
+    const userAgent = String(req.headers['user-agent'] || '')
+    await run(`
+        INSERT INTO impersonation_events (actor_id, target_id, method, path, ip, user_agent)
+        SELECT $1, $2, $3, $4, $5, $6
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM impersonation_events
+            WHERE actor_id = $1
+              AND target_id = $2
+              AND method = $3
+              AND path = $4
+              AND created_at > NOW() - INTERVAL '5 minutes'
+        )
+    `, [actorId, targetId, method, path, req.ip, userAgent]).catch(error => {
+        req.log.warn({ error, actorId, targetId, method, path }, 'Failed to audit impersonation request')
+    })
 }
 
 /**
@@ -86,6 +125,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         }
 
         let effectiveId = session.user.id
+        let target: ImpersonationTarget | null = null
         let impersonating = false
         if (impersonateId && impersonateId !== session.user.id) {
             if (!session.roles.some(isAdminRole)) {
@@ -94,6 +134,16 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
                     id: session.user.id,
                     authenticatedId: session.user.id,
                     error: 'Only admins can impersonate users.'
+                }
+            }
+
+            target = await getImpersonationTarget(impersonateId)
+            if (!target) {
+                return {
+                    valid: false,
+                    id: session.user.id,
+                    authenticatedId: session.user.id,
+                    error: 'Impersonated user not found.'
                 }
             }
 
@@ -109,7 +159,11 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         res.header('x-access-token-expires-at', session.refreshed.expires_at)
         if (impersonating) {
             res.header('x-impersonating-id', effectiveId)
+            if (target?.name) {
+                res.header('x-impersonating-name', target.name)
+            }
             res.header('x-authenticated-id', session.user.id)
+            void auditImpersonationRequest(req, session.user.id, effectiveId)
         }
         return { valid: true, id: effectiveId, authenticatedId: session.user.id, impersonating }
     } catch (error) {
