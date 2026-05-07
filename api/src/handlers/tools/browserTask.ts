@@ -6,6 +6,9 @@ const MAX_EXCERPT_LENGTH = 5000
 const MAX_STRUCTURE_ITEMS = 20
 
 export default async function browserTaskTool(req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate')
+    res.header('Vary', 'Authorization, Cookie')
+
     const { valid, id: actorId } = await tokenWrapper(req, res)
     if (!valid) {
         return res.status(401).send({ error: 'Unauthorized.' })

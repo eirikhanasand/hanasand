@@ -14,6 +14,9 @@ type GeneratedProject = {
 }
 
 export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
+    res.header('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate')
+    res.header('Vary', 'Authorization, Cookie')
+
     const body = req.body as {
         action?: string
         prompt?: string
