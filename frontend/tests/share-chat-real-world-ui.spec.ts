@@ -239,6 +239,29 @@ const runSummaryStories: AppStory[] = [
     { id: 1120, prompt: 'are we still optimizing for real users', expected: 'real-user-run-proof' },
 ]
 
+const browserRetryStories: AppStory[] = [
+    { id: 1121, prompt: 'browser proof failed but dont lie', expected: 'browser-failed-honestly' },
+    { id: 1122, prompt: 'designer needs to know proof did not complete', expected: 'designer-proof-retry' },
+    { id: 1123, prompt: 'newbie asks did the check work', expected: 'newbie-check-failed' },
+    { id: 1124, prompt: 'corporate reviewer says failed proof must be visible', expected: 'corporate-failed-proof' },
+    { id: 1125, prompt: 'ops wants retry state when browser flakes', expected: 'ops-retry-state' },
+    { id: 1126, prompt: 'agency client should not see false completed', expected: 'agency-no-false-complete' },
+    { id: 1127, prompt: 'support asks if the browser tool timed out', expected: 'support-browser-timeout' },
+    { id: 1128, prompt: 'founder says stop pretending it worked', expected: 'founder-honest-failure' },
+    { id: 1129, prompt: 'accessibility proof failed, no claims', expected: 'a11y-no-claim' },
+    { id: 1130, prompt: 'pricing proof failed, mark retry', expected: 'pricing-retry-visible' },
+    { id: 1131, prompt: 'mobile proof did not load', expected: 'mobile-proof-retry' },
+    { id: 1132, prompt: 'compliance needs failure visible before apply', expected: 'compliance-failure-visible' },
+    { id: 1133, prompt: 'investor page check errored', expected: 'investor-check-error' },
+    { id: 1134, prompt: 'restaurant booking proof failed', expected: 'restaurant-proof-failed' },
+    { id: 1135, prompt: 'terminal tools hide failed checks', expected: 'terminal-failure-visible' },
+    { id: 1136, prompt: 'another agent needs to see retry needed', expected: 'handoff-retry-needed' },
+    { id: 1137, prompt: 'client asks if proof is reliable', expected: 'client-proof-unreliable' },
+    { id: 1138, prompt: 'designer says no green check if proof failed', expected: 'designer-no-green-check' },
+    { id: 1139, prompt: 'beginner asks what to do next after failure', expected: 'beginner-retry-next' },
+    { id: 1140, prompt: 'are we still honest enough for production', expected: 'production-honesty' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1341,4 +1364,114 @@ test('share page AI shows a bounded last-run receipt for ambiguous user requests
     }
 
     expect(handledPrompts).toHaveLength(runSummaryStories.length)
+})
+
+test('share page AI marks the last run as needing retry when browser proof fails', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-browser-retry-story',
+                alias: body.path || body.name || body.id || 'app-browser-retry-story',
+                path: body.path || body.name || body.id || 'app-browser-retry-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-browser-retry-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        expect(body.url).toContain('https://hanasand.com/s/app-browser-retry-')
+        await route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'Browser evidence timed out.' }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = browserRetryStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-browser-retry-${matchingStory!.id}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain('Use browser evidence before claiming a page works')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Browser proof must show retry if it fails.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Do not claim browser proof succeeded when it failed.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of browserRetryStories) {
+        const expectedUrl = `https://hanasand.com/s/app-browser-retry-${story.id}`
+        await page.goto(`/s/app-browser-retry-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Browser proof must show retry if it fails.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Last run', { exact: true })).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Needs retry', { exact: true })).toBeVisible()
+        await expect(page.getByText('Completed', { exact: true })).not.toBeVisible()
+        await expect(page.getByText('1 edit')).toBeVisible()
+        await expect(page.getByText('1 browser proof')).toBeVisible()
+        await expect(page.getByText('2.2k cap')).toBeVisible()
+        await expect(page.getByText('Browser proof: Untitled page')).toBeVisible()
+        await expect(page.getByText('1 issues')).toBeVisible()
+        await expect(page.getByText('Page issues: 1.')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(browserRetryStories.length)
 })

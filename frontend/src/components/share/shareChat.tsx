@@ -181,6 +181,8 @@ export default function ShareChat({
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, share, tree || null, editingContent)
             const browserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
+            let browserProofs = browserCalls.length
+            let browserProofHadIssues = false
             const visibleContent = stripToolTags(rawContent).trim()
                 || (pendingChanges.length ? `Prepared ${pendingChanges.length} file change${pendingChanges.length === 1 ? '' : 's'}.` : rawContent)
 
@@ -201,6 +203,9 @@ export default function ShareChat({
             if (browserCalls.length) {
                 const results = await Promise.all(browserCalls.slice(0, 3).map(runBrowserEvidenceTool))
                 const visibleResults = results.filter(Boolean) as BrowserEvidence[]
+                browserProofs = visibleResults.length
+                browserProofHadIssues = visibleResults.length !== browserCalls.slice(0, 3).length
+                    || visibleResults.some((result) => Boolean(result.pageErrors?.filter(Boolean).length))
                 if (visibleResults.length) {
                     setBrowserEvidence((current) => [...visibleResults, ...current].slice(0, 5))
                     setMessages((current) => [...current, ...visibleResults.map((result) => ({
@@ -214,9 +219,9 @@ export default function ShareChat({
             setLastRun({
                 durationMs: Date.now() - runStartedAt,
                 pendingChanges: pendingChanges.length,
-                browserProofs: browserCalls.length,
+                browserProofs,
                 tokenCap,
-                status: response.ok ? 'completed' : 'error',
+                status: response.ok && !browserProofHadIssues ? 'completed' : 'error',
             })
         } catch {
             setMessages((current) => [...current, {
