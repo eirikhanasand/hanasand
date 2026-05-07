@@ -34,19 +34,20 @@ async function createAiWorkspacePage({
     }>()
     const treeChildren = new Map<string, string[]>()
     let vmName = ''
+    const cookieDomain = new URL(baseURL || 'http://127.0.0.1:3000').hostname
 
     const context = await browser.newContext({ baseURL })
     await context.addCookies([
         {
             name: 'id',
             value: 'playwright-user',
-            domain: '127.0.0.1',
+            domain: cookieDomain,
             path: '/',
         },
         {
             name: 'access_token',
             value: encodeURIComponent('playwright-token'),
-            domain: '127.0.0.1',
+            domain: cookieDomain,
             path: '/',
         },
     ])
