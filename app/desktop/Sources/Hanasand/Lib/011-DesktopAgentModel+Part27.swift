@@ -127,8 +127,8 @@ extension DesktopAgentModel {
         if authenticated {
             request.setValue("Bearer \(authTokenForRequests)", forHTTPHeaderField: "Authorization")
             request.setValue(userIDForRequests, forHTTPHeaderField: "id")
-            if !impersonatingUserIDForRequests.isEmpty {
-                request.setValue(impersonatingUserIDForRequests, forHTTPHeaderField: "x-impersonate-id")
+            if !settings.impersonationToken.isEmpty {
+                request.setValue(settings.impersonationToken, forHTTPHeaderField: "x-impersonation-token")
             }
         }
         return request

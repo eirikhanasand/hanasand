@@ -73,8 +73,24 @@ export default async function ensureSchema() {
         )
     `)
     await run(`
+        CREATE TABLE IF NOT EXISTS impersonation_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            token_hash TEXT NOT NULL UNIQUE,
+            actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            reason TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL,
+            revoked_at TIMESTAMPTZ,
+            revoked_by TEXT REFERENCES users(id) ON DELETE SET NULL
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_actor_active ON impersonation_sessions(actor_id, expires_at DESC) WHERE revoked_at IS NULL')
+    await run('CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_target_created ON impersonation_sessions(target_id, created_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS impersonation_events (
             id BIGSERIAL PRIMARY KEY,
+            session_id UUID REFERENCES impersonation_sessions(id) ON DELETE SET NULL,
             actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             method TEXT NOT NULL DEFAULT '',
@@ -84,6 +100,7 @@ export default async function ensureSchema() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run('ALTER TABLE impersonation_events ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES impersonation_sessions(id) ON DELETE SET NULL')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_actor_created ON impersonation_events(actor_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(target_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, target_id, method, path, created_at DESC)')

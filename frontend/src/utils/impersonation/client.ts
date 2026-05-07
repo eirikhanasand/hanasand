@@ -4,8 +4,9 @@ import { getCookie, removeCookies, setCookie } from '@/utils/cookies/cookies'
 import config from '@/config'
 
 export function impersonationHeaders(): Record<string, string> {
-    const target = getCookie('impersonating_id')
-    return target ? { 'x-impersonate-id': target } : {}
+    const token = getCookie('impersonation_token')
+    if (token) return { 'x-impersonation-token': token }
+    return {}
 }
 
 export async function startImpersonating(id: string, name?: string | null) {
@@ -18,23 +19,45 @@ export async function startImpersonating(id: string, name?: string | null) {
         throw new Error('You are already viewing your own account.')
     }
 
-    const response = await fetch(`${config.url.api}/user/full/${encodeURIComponent(id)}`, {
+    const response = await fetch(`${config.url.api}/impersonation/start`, {
+        method: 'POST',
         headers: {
-            Authorization: `Bearer ${decodeURIComponent(token)}`,
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
             id: actorId,
-            'x-impersonate-id': id,
         },
+        body: JSON.stringify({ target_id: id }),
     })
     if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: string } | null
         throw new Error(body?.error || 'Unable to start impersonation.')
     }
 
-    const target = await response.json().catch(() => null) as { name?: string } | null
+    const payload = await response.json().catch(() => null) as {
+        token?: string
+        session?: { target?: { id?: string, name?: string } }
+    } | null
+    if (!payload?.token || !payload.session?.target?.id) {
+        throw new Error('Unable to start impersonation.')
+    }
+    setCookie('impersonation_token', payload.token, 1)
     setCookie('impersonating_id', id, 1)
-    setCookie('impersonating_name', target?.name || name || id, 1)
+    setCookie('impersonating_name', payload.session.target.name || name || id, 1)
 }
 
 export function stopImpersonating() {
-    removeCookies('impersonating_id', 'impersonating_name')
+    const actorId = getCookie('id')
+    const token = getCookie('access_token')
+    const impersonationToken = getCookie('impersonation_token')
+    if (actorId && token && impersonationToken) {
+        void fetch(`${config.url.api}/impersonation`, {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                id: actorId,
+                'x-impersonation-token': impersonationToken,
+            },
+        }).catch(() => {})
+    }
+    removeCookies('impersonation_token', 'impersonating_id', 'impersonating_name')
 }

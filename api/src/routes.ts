@@ -113,6 +113,7 @@ import deleteApiKeyHandler from './handlers/rateLimit/deleteApiKey.ts'
 import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/desktopAgent/presence.ts'
 import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
 import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
+import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
 
 /**
  * Defines the routes available in the API.
@@ -142,6 +143,12 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/auth/password-reset/complete', completePasswordReset)
     fastify.post('/auth/sessions/revoke', revokeSessions)
     fastify.delete('/auth/sessions/:token_id', revokeSession)
+
+    // Impersonation
+    fastify.get('/impersonation', getImpersonationCurrent)
+    fastify.post('/impersonation/start', startImpersonation)
+    fastify.delete('/impersonation', stopImpersonation)
+    fastify.get('/impersonation/events', getImpersonationEvents)
 
     // User handlers
     fastify.get('/users', getUsers)

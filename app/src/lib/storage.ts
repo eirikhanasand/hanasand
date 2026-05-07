@@ -14,6 +14,7 @@ export const defaultSettings: AppSettings = {
     cdnBaseUrl: 'https://cdn.hanasand.com/api',
     authToken: '',
     userId: '',
+    impersonationToken: '',
     impersonatingUserId: '',
     impersonatingUserName: '',
     codexUrl: 'https://hanasand.com/ai',

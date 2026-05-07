@@ -20,8 +20,8 @@ function headers(settings: AppSettings) {
         Authorization: settings.authToken ? `Bearer ${settings.authToken}` : '',
         id: settings.userId || '',
     }
-    if (settings.impersonatingUserId) {
-        next['x-impersonate-id'] = settings.impersonatingUserId
+    if (settings.impersonationToken) {
+        next['x-impersonation-token'] = settings.impersonationToken
     }
     return next
 }
@@ -1034,6 +1034,39 @@ export async function fetchDashboardUserRoles(settings: AppSettings, userId: str
     }
 
     return Array.isArray(body) ? body.map(normalizeUserRoleAssignment).filter(Boolean) as DashboardUserRoleAssignment[] : []
+}
+
+export async function startMobileImpersonation(settings: AppSettings, userId: string) {
+    requireAppAuth(settings, 'impersonate users')
+    if (userId === settings.userId) {
+        throw new Error('You are already viewing your own account.')
+    }
+
+    const response = await fetch(joinUrl(settings.apiBaseUrl, 'impersonation/start'), {
+        method: 'POST',
+        headers: headers({ ...settings, impersonationToken: '', impersonatingUserId: '', impersonatingUserName: '' }),
+        body: JSON.stringify({ target_id: userId }),
+    })
+    const body = await readJsonObject(response, {})
+    if (!response.ok) {
+        throw new Error(String(asRecord(body).error || 'Unable to start impersonation.'))
+    }
+    const record = asRecord(body)
+    const session = asRecord(record.session)
+    const target = asRecord(session.target)
+    return {
+        token: String(record.token || ''),
+        targetId: String(target.id || userId),
+        targetName: String(target.name || userId),
+    }
+}
+
+export async function stopMobileImpersonation(settings: AppSettings) {
+    if (!settings.impersonationToken || !settings.authToken || !settings.userId) return
+    await fetch(joinUrl(settings.apiBaseUrl, 'impersonation'), {
+        method: 'DELETE',
+        headers: headers(settings),
+    }).catch(() => {})
 }
 
 export async function setDashboardUserActive(settings: AppSettings, userId: string, active: boolean) {

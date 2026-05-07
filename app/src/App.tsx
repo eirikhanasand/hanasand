@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavigationContainer, DarkTheme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { Platform, Pressable, Text, View } from 'react-native'
+import { Alert, Platform, Pressable, Text, View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import * as SystemUI from 'expo-system-ui'
 import { AlarmClockCheck, Bot, Images, Mail, ScanLine, SlidersHorizontal, StickyNote, UserRound } from 'lucide-react-native'
@@ -22,7 +22,7 @@ import { AutomationsScreen } from './screens/AutomationsScreen'
 import { defaultSettings, loadAiChat, loadAuthenticatorEntries, loadMailboxConnections, loadSettings, saveAiChat, saveAuthenticatorEntries, saveMailboxConnections, saveSettings } from './lib/storage'
 import { getThemePalette, palette } from './theme/tokens'
 import { AppThemeProvider } from './theme/context'
-import { PendingDeletionError, refreshHanasandSession } from './lib/api'
+import { PendingDeletionError, refreshHanasandSession, startMobileImpersonation, stopMobileImpersonation } from './lib/api'
 
 const Tab = createBottomTabNavigator<RootTabParamList>()
 
@@ -126,6 +126,7 @@ export default function App() {
             ...settings!,
             authToken: session.token,
             userId: session.id,
+            impersonationToken: '',
             impersonatingUserId: '',
             impersonatingUserName: '',
         }
@@ -138,6 +139,7 @@ export default function App() {
             ...settings!,
             authToken: '',
             userId: '',
+            impersonationToken: '',
             impersonatingUserId: '',
             impersonatingUserName: '',
         }
@@ -146,18 +148,27 @@ export default function App() {
     }
 
     async function handleImpersonate(user: { id: string; name?: string }) {
-        const next = {
-            ...settings!,
-            impersonatingUserId: user.id,
-            impersonatingUserName: user.name || user.id,
+        try {
+            const session = await startMobileImpersonation(settings!, user.id)
+            const next = {
+                ...settings!,
+                impersonationToken: session.token,
+                impersonatingUserId: session.targetId,
+                impersonatingUserName: session.targetName,
+            }
+            await saveSettings(next)
+            setSettings(next)
+        } catch (error) {
+            console.warn(error)
+            Alert.alert('Impersonation failed', error instanceof Error ? error.message : 'Unable to start impersonation.')
         }
-        await saveSettings(next)
-        setSettings(next)
     }
 
     async function returnToOwnView() {
+        await stopMobileImpersonation(settings!)
         const next = {
             ...settings!,
+            impersonationToken: '',
             impersonatingUserId: '',
             impersonatingUserName: '',
         }

@@ -10,12 +10,16 @@ export async function proxy(req: NextRequest) {
     let validToken = false
     const requestHeaders = new Headers(req.headers)
     const theme = req.cookies.get('theme')?.value || 'dark'
+    const impersonationToken = req.cookies.get('impersonation_token')?.value || ''
     const impersonatingId = req.cookies.get('impersonating_id')?.value || ''
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
     const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
 
     requestHeaders.set('x-theme', theme)
     requestHeaders.set('x-current-path', path)
+    if (impersonationToken) {
+        requestHeaders.set('x-impersonation-token', impersonationToken)
+    }
     if (impersonatingId) {
         requestHeaders.set('x-impersonating-id', impersonatingId)
         requestHeaders.set('x-impersonating-name', impersonatingName || impersonatingId)
