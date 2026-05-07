@@ -5,8 +5,8 @@ import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
-import { ArrowUp, Check, Code2, ExternalLink, Gauge, Globe2, Loader2, RotateCw, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
-import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, ArrowUp, Check, ChevronRight, ClipboardCheck, ExternalLink, Eye, FileText, Gauge, Globe2, Loader2, RotateCw, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
+import { Dispatch, FormEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 
 type ShareChatProps = {
@@ -142,6 +142,12 @@ type BrowserProofJob = {
     error?: string
 }
 
+type PlainProjectState = {
+    label: 'Planning' | 'Editing' | 'Verifying' | 'Needs you' | 'Ready to publish' | 'Failed with fix'
+    detail: string
+    tone: 'neutral' | 'working' | 'attention' | 'success' | 'danger'
+}
+
 export default function ShareChat({
     share,
     setShare,
@@ -177,18 +183,50 @@ export default function ShareChat({
     const composerHint = getComposerHint(input)
     const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
     const canSend = hydrated && !loading && !pendingEditBlocksNewRun
-    const phaseLabel = loading
-        ? elapsedSeconds < 4
-            ? 'Scoping'
-            : elapsedSeconds < 14
-                ? 'Preparing'
-                : 'Still working'
-        : pendingEdit?.status === 'pending'
-            ? 'Review'
-            : pendingEdit?.status === 'applied'
-                ? 'Applied'
-                : 'Ready'
     const proofApplyBlocked = pendingEdit?.status === 'pending' && Boolean(lastRun?.browserProofs) && lastRun?.status !== 'completed'
+    const projectState = getPlainProjectState({
+        loading,
+        elapsedSeconds,
+        pendingStatus: pendingEdit?.status,
+        lastRunStatus: lastRun?.status,
+        qualityReport,
+        activeProofs: browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length,
+        proofApplyBlocked,
+    })
+    const primaryAction = pendingEdit?.status === 'pending'
+        ? proofApplyBlocked
+            ? {
+                label: retryingProof ? 'Checking again...' : 'Check page again',
+                detail: 'The page check must pass before these changes are applied.',
+                disabled: retryingProof || !lastBrowserCalls.length,
+                onClick: retryBrowserProof,
+            }
+            : {
+                label: 'Apply changes',
+                detail: `${pendingEdit.changes.length} reviewed change${pendingEdit.changes.length === 1 ? '' : 's'} ready for you.`,
+                disabled: false,
+                onClick: applyPendingEdit,
+            }
+        : pendingEdit?.status === 'error'
+            ? {
+                label: 'Review fix',
+                detail: pendingEdit.error || 'A change needs attention before it can be applied.',
+                disabled: false,
+                onClick: () => inputRef.current?.focus(),
+            }
+            : lastRun?.status === 'error'
+                ? {
+                    label: 'Ask for a fix',
+                    detail: 'The last check found a problem. Describe what you want changed or retry the page check.',
+                    disabled: false,
+                    onClick: () => inputRef.current?.focus(),
+                }
+                : {
+                    label: messages.length ? 'Ask for another change' : 'Describe what to build',
+                    detail: 'Tell Hanasand what you want in everyday language.',
+                    disabled: loading,
+                    onClick: () => inputRef.current?.focus(),
+                }
 
     useEffect(() => {
         setHydrated(true)
@@ -540,30 +578,49 @@ export default function ShareChat({
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
                         <Sparkles className='h-4 w-4 text-[#f07d33]' />
-                        Chat
+                        Build with Hanasand
                     </div>
-                    <p className='truncate text-xs text-bright/45'>{share?.path || 'Waiting for share...'}</p>
+                    <p className='truncate text-xs text-bright/45'>{share?.path || 'Tell us what you want to launch.'}</p>
                 </div>
-                <span className='rounded-full border border-bright/10 px-2 py-1 text-[10px] font-medium text-bright/45'>
-                    {treePaths.length ? `${treePaths.length} files` : 'Current file'}
+                <span className='hidden rounded-full border border-bright/10 px-2 py-1 text-[10px] font-medium text-bright/45 sm:inline-flex'>
+                    {projectState.label}
                 </span>
             </div>
-            <div className='grid grid-cols-3 gap-2 border-b border-bright/8 bg-black/12 px-3 py-2 text-[11px] text-bright/58'>
-                <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
-                    {loading ? <Loader2 className='h-3.5 w-3.5 shrink-0 animate-spin text-[#f07d33]' /> : <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />}
-                    <span className='truncate'>{phaseLabel}{loading ? ` · ${elapsedSeconds}s` : ''}</span>
+            <div className='border-b border-bright/8 bg-black/12 p-3'>
+                <div className={`grid gap-3 rounded-2xl border p-3 ${
+                    projectState.tone === 'success'
+                        ? 'border-emerald-300/15 bg-emerald-950/10'
+                        : projectState.tone === 'danger'
+                            ? 'border-red-300/15 bg-red-950/12'
+                            : projectState.tone === 'attention'
+                                ? 'border-amber-200/15 bg-amber-950/12'
+                                : 'border-bright/8 bg-bright/[0.035]'
+                } sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center`}>
+                    <div className='flex min-w-0 items-start gap-3'>
+                        <ProjectStateIcon state={projectState} loading={loading} />
+                        <div className='min-w-0'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <p className='text-sm font-semibold text-bright/88'>{projectState.label}</p>
+                                {loading ? <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/45'>{elapsedSeconds}s</span> : null}
+                            </div>
+                            <p className='mt-1 text-xs leading-5 text-bright/56'>{projectState.detail}</p>
+                        </div>
+                    </div>
+                    <button
+                        type='button'
+                        onClick={() => void primaryAction.onClick()}
+                        disabled={primaryAction.disabled}
+                        className='inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full bg-bright px-4 text-sm font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-45'
+                    >
+                        {primaryAction.label}
+                        <ChevronRight className='h-4 w-4' />
+                    </button>
+                    <p className='text-xs leading-5 text-bright/45 sm:col-span-2'>{primaryAction.detail}</p>
                 </div>
-                <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
-                    <Code2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                    <span className='truncate'>{treePaths.length ? `${treePaths.length} context files` : 'Current file context'}</span>
-                </div>
-                <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
-                    <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                    <span className='truncate'>
-                        {pendingEdit?.status === 'pending'
-                            ? `${pendingEdit.changes.length} pending change${pendingEdit.changes.length === 1 ? '' : 's'}`
-                            : 'No auto-apply'}
-                    </span>
+                <div className='mt-2 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
+                    <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label={pendingEdit?.status === 'pending' ? 'Changes waiting for review' : 'Project files'} value={pendingEdit?.status === 'pending' ? `${pendingEdit.changes.length}` : treePaths.length ? `${treePaths.length}` : '1'} />
+                    <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Page checks' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
+                    <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
                 </div>
             </div>
 
@@ -571,11 +628,10 @@ export default function ShareChat({
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
                     <div className='flex flex-wrap items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                        <span className='font-semibold text-bright/70'>Last run</span>
+                        <span className='font-semibold text-bright/70'>Last update</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{formatRunDuration(lastRun.durationMs)}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser proof{lastRun.browserProofs === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k cap</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} change{lastRun.pendingChanges === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} page check{lastRun.browserProofs === 1 ? '' : 's'}</span>
                         <span className={`rounded-full border px-2 py-0.5 ${
                             lastRun.status === 'completed'
                                 ? 'border-emerald-300/15 text-emerald-100/62'
@@ -583,7 +639,7 @@ export default function ShareChat({
                                     ? 'border-amber-200/15 text-amber-50/70'
                                     : 'border-red-300/15 text-red-100/70'
                         }`}>
-                            {lastRun.status === 'completed' ? 'Completed' : lastRun.status === 'queued' ? 'Proof queued' : 'Needs retry'}
+                            {lastRun.status === 'completed' ? 'Ready' : lastRun.status === 'queued' ? 'Checking' : 'Needs a fix'}
                         </span>
                     </div>
                 </div>
@@ -594,8 +650,8 @@ export default function ShareChat({
                     <div className='grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='font-semibold text-bright/70'>Verification queue</span>
-                            <span className='truncate text-bright/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} active</span>
+                            <span className='font-semibold text-bright/70'>Page checks</span>
+                            <span className='truncate text-bright/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} running</span>
                         </div>
                         <div className='flex min-w-0 flex-wrap gap-1.5'>
                             {browserProofJobs.map((job) => (
@@ -606,7 +662,7 @@ export default function ShareChat({
                                             ? 'border-red-300/15 text-red-100/70'
                                             : 'border-amber-200/15 text-amber-50/70'
                                 }`}>
-                                    {job.status === 'running' ? 'Running' : job.status === 'queued' ? 'Queued' : job.status === 'completed' ? 'Done' : 'Retry'} · {job.url}
+                                    {job.status === 'running' ? 'Checking' : job.status === 'queued' ? 'Waiting' : job.status === 'completed' ? 'Looks good' : 'Needs fix'}
                                 </span>
                             ))}
                         </div>
@@ -623,10 +679,10 @@ export default function ShareChat({
                     <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <Globe2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='shrink-0 font-semibold text-bright/68'>{proofTarget.label}</span>
-                            <span className='truncate font-mono text-bright/42'>{proofTarget.url}</span>
+                            <span className='shrink-0 font-semibold text-bright/68'>Page to check</span>
+                            <span className='truncate text-bright/42'>{proofTarget.label}</span>
                         </div>
-                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open current AI proof target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
+                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open page to check' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     </div>
@@ -639,14 +695,14 @@ export default function ShareChat({
                         <div className='flex min-w-0 items-start gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
                             <div className='min-w-0'>
-                                <p className='truncate font-semibold text-bright/72'>Browser proof: {browserEvidence[0].title || 'Untitled page'}</p>
-                                <p className='truncate font-mono text-bright/42'>{browserEvidence[0].url}</p>
+                                <p className='truncate font-semibold text-bright/72'>Page check: {browserEvidence[0].title || 'Untitled page'}</p>
+                                <p className='truncate text-bright/42'>A real browser opened the page and inspected the visible result.</p>
                             </div>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end'>
                             <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].structure?.headings?.length || 0} headings</span>
                             <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].pageErrors?.filter(Boolean).length || 0} issues</span>
-                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].screenshotPath ? 'Screenshot captured' : 'No screenshot'}</span>
+                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].screenshotPath ? 'Screenshot saved' : 'No screenshot'}</span>
                             <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/42'>{browserEvidence.length} saved</span>
                         </div>
                     </div>
@@ -661,24 +717,37 @@ export default function ShareChat({
                                 <Sparkles className='h-5 w-5' />
                             </div>
                             <h3 className='text-base font-semibold text-bright/90'>Ready when you are.</h3>
-                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>Ask for a change and review the diff before it lands.</p>
+                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>Ask for a change and review the summary before it lands.</p>
                         </div>
                     </div>
-                ) : messages.map((message) => (
-                    <article key={message.id} className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm leading-6 ${
-                        message.role === 'user'
-                            ? 'ml-auto bg-bright/12 text-bright'
-                            : message.role === 'tool'
-                                ? 'border border-bright/8 bg-black/18 text-bright/62'
-                                : 'bg-white/[0.055] text-bright/82'
-                    }`}>
-                        <p className='whitespace-pre-wrap wrap-break-word'>{message.content}</p>
-                    </article>
-                ))}
+                ) : messages.map((message) => {
+                    const activity = message.role === 'tool' ? friendlyActivityMessage(message.content) : null
+                    return (
+                        <article key={message.id} className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm leading-6 ${
+                            message.role === 'user'
+                                ? 'ml-auto bg-bright/12 text-bright'
+                                : message.role === 'tool'
+                                    ? 'border border-bright/8 bg-black/18 text-bright/62'
+                                    : 'bg-white/[0.055] text-bright/82'
+                        }`}>
+                            {activity ? (
+                                <div className='flex items-start gap-2'>
+                                    <ClipboardCheck className='mt-1 h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                                    <div>
+                                        <p className='font-medium text-bright/72'>{activity.title}</p>
+                                        <p className='text-xs leading-5 text-bright/48'>{activity.detail}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className='whitespace-pre-wrap wrap-break-word'>{message.content}</p>
+                            )}
+                        </article>
+                    )
+                })}
                 {loading ? (
                     <div className='flex items-center gap-2 text-sm text-bright/55'>
                         <Loader2 className='h-4 w-4 animate-spin' />
-                        {phaseLabel} changes
+                        {projectState.label}: {projectState.detail}
                     </div>
                 ) : null}
                 {browserTarget ? (
@@ -710,14 +779,15 @@ export default function ShareChat({
 
             {pendingEdit ? (
                 <div className='border-t border-bright/8 bg-black/14 p-3'>
-                    <div className='mb-2 flex items-center justify-between gap-3'>
-                        <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-bright/82'>
-                            <Code2 className='h-4 w-4 text-[#f07d33]' />
-                            <span className='truncate'>
-                                {pendingEdit.changes.length === 1
-                                    ? pendingEdit.changes[0].path
-                                    : `${pendingEdit.changes.length} file changes`}
-                            </span>
+                    <div className='mb-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
+                        <div className='min-w-0'>
+                            <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-bright/86'>
+                                <FileText className='h-4 w-4 text-[#f07d33]' />
+                                <span className='truncate'>What changed</span>
+                            </div>
+                            <p className='mt-1 text-xs leading-5 text-bright/48'>
+                                Review the plain summary first. Technical diffs stay tucked away for advanced checks.
+                            </p>
                         </div>
                         <div className='flex shrink-0 items-center gap-1.5'>
                             {pendingEdit.status === 'pending' ? (
@@ -733,21 +803,21 @@ export default function ShareChat({
                                 type='button'
                                 disabled={pendingEdit.status === 'applying' || pendingEdit.status === 'applied' || proofApplyBlocked}
                                 onClick={applyPendingEdit}
-                                className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-bright/10 px-3 text-xs font-medium text-bright/72 transition hover:bg-bright/8 disabled:cursor-default disabled:opacity-55'
+                                className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-bright px-3 text-xs font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-55'
                             >
                                 {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
-                                {proofApplyBlocked ? 'Retry proof first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply'}
+                                {proofApplyBlocked ? 'Check page first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply changes'}
                             </button>
                         </div>
                     </div>
                     {pendingEditBlocksNewRun ? (
                         <div className='mb-2 rounded-lg border border-amber-200/10 bg-amber-950/12 px-2 py-1.5 text-xs text-amber-50/68'>
-                            Resolve the pending change before starting another AI run.
+                            Choose Apply changes or Discard before asking for another edit.
                         </div>
                     ) : null}
                     {proofApplyBlocked ? (
                         <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
-                            <span>{lastRun?.status === 'queued' ? 'Browser proof is queued before these changes can be applied.' : 'Browser proof needs retry before these changes can be applied.'}</span>
+                            <span>{lastRun?.status === 'queued' ? 'The page check is still running before these changes can be applied.' : 'The page check needs to pass before these changes can be applied.'}</span>
                             {lastBrowserCalls.length ? (
                                 <button
                                     type='button'
@@ -756,31 +826,13 @@ export default function ShareChat({
                                     className='inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-red-200/15 px-2.5 text-[11px] font-medium text-red-50/82 transition hover:bg-red-100/10 disabled:cursor-default disabled:opacity-55'
                                 >
                                     {retryingProof ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <RotateCw className='h-3.5 w-3.5' />}
-                                    Retry proof
+                                    Check again
                                 </button>
                             ) : null}
                         </div>
                     ) : null}
-                    <div className='max-h-56 space-y-2 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2'>
-                        {pendingEdit.changes.map((change) => {
-                            const summary = summarizePendingChange(change)
-                            return (
-                                <details key={change.id} open={pendingEdit.changes.length <= 2} className='rounded-md border border-bright/8 bg-black/18 p-2'>
-                                    <summary className='cursor-pointer text-xs font-semibold text-bright/72'>
-                                        {summary.action} {change.path}
-                                    </summary>
-                                    <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
-                                        <span className='rounded-full border border-bright/8 px-2 py-0.5'>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
-                                        <span className='rounded-full border border-emerald-300/10 px-2 py-0.5 text-emerald-100/62'>+{summary.added}</span>
-                                        <span className='rounded-full border border-red-300/10 px-2 py-0.5 text-red-100/62'>-{summary.removed}</span>
-                                        <span className='truncate text-bright/42'>{summary.kind}</span>
-                                    </div>
-                                    <pre className='mt-2 whitespace-pre-wrap text-xs leading-5 text-bright/68'>
-                                        {buildDiff(change.beforeContent, change.content)}
-                                    </pre>
-                                </details>
-                            )
-                        })}
+                    <div className='max-h-72 space-y-2 overflow-auto'>
+                        {pendingEdit.changes.map((change) => <ChangeSummaryCard key={change.id} change={change} />)}
                     </div>
                     {pendingEdit.error ? <ErrorNotice compact className='mt-2' message={pendingEdit.error} /> : null}
                 </div>
@@ -801,7 +853,7 @@ export default function ShareChat({
                                 event.currentTarget.form?.requestSubmit()
                             }
                         }}
-                        placeholder='Ask Hanasand AI to change this project...'
+                        placeholder='Describe what you want to build or change...'
                         className='max-h-36 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-bright outline-none placeholder:text-bright/35'
                         rows={1}
                     />
@@ -817,7 +869,7 @@ export default function ShareChat({
                 </div>
                 {pendingEditBlocksNewRun ? (
                     <p className='mt-2 text-xs text-bright/42'>
-                        Apply or discard the pending change before asking for another edit.
+                        Choose Apply changes or Discard before asking for another edit.
                     </p>
                 ) : composerHint ? (
                     <p className='mt-2 text-xs text-bright/42'>
@@ -826,6 +878,75 @@ export default function ShareChat({
                 ) : null}
             </form>
         </section>
+    )
+}
+
+function ProjectStateIcon({ state, loading }: { state: PlainProjectState, loading: boolean }) {
+    const className = 'mt-0.5 h-4 w-4 shrink-0 text-[#f07d33]'
+    if (loading || state.label === 'Planning' || state.label === 'Editing' || state.label === 'Verifying') {
+        return <Loader2 className={`${className} animate-spin`} />
+    }
+    if (state.label === 'Needs you') {
+        return <AlertTriangle className={className} />
+    }
+    if (state.label === 'Failed with fix') {
+        return <RotateCw className={className} />
+    }
+    return <Check className={className} />
+}
+
+function PlainMetric({ icon, label, value }: { icon: ReactNode, label: string, value: string }) {
+    return (
+        <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+            <span className='shrink-0 text-[#f07d33]'>{icon}</span>
+            <span className='min-w-0 truncate text-bright/42'>{label}</span>
+            <span className='ml-auto shrink-0 font-semibold text-bright/68'>{value}</span>
+        </div>
+    )
+}
+
+function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
+    const summary = summarizePendingChange(change)
+    return (
+        <article className='rounded-2xl border border-bright/8 bg-black/24 p-3'>
+            <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <div className='flex items-center gap-2'>
+                        <FileText className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                        <h4 className='truncate text-sm font-semibold text-bright/84'>{plainChangeTitle(change, summary.kind)}</h4>
+                    </div>
+                    <p className='mt-1 text-xs leading-5 text-bright/48'>{plainPathLabel(change.path)}</p>
+                </div>
+                <span className='shrink-0 rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/52'>
+                    {change.created ? 'New' : 'Updated'}
+                </span>
+            </div>
+            <div className='mt-3 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Type</span>
+                    <span className='font-medium text-bright/68'>{summary.kind}</span>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Size</span>
+                    <span className='font-medium text-bright/68'>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Impact</span>
+                    <span className='font-medium text-bright/68'>{plainImpactForPath(change.path)}</span>
+                </div>
+            </div>
+            <details className='mt-3 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5'>
+                <summary className='cursor-pointer text-xs font-medium text-bright/58'>Advanced details</summary>
+                <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
+                    <span className='rounded-full border border-emerald-300/10 px-2 py-0.5 text-emerald-100/62'>+{summary.added}</span>
+                    <span className='rounded-full border border-red-300/10 px-2 py-0.5 text-red-100/62'>-{summary.removed}</span>
+                    <span className='truncate text-bright/42'>{summary.action} {change.path}</span>
+                </div>
+                <pre className='mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-black/24 p-2 text-xs leading-5 text-bright/64'>
+                    {buildDiff(change.beforeContent, change.content)}
+                </pre>
+            </details>
+        </article>
     )
 }
 
@@ -916,6 +1037,8 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     return [
         'You are Hanasand AI in a browser chat panel for the active /s share.',
         'Help like a coding agent. Be concise. For pure conversation, answer normally.',
+        'The visible UI is for non-developers. Do not paste raw code, terminal-style logs, or framework jargon in normal prose; the UI will summarize file changes separately.',
+        'Use beginner language for deploy, environment, domain, and build failures. Give one obvious next action.',
         'For project changes, move directly to useful files. Do not ask for a full brief unless the request is impossible or unsafe.',
         'Keep visible prose to at most 5 short sentences. Spend tokens on complete file contents, not meta commentary.',
         'When the user asks for project changes, return complete replacement content for every changed or new file using Hanasand tool tags.',
@@ -1092,27 +1215,35 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 <div className='flex min-w-0 items-center gap-2'>
                     <ScanSearch className='h-4 w-4 shrink-0 text-[#f07d33]' />
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-bright/84'>Browser proof</p>
-                        <p className='truncate text-xs text-bright/42'>{evidence.title || evidence.url}</p>
+                        <p className='truncate text-sm font-semibold text-bright/84'>Page check</p>
+                        <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'The page opened and basic checks completed.'}</p>
                     </div>
                 </div>
-                <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open browser evidence URL'>
+                <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open checked page'>
                     <ExternalLink className='h-4 w-4' />
                 </a>
             </div>
             <div className='grid gap-2 p-3 text-xs text-bright/62 sm:grid-cols-2'>
-                <EvidenceList title='Headings' items={structure.headings} />
-                <EvidenceList title='Links' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
-                <EvidenceList title='Buttons' items={structure.buttons} />
-                <EvidenceList title='Inputs/forms' items={[...(structure.inputs || []), ...(structure.forms || [])]} />
+                <EvidenceList title='Visible sections' items={structure.headings} />
+                <EvidenceList title='Actions found' items={structure.buttons} />
+                <EvidenceList title='Forms found' items={[...(structure.inputs || []), ...(structure.forms || [])]} />
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Viewport</p>
-                    <p className='mt-1 text-bright/72'>{structure.hasViewportMeta ? 'Viewport meta present' : 'Viewport meta missing or unknown'}</p>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Phone readiness</p>
+                    <p className='mt-1 text-bright/72'>{structure.hasViewportMeta ? 'Mobile layout signal found' : 'Mobile layout signal missing or unknown'}</p>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
                     <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Screenshot</p>
-                    <p className='mt-1 text-bright/72'>{evidence.screenshotPath || 'Screenshot not available yet'}</p>
+                    <p className='mt-1 text-bright/72'>{evidence.screenshotPath ? 'Saved for review' : 'Not available yet'}</p>
                 </div>
+                <details className='rounded-lg border border-bright/8 bg-black/16 p-2 sm:col-span-2'>
+                    <summary className='cursor-pointer text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Advanced details</summary>
+                    <div className='mt-2 grid gap-2 sm:grid-cols-2'>
+                        <EvidenceList title='Links' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
+                        <EvidenceList title='Page address' items={[evidence.url]} />
+                        <EvidenceList title='Console messages' items={evidence.consoleMessages} />
+                        <EvidenceList title='Page errors' items={issues} />
+                    </div>
+                </details>
             </div>
             {issues.length ? (
                 <div className='border-t border-bright/8 px-3 py-2 text-xs text-red-200/78'>
@@ -1135,11 +1266,11 @@ function QualityGatePanel({ report }: { report: QualityReport }) {
             <div className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-2 text-[11px] text-bright/62'>
                 <div className='flex flex-wrap items-center gap-1.5'>
                     <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                    <span className='font-semibold text-bright/72'>Quality gates</span>
-                    <span className='rounded-full border border-emerald-300/15 px-2 py-0.5 text-emerald-100/62'>{counts.passed} passed</span>
-                    {counts.running ? <span className='rounded-full border border-amber-200/15 px-2 py-0.5 text-amber-50/70'>{counts.running} running</span> : null}
-                    {counts.failed ? <span className='rounded-full border border-red-300/15 px-2 py-0.5 text-red-100/70'>{counts.failed} failed</span> : null}
-                    <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/45'>{counts.notVerified} not verified</span>
+                    <span className='font-semibold text-bright/72'>Ready checks</span>
+                    <span className='rounded-full border border-emerald-300/15 px-2 py-0.5 text-emerald-100/62'>{counts.passed} look good</span>
+                    {counts.running ? <span className='rounded-full border border-amber-200/15 px-2 py-0.5 text-amber-50/70'>{counts.running} checking</span> : null}
+                    {counts.failed ? <span className='rounded-full border border-red-300/15 px-2 py-0.5 text-red-100/70'>{counts.failed} need fixes</span> : null}
+                    <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/45'>{counts.notVerified} unknown</span>
                 </div>
                 <div className='grid gap-1 sm:grid-cols-2'>
                     {report.gates.map((gate) => (
@@ -1155,7 +1286,7 @@ function QualityGatePanel({ report }: { report: QualityReport }) {
                                                 ? 'border-amber-200/15 text-amber-50/70'
                                                 : 'border-bright/8 text-bright/42'
                                 }`}>
-                                    {gate.status === 'not_verified' ? 'Not verified' : gate.status === 'running' ? 'Running' : gate.status === 'passed' ? 'Passed' : 'Failed'}
+                                    {plainGateStatus(gate.status)}
                                 </span>
                             </div>
                             <p className='mt-1 line-clamp-2 text-bright/42'>{gate.detail}</p>
@@ -1163,16 +1294,16 @@ function QualityGatePanel({ report }: { report: QualityReport }) {
                     ))}
                 </div>
                 <details className='rounded-md border border-bright/8 bg-black/18 px-2 py-1.5'>
-                    <summary className='cursor-pointer font-medium text-bright/70'>Acceptance criteria and unknowns</summary>
+                    <summary className='cursor-pointer font-medium text-bright/70'>What Hanasand checked</summary>
                     <div className='mt-2 grid gap-2 sm:grid-cols-2'>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>Criteria</p>
+                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>This should do</p>
                             <ul className='mt-1 space-y-1 text-bright/58'>
                                 {report.criteria.map((criterion) => <li key={criterion.id}>{criterion.label}</li>)}
                             </ul>
                         </div>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>Not verified</p>
+                            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/35'>Still unknown</p>
                             <ul className='mt-1 space-y-1 text-bright/58'>
                                 {report.notVerified.map((item) => <li key={item}>{item}</li>)}
                             </ul>
@@ -1243,49 +1374,49 @@ function buildQualityReport({
     const gates: QualityGate[] = [
         {
             id: 'acceptance',
-            label: 'Acceptance criteria',
+            label: 'Request match',
             status: criteria.length ? 'passed' : 'failed',
-            detail: criteria.length ? `${criteria.length} criteria defined from the request.` : 'No criteria were derived from the request.',
+            detail: criteria.length ? `${criteria.length} plain goals were defined from the request.` : 'No clear goals were derived from the request.',
         },
         {
             id: 'build',
-            label: 'Build output',
+            label: 'App build',
             status: 'not_verified',
-            detail: 'No backend build runner is attached to this share edit yet.',
+            detail: 'The share editor has not run a full production build yet.',
         },
         {
             id: 'smoke',
-            label: 'Smoke run',
+            label: 'Basic response',
             status: responseOk ? 'passed' : 'failed',
-            detail: responseOk ? 'AI response and tool parsing completed.' : 'The AI response failed before a runnable smoke check.',
+            detail: responseOk ? 'Hanasand returned reviewable changes.' : 'Hanasand could not prepare reviewable changes.',
         },
         {
             id: 'browser',
-            label: 'Browser proof',
+            label: 'Page opens',
             status: proofRunning ? 'running' : pageErrors.length ? 'failed' : latestEvidence ? 'passed' : 'not_verified',
-            detail: latestEvidence ? `Fetched ${latestEvidence.url}.` : proofRunning ? 'Browser evidence is queued.' : 'No browser evidence has run for this response.',
+            detail: latestEvidence ? 'A real browser opened the page.' : proofRunning ? 'A real browser is checking the page.' : 'The page has not been opened by the checker yet.',
         },
         {
             id: 'mobile',
-            label: 'Mobile viewport',
+            label: 'Phone layout',
             status: a11y?.hasViewportMeta ? 'passed' : latestEvidence ? 'failed' : 'not_verified',
-            detail: latestEvidence ? (a11y?.hasViewportMeta ? 'Viewport meta is present.' : 'Viewport meta is missing or unknown.') : 'Mobile rendered viewport was not checked.',
+            detail: latestEvidence ? (a11y?.hasViewportMeta ? 'The page includes the basic mobile layout signal.' : 'The basic mobile layout signal is missing or unknown.') : 'Mobile layout was not checked.',
         },
         {
             id: 'a11y',
-            label: 'Accessibility basics',
+            label: 'Accessibility',
             status: a11y ? basicA11yStatus(a11y) : 'not_verified',
-            detail: a11y ? basicA11yDetail(a11y) : 'Title, H1, labels, and image alt text were not checked.',
+            detail: a11y ? basicA11yDetail(a11y) : 'Title, headings, labels, and image descriptions were not checked.',
         },
         {
             id: 'links',
-            label: 'Broken-link basics',
+            label: 'Links',
             status: broken ? (broken.issues?.length ? 'failed' : 'passed') : 'not_verified',
-            detail: broken ? `${broken.checked || 0} links inspected; ${(broken.issues || []).length} obvious issue${(broken.issues || []).length === 1 ? '' : 's'}.` : 'Links were not inspected.',
+            detail: broken ? `${broken.checked || 0} links checked; ${(broken.issues || []).length} obvious issue${(broken.issues || []).length === 1 ? '' : 's'}.` : 'Links were not checked.',
         },
         {
             id: 'critical-journeys',
-            label: 'Critical journeys',
+            label: 'Main task',
             status: criticalJourneyStatus(criteria, journey),
             detail: criticalJourneyDetail(criteria, journey),
         },
@@ -1324,13 +1455,20 @@ function basicA11yStatus(a11y: NonNullable<BrowserQuality['accessibilityBasics']
 
 function basicA11yDetail(a11y: NonNullable<BrowserQuality['accessibilityBasics']>) {
     const issues = [
-        !a11y.hasTitle ? 'missing title' : null,
-        !a11y.hasH1 ? 'missing H1' : null,
-        !a11y.hasViewportMeta ? 'missing viewport' : null,
-        (a11y.unlabeledControls || []).length ? `${a11y.unlabeledControls?.length} unlabeled control${a11y.unlabeledControls?.length === 1 ? '' : 's'}` : null,
-        (a11y.imagesWithoutAlt || []).length ? `${a11y.imagesWithoutAlt?.length} image${a11y.imagesWithoutAlt?.length === 1 ? '' : 's'} without alt` : null,
+        !a11y.hasTitle ? 'missing page title' : null,
+        !a11y.hasH1 ? 'missing main heading' : null,
+        !a11y.hasViewportMeta ? 'missing phone layout signal' : null,
+        (a11y.unlabeledControls || []).length ? `${a11y.unlabeledControls?.length} control${a11y.unlabeledControls?.length === 1 ? '' : 's'} need labels` : null,
+        (a11y.imagesWithoutAlt || []).length ? `${a11y.imagesWithoutAlt?.length} image${a11y.imagesWithoutAlt?.length === 1 ? '' : 's'} need descriptions` : null,
     ].filter(Boolean)
-    return issues.length ? issues.join(', ') : 'Title, H1, viewport, labels, and image alt basics passed.'
+    return issues.length ? issues.join(', ') : 'Page title, main heading, phone layout signal, labels, and image descriptions look good.'
+}
+
+function plainGateStatus(status: GateStatus) {
+    if (status === 'passed') return 'Looks good'
+    if (status === 'running') return 'Checking'
+    if (status === 'failed') return 'Needs fix'
+    return 'Unknown'
 }
 
 function criticalJourneyStatus(criteria: AcceptanceCriterion[], journey?: BrowserQuality['criticalJourneySignals']): GateStatus {
@@ -1347,14 +1485,14 @@ function criticalJourneyStatus(criteria: AcceptanceCriterion[], journey?: Browse
 
 function criticalJourneyDetail(criteria: AcceptanceCriterion[], journey?: BrowserQuality['criticalJourneySignals']) {
     if (!journey) {
-        return 'Forms, checkout, auth, booking, and dashboard CRUD were not exercised.'
+        return 'Forms, checkout, login, booking, and dashboard work were not checked.'
     }
     const expected = criteria
         .filter((criterion) => ['form-journey', 'checkout-journey', 'auth-journey', 'booking-journey', 'dashboard-crud'].includes(criterion.id))
         .map((criterion) => criterion.label)
     return expected.length
-        ? `Expected: ${expected.join(', ')}. Signals: ${journey.forms || 0} form(s), ${journey.buttons || 0} button(s).`
-        : `No special critical journey requested; found ${journey.forms || 0} form(s) and ${journey.buttons || 0} button(s).`
+        ? `Expected: ${expected.join(', ')}. Found ${journey.forms || 0} form(s) and ${journey.buttons || 0} button(s).`
+        : `No special main task was detected; found ${journey.forms || 0} form(s) and ${journey.buttons || 0} button(s).`
 }
 
 function fakeSuccessWarningsFor(content: string, quality?: BrowserQuality) {
@@ -1369,6 +1507,87 @@ function fakeSuccessWarningsFor(content: string, quality?: BrowserQuality) {
         warnings.push('Possible swallowed error: generated code contains an empty catch block.')
     }
     return warnings
+}
+
+function getPlainProjectState({
+    loading,
+    elapsedSeconds,
+    pendingStatus,
+    lastRunStatus,
+    qualityReport,
+    activeProofs,
+    proofApplyBlocked,
+}: {
+    loading: boolean
+    elapsedSeconds: number
+    pendingStatus?: PendingEdit['status']
+    lastRunStatus?: RunSummary['status']
+    qualityReport?: QualityReport | null
+    activeProofs: number
+    proofApplyBlocked: boolean
+}): PlainProjectState {
+    const failedGate = qualityReport?.gates.some((gate) => gate.status === 'failed')
+    if (loading) {
+        if (elapsedSeconds < 4) {
+            return { label: 'Planning', detail: 'Understanding the request and choosing the smallest useful change.', tone: 'working' }
+        }
+        return { label: 'Editing', detail: 'Preparing the project changes for your review.', tone: 'working' }
+    }
+    if (activeProofs || lastRunStatus === 'queued') {
+        return { label: 'Verifying', detail: 'Opening the page and checking whether the visible result still works.', tone: 'working' }
+    }
+    if (pendingStatus === 'pending') {
+        return {
+            label: 'Needs you',
+            detail: proofApplyBlocked ? 'A page check needs to pass before you apply the changes.' : 'Review the summary, then apply or discard the changes.',
+            tone: 'attention',
+        }
+    }
+    if (pendingStatus === 'error' || lastRunStatus === 'error' || failedGate) {
+        return { label: 'Failed with fix', detail: 'Something needs attention, but the next action explains how to continue.', tone: 'danger' }
+    }
+    if (pendingStatus === 'applied') {
+        return { label: 'Ready to publish', detail: 'The latest approved changes are in the project.', tone: 'success' }
+    }
+    return { label: 'Planning', detail: 'Describe the result you want. No code or terminal knowledge needed.', tone: 'neutral' }
+}
+
+function friendlyActivityMessage(content: string) {
+    if (/Browser verification queued|Browser proof retry queued/i.test(content)) {
+        return { title: 'Page check started', detail: 'Hanasand is opening the page and checking the visible result.' }
+    }
+    if (/Browser proof visible/i.test(content)) {
+        return { title: 'Page check finished', detail: 'The result below shows what the browser could verify.' }
+    }
+    if (/Applied \d+ file change/i.test(content)) {
+        return { title: 'Changes applied', detail: 'The approved updates are now part of the project.' }
+    }
+    if (/reconnecting|try .*again/i.test(content)) {
+        return { title: 'Connection paused', detail: 'The service needs another try. Your project was not silently changed.' }
+    }
+    return null
+}
+
+function plainChangeTitle(change: PendingShareChange, kind: string) {
+    if (/readme|docs?\//i.test(change.path)) return 'Updated the project instructions'
+    if (/docker|compose|env/i.test(change.path)) return 'Updated launch settings'
+    if (/package\.json|tsconfig|next\.config/i.test(change.path)) return 'Updated app setup'
+    if (/page|layout|component|src\/app/i.test(change.path)) return 'Updated the visible website'
+    if (/test|spec|e2e|smoke/i.test(change.path)) return 'Updated checks'
+    return change.created ? `Added ${kind.toLowerCase()}` : `Updated ${kind.toLowerCase()}`
+}
+
+function plainPathLabel(path: string) {
+    return `File: ${normalizeSharePath(path)}`
+}
+
+function plainImpactForPath(path: string) {
+    if (/docker|compose|env/i.test(path)) return 'Publishing'
+    if (/page|layout|component|src\/app/i.test(path)) return 'Visitor view'
+    if (/test|spec|e2e|smoke/i.test(path)) return 'Verification'
+    if (/readme|docs?\//i.test(path)) return 'Handoff'
+    if (/package\.json|tsconfig|next\.config/i.test(path)) return 'App setup'
+    return 'Project'
 }
 
 function emptyBrowserStructure() {
