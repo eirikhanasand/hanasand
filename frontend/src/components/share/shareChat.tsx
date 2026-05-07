@@ -123,7 +123,7 @@ export default function ShareChat({
                 body: JSON.stringify({
                     prompt: buildPrompt(trimmed, share, editingContent, treePaths),
                     context: buildContext(share, editingContent, treePaths, messages),
-                    maxTokens: 4200,
+                    maxTokens: 2600,
                 }),
             })
             const data = await response.json().catch(() => ({}))
@@ -325,7 +325,7 @@ export default function ShareChat({
                     </div>
                     <div className='max-h-56 space-y-2 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2'>
                         {pendingEdit.changes.map((change) => (
-                            <details key={change.id} open={pendingEdit.changes.length === 1} className='rounded-md border border-bright/8 bg-black/18 p-2'>
+                            <details key={change.id} open={pendingEdit.changes.length <= 2} className='rounded-md border border-bright/8 bg-black/18 p-2'>
                                 <summary className='cursor-pointer text-xs font-semibold text-bright/72'>
                                     {change.shareId ? 'Update' : 'Create'} {change.path}
                                 </summary>
@@ -407,13 +407,15 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     return [
         'You are Hanasand AI in a browser chat panel for the active /s share.',
         'Help like a coding agent. Be concise. For pure conversation, answer normally.',
+        'For project changes, move directly to useful files. Do not ask for a full brief unless the request is impossible or unsafe.',
+        'Keep visible prose to at most 5 short sentences. Spend tokens on complete file contents, not meta commentary.',
         'When the user asks for project changes, return complete replacement content for every changed or new file using Hanasand tool tags.',
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
         `Current share: ${share.id} (${share.path})`,
         treePaths.length ? `Project files:\n${treePaths.join('\n')}` : null,
-        `Current file content:\n${editingContent.slice(0, 22000)}`,
+        `Current file content:\n${editingContent.slice(0, 16000)}`,
         `User request:\n${prompt}`,
     ].filter(Boolean).join('\n\n')
 }
@@ -422,8 +424,8 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
         tree: treePaths,
-        currentContent: editingContent.slice(0, 22000),
-        recentMessages: messages.slice(-8).map(({ role, content }) => ({ role, content })),
+        currentContent: editingContent.slice(0, 8000),
+        recentMessages: messages.slice(-4).map(({ role, content }) => ({ role, content })),
     })
 }
 

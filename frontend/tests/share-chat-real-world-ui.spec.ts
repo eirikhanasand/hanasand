@@ -78,6 +78,29 @@ const speedReviewStories: AppStory[] = [
     { id: 860, prompt: 'Audit prep page. Checklist only. No upload.', expected: 'audit' },
 ]
 
+const toolFrictionStories: AppStory[] = [
+    { id: 861, prompt: 'make it investor safe but not cringe', expected: 'investor' },
+    { id: 862, prompt: 'idk, customer dashboard vibes, but just the page', expected: 'dashboard' },
+    { id: 863, prompt: 'my boss wants proof we know what changed', expected: 'change-log' },
+    { id: 864, prompt: 'agency client is picky. make first screen better.', expected: 'agency' },
+    { id: 865, prompt: 'newbie mode: I sell plants, make the site useful', expected: 'plants' },
+    { id: 866, prompt: 'corporate procurement hates fluff. fix it.', expected: 'procurement' },
+    { id: 867, prompt: 'designer asked for taste, founder asked for speed', expected: 'studio-brief' },
+    { id: 868, prompt: 'the page feels scammy. remove risky promises.', expected: 'trust' },
+    { id: 869, prompt: 'make support page less annoying, no ticket system', expected: 'support' },
+    { id: 870, prompt: 'compliance will read this, keep claims boring', expected: 'compliance' },
+    { id: 871, prompt: 'turn this into a local gym page, no fake booking', expected: 'gym' },
+    { id: 872, prompt: 'we need release notes customers can understand', expected: 'release-notes' },
+    { id: 873, prompt: 'make a contractor handoff thing, but quick', expected: 'contractor' },
+    { id: 874, prompt: 'finance team asked for cost page. careful wording.', expected: 'costs' },
+    { id: 875, prompt: 'school club page, make parents trust it', expected: 'school-club' },
+    { id: 876, prompt: 'sales overpromised. make this honest.', expected: 'honest-sales' },
+    { id: 877, prompt: 'ops needs a checklist, not a novel', expected: 'ops-checklist' },
+    { id: 878, prompt: 'restaurant site, allergies careful, no orders', expected: 'restaurant' },
+    { id: 879, prompt: 'make security review page from nothing', expected: 'security-review' },
+    { id: 880, prompt: 'the user is lost. show what happens next.', expected: 'next-steps' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -386,4 +409,97 @@ test('share chat reaches concise two-file review quickly for speed-review storie
     }
 
     expect(handledPrompts).toHaveLength(speedReviewStories.length)
+})
+
+test('share chat avoids bloat and exposes review controls for tool-friction stories', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-tool-friction-story',
+                alias: body.path || body.name || body.id || 'app-tool-friction-story',
+                path: body.path || body.name || body.id || 'app-tool-friction-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-tool-friction-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
+        const matchingStory = toolFrictionStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        expect(body.maxTokens).toBeLessThanOrEqual(2600)
+        expect(body.prompt).toContain('Keep visible prose to at most 5 short sentences')
+        expect(body.context?.length || 0).toBeLessThan(12_000)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Two scoped files are waiting for review.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Clear next step, careful claims, and no fake backend promises.</p></main> }`,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/review-notes.ts',
+                        content: 'export const reviewNotes = [\'Manual review before apply\', \'No fake payments, portals, uploads, guarantees, or hidden background work\']',
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of toolFrictionStories) {
+        await page.goto(`/s/app-tool-friction-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+        await expect(page.getByText('No auto-apply')).toBeVisible()
+
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Two scoped files are waiting for review.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('2 pending changes')).toBeVisible()
+        await expect(page.getByText('2 file changes')).toBeVisible()
+        await expect(page.getByText('Create app/page.tsx')).toBeVisible()
+        await expect(page.getByText('Create app/review-notes.ts')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Apply' })).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        await expect(page.getByText('No fake payments, portals, uploads, guarantees, or hidden background work')).toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(toolFrictionStories.length)
 })
