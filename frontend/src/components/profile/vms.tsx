@@ -17,9 +17,8 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
     async function update() {
         const id = getCookie('id')
         const impersonatingId = getCookie('impersonating_id')
-        const impersonationToken = getCookie('impersonation_token')
         if (id) {
-            const updatedVMs = await getVMs(impersonatingId || id, undefined, id, impersonationToken || undefined)
+            const updatedVMs = await getVMs(impersonatingId || id, undefined, id)
             setVms(updatedVMs)
         } else {
             return router.push('/login?internal=true&path=/profile')

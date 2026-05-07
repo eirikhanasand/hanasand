@@ -1,8 +1,6 @@
 'use client'
 
-import config from '@/config'
 import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
-import { impersonationHeaders } from '@/utils/impersonation/client'
 
 function authHeaders() {
     const token = getCookie('access_token') || ''
@@ -12,12 +10,11 @@ function authHeaders() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
         id,
-        ...impersonationHeaders(),
     }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${config.url.api}${path}`, {
+    const response = await fetch(`/api/backend${path}`, {
         ...init,
         headers: {
             ...authHeaders(),

@@ -41,7 +41,7 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
         e.preventDefault()
         setImpersonationPending(true)
         try {
-            await startImpersonating(user.id, user.name)
+            await startImpersonating(user.id)
             router.refresh()
         } catch (error) {
             setError(error instanceof Error ? error.message : 'Unable to start impersonation.')

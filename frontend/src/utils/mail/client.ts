@@ -1,8 +1,6 @@
 'use client'
 
-import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
-import { impersonationHeaders } from '@/utils/impersonation/client'
 import type { MailOverview } from './types'
 
 export type DraftAttachment = {
@@ -24,7 +22,6 @@ function authHeaders() {
         'Content-Type': 'application/json',
         id,
         Authorization: `Bearer ${token}`,
-        ...impersonationHeaders(),
     }
 }
 
@@ -45,7 +42,7 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
         search.set('messageId', params.messageId)
     }
 
-    const response = await fetch(`${config.url.api}/mail/overview?${search.toString()}`, {
+    const response = await fetch(`/api/backend/mail/overview?${search.toString()}`, {
         headers,
         cache: 'no-store',
     })
@@ -97,7 +94,7 @@ export async function deleteFilter(id: number, mailboxUser?: string) {
     }
 
     const search = mailboxUser ? `?mailboxUser=${encodeURIComponent(mailboxUser)}` : ''
-    const response = await fetch(`${config.url.api}/mail/filters/${id}${search}`, { method: 'DELETE', headers })
+    const response = await fetch(`/api/backend/mail/filters/${id}${search}`, { method: 'DELETE', headers })
     if (!response.ok) {
         throw new Error((await response.json()).error || 'Unable to delete filter.')
     }
@@ -113,7 +110,7 @@ export async function messageAction(messageId: string, body: {
 }
 
 export function mailBlobUrl(mailboxUser: string, blobId: string, name: string) {
-    return `${config.url.api}/mail/blob/${encodeURIComponent(mailboxUser)}/${encodeURIComponent(blobId)}/${encodeURIComponent(name)}`
+    return `/api/backend/mail/blob/${encodeURIComponent(mailboxUser)}/${encodeURIComponent(blobId)}/${encodeURIComponent(name)}`
 }
 
 async function postJson(path: string, body: Record<string, unknown>) {
@@ -122,7 +119,7 @@ async function postJson(path: string, body: Record<string, unknown>) {
         throw new Error('Unauthorized.')
     }
 
-    const response = await fetch(`${config.url.api}${path}`, {
+    const response = await fetch(`/api/backend${path}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
