@@ -124,6 +124,29 @@ const contextBudgetStories: AppStory[] = [
     { id: 900, prompt: 'make next step dead obvious for a total beginner', expected: 'beginner-next-step' },
 ]
 
+const shareBrowserEvidenceStories: AppStory[] = [
+    { id: 1021, prompt: 'does this look live or am i kidding myself', expected: 'live-proof' },
+    { id: 1022, prompt: 'designer says first screen feels wrong, look at it', expected: 'first-screen' },
+    { id: 1023, prompt: 'newbie asks where contact is', expected: 'contact-path' },
+    { id: 1024, prompt: 'corporate buyer needs pricing obvious but not fake', expected: 'pricing-proof' },
+    { id: 1025, prompt: 'phone users complain, dont just lint', expected: 'mobile-proof' },
+    { id: 1026, prompt: 'agency client wants proof before applying anything', expected: 'proof-before-apply' },
+    { id: 1027, prompt: 'public sector page, screen reader basics first', expected: 'accessibility-proof' },
+    { id: 1028, prompt: 'founder says it feels scammy, check visible claims', expected: 'trust-proof' },
+    { id: 1029, prompt: 'restaurant owner wants booking but no fake booking', expected: 'booking-proof' },
+    { id: 1030, prompt: 'ops asks what changed and whether it is visible', expected: 'ops-visible-proof' },
+    { id: 1031, prompt: 'investor link goes out today, verify the page surface', expected: 'investor-proof' },
+    { id: 1032, prompt: 'compliance wants docs visible without upload portal', expected: 'docs-proof' },
+    { id: 1033, prompt: 'user says blank page, dont reassure me', expected: 'blank-proof' },
+    { id: 1034, prompt: 'total beginner needs next step obvious', expected: 'next-step-proof' },
+    { id: 1035, prompt: 'designer asked for less generic copy, inspect headings', expected: 'copy-proof' },
+    { id: 1036, prompt: 'support page is annoying, check buttons and forms', expected: 'support-proof' },
+    { id: 1037, prompt: 'sales overpromised, show visible proof and caveats', expected: 'claims-proof' },
+    { id: 1038, prompt: 'another agent will continue this, make evidence visible', expected: 'handoff-proof' },
+    { id: 1039, prompt: 'codex terminal hides too much, prove the ui is better', expected: 'terminal-contrast-proof' },
+    { id: 1040, prompt: 'are we still building the best autonomous website builder', expected: 'drift-proof' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -615,4 +638,133 @@ test('share chat keeps context lean while resolving context-budget stories', asy
     }
 
     expect(handledPrompts).toHaveLength(contextBudgetStories.length)
+})
+
+test('share page AI shows browser proof in the website UI for ambiguous build stories', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-share-browser-proof-story',
+                alias: body.path || body.name || body.id || 'app-share-browser-proof-story',
+                path: body.path || body.name || body.id || 'app-share-browser-proof-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-share-browser-proof-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url: body.url || 'https://example.com',
+                title: 'Share Preview OK',
+                textExcerpt: 'Visible preview with hero, pricing, contact, booking caveat, and next step.',
+                structure: {
+                    headings: ['Visible preview', 'Pricing', 'Contact'],
+                    links: [
+                        { text: 'Contact support', href: '/contact' },
+                        { text: 'Pricing', href: '/pricing' },
+                    ],
+                    buttons: ['Start review', 'Book demo'],
+                    inputs: ['Email address / email'],
+                    forms: ['Email address / email | Start review'],
+                    hasViewportMeta: true,
+                },
+                screenshotPath: null,
+                consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
+                pageErrors: [],
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
+        const matchingStory = shareBrowserEvidenceStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        expect(body.maxTokens).toBeLessThanOrEqual(2200)
+        expect(body.prompt).toContain('Use browser evidence before claiming a page works')
+        expect(body.context?.length || 0).toBeLessThan(9_000)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Browser proof is visible before apply.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: 'https://example.com',
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Visible proof first, careful claims, no fake backend promises.</p></main> }`,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/proof.ts',
+                        content: `export const proof = { browser: true, apply: 'manual', topic: '${matchingStory!.expected}' }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of shareBrowserEvidenceStories) {
+        await page.goto(`/s/app-share-browser-proof-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+        await expect(page.getByText('No auto-apply')).toBeVisible()
+
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Browser proof is visible before apply.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Browser proof visible for https://example.com.')).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Browser proof', { exact: true }).last()).toBeVisible()
+        await expect(page.getByText('Visible preview').last()).toBeVisible()
+        await expect(page.getByText('Contact support -> /contact').last()).toBeVisible()
+        await expect(page.getByText('Viewport meta present').last()).toBeVisible()
+        await expect(page.getByText('Screenshot not available yet').last()).toBeVisible()
+        await expect(page.getByText('2 pending changes')).toBeVisible()
+        await expect(page.getByText('Create app/page.tsx')).toBeVisible()
+        await expect(page.getByText('Create app/proof.ts')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(shareBrowserEvidenceStories.length)
 })

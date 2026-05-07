@@ -5,7 +5,7 @@ import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
-import { ArrowUp, Check, Code2, ExternalLink, Gauge, Globe2, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowUp, Check, Code2, ExternalLink, Gauge, Globe2, Loader2, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
 import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -43,17 +43,39 @@ type PendingShareChange = {
 }
 
 type ToolCall = {
-    action?: 'update_share' | 'upsert_share' | 'create_share'
+    action?: 'update_share' | 'upsert_share' | 'create_share' | 'browser_task'
     shareId?: string
     path?: string
     content?: string
     type?: 'file' | 'folder'
+    url?: string
+    captureScreenshot?: boolean
+    timeoutMs?: number
     actions?: ToolCall[]
 }
 
 type BrowserTarget = {
     url: string
     title: string
+}
+
+type BrowserEvidence = {
+    id: string
+    url: string
+    title?: string | null
+    screenshotPath?: string | null
+    textExcerpt?: string
+    structure?: {
+        headings?: string[]
+        links?: { text?: string, href?: string }[]
+        buttons?: string[]
+        inputs?: string[]
+        forms?: string[]
+        hasViewportMeta?: boolean
+    }
+    consoleMessages?: string[]
+    pageErrors?: string[]
+    fetchedAt: string
 }
 
 export default function ShareChat({
@@ -71,6 +93,7 @@ export default function ShareChat({
     const [elapsedSeconds, setElapsedSeconds] = useState(0)
     const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null)
     const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null)
+    const [browserEvidence, setBrowserEvidence] = useState<BrowserEvidence[]>([])
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
     const canSend = input.trim().length > 0 && !loading && Boolean(share)
@@ -138,6 +161,7 @@ export default function ShareChat({
             }
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, share, tree || null, editingContent)
+            const browserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
             const visibleContent = stripToolTags(rawContent).trim()
                 || (pendingChanges.length ? `Prepared ${pendingChanges.length} file change${pendingChanges.length === 1 ? '' : 's'}.` : rawContent)
 
@@ -154,6 +178,19 @@ export default function ShareChat({
                     changes: pendingChanges,
                     status: 'pending',
                 })
+            }
+            if (browserCalls.length) {
+                const results = await Promise.all(browserCalls.slice(0, 3).map(runBrowserEvidenceTool))
+                const visibleResults = results.filter(Boolean) as BrowserEvidence[]
+                if (visibleResults.length) {
+                    setBrowserEvidence((current) => [...visibleResults, ...current].slice(0, 5))
+                    setMessages((current) => [...current, ...visibleResults.map((result) => ({
+                        id: randomId(),
+                        role: 'tool' as const,
+                        content: summarizeBrowserEvidence(result),
+                        createdAt: new Date().toISOString(),
+                    }))])
+                }
             }
         } catch {
             setMessages((current) => [...current, {
@@ -250,6 +287,18 @@ export default function ShareChat({
                 </div>
             </div>
 
+            {browserEvidence[0] ? (
+                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
+                    <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
+                        <div className='flex min-w-0 items-center gap-1.5'>
+                            <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                            <span className='truncate'>Browser proof visible · {browserEvidence[0].structure?.headings?.length || 0} headings · {browserEvidence[0].structure?.links?.length || 0} links</span>
+                        </div>
+                        <span className='shrink-0 text-bright/42'>{browserEvidence.length} saved</span>
+                    </div>
+                </div>
+            ) : null}
+
             <div className={`flex-1 space-y-3 overflow-y-auto px-3 py-4 ${mode === 'workspace' ? 'lg:px-6 lg:py-5' : ''}`}>
                 {messages.length === 0 ? (
                     <div className='grid h-full place-items-center text-center'>
@@ -300,6 +349,9 @@ export default function ShareChat({
                         />
                     </div>
                 ) : null}
+                {browserEvidence.map((evidence) => (
+                    <BrowserEvidenceCard key={evidence.id} evidence={evidence} />
+                ))}
             </div>
 
             {pendingEdit ? (
@@ -410,6 +462,9 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         'For project changes, move directly to useful files. Do not ask for a full brief unless the request is impossible or unsafe.',
         'Keep visible prose to at most 5 short sentences. Spend tokens on complete file contents, not meta commentary.',
         'When the user asks for project changes, return complete replacement content for every changed or new file using Hanasand tool tags.',
+        'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, also request browser evidence with:',
+        '<hanasand-tool>{"action":"browser_task","url":"https://example.com","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>',
+        'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport proof.',
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
@@ -457,6 +512,128 @@ function buildPendingChanges(toolCalls: ToolCall[], share: Share, tree: Tree | n
             created: !existingShareId,
         }]
     })
+}
+
+async function runBrowserEvidenceTool(call: ToolCall): Promise<BrowserEvidence | null> {
+    if (!call.url) {
+        return null
+    }
+    try {
+        const response = await aiClientRequest('/tools/browser/task', {
+            method: 'POST',
+            body: JSON.stringify({
+                url: call.url,
+                captureScreenshot: Boolean(call.captureScreenshot),
+                timeoutMs: call.timeoutMs || 16000,
+            }),
+        })
+        const payload = await response.json().catch(() => null) as Omit<BrowserEvidence, 'id' | 'fetchedAt'> | null
+        if (!response.ok || !payload) {
+            return {
+                id: randomId(),
+                url: call.url,
+                title: null,
+                screenshotPath: null,
+                structure: emptyBrowserStructure(),
+                consoleMessages: [],
+                pageErrors: [friendlyChatError(response.status)],
+                fetchedAt: new Date().toISOString(),
+            }
+        }
+        return {
+            id: randomId(),
+            ...payload,
+            url: payload.url || call.url,
+            structure: payload.structure || emptyBrowserStructure(),
+            fetchedAt: new Date().toISOString(),
+        }
+    } catch {
+        return {
+            id: randomId(),
+            url: call.url,
+            title: null,
+            screenshotPath: null,
+            structure: emptyBrowserStructure(),
+            consoleMessages: [],
+            pageErrors: ['Browser evidence is reconnecting. Try the check again in a moment.'],
+            fetchedAt: new Date().toISOString(),
+        }
+    }
+}
+
+function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
+    const structure = evidence.structure || emptyBrowserStructure()
+    const issues = evidence.pageErrors?.filter(Boolean) || []
+    return (
+        <article className='overflow-hidden rounded-2xl border border-bright/10 bg-black/24'>
+            <div className='flex items-center justify-between gap-3 border-b border-bright/8 px-3 py-2'>
+                <div className='flex min-w-0 items-center gap-2'>
+                    <ScanSearch className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                    <div className='min-w-0'>
+                        <p className='truncate text-sm font-semibold text-bright/84'>Browser proof</p>
+                        <p className='truncate text-xs text-bright/42'>{evidence.title || evidence.url}</p>
+                    </div>
+                </div>
+                <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open browser evidence URL'>
+                    <ExternalLink className='h-4 w-4' />
+                </a>
+            </div>
+            <div className='grid gap-2 p-3 text-xs text-bright/62 sm:grid-cols-2'>
+                <EvidenceList title='Headings' items={structure.headings} />
+                <EvidenceList title='Links' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
+                <EvidenceList title='Buttons' items={structure.buttons} />
+                <EvidenceList title='Inputs/forms' items={[...(structure.inputs || []), ...(structure.forms || [])]} />
+                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Viewport</p>
+                    <p className='mt-1 text-bright/72'>{structure.hasViewportMeta ? 'Viewport meta present' : 'Viewport meta missing or unknown'}</p>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Screenshot</p>
+                    <p className='mt-1 text-bright/72'>{evidence.screenshotPath || 'Screenshot not available yet'}</p>
+                </div>
+            </div>
+            {issues.length ? (
+                <div className='border-t border-bright/8 px-3 py-2 text-xs text-red-200/78'>
+                    {issues.slice(0, 3).join('\n')}
+                </div>
+            ) : null}
+        </article>
+    )
+}
+
+function EvidenceList({ title, items }: { title: string, items?: string[] }) {
+    const visible = (items || []).filter(Boolean).slice(0, 4)
+    return (
+        <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
+            <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>{title}</p>
+            <ul className='mt-1 space-y-0.5 text-bright/72'>
+                {visible.length ? visible.map((item) => <li key={item} className='truncate'>{item}</li>) : <li>&lt;none&gt;</li>}
+            </ul>
+        </div>
+    )
+}
+
+function emptyBrowserStructure() {
+    return {
+        headings: [],
+        links: [],
+        buttons: [],
+        inputs: [],
+        forms: [],
+        hasViewportMeta: false,
+    }
+}
+
+function summarizeBrowserEvidence(evidence: BrowserEvidence) {
+    const structure = evidence.structure || emptyBrowserStructure()
+    const issueCount = evidence.pageErrors?.filter(Boolean).length || 0
+    return [
+        `Browser proof visible for ${evidence.url}.`,
+        `Headings: ${structure.headings?.slice(0, 3).join(', ') || '<none>'}.`,
+        `Links/buttons/forms: ${(structure.links?.length || 0)}/${(structure.buttons?.length || 0)}/${((structure.inputs?.length || 0) + (structure.forms?.length || 0))}.`,
+        `Viewport: ${structure.hasViewportMeta ? 'present' : 'missing/unknown'}. Screenshot: ${evidence.screenshotPath ? 'available' : 'not available yet'}.`,
+        issueCount ? `Page issues: ${issueCount}.` : 'Page issues: none.',
+    ].join('\n')
 }
 
 function normalizeSharePath(path: string) {
