@@ -130,7 +130,11 @@ export default function ChatPane({
                             >
                                 <FolderKanban className='h-4 w-4 shrink-0' />
                             </Link>
-                            <StatusChip icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />} label={isThinking ? 'Thinking...' : 'Ready'} accent={isThinking} />
+                            <StatusChip
+                                icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />}
+                                label={isThinking ? 'Thinking...' : isConnected ? 'Ready' : 'Offline'}
+                                accent={isThinking}
+                            />
                             {latestArtifacts.length ? (
                                 <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs transition-colors ${showArtifacts ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
                                     <PanelRightOpen className='h-3.5 w-3.5' />
