@@ -133,6 +133,7 @@ type QualityReport = {
     gates: QualityGate[]
     notVerified: string[]
     fakeSuccessWarnings: string[]
+    designReview?: DesignReview
 }
 
 type BrowserProofJob = {
@@ -149,6 +150,21 @@ type PlainProjectState = {
 }
 
 type ShareChatWorkflow = 'ask' | 'build'
+
+type DesignMemory = {
+    summary: string
+    tokens: string[]
+    updatedAt: string
+}
+
+type DesignReview = {
+    status: GateStatus
+    detail: string
+    issues: string[]
+    strengths: string[]
+}
+
+const DESIGN_MEMORY_STORAGE_KEY = 'hanasand:share-design-memory:v1'
 
 export default function ShareChat({
     share,
@@ -174,6 +190,7 @@ export default function ShareChat({
     const [retryingProof, setRetryingProof] = useState(false)
     const [hydrated, setHydrated] = useState(false)
     const [builderWorkflowOpen, setBuilderWorkflowOpen] = useState(false)
+    const [designMemory, setDesignMemory] = useState<DesignMemory | null>(null)
     const proofQueueRunRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const formRef = useRef<HTMLFormElement | null>(null)
@@ -184,6 +201,7 @@ export default function ShareChat({
             ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
             : null
     const activeWorkflow: ShareChatWorkflow = builderWorkflowOpen ? 'build' : 'ask'
+    const designMemoryKey = share?.owner || share?.alias || share?.path || 'local'
     const composerHint = activeWorkflow === 'build' ? getComposerHint(input) : null
     const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
     const canSend = hydrated && !loading && !pendingEditBlocksNewRun
@@ -243,6 +261,10 @@ export default function ShareChat({
     }, [])
 
     useEffect(() => {
+        setDesignMemory(loadDesignMemory(designMemoryKey))
+    }, [designMemoryKey])
+
+    useEffect(() => {
         if (!startedAt) {
             setElapsedSeconds(0)
             return
@@ -291,8 +313,8 @@ export default function ShareChat({
             const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
-                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null, workflow),
-                    context: buildContext(activeShare, editingContent, treePaths, messages, previewUrl || null, trimmed, workflow),
+                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null, workflow, designMemory),
+                    context: buildContext(activeShare, editingContent, treePaths, messages, previewUrl || null, trimmed, workflow, designMemory),
                     maxTokens: tokenCap,
                 }),
             })
@@ -342,6 +364,9 @@ export default function ShareChat({
                     changes: pendingChanges,
                     status: 'pending',
                 })
+                const nextDesignMemory = mergeDesignMemory(designMemory, inferDesignMemory(trimmed, pendingChanges.map((change) => change.content).join('\n')))
+                setDesignMemory(nextDesignMemory)
+                saveDesignMemory(designMemoryKey, nextDesignMemory)
             }
             setQualityReport(buildQualityReport({
                 prompt: trimmed,
@@ -669,6 +694,18 @@ export default function ShareChat({
                         <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Page checks' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
                         <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
                     </div>
+                    {designMemory ? (
+                        <div className='mt-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] leading-5 text-bright/58'>
+                            <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+                                <Sparkles className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                                <span className='font-semibold text-bright/70'>Design memory</span>
+                                {designMemory.tokens.slice(0, 4).map((token) => (
+                                    <span key={token} className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/48'>{token}</span>
+                                ))}
+                            </div>
+                            <p className='mt-1 text-bright/42'>{designMemory.summary}</p>
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
 
@@ -1145,7 +1182,7 @@ function beginnerActionFailure(error?: string) {
     return 'Review the summary and try the smallest safer change.'
 }
 
-function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null, workflow: ShareChatWorkflow) {
+function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null, workflow: ShareChatWorkflow, designMemory: DesignMemory | null) {
     const shareEvidenceUrl = buildShareEvidenceUrl(share)
     const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
     const costControlMode = isCostControlPrompt(prompt)
@@ -1153,6 +1190,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     const progressGovernanceMode = isProgressGovernancePrompt(prompt)
     const regressionAccountabilityMode = isRegressionAccountabilityPrompt(prompt)
     const sandboxSafetyMode = isSandboxSafetyPrompt(prompt)
+    const designDifferentiationMode = isDesignDifferentiationPrompt(prompt)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -1182,6 +1220,18 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, request browser evidence using the best target above, for example:',
         `<hanasand-tool>{"action":"browser_task","url":"${previewUrl || shareEvidenceUrl || 'https://hanasand.com/s'}","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>`,
         'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport proof.',
+        designMemory ? [
+            'Brand/style memory for this builder:',
+            `- ${designMemory.summary}`,
+            designMemory.tokens.length ? `- Reuse these differentiators when they still fit: ${designMemory.tokens.join(', ')}` : null,
+            '- Keep the memory as inspiration, not template lock-in. Adapt it to the current business type and request.',
+        ].filter(Boolean).join('\n') : 'Brand/style memory: none yet. Establish a distinct visual direction from the business type and current content.',
+        'Design differentiation rules:',
+        '- Avoid generic AI-builder output: no default gradient hero plus oversized headline plus repeated rounded cards unless the brand explicitly asks for it.',
+        '- Create a specific visual language using theme tokens, type scale, spacing rhythm, icon/image direction, and business-specific copy.',
+        '- Prefer real asset slots and honest placeholders with alt text over decorative blobs. Use icons, photos, illustrations, or brand-kit notes when they materially help the page.',
+        '- Check spacing, hierarchy, contrast, mobile overflow, repeated patterns, and generic copy before claiming the design is ready.',
+        '- Use niche business conventions as a starting point only. Do not lock the user into a rigid template.',
         'Quality gates:',
         '- Define acceptance criteria from the user request before claiming success.',
         '- Treat build, smoke, browser proof, mobile viewport, accessibility basics, broken links, and critical journeys as separate gates.',
@@ -1206,6 +1256,13 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             '- Prefer plain owned code, minimal dependencies, accessible semantic markup, and a structure a developer can maintain later.',
             '- Do not hide core content in platform-specific magic. If the user needs editing or CMS behavior, propose the smallest durable content model instead of hard-coding everything.',
             '- Treat performance and ownership as acceptance criteria: avoid giant generated styles, unused assets, opaque widgets, and unnecessary client-side code.',
+        ].join('\n') : null,
+        designDifferentiationMode ? [
+            'Make-this-not-AI-generated review mode:',
+            '- Treat sameness as a defect. Rewrite generic copy, remove default-looking repeated cards, and add a deliberate design rationale.',
+            '- Include design tokens or a small brand kit file when the change is visual or brand-heavy.',
+            '- Add concrete asset guidance: image subjects, icon direction, empty states, and what must not be faked.',
+            '- Verify mobile hierarchy and overflow. A pretty desktop-only result is not finished.',
         ].join('\n') : null,
         progressGovernanceMode ? [
             'Progress governance mode:',
@@ -1241,11 +1298,13 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     ].filter(Boolean).join('\n\n')
 }
 
-function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null, prompt: string, workflow: ShareChatWorkflow) {
+function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null, prompt: string, workflow: ShareChatWorkflow, designMemory: DesignMemory | null) {
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
         workflow,
         writesAllowed: workflow === 'build',
+        designDifferentiationMode: isDesignDifferentiationPrompt(prompt),
+        designMemory,
         diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
         costControlMode: isCostControlPrompt(prompt),
         maintainabilityMode: isMaintainabilityPrompt(prompt),
@@ -1431,6 +1490,26 @@ function QualityGatePanel({ report }: { report: QualityReport }) {
                         </div>
                     ))}
                 </div>
+                {report.designReview ? (
+                    <div className={`rounded-md border px-2 py-1.5 ${
+                        report.designReview.status === 'failed'
+                            ? 'border-red-300/10 bg-red-950/12 text-red-100/70'
+                            : report.designReview.status === 'passed'
+                                ? 'border-emerald-300/10 bg-emerald-950/10 text-emerald-100/62'
+                                : 'border-bright/8 bg-black/18 text-bright/52'
+                    }`}>
+                        <div className='flex flex-wrap items-center gap-1.5'>
+                            <Sparkles className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                            <span className='font-semibold text-bright/72'>Design QA</span>
+                            <span>{report.designReview.detail}</span>
+                        </div>
+                        {report.designReview.issues.length ? (
+                            <ul className='mt-1 space-y-0.5 text-bright/52'>
+                                {report.designReview.issues.slice(0, 3).map((issue) => <li key={issue}>{issue}</li>)}
+                            </ul>
+                        ) : null}
+                    </div>
+                ) : null}
                 <details className='rounded-md border border-bright/8 bg-black/18 px-2 py-1.5'>
                     <summary className='cursor-pointer font-medium text-bright/70'>What Hanasand checked</summary>
                     <div className='mt-2 grid gap-2 sm:grid-cols-2'>
@@ -1509,6 +1588,9 @@ function buildQualityReport({
     const pageErrors = browserEvidence.flatMap((evidence) => evidence.pageErrors || []).filter(Boolean)
     const content = pendingChanges.map((change) => change.content).join('\n')
     const fakeSuccessWarnings = fakeSuccessWarningsFor(content, quality)
+    const designReview = pendingChanges.length
+        ? reviewDesignDifferentiation(content, prompt, pendingChanges)
+        : previous?.designReview || reviewDesignDifferentiation(content, prompt, pendingChanges)
     const gates: QualityGate[] = [
         {
             id: 'acceptance',
@@ -1558,6 +1640,12 @@ function buildQualityReport({
             status: criticalJourneyStatus(criteria, journey),
             detail: criticalJourneyDetail(criteria, journey),
         },
+        {
+            id: 'design-quality',
+            label: 'Design quality',
+            status: designReview.status,
+            detail: designReview.detail,
+        },
     ]
     return {
         criteria,
@@ -1567,6 +1655,7 @@ function buildQualityReport({
             ...(quality?.notVerified || []),
         ])],
         fakeSuccessWarnings,
+        designReview,
     }
 }
 
@@ -1576,6 +1665,7 @@ function acceptanceCriteriaForPrompt(prompt: string): AcceptanceCriterion[] {
         { id: 'request-match', label: 'Matches the requested use case', reason: 'The output must solve the user request, not a generic template.' },
         { id: 'owned-files', label: 'Files are explicit and reviewable', reason: 'Users need to see what changed before trusting it.' },
         { id: 'no-fake-success', label: 'No fake live data or swallowed errors', reason: 'Unverified integrations must stay visibly stubbed.' },
+        { id: 'distinct-design', label: 'Does not look like a generic AI template', reason: 'Client-facing work needs specific taste, hierarchy, assets, and brand memory.' },
     ]
     if (/\b(form|lead|contact|signup|intake|support)\b/.test(lower)) criteria.push({ id: 'form-journey', label: 'Form validation and submit journey works', reason: 'Forms are common launch blockers.' })
     if (/\b(checkout|payment|subscription|billing|invoice|cart)\b/.test(lower)) criteria.push({ id: 'checkout-journey', label: 'Checkout or billing journey has real failure states', reason: 'Payment paths cannot be cosmetic.' })
@@ -1645,6 +1735,102 @@ function fakeSuccessWarningsFor(content: string, quality?: BrowserQuality) {
         warnings.push('Possible swallowed error: generated code contains an empty catch block.')
     }
     return warnings
+}
+
+function reviewDesignDifferentiation(content: string, prompt: string, pendingChanges: PendingShareChange[]): DesignReview {
+    if (!pendingChanges.length) {
+        return {
+            status: 'not_verified',
+            detail: 'No visual change was prepared.',
+            issues: [],
+            strengths: [],
+        }
+    }
+
+    const visualFiles = pendingChanges.filter((change) => /page|layout|component|app\/|css|theme|design|asset|public\//i.test(change.path))
+    if (!visualFiles.length) {
+        return {
+            status: 'not_verified',
+            detail: 'No visible page or theme file changed.',
+            issues: [],
+            strengths: [],
+        }
+    }
+
+    const issues = [
+        repeatedUtilityPatternIssue(content),
+        genericCopyIssue(content),
+        missingTokenIssue(content),
+        missingAssetDirectionIssue(content, prompt),
+        mobileOverflowRiskIssue(content),
+    ].filter(Boolean) as string[]
+    const strengths = [
+        /--[a-z0-9-]+|theme|tokens|brand|palette|typography|type scale/i.test(content) ? 'Uses brand or theme tokens.' : null,
+        /<img|next\/image|background-image|\.svg|lucide-react|icon/i.test(content) ? 'Includes an asset or icon direction.' : null,
+        /\b(clamp|minmax|grid-template|container|@media|sm:|md:|lg:|max-width|min-width)\b/i.test(content) ? 'Includes responsive layout signals.' : null,
+        /\b(voice|tone|editorial|visual language|art direction|brand kit)\b/i.test(content) ? 'Names a specific design direction.' : null,
+    ].filter(Boolean) as string[]
+    const status: GateStatus = issues.length >= 2 ? 'failed' : issues.length ? 'not_verified' : 'passed'
+    return {
+        status,
+        detail: status === 'passed'
+            ? 'Design has specific tokens, assets, hierarchy, and responsive signals.'
+            : status === 'failed'
+                ? 'Design risks looking generic or AI-generated.'
+                : 'Some design proof is still missing.',
+        issues,
+        strengths,
+    }
+}
+
+function repeatedUtilityPatternIssue(content: string) {
+    const roundedCards = (content.match(/rounded-(?:xl|2xl|3xl)[^'"]*border[^'"]*(?:shadow|bg-white|bg-black|bg-\w+\/)/gi) || []).length
+    const gradients = (content.match(/gradient-to-|radial-gradient|linear-gradient/gi) || []).length
+    const repeatedCards = (content.match(/grid[^'"]*gap-[0-9][^'"]*card|<article|<Card/gi) || []).length
+    if ((roundedCards >= 4 && gradients >= 1) || repeatedCards >= 7) {
+        return 'Looks close to the common AI-builder card-grid/gradient pattern; add a more specific layout or art direction.'
+    }
+    return null
+}
+
+function genericCopyIssue(content: string) {
+    const genericPhrases = [
+        'unlock your potential',
+        'seamless experience',
+        'powerful platform',
+        'transform your business',
+        'built for modern teams',
+        'all-in-one solution',
+        'elevate your workflow',
+        'lorem ipsum',
+    ]
+    const count = genericPhrases.filter((phrase) => content.toLowerCase().includes(phrase)).length
+    return count ? 'Copy contains generic AI-builder phrases; replace them with business-specific proof and constraints.' : null
+}
+
+function missingTokenIssue(content: string) {
+    if (!/\b(className|style=|\.css|tailwind|bg-|text-|rounded-|font-)\b/i.test(content)) {
+        return null
+    }
+    return /--[a-z0-9-]+|design token|brand kit|palette|type scale|theme|brandTokens/i.test(content)
+        ? null
+        : 'Visual work lacks brand/theme tokens, making it harder to remember and refine a distinct style later.'
+}
+
+function missingAssetDirectionIssue(content: string, prompt: string) {
+    const visualPrompt = /\b(site|page|landing|portfolio|brand|design|visual|premium|not look ai|not ai-generated|image|photo|icon)\b/i.test(prompt)
+    if (!visualPrompt) {
+        return null
+    }
+    return /<img|next\/image|background-image|\.svg|lucide-react|icon|asset|photo|illustration|brand kit/i.test(content)
+        ? null
+        : 'No asset, icon, or brand-kit direction was included for a visual request.'
+}
+
+function mobileOverflowRiskIssue(content: string) {
+    return /\bw-screen\b|min-w-\[(?:7|8|9|\d{3,})|width:\s*(?:7|8|9|\d{3,})px|white-space:\s*nowrap/i.test(content)
+        ? 'Possible mobile overflow risk from fixed widths or nowrap content.'
+        : null
 }
 
 function getPlainProjectState({
@@ -1822,8 +2008,78 @@ function looksLikeVisibleCodeLine(line: string) {
         || /(?:=>|;|<\/[A-Za-z]+>|className=|from ['"]|=\s*\{)/.test(line)
 }
 
+function loadDesignMemory(key: string): DesignMemory | null {
+    if (typeof window === 'undefined') {
+        return null
+    }
+    try {
+        const allMemory = JSON.parse(window.localStorage.getItem(DESIGN_MEMORY_STORAGE_KEY) || '{}') as Record<string, DesignMemory>
+        return allMemory[key] || null
+    } catch {
+        return null
+    }
+}
+
+function saveDesignMemory(key: string, memory: DesignMemory) {
+    if (typeof window === 'undefined') {
+        return
+    }
+    try {
+        const allMemory = JSON.parse(window.localStorage.getItem(DESIGN_MEMORY_STORAGE_KEY) || '{}') as Record<string, DesignMemory>
+        window.localStorage.setItem(DESIGN_MEMORY_STORAGE_KEY, JSON.stringify({
+            ...allMemory,
+            [key]: memory,
+        }))
+    } catch {
+        // Design memory is a convenience layer; failed storage should never block building.
+    }
+}
+
+function inferDesignMemory(prompt: string, content: string): DesignMemory {
+    const tokens = [...new Set([
+        ...extractDesignTokens(prompt),
+        ...extractDesignTokens(content),
+    ])].slice(0, 8)
+    return {
+        summary: summarizeDesignMemory(prompt, content, tokens),
+        tokens,
+        updatedAt: new Date().toISOString(),
+    }
+}
+
+function mergeDesignMemory(previous: DesignMemory | null, next: DesignMemory): DesignMemory {
+    const tokens = [...new Set([...(next.tokens || []), ...(previous?.tokens || [])])].slice(0, 8)
+    return {
+        summary: next.summary || previous?.summary || 'Keep future visual work specific to the current brand and business type.',
+        tokens,
+        updatedAt: next.updatedAt,
+    }
+}
+
+function extractDesignTokens(content: string) {
+    const matches = content.match(/\b(?:premium|editorial|playful|minimal|industrial|clinical|warm|luxury|brutalist|calm|bold|trust|local|studio|enterprise|heritage|technical|handmade|monochrome|high-contrast|soft|dense|spacious|portfolio|restaurant|clinic|agency|saas|dashboard)\b/gi) || []
+    const cssTokens = content.match(/--[a-z0-9-]+/gi) || []
+    return [...matches, ...cssTokens].map((token) => token.toLowerCase()).slice(0, 12)
+}
+
+function summarizeDesignMemory(prompt: string, content: string, tokens: string[]) {
+    const business = prompt.match(/\b(?:for|about)\s+([a-z0-9][a-z0-9\s-]{2,42})/i)?.[1]?.trim()
+    const hasAssets = /<img|next\/image|background-image|\.svg|lucide-react|icon|photo|illustration/i.test(content)
+    const hasTokens = /--[a-z0-9-]+|design token|brand kit|palette|type scale|theme|brandTokens/i.test(content)
+    return [
+        business ? `Brand context: ${business}.` : 'Brand context: infer from the active share and user request.',
+        tokens.length ? `Style cues: ${tokens.slice(0, 5).join(', ')}.` : 'Style cues: avoid generic gradients, oversized heroes, and repeated cards.',
+        hasTokens ? 'Theme tokens are part of this direction.' : 'Add theme tokens when the next change is visual.',
+        hasAssets ? 'Asset direction exists.' : 'Define image/icon direction before claiming visual polish.',
+    ].join(' ')
+}
+
 function isDeploymentDiagnosticPrompt(prompt: string) {
     return /\b(deploy|deployed|deployment|build|vercel|netlify|env|environment|secret|preview|production|prod|staging|runtime|log|logs|queue|edge|serverless)\b/i.test(prompt)
+}
+
+function isDesignDifferentiationPrompt(prompt: string) {
+    return /\b(design|style|brand|generic|ai-generated|ai generated|not look ai|tailwind|shadcn|template|same|cookie-cutter|premium|beautiful|polish|visual|layout|hero|asset|image|icon|theme|tokens|brand kit|make it not embarrassing)\b/i.test(prompt)
 }
 
 function isCostControlPrompt(prompt: string) {

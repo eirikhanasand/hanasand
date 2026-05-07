@@ -52,8 +52,8 @@ export async function proxy(req: NextRequest) {
             }
 
             if (auth.roles) {
-                roles = auth.roles
-                response.cookies.set('roles', JSON.stringify(auth.roles), {
+                roles = normalizeRoles(auth.roles)
+                response.cookies.set('roles', JSON.stringify(roles), {
                     sameSite: 'lax',
                     path: '/',
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
@@ -81,10 +81,10 @@ export async function proxy(req: NextRequest) {
         if (strictPath) {
             if (!roles.length) {
                 const rolesCookie = req.cookies.get('roles')?.value
-                roles = rolesCookie ? JSON.parse(rolesCookie) : []
+                roles = normalizeRoles(rolesCookie ? JSON.parse(rolesCookie) : [])
             }
 
-            if (!roles.some((role) => role.id === strictPath.role || ('role_id' in role && role.role_id === strictPath.role))) {
+            if (!roles.some((role) => roleMatchesStrictPath(role, strictPath.role))) {
                 return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&notAllowed=true'}`, req.url))
             }
         }
@@ -93,4 +93,33 @@ export async function proxy(req: NextRequest) {
     response.headers.set('x-theme', theme)
     response.headers.set('x-current-path', path)
     return response
+}
+
+function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
+    if (!Array.isArray(value)) {
+        return []
+    }
+
+    return value.flatMap((role) => {
+        if (typeof role === 'string') {
+            return [{
+                id: role,
+                name: role,
+                description: '',
+                priority: 0,
+                created_by: '',
+                created_at: '',
+                updated_at: '',
+            } as Role & { role_id?: string }]
+        }
+        if (!role || typeof role !== 'object') {
+            return []
+        }
+
+        return [role as Role & { role_id?: string }]
+    })
+}
+
+function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: string) {
+    return role.id === requiredRole || role.role_id === requiredRole
 }
