@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, CheckCircle2, Clock3, Coins, Layers3, LineChart, ShieldCheck } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Coins, Layers3, LineChart, Server, ShieldCheck, Timer, Zap } from 'lucide-react'
 import GPT_Content from '@components/gpt/content'
 import GPT_EmptyState from '@components/gpt/emptyState'
 import GPT_Header from '@components/gpt/header'
@@ -45,6 +45,73 @@ type AIEconomics = {
         fit?: string
         features?: string[]
     }[]
+    reliability: {
+        incidentStatus: {
+            state: string
+            label: string
+            message: string
+        }
+        queueDepth: {
+            lane: string
+            model: string
+            kind: string
+            status: string
+            count: number
+        }[]
+        verificationLatency: {
+            kind: string
+            p50Ms: number
+            p95Ms: number
+            sampleCount: number
+        }[]
+        buildDeploy: {
+            kind: string
+            completed: number
+            failed: number
+            cancelled: number
+            total: number
+            successRate: number
+        }[]
+        failedProofCategories: {
+            category: string
+            kind: string
+            count: number
+        }[]
+        gpuLanes: {
+            clientName: string
+            lane: string
+            model: string
+            status: string
+            tier: string
+            activeSessions: number
+            queuedSessions: number
+            maxSessions: number
+            availableSessions: number
+            contextMaxTokens: number
+            memoryUsedMb: number
+            memoryTotalMb: number
+            gpuLoad: number
+            powerWatts: number
+            powerLimitWatts: number
+            temperatureC: number
+        }[]
+        costPerSuccessfulVerifiedBuildNok: number
+        promptTiming: {
+            p50FirstUsefulOutputMs: number
+            p95FirstUsefulOutputMs: number
+            sampleCount: number
+        }
+        deployTiming: {
+            p50PromptToVerifiedDeployMs: number
+            p95PromptToVerifiedDeployMs: number
+            sampleCount: number
+        }
+        capacity: {
+            totalQueued: number
+            totalActiveSessions: number
+            totalAvailableSessions: number
+        }
+    }
     trend: {
         bucket: string
         eventCount: number
@@ -177,6 +244,8 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                 <EconomicsStat icon={<Layers3 className='h-4 w-4' />} label='Cached work' value={`${cacheRate}%`} detail={`${summary.cacheHits} cache hits from ${summary.cacheableEvents} cacheable events`} />
             </div>
 
+            <ReliabilityPanel reliability={economics.reliability} />
+
             <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
                     <div className='mb-3 flex items-center justify-between'>
@@ -245,6 +314,149 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                 </div>
             </div>
         </section>
+    )
+}
+
+function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliability'] }) {
+    const incidentTone = incidentToneClass(reliability.incidentStatus.state)
+    const queuedRows = reliability.queueDepth.filter((row) => row.status === 'queued' || row.status === 'running')
+    const buildRate = reliability.buildDeploy.find((row) => row.kind === 'build')
+    const deployRate = reliability.buildDeploy.find((row) => row.kind === 'deploy')
+
+    return (
+        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                <div>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Reliability and observability</p>
+                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Can users get work done right now?</h3>
+                </div>
+                <div className={`rounded-lg px-3 py-2 outline ${incidentTone}`}>
+                    <div className='flex items-center gap-2 text-sm font-semibold'>
+                        {reliability.incidentStatus.state === 'operational' ? <CheckCircle2 className='h-4 w-4' /> : <AlertTriangle className='h-4 w-4' />}
+                        {reliability.incidentStatus.label}
+                    </div>
+                    <p className='mt-1 max-w-xl text-xs leading-5 opacity-80'>{reliability.incidentStatus.message}</p>
+                </div>
+            </div>
+
+            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                <EconomicsStat icon={<Activity className='h-4 w-4' />} label='Queue capacity' value={`${reliability.capacity.totalAvailableSessions} open`} detail={`${reliability.capacity.totalActiveSessions} active, ${reliability.capacity.totalQueued} queued across lanes`} />
+                <EconomicsStat icon={<Timer className='h-4 w-4' />} label='First output' value={formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs)} detail={`p95 ${formatDuration(reliability.promptTiming.p95FirstUsefulOutputMs)} · ${reliability.promptTiming.sampleCount} runs`} />
+                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified deploy' value={formatDuration(reliability.deployTiming.p50PromptToVerifiedDeployMs)} detail={`p95 ${formatDuration(reliability.deployTiming.p95PromptToVerifiedDeployMs)} · ${reliability.deployTiming.sampleCount} deploys`} />
+                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Cost / verified build' value={`${formatNok(reliability.costPerSuccessfulVerifiedBuildNok)} NOK`} detail='Cost per successful build or deploy proof' />
+            </div>
+
+            <div className='mt-4 grid gap-4 xl:grid-cols-[1fr_1.1fr]'>
+                <div className='grid gap-4'>
+                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <h4 className='text-sm font-semibold text-bright/84'>Verification latency</h4>
+                            <span className='text-xs text-bright/35'>p50 / p95</span>
+                        </div>
+                        <div className='mt-3 grid gap-2'>
+                            {reliability.verificationLatency.length ? reliability.verificationLatency.map((row) => (
+                                <div key={row.kind} className='flex items-center justify-between gap-3 rounded-md border border-bright/8 bg-black/18 px-3 py-2 text-sm'>
+                                    <span className='capitalize text-bright/76'>{row.kind}</span>
+                                    <span className='text-bright/48'>{formatDuration(row.p50Ms)} / {formatDuration(row.p95Ms)} · {row.sampleCount}</span>
+                                </div>
+                            )) : <p className='text-sm text-bright/45'>No completed verification jobs yet.</p>}
+                        </div>
+                    </div>
+
+                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                        <h4 className='text-sm font-semibold text-bright/84'>Build and deploy success</h4>
+                        <div className='mt-3 grid gap-3'>
+                            <SuccessRate row={buildRate} fallback='build' />
+                            <SuccessRate row={deployRate} fallback='deploy' />
+                        </div>
+                    </div>
+
+                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                        <h4 className='text-sm font-semibold text-bright/84'>Failed proof categories</h4>
+                        <div className='mt-3 flex flex-wrap gap-2'>
+                            {reliability.failedProofCategories.length ? reliability.failedProofCategories.map((row) => (
+                                <span key={`${row.kind}-${row.category}`} className='rounded-full border border-red-300/15 bg-red-400/8 px-2.5 py-1 text-xs text-red-100/72'>
+                                    {formatKind(row.category)} · {row.kind} · {row.count}
+                                </span>
+                            )) : <span className='rounded-full border border-emerald-300/15 bg-emerald-400/8 px-2.5 py-1 text-xs text-emerald-100/72'>No proof failures in this window</span>}
+                        </div>
+                    </div>
+                </div>
+
+                <div className='grid gap-4'>
+                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <h4 className='text-sm font-semibold text-bright/84'>Queue depth by lane/model</h4>
+                            <span className='text-xs text-bright/35'>{queuedRows.length} active buckets</span>
+                        </div>
+                        <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
+                            {queuedRows.length ? queuedRows.map((row) => (
+                                <div key={`${row.lane}-${row.kind}-${row.status}`} className='grid grid-cols-[1fr_auto] gap-3 rounded-md border border-bright/8 bg-black/18 px-3 py-2 text-xs'>
+                                    <div>
+                                        <p className='font-medium text-bright/78'>{row.lane} · {row.model}</p>
+                                        <p className='mt-1 text-bright/42'>{row.kind} · {row.status}</p>
+                                    </div>
+                                    <span className='self-center text-sm font-semibold text-bright/82'>{row.count}</span>
+                                </div>
+                            )) : <p className='text-sm text-bright/45'>No queued or running verification jobs.</p>}
+                        </div>
+                    </div>
+
+                    <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <h4 className='text-sm font-semibold text-bright/84'>GPU lane health</h4>
+                            <span className='text-xs text-bright/35'>{reliability.gpuLanes.length} lanes</span>
+                        </div>
+                        <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                            {reliability.gpuLanes.length ? reliability.gpuLanes.map((lane) => (
+                                <article key={`${lane.clientName}-${lane.lane}`} className='rounded-lg border border-bright/8 bg-black/18 p-3'>
+                                    <div className='flex items-start justify-between gap-2'>
+                                        <div>
+                                            <p className='text-sm font-semibold text-bright/84'>{lane.lane}</p>
+                                            <p className='mt-1 text-xs text-bright/42'>{lane.model} · {lane.tier}</p>
+                                        </div>
+                                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-bright/48'>{lane.status}</span>
+                                    </div>
+                                    <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-bright/52'>
+                                        <LaneMetric icon={<Server className='h-3.5 w-3.5' />} value={`${lane.availableSessions}/${lane.maxSessions}`} label='available' />
+                                        <LaneMetric icon={<Activity className='h-3.5 w-3.5' />} value={`${Math.round(lane.gpuLoad)}%`} label='load' />
+                                        <LaneMetric icon={<Zap className='h-3.5 w-3.5' />} value={`${Math.round(lane.powerWatts)} W`} label='power' />
+                                        <LaneMetric icon={<Timer className='h-3.5 w-3.5' />} value={formatCompact(lane.contextMaxTokens)} label='context' />
+                                    </div>
+                                </article>
+                            )) : <p className='text-sm text-bright/45'>No live GPU lane metrics are connected.</p>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buildDeploy'][number], fallback: string }) {
+    const rate = row ? Math.round(row.successRate * 100) : 0
+    return (
+        <div>
+            <div className='mb-1 flex items-center justify-between text-xs text-bright/48'>
+                <span className='capitalize'>{row?.kind || fallback}</span>
+                <span>{row ? `${rate}% · ${row.completed}/${row.total}` : 'no samples'}</span>
+            </div>
+            <div className='h-2 overflow-hidden rounded-full bg-bright/8'>
+                <div className='h-full rounded-full bg-[#f07d33]' style={{ width: `${row ? Math.max(4, rate) : 0}%` }} />
+            </div>
+        </div>
+    )
+}
+
+function LaneMetric({ icon, value, label }: { icon: ReactNode, value: string, label: string }) {
+    return (
+        <div className='rounded-md border border-bright/8 bg-bright/[0.025] p-2'>
+            <div className='flex items-center gap-1.5 text-bright/72'>
+                <span className='text-[#f07d33]'>{icon}</span>
+                <span className='font-medium'>{value}</span>
+            </div>
+            <p className='mt-1 text-[10px] uppercase tracking-[0.12em] text-bright/32'>{label}</p>
+        </div>
     )
 }
 
@@ -320,4 +532,21 @@ function formatKind(kind: string) {
 
 function formatDate(value: string) {
     return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDuration(value: number) {
+    if (!value) return 'n/a'
+    if (value < 1000) return `${Math.round(value)} ms`
+    const seconds = value / 1000
+    if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`
+    const minutes = seconds / 60
+    if (minutes < 60) return `${minutes.toFixed(minutes < 10 ? 1 : 0)} min`
+    return `${(minutes / 60).toFixed(1)} h`
+}
+
+function incidentToneClass(state: string) {
+    if (state === 'operational') return 'bg-emerald-400/8 text-emerald-100/80 outline-emerald-300/15'
+    if (state === 'busy') return 'bg-amber-400/8 text-amber-100/80 outline-amber-300/15'
+    if (state === 'watching') return 'bg-sky-400/8 text-sky-100/80 outline-sky-300/15'
+    return 'bg-red-400/8 text-red-100/80 outline-red-300/15'
 }
