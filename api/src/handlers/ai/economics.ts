@@ -158,8 +158,50 @@ function pricingModes() {
 
 function subscriptionTiers() {
     return [
-        { id: 'starter', label: 'Starter', outcomeAllowance: 25, queuePriority: 'standard', concurrency: 1 },
-        { id: 'studio', label: 'Studio', outcomeAllowance: 120, queuePriority: 'verified', concurrency: 3 },
-        { id: 'business', label: 'Business', outcomeAllowance: 500, queuePriority: 'priority', concurrency: 8 },
+        {
+            id: 'free',
+            label: 'Free',
+            outcomeAllowance: 5,
+            queuePriority: 'draft',
+            concurrency: 1,
+            fit: 'Small prototypes',
+            features: ['limited verification', 'cheap draft lane', 'community queue'],
+        },
+        {
+            id: 'starter',
+            label: 'Starter',
+            outcomeAllowance: 25,
+            queuePriority: 'standard',
+            concurrency: 1,
+            fit: 'Personal sites',
+            features: ['async queue', 'basic deploy', 'basic verification'],
+        },
+        {
+            id: 'pro',
+            label: 'Pro',
+            outcomeAllowance: 120,
+            queuePriority: 'verified',
+            concurrency: 3,
+            fit: 'Larger projects',
+            features: ['custom domains', 'priority verification', 'rollback'],
+        },
+        {
+            id: 'agency',
+            label: 'Agency',
+            outcomeAllowance: 350,
+            queuePriority: 'priority',
+            concurrency: 6,
+            fit: 'Multiple client workspaces',
+            features: ['handoff reports', 'white-label deploy', 'client workspace separation'],
+        },
+        {
+            id: 'business',
+            label: 'Business',
+            outcomeAllowance: 900,
+            queuePriority: 'priority',
+            concurrency: 10,
+            fit: 'Controlled teams',
+            features: ['audit logs', 'approvals', 'scoped secrets', 'SSO later'],
+        },
     ]
 }

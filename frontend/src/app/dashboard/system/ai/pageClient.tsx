@@ -42,6 +42,8 @@ type AIEconomics = {
         outcomeAllowance: number
         queuePriority: string
         concurrency: number
+        fit?: string
+        features?: string[]
     }[]
     trend: {
         bucket: string
@@ -202,14 +204,24 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
             <div className='grid gap-4 xl:grid-cols-2'>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
                     <h3 className='text-sm font-semibold text-bright/84'>Outcome-based tiers</h3>
-                    <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                    <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
                         {economics.subscriptionTiers.map((tier) => (
                             <article key={tier.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
                                 <div className='flex items-center gap-2 text-bright/84'>
                                     <ShieldCheck className='h-4 w-4 text-[#f07d33]' />
                                     <h4 className='text-sm font-semibold'>{tier.label}</h4>
                                 </div>
-                                <p className='mt-2 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent lane{tier.concurrency === 1 ? '' : 's'}.</p>
+                                {tier.fit ? <p className='mt-2 text-xs font-medium text-bright/62'>{tier.fit}</p> : null}
+                                <p className='mt-1 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent lane{tier.concurrency === 1 ? '' : 's'}.</p>
+                                {tier.features?.length ? (
+                                    <div className='mt-2 flex flex-wrap gap-1'>
+                                        {tier.features.map((feature) => (
+                                            <span key={feature} className='rounded-full border border-bright/8 px-2 py-0.5 text-[10px] text-bright/48'>
+                                                {feature}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : null}
                             </article>
                         ))}
                     </div>
