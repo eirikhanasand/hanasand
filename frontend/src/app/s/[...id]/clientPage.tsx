@@ -335,28 +335,30 @@ export default function ClientPage({
                     />
                 )}
             </div>
-            <Metadata
-                shareRouteId={id}
-                share={share}
-                setShare={setShare}
-                isConnected={isConnected}
-                showMetadata={showMetadata}
-                setShowMetadata={setShowMetaData}
-                participants={participants}
-                clickedWord={clickedWord}
-                setClickedWord={setClickedWord}
-                editingContent={editingContent}
-                setDisplayLineNumbers={setDisplayLineNumbers}
-                syntaxHighlighting={syntaxHighlighting}
-                setSyntaxHighlighting={setSyntaxHighlighting}
-                box={box}
-                setBox={setBox}
-                terminalStatus={terminalStatus}
-                terminalCredentials={terminalCredentials}
-                tree={workspaceTree}
-                setEditorPatch={setEditorPatch}
-                setTriggerTerminalChange={setTriggerTerminalChange}
-            />
+            {!chatOpen ? (
+                <Metadata
+                    shareRouteId={id}
+                    share={share}
+                    setShare={setShare}
+                    isConnected={isConnected}
+                    showMetadata={showMetadata}
+                    setShowMetadata={setShowMetaData}
+                    participants={participants}
+                    clickedWord={clickedWord}
+                    setClickedWord={setClickedWord}
+                    editingContent={editingContent}
+                    setDisplayLineNumbers={setDisplayLineNumbers}
+                    syntaxHighlighting={syntaxHighlighting}
+                    setSyntaxHighlighting={setSyntaxHighlighting}
+                    box={box}
+                    setBox={setBox}
+                    terminalStatus={terminalStatus}
+                    terminalCredentials={terminalCredentials}
+                    tree={workspaceTree}
+                    setEditorPatch={setEditorPatch}
+                    setTriggerTerminalChange={setTriggerTerminalChange}
+                />
+            ) : null}
             <Terminal
                 share={share}
                 open={terminalOpen}

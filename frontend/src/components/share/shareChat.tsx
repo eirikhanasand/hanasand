@@ -327,8 +327,7 @@ export default function ShareChat({
             const requestedBrowserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
             const browserCalls = ensureBrowserProofCalls(requestedBrowserCalls, Boolean(pendingChanges.length), proofTarget?.url || null)
             const boundedBrowserCalls = browserCalls.slice(0, 3)
-            const visibleContent = stripToolTags(rawContent).trim()
-                || (pendingChanges.length ? `Prepared ${pendingChanges.length} file change${pendingChanges.length === 1 ? '' : 's'}.` : rawContent)
+            const visibleContent = buildVisibleBuildReply(rawContent, pendingChanges, boundedBrowserCalls.length, response.ok)
 
             setMessages((current) => [...current, {
                 id: randomId(),
@@ -608,7 +607,7 @@ export default function ShareChat({
                         AI assistant
                     </div>
                     <p className='truncate text-xs text-bright/45'>
-                        {showBuilderWorkflow ? 'Optional builder workflow is open.' : 'Ask mode will not change files.'}
+                        {showBuilderWorkflow ? 'Build mode prepares reviewable changes.' : 'Ask mode will not change files.'}
                     </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 p-1 text-[11px]'>
@@ -630,6 +629,11 @@ export default function ShareChat({
             </div>
             {showBuilderWorkflow ? (
                 <div className='border-b border-bright/8 bg-black/12 p-3'>
+                    <div className='mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5 text-[11px] text-bright/52'>
+                        <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                        <span className='font-medium text-bright/68'>Build is opt-in.</span>
+                        <span>No files change until you approve the What changed cards.</span>
+                    </div>
                     <div className={`grid gap-3 rounded-2xl border p-3 ${
                         projectState.tone === 'success'
                             ? 'border-emerald-300/15 bg-emerald-950/10'
@@ -763,7 +767,7 @@ export default function ShareChat({
                             <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build.' : 'Ask without changing files.'}</h3>
                             <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>
                                 {showBuilderWorkflow
-                                    ? 'Describe the result you want, then review the summary before anything lands.'
+                                    ? 'Describe the result you want. Hanasand will show summaries and proof before anything lands.'
                                     : 'Use Ask for explanations. Switch to Build only when you want reviewable project changes.'}
                             </p>
                         </div>
@@ -1783,6 +1787,39 @@ function parentIdForPath(tree: Tree | null, filePath: string) {
 
 function stripToolTags(content: string) {
     return content.replace(/<hanasand-tool>[\s\S]*?<\/hanasand-tool>/g, '').replace(/\n{3,}/g, '\n\n')
+}
+
+function buildVisibleBuildReply(rawContent: string, pendingChanges: PendingShareChange[], browserProofs: number, responseOk: boolean) {
+    if (!responseOk) {
+        return stripToolTags(rawContent).trim() || 'Hanasand AI is reconnecting. Try again in a moment.'
+    }
+
+    const plainReply = hideCodeFromBuildReply(stripToolTags(rawContent)).trim()
+    const fallback = pendingChanges.length
+        ? `Prepared ${pendingChanges.length} reviewable change${pendingChanges.length === 1 ? '' : 's'}.`
+        : 'I checked the request and did not prepare file changes.'
+    const proofNote = browserProofs
+        ? 'A page check is running, so you can review the summary while Hanasand verifies the visible result.'
+        : ''
+    const reviewNote = pendingChanges.length
+        ? 'Open What changed for the summary. Advanced diffs stay collapsed for developers.'
+        : ''
+    return [plainReply || fallback, reviewNote, proofNote].filter(Boolean).join('\n\n')
+}
+
+function hideCodeFromBuildReply(content: string) {
+    const withoutCodeFences = content.replace(/```[\s\S]*?```/g, '').replace(/`([^`\n]{40,}|[^`\n]*(?:import|export|function|const|class|return)[^`\n]*)`/gi, '')
+    const readableLines = withoutCodeFences
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !looksLikeVisibleCodeLine(line))
+        .slice(0, 5)
+    return readableLines.join('\n').replace(/\n{3,}/g, '\n\n')
+}
+
+function looksLikeVisibleCodeLine(line: string) {
+    return /^(import|export|const|let|var|function|class|type|interface|return|<\/?[A-Za-z][^>]*>|[{}[\]);,]|\/\/|#!)/.test(line)
+        || /(?:=>|;|<\/[A-Za-z]+>|className=|from ['"]|=\s*\{)/.test(line)
 }
 
 function isDeploymentDiagnosticPrompt(prompt: string) {
