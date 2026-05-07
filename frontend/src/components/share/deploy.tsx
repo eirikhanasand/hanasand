@@ -1,4 +1,5 @@
 import type { ShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
+import { ExternalLink, RotateCcw, ScrollText, ShieldCheck } from 'lucide-react'
 import { Dispatch, SetStateAction } from 'react'
 
 type DeployProps = {
@@ -13,15 +14,20 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
     }
 
     const disabled = !capability.canDeploy
-    const label = disabled ? 'No deploy target' : terminalOpen ? 'Deployment terminal open' : 'Launch'
+    const label = disabled ? 'Deploy proof unavailable' : terminalOpen ? 'Deployment path open' : 'Deploy with proof'
+    const detail = disabled
+        ? capability.reason
+        : capability.evidence.length
+            ? `Detected ${capability.evidence.slice(0, 2).join(', ')}${capability.evidence.length > 2 ? '...' : ''}.`
+            : 'Hanasand will open the launch path with logs and recovery notes.'
     const stateClass = disabled
-        ? 'cursor-not-allowed border-bright/8 bg-black/36 text-bright/34'
-        : 'cursor-pointer border-[#f07d33]/25 bg-[#f07d33]/12 text-[#ffb77c] hover:border-[#f07d33]/45 hover:bg-[#f07d33]/18 hover:text-[#ffd5b4]'
+        ? 'cursor-not-allowed border-bright/8 bg-black/50 text-bright/34'
+        : 'cursor-pointer border-[#f07d33]/25 bg-[#0f1110]/92 text-[#ffb77c] hover:border-[#f07d33]/45 hover:bg-[#151715]/96 hover:text-[#ffd5b4]'
 
     return (
         <button
             type='button'
-            aria-label={disabled ? `Deployment unavailable: ${capability.reason}` : terminalOpen ? 'Terminal open for deployment commands' : 'Open launch path with deployment commands'}
+            aria-label={disabled ? `Deployment proof unavailable: ${capability.reason}` : terminalOpen ? 'Deployment path is open' : 'Open deployment path with logs and rollback proof'}
             title={capability.reason}
             disabled={disabled}
             onClick={() => {
@@ -30,13 +36,33 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
                 }
             }}
             className={`
-                fixed bottom-3 right-3 z-100 inline-flex max-w-[calc(100vw-1.5rem)] select-none
-                items-center justify-center rounded-full border px-3.5 py-2 text-sm
+                fixed bottom-3 right-3 z-100 grid w-[min(23rem,calc(100vw-1.5rem))] select-none
+                gap-2 rounded-2xl border p-3 text-left
                 shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-md transition
                 ${stateClass}
             `}
         >
-            <span className='truncate'>{label}</span>
+            <span className='flex min-w-0 items-center justify-between gap-3'>
+                <span className='min-w-0'>
+                    <span className='block truncate text-sm font-semibold'>{label}</span>
+                    <span className='mt-0.5 block truncate text-[11px] text-bright/45'>{detail}</span>
+                </span>
+                <ExternalLink className='h-4 w-4 shrink-0 opacity-70' />
+            </span>
+            <span className='grid grid-cols-3 gap-1 text-[10px] text-bright/50'>
+                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
+                    <ShieldCheck className='h-3 w-3 shrink-0' />
+                    <span className='truncate'>Health proof</span>
+                </span>
+                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
+                    <ScrollText className='h-3 w-3 shrink-0' />
+                    <span className='truncate'>Logs</span>
+                </span>
+                <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
+                    <RotateCcw className='h-3 w-3 shrink-0' />
+                    <span className='truncate'>Rollback</span>
+                </span>
+            </span>
         </button>
     )
 }
