@@ -1,7 +1,7 @@
 'use client'
 
 import { Dispatch, SetStateAction, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { FileCode2, FolderTree, GitBranch, MonitorUp, TerminalSquare } from 'lucide-react'
+import { FileCode2, FolderTree, GitBranch, MonitorUp, RotateCcw, ShieldCheck, TerminalSquare } from 'lucide-react'
 import { countTreeItems, findPath, getVisibleWorkspaceTree, getWorkspaceName, isWorkspaceRootItem } from './workspaceTree'
 
 type WorkspaceStatusProps = {
@@ -56,9 +56,28 @@ export default function WorkspaceStatus({
         : share
             ? `${share.wordCount} words`
             : 'Waiting for workspace'
+    const proofDetail = share?.alias
+        ? `Preview proof target: ${share.alias}.hanasand.com`
+        : 'Add an alias or preview target to attach rendered proof'
 
     return (
         <section className='space-y-2 rounded-lg border border-bright/8 bg-black/16 p-3 text-bright/72'>
+            <div className='rounded-lg border border-[#f07d33]/12 bg-[#f07d33]/6 p-2.5'>
+                <div className='flex items-start gap-2'>
+                    <ShieldCheck className='mt-0.5 h-4 w-4 shrink-0 text-[#f07d33]' />
+                    <div className='min-w-0'>
+                        <div className='text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffc49b]/62'>Production assistant</div>
+                        <div className='mt-1 text-sm font-semibold text-bright/86'>Build, verify, deploy, recover</div>
+                        <div className='mt-0.5 text-[11px] leading-4 text-bright/48'>{proofDetail}</div>
+                    </div>
+                </div>
+                <div className='mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-bright/54'>
+                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Reviewable changes</span>
+                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Visible proof</span>
+                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Deploy logs</span>
+                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Rollback path</span>
+                </div>
+            </div>
             <StatusRow
                 icon={<FolderTree className='h-4 w-4' />}
                 label='Workspace'
@@ -76,6 +95,12 @@ export default function WorkspaceStatus({
                 label='Git'
                 value={storedGit ? storedGit.fullName : 'No repository loaded'}
                 detail={storedGit ? `${storedGit.branch}${storedGit.sourcePath ? ` / ${storedGit.sourcePath}` : ''}` : 'Use the Git panel to load or inspect changes'}
+            />
+            <StatusRow
+                icon={<RotateCcw className='h-4 w-4' />}
+                label='Recovery'
+                value='Changes stay reviewable'
+                detail='Use saved history, Git sync, and deploy rollback evidence to recover safely'
             />
             <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-2.5'>
                 <div className='flex items-start gap-2'>
