@@ -1632,6 +1632,7 @@ test('share page AI blocks applying pending edits when browser proof needs retry
 test('share page AI lets users retry failed browser proof without rerunning the prompt', async ({ page, context, baseURL }) => {
     test.setTimeout(180_000)
     await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
 
     await page.route('https://cdn.hanasand.com/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
@@ -1711,7 +1712,7 @@ test('share page AI lets users retry failed browser proof without rerunning the 
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = proofRecoveryStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
-        const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${matchingStory!.id}`
+        const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${matchingStory!.id}-${runSlug}`
         expect(body.maxTokens).toBe(2200)
         expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
         expect(body.context).toContain(expectedUrl)
@@ -1740,8 +1741,8 @@ test('share page AI lets users retry failed browser proof without rerunning the 
     })
 
     for (const story of proofRecoveryStories) {
-        const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${story.id}`
-        await page.goto(`/s/app-proof-recovery-${story.id}?new=1`)
+        const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${story.id}-${runSlug}`
+        await page.goto(`/s/app-proof-recovery-${story.id}-${runSlug}?new=1`)
         await page.getByRole('button', { name: 'Open workspace chat' }).click()
         await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
         const startedAt = Date.now()
