@@ -164,6 +164,14 @@ type DesignReview = {
     strengths: string[]
 }
 
+type DesignBrief = {
+    businessType: string
+    layoutMoves: string[]
+    assetPipeline: string[]
+    tokenPlan: string[]
+    templateCaveat: string
+}
+
 const DESIGN_MEMORY_STORAGE_KEY = 'hanasand:share-design-memory:v1'
 
 export default function ShareChat({
@@ -1191,6 +1199,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     const regressionAccountabilityMode = isRegressionAccountabilityPrompt(prompt)
     const sandboxSafetyMode = isSandboxSafetyPrompt(prompt)
     const designDifferentiationMode = isDesignDifferentiationPrompt(prompt)
+    const designBrief = inferDesignBrief(prompt, treePaths)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -1232,6 +1241,14 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         '- Prefer real asset slots and honest placeholders with alt text over decorative blobs. Use icons, photos, illustrations, or brand-kit notes when they materially help the page.',
         '- Check spacing, hierarchy, contrast, mobile overflow, repeated patterns, and generic copy before claiming the design is ready.',
         '- Use niche business conventions as a starting point only. Do not lock the user into a rigid template.',
+        designBrief ? [
+            'Niche design starting point:',
+            `- Business type: ${designBrief.businessType}.`,
+            `- Layout moves: ${designBrief.layoutMoves.join('; ')}.`,
+            `- Asset pipeline: ${designBrief.assetPipeline.join('; ')}.`,
+            `- Theme tokens: ${designBrief.tokenPlan.join('; ')}.`,
+            `- Constraint: ${designBrief.templateCaveat}`,
+        ].join('\n') : null,
         'Quality gates:',
         '- Define acceptance criteria from the user request before claiming success.',
         '- Treat build, smoke, browser proof, mobile viewport, accessibility basics, broken links, and critical journeys as separate gates.',
@@ -1260,7 +1277,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         designDifferentiationMode ? [
             'Make-this-not-AI-generated review mode:',
             '- Treat sameness as a defect. Rewrite generic copy, remove default-looking repeated cards, and add a deliberate design rationale.',
-            '- Include design tokens or a small brand kit file when the change is visual or brand-heavy.',
+            '- Include design tokens and a small brand-kit/asset-guidance file when the change is visual or brand-heavy.',
             '- Add concrete asset guidance: image subjects, icon direction, empty states, and what must not be faked.',
             '- Verify mobile hierarchy and overflow. A pretty desktop-only result is not finished.',
         ].join('\n') : null,
@@ -1305,6 +1322,7 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
         writesAllowed: workflow === 'build',
         designDifferentiationMode: isDesignDifferentiationPrompt(prompt),
         designMemory,
+        designBrief: inferDesignBrief(prompt, treePaths),
         diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
         costControlMode: isCostControlPrompt(prompt),
         maintainabilityMode: isMaintainabilityPrompt(prompt),
@@ -1762,6 +1780,7 @@ function reviewDesignDifferentiation(content: string, prompt: string, pendingCha
         genericCopyIssue(content),
         missingTokenIssue(content),
         missingAssetDirectionIssue(content, prompt),
+        missingBrandKitIssue(content, prompt, pendingChanges),
         mobileOverflowRiskIssue(content),
     ].filter(Boolean) as string[]
     const strengths = [
@@ -1825,6 +1844,18 @@ function missingAssetDirectionIssue(content: string, prompt: string) {
     return /<img|next\/image|background-image|\.svg|lucide-react|icon|asset|photo|illustration|brand kit/i.test(content)
         ? null
         : 'No asset, icon, or brand-kit direction was included for a visual request.'
+}
+
+function missingBrandKitIssue(content: string, prompt: string, pendingChanges: PendingShareChange[]) {
+    const visualPrompt = /\b(site|page|landing|portfolio|brand|design|visual|premium|not look ai|not ai-generated|image|photo|icon|restaurant|clinic|agency|studio|shop|gym|portfolio)\b/i.test(prompt)
+    if (!visualPrompt) {
+        return null
+    }
+    const hasBrandKitFile = pendingChanges.some((change) => /brand.?kit|design.?tokens|style.?guide|asset.?guide|theme/i.test(change.path))
+    const hasBrandKitCopy = /\b(brand kit|design tokens|asset pipeline|asset guidance|image direction|icon direction|theme tokens|style guide)\b/i.test(content)
+    return hasBrandKitFile || hasBrandKitCopy
+        ? null
+        : 'Visual work needs a tiny brand kit or asset guide so the style can survive future edits.'
 }
 
 function mobileOverflowRiskIssue(content: string) {
@@ -2072,6 +2103,64 @@ function summarizeDesignMemory(prompt: string, content: string, tokens: string[]
         hasTokens ? 'Theme tokens are part of this direction.' : 'Add theme tokens when the next change is visual.',
         hasAssets ? 'Asset direction exists.' : 'Define image/icon direction before claiming visual polish.',
     ].join(' ')
+}
+
+function inferDesignBrief(prompt: string, treePaths: string[]): DesignBrief | null {
+    const lower = prompt.toLowerCase()
+    const hasVisualIntent = isDesignDifferentiationPrompt(prompt) || /\b(site|page|landing|home|portfolio|restaurant|clinic|agency|studio|shop|gym|course|nonprofit|law|architect|photographer)\b/i.test(prompt)
+    if (!hasVisualIntent) {
+        return null
+    }
+    const businessType = inferBusinessType(lower, treePaths)
+    const briefByType: Record<string, Omit<DesignBrief, 'businessType' | 'templateCaveat'>> = {
+        restaurant: {
+            layoutMoves: ['menu-first scan path', 'hours and location above the fold', 'dietary caveats close to food choices'],
+            assetPipeline: ['real food/interior photography slots with alt text', 'small icon set for dietary notes and pickup/dine-in', 'never fake ordering or booking'],
+            tokenPlan: ['warm paper background', 'ink text', 'one appetite accent', 'tight menu rhythm'],
+        },
+        clinic: {
+            layoutMoves: ['trust and access first', 'clear eligibility and wait-time sections', 'privacy boundaries near forms'],
+            assetPipeline: ['real facility/team photo slots only if available', 'calm line icons for services', 'no patient-detail collection unless explicitly requested'],
+            tokenPlan: ['clinical neutral base', 'calm blue/green accent', 'large readable type', 'high contrast states'],
+        },
+        agency: {
+            layoutMoves: ['proof-led hero', 'case-study strips', 'process and handoff sections'],
+            assetPipeline: ['project thumbnail slots', 'client-logo placeholders marked as pending', 'icons for strategy/design/build'],
+            tokenPlan: ['editorial type scale', 'restrained accent', 'portfolio spacing rhythm', 'case-study cards with varied composition'],
+        },
+        studio: {
+            layoutMoves: ['editorial first screen', 'selected-work rhythm', 'inquiry and constraints together'],
+            assetPipeline: ['atelier/process photo slots', 'quiet icon marks for services', 'art-direction notes in brand kit'],
+            tokenPlan: ['paper/ink palette', 'one material accent', 'wide margins', 'asymmetric content blocks'],
+        },
+        shop: {
+            layoutMoves: ['product/category scan path', 'trust and delivery details close to CTAs', 'clear support/returns block'],
+            assetPipeline: ['real product photo slots', 'category icons', 'no fake checkout or inventory'],
+            tokenPlan: ['commerce-neutral base', 'one brand accent', 'compact product grid rhythm', 'touch-safe buttons'],
+        },
+        default: {
+            layoutMoves: ['specific first screen tied to the business', 'varied section rhythm', 'one obvious next action'],
+            assetPipeline: ['real image slots with subjects and alt text', 'purposeful icon set', 'brand-kit notes for future edits'],
+            tokenPlan: ['named color tokens', 'type scale', 'spacing rhythm', 'contrast states'],
+        },
+    }
+    const brief = briefByType[businessType] || briefByType.default
+    return {
+        businessType,
+        ...brief,
+        templateCaveat: 'Use these as starting constraints, not a fixed template; adapt to the user request and existing project.',
+    }
+}
+
+function inferBusinessType(lowerPrompt: string, treePaths: string[]) {
+    const joinedTree = treePaths.join(' ').toLowerCase()
+    const source = `${lowerPrompt} ${joinedTree}`
+    if (/\b(restaurant|cafe|café|bistro|bar|catering|menu|food|allerg)\b/.test(source)) return 'restaurant'
+    if (/\b(clinic|health|patient|therapy|dentist|doctor|medical|wellness)\b/.test(source)) return 'clinic'
+    if (/\b(agency|consultancy|client|case stud|white label|services)\b/.test(source)) return 'agency'
+    if (/\b(studio|designer|architect|photographer|portfolio|creative)\b/.test(source)) return 'studio'
+    if (/\b(shop|store|retail|product|commerce|bike|plants|repair)\b/.test(source)) return 'shop'
+    return 'default'
 }
 
 function isDeploymentDiagnosticPrompt(prompt: string) {
