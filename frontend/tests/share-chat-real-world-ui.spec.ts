@@ -354,6 +354,29 @@ const pendingSummaryStories: AppStory[] = [
     { id: 1220, prompt: 'are we reducing bloat where it matters', expected: 'less-bloat-summary' },
 ]
 
+const deploymentDiagnosticStories: AppStory[] = [
+    { id: 1221, prompt: 'vercel build failed but logs are missing', expected: 'missing-build-logs' },
+    { id: 1222, prompt: 'env works locally but production says undefined', expected: 'env-prod-mismatch' },
+    { id: 1223, prompt: 'preview and production dont match', expected: 'preview-prod-drift' },
+    { id: 1224, prompt: 'netlify deploy queue is stuck', expected: 'deploy-queue-stuck' },
+    { id: 1225, prompt: 'staging redirects fail but local works', expected: 'staging-redirects' },
+    { id: 1226, prompt: 'runtime logs are loading forever', expected: 'runtime-logs-missing' },
+    { id: 1227, prompt: 'edge function fails only after deploy', expected: 'edge-deploy-fail' },
+    { id: 1228, prompt: 'corporate reviewer needs deploy evidence first', expected: 'corporate-deploy-evidence' },
+    { id: 1229, prompt: 'designer says preview is stale', expected: 'designer-stale-preview' },
+    { id: 1230, prompt: 'newbie says the website deployed but looks old', expected: 'newbie-old-deploy' },
+    { id: 1231, prompt: 'agency client says production is broken', expected: 'agency-prod-broken' },
+    { id: 1232, prompt: 'support asks where the build error is', expected: 'support-build-error' },
+    { id: 1233, prompt: 'founder demo link is down after deploy', expected: 'founder-demo-down' },
+    { id: 1234, prompt: 'pricing page deploy changed environment', expected: 'pricing-env-scope' },
+    { id: 1235, prompt: 'mobile preview works but prod mobile fails', expected: 'mobile-preview-prod' },
+    { id: 1236, prompt: 'compliance says dont expose secrets in logs', expected: 'compliance-secret-logs' },
+    { id: 1237, prompt: 'terminal agent kept guessing at the deploy bug', expected: 'terminal-no-guessing' },
+    { id: 1238, prompt: 'handoff needs exact deploy next check', expected: 'handoff-deploy-check' },
+    { id: 1239, prompt: 'client asks why vercel succeeded but app errors', expected: 'client-vercel-runtime' },
+    { id: 1240, prompt: 'are these deploy stories actually real world enough', expected: 'real-world-deploy-diagnostics' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -2018,4 +2041,97 @@ test('share page AI shows compact pending change summaries before raw diffs', as
     }
 
     expect(handledPrompts).toHaveLength(pendingSummaryStories.length)
+})
+
+test('share page AI switches to deployment diagnostics for real hosting failures', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-deploy-diagnostic-story',
+                alias: body.path || body.name || body.id || 'app-deploy-diagnostic-story',
+                path: body.path || body.name || body.id || 'app-deploy-diagnostic-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-deploy-diagnostic-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = deploymentDiagnosticStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-deploy-diagnostic-${matchingStory!.id}-${runSlug}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain('Deployment diagnostic mode:')
+        expect(body.prompt).toContain('do not guess and do not edit first')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain('"diagnosticMode":true')
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}.`,
+                    'Diagnostic checklist: target URL, environment scope, last changed config/package files, exact build/runtime log evidence, and the smallest safe next check.',
+                    'No edit yet; missing deploy evidence would make this a guess.',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    for (const story of deploymentDiagnosticStories) {
+        const expectedUrl = `https://hanasand.com/s/app-deploy-diagnostic-${story.id}-${runSlug}`
+        await page.goto(`/s/app-deploy-diagnostic-${story.id}-${runSlug}?new=1`)
+        const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
+        await expect(chatButton).toBeVisible({ timeout: 2500 })
+        await chatButton.click()
+        const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
+        await expect(promptBox).toBeVisible({ timeout: 2500 })
+        await promptBox.fill(story.prompt)
+        await expect(page.getByText('Diagnostic mode: collect target, logs, env scope, and preview evidence before editing.')).toBeVisible()
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Diagnostic checklist: target URL, environment scope, last changed config/package files, exact build/runtime log evidence, and the smallest safe next check.')).toBeVisible()
+        await expect(page.getByText('No edit yet; missing deploy evidence would make this a guess.')).toBeVisible()
+        await expect(page.getByText('1 pending change')).not.toBeVisible()
+        await expect(page.getByRole('button', { name: 'Apply' })).not.toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(deploymentDiagnosticStories.length)
 })

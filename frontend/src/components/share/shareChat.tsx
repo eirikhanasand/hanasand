@@ -114,6 +114,7 @@ export default function ShareChat({
         : share
             ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
             : null
+    const diagnosticHint = getDiagnosticHint(input)
     const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
     const canSend = input.trim().length > 0 && !loading && Boolean(share) && !pendingEditBlocksNewRun
     const phaseLabel = loading
@@ -168,7 +169,7 @@ export default function ShareChat({
                 method: 'POST',
                 body: JSON.stringify({
                     prompt: buildPrompt(trimmed, share, editingContent, treePaths, previewUrl || null),
-                    context: buildContext(share, editingContent, treePaths, messages, previewUrl || null),
+                    context: buildContext(share, editingContent, treePaths, messages, previewUrl || null, trimmed),
                     maxTokens: tokenCap,
                 }),
             })
@@ -586,6 +587,10 @@ export default function ShareChat({
                     <p className='mt-2 text-xs text-bright/42'>
                         Apply or discard the pending change before asking for another edit.
                     </p>
+                ) : diagnosticHint ? (
+                    <p className='mt-2 text-xs text-bright/42'>
+                        {diagnosticHint}
+                    </p>
                 ) : null}
             </form>
         </section>
@@ -628,6 +633,7 @@ function wait(ms: number) {
 
 function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null) {
     const shareEvidenceUrl = buildShareEvidenceUrl(share)
+    const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -642,6 +648,12 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, request browser evidence using the best target above, for example:',
         `<hanasand-tool>{"action":"browser_task","url":"${previewUrl || shareEvidenceUrl || 'https://hanasand.com/s'}","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>`,
         'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport proof.',
+        diagnosticMode ? [
+            'Deployment diagnostic mode:',
+            '- For build failures, missing logs, env variable mismatch, preview vs production drift, or deploy queue/runtime issues, do not guess and do not edit first.',
+            '- First return a compact diagnostic checklist covering target URL, environment scope, last changed config/package files, exact error/log evidence needed, and the smallest safe next check.',
+            '- If browser evidence can prove the public or preview page state, request browser evidence. If logs or secrets are needed, ask for the specific missing evidence without asking for broad access.',
+        ].join('\n') : null,
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
@@ -652,9 +664,10 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     ].filter(Boolean).join('\n\n')
 }
 
-function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null) {
+function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null, prompt: string) {
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
+        diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
         browserEvidenceTargets: {
             previewUrl,
             sharePageUrl: buildShareEvidenceUrl(share),
@@ -858,6 +871,17 @@ function parentIdForPath(tree: Tree | null, filePath: string) {
 
 function stripToolTags(content: string) {
     return content.replace(/<hanasand-tool>[\s\S]*?<\/hanasand-tool>/g, '').replace(/\n{3,}/g, '\n\n')
+}
+
+function isDeploymentDiagnosticPrompt(prompt: string) {
+    return /\b(deploy|deployed|deployment|build|vercel|netlify|env|environment|secret|preview|production|prod|staging|runtime|log|logs|queue|edge|serverless)\b/i.test(prompt)
+}
+
+function getDiagnosticHint(prompt: string) {
+    if (!isDeploymentDiagnosticPrompt(prompt)) {
+        return null
+    }
+    return 'Diagnostic mode: collect target, logs, env scope, and preview evidence before editing.'
 }
 
 function summarizePendingChange(change: PendingShareChange) {
