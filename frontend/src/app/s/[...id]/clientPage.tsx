@@ -209,7 +209,7 @@ export default function ClientPage({
                         {chatOpen ? (
                             <div className='flex items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
                                 <MessageSquare className='h-4 w-4 text-[#f07d33]' />
-                                <span className='truncate'>Chat workspace</span>
+                                <span className='truncate'>Production assistant</span>
                             </div>
                         ) : (
                             <div className='min-w-0 flex-1'>
@@ -219,12 +219,12 @@ export default function ClientPage({
                     </div>
                     <button
                         type='button'
-                        aria-label={chatOpen ? 'Back to code editor' : 'Open workspace chat'}
+                        aria-label={chatOpen ? 'Back to code editor' : 'Open production assistant'}
                         onClick={() => setChatOpen(prev => !prev)}
                         className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#f07d33]/35 hover:bg-[#f07d33]/12 hover:text-bright'
                     >
                         {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
-                        {chatOpen ? 'Back to code' : 'Open Chat'}
+                        {chatOpen ? 'Back to code' : 'Build with proof'}
                     </button>
                 </div>
                 {!chatOpen && (
