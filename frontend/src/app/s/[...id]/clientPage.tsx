@@ -195,7 +195,7 @@ export default function ClientPage({
                 />
             </div>
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
-                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-[var(--panel-surface)] px-2 py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/72 md:shadow-black/10'>
+                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-(--panel-surface) px-2 py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/72 md:shadow-black/10'>
                     <div className='min-w-0 flex flex-1 items-center gap-2'>
                         {chatOpen ? (
                             <div className='flex min-w-0 items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
@@ -265,7 +265,7 @@ export default function ClientPage({
                     />
                 )}
                 {chatOpen ? (
-                    <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/48'>
+                    <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/48'>
                         <ShareChat
                             share={share}
                             setShare={setShare}
@@ -388,7 +388,7 @@ function CollaborationStatus({
     }
 
     return (
-        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-[var(--panel-surface)] px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/50 md:shadow-black/10'>
+        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-(--panel-surface) px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/50 md:shadow-black/10'>
             <div className='flex min-w-0 flex-wrap items-center gap-2'>
                 {otherUsers.length ? (
                     <div className='flex items-center gap-1.5'>

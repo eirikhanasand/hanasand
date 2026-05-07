@@ -107,7 +107,7 @@ export default function PreviewFlow({
     return (
         <section className={`flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs shadow-2xl shadow-black/10 backdrop-blur-md ${runtime.canRun
             ? 'border-[#f07d33]/20 bg-[#f07d33]/10 text-bright/70 md:bg-[#f07d33]/7'
-            : 'border-bright/10 bg-[var(--panel-surface)] text-bright/50 md:bg-background/42'
+            : 'border-bright/10 bg-(--panel-surface) text-bright/50 md:bg-background/42'
         }`}>
             <div className='flex min-w-0 flex-1 items-center gap-2'>
                 <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${runtime.canRun ? 'bg-[#f07d33]/14 text-[#ffb27f]' : 'bg-bright/5 text-bright/42'}`}>

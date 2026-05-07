@@ -42,7 +42,7 @@ export default function Menu() {
     return (
         <div className='group z-105 grid h-11 w-11 place-items-center rounded-lg md:hidden'>
             <X onClick={toggleOpen} />
-            <div onClick={(e) => e.preventDefault()} className='absolute right-3 top-16 z-105 h-fit w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-bright/10 bg-[var(--panel-surface)] p-1.5 text-bright shadow-[0_24px_90px_var(--soft-shadow)] outline outline-dark/60 backdrop-blur-xl sm:right-5 sm:top-18'>
+            <div onClick={(e) => e.preventDefault()} className='absolute right-3 top-16 z-105 h-fit w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-bright/10 bg-(--panel-surface) p-1.5 text-bright shadow-[0_24px_90px_var(--soft-shadow)] outline outline-dark/60 backdrop-blur-xl sm:right-5 sm:top-18'>
                 <Link href='/upload' onClick={toggleOpen} className='flex rounded-xl pl-2 pr-5 transition-colors hover:bg-bright/8'>
                     <Upload baseStyles={baseStyles} isUpload={isUpload} />
                     <h1 className='self-center font-semibold'>Upload</h1>

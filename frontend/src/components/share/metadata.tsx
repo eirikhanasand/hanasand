@@ -116,7 +116,7 @@ export default function Metadata({
                     setLocalOpen(true)
                     setShowMetadata(true)
                 }}
-                className={`group ${isCompactViewport ? 'fixed right-4 bottom-22 grid place-items-center rounded-lg border border-bright/10 bg-[var(--panel-surface)] p-3 shadow-2xl shadow-black/30 backdrop-blur-md' : sharedStyles}`}
+                className={`group ${isCompactViewport ? 'fixed right-4 bottom-22 grid place-items-center rounded-lg border border-bright/10 bg-(--panel-surface) p-3 shadow-2xl shadow-black/30 backdrop-blur-md' : sharedStyles}`}
                 style={compactStyle}
             >
                 <h1>
@@ -141,7 +141,7 @@ export default function Metadata({
 
     return (
         <div className='flex h-full min-w-fit flex-row-reverse gap-2'>
-            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
+            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
                 <SidebarTooltip label='Close' side='left'>
                     <button type='button' aria-label='Close metadata' onClick={closeMetadata} className={baseButtonStyle}>
                         <X className='h-5 w-5' />
@@ -268,7 +268,7 @@ export default function Metadata({
                             ? 'w-[min(30rem,calc(100vw-5.5rem))]'
                             : 'w-[min(24rem,calc(100vw-5.5rem))] lg:w-[min(24rem,21vw)]'
                 }`}>
-                    <div className='h-full w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
+                    <div className='h-full w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
                         <header className='flex items-center justify-between rounded-lg border border-bright/8 bg-black/14 px-3 py-2 text-bright/80'>
                             <span className='text-[11px] font-semibold uppercase tracking-[0.22em] text-bright/45'>{panelTitle}</span>
                             <button type='button' aria-label='Hide metadata panel' onClick={() => setActivePanel(null)} className='grid h-8 w-8 place-items-center rounded-lg text-bright/45 transition hover:bg-bright/8 hover:text-bright'>

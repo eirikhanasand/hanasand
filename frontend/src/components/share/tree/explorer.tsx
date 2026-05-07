@@ -130,7 +130,7 @@ export default function Explorer({
         return (
             <div
                 onMouseDown={(event) => handleMouseDown(event)}
-                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/35 backdrop-blur-md max-md:bottom-16 max-md:left-2 max-md:top-auto md:bg-background/80 md:shadow-black/30'
+                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/35 backdrop-blur-md max-md:bottom-16 max-md:left-2 max-md:top-auto md:bg-background/80 md:shadow-black/30'
                 style={{
                     top: position.y,
                     left: position.x,
@@ -168,7 +168,7 @@ export default function Explorer({
 
     return (
         <div className='fixed inset-y-2 left-2 z-[120] flex min-w-0 gap-2 md:relative md:inset-auto md:z-auto md:h-full md:min-w-fit'>
-            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
+            <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:bg-background/82 md:shadow-black/20'>
                 <SidebarTooltip label='Close'>
                     <button type='button' aria-label='Close left sidebar' onClick={() => setShowExplorer(false)} className='grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'>
                         <X className='h-5 w-5' />
@@ -217,7 +217,7 @@ export default function Explorer({
                     setError={setError}
                 />
             ) : (
-                <div className='relative z-10 h-full w-[min(18rem,calc(100vw-5rem))] overflow-auto rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:w-[15vw] md:min-w-60 md:bg-background/82 md:shadow-black/20'>
+                <div className='relative z-10 h-full w-[min(18rem,calc(100vw-5rem))] overflow-auto rounded-xl border border-bright/10 bg-(--panel-surface) p-2 shadow-2xl shadow-black/30 backdrop-blur-md md:w-[15vw] md:min-w-60 md:bg-background/82 md:shadow-black/20'>
                     {(!tree || !share) && <div className='w-full'>
                         {treeLoading || !share ? <TreeSkeleton /> : null}
                         {share && !treeLoading ? (
