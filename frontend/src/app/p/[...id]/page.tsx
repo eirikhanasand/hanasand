@@ -47,6 +47,7 @@ export default async function Page(props: {
                 shareTerminalHeight={shareTerminalHeight}
                 serverOpenFiles={openFiles}
                 autoCreate={false}
+                initialChatOpen={false}
                 replaceUrlOnCreate={false}
             />
         </div>

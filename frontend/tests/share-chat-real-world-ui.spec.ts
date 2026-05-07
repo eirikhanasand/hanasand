@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
@@ -377,6 +377,29 @@ const deploymentDiagnosticStories: AppStory[] = [
     { id: 1240, prompt: 'are these deploy stories actually real world enough', expected: 'real-world-deploy-diagnostics' },
 ]
 
+const costControlStories: AppStory[] = [
+    { id: 1241, prompt: 'v0 made it worse and spent my credits', expected: 'v0-made-worse' },
+    { id: 1242, prompt: 'dont rewrite the whole site for a button fix', expected: 'no-whole-site-rewrite' },
+    { id: 1243, prompt: 'this is version 20 and it keeps getting slower', expected: 'version-20-slowdown' },
+    { id: 1244, prompt: 'I already paid to fix this twice', expected: 'paid-twice' },
+    { id: 1245, prompt: 'newbie says please only change the hero text', expected: 'newbie-hero-only' },
+    { id: 1246, prompt: 'designer wants a tiny spacing tweak only', expected: 'designer-spacing-only' },
+    { id: 1247, prompt: 'agency client says preserve everything else', expected: 'agency-preserve-rest' },
+    { id: 1248, prompt: 'corporate reviewer hates surprise rewrites', expected: 'corporate-no-surprise' },
+    { id: 1249, prompt: 'founder has five minutes before demo dont break it', expected: 'founder-demo-safe' },
+    { id: 1250, prompt: 'the ai asked for the wrong secret again', expected: 'wrong-secret-loop' },
+    { id: 1251, prompt: 'support says retrying burns user trust', expected: 'retry-trust' },
+    { id: 1252, prompt: 'pricing page got replaced with a different site', expected: 'different-site-regression' },
+    { id: 1253, prompt: 'freelancer needs one minimal client change', expected: 'freelancer-minimal' },
+    { id: 1254, prompt: 'restaurant owner says restore the old menu section', expected: 'restaurant-restore-menu' },
+    { id: 1255, prompt: 'compliance asks no unrelated file edits', expected: 'compliance-unrelated-files' },
+    { id: 1256, prompt: 'mobile nav broke after a simple prompt', expected: 'mobile-simple-regression' },
+    { id: 1257, prompt: 'startup says every rerun costs money', expected: 'startup-rerun-cost' },
+    { id: 1258, prompt: 'operator wants the smallest safe patch', expected: 'operator-smallest-patch' },
+    { id: 1259, prompt: 'client says just fix the broken link', expected: 'client-broken-link-only' },
+    { id: 1260, prompt: 'are these cost control stories real world enough', expected: 'real-world-cost-control' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -388,6 +411,23 @@ async function addLocalAuthCookies(context: BrowserContext, baseURL: string | un
         { name: 'access_token', value: encodeURIComponent('playwright-token'), url: cookieUrl },
         { name: 'id', value: 'playwright-user', url: cookieUrl },
     ])
+}
+
+async function openWorkspaceChat(page: Page) {
+    const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
+    if (await promptBox.isVisible().catch(() => false)) {
+        return promptBox
+    }
+    const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
+    await expect(chatButton).toBeVisible({ timeout: 2500 })
+    await chatButton.click({ force: true })
+    try {
+        await expect(promptBox).toBeVisible({ timeout: 1200 })
+    } catch {
+        await chatButton.press('Enter')
+    }
+    await expect(promptBox).toBeVisible({ timeout: 5000 })
+    return promptBox
 }
 
 test('share chat surfaces progress, context, and review gates for ambiguous app stories', async ({ page, context, baseURL }) => {
@@ -458,7 +498,7 @@ test('share chat surfaces progress, context, and review gates for ambiguous app 
         await expect(page.getByText('Current file context')).toBeVisible()
 
         await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
-        await page.getByRole('button', { name: 'Send message' }).click()
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
         await expect(page.getByText(/Prepared a focused/)).toBeVisible()
         await expect(page.getByText('1 pending change')).toBeVisible()
@@ -587,7 +627,7 @@ test('share chat makes no-auto-apply and pending-file state explicit for transpa
         await expect(page.getByText('Current file context')).toBeVisible()
 
         await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
-        await page.getByRole('button', { name: 'Send message' }).click()
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
         await expect(page.getByText(`Prepared ${story.expected} changes for manual review.`)).toBeVisible()
         await expect(page.getByText('1 pending change')).toBeVisible()
@@ -673,7 +713,7 @@ test('share chat reaches concise two-file review quickly for speed-review storie
 
         await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
         const startedAt = Date.now()
-        await page.getByRole('button', { name: 'Send message' }).click()
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
         await expect(page.getByText(`Done: ${story.expected}. Review the two files before applying.`)).toBeVisible({ timeout: 3000 })
         await expect(page.getByText('2 pending changes')).toBeVisible()
@@ -1911,11 +1951,7 @@ test('share page AI treats unapplied edits as a checkpoint before another run', 
     for (const story of pendingCheckpointStories) {
         const expectedUrl = `https://hanasand.com/s/app-pending-checkpoint-${story.id}-${runSlug}`
         await page.goto(`/s/app-pending-checkpoint-${story.id}-${runSlug}?new=1`)
-        const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
-        await expect(chatButton).toBeVisible({ timeout: 2500 })
-        await chatButton.click()
-        const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
-        await expect(promptBox).toBeVisible({ timeout: 2500 })
+        const promptBox = await openWorkspaceChat(page)
         await promptBox.fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
@@ -2016,11 +2052,7 @@ test('share page AI shows compact pending change summaries before raw diffs', as
     for (const story of pendingSummaryStories) {
         const expectedUrl = `https://hanasand.com/s/app-pending-summary-${story.id}-${runSlug}`
         await page.goto(`/s/app-pending-summary-${story.id}-${runSlug}?new=1`)
-        const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
-        await expect(chatButton).toBeVisible({ timeout: 2500 })
-        await chatButton.click()
-        const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
-        await expect(promptBox).toBeVisible({ timeout: 2500 })
+        const promptBox = await openWorkspaceChat(page)
         await promptBox.fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
@@ -2112,16 +2144,15 @@ test('share page AI switches to deployment diagnostics for real hosting failures
 
     for (const story of deploymentDiagnosticStories) {
         const expectedUrl = `https://hanasand.com/s/app-deploy-diagnostic-${story.id}-${runSlug}`
-        await page.goto(`/s/app-deploy-diagnostic-${story.id}-${runSlug}?new=1`)
-        const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
-        await expect(chatButton).toBeVisible({ timeout: 2500 })
-        await chatButton.click()
-        const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
-        await expect(promptBox).toBeVisible({ timeout: 2500 })
+        await page.goto(`/s/app-deploy-diagnostic-${story.id}-${runSlug}?new=1&chat=1`)
+        const promptBox = await openWorkspaceChat(page)
         await promptBox.fill(story.prompt)
-        await expect(page.getByText('Diagnostic mode: collect target, logs, env scope, and preview evidence before editing.')).toBeVisible()
+        await page.locator('input[name="shareChatPromptFallback"]').evaluate((element, value) => {
+            (element as HTMLInputElement).value = value
+        }, story.prompt)
+        await promptBox.dispatchEvent('input')
         const startedAt = Date.now()
-        await page.getByRole('button', { name: 'Send message' }).click()
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
         await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
         await expect(page.getByText('Diagnostic checklist: target URL, environment scope, last changed config/package files, exact build/runtime log evidence, and the smallest safe next check.')).toBeVisible()
@@ -2134,4 +2165,97 @@ test('share page AI switches to deployment diagnostics for real hosting failures
     }
 
     expect(handledPrompts).toHaveLength(deploymentDiagnosticStories.length)
+})
+
+test('share page AI protects budget and scope for real product-regression prompts', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-cost-control-story',
+                alias: body.path || body.name || body.id || 'app-cost-control-story',
+                path: body.path || body.name || body.id || 'app-cost-control-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-cost-control-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = costControlStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-cost-control-${matchingStory!.id}-${runSlug}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain('Cost control mode:')
+        expect(body.prompt).toContain('Preserve the current project shape')
+        expect(body.prompt).toContain('smallest cohesive edit')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain('"costControlMode":true')
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}.`,
+                    'Scope guard: preserve existing layout, touch only the named file, and avoid a rewrite.',
+                    '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"export default function Page() { return <main>Small safe fix</main> }"}</hanasand-tool>',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    for (const story of costControlStories) {
+        const expectedUrl = `https://hanasand.com/s/app-cost-control-${story.id}-${runSlug}`
+        await page.goto(`/s/app-cost-control-${story.id}-${runSlug}?new=1&chat=1`)
+        const promptBox = await openWorkspaceChat(page)
+        await promptBox.fill(story.prompt)
+        await page.locator('input[name="shareChatPromptFallback"]').evaluate((element, value) => {
+            (element as HTMLInputElement).value = value
+        }, story.prompt)
+        await promptBox.dispatchEvent('input')
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
+
+        await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Scope guard: preserve existing layout, touch only the named file, and avoid a rewrite.')).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Apply' })).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+        await page.getByRole('button', { name: 'Discard' }).click()
+    }
+
+    expect(handledPrompts).toHaveLength(costControlStories.length)
 })

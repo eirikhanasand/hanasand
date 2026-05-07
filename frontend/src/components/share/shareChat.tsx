@@ -107,16 +107,18 @@ export default function ShareChat({
     const [lastRun, setLastRun] = useState<RunSummary | null>(null)
     const [lastBrowserCalls, setLastBrowserCalls] = useState<ToolCall[]>([])
     const [retryingProof, setRetryingProof] = useState(false)
+    const [hydrated, setHydrated] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
+    const formRef = useRef<HTMLFormElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
     const proofTarget = previewUrl
         ? { label: 'Preview target', url: previewUrl }
         : share
             ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
             : null
-    const diagnosticHint = getDiagnosticHint(input)
+    const composerHint = getComposerHint(input)
     const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
-    const canSend = input.trim().length > 0 && !loading && Boolean(share) && !pendingEditBlocksNewRun
+    const canSend = hydrated && !loading && !pendingEditBlocksNewRun
     const phaseLabel = loading
         ? elapsedSeconds < 4
             ? 'Scoping'
@@ -131,6 +133,10 @@ export default function ShareChat({
     const proofApplyBlocked = pendingEdit?.status === 'pending' && lastRun?.status === 'error' && lastRun.browserProofs > 0
 
     useEffect(() => {
+        setHydrated(true)
+    }, [])
+
+    useEffect(() => {
         if (!startedAt) {
             setElapsedSeconds(0)
             return
@@ -142,12 +148,18 @@ export default function ShareChat({
         return () => window.clearInterval(interval)
     }, [startedAt])
 
-    async function submit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
-        const trimmed = input.trim()
-        if (!trimmed || !share || loading) {
+    async function submit(event?: FormEvent<HTMLFormElement>) {
+        event?.preventDefault()
+        const currentForm = event?.currentTarget
+        await submitPrompt(readSubmittedPrompt(currentForm))
+    }
+
+    async function submitPrompt(rawPrompt: string) {
+        const trimmed = rawPrompt.trim()
+        if (!trimmed || loading) {
             return
         }
+        const activeShare = share || createOptimisticChatShare(trimmed)
 
         const userMessage: Message = {
             id: randomId(),
@@ -168,8 +180,8 @@ export default function ShareChat({
             const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
-                    prompt: buildPrompt(trimmed, share, editingContent, treePaths, previewUrl || null),
-                    context: buildContext(share, editingContent, treePaths, messages, previewUrl || null, trimmed),
+                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null),
+                    context: buildContext(activeShare, editingContent, treePaths, messages, previewUrl || null, trimmed),
                     maxTokens: tokenCap,
                 }),
             })
@@ -184,7 +196,7 @@ export default function ShareChat({
                 })
             }
             const toolCalls = parseToolCalls(rawContent)
-            const pendingChanges = buildPendingChanges(toolCalls, share, tree || null, editingContent)
+            const pendingChanges = buildPendingChanges(toolCalls, activeShare, tree || null, editingContent)
             const browserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
             const boundedBrowserCalls = browserCalls.slice(0, 3)
             let browserProofs = browserCalls.length
@@ -249,6 +261,21 @@ export default function ShareChat({
             setStartedAt(null)
             window.setTimeout(() => inputRef.current?.focus(), 0)
         }
+    }
+
+    function readSubmittedPrompt(form?: HTMLFormElement) {
+        if (!form) {
+            return inputRef.current?.value || input
+        }
+        const formData = new FormData(form)
+        const submittedInput = typeof formData.get('shareChatPrompt') === 'string'
+            ? formData.get('shareChatPrompt') as string
+            : ''
+        const submittedFallback = typeof formData.get('shareChatPromptFallback') === 'string'
+            ? formData.get('shareChatPromptFallback') as string
+            : ''
+        const fallbackInput = inputRef.current?.value || ''
+        return submittedInput || submittedFallback || fallbackInput || input
     }
 
     async function retryBrowserProof() {
@@ -558,12 +585,15 @@ export default function ShareChat({
                 </div>
             ) : null}
 
-            <form onSubmit={submit} className='border-t border-bright/8 p-3'>
+            <form ref={formRef} onSubmit={submit} className='border-t border-bright/8 p-3'>
                 <div className='flex items-end gap-2 rounded-2xl border border-bright/10 bg-bright/[0.045] p-2'>
+                    <input type='hidden' name='shareChatPromptFallback' value={input} />
                     <textarea
                         ref={inputRef}
+                        name='shareChatPrompt'
                         value={input}
                         onChange={(event) => setInput(event.target.value)}
+                        onInput={(event) => setInput(event.currentTarget.value)}
                         onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
                                 event.preventDefault()
@@ -575,8 +605,9 @@ export default function ShareChat({
                         rows={1}
                     />
                     <button
-                        type='submit'
+                        type='button'
                         disabled={!canSend}
+                        onClick={() => void submitPrompt(readSubmittedPrompt(formRef.current || undefined))}
                         aria-label='Send message'
                         className='grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full bg-bright text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-35'
                     >
@@ -587,9 +618,9 @@ export default function ShareChat({
                     <p className='mt-2 text-xs text-bright/42'>
                         Apply or discard the pending change before asking for another edit.
                     </p>
-                ) : diagnosticHint ? (
+                ) : composerHint ? (
                     <p className='mt-2 text-xs text-bright/42'>
-                        {diagnosticHint}
+                        {composerHint}
                     </p>
                 ) : null}
             </form>
@@ -634,6 +665,7 @@ function wait(ms: number) {
 function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null) {
     const shareEvidenceUrl = buildShareEvidenceUrl(share)
     const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
+    const costControlMode = isCostControlPrompt(prompt)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -654,6 +686,12 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             '- First return a compact diagnostic checklist covering target URL, environment scope, last changed config/package files, exact error/log evidence needed, and the smallest safe next check.',
             '- If browser evidence can prove the public or preview page state, request browser evidence. If logs or secrets are needed, ask for the specific missing evidence without asking for broad access.',
         ].join('\n') : null,
+        costControlMode ? [
+            'Cost control mode:',
+            '- Users may be reacting to credit burn, broad rewrites, repeated retries, wrong-secret loops, or a project that got worse after many versions.',
+            '- Preserve the current project shape. Prefer the smallest cohesive edit, name the intended files before tool tags, and avoid replacing unrelated files.',
+            '- If the prompt says the AI made it worse, first identify what should be restored or preserved. Do not rebuild a different site unless the user explicitly asks.',
+        ].join('\n') : null,
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
@@ -668,6 +706,7 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
     return JSON.stringify({
         share: { id: share.id, path: share.path, alias: share.alias, parent: share.parent },
         diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
+        costControlMode: isCostControlPrompt(prompt),
         browserEvidenceTargets: {
             previewUrl,
             sharePageUrl: buildShareEvidenceUrl(share),
@@ -877,11 +916,40 @@ function isDeploymentDiagnosticPrompt(prompt: string) {
     return /\b(deploy|deployed|deployment|build|vercel|netlify|env|environment|secret|preview|production|prod|staging|runtime|log|logs|queue|edge|serverless)\b/i.test(prompt)
 }
 
-function getDiagnosticHint(prompt: string) {
-    if (!isDeploymentDiagnosticPrompt(prompt)) {
-        return null
+function isCostControlPrompt(prompt: string) {
+    return /\b(cost|credit|credits|budget|spend|spent|paid|pricing|limit|limits|usage|retry|retrying|rerun|rerunning|burn|burns|again|fix|fixed|worse|break|broke|broken|restore|revert|minimal|small|smallest|tiny|simple|only|preserve|scope|unrelated|related|file edits|version|versions|rewrite|rewrote|surprise|different site|wrong secret|secrets)\b/i.test(prompt)
+}
+
+function getComposerHint(prompt: string) {
+    const deploymentDiagnostic = isDeploymentDiagnosticPrompt(prompt)
+    const costControl = isCostControlPrompt(prompt)
+    if (deploymentDiagnostic && costControl) {
+        return 'Diagnostic mode: collect deploy evidence. Cost control mode: preserve scope and make the smallest useful edit.'
     }
-    return 'Diagnostic mode: collect target, logs, env scope, and preview evidence before editing.'
+    if (costControl) {
+        return 'Cost control mode: preserve scope, name files, and make the smallest useful edit.'
+    }
+    if (deploymentDiagnostic) {
+        return 'Diagnostic mode: collect target, logs, env scope, and preview evidence before editing.'
+    }
+    return null
+}
+
+function createOptimisticChatShare(prompt: string): Share {
+    const safeId = `unsaved-${randomId()}`
+    return {
+        id: safeId,
+        path: safeId,
+        content: '',
+        wordCount: prompt.split(/\s+/).filter(Boolean).length,
+        estimatedMinutes: 0,
+        timestamp: new Date().toISOString(),
+        git: null,
+        locked: false,
+        owner: '',
+        parent: '',
+        alias: safeId,
+    }
 }
 
 function summarizePendingChange(change: PendingShareChange) {

@@ -7,12 +7,13 @@ import getProject from '@/utils/projects/getProject'
 
 export default async function Page(props: {
     params: Promise<{ id: string[] }>
-    searchParams: Promise<{ new?: string }>
+    searchParams: Promise<{ chat?: string, new?: string }>
 }) {
     const params = await props.params
     const searchParams = await props.searchParams
     const id = params.id[0]
     const isNewWorkspace = searchParams.new === '1'
+    const initialChatOpen = searchParams.chat === '1'
     const Cookies = await cookies()
     const openFoldersCookie = Cookies.get('openFolders')
     const openFilesCookie = Cookies.get('openFiles')
@@ -53,6 +54,7 @@ export default async function Page(props: {
                 shareTerminalHeight={shareTerminalHeight}
                 serverOpenFiles={openFiles}
                 autoCreate={isNewWorkspace}
+                initialChatOpen={initialChatOpen}
                 replaceUrlOnCreate
             />
         </div>

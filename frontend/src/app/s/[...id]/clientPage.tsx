@@ -30,6 +30,7 @@ type ClientPageProps = {
     shareTerminalHeight: number
     serverOpenFiles: OpenFile[]
     autoCreate: boolean
+    initialChatOpen: boolean
     replaceUrlOnCreate: boolean
 }
 
@@ -42,6 +43,7 @@ export default function ClientPage({
     shareTerminalHeight,
     serverOpenFiles,
     autoCreate,
+    initialChatOpen,
     replaceUrlOnCreate,
 }: ClientPageProps) {
     const [showExplorer, setShowExplorer] = useState(true)
@@ -69,7 +71,7 @@ export default function ClientPage({
     const [openFiles, setOpenFiles] = useState(serverOpenFiles)
     const [workspaceCreated, setWorkspaceCreated] = useState(!autoCreate)
     const [editorPatch, setEditorPatch] = useState<{ value: string; nonce: number } | null>(null)
-    const [chatOpen, setChatOpen] = useState(false)
+    const [chatOpen, setChatOpen] = useState(initialChatOpen)
     const [explorerPanelRequest, setExplorerPanelRequest] = useState<{ panel: 'files' | 'search'; nonce: number } | null>(null)
     const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
@@ -140,6 +142,7 @@ export default function ClientPage({
         }
 
         hasCreatedWorkspace.current = true
+        setWorkspaceCreated(true)
 
         async function createWorkspace() {
             const token = getCookie('access_token')
@@ -157,19 +160,20 @@ export default function ClientPage({
                 userId,
             })
             if (!createdShare) {
+                hasCreatedWorkspace.current = false
+                setWorkspaceCreated(false)
                 setError('Unable to save this workspace yet. Your editor stays open so you can retry.')
                 return
             }
 
             setShare(createdShare)
-            setWorkspaceCreated(true)
             if (replaceUrlOnCreate) {
-                window.history.replaceState(window.history.state, '', `/s/${id}`)
+                window.history.replaceState(window.history.state, '', `/s/${id}${chatOpen ? '?chat=1' : ''}`)
             }
         }
 
         void createWorkspace()
-    }, [autoCreate, editingContent, id, replaceUrlOnCreate, setError])
+    }, [autoCreate, chatOpen, editingContent, id, replaceUrlOnCreate, setError])
 
     return (
         <div className='flex w-full h-full max-w-[100vw] min-w-0 overflow-hidden gap-1 p-1 md:gap-2 md:p-2'>
