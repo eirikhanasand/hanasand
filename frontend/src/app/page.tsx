@@ -44,6 +44,13 @@ const secondaryLinks = [
     { label: 'Dashboard', href: '/dashboard/overview' },
 ]
 
+const productionProof = [
+    { label: 'Build', detail: 'Reviewable file changes instead of hidden magic.', icon: Link2 },
+    { label: 'Verify', detail: 'Rendered screenshots, visible checks, and journey proof.', icon: ShieldCheck },
+    { label: 'Deploy', detail: 'Launch checks, health status, and visible failure reasons.', icon: Activity },
+    { label: 'Recover', detail: 'Rollback and recovery evidence stay part of the flow.', icon: LockKeyhole },
+]
+
 export default async function Page({
     searchParams,
 }: {
@@ -92,6 +99,21 @@ export default async function Page({
                                 <h2 className='mt-5 text-lg font-medium text-[#eeeeea]'>{tool.title}</h2>
                                 <p className='mt-2 max-w-md text-sm leading-6 text-bright/48'>{tool.description}</p>
                             </Link>
+                        )
+                    })}
+                </div>
+
+                <div className='grid gap-2 rounded-2xl border border-bright/8 bg-[#0f1110]/45 p-3 sm:grid-cols-4'>
+                    {productionProof.map((step) => {
+                        const Icon = step.icon
+                        return (
+                            <div key={step.label} className='min-w-0 rounded-xl border border-bright/7 bg-black/16 p-3'>
+                                <div className='flex items-center gap-2 text-sm font-semibold text-[#eeeeea]'>
+                                    <Icon className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                                    {step.label}
+                                </div>
+                                <p className='mt-2 text-xs leading-5 text-bright/48'>{step.detail}</p>
+                            </div>
                         )
                     })}
                 </div>

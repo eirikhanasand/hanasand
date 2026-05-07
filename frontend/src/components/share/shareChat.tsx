@@ -278,8 +278,8 @@ export default function ShareChat({
     const primaryAction = pendingEdit?.status === 'pending'
         ? proofApplyBlocked
             ? {
-                label: retryingProof ? 'Checking again...' : 'Check page again',
-                detail: 'The page check must pass before these changes are applied.',
+                label: retryingProof ? 'Checking proof...' : 'Run proof again',
+                detail: 'Visible proof must pass before these changes are applied.',
                 disabled: retryingProof || !lastBrowserCalls.length,
                 onClick: retryBrowserProof,
             }
@@ -299,7 +299,7 @@ export default function ShareChat({
             : lastRun?.status === 'error'
                 ? {
                     label: 'Ask for a fix',
-                    detail: 'The last check found a problem. Describe what you want changed or retry the page check.',
+                    detail: 'The last proof run found a problem. Describe what you want changed or retry verification.',
                     disabled: false,
                     onClick: () => inputRef.current?.focus(),
                 }
@@ -688,10 +688,10 @@ export default function ShareChat({
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
                         <Sparkles className='h-4 w-4 text-[#f07d33]' />
-                        AI assistant
+                        Production assistant
                     </div>
                     <p className='truncate text-xs text-bright/45'>
-                        {showBuilderWorkflow ? 'Build mode prepares reviewable changes.' : 'Ask mode will not change files.'}
+                        {showBuilderWorkflow ? 'Build, verify, deploy, and recover with visible proof.' : 'Ask mode explains without changing files.'}
                     </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 p-1 text-[11px]'>
@@ -717,6 +717,12 @@ export default function ShareChat({
                         <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
                         <span className='font-medium text-bright/68'>Build is opt-in.</span>
                         <span>No files change until you approve the What changed cards.</span>
+                    </div>
+                    <div className='mb-2 grid gap-1.5 text-[11px] text-bright/58 sm:grid-cols-4'>
+                        <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label='Build' value='Reviewable changes' />
+                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Verify' value='Visible proof' />
+                        <PlainMetric icon={<Globe2 className='h-3.5 w-3.5' />} label='Deploy' value='Publish checks' />
+                        <PlainMetric icon={<RotateCw className='h-3.5 w-3.5' />} label='Recover' value='Rollback path' />
                     </div>
                     <div className={`grid gap-3 rounded-2xl border p-3 ${
                         projectState.tone === 'success'
@@ -750,7 +756,7 @@ export default function ShareChat({
                     </div>
                     <div className='mt-2 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
                         <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label={pendingEdit?.status === 'pending' ? 'Changes waiting for review' : 'Project files'} value={pendingEdit?.status === 'pending' ? `${pendingEdit.changes.length}` : treePaths.length ? `${treePaths.length}` : '1'} />
-                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Page checks' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
+                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Visible proof' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
                         <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
                     </div>
                     {designMemory ? (
@@ -775,7 +781,7 @@ export default function ShareChat({
                         <span className='font-semibold text-bright/70'>Last update</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{formatRunDuration(lastRun.durationMs)}</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} change{lastRun.pendingChanges === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} page check{lastRun.browserProofs === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} proof run{lastRun.browserProofs === 1 ? '' : 's'}</span>
                         <span className={`rounded-full border px-2 py-0.5 ${
                             lastRun.status === 'completed'
                                 ? 'border-emerald-300/15 text-emerald-100/62'
@@ -794,7 +800,7 @@ export default function ShareChat({
                     <div className='grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='font-semibold text-bright/70'>Page checks</span>
+                            <span className='font-semibold text-bright/70'>Visible proof</span>
                             <span className='truncate text-bright/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} running</span>
                         </div>
                         <div className='flex min-w-0 flex-wrap gap-1.5'>
@@ -823,10 +829,10 @@ export default function ShareChat({
                     <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <Globe2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='shrink-0 font-semibold text-bright/68'>Page to check</span>
+                            <span className='shrink-0 font-semibold text-bright/68'>Proof target</span>
                             <span className='truncate text-bright/42'>{proofTarget.label}</span>
                         </div>
-                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open page to check' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
+                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open proof target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     </div>
@@ -839,8 +845,8 @@ export default function ShareChat({
                         <div className='flex min-w-0 items-start gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
                             <div className='min-w-0'>
-                                <p className='truncate font-semibold text-bright/72'>Page check: {browserEvidence[0].title || 'Untitled page'}</p>
-                                <p className='truncate text-bright/42'>A real browser opened the page and inspected the visible result.</p>
+                                <p className='truncate font-semibold text-bright/72'>Production proof: {browserEvidence[0].title || 'Untitled page'}</p>
+                                <p className='truncate text-bright/42'>A real browser inspected the rendered result and saved review evidence.</p>
                             </div>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end'>
@@ -860,10 +866,10 @@ export default function ShareChat({
                             <div className='mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-bright/7 text-bright/70'>
                                 <Sparkles className='h-5 w-5' />
                             </div>
-                            <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build.' : 'Ask without changing files.'}</h3>
+                            <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build with proof.' : 'Ask without changing files.'}</h3>
                             <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>
                                 {showBuilderWorkflow
-                                    ? 'Describe the result you want. Hanasand will show summaries and proof before anything lands.'
+                                    ? 'Describe the result you want. Hanasand prepares changes, verifies the visible result, and keeps recovery visible.'
                                     : 'Use Ask for explanations. Switch to Build only when you want reviewable project changes.'}
                             </p>
                         </div>
@@ -954,7 +960,7 @@ export default function ShareChat({
                                 className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-bright px-3 text-xs font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-55'
                             >
                                 {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
-                                {proofApplyBlocked ? 'Check page first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply changes'}
+                                {proofApplyBlocked ? 'Run proof first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply changes'}
                             </button>
                         </div>
                     </div>
@@ -965,7 +971,7 @@ export default function ShareChat({
                     ) : null}
                     {proofApplyBlocked ? (
                         <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
-                            <span>{lastRun?.status === 'queued' ? 'The page check is still running before these changes can be applied.' : 'The page check needs to pass before these changes can be applied.'}</span>
+                            <span>{lastRun?.status === 'queued' ? 'Visible proof is still running before these changes can be applied.' : 'Visible proof needs to pass before these changes can be applied.'}</span>
                             {lastBrowserCalls.length ? (
                                 <button
                                     type='button'
@@ -2117,12 +2123,12 @@ function getPlainProjectState({
         return { label: 'Editing', detail: 'Preparing the project changes for your review.', tone: 'working' }
     }
     if (activeProofs || lastRunStatus === 'queued') {
-        return { label: 'Verifying', detail: 'Opening the page and checking whether the visible result still works.', tone: 'working' }
+        return { label: 'Verifying', detail: 'Opening the rendered page, saving proof, and checking whether the visible result still works.', tone: 'working' }
     }
     if (pendingStatus === 'pending') {
         return {
             label: 'Needs you',
-            detail: proofApplyBlocked ? 'A page check needs to pass before you apply the changes.' : 'Review the summary, then apply or discard the changes.',
+            detail: proofApplyBlocked ? 'Visible proof needs to pass before you apply the changes.' : 'Review the summary and proof, then apply or discard the changes.',
             tone: 'attention',
         }
     }
@@ -2137,10 +2143,10 @@ function getPlainProjectState({
 
 function friendlyActivityMessage(content: string) {
     if (/Browser verification queued|Browser proof retry queued/i.test(content)) {
-        return { title: 'Page check started', detail: 'Hanasand is opening the page and checking the visible result.' }
+        return { title: 'Production proof started', detail: 'Hanasand is opening the rendered page and saving visible evidence.' }
     }
-    if (/Browser proof visible/i.test(content)) {
-        return { title: 'Page check finished', detail: 'The result below shows what the browser could verify.' }
+    if (/Browser proof visible|Production proof visible/i.test(content)) {
+        return { title: 'Production proof finished', detail: 'The result below shows what the browser verified and what remains unproven.' }
     }
     if (/Applied \d+ file change/i.test(content)) {
         return { title: 'Changes applied', detail: 'The approved updates are now part of the project.' }
@@ -2259,7 +2265,7 @@ function buildVisibleBuildReply(rawContent: string, pendingChanges: PendingShare
         ? `Prepared ${pendingChanges.length} reviewable change${pendingChanges.length === 1 ? '' : 's'}.`
         : 'I checked the request and did not prepare file changes.'
     const proofNote = browserProofs
-        ? 'A page check is running, so you can review the summary while Hanasand verifies the visible result.'
+        ? 'Production proof is running, so you can review the summary while Hanasand verifies the visible result.'
         : ''
     const reviewNote = pendingChanges.length
         ? 'Open What changed for the summary. Advanced diffs stay collapsed for developers.'
