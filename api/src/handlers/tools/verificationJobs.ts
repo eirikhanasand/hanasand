@@ -2,10 +2,15 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { recordAiUsageEvent } from '#utils/ai/usage.ts'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { spawn } from 'node:child_process'
 
 const MAX_STRUCTURE_ITEMS = 20
 const MAX_EXCERPT_LENGTH = 5000
 const MAX_CONCURRENT_JOBS = Number(process.env.VERIFICATION_JOB_CONCURRENCY || 2)
+const CHROMIUM_BIN = process.env.CHROMIUM_BIN || 'chromium-browser'
 
 type VerificationKind = 'browser' | 'build' | 'deploy' | 'design'
 type VerificationStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
@@ -286,6 +291,9 @@ async function runBrowserJob(job: VerificationJobRow) {
         })
         await updateStep(job.id, 'Extracting evidence')
         const text = await response.text()
+        const screenshots = metadata.captureScreenshot
+            ? await captureRenderedScreenshots(job.target_url, job.id)
+            : []
         const artifact = {
             id: crypto.randomUUID(),
             type: 'browser_result',
@@ -300,10 +308,11 @@ async function runBrowserJob(job: VerificationJobRow) {
                 title: extractTitle(text),
                 textExcerpt: extractTextExcerpt(text),
                 structure: extractStructure(text),
-                screenshotPath: null,
+                screenshotPath: screenshots[0]?.path || null,
+                screenshots,
                 consoleMessages: [
-                    'Fetched browser target without executing client-side JavaScript.',
-                    'Screenshot capture is not available in this lightweight server task yet.',
+                    'Fetched browser target and captured durable rendered viewport evidence.',
+                    screenshots.length ? `${screenshots.length} rendered screenshot artifact${screenshots.length === 1 ? '' : 's'} captured.` : 'Rendered screenshot capture was not requested or did not complete.',
                 ],
                 pageErrors: response.ok ? [] : [`HTTP ${response.status} ${response.statusText}`],
             },
@@ -375,6 +384,8 @@ async function runDesignJob(job: VerificationJobRow) {
         const structure = extractStructure(text)
         const excerpt = extractTextExcerpt(text)
         const review = reviewDesignQuality(text, excerpt, structure)
+        const screenshots = await captureRenderedScreenshots(job.target_url, job.id)
+        const hasRenderedProof = screenshots.length > 0
         const passed = response.ok && review.score >= 72 && review.criticalIssues.length === 0
         const artifact = {
             id: crypto.randomUUID(),
@@ -394,11 +405,13 @@ async function runDesignJob(job: VerificationJobRow) {
                 criticalIssues: review.criticalIssues,
                 repeatedPatternCount: review.repeatedPatternCount,
                 genericPhraseCount: review.genericPhraseCount,
-                screenshotPath: null,
+                screenshotPath: screenshots[0]?.path || null,
+                screenshots,
                 notVerified: [
-                    'Static design QA does not execute client-side JavaScript.',
-                    'Screenshot diffing requires a browser worker attachment.',
-                ],
+                    hasRenderedProof ? null : 'Rendered screenshot capture did not complete.',
+                    'Automated screenshot diffing still needs a before/after baseline to compare against.',
+                    'Client-side interaction journeys need Playwright-style scripted selectors before they can be marked fully verified.',
+                ].filter(Boolean),
             },
         }
         await run(`
@@ -437,12 +450,90 @@ async function runDesignJob(job: VerificationJobRow) {
                 score: review.score,
                 genericPhraseCount: review.genericPhraseCount,
                 repeatedPatternCount: review.repeatedPatternCount,
+                renderedScreenshotCount: screenshots.length,
                 elapsedMs: Math.round(performance.now() - started),
             },
         })
     } finally {
         clearTimeout(timeout)
     }
+}
+
+type ScreenshotViewport = {
+    label: string
+    width: number
+    height: number
+}
+
+async function captureRenderedScreenshots(url: string, jobId: string) {
+    const viewports: ScreenshotViewport[] = [
+        { label: 'mobile', width: 390, height: 844 },
+        { label: 'desktop', width: 1440, height: 1000 },
+    ]
+    const results = []
+    for (const viewport of viewports) {
+        const result = await captureRenderedScreenshot(url, jobId, viewport)
+        if (result) {
+            results.push(result)
+        }
+    }
+    return results
+}
+
+async function captureRenderedScreenshot(url: string, jobId: string, viewport: ScreenshotViewport) {
+    const dir = await mkdtemp(path.join(tmpdir(), 'hanasand-ai-proof-'))
+    const screenshotPath = path.join(dir, `${jobId}-${viewport.label}.png`)
+    try {
+        await runChromium([
+            '--headless=new',
+            '--no-sandbox',
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            `--window-size=${viewport.width},${viewport.height}`,
+            `--screenshot=${screenshotPath}`,
+            url,
+        ], 18000)
+        const bytes = await readFile(screenshotPath)
+        return {
+            viewport: viewport.label,
+            width: viewport.width,
+            height: viewport.height,
+            path: `artifact://${jobId}/${viewport.label}.png`,
+            mimeType: 'image/png',
+            sizeBytes: bytes.length,
+            dataUrl: `data:image/png;base64,${bytes.toString('base64')}`,
+        }
+    } catch {
+        return null
+    } finally {
+        await rm(dir, { recursive: true, force: true }).catch(() => {})
+    }
+}
+
+async function runChromium(args: string[], timeoutMs: number) {
+    await new Promise<void>((resolve, reject) => {
+        const child = spawn(CHROMIUM_BIN, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+        let stderr = ''
+        const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('Chromium screenshot timed out.'))
+        }, timeoutMs)
+        child.stderr.on('data', (chunk) => {
+            stderr += String(chunk).slice(0, 4000)
+        })
+        child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+        })
+        child.on('close', (code) => {
+            clearTimeout(timeout)
+            if (code === 0) {
+                resolve()
+            } else {
+                reject(new Error(stderr || `Chromium exited with ${code}.`))
+            }
+        })
+    })
 }
 
 async function completeNonBrowserJob(job: VerificationJobRow) {
