@@ -53,7 +53,8 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
         throw new Error((await response.json()).error || 'Unable to load mail.')
     }
 
-    return response.json() as Promise<MailOverview>
+    const payload = await response.json()
+    return normalizeMailOverview(payload)
 }
 
 export async function sendMail(body: {
@@ -133,4 +134,37 @@ async function postJson(path: string, body: Record<string, unknown>) {
     }
 
     return response.json().catch(() => null)
+}
+
+function normalizeMailOverview(payload: Partial<MailOverview>): MailOverview {
+    const mailboxUser = payload.mailboxUser || getCookie('id') || ''
+    const mailboxAddress = payload.mailboxAddress || (mailboxUser ? `${mailboxUser}@hanasand.com` : '')
+
+    return {
+        actor: {
+            id: payload.actor?.id || getCookie('id') || mailboxUser,
+            canAccessAnyMailbox: Boolean(payload.actor?.canAccessAnyMailbox),
+        },
+        mailboxUser,
+        mailboxAddress,
+        mailPassword: payload.mailPassword || '',
+        accessibleAccounts: payload.accessibleAccounts || [],
+        mailboxes: payload.mailboxes || [],
+        selectedMailboxId: payload.selectedMailboxId || null,
+        messages: payload.messages || [],
+        selectedMessage: payload.selectedMessage || null,
+        filters: payload.filters || [],
+        recentRecipients: payload.recentRecipients || [],
+        health: payload.health || null,
+        settings: payload.settings || {
+            host: '',
+            imapHost: '',
+            imapPort: 0,
+            smtpHost: '',
+            smtpPort: 0,
+            managesievePort: 0,
+            username: mailboxUser,
+            address: mailboxAddress,
+        },
+    }
 }

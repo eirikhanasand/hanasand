@@ -1,19 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, X, Pencil } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
 import config from '@/config'
-import getMetrics from '@/utils/traffic/getMetrics'
 import getBlocklist from '@/utils/traffic/getBlocklist'
-import getLogs from '@/utils/traffic/getLogs'
 import postBlocklist from '@/utils/traffic/postBlocklist'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import prettyDate from '@/utils/date/prettyDate'
 import TrafficSpeedometer from '@/components/traffic/speedometer'
 import useWS from '@/hooks/useWS'
-import getUAs from '@/utils/traffic/getUAs'
-import getIPs from '@/utils/traffic/getIPs'
 
 type MetricSummary = {
     value: string
@@ -48,32 +44,17 @@ export default function TrafficDashboard({
     topUAs,
     topIPs
 }: DashboardProps) {
-    const [metrics, setMetrics] = useState<MetricSummary[]>(serverMetrics)
+    const [metrics] = useState<MetricSummary[]>(serverMetrics)
     const [blocklist, setBlocklist] = useState<BlocklistEntry[]>(serverBlocklist)
-    const [logs, setLogs] = useState<RequestLog[]>(serverLogs)
-    const [UAs, setUAs] = useState<UAMetrics[]>(topUAs)
-    const [IPs, setIPs] = useState<IPMetrics[]>(topIPs)
+    const [logs] = useState<RequestLog[]>(serverLogs)
+    const [UAs] = useState<UAMetrics[]>(topUAs)
+    const [IPs] = useState<IPMetrics[]>(topIPs)
     const [showBlockModal, setShowBlockModal] = useState(false)
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id', replace: true })
     const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm backdrop-blur-md'
-
-    useEffect(() => {
-        (async () => {
-            const updatedMetrics = await getMetrics()
-            setMetrics(updatedMetrics)
-            const updatedBlocklist = await getBlocklist()
-            setBlocklist(updatedBlocklist)
-            const updatedLogs = await getLogs()
-            setLogs(updatedLogs)
-            const updatedIPs = await getIPs()
-            setIPs(updatedIPs)
-            const updatedUAs = await getUAs()
-            setUAs(updatedUAs)
-        })()
-    }, [])
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         // @ts-expect-error
@@ -106,7 +87,7 @@ export default function TrafficDashboard({
         }
 
         try {
-            await fetch(`${config.url.api}/blocklist/${id}`, { method: 'DELETE' })
+            await fetch(`${config.url.cdn}/blocklist/${id}`, { method: 'DELETE' })
             setMessage('Blocklist entry deleted')
             setBlocklist(await getBlocklist())
         } catch (e) {
