@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type BrowserContext } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(120_000)
@@ -55,12 +55,21 @@ const transparencyStories: AppStory[] = [
     { id: 840, prompt: 'Workshop page. What to bring and accessibility.', expected: 'workshop' },
 ]
 
-test('share chat surfaces progress, context, and review gates for ambiguous app stories', async ({ page, context, baseURL }) => {
+async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
+    const hostname = new URL(cookieUrl).hostname
+    if (hostname !== '127.0.0.1' && hostname !== 'localhost') {
+        return
+    }
+
     await context.addCookies([
         { name: 'access_token', value: encodeURIComponent('playwright-token'), url: cookieUrl },
         { name: 'id', value: 'playwright-user', url: cookieUrl },
     ])
+}
+
+test('share chat surfaces progress, context, and review gates for ambiguous app stories', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
 
     await page.route('https://cdn.hanasand.com/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
@@ -140,11 +149,7 @@ test('share chat surfaces progress, context, and review gates for ambiguous app 
 })
 
 test('share chat makes no-auto-apply and pending-file state explicit for transparency stories', async ({ page, context, baseURL }) => {
-    const cookieUrl = baseURL || 'http://127.0.0.1:3000'
-    await context.addCookies([
-        { name: 'access_token', value: encodeURIComponent('playwright-token'), url: cookieUrl },
-        { name: 'id', value: 'playwright-user', url: cookieUrl },
-    ])
+    await addLocalAuthCookies(context, baseURL)
 
     await page.route('https://cdn.hanasand.com/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
