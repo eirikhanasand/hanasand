@@ -944,7 +944,7 @@ function isMaintainabilityPrompt(prompt: string) {
 }
 
 function isProgressGovernancePrompt(prompt: string) {
-    return /\b(permission|permissions|approve|approval|deny|autopilot|auto.?approve|bypass|waiting|wait|stuck|almost done|no progress|partial|intermediate|logs|stdout|stderr|runtime|stacktrace|console|screenshot|observable|blocked|blocker|meaningful|confirm|confirmation|ask me|question|proceed|validation|early abort|abort|progress update|tool call|tool calls|three days|hours)\b/i.test(prompt)
+    return /\b(permission|permissions|approve|approval|deny|autopilot|auto.?approve|bypass|waiting|wait|stuck|almost done|no progress|progress|governance|partial|intermediate|logs|stdout|stderr|runtime|stacktrace|console|screenshot|screenshots|observable|proof|claim|claimed|blocked|blocker|meaningful|confirm|confirmation|ask me|question|proceed|validation|fixed|early abort|abort|progress update|tool call|tool calls|failed tool|timeout|session|sessions|needs action|three days|hours)\b/i.test(prompt)
 }
 
 function getComposerHint(prompt: string) {
