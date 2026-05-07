@@ -35,7 +35,12 @@ export default async function authorizedUserHandler(req: FastifyRequest, res: Fa
         if (!session) {
             const auth = await tokenWrapper(req, res)
             if (!auth.valid || auth.id !== id) {
-                return res.status(401).send({ error: 'Invalid token.' })
+                const status = auth.error === 'Impersonated user not found.'
+                    ? 404
+                    : auth.error === 'Only admins can impersonate users.'
+                        ? 403
+                        : 401
+                return res.status(status).send({ error: auth.error || 'Invalid token.' })
             }
 
             const userResult = await run(`
