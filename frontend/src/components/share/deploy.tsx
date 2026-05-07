@@ -14,7 +14,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
     }
 
     const disabled = !capability.canDeploy
-    const label = disabled ? 'Deploy proof unavailable' : terminalOpen ? 'Deployment path open' : 'Deploy with proof'
+    const label = disabled ? 'Deploy unavailable' : terminalOpen ? 'Deployment open' : 'Deploy'
     const detail = disabled
         ? capability.reason
         : capability.evidence.length
@@ -27,7 +27,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
     return (
         <button
             type='button'
-            aria-label={disabled ? `Deployment proof unavailable: ${capability.reason}` : terminalOpen ? 'Deployment path is open' : 'Open deployment path with logs and rollback proof'}
+            aria-label={disabled ? `Deployment unavailable: ${capability.reason}` : terminalOpen ? 'Deployment path is open' : 'Open deployment path with logs and rollback'}
             title={capability.reason}
             disabled={disabled}
             onClick={() => {
@@ -52,7 +52,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
             <span className='grid grid-cols-3 gap-1 text-[10px] text-bright/50'>
                 <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
                     <ShieldCheck className='h-3 w-3 shrink-0' />
-                    <span className='truncate'>Health proof</span>
+                    <span className='truncate'>Health</span>
                 </span>
                 <span className='inline-flex min-w-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 px-2 py-1'>
                     <ScrollText className='h-3 w-3 shrink-0' />

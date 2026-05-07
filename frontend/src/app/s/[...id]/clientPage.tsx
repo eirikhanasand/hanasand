@@ -5,7 +5,6 @@ import Terminal from '@/components/share/terminal'
 import Deploy from '@/components/share/deploy'
 import Explorer from '@/components/share/tree/explorer'
 import Metadata from '@/components/share/metadata'
-import PreviewFlow from '@/components/share/previewFlow'
 import RenderSite from '@/components/share/renderSite'
 import ShareChat from '@/components/share/shareChat'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -18,7 +17,7 @@ import postShare from '@/utils/share/post'
 import type { TerminalCredentials } from '@/hooks/useTerminal'
 import { getShareRuntimeCapability } from '@/utils/share/runtimeCapabilities'
 import { CheckCircle2, CloudOff, Code2, FileCode2, Loader2, MessageSquare, Radio, TerminalSquare } from 'lucide-react'
-import { countTreeItems, findPath, getVisibleWorkspaceTree, getWorkspaceName, isWorkspaceRootItem } from '@/components/share/workspaceTree'
+import { findPath, isWorkspaceRootItem } from '@/components/share/workspaceTree'
 import type { ShareConflict, SharePresenceUser } from '@/components/share/useShareCodeSocket'
 
 type ClientPageProps = {
@@ -72,6 +71,7 @@ export default function ClientPage({
     const [workspaceCreated, setWorkspaceCreated] = useState(!autoCreate)
     const [editorPatch, setEditorPatch] = useState<{ value: string; nonce: number } | null>(null)
     const [chatOpen, setChatOpen] = useState(initialChatOpen)
+    const [hydrated, setHydrated] = useState(false)
     const [explorerPanelRequest, setExplorerPanelRequest] = useState<{ panel: 'files' | 'search'; nonce: number } | null>(null)
     const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
@@ -81,21 +81,16 @@ export default function ClientPage({
         tree: workspaceTree,
         activeContent: editingContent,
     }), [editingContent, share, workspaceTree])
-    const visibleTree = useMemo(() => getVisibleWorkspaceTree(workspaceTree, share), [share, workspaceTree])
-    const workspaceCounts = useMemo(() => countTreeItems(visibleTree), [visibleTree])
     const activePath = useMemo(() => findPath(workspaceTree, share?.id || id), [id, share?.id, workspaceTree])
     const activeIsRoot = isWorkspaceRootItem(workspaceTree, share, share?.id || id)
-    const workspaceName = getWorkspaceName(workspaceTree, share, id)
-    const breadcrumbs = useMemo(() => buildBreadcrumbs(workspaceName, activePath, activeIsRoot), [activeIsRoot, activePath, workspaceName])
     const activeLabel = activeIsRoot ? 'Workspace root' : activePath || share?.alias || 'Loading file'
     const previewEvidenceUrl = share?.alias && runtimeCapability.canPreview ? `https://${share.alias}.hanasand.com/` : null
-    const activeDetail = activeIsRoot
-        ? editingContent.trim().length > 0
-            ? 'Root note'
-            : 'Open a file from the left sidebar'
-        : `${editingContent.split(/\s+/).filter(Boolean).length} words`
     const otherUsers = presenceUsers.filter(user => user.clientId !== selfClientId)
     const remoteEditors = otherUsers.filter(user => user.editing)
+
+    useEffect(() => {
+        setHydrated(true)
+    }, [])
 
     useEffect(() => {
         if (!runtimeCapability.hasHttpSurface && renderSite) {
@@ -200,52 +195,24 @@ export default function ClientPage({
                 />
             </div>
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
-                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/72 px-2 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-md'>
-                    <div className='min-w-0 flex flex-1 items-center gap-3'>
-                        <div className='hidden min-w-0 border-r border-bright/10 pr-3 md:block'>
-                            <div className='truncate text-sm font-semibold text-bright/84'>{workspaceName}</div>
-                            <div className='text-[11px] leading-4 text-bright/42'>{workspaceCounts.files} files · {workspaceCounts.folders} folders</div>
-                        </div>
+                <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-[var(--panel-surface)] px-2 py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/72 md:shadow-black/10'>
+                    <div className='min-w-0 flex flex-1 items-center gap-2'>
                         {chatOpen ? (
-                            <div className='flex items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
-                                <MessageSquare className='h-4 w-4 text-[#f07d33]' />
-                                <span className='truncate'>Production assistant</span>
+                            <div className='flex min-w-0 items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
+                                <MessageSquare className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                                <span className='truncate'>Chat</span>
                             </div>
+                        ) : openFiles.length ? (
+                            <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
                         ) : (
-                            <div className='min-w-0 flex-1'>
-                                <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
+                            <div className='flex min-w-0 items-center gap-2 px-2 text-sm text-bright/62'>
+                                <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
+                                <span className='truncate'>{activeLabel}</span>
                             </div>
                         )}
                     </div>
-                    <button
-                        type='button'
-                        aria-label={chatOpen ? 'Back to code editor' : 'Open production assistant'}
-                        onClick={() => setChatOpen(prev => !prev)}
-                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#f07d33]/35 hover:bg-[#f07d33]/12 hover:text-bright'
-                    >
-                        {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
-                        {chatOpen ? 'Back to code' : 'Build with proof'}
-                    </button>
-                </div>
-                {!chatOpen && (
-                    <div className='flex min-h-10 flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/58 px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/10 backdrop-blur-md'>
-                        <div className='flex min-w-0 items-center gap-2'>
-                            <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
-                            <div className='min-w-0'>
-                                <div className='truncate font-semibold text-bright/84'>{activeLabel}</div>
-                                <div className='flex min-w-0 flex-wrap items-center gap-1 text-[11px] leading-4 text-bright/42'>
-                                    {breadcrumbs.map((crumb, index) => (
-                                        <span key={`${crumb}-${index}`} className='flex min-w-0 items-center gap-1'>
-                                            {index > 0 ? <span className='text-bright/24'>/</span> : null}
-                                            <span className={index === breadcrumbs.length - 1 ? 'truncate text-bright/62' : 'truncate'}>{crumb}</span>
-                                        </span>
-                                    ))}
-                                    <span className='text-bright/24'>·</span>
-                                    <span>{activeDetail}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className='flex shrink-0 flex-wrap items-center justify-end gap-1.5'>
+                    {!chatOpen && (
+                        <div className='hidden shrink-0 items-center gap-1.5 lg:flex'>
                             <StatusPill
                                 icon={isConnected ? <Radio className='h-3.5 w-3.5' /> : <CloudOff className='h-3.5 w-3.5' />}
                                 label={isConnected ? `${participants} live` : workspaceCreated ? 'Reconnecting' : 'Preparing'}
@@ -262,8 +229,18 @@ export default function ClientPage({
                                 tone={terminalStatus.toLowerCase().includes('ready') ? 'good' : 'neutral'}
                             />
                         </div>
-                    </div>
-                )}
+                    )}
+                    <button
+                        type='button'
+                        aria-label={hydrated ? chatOpen ? 'Back to code editor' : 'Open workspace chat' : 'Preparing workspace chat'}
+                        disabled={!hydrated}
+                        onClick={() => setChatOpen(prev => !prev)}
+                        className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#f07d33]/35 hover:bg-[#f07d33]/12 hover:text-bright disabled:cursor-not-allowed disabled:opacity-45'
+                    >
+                        {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
+                        {chatOpen ? 'Back to code' : 'Build'}
+                    </button>
+                </div>
                 {!chatOpen && (
                     <CollaborationStatus
                         users={presenceUsers}
@@ -287,20 +264,8 @@ export default function ClientPage({
                         }}
                     />
                 )}
-                {!chatOpen && (
-                    <PreviewFlow
-                        share={share}
-                        tree={workspaceTree}
-                        activePath={activePath}
-                        activeContent={editingContent}
-                        capability={runtimeCapability}
-                        renderSite={renderSite}
-                        setTriggerSiteChange={setTriggerSiteChange}
-                        setTriggerTerminalChange={setTriggerTerminalChange}
-                    />
-                )}
                 {chatOpen ? (
-                    <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-background/48 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
+                    <div className='min-h-0 flex-1 rounded-xl border border-bright/10 bg-[var(--panel-surface)] p-2 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/48'>
                         <ShareChat
                             share={share}
                             setShare={setShare}
@@ -423,7 +388,7 @@ function CollaborationStatus({
     }
 
     return (
-        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/50 px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/10 backdrop-blur-md'>
+        <div className='flex flex-wrap items-center justify-between gap-2 rounded-xl border border-bright/10 bg-[var(--panel-surface)] px-3 py-2 text-xs text-bright/62 shadow-2xl shadow-black/20 backdrop-blur-md md:bg-background/50 md:shadow-black/10'>
             <div className='flex min-w-0 flex-wrap items-center gap-2'>
                 {otherUsers.length ? (
                     <div className='flex items-center gap-1.5'>
@@ -513,13 +478,4 @@ function normalizeTerminalStatus(status: string) {
     if (normalized.toLowerCase().includes('preparing')) return 'Terminal preparing'
     if (normalized.toLowerCase().includes('connecting')) return 'Terminal connecting'
     return normalized.length > 22 ? `${normalized.slice(0, 19)}...` : normalized
-}
-
-function buildBreadcrumbs(workspaceName: string, activePath: string | null, activeIsRoot: boolean) {
-    if (activeIsRoot || !activePath) {
-        return [workspaceName]
-    }
-
-    const parts = activePath.split('/').filter(Boolean)
-    return [workspaceName, ...parts]
 }

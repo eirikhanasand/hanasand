@@ -688,10 +688,10 @@ export default function ShareChat({
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
                         <Sparkles className='h-4 w-4 text-[#f07d33]' />
-                        Production assistant
+                        AI assistant
                     </div>
                     <p className='truncate text-xs text-bright/45'>
-                        {showBuilderWorkflow ? 'Build, verify, deploy, and recover with visible proof.' : 'Ask mode explains without changing files.'}
+                        {showBuilderWorkflow ? 'Build reviewable changes with visible checks.' : 'Ask mode will not change files.'}
                     </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 p-1 text-[11px]'>
@@ -866,7 +866,7 @@ export default function ShareChat({
                             <div className='mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-bright/7 text-bright/70'>
                                 <Sparkles className='h-5 w-5' />
                             </div>
-                            <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build with proof.' : 'Ask without changing files.'}</h3>
+                            <h3 className='text-base font-semibold text-bright/90'>{showBuilderWorkflow ? 'Ready to build.' : 'Ask without changing files.'}</h3>
                             <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>
                                 {showBuilderWorkflow
                                     ? 'Describe the result you want. Hanasand prepares changes, verifies the visible result, and keeps recovery visible.'

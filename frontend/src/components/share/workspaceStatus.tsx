@@ -56,9 +56,9 @@ export default function WorkspaceStatus({
         : share
             ? `${share.wordCount} words`
             : 'Waiting for workspace'
-    const proofDetail = share?.alias
-        ? `Preview proof target: ${share.alias}.hanasand.com`
-        : 'Add an alias or preview target to attach rendered proof'
+    const verificationDetail = share?.alias
+        ? `Preview target: ${share.alias}.hanasand.com`
+        : 'Add an alias or preview target to verify the result'
 
     return (
         <section className='space-y-2 rounded-lg border border-bright/8 bg-black/16 p-3 text-bright/72'>
@@ -68,12 +68,12 @@ export default function WorkspaceStatus({
                     <div className='min-w-0'>
                         <div className='text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffc49b]/62'>Production assistant</div>
                         <div className='mt-1 text-sm font-semibold text-bright/86'>Build, verify, deploy, recover</div>
-                        <div className='mt-0.5 text-[11px] leading-4 text-bright/48'>{proofDetail}</div>
+                        <div className='mt-0.5 text-[11px] leading-4 text-bright/48'>{verificationDetail}</div>
                     </div>
                 </div>
                 <div className='mt-2 grid grid-cols-2 gap-1.5 text-[10px] text-bright/54'>
                     <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Reviewable changes</span>
-                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Visible proof</span>
+                    <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Verification</span>
                     <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Deploy logs</span>
                     <span className='rounded-full border border-bright/8 bg-black/16 px-2 py-1'>Rollback path</span>
                 </div>

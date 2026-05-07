@@ -161,18 +161,18 @@ export default function Editor({
                         // @ts-expect-error Not fully compatible because ref is
                         // element specific, but its close enough (<div> vs <pre>)
                         ref={lineNumberRef}
-                        className={`min-w-fit sync-scroll select-none text-gray-500 text-right pl-2 overflow-auto pt-2 noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                        className={`sync-scroll min-w-fit select-none overflow-auto pl-2 pr-3 pt-2 text-right font-mono text-sm leading-5 text-bright/34 noscroll ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
                         onScroll={handleScrollDiv}
                     >
                         {lines.map((_, i) => (
-                            <h1 key={i} className='text-sm' style={{ color: 'var(--text-foreground)', opacity: 0.5 }}>
+                            <div key={i} className='h-5 leading-5'>
                                 {i + 1}
-                            </h1>
+                            </div>
                         ))}
                     </div>
                 )}
 
-                <pre className={`sync-scroll -mt-[6px] overflow-auto text-sm font-mono ${lines.length > 100 ? 'pb-[100vh]' : ''}`}>
+                <pre className={`sync-scroll m-0 overflow-auto pt-2 font-mono text-sm leading-5 ${lines.length > 100 ? 'pb-[100vh]' : ''}`}>
                     <code ref={codeRef}>{editingContent}</code>
                 </pre>
             </div>
@@ -191,13 +191,13 @@ export default function Editor({
                         handleScroll(e)
                     }
                 }}
-                className={`sync-scroll min-w-full min-h-full bg-transparent text-transparent resize-none rounded-lg pt-2 mr-2 text-sm font-mono overflow-auto outline-none caret-gray-200 absolute z-10 top-0 left-0 ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                className={`sync-scroll absolute left-0 top-0 z-10 min-h-full min-w-full resize-none overflow-auto rounded-lg bg-transparent pt-2 font-mono text-sm leading-5 text-transparent caret-gray-200 outline-none ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
                 autoCapitalize='off'
                 autoComplete='off'
                 autoCorrect='off'
                 spellCheck={false}
                 style={{
-                    paddingLeft: displayLineNumbers ? `${lineNumberWidth + 14}px` : '14px',
+                    paddingLeft: displayLineNumbers ? `${lineNumberWidth}px` : '0px',
                     whiteSpace: 'pre',
                     overflowWrap: 'normal',
                 }}

@@ -51,28 +51,28 @@
 }
 
 .light {
-  --background: #f6f7f4;
-  --foreground: #141710;
-  --color-background: #f6f7f4;
-  --color-dark: #dfe4dc;
-  --color-dark-reverse: #eef1eb;
-  --color-normal: #eaeee8;
-  --color-light: #d5ddd3;
-  --color-extralight: #bfcabe;
-  --color-superlight: #8d9b88;
-  --color-almostbright: #5d6b59;
-  --color-bright: #11140f;
-  --page-wash-top: #fbfcf8;
-  --page-wash-bottom: #edf2eb;
-  --grid-line: rgba(22, 31, 18, 0.040);
-  --ambient-primary: rgba(70, 130, 94, 0.028);
-  --ambient-secondary: rgba(210, 95, 47, 0.018);
-  --ambient-neutral: rgba(20, 23, 16, 0.012);
-  --panel-border: rgba(20, 23, 16, 0.11);
-  --panel-surface: rgba(246, 247, 244, 0.82);
-  --card-border: rgba(20, 23, 16, 0.10);
-  --card-surface: rgba(255, 255, 255, 0.48);
-  --soft-shadow: rgba(40, 55, 35, 0.12);
+  --background: #e2dac9;
+  --foreground: #231d13;
+  --color-background: #e2dac9;
+  --color-dark: #b9aa8d;
+  --color-dark-reverse: #efe6d3;
+  --color-normal: #d7cbb4;
+  --color-light: #c7b895;
+  --color-extralight: #a49370;
+  --color-superlight: #74664c;
+  --color-almostbright: #514735;
+  --color-bright: #241e14;
+  --page-wash-top: #e9dfca;
+  --page-wash-bottom: #cfc3aa;
+  --grid-line: rgba(76, 64, 42, 0.060);
+  --ambient-primary: rgba(64, 105, 88, 0.070);
+  --ambient-secondary: rgba(164, 86, 39, 0.056);
+  --ambient-neutral: rgba(61, 78, 91, 0.034);
+  --panel-border: rgba(60, 50, 32, 0.18);
+  --panel-surface: rgba(224, 215, 195, 0.88);
+  --card-border: rgba(60, 50, 32, 0.14);
+  --card-surface: rgba(239, 230, 211, 0.58);
+  --soft-shadow: rgba(75, 58, 32, 0.18);
 }
 
 body {
@@ -83,6 +83,47 @@ body {
     linear-gradient(180deg, var(--page-wash-top), var(--background) 46%, var(--page-wash-bottom));
   font-family: var(--font-sans);
   transition: background 0.4s, color 0.4s;
+}
+
+.light body {
+  background:
+    radial-gradient(ellipse 44rem 24rem at 80% -7%, rgba(93, 122, 118, 0.12) 0%, transparent 72%),
+    radial-gradient(ellipse 42rem 30rem at 8% 88%, rgba(151, 82, 38, 0.11) 0%, transparent 76%),
+    linear-gradient(180deg, var(--page-wash-top), var(--background) 50%, var(--page-wash-bottom));
+}
+
+.light ::selection {
+  background: rgba(132, 85, 40, 0.28);
+}
+
+.light .text-glow {
+  text-shadow: 0 1px 0 rgba(255, 248, 230, 0.55), 0 12px 38px rgba(73, 54, 26, 0.12);
+}
+
+.light [class*="border-white/"],
+.light [class*="border-bright/"] {
+  border-color: rgba(60, 50, 32, 0.16) !important;
+}
+
+.light [class*="bg-white/"] {
+  background-color: rgba(111, 91, 55, 0.08) !important;
+}
+
+.light [class*="bg-black/"] {
+  background-color: rgba(86, 68, 38, 0.10) !important;
+}
+
+.light [class*="text-white/"] {
+  color: rgba(35, 29, 19, 0.74) !important;
+}
+
+.light .glass-panel {
+  background:
+    linear-gradient(180deg, rgba(239, 230, 211, 0.90), rgba(211, 199, 174, 0.82));
+}
+
+.light .glass-card {
+  box-shadow: inset 0 1px 0 rgba(255, 248, 230, 0.52);
 }
 
 button:not(:disabled),
