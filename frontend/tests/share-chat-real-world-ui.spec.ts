@@ -423,6 +423,29 @@ const maintainabilityStories: AppStory[] = [
     { id: 1280, prompt: 'are these maintainability stories real world enough', expected: 'real-world-maintainability' },
 ]
 
+const progressGovernanceStories: AppStory[] = [
+    { id: 1281, prompt: 'claude was waiting for my input for 20 minutes', expected: 'waiting-for-input' },
+    { id: 1282, prompt: 'agent says almost done but nothing changes', expected: 'almost-done-no-change' },
+    { id: 1283, prompt: 'dont ask for approval then do it anyway', expected: 'approval-then-proceed' },
+    { id: 1284, prompt: 'show me what is blocked instead of vague progress', expected: 'blocked-not-vague' },
+    { id: 1285, prompt: 'newbie cannot tell if the ai is stuck or running', expected: 'newbie-stuck-running' },
+    { id: 1286, prompt: 'designer needs screenshots before you claim the page works', expected: 'designer-screenshot-proof' },
+    { id: 1287, prompt: 'corp admin wants meaningful approval prompts with risk', expected: 'meaningful-approval-risk' },
+    { id: 1288, prompt: 'terminal agent hid a failed tool call for ten minutes', expected: 'hidden-failed-tool' },
+    { id: 1289, prompt: 'deployment seems queued but I need logs not optimism', expected: 'queued-logs-not-optimism' },
+    { id: 1290, prompt: 'ask me only when the next step changes files', expected: 'ask-only-file-change' },
+    { id: 1291, prompt: 'client says give partial working output now', expected: 'partial-output-now' },
+    { id: 1292, prompt: 'support wants stdout stderr and browser console first', expected: 'runtime-evidence-first' },
+    { id: 1293, prompt: 'agency has four sessions and cannot see which need action', expected: 'multi-session-needs-action' },
+    { id: 1294, prompt: 'founder says stop burning hours on silent retries', expected: 'silent-retry-burn' },
+    { id: 1295, prompt: 'operator needs smallest reversible next step', expected: 'reversible-next-step' },
+    { id: 1296, prompt: 'dont continue if confirmation is actually required', expected: 'stop-for-confirmation' },
+    { id: 1297, prompt: 'show validation before saying fixed', expected: 'validation-before-fixed' },
+    { id: 1298, prompt: 'mobile issue needs observable viewport proof', expected: 'mobile-viewport-proof' },
+    { id: 1299, prompt: 'approval should say exact files and scope', expected: 'approval-files-scope' },
+    { id: 1300, prompt: 'are these progress governance stories real world enough', expected: 'real-world-progress-governance' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -2365,4 +2388,88 @@ test('share page AI flags maintainability and ownership risks from real AI-build
     }
 
     expect(handledPrompts).toHaveLength(maintainabilityStories.length)
+})
+
+test('share page AI makes progress, blockers, and approvals observable for real agent complaints', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-progress-story',
+                alias: body.path || body.name || body.id || 'app-progress-story',
+                path: body.path || body.name || body.id || 'app-progress-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-progress-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = progressGovernanceStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-progress-${matchingStory!.id}-${runSlug}`
+        expect(body.prompt).toContain('Progress governance mode:')
+        expect(body.prompt).toContain('Make approval points meaningful')
+        expect(body.prompt).toContain('collect stdout/stderr')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain('"progressGovernanceMode":true')
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}.`,
+                    'Progress guard: exact blocker, observable evidence, meaningful approval scope, and smallest reversible next step.',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    for (const story of progressGovernanceStories) {
+        const expectedUrl = `https://hanasand.com/s/app-progress-${story.id}-${runSlug}`
+        await page.goto(`/s/app-progress-${story.id}-${runSlug}?new=1&chat=1`)
+        const promptBox = await openWorkspaceChat(page)
+        await promptBox.fill(story.prompt)
+        await page.locator('input[name="shareChatPromptFallback"]').evaluate((element, value) => {
+            (element as HTMLInputElement).value = value
+        }, story.prompt)
+        await promptBox.dispatchEvent('input')
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
+
+        await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Progress guard: exact blocker, observable evidence, meaningful approval scope, and smallest reversible next step.')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+    }
+
+    expect(handledPrompts).toHaveLength(progressGovernanceStories.length)
 })

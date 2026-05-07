@@ -667,6 +667,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
     const costControlMode = isCostControlPrompt(prompt)
     const maintainabilityMode = isMaintainabilityPrompt(prompt)
+    const progressGovernanceMode = isProgressGovernancePrompt(prompt)
     const evidenceTargets = [
         previewUrl ? `Runnable preview: ${previewUrl}` : null,
         shareEvidenceUrl ? `Current share page: ${shareEvidenceUrl}` : null,
@@ -700,6 +701,14 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             '- Do not hide core content in platform-specific magic. If the user needs editing or CMS behavior, propose the smallest durable content model instead of hard-coding everything.',
             '- Treat performance and ownership as acceptance criteria: avoid giant generated styles, unused assets, opaque widgets, and unnecessary client-side code.',
         ].join('\n') : null,
+        progressGovernanceMode ? [
+            'Progress governance mode:',
+            '- Users may be reacting to agents that wait silently, burn time while saying almost done, ask meaningless approvals, or ask a question and then proceed anyway.',
+            '- Make approval points meaningful: name the exact action, files/scope, why it is needed, risk, and the smallest reversible next step.',
+            '- Do not ask rhetorical questions followed by tool tags that already perform the action. If user confirmation is needed, stop before changing files.',
+            '- If blocked, say the exact blocker and the next observable evidence needed. Prefer partial working output, logs, screenshots, or runtime errors over vague progress updates.',
+            '- For runtime or deploy issues, keep the observe-and-react loop alive: collect stdout/stderr, browser console, screenshots, or deployment logs before claiming success.',
+        ].join('\n') : null,
         'Tool format:',
         '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"complete file content"}</hanasand-tool>',
         'You may emit several tool tags in one answer. Do not emit partial diffs. Prefer small, cohesive files over one giant file. Include package/config files when a bot, API, or app needs them.',
@@ -716,6 +725,7 @@ function buildContext(share: Share, editingContent: string, treePaths: string[],
         diagnosticMode: isDeploymentDiagnosticPrompt(prompt),
         costControlMode: isCostControlPrompt(prompt),
         maintainabilityMode: isMaintainabilityPrompt(prompt),
+        progressGovernanceMode: isProgressGovernancePrompt(prompt),
         browserEvidenceTargets: {
             previewUrl,
             sharePageUrl: buildShareEvidenceUrl(share),
@@ -933,14 +943,20 @@ function isMaintainabilityPrompt(prompt: string) {
     return /\b(maintain|maintainable|maintenance|messy|mess|refactor|technical debt|debt|slow|slower|performance|perf|crawl|bloated|bloat|redundant|css|asset|assets|cms|content management|ownership|own the code|export|lock-in|locked in|platform|vendor|portable|handoff|developer later|edge case|browser|device|mobile safari|checkout|integration|weird bug|scalability|scale)\b/i.test(prompt)
 }
 
+function isProgressGovernancePrompt(prompt: string) {
+    return /\b(permission|permissions|approve|approval|deny|autopilot|auto.?approve|bypass|waiting|wait|stuck|almost done|no progress|partial|intermediate|logs|stdout|stderr|runtime|stacktrace|console|screenshot|observable|blocked|blocker|meaningful|confirm|confirmation|ask me|question|proceed|validation|early abort|abort|progress update|tool call|tool calls|three days|hours)\b/i.test(prompt)
+}
+
 function getComposerHint(prompt: string) {
     const deploymentDiagnostic = isDeploymentDiagnosticPrompt(prompt)
     const costControl = isCostControlPrompt(prompt)
     const maintainability = isMaintainabilityPrompt(prompt)
+    const progressGovernance = isProgressGovernancePrompt(prompt)
     const hints = [
         deploymentDiagnostic ? 'Diagnostic mode: collect deploy evidence.' : null,
         costControl ? 'Cost control mode: preserve scope and make the smallest useful edit.' : null,
         maintainability ? 'Maintainability mode: keep code owned, small, fast, and editable.' : null,
+        progressGovernance ? 'Progress mode: show blockers, evidence, and meaningful approvals.' : null,
     ].filter(Boolean)
     if (hints.length) {
         return hints.join(' ')
