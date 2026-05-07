@@ -94,7 +94,7 @@ import deleteRepositoryCredential from './handlers/ai/deleteRepositoryCredential
 import { getAiDeployments, postAiDeployment } from './handlers/ai/deployments.ts'
 import { getAiEconomics } from './handlers/ai/economics.ts'
 import { deleteAiConversationCollaborator, postAiConversationCollaborator } from './handlers/ai/collaborators.ts'
-import { getAiReleases, postAiRollback } from './handlers/ai/releases.ts'
+import { getAiReleases, getAiReleaseSupportBundle, postAiRollback } from './handlers/ai/releases.ts'
 import { getAiPreview } from './handlers/ai/preview.ts'
 import getMailOverview from './handlers/mail/getOverview.ts'
 import postSendMail from './handlers/mail/postSend.ts'
@@ -309,6 +309,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/ai/deployments', getAiDeployments)
     fastify.post('/ai/deployments', postAiDeployment)
     fastify.get('/ai/releases', getAiReleases)
+    fastify.get('/ai/releases/:id/support-bundle', getAiReleaseSupportBundle)
     fastify.post('/ai/releases/:id/rollback', postAiRollback)
     fastify.put('/ai/repositories/:id/credentials/github', putRepositoryCredential)
     fastify.delete('/ai/repositories/:id/credentials/github', deleteRepositoryCredential)

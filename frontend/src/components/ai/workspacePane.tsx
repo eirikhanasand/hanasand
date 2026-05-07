@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ExternalLink, FolderGit2, RefreshCcw, Rocket, ServerCog, Share2, ShieldCheck, TerminalSquare, UsersRound } from 'lucide-react'
+import { AlertTriangle, Archive, CheckCircle2, Download, ExternalLink, FileText, FolderGit2, History, LifeBuoy, RefreshCcw, Rocket, ServerCog, Share2, ShieldCheck, TerminalSquare, UsersRound } from 'lucide-react'
 import { listTreePaths } from './shareTree'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -122,6 +122,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     const deployActors = Array.from(new Set(deployments.map((deployment) => deployment.startedBy || deployment.ownerId).filter(Boolean)))
     const releaseActors = Array.from(new Set(releases.map((release) => release.createdBy || release.ownerId).filter(Boolean)))
     const latestRelease = releases[0] || null
+    const trustRelease = releases.find((release) => release.status === 'current') || latestRelease
+    const trust = trustRelease?.trust || buildFallbackTrust(trustRelease)
     const envPlaceholders = detectEnvPlaceholders(activeRepo)
     const deployProfile = buildDeployProfile({
         environment: deployEnvironment,
@@ -307,6 +309,56 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             </Panel>
 
             <Panel
+                icon={<ShieldCheck className='h-4 w-4' />}
+                title='Commercial trust'
+                subtitle={trustRelease ? 'Recovery, export, and handoff evidence for this project.' : 'Recovery evidence appears after the first release.'}
+            >
+                {trustRelease && trust ? (
+                    <>
+                        <div className='rounded-xl bg-emerald-500/8 px-3 py-2 text-xs text-emerald-100/78 outline outline-emerald-200/10'>
+                            {trust.noLockIn.headline}
+                        </div>
+                        <TrustItem icon={<History className='h-3.5 w-3.5' />} label='Version history' value={trust.versionHistory.summary} />
+                        <TrustItem icon={<RefreshCcw className='h-3.5 w-3.5' />} label='Rollback' value={trust.recovery.rollbackLabel} />
+                        <TrustItem icon={<Archive className='h-3.5 w-3.5' />} label='Backup before risk' value={trust.recovery.backupBeforeRiskyChanges ? trust.recovery.backupPolicy : 'No backup policy recorded.'} />
+                        <TrustItem icon={<Download className='h-3.5 w-3.5' />} label='Export' value={`${trust.exports.zipLabel} ${trust.exports.githubLabel}`} />
+                        <TrustItem icon={<FileText className='h-3.5 w-3.5' />} label='Handoff report' value={trust.handoffReport.join(' ')} />
+                        <div className='flex flex-wrap gap-2'>
+                            <a
+                                href={supportBundleHref(trustRelease)}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                className='inline-flex items-center gap-2 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33]'
+                            >
+                                <LifeBuoy className='h-3.5 w-3.5' />
+                                Support bundle
+                            </a>
+                            {trustRelease.status !== 'current' && trustRelease.status !== 'rollback_target' ? (
+                                <button
+                                    type='button'
+                                    onClick={() => void onRollbackRelease(trustRelease.id)}
+                                    disabled={rollbackPendingId === trustRelease.id}
+                                    className='inline-flex items-center gap-2 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
+                                >
+                                    <RefreshCcw className='h-3.5 w-3.5' />
+                                    {rollbackPendingId === trustRelease.id ? 'Preparing...' : 'Rollback'}
+                                </button>
+                            ) : null}
+                        </div>
+                        <div className='space-y-1'>
+                            {trust.sla.slice(0, 4).map((item) => (
+                                <div key={item.tier} className='rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/58 outline outline-dark'>
+                                    <span className='font-semibold text-bright/78'>{item.tier}:</span> {item.promise}
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <Empty text='No release record yet. Deploy or record a release to create rollback, export, handoff, and support evidence.' />
+                )}
+            </Panel>
+
+            <Panel
                 icon={<RefreshCcw className='h-4 w-4' />}
                 title='Release history'
                 subtitle='Rollback targets and launch evidence per release.'
@@ -334,6 +386,12 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                     </span>
                                 </div>
                                 {release.notes ? <div className='mt-2 text-xs text-bright/58'>{release.notes}</div> : null}
+                                {release.trust ? (
+                                    <div className='mt-2 grid gap-1 text-[11px] text-bright/44'>
+                                        <span>{release.trust.noLockIn.headline}</span>
+                                        <span>Support bundle: {release.trust.supportBundle.includes.join(', ')}</span>
+                                    </div>
+                                ) : null}
                                 {release.status !== 'rollback_target' && release.status !== 'current' ? (
                                     <button
                                         type='button'
@@ -677,12 +735,78 @@ function Stat({ label, value }: { label: string, value: string }) {
     )
 }
 
+function TrustItem({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
+    return (
+        <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/58 outline outline-dark'>
+            <span className='mt-0.5 text-[#f07d33]'>{icon}</span>
+            <div className='min-w-0'>
+                <div className='text-[10px] uppercase tracking-[0.18em] text-bright/30'>{label}</div>
+                <div className='mt-1 leading-5'>{value}</div>
+            </div>
+        </div>
+    )
+}
+
 function Empty({ text }: { text: string }) {
     return (
         <div className='rounded-xl bg-dark/30 px-3 py-4 text-sm text-bright/40 outline outline-dark'>
             {text}
         </div>
     )
+}
+
+function supportBundleHref(release: AIRelease) {
+    return `/api/backend/ai/releases/${encodeURIComponent(release.id)}/support-bundle`
+}
+
+function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
+    if (!release) {
+        return null
+    }
+
+    return {
+        versionHistory: {
+            releaseId: release.id,
+            status: release.status,
+            createdAt: release.createdAt,
+            updatedAt: release.updatedAt,
+            summary: `Release ${release.id} is kept in project history as ${release.status.replaceAll('_', ' ')}.`,
+        },
+        recovery: {
+            rollbackAvailable: release.status !== 'current' && release.status !== 'rollback_target',
+            rollbackLabel: release.status === 'rollback_target' ? 'Rollback target selected' : 'Rollback to this release',
+            backupBeforeRiskyChanges: true,
+            backupPolicy: 'Create a checkpoint before destructive or production-impacting AI changes.',
+        },
+        exports: {
+            zipAvailable: true,
+            githubAvailable: true,
+            zipLabel: 'Export project as zip from workspace files.',
+            githubLabel: 'Push or mirror the project to GitHub.',
+        },
+        handoffReport: [
+            `Release ${release.id} on ${release.vmName}.`,
+            `Stack: ${release.stackType.replaceAll('_', ' ')}.`,
+            `Access: ${release.accessPolicy.replaceAll('_', ' ')}.`,
+            release.previewUrl ? `Preview: ${release.previewUrl}.` : 'Preview URL was not recorded.',
+        ],
+        noLockIn: {
+            headline: 'Your code, your domain, your infrastructure.',
+            bullets: ['Source stays exportable.', 'Deployments are recorded against your VM/domain choices.', 'Rollback evidence stays attached to release history.'],
+        },
+        supportBundle: {
+            available: true,
+            url: `/api/ai/releases/${release.id}/support-bundle`,
+            includes: ['release metadata', 'deployment events', 'failure reason', 'request IDs', 'handoff report', 'rollback status'],
+            requestIds: [],
+        },
+        sla: [
+            { tier: 'Starter', promise: 'Async queue, basic deploy history, and recoverable release records.' },
+            { tier: 'Pro', promise: 'Priority verification, rollback target selection, and support bundles.' },
+            { tier: 'Agency', promise: 'Client handoff reports and multi-workspace history.' },
+            { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, release evidence, and SSO later.' },
+        ],
+    }
 }
 
 function PreviewLink({ href, emptyText }: { href: string | null | undefined, emptyText: string }) {

@@ -682,6 +682,44 @@ type AIRelease = {
     createdAt: string
     updatedAt: string
     notes: string | null
+    trust?: AIReleaseTrust
+}
+
+type AIReleaseTrust = {
+    versionHistory: {
+        releaseId: string
+        status: AIReleaseStatus
+        createdAt: string
+        updatedAt: string
+        summary: string
+    }
+    recovery: {
+        rollbackAvailable: boolean
+        rollbackLabel: string
+        backupBeforeRiskyChanges: boolean
+        backupPolicy: string
+    }
+    exports: {
+        zipAvailable: boolean
+        githubAvailable: boolean
+        zipLabel: string
+        githubLabel: string
+    }
+    handoffReport: string[]
+    noLockIn: {
+        headline: string
+        bullets: string[]
+    }
+    supportBundle: {
+        available: boolean
+        url: string
+        includes: string[]
+        requestIds: string[]
+    }
+    sla: {
+        tier: string
+        promise: string
+    }[]
 }
 
 type AIUsageEventKind =
@@ -1147,6 +1185,7 @@ type AIRelease = {
     createdAt: string
     updatedAt: string
     notes: string | null
+    trust?: AIReleaseTrust
 }
 
 type AIUsageEventKind =
