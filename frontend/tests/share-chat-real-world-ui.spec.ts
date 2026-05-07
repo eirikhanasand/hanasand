@@ -331,6 +331,29 @@ const pendingCheckpointStories: AppStory[] = [
     { id: 1200, prompt: 'are we still prioritizing safe fast progress', expected: 'safe-fast-progress' },
 ]
 
+const pendingSummaryStories: AppStory[] = [
+    { id: 1201, prompt: 'what changed, dont make me read code first', expected: 'change-summary' },
+    { id: 1202, prompt: 'designer wants a quick file summary', expected: 'designer-file-summary' },
+    { id: 1203, prompt: 'newbie asks is this a new file', expected: 'newbie-new-file' },
+    { id: 1204, prompt: 'corporate reviewer needs line counts', expected: 'corporate-line-counts' },
+    { id: 1205, prompt: 'ops wants added removed visible', expected: 'ops-added-removed' },
+    { id: 1206, prompt: 'agency client hates raw diffs first', expected: 'agency-diff-summary' },
+    { id: 1207, prompt: 'support says pending diffs look scary', expected: 'support-friendly-diff' },
+    { id: 1208, prompt: 'founder skims before demo', expected: 'founder-skim-summary' },
+    { id: 1209, prompt: 'accessibility reviewer wants file scope fast', expected: 'a11y-file-scope' },
+    { id: 1210, prompt: 'pricing change needs compact evidence', expected: 'pricing-compact-change' },
+    { id: 1211, prompt: 'mobile fix ready, show size', expected: 'mobile-change-size' },
+    { id: 1212, prompt: 'compliance wants no mystery patch', expected: 'compliance-no-mystery' },
+    { id: 1213, prompt: 'investor page diff needs quick read', expected: 'investor-quick-diff' },
+    { id: 1214, prompt: 'restaurant owner doesnt know diff syntax', expected: 'restaurant-no-diff-syntax' },
+    { id: 1215, prompt: 'terminal agents dump walls of patch', expected: 'terminal-patch-summary' },
+    { id: 1216, prompt: 'handoff needs changed file summary', expected: 'handoff-file-summary' },
+    { id: 1217, prompt: 'client asks how big the change is', expected: 'client-change-size' },
+    { id: 1218, prompt: 'designer rejects huge unseen edits', expected: 'designer-sized-edit' },
+    { id: 1219, prompt: 'beginner wants safe apply confidence', expected: 'beginner-apply-confidence' },
+    { id: 1220, prompt: 'are we reducing bloat where it matters', expected: 'less-bloat-summary' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1894,4 +1917,105 @@ test('share page AI treats unapplied edits as a checkpoint before another run', 
     }
 
     expect(handledPrompts).toHaveLength(pendingCheckpointStories.length)
+})
+
+test('share page AI shows compact pending change summaries before raw diffs', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-pending-summary-story',
+                alias: body.path || body.name || body.id || 'app-pending-summary-story',
+                path: body.path || body.name || body.id || 'app-pending-summary-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-pending-summary-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = pendingSummaryStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-pending-summary-${matchingStory!.id}-${runSlug}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Change summary should be visible before the raw diff.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: [
+                            'export default function Page() {',
+                            `  return <main><h1>${matchingStory!.expected}</h1><p>Compact change summary before code.</p></main>`,
+                            '}',
+                        ].join('\n'),
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of pendingSummaryStories) {
+        const expectedUrl = `https://hanasand.com/s/app-pending-summary-${story.id}-${runSlug}`
+        await page.goto(`/s/app-pending-summary-${story.id}-${runSlug}?new=1`)
+        const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
+        await expect(chatButton).toBeVisible({ timeout: 2500 })
+        await chatButton.click()
+        const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
+        await expect(promptBox).toBeVisible({ timeout: 2500 })
+        await promptBox.fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Change summary should be visible before the raw diff.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Create app/page.tsx')).toBeVisible()
+        await expect(page.getByText('3 lines')).toBeVisible()
+        await expect(page.getByText('+3')).toBeVisible()
+        await expect(page.getByText('-0')).toBeVisible()
+        await expect(page.getByText('New file', { exact: true })).toBeVisible()
+        await expect(page.getByText('+ export default function Page() {')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Apply' })).toBeEnabled()
+        await expect(page.getByRole('button', { name: 'Discard' })).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+        await page.getByRole('button', { name: 'Discard' }).click()
+    }
+
+    expect(handledPrompts).toHaveLength(pendingSummaryStories.length)
 })

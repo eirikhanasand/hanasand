@@ -533,16 +533,25 @@ export default function ShareChat({
                         </div>
                     ) : null}
                     <div className='max-h-56 space-y-2 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2'>
-                        {pendingEdit.changes.map((change) => (
-                            <details key={change.id} open={pendingEdit.changes.length <= 2} className='rounded-md border border-bright/8 bg-black/18 p-2'>
-                                <summary className='cursor-pointer text-xs font-semibold text-bright/72'>
-                                    {change.shareId ? 'Update' : 'Create'} {change.path}
-                                </summary>
-                                <pre className='mt-2 whitespace-pre-wrap text-xs leading-5 text-bright/68'>
-                                    {buildDiff(change.beforeContent, change.content)}
-                                </pre>
-                            </details>
-                        ))}
+                        {pendingEdit.changes.map((change) => {
+                            const summary = summarizePendingChange(change)
+                            return (
+                                <details key={change.id} open={pendingEdit.changes.length <= 2} className='rounded-md border border-bright/8 bg-black/18 p-2'>
+                                    <summary className='cursor-pointer text-xs font-semibold text-bright/72'>
+                                        {summary.action} {change.path}
+                                    </summary>
+                                    <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
+                                        <span className='rounded-full border border-bright/8 px-2 py-0.5'>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
+                                        <span className='rounded-full border border-emerald-300/10 px-2 py-0.5 text-emerald-100/62'>+{summary.added}</span>
+                                        <span className='rounded-full border border-red-300/10 px-2 py-0.5 text-red-100/62'>-{summary.removed}</span>
+                                        <span className='truncate text-bright/42'>{summary.kind}</span>
+                                    </div>
+                                    <pre className='mt-2 whitespace-pre-wrap text-xs leading-5 text-bright/68'>
+                                        {buildDiff(change.beforeContent, change.content)}
+                                    </pre>
+                                </details>
+                            )
+                        })}
                     </div>
                     {pendingEdit.error ? <ErrorNotice compact className='mt-2' message={pendingEdit.error} /> : null}
                 </div>
@@ -849,6 +858,34 @@ function parentIdForPath(tree: Tree | null, filePath: string) {
 
 function stripToolTags(content: string) {
     return content.replace(/<hanasand-tool>[\s\S]*?<\/hanasand-tool>/g, '').replace(/\n{3,}/g, '\n\n')
+}
+
+function summarizePendingChange(change: PendingShareChange) {
+    const beforeLines = change.beforeContent ? change.beforeContent.split('\n') : []
+    const afterLines = change.content ? change.content.split('\n') : []
+    const max = Math.max(beforeLines.length, afterLines.length)
+    let added = 0
+    let removed = 0
+    for (let index = 0; index < max; index += 1) {
+        const oldLine = beforeLines[index]
+        const newLine = afterLines[index]
+        if (oldLine === newLine) {
+            continue
+        }
+        if (typeof oldLine === 'string' && oldLine.length > 0) {
+            removed += 1
+        }
+        if (typeof newLine === 'string' && newLine.length > 0) {
+            added += 1
+        }
+    }
+    return {
+        action: change.shareId ? 'Update' : 'Create',
+        added,
+        removed,
+        totalLines: afterLines.filter((line) => line.length > 0).length,
+        kind: change.created || !change.shareId ? 'New file' : 'Existing file',
+    }
 }
 
 function buildDiff(before: string, after: string) {
