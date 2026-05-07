@@ -8,7 +8,7 @@ import setUserActive from '@/utils/users/setUserActive'
 import { Ban, CheckCircle2, Crown, Pencil, Trash2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import Notify from '../notify/notify'
+import ErrorNotice from '../error/errorNotice'
 import UserRoleHandler from '../roles/userRoleHandler'
 
 export default function DashboardUser({ user, roles }: { user: UserWithRole, roles: Role[] }) {
@@ -98,12 +98,8 @@ export default function DashboardUser({ user, roles }: { user: UserWithRole, rol
                 </div>}
             </div>
             <UserRoleHandler user={user} displayRoles={displayRoles} roles={roles} />
-            {deleted && <div className='absolute top-16 right-2 w-50 h-fit z-100'>
-                <Notify color='bg-blue-500' background='bg-bright/3 backdrop-blur-md' message={`Deleted user ${user.id}.`} className=' min-w-full px-4 outline outline-dark' />
-            </div>}
-            {error && <div className='absolute top-16 right-2 w-50 h-fit z-100'>
-                <Notify background='bg-bright/3 backdrop-blur-md' message={String(error)} className=' min-w-full px-4 outline outline-dark' />
-            </div>}
+            {deleted ? <ErrorNotice compact variant='success' className='absolute right-2 top-12 z-100 w-60' message={`Deleted user ${user.id}.`} /> : null}
+            {error ? <ErrorNotice compact className='absolute right-2 top-12 z-100 w-60' message={String(error)} /> : null}
         </div>
     )
 }

@@ -9,8 +9,8 @@ export default async function deleteRole(id: string): Promise<{ status: number, 
 
     try {
         const token = getCookie('access_token')
-        const id = getCookie('id')
-        if (!token || !id) {
+        const userId = getCookie('id')
+        if (!token || !userId) {
             return {
                 status: 401,
                 message: 'Please log in to delete roles.'
@@ -21,7 +21,7 @@ export default async function deleteRole(id: string): Promise<{ status: number, 
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'id': id
+                'id': userId
             },
             signal: controller.signal
         })

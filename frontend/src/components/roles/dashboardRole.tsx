@@ -5,7 +5,7 @@ import useKeyPress from '@/hooks/keyPressed'
 import { Crown, Shield, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import Notify from '../notify/notify'
+import ErrorNotice from '../error/errorNotice'
 import deleteRole from '@/utils/roles/deleteRole'
 
 export default function DashboardRole({ role }: { role: Role }) {
@@ -30,7 +30,7 @@ export default function DashboardRole({ role }: { role: Role }) {
 
     if (deleted) {
         return (
-            <Notify message={`Deleted role ${role.id}.`} className='min-w-full px-4 bg-light' />
+            <ErrorNotice compact variant='success' message={`Deleted role ${role.id}.`} />
         )
     }
 
@@ -57,7 +57,7 @@ export default function DashboardRole({ role }: { role: Role }) {
                     {keys['shift'] && <Trash2 className='h-4 w-4 text-red-400' />}
                 </div>
             </button>
-            {error && <Notify message={error} className='min-w-full px-4 bg-light' />}
+            {error ? <ErrorNotice compact message={error} /> : null}
         </div>
     )
 }
