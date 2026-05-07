@@ -143,6 +143,22 @@ type BrowserProofJob = {
     error?: string
 }
 
+type VerificationJobResponse = {
+    job?: {
+        id: string
+        kind: 'browser' | 'build' | 'deploy' | 'design'
+        status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+        currentStep?: string
+        queuePosition?: number
+        targetUrl?: string | null
+        artifacts?: {
+            type?: string
+            data?: Record<string, unknown>
+        }[]
+        error?: string | null
+    } | null
+}
+
 type PlainProjectState = {
     label: 'Planning' | 'Editing' | 'Verifying' | 'Needs you' | 'Ready to publish' | 'Failed with fix'
     detail: string
@@ -1425,6 +1441,109 @@ async function runBrowserEvidenceTool(call: ToolCall): Promise<BrowserEvidence |
         return null
     }
     try {
+        const job = await runDurableVerificationJob(call, 'browser')
+        if (!job) {
+            return runLegacyBrowserEvidenceTool(call)
+        }
+        const browserArtifact = job.artifacts?.find((artifact) => artifact.type === 'browser_result')
+        const data = browserArtifact?.data || {}
+        const evidence = browserEvidenceFromVerificationJob(call.url, job, data)
+        const designJob = await runDurableVerificationJob(call, 'design')
+        if (designJob) {
+            const designData = designJob.artifacts?.find((artifact) => artifact.type === 'design_quality_report')?.data || {}
+            const score = typeof designData.score === 'number' ? designData.score : null
+            const designErrors = designJob.status === 'failed' && designJob.error ? [designJob.error] : []
+            return {
+                ...evidence,
+                consoleMessages: [
+                    ...(evidence.consoleMessages || []),
+                    `Durable design QA job ${designJob.id}: ${score === null ? designJob.currentStep || designJob.status : `score ${score}`}.`,
+                ],
+                pageErrors: [
+                    ...(evidence.pageErrors || []),
+                    ...designErrors,
+                ],
+            }
+        }
+        return evidence
+    } catch {
+        return {
+            id: randomId(),
+            url: call.url,
+            title: null,
+            screenshotPath: null,
+            structure: emptyBrowserStructure(),
+            consoleMessages: [],
+            pageErrors: ['Browser evidence is reconnecting. Try the check again in a moment.'],
+            fetchedAt: new Date().toISOString(),
+        }
+    }
+}
+
+async function runDurableVerificationJob(call: ToolCall, kind: 'browser' | 'design'): Promise<NonNullable<VerificationJobResponse['job']> | null> {
+    const response = await aiClientRequest('/tools/verification-jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+            kind,
+            targetUrl: call.url,
+            priority: 'paid',
+            captureScreenshot: Boolean(call.captureScreenshot),
+            timeoutMs: call.timeoutMs || 16000,
+            maxRetries: 1,
+            metadata: {
+                source: 'share_chat',
+                requestedScreenshot: Boolean(call.captureScreenshot),
+            },
+        }),
+    })
+    const created = await response.json().catch(() => null) as VerificationJobResponse | null
+    if (!response.ok || !created?.job?.id) {
+        return null
+    }
+
+    let job = created.job
+    for (let index = 0; index < 36; index += 1) {
+        if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+            return job
+        }
+        await delay(750)
+        const check = await aiClientRequest(`/tools/verification-jobs/${job.id}`)
+        const payload = await check.json().catch(() => null) as VerificationJobResponse | null
+        if (!check.ok || !payload?.job) {
+            return job
+        }
+        job = payload.job
+    }
+    return job
+}
+
+function browserEvidenceFromVerificationJob(url: string, job: NonNullable<VerificationJobResponse['job']>, data: Record<string, unknown>): BrowserEvidence {
+    const structure = typeof data.structure === 'object' && data.structure ? data.structure as BrowserEvidence['structure'] : emptyBrowserStructure()
+    const consoleMessages = Array.isArray(data.consoleMessages) ? data.consoleMessages.filter((item): item is string => typeof item === 'string') : []
+    const pageErrors = Array.isArray(data.pageErrors) ? data.pageErrors.filter((item): item is string => typeof item === 'string') : []
+    const jobError = job.status === 'failed' && job.error ? [job.error] : []
+    return {
+        id: randomId(),
+        url: typeof data.url === 'string' ? data.url : url,
+        title: typeof data.title === 'string' ? data.title : null,
+        screenshotPath: typeof data.screenshotPath === 'string' ? data.screenshotPath : null,
+        textExcerpt: typeof data.textExcerpt === 'string' ? data.textExcerpt : '',
+        structure,
+        consoleMessages: [
+            `Durable verification job ${job.id}: ${job.currentStep || job.status}.`,
+            ...consoleMessages,
+        ],
+        pageErrors: [...jobError, ...pageErrors],
+        quality: typeof data.quality === 'object' && data.quality ? data.quality as BrowserQuality : undefined,
+        fetchedAt: new Date().toISOString(),
+    }
+}
+
+async function runLegacyBrowserEvidenceTool(call: ToolCall): Promise<BrowserEvidence | null> {
+    if (!call.url) {
+        return null
+    }
+    try {
         const response = await aiClientRequest('/tools/browser/task', {
             method: 'POST',
             body: JSON.stringify({
@@ -1465,6 +1584,10 @@ async function runBrowserEvidenceTool(call: ToolCall): Promise<BrowserEvidence |
             fetchedAt: new Date().toISOString(),
         }
     }
+}
+
+function delay(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
