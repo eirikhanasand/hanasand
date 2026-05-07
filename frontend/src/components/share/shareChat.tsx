@@ -150,6 +150,7 @@ type PlainProjectState = {
 }
 
 type ShareChatWorkflow = 'ask' | 'build'
+type ShareChatCostMode = 'draft' | 'standard' | 'verified' | 'priority'
 
 type DesignMemory = {
     summary: string
@@ -173,6 +174,12 @@ type DesignBrief = {
 }
 
 const DESIGN_MEMORY_STORAGE_KEY = 'hanasand:share-design-memory:v1'
+const costModes: { id: ShareChatCostMode, label: string, detail: string }[] = [
+    { id: 'draft', label: 'Cheap draft', detail: 'fast sketch' },
+    { id: 'standard', label: 'Standard', detail: 'balanced' },
+    { id: 'verified', label: 'Verified', detail: 'proof first' },
+    { id: 'priority', label: 'Priority', detail: 'paid lane' },
+]
 
 export default function ShareChat({
     share,
@@ -199,6 +206,7 @@ export default function ShareChat({
     const [hydrated, setHydrated] = useState(false)
     const [builderWorkflowOpen, setBuilderWorkflowOpen] = useState(false)
     const [designMemory, setDesignMemory] = useState<DesignMemory | null>(null)
+    const [costMode, setCostMode] = useState<ShareChatCostMode>('standard')
     const proofQueueRunRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const formRef = useRef<HTMLFormElement | null>(null)
@@ -317,13 +325,14 @@ export default function ShareChat({
         proofQueueRunRef.current = proofRunId
 
         try {
-            const tokenCap = 2200
+            const tokenCap = tokenCapForCostMode(costMode)
             const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
-                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null, workflow, designMemory),
+                    prompt: buildPrompt(trimmed, activeShare, editingContent, treePaths, previewUrl || null, workflow, designMemory, costMode),
                     context: buildContext(activeShare, editingContent, treePaths, messages, previewUrl || null, trimmed, workflow, designMemory),
                     maxTokens: tokenCap,
+                    billingMode: costMode,
                 }),
             })
             const data = await response.json().catch(() => ({}))
@@ -937,6 +946,22 @@ export default function ShareChat({
             ) : null}
 
             <form ref={formRef} onSubmit={submit} className='border-t border-bright/8 p-3'>
+                {showBuilderWorkflow ? (
+                    <div className='mb-2 grid grid-cols-4 gap-1 rounded-xl border border-bright/8 bg-black/18 p-1'>
+                        {costModes.map((mode) => (
+                            <button
+                                key={mode.id}
+                                type='button'
+                                onClick={() => setCostMode(mode.id)}
+                                className={`min-w-0 rounded-lg px-2 py-2 text-left transition ${costMode === mode.id ? 'bg-[#f07d33]/16 text-bright outline outline-[#f07d33]/25' : 'text-bright/48 hover:bg-bright/[0.045] hover:text-bright/72'}`}
+                                aria-pressed={costMode === mode.id}
+                            >
+                                <span className='block truncate text-[11px] font-semibold'>{mode.label}</span>
+                                <span className='mt-0.5 block truncate text-[10px] opacity-70'>{mode.detail}</span>
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
                 <div className='flex items-end gap-2 rounded-2xl border border-bright/10 bg-bright/[0.045] p-2'>
                     <input type='hidden' name='shareChatPromptFallback' value={input} />
                     <textarea
@@ -1190,7 +1215,7 @@ function beginnerActionFailure(error?: string) {
     return 'Review the summary and try the smallest safer change.'
 }
 
-function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null, workflow: ShareChatWorkflow, designMemory: DesignMemory | null) {
+function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null, workflow: ShareChatWorkflow, designMemory: DesignMemory | null, costMode: ShareChatCostMode) {
     const shareEvidenceUrl = buildShareEvidenceUrl(share)
     const diagnosticMode = isDeploymentDiagnosticPrompt(prompt)
     const costControlMode = isCostControlPrompt(prompt)
@@ -1223,6 +1248,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         'The visible UI is for non-developers. Do not paste raw code, terminal-style logs, or framework jargon in normal prose; the UI will summarize file changes separately.',
         'Use beginner language for deploy, environment, domain, and build failures. Give one obvious next action.',
         'For project changes, move directly to useful files. Do not ask for a full brief unless the request is impossible or unsafe.',
+        costModeInstruction(costMode),
         'Keep visible prose to at most 5 short sentences. Spend tokens on complete file contents, not meta commentary.',
         'When the user asks for project changes, return complete replacement content for every changed or new file using Hanasand tool tags.',
         evidenceTargets.length ? `Browser evidence targets:\n${evidenceTargets.join('\n')}` : 'Browser evidence target: use the current share or preview URL once it exists.',
@@ -1313,6 +1339,26 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         `Current file content:\n${editingContent.slice(0, 12000)}`,
         `User request:\n${prompt}`,
     ].filter(Boolean).join('\n\n')
+}
+
+function tokenCapForCostMode(mode: ShareChatCostMode) {
+    if (mode === 'draft') return 1200
+    if (mode === 'verified') return 2600
+    if (mode === 'priority') return 3200
+    return 2200
+}
+
+function costModeInstruction(mode: ShareChatCostMode) {
+    if (mode === 'draft') {
+        return 'Cost mode: cheap draft. Make the smallest useful first version, avoid broad rewrites, and leave expensive verification for later.'
+    }
+    if (mode === 'verified') {
+        return 'Cost mode: verified. Spend extra effort on acceptance criteria, browser proof requests, mobile/a11y basics, and clear not-verified items.'
+    }
+    if (mode === 'priority') {
+        return 'Cost mode: priority. Use the paid lane for faster progress, but still avoid wasted rewrites and platform-error retry loops.'
+    }
+    return 'Cost mode: standard. Balance useful progress, context size, and verification.'
 }
 
 function buildContext(share: Share, editingContent: string, treePaths: string[], messages: Message[], previewUrl: string | null, prompt: string, workflow: ShareChatWorkflow, designMemory: DesignMemory | null) {

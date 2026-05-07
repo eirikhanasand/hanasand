@@ -92,6 +92,7 @@ import { getGitWorkspaceStatus, postGitWorkspaceCommit, postGitWorkspacePull, po
 import putRepositoryCredential from './handlers/ai/putRepositoryCredential.ts'
 import deleteRepositoryCredential from './handlers/ai/deleteRepositoryCredential.ts'
 import { getAiDeployments, postAiDeployment } from './handlers/ai/deployments.ts'
+import { getAiEconomics } from './handlers/ai/economics.ts'
 import { deleteAiConversationCollaborator, postAiConversationCollaborator } from './handlers/ai/collaborators.ts'
 import { getAiReleases, postAiRollback } from './handlers/ai/releases.ts'
 import { getAiPreview } from './handlers/ai/preview.ts'
@@ -289,6 +290,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // AI workspace
     fastify.get('/ai/workspace', getAiWorkspace)
     fastify.get('/ai/runtime', getAiRuntime)
+    fastify.get('/ai/economics', getAiEconomics)
     fastify.get('/ai/models', getAiModels)
     fastify.get('/ai/previews/:id', getAiPreview)
     fastify.get('/ai/previews/:id/*', getAiPreview)

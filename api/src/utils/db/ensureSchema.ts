@@ -381,6 +381,13 @@ export default async function ensureSchema() {
             kind TEXT NOT NULL CHECK (kind IN (
                 'conversation_created',
                 'message_written',
+                'ai_run_completed',
+                'ai_run_failed',
+                'ai_run_platform_error',
+                'browser_proof_completed',
+                'build_minutes_recorded',
+                'deploy_minutes_recorded',
+                'cache_hit',
                 'deployment_started',
                 'release_recorded',
                 'rollback_marked',
@@ -388,12 +395,41 @@ export default async function ensureSchema() {
                 'collaborator_removed'
             )),
             units INT NOT NULL DEFAULT 1,
+            billable_units INT NOT NULL DEFAULT 1,
+            estimated_cost_nok NUMERIC(12,4) NOT NULL DEFAULT 0,
+            billing_mode TEXT NOT NULL DEFAULT 'standard',
+            outcome TEXT NOT NULL DEFAULT 'unverified',
             metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run('ALTER TABLE ai_usage_events DROP CONSTRAINT IF EXISTS ai_usage_events_kind_check')
+    await run(`
+        ALTER TABLE ai_usage_events
+        ADD CONSTRAINT ai_usage_events_kind_check CHECK (kind IN (
+            'conversation_created',
+            'message_written',
+            'ai_run_completed',
+            'ai_run_failed',
+            'ai_run_platform_error',
+            'browser_proof_completed',
+            'build_minutes_recorded',
+            'deploy_minutes_recorded',
+            'cache_hit',
+            'deployment_started',
+            'release_recorded',
+            'rollback_marked',
+            'collaborator_invited',
+            'collaborator_removed'
+        ))
+    `)
+    await run('ALTER TABLE ai_usage_events ADD COLUMN IF NOT EXISTS billable_units INT NOT NULL DEFAULT 1')
+    await run('ALTER TABLE ai_usage_events ADD COLUMN IF NOT EXISTS estimated_cost_nok NUMERIC(12,4) NOT NULL DEFAULT 0')
+    await run('ALTER TABLE ai_usage_events ADD COLUMN IF NOT EXISTS billing_mode TEXT NOT NULL DEFAULT \'standard\'')
+    await run('ALTER TABLE ai_usage_events ADD COLUMN IF NOT EXISTS outcome TEXT NOT NULL DEFAULT \'unverified\'')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_owner_created_at ON ai_usage_events(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_conversation_created_at ON ai_usage_events(conversation_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_owner_kind_created ON ai_usage_events(owner_id, kind, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS ai_verification_jobs (
             id TEXT PRIMARY KEY,

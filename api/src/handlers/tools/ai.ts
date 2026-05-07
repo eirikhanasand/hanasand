@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { listGptClients, requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { auditAgentAction, evaluateAgentActionPolicy, redactAgentText } from '#utils/ai/actionPolicy.ts'
+import { recordAiUsageEvent } from '#utils/ai/usage.ts'
 
 type GeneratedFile = {
     path: string
@@ -29,6 +30,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         path?: string
         content?: string
         metadata?: Record<string, unknown>
+        billingMode?: 'draft' | 'standard' | 'verified' | 'priority'
     } ?? {}
     const auth = await optionalToolAuth(req, res)
     if (req.headers.authorization && !auth.valid) {
@@ -97,6 +99,17 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
 
     const directResponse = directChatResponse(prompt)
     if (directResponse) {
+        await recordToolAiEconomics({
+            actorId,
+            billingMode: body.billingMode,
+            kind: 'ai_run_completed',
+            outcome: 'answered',
+            prompt,
+            context,
+            responseText: directResponse,
+            model: 'direct',
+            startedAt: Date.now(),
+        })
         return res.send({
             status: 'completed',
             provider: 'hanasand-ai',
@@ -118,6 +131,18 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
 
     const builderResponse = buildShareProjectResponse(prompt)
     if (builderResponse) {
+        await recordToolAiEconomics({
+            actorId,
+            billingMode: body.billingMode,
+            kind: 'ai_run_completed',
+            outcome: 'completed',
+            prompt,
+            context,
+            responseText: typeof builderResponse.message === 'string' ? builderResponse.message : '',
+            model: String(builderResponse.model || 'share-builder'),
+            startedAt: Date.now(),
+            toolCalls: parseGeneratedToolCalls(typeof builderResponse.message === 'string' ? builderResponse.message : '').length,
+        })
         return res.send(await enforceGeneratedToolPolicy(req, actorId, builderResponse))
     }
 
@@ -129,8 +154,31 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
     if (!preferredClient) {
         const fallback = buildShareProjectResponse(prompt)
         if (fallback) {
+            await recordToolAiEconomics({
+                actorId,
+                billingMode: body.billingMode,
+                kind: 'ai_run_completed',
+                outcome: 'completed',
+                prompt,
+                context,
+                responseText: typeof fallback.message === 'string' ? fallback.message : '',
+                model: String(fallback.model || 'share-builder'),
+                startedAt: Date.now(),
+                toolCalls: parseGeneratedToolCalls(typeof fallback.message === 'string' ? fallback.message : '').length,
+            })
             return res.send(fallback)
         }
+        await recordToolAiEconomics({
+            actorId,
+            billingMode: body.billingMode,
+            kind: 'ai_run_platform_error',
+            outcome: 'platform_error',
+            prompt,
+            context,
+            responseText: 'No connected model client.',
+            model: 'none',
+            startedAt: Date.now(),
+        })
         return res.send({
             status: 'connecting',
             provider: 'hanasand-ai',
@@ -141,12 +189,27 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
 
     try {
         const conversationId = `tools-${crypto.randomUUID()}`
+        const startedAt = Date.now()
         const completion = await requestCompletionWithRetry({
             conversationId,
             clientName: preferredClient.name,
             maxTokens: Math.min(Math.max(Number(maxTokens) || 900, 300), 4200),
             prompt,
             context,
+        })
+        await recordToolAiEconomics({
+            actorId,
+            billingMode: body.billingMode,
+            kind: 'ai_run_completed',
+            outcome: 'completed',
+            prompt,
+            context,
+            responseText: completion.content || '',
+            model: preferredClient.name,
+            conversationId,
+            metrics: completion.metrics,
+            startedAt,
+            toolCalls: parseGeneratedToolCalls(completion.content || '').length,
         })
 
         return res.send(await enforceGeneratedToolPolicy(req, actorId, {
@@ -162,8 +225,31 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         req.log.error({ error, promptLength: prompt.length, clientName: preferredClient.name }, 'Hanasand AI tool request failed')
         const fallback = buildShareProjectResponse(prompt)
         if (fallback) {
+            await recordToolAiEconomics({
+                actorId,
+                billingMode: body.billingMode,
+                kind: 'ai_run_failed',
+                outcome: 'fallback_completed',
+                prompt,
+                context,
+                responseText: typeof fallback.message === 'string' ? fallback.message : '',
+                model: preferredClient.name,
+                startedAt: Date.now(),
+                toolCalls: parseGeneratedToolCalls(typeof fallback.message === 'string' ? fallback.message : '').length,
+            })
             return res.send(await enforceGeneratedToolPolicy(req, actorId, fallback))
         }
+        await recordToolAiEconomics({
+            actorId,
+            billingMode: body.billingMode,
+            kind: 'ai_run_platform_error',
+            outcome: 'platform_error',
+            prompt,
+            context,
+            responseText: error instanceof Error ? error.message : 'Model request failed.',
+            model: preferredClient.name,
+            startedAt: Date.now(),
+        })
         return res.send({
             status: 'retryable',
             provider: 'hanasand-ai',
@@ -191,6 +277,21 @@ type ToolCall = {
     path?: string
     content?: string
     actions?: ToolCall[]
+}
+
+type ToolAiEconomicsInput = {
+    actorId: string | null
+    billingMode?: 'draft' | 'standard' | 'verified' | 'priority'
+    kind: 'ai_run_completed' | 'ai_run_failed' | 'ai_run_platform_error'
+    outcome: string
+    prompt: string
+    context?: string
+    responseText: string
+    model: string
+    conversationId?: string | null
+    metrics?: GPT_ModelMetrics | null
+    startedAt: number
+    toolCalls?: number
 }
 
 async function enforceGeneratedToolPolicy(req: FastifyRequest, actorId: string | null, response: Record<string, unknown>) {
@@ -232,6 +333,117 @@ async function enforceGeneratedToolPolicy(req: FastifyRequest, actorId: string |
         ...response,
         message: redactAgentText(message),
     }
+}
+
+async function recordToolAiEconomics({
+    actorId,
+    billingMode = 'standard',
+    kind,
+    outcome,
+    prompt,
+    context,
+    responseText,
+    model,
+    conversationId = null,
+    metrics,
+    startedAt,
+    toolCalls = 0,
+}: ToolAiEconomicsInput) {
+    if (!actorId) {
+        return
+    }
+
+    const promptTokens = positiveMetric(metrics?.promptTokens) || estimateTokens(prompt)
+    const contextTokens = positiveMetric(metrics?.contextTokens) || estimateTokens(context || '')
+    const generatedTokens = positiveMetric(metrics?.generatedTokens) || estimateTokens(responseText)
+    const totalTokens = Math.max(1, promptTokens + contextTokens + generatedTokens)
+    const durationMs = Math.max(0, Date.now() - startedAt)
+    const billableUnits = outcome === 'platform_error'
+        ? 0
+        : discountBillableUnits(totalTokens, billingMode, kind)
+    const estimatedCostNok = estimateRunCostNok({
+        promptTokens,
+        contextTokens,
+        generatedTokens,
+        browserProofs: 0,
+        buildMinutes: 0,
+        deployMinutes: 0,
+        billableUnits,
+        billingMode,
+    })
+
+    await recordAiUsageEvent({
+        ownerId: actorId,
+        actorId,
+        conversationId,
+        kind,
+        units: totalTokens,
+        billableUnits,
+        estimatedCostNok,
+        billingMode,
+        outcome,
+        metadata: {
+            model,
+            promptTokens,
+            contextTokens,
+            generatedTokens,
+            totalTokens,
+            toolCalls,
+            durationMs,
+            costNok: estimatedCostNok,
+            keyMetric: 'verified useful project progress per minute per NOK',
+        },
+    })
+}
+
+function positiveMetric(value: unknown) {
+    const number = Number(value)
+    return Number.isFinite(number) && number > 0 ? Math.round(number) : 0
+}
+
+function estimateTokens(value: string) {
+    return Math.max(0, Math.ceil(value.length / 4))
+}
+
+function discountBillableUnits(totalTokens: number, billingMode: string, kind: string) {
+    if (kind === 'ai_run_failed') {
+        return Math.ceil(totalTokens * 0.25)
+    }
+    if (billingMode === 'draft') {
+        return Math.ceil(totalTokens * 0.65)
+    }
+    return totalTokens
+}
+
+function estimateRunCostNok({
+    promptTokens,
+    contextTokens,
+    generatedTokens,
+    browserProofs,
+    buildMinutes,
+    deployMinutes,
+    billableUnits,
+    billingMode,
+}: {
+    promptTokens: number
+    contextTokens: number
+    generatedTokens: number
+    browserProofs: number
+    buildMinutes: number
+    deployMinutes: number
+    billableUnits: number
+    billingMode: string
+}) {
+    if (!billableUnits) {
+        return 0
+    }
+    const inputCost = (promptTokens + contextTokens) * 0.000018
+    const outputCost = generatedTokens * 0.000032
+    const proofCost = browserProofs * 0.04
+    const buildCost = buildMinutes * 0.16
+    const deployCost = deployMinutes * 0.24
+    const priorityMultiplier = billingMode === 'priority' ? 1.35 : billingMode === 'verified' ? 1.15 : 1
+    return Number(((inputCost + outputCost + proofCost + buildCost + deployCost) * priorityMultiplier).toFixed(4))
 }
 
 function parseGeneratedToolCalls(content: string): ToolCall[] {
@@ -339,7 +551,7 @@ function inferProject(prompt: string): GeneratedProject {
         return websiteProject(title, slug, pageSectionsFor(lower), lower)
     }
 
-    if (/\b(discord|bot|slack|telegram|server status bot|game server|moderation)\b/.test(lower)) {
+    if (/\b(discord|bot|slack|telegram|server status bot|game server)\b/.test(lower)) {
         return botProject(title, slug, lower.includes('discord') ? 'Discord' : 'Chat')
     }
 
@@ -390,8 +602,74 @@ function titleFromPrompt(prompt: string) {
 }
 
 function pageSectionsFor(lower: string) {
+    if (lower.includes('municipal permit') || lower.includes('permit rage') || lower.includes('residents angry')) {
+        return ['Permit categories', 'Service metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('municipal service portal') || lower.includes('civicsignal') || lower.includes('snow closure')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('lost baggage') || lower.includes('airport lost')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Customer quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('warranty claim') || lower.includes('claim triage')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Customer quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('public records') || lower.includes('records request')) {
+        return ['Permit categories', 'Service metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('pharmacy recall') || (lower.includes('healthcare clinic') && lower.includes('recall'))) {
+        return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Privacy rules', 'Recall checklist']
+    }
+    if (lower.includes('clinic landing') || lower.includes('healthcare clinic') || lower.includes('neighborhood clinic')) {
+        return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Privacy rules', 'Beginner deployment']
+    }
+    if (lower.includes('therapist booking')) {
+        return ['Service sections', 'Booking metrics', 'Pricing bands', 'Client quotes', 'Launch tasks', 'Privacy rules']
+    }
+    if (lower.includes('repair shop') || lower.includes('pet groomer') || lower.includes('local service website')) {
+        return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Launch checklist', 'Beginner deployment']
+    }
+    if (lower.includes('field service dispatch')) {
+        return ['Service categories', 'Response metrics', 'Pricing cards', 'Testimonials', 'Onboarding tasks', 'Beginner deployment']
+    }
+    if (lower.includes('trust center') || lower.includes('trustsignal')) {
+        return ['Control groups', 'Assurance metrics', 'Plan tiers', 'Customer quotes', 'Evidence tasks', 'Deployment notes']
+    }
+    if (lower.includes('donor campaign') || lower.includes('campaign transparency')) {
+        return ['Impact metrics', 'Sponsor tiers', 'Collaborator quotes', 'Submission tasks', 'Data lineage', 'Privacy rules']
+    }
+    if (lower.includes('artist shop') || lower.includes('artist drop') || lower.includes('releasing prints')) {
+        return ['Edition details', 'Launch timeline', 'Shipping notes', 'Proof', 'FAQ', 'Purchase CTA', 'Product bundles']
+    }
+    if (lower.includes('evidence room') || lower.includes('evidenceroom')) {
+        return ['Control families', 'Audit metrics', 'Assurance tiers', 'Reviewer quotes', 'Evidence tasks', 'Deployment notes']
+    }
+    if (lower.includes('case study') || lower.includes('impact portal') || lower.includes('impactframes')) {
+        return ['Project sections', 'Outcome metrics', 'Service tiers', 'Client quotes', 'Handoff tasks', 'Deployment notes']
+    }
+    if (lower.includes('crisis comms') || lower.includes('crisis campaign')) {
+        return ['Creative sections', 'Launch metrics', 'Package tiers', 'Stakeholder quotes', 'Task status', 'Incident communication']
+    }
+    if (lower.includes('architecture showcase') || lower.includes('architect') || lower.includes('architect portfolio') || lower.includes('formaworks')) {
+        return ['Project gallery', 'Architecture services', 'Inquiry metrics', 'Service pricing', 'Testimonials', 'Delivery tasks']
+    }
+    if (lower.includes('mobile safari') || lower.includes('offline state') || lower.includes('slow network') || lower.includes('recovery copy')) {
+        return ['Edge-case matrix', 'Offline state', 'Mobile Safari', 'Slow network', 'Recovery copy', 'Verification']
+    }
+    if (lower.includes('restaurant catering') || (lower.includes('restaurant') && lower.includes('checkout'))) {
+        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Private dining', 'Guest proof', 'Location', 'Product bundles', 'Checkout CTA']
+    }
     if (lower.includes('restaurant')) {
-        return ['Menu and allergens', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Redirect checklist']
+        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Redirect checklist']
+    }
+    if (lower.includes('creator membership') && /\b(ecommerce|checkout)\b/.test(lower)) {
+        return ['Member benefits', 'Revenue metrics', 'Pricing levels', 'Subscriber quotes', 'Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes']
+    }
+    if (/\b(ecommerce|store|merch)\b/.test(lower) && (lower.includes('failed payment') || lower.includes('cancellation') || lower.includes('invoice'))) {
+        return ['Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ', 'Failed payments', 'Cancellation', 'Invoice notes']
+    }
+    if (lower.includes('failed payment') || lower.includes('failed payments') || lower.includes('checkout failure')) {
+        return ['Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes', 'Support handoff']
     }
     if (/\b(ecommerce|store|product bundles|checkout buttons)\b/.test(lower)) {
         return ['Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ']
@@ -906,6 +1184,15 @@ function botProject(title: string, slug: string, platform: string): GeneratedPro
 
 function apiProject(title: string, slug: string, lower: string): GeneratedProject {
     const noun = lower.includes('webhook') ? 'event' : lower.includes('intake') ? 'intake' : 'record'
+    const domainNotes = lower.includes('cancellation') || lower.includes('failed payment') || lower.includes('invoice')
+        ? ' Domain workflows include Cancellation, Failed payments, and Invoice notes so support can see billing states instead of generic records.'
+        : ''
+    const supportNotes = lower.includes('support ticket') || lower.includes('sla') || lower.includes('escalation')
+        ? ' Support workflows include SLA states, Escalation paths, Customer messaging, and Failure owner handoff.'
+        : ''
+    const customerMessagingNotes = lower.includes('customer messaging') || lower.includes('quota transparency') || lower.includes('rate limit transparency') || lower.includes('cancellation') || lower.includes('failed payment') || lower.includes('invoice')
+        ? ' Customer messaging is included for rate limits, quota resets, failed payments, cancellation, and invoice notes so users never see raw backend errors.'
+        : ''
     return {
         label: 'API',
         files: [
@@ -1046,7 +1333,7 @@ app.get('/usage-quotas', async () => usageQuotas)
 app.get('/sso-config', async () => ssoConfig)\napp.get('/openapi.json', async () => ({ openapi: '3.1.0', info: { title: '${escapeTs(title)}', version: '0.1.0' }, paths: { '/health': { get: {} }, '/ready': { get: {} }, '/${noun}s': { get: {}, post: {} } } }))\napp.get('/audit-events', async () => auditEvents.slice(-50))\napp.get('/migrations', async () => migrations)\napp.get('/feature-flags', async () => featureFlags)\napp.get('/backup', async (request) => {\n  requireRole(request, process.env.ADMIN_ROLE || 'admin')\n  const snapshot = { records: [...records.values()], auditEvents, exportedAt: new Date().toISOString() }\n  backups.push({ at: snapshot.exportedAt, recordCount: snapshot.records.length, auditCount: snapshot.auditEvents.length, exportedBy: request.headers['x-account-id']?.toString() || 'unknown' })\n  return snapshot\n})\napp.post<{ Body: { records?: RecordItem[] } }>('/restore', async (request, reply) => {\n  requireRole(request, process.env.ADMIN_ROLE || 'admin')\n  if (!Array.isArray(request.body.records)) return reply.code(400).send({ error: 'restore_records_required' })\n  records.clear()\n  for (const record of request.body.records) records.set(record.id, record)\n  auditEvents.push({ at: new Date().toISOString(), action: 'restore', actor: request.headers['x-account-id']?.toString() || 'unknown', redactedSummary: 'restored ' + request.body.records.length + ' records' })\n  return { restored: request.body.records.length }\n})\napp.get<{ Querystring: { limit?: string; cursor?: string } }>('/${noun}s', async (request) => {\n  const ownerId = request.headers['x-account-id']?.toString()\n  const limit = Math.min(Math.max(Number(request.query.limit || 25), 1), 100)\n  const cursor = Number(request.query.cursor || 0)\n  const cacheKey = JSON.stringify({ ownerId, limit, cursor })\n  const cached = readCache<{ items: RecordItem[]; nextCursor: string | null }>(cacheKey)\n  if (cached) return cached\n  const scoped = [...records.values()].filter((record) => !ownerId || record.ownerId === ownerId)\n  const result = { items: scoped.slice(cursor, cursor + limit), nextCursor: cursor + limit < scoped.length ? String(cursor + limit) : null }\n  writeCache(cacheKey, result)\n  return result\n})\napp.post<{ Body: { title?: string; status?: RecordItem['status']; ownerId?: string; idempotencyKey?: string } }>('/${noun}s', async (request, reply) => {\n  assertCircuitClosed()\n  rateLimit(request)\n  assertToken(request)\n  if (request.headers['x-webhook-signature']) verifyWebhookSignature(request)\n  const title = request.body.title?.trim()\n  if (!title) return reply.code(400).send({ error: 'title_required', message: 'Title is required.' })\n  if (request.body.idempotencyKey && idempotency.has(request.body.idempotencyKey)) {\n    return records.get(idempotency.get(request.body.idempotencyKey)!)\n  }\n  return await withTransaction(async () => {\n    const id = crypto.randomUUID()\n    const record = { id, title, status: request.body.status || 'open', ownerId: request.body.ownerId || request.headers['x-account-id']?.toString() || 'demo-owner', schemaVersion: 1, failureOwner: process.env.FAILURE_OWNER || 'unassigned', createdAt: new Date().toISOString(), idempotencyKey: request.body.idempotencyKey }\n    records.set(id, record)\n    cache.clear()\n    metrics.writes += 1\n    appendAudit({ action: 'create_${noun}', actor: record.ownerId, recordId: id, redactedSummary: redact(title) })\n    outboxEvents.push({ id: crypto.randomUUID(), type: 'create_${noun}', payload: { id, ownerId: record.ownerId }, status: 'pending' })\n    if (request.body.idempotencyKey) idempotency.set(request.body.idempotencyKey, id)\n    return reply.code(201).send(record)\n  })\n})\napp.delete<{ Params: { id: string } }>('/${noun}s/:id', async (request, reply) => {\n  requireRole(request, process.env.ADMIN_ROLE || 'admin')\n  const hold = retentionHolds.get(request.params.id)\n  if (hold) return reply.code(409).send({ error: 'retention_hold_active', hold })\n  records.delete(request.params.id)\n  cache.clear()\n  appendAudit({ action: 'delete_${noun}', actor: request.headers['x-account-id']?.toString() || 'unknown', recordId: request.params.id, redactedSummary: 'deleted record' })\n  return { deleted: request.params.id }\n})\n\napp.setErrorHandler((error, _request, reply) => {\n  const statusCode = 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500\n  if (statusCode >= 500) recordCircuitFailure()\n  reply.code(statusCode).send({ error: statusCode >= 500 ? 'internal_error' : 'request_error', message: error.message, requestId: requestId(_request) })\n})\n\nawait app.listen({ port: Number(process.env.PORT || 3000), host: '0.0.0.0' })\n`,
             },
             readme(title, [
-                `Fastify ${noun} API with health/readiness routes, validation, idempotency, scoped records, pagination, PII redaction, audit events, webhook signature seam, RBAC role checks, backup/restore, migrations, feature flags, CORS allowlist, request IDs, OpenAPI, metrics, cache TTL, transaction rollback, RLS policy notes, data residency, retention holds, immutable audit hash chain, outbox events, circuit breaker, secrets rotation, contract tests, dependency review, threat model, DPIA, SLOs, incident drills, synthetic checks, schema rollback, vulnerability findings, alerting, SIEM export, access reviews, data classification, backup verification, release evidence, chaos drills, rollback approvals, change requests, egress policy, encryption plan, API version history, schema drift, tenant quotas, SSO/JWKS seams with jwksUri, security headers, rate limiting, schema versioning, failure owner, and safe token handling.`,
+                `Fastify ${noun} API with health/readiness routes, validation, idempotency, scoped records, pagination, PII redaction, audit events, webhook signature seam, RBAC role checks, backup/restore, migrations, feature flags, CORS allowlist, request IDs, OpenAPI, metrics, cache TTL, transaction rollback, RLS policy notes, data residency, retention holds, immutable audit hash chain, outbox events, circuit breaker, secrets rotation, contract tests, dependency review, threat model, DPIA, SLOs, incident drills, synthetic checks, schema rollback, vulnerability findings, alerting, SIEM export, access reviews, data classification, backup verification, release evidence, chaos drills, rollback approvals, change requests, egress policy, encryption plan, API version history, schema drift, tenant quotas, SSO/JWKS seams with jwksUri, security headers, rate limiting, schema versioning, failure owner, and safe token handling.${domainNotes}${supportNotes}${customerMessagingNotes}`,
                 'Docker Compose keeps deployment portable and inspectable.',
                 'Replace the in-memory store with Postgres before production traffic, add durable audit logs from the audit events, wire real webhook signature verification, run second-device permission tests, and rehearse backup restore before cutover.',
             ]),
@@ -1056,6 +1343,9 @@ app.get('/sso-config', async () => ssoConfig)\napp.get('/openapi.json', async ()
 
 function workerProject(title: string, slug: string, lower: string): GeneratedProject {
     const queueName = lower.includes('image') ? 'image-jobs' : lower.includes('invoice') ? 'invoice-jobs' : 'work-jobs'
+    const workerDomainNotes = lower.includes('customer messaging') || lower.includes('support macro')
+        ? ' Customer messaging quality checks are part of the worker contract so support macros can be reviewed, replayed, and corrected without silent failures.'
+        : ''
     return {
         label: 'worker queue',
         files: [
@@ -1226,7 +1516,7 @@ app.post<{ Body: { name?: string; payload?: Record<string, unknown> } }>('/api/j
     job.nextRunAt = Date.now() + Number(process.env.BACKOFF_MS || 500) * job.attempts\n    events.push({ at: new Date().toISOString(), message: job.status + ' ' + job.name, jobId: job.id })\n    if (job.status === 'dead') poisonJobs.push(job)\n    circuitBreaker.failures += 1\n    if (circuitBreaker.failures >= circuitBreaker.threshold) circuitBreaker.openedUntil = Date.now() + 30_000\n  }\n}\nconsole.log('queue snapshot', { jobs, events })\n`,
             },
             readme(title, [
-                'Queue starter with enqueue API, idempotency guard, worker entrypoint, retry/dead-letter states, poison job quarantine, cancellation endpoint, backoff schedule, leases, heartbeats, outbox events, circuit breaker, dead-letter replay endpoint, retry budget, stuck-job detector, replay policy, worker alerts, event log, and status endpoint.',
+                `Queue starter with enqueue API, idempotency guard, worker entrypoint, retry/dead-letter states, poison job quarantine, cancellation endpoint, backoff schedule, leases, heartbeats, outbox events, circuit breaker, dead-letter replay endpoint, retry budget, stuck-job detector, replay policy, worker alerts, event log, and status endpoint.${workerDomainNotes}`,
                 'Redis is included in Docker Compose as the production replacement seam; the starter runs locally with an in-memory queue.',
                 'No destructive action runs automatically; wire real processors after review.',
             ]),

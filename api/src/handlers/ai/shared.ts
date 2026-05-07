@@ -92,6 +92,10 @@ type UsageRow = {
     release_id: string | null
     kind: AIUsageEventKind
     units: number
+    billable_units: number
+    estimated_cost_nok: number
+    billing_mode: string
+    outcome: string
     metadata: Record<string, unknown> | null
     created_at: string
     actor_name: string | null
@@ -522,6 +526,10 @@ function toUsageEvent(row: UsageRow): AIUsageEvent {
         releaseId: row.release_id,
         kind: row.kind,
         units: Number(row.units || 1),
+        billableUnits: Number(row.billable_units || 0),
+        estimatedCostNok: Number(row.estimated_cost_nok || 0),
+        billingMode: row.billing_mode,
+        outcome: row.outcome,
         metadata: row.metadata || {},
         createdAt: row.created_at,
     }

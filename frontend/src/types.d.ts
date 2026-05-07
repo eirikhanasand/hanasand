@@ -687,6 +687,13 @@ type AIRelease = {
 type AIUsageEventKind =
     | 'conversation_created'
     | 'message_written'
+    | 'ai_run_completed'
+    | 'ai_run_failed'
+    | 'ai_run_platform_error'
+    | 'browser_proof_completed'
+    | 'build_minutes_recorded'
+    | 'deploy_minutes_recorded'
+    | 'cache_hit'
     | 'deployment_started'
     | 'release_recorded'
     | 'rollback_marked'
@@ -1145,6 +1152,13 @@ type AIRelease = {
 type AIUsageEventKind =
     | 'conversation_created'
     | 'message_written'
+    | 'ai_run_completed'
+    | 'ai_run_failed'
+    | 'ai_run_platform_error'
+    | 'browser_proof_completed'
+    | 'build_minutes_recorded'
+    | 'deploy_minutes_recorded'
+    | 'cache_hit'
     | 'deployment_started'
     | 'release_recorded'
     | 'rollback_marked'
@@ -1161,6 +1175,10 @@ type AIUsageEvent = {
     releaseId: string | null
     kind: AIUsageEventKind
     units: number
+    billableUnits?: number
+    estimatedCostNok?: number
+    billingMode?: string
+    outcome?: string
     metadata: Record<string, unknown>
     createdAt: string
 }

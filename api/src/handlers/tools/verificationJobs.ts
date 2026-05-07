@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { recordAiUsageEvent } from '#utils/ai/usage.ts'
 
 const MAX_STRUCTURE_ITEMS = 20
 const MAX_EXCERPT_LENGTH = 5000
@@ -321,6 +322,25 @@ async function runBrowserJob(job: VerificationJobRow) {
             JSON.stringify([artifact]),
             response.ok ? null : `HTTP ${response.status} ${response.statusText}`,
         ])
+        await recordAiUsageEvent({
+            ownerId: job.owner_id,
+            actorId: job.owner_id,
+            workspaceKind: cleanWorkspaceKind(job.workspace_kind),
+            workspaceId: job.workspace_id,
+            kind: 'browser_proof_completed',
+            units: 1,
+            billableUnits: response.ok ? 1 : 0,
+            estimatedCostNok: response.ok ? 0.04 : 0,
+            billingMode: job.lane,
+            outcome: response.ok ? 'verified' : 'failed',
+            metadata: {
+                jobId: job.id,
+                requestId: job.request_id,
+                targetUrl: job.target_url,
+                status: response.status,
+                elapsedMs: Math.round(performance.now() - started),
+            },
+        })
     } finally {
         clearTimeout(timeout)
     }
@@ -347,6 +367,26 @@ async function completeNonBrowserJob(job: VerificationJobRow) {
             updated_at = NOW()
         WHERE id = $1
     `, [job.id, JSON.stringify([artifact])])
+    const durationMinutes = Math.max(1, Math.ceil(((job.started_at ? Date.now() - Date.parse(job.started_at) : 0) || 60000) / 60000))
+    const kind = job.kind === 'deploy' ? 'deploy_minutes_recorded' : 'build_minutes_recorded'
+    await recordAiUsageEvent({
+        ownerId: job.owner_id,
+        actorId: job.owner_id,
+        workspaceKind: cleanWorkspaceKind(job.workspace_kind),
+        workspaceId: job.workspace_id,
+        kind,
+        units: durationMinutes,
+        billableUnits: durationMinutes,
+        estimatedCostNok: durationMinutes * (job.kind === 'deploy' ? 0.24 : 0.16),
+        billingMode: job.lane,
+        outcome: job.kind === 'deploy' ? 'deployed' : 'verified',
+        metadata: {
+            jobId: job.id,
+            requestId: job.request_id,
+            deployUrl: job.deploy_url,
+            currentStep: 'Receipt stored',
+        },
+    })
 }
 
 async function updateStep(id: string, step: string) {
@@ -439,6 +479,10 @@ function normalizePriority(priority: CreateJobBody['priority']) {
 
 function cleanOptional(value: unknown) {
     return typeof value === 'string' && value.trim() ? value.trim().slice(0, 200) : null
+}
+
+function cleanWorkspaceKind(value: string | null): 'share' | 'repo' | null {
+    return value === 'share' || value === 'repo' ? value : null
 }
 
 function headerValue(value: string | string[] | undefined) {
