@@ -43,6 +43,13 @@ export default function ChatPane({
         || activeConversation?.metrics?.status === 'generating'
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
     const hasReadyModel = isConnected && clients.length > 0
+    const composerBlockedReason = readOnly
+        ? 'Reviewer mode: you can inspect this workspace but cannot send prompts.'
+        : awaitingResponse
+            ? 'Waiting for the current agent turn to finish.'
+            : !hasReadyModel
+                ? 'Model offline: connect a model lane to send prompts.'
+                : null
     const lastMessageKey = useMemo(() => {
         const lastMessage = activeConversation?.messages.at(-1)
         return `${lastMessage?.id || 'empty'}:${lastMessage?.content.length || 0}:${lastMessage?.pending ? 'pending' : 'done'}`
@@ -220,13 +227,20 @@ export default function ChatPane({
                         <button
                             type='button'
                             aria-label='Send'
-                            disabled={readOnly || !composer.trim() || awaitingResponse || !isConnected}
+                            aria-describedby={composerBlockedReason ? 'ai-composer-blocked-reason' : undefined}
+                            title={composerBlockedReason || undefined}
+                            disabled={Boolean(composerBlockedReason) || !composer.trim()}
                             onClick={onSend}
                             className='grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f0eee6] text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
                         >
                             {awaitingResponse ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <ArrowUp className='h-3.5 w-3.5 stroke-[2.8]' />}
                         </button>
                     </div>
+                    {composerBlockedReason ? (
+                        <div id='ai-composer-blocked-reason' className='mx-auto mt-2 max-w-5xl px-4 text-xs text-[#9a9a95]'>
+                            {composerBlockedReason}
+                        </div>
+                    ) : null}
                 </div>
             </section>
             <ArtifactPreviewOverlay artifact={previewArtifact} onClose={() => setPreviewArtifact(null)} />

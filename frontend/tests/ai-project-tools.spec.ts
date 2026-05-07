@@ -776,6 +776,100 @@ test('AI website workbench handles accessibility, messy scope, and evidence pres
     await context.close()
 })
 
+test('AI website workbench handles terminal-contrast and blocked-state stories', async ({ browser, baseURL }) => {
+    const offline = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: 'Model pool unavailable.',
+        modelConnected: false,
+    })
+    await offline.page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill('hello can you make my site')
+    await expect(offline.page.getByText('Model offline: connect a model lane to send prompts.')).toBeVisible()
+    await expect(offline.page.getByRole('button', { name: 'Send' })).toBeDisabled()
+    await offline.context.close()
+
+    const stories = [
+        ['feels cheap', 'Visual direction chosen: editorial contrast, warmer accents, sharper hierarchy.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Taste Rescue Workspace"}</hanasand-tool>'],
+        ['crm for plumbers', 'Smallest paid workflow: lead intake, quote request, job status, and invoice placeholder.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Plumber CRM Revenue Flow"}</hanasand-tool>'],
+        ['legal will ask', 'Evidence first: changed files, command output, deploy state, reviewer handoff, then short summary.'],
+        ['client call in 20', 'Fast polish pass selected: hero hierarchy, proof section, CTA clarity, one focused check.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Client Call Polish Pass"}</hanasand-tool>'],
+        ['where did the stuff go', 'Open editor shows the files; workspace details shows what is attached and what changed.'],
+        ['opens it on phone', 'Mobile-first workspace ready; verify the narrow viewport before claiming the fix.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Phone First Restaurant Preview"}</hanasand-tool>'],
+        ['Stripe secret', 'Do not paste Stripe secrets into chat. Use env vars or a managed secret path, then I can wire the demo safely.'],
+        ['less words', 'Building first.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Compact Build First Workspace"}</hanasand-tool>'],
+        ['revenue graph', 'I will not fake verified revenue. I can build a demo-labeled chart or import real data.'],
+        ['auditor can look', 'Auditor should be reviewer-only; do not grant editor/admin unless the owner explicitly asks.'],
+        ['angry users', 'Refund/SLA triage workspace ready with severity, owner, escalation, and overdue states.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Refund SLA Triage"}</hanasand-tool>'],
+        ['build broke', 'Running the build first.\n<hanasand-tool>{"action":"run_terminal_command","command":"npm run build","timeoutMs":20000}</hanasand-tool>'],
+        ['cofounder open it', 'Preview access needs proof: check deploy/HTTP state before claiming it is public.\n<hanasand-tool>{"action":"http_request","url":"https://example.com","method":"GET"}</hanasand-tool>'],
+        ['patients need intake', 'Patient intake workspace ready with simple accessible steps and no fake compliance claim.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Patient Intake Flow"}</hanasand-tool>'],
+        ['where were we', 'Continuity summary: changed files, last tool result, release state, and next step stay visible.'],
+        ['stop reading code', 'Visual QA needs a workspace first; create/attach, then inspect in browser with screenshot evidence.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Browser Visual QA Workspace"}</hanasand-tool>'],
+        ['vendor onboarding', 'Vendor onboarding admin ready with status, missing docs, owner, and audit trail.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Vendor Onboarding Admin"}</hanasand-tool>'],
+        ['sell my templates', 'Template storefront ready with licensing, preview, checkout caveat, and delivery states.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Template Storefront"}</hanasand-tool>'],
+        ['best coding website', 'Drift check: still optimizing fast autonomous builds, clear blockers, visible proof, and compact handoff. Next improvement: browser evidence tool.'],
+    ] as const
+
+    const prompts = [
+        'this feels cheap, fix the taste',
+        'make crm for plumbers, dunno, needs money',
+        'legal will ask what happened',
+        'client call in 20, make it less embarrassing',
+        'where did the stuff go',
+        'everyone opens it on phone',
+        'I will paste the Stripe secret',
+        'less words, build first',
+        'make revenue graph look better',
+        'auditor can look but not change',
+        'angry users, refunds, too much',
+        'build broke, don\'t guess',
+        'can my cofounder open it',
+        'patients need intake, make it easy',
+        'where were we',
+        'stop reading code, look at it',
+        'vendor onboarding, less chaos',
+        'sell my templates by tomorrow',
+        'are we still building the best coding website',
+    ]
+
+    const { context, page } = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: 'Default compact terminal-contrast update.',
+        promptResponses: stories.map(([match, content]) => ({ match, content })),
+    })
+
+    await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+    await expect(page.getByText('Model offline: connect a model lane to send prompts.')).toHaveCount(0)
+
+    for (const [index, prompt] of prompts.entries()) {
+        await test.step(`story ${962 + index}`, async () => {
+            const storyContent = stories[index][1]
+            await page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill(prompt)
+            await page.getByRole('button', { name: 'Send' }).click()
+            await expect(page.getByText(storyContent.split('\n')[0])).toBeVisible({ timeout: 10000 })
+            const toolText = expectedToolCompletionText(storyContent)
+            if (toolText) {
+                await expect(page.getByText(toolText).last()).toBeVisible({ timeout: 10000 })
+            }
+        })
+    }
+
+    await expect(page.getByText('Do not paste Stripe secrets into chat.')).toBeVisible()
+    await expect(page.getByText('I will not fake verified revenue.')).toBeVisible()
+    await expect(page.getByText('Auditor should be reviewer-only')).toBeVisible()
+    await expect(page.getByText('Next improvement: browser evidence tool.')).toBeVisible()
+
+    const lastPromptRequest = await page.evaluate(() => (window as typeof window & {
+        __lastAiPromptRequest?: { messages?: { role: string, content: string }[] }
+    }).__lastAiPromptRequest)
+    const systemPrompt = lastPromptRequest?.messages?.find((message) => message.role === 'system')?.content || ''
+    expect(systemPrompt).toContain('Keep visible replies compact')
+    expect(systemPrompt).toContain('Do not run terminal, read_share, or update_share tools before a workspace is attached')
+
+    await context.close()
+})
+
 function expectedToolCompletionText(content: string) {
     if (content.includes('"action":"scaffold_nextjs_docker"')) {
         const projectName = content.match(/"projectName":"([^"]+)"/)?.[1]
