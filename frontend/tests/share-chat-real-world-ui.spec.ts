@@ -216,6 +216,29 @@ const evidenceSummaryStories: AppStory[] = [
     { id: 1100, prompt: 'are we drifting or shipping useful websites', expected: 'shipping-drift-proof' },
 ]
 
+const runSummaryStories: AppStory[] = [
+    { id: 1101, prompt: 'did it actually do anything fast', expected: 'fast-run-proof' },
+    { id: 1102, prompt: 'designer wants speed, not a wall of text', expected: 'designer-speed-proof' },
+    { id: 1103, prompt: 'newbie asks what happened just now', expected: 'newbie-run-summary' },
+    { id: 1104, prompt: 'corporate reviewer needs bounded output', expected: 'corporate-token-cap' },
+    { id: 1105, prompt: 'ops wants tool count without logs', expected: 'ops-tool-count' },
+    { id: 1106, prompt: 'agency client says prove progress', expected: 'agency-progress-proof' },
+    { id: 1107, prompt: 'support asks whether browser ran', expected: 'support-browser-count' },
+    { id: 1108, prompt: 'founder asks if it just rambled', expected: 'founder-no-ramble' },
+    { id: 1109, prompt: 'accessibility reviewer wants concise evidence', expected: 'a11y-compact-run' },
+    { id: 1110, prompt: 'pricing page check, keep token budget visible', expected: 'pricing-budget-visible' },
+    { id: 1111, prompt: 'mobile bug, show run result quickly', expected: 'mobile-run-result' },
+    { id: 1112, prompt: 'compliance needs retry state if failed', expected: 'compliance-retry-state' },
+    { id: 1113, prompt: 'investor handoff asks how long it took', expected: 'investor-duration' },
+    { id: 1114, prompt: 'restaurant owner says just show progress', expected: 'restaurant-progress' },
+    { id: 1115, prompt: 'terminal tools hide duration', expected: 'terminal-duration-visible' },
+    { id: 1116, prompt: 'another agent needs a run receipt', expected: 'handoff-run-receipt' },
+    { id: 1117, prompt: 'client asks how many edits are pending', expected: 'client-edit-count' },
+    { id: 1118, prompt: 'designer says less narration', expected: 'designer-less-narration' },
+    { id: 1119, prompt: 'beginner asks whether it finished', expected: 'beginner-completed-state' },
+    { id: 1120, prompt: 'are we still optimizing for real users', expected: 'real-user-run-proof' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1196,4 +1219,126 @@ test('share page AI summarizes browser evidence in the chat status strip for fas
     }
 
     expect(handledPrompts).toHaveLength(evidenceSummaryStories.length)
+})
+
+test('share page AI shows a bounded last-run receipt for ambiguous user requests', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-run-summary-story',
+                alias: body.path || body.name || body.id || 'app-run-summary-story',
+                path: body.path || body.name || body.id || 'app-run-summary-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-run-summary-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        expect(body.url).toContain('https://hanasand.com/s/app-run-summary-')
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url: body.url,
+                title: 'Run Summary Proof',
+                textExcerpt: 'The last-run receipt shows duration, edit count, browser proof count, and token cap.',
+                structure: {
+                    headings: ['Run summary proof', 'Bounded progress'],
+                    links: [{ text: 'Checked page', href: body.url }],
+                    buttons: ['Review'],
+                    inputs: [],
+                    forms: [],
+                    hasViewportMeta: true,
+                },
+                screenshotPath: null,
+                consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
+                pageErrors: [],
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = runSummaryStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-run-summary-${matchingStory!.id}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain('Keep visible prose to at most 5 short sentences')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        expect(body.context?.length || 0).toBeLessThan(9_500)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Run receipt is visible without terminal logs.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Bounded last run, browser proof, and manual apply.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of runSummaryStories) {
+        const expectedUrl = `https://hanasand.com/s/app-run-summary-${story.id}`
+        await page.goto(`/s/app-run-summary-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Run receipt is visible without terminal logs.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Last run', { exact: true })).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('1 edit')).toBeVisible()
+        await expect(page.getByText('1 browser proof')).toBeVisible()
+        await expect(page.getByText('2.2k cap')).toBeVisible()
+        await expect(page.getByText('Completed', { exact: true })).toBeVisible()
+        await expect(page.getByText('Browser proof: Run Summary Proof')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(runSummaryStories.length)
 })

@@ -79,6 +79,14 @@ type BrowserEvidence = {
     fetchedAt: string
 }
 
+type RunSummary = {
+    durationMs: number
+    pendingChanges: number
+    browserProofs: number
+    tokenCap: number
+    status: 'completed' | 'error'
+}
+
 export default function ShareChat({
     share,
     setShare,
@@ -96,6 +104,7 @@ export default function ShareChat({
     const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null)
     const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null)
     const [browserEvidence, setBrowserEvidence] = useState<BrowserEvidence[]>([])
+    const [lastRun, setLastRun] = useState<RunSummary | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
     const proofTarget = previewUrl
@@ -146,14 +155,17 @@ export default function ShareChat({
         setLoading(true)
         setStartedAt(Date.now())
         setPendingEdit(null)
+        setLastRun(null)
+        const runStartedAt = Date.now()
 
         try {
+            const tokenCap = 2200
             const response = await requestShareChat({
                 method: 'POST',
                 body: JSON.stringify({
                     prompt: buildPrompt(trimmed, share, editingContent, treePaths, previewUrl || null),
                     context: buildContext(share, editingContent, treePaths, messages, previewUrl || null),
-                    maxTokens: 2200,
+                    maxTokens: tokenCap,
                 }),
             })
             const data = await response.json().catch(() => ({}))
@@ -199,6 +211,13 @@ export default function ShareChat({
                     }))])
                 }
             }
+            setLastRun({
+                durationMs: Date.now() - runStartedAt,
+                pendingChanges: pendingChanges.length,
+                browserProofs: browserCalls.length,
+                tokenCap,
+                status: response.ok ? 'completed' : 'error',
+            })
         } catch {
             setMessages((current) => [...current, {
                 id: randomId(),
@@ -206,6 +225,13 @@ export default function ShareChat({
                 content: 'Hanasand AI is reconnecting. Try the same message again in a moment.',
                 createdAt: new Date().toISOString(),
             }])
+            setLastRun({
+                durationMs: Date.now() - runStartedAt,
+                pendingChanges: 0,
+                browserProofs: 0,
+                tokenCap: 2200,
+                status: 'error',
+            })
         } finally {
             setLoading(false)
             setStartedAt(null)
@@ -293,6 +319,22 @@ export default function ShareChat({
                     </span>
                 </div>
             </div>
+
+            {lastRun ? (
+                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
+                    <div className='flex flex-wrap items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
+                        <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                        <span className='font-semibold text-bright/70'>Last run</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{formatRunDuration(lastRun.durationMs)}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser proof{lastRun.browserProofs === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k cap</span>
+                        <span className={`rounded-full border px-2 py-0.5 ${lastRun.status === 'completed' ? 'border-emerald-300/15 text-emerald-100/62' : 'border-red-300/15 text-red-100/70'}`}>
+                            {lastRun.status === 'completed' ? 'Completed' : 'Needs retry'}
+                        </span>
+                    </div>
+                </div>
+            ) : null}
 
             {proofTarget?.url ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
@@ -679,6 +721,11 @@ function summarizeBrowserEvidence(evidence: BrowserEvidence) {
         `Viewport: ${structure.hasViewportMeta ? 'present' : 'missing/unknown'}. Screenshot: ${evidence.screenshotPath ? 'available' : 'not available yet'}.`,
         issueCount ? `Page issues: ${issueCount}.` : 'Page issues: none.',
     ].join('\n')
+}
+
+function formatRunDuration(durationMs: number) {
+    const seconds = Math.max(0.1, durationMs / 1000)
+    return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
 }
 
 function normalizeSharePath(path: string) {
