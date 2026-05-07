@@ -27,6 +27,7 @@
     "smoke:roles-unit": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-role-permissions.ts",
     "smoke:user-delete-unit": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-user-delete-contract.ts",
     "smoke:impersonation-production": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-impersonation-production.ts",
+    "smoke:impersonation-regression": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-impersonation-regression.mjs",
     "smoke:vm-targets": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-vm-agent-targets.mjs",
     "smoke:vm-request-bridge": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-vm-request-bridge.mjs",
     "smoke:ai-deployments": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-ai-deployments.mjs",
