@@ -55,6 +55,29 @@ const transparencyStories: AppStory[] = [
     { id: 840, prompt: 'Workshop page. What to bring and accessibility.', expected: 'workshop' },
 ]
 
+const speedReviewStories: AppStory[] = [
+    { id: 841, prompt: 'Make this not embarrassing for a studio.', expected: 'studio' },
+    { id: 842, prompt: 'Make it sound real, but don\'t overpromise.', expected: 'positioning' },
+    { id: 843, prompt: 'Procurement page. Safer, shorter, no portal.', expected: 'procurement' },
+    { id: 844, prompt: 'Make handoff clearer. Mention limits.', expected: 'handoff' },
+    { id: 845, prompt: 'I need a simple page for my class.', expected: 'class' },
+    { id: 846, prompt: 'Outage note. Calm. No fake status.', expected: 'outage' },
+    { id: 847, prompt: 'Waitlist info, but don\'t collect health stuff.', expected: 'waitlist' },
+    { id: 848, prompt: 'Catering page. Keep allergy wording careful.', expected: 'catering' },
+    { id: 849, prompt: 'Access page. No passwords. Make approvals clear.', expected: 'access' },
+    { id: 850, prompt: 'Volunteers. Roles, shifts, training. Keep it honest.', expected: 'volunteers' },
+    { id: 851, prompt: 'Proofing page. Feedback rules and usage caveat.', expected: 'proofing' },
+    { id: 852, prompt: 'Visit prep. Access, timing, safety. No booking.', expected: 'visit' },
+    { id: 853, prompt: 'Budget review. Useful, not financial advice.', expected: 'budget' },
+    { id: 854, prompt: 'Feedback page. Tell people what helps.', expected: 'feedback' },
+    { id: 855, prompt: 'Repair request info. Emergencies separate.', expected: 'repair' },
+    { id: 856, prompt: 'Intake page. Conflict check. No advice.', expected: 'intake' },
+    { id: 857, prompt: 'Workshop page. Bring-list and accessibility.', expected: 'workshop' },
+    { id: 858, prompt: 'Migration page. Checklist, risks, reassuring.', expected: 'migration' },
+    { id: 859, prompt: 'Warranty page. Proof, exclusions, next steps.', expected: 'warranty' },
+    { id: 860, prompt: 'Audit prep page. Checklist only. No upload.', expected: 'audit' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -226,4 +249,92 @@ test('share chat makes no-auto-apply and pending-file state explicit for transpa
     }
 
     expect(handledPrompts).toHaveLength(transparencyStories.length)
+})
+
+test('share chat reaches concise two-file review quickly for speed-review stories', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-speed-review-story',
+                alias: body.path || body.name || body.id || 'app-speed-review-story',
+                path: body.path || body.name || body.id || 'app-speed-review-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-speed-review-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string }
+        const matchingStory = speedReviewStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Done: ${matchingStory!.expected}. Review the two files before applying.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Useful, careful, and scoped. No fake portals, guarantees, uploads, or payments.</p></main> }`,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/brief.tsx',
+                        content: `export const brief = { topic: '${matchingStory!.expected}', review: 'Manual apply only', scope: 'Two small files' }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of speedReviewStories) {
+        await page.goto(`/s/app-speed-review-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+        await expect(page.getByText('No auto-apply')).toBeVisible()
+
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Done: ${story.expected}. Review the two files before applying.`)).toBeVisible({ timeout: 3000 })
+        await expect(page.getByText('2 pending changes')).toBeVisible()
+        await expect(page.getByText('2 file changes')).toBeVisible()
+        await expect(page.getByText('Create app/page.tsx')).toBeVisible()
+        await expect(page.getByText('Create app/brief.tsx')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(3000)
+    }
+
+    expect(handledPrompts).toHaveLength(speedReviewStories.length)
 })
