@@ -9,7 +9,7 @@ export async function GET() {
             return new Response('Unauthorized', { status: 401 })
         }
 
-        const response = await fetch(`${config.url.beekeeper}/traffic/live`, {
+        const response = await fetch(`${config.url.cdn}/traffic/live`, {
             headers: {
                 Authorization: `Bearer ${token}`,
                 Accept: 'text/event-stream',

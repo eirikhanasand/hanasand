@@ -76,6 +76,7 @@ import httpRequestTool from './handlers/tools/httpRequest.ts'
 import browserTaskTool from './handlers/tools/browserTask.ts'
 import getExecutionTargets from './handlers/tools/getExecutionTargets.ts'
 import aiTool from './handlers/tools/ai.ts'
+import { cancelVerificationJob, getVerificationJob, getVerificationJobs, postVerificationJob } from './handlers/tools/verificationJobs.ts'
 import { getLogs, getLogServices, getRealtimeLogs } from './handlers/logs/get.ts'
 import ingestLog from './handlers/logs/ingest.ts'
 import getAiWorkspace from './handlers/ai/getWorkspace.ts'
@@ -264,6 +265,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/tools/execution-targets', getExecutionTargets)
     fastify.post('/tools/http/request', httpRequestTool)
     fastify.post('/tools/browser/task', browserTaskTool)
+    fastify.get('/tools/verification-jobs', getVerificationJobs)
+    fastify.post('/tools/verification-jobs', postVerificationJob)
+    fastify.get('/tools/verification-jobs/:id', getVerificationJob)
+    fastify.post('/tools/verification-jobs/:id/cancel', cancelVerificationJob)
     fastify.post('/tools/ai', aiTool)
 
     // Agent automations

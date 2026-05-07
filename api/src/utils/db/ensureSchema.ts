@@ -363,6 +363,36 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_owner_created_at ON ai_usage_events(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_ai_usage_events_conversation_created_at ON ai_usage_events(conversation_id, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS ai_verification_jobs (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            workspace_kind TEXT,
+            workspace_id TEXT,
+            kind TEXT NOT NULL CHECK (kind IN ('browser', 'build', 'deploy')),
+            status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+            priority INT NOT NULL DEFAULT 0,
+            lane TEXT NOT NULL DEFAULT 'standard',
+            queue_position INT NOT NULL DEFAULT 0,
+            retry_count INT NOT NULL DEFAULT 0,
+            max_retries INT NOT NULL DEFAULT 1,
+            current_step TEXT NOT NULL DEFAULT 'Queued',
+            target_url TEXT,
+            deploy_url TEXT,
+            request_id TEXT NOT NULL,
+            artifacts JSONB NOT NULL DEFAULT '[]'::jsonb,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            error TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ,
+            cancelled_at TIMESTAMPTZ
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_ai_verification_jobs_owner_created ON ai_verification_jobs(owner_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ai_verification_jobs_workspace_created ON ai_verification_jobs(owner_id, workspace_kind, workspace_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ai_verification_jobs_queue ON ai_verification_jobs(status, priority DESC, created_at ASC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS api_rate_limit_settings (
             id TEXT PRIMARY KEY,
             config_json JSONB NOT NULL DEFAULT '{}'::jsonb,

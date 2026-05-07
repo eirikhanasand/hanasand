@@ -343,6 +343,10 @@ function inferProject(prompt: string): GeneratedProject {
         return botProject(title, slug, lower.includes('discord') ? 'Discord' : 'Chat')
     }
 
+    if (/\b(api|backend|fastify)\b/.test(lower) && !/\bpage|website|web site|site|frontend|landing|concept\b/.test(lower)) {
+        return apiProject(title, slug, lower)
+    }
+
     if (/\b(worker|queue|background|redis|job|transcode|import)\b/.test(lower) && !/\bwebsite|web site|page|frontend|landing\b/.test(lower)) {
         return workerProject(title, slug, lower)
     }
@@ -386,6 +390,15 @@ function titleFromPrompt(prompt: string) {
 }
 
 function pageSectionsFor(lower: string) {
+    if (lower.includes('restaurant')) {
+        return ['Menu and allergens', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Redirect checklist']
+    }
+    if (/\b(ecommerce|store|product bundles|checkout buttons)\b/.test(lower)) {
+        return ['Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ']
+    }
+    if (lower.includes('local seo') || lower.includes('seo redirect') || lower.includes('redirect recovery')) {
+        return ['Search proof', 'Redirect checklist', 'Migration plan', 'QA plan', 'Browser verification', 'Exit plan']
+    }
     if (lower.includes('tiny agency') || lower.includes('brand, webflow cleanup') || lower.includes('agency site')) {
         return ['Proof', 'Services', 'Selected work', 'Pricing cues', 'Testimonials', 'Contact CTA']
     }
@@ -461,10 +474,28 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('data quality dashboard') || lower.includes('freshnessboard') || lower.includes('pipeline sections')) {
         return ['Pipeline sections', 'Freshness metrics', 'Support tiers', 'Stakeholder quotes', 'Incident tasks', 'Deployment notes']
     }
-    if (lower.includes('payment') || lower.includes('checkout') || lower.includes('subscription')) {
+    if (lower.includes('multi-region') || lower.includes('service health') || lower.includes('subscriber notice') || lower.includes('slo evidence')) {
+        return ['Service health', 'Incident timeline', 'Subscriber notice', 'SLO evidence', 'Postmortems', 'Failure owner']
+    }
+    if (((lower.includes('support') && !lower.includes('support bundle')) || lower.includes('escalation') || lower.includes('sla')) && !lower.includes('knowledge') && !lower.includes('docs') && !lower.includes('documentation') && !lower.includes('gdpr') && !lower.includes('privacy')) {
+        return ['Escalation paths', 'SLA states', 'Customer messaging', 'Failure owner', 'Runbook', 'Audit trail']
+    }
+    if (lower.includes('payment') || lower.includes('checkout') || lower.includes('subscription') || lower.includes('invoice')) {
         return ['Plans', 'Checkout states', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review']
     }
-    if (lower.includes('seo') || lower.includes('migration') || lower.includes('redirect')) {
+    if (lower.includes('governance') || lower.includes('audit trail') || lower.includes('compliance') || lower.includes('security review') || lower.includes('pii handling') || lower.includes('legal reviewer')) {
+        return ['Governance gates', 'Audit trail', 'Security review', 'PII handling', 'Deployment checks', 'Failure owner']
+    }
+    if (lower.includes('analytics consent') || lower.includes('analytics handoff') || lower.includes('consent/data seams')) {
+        return ['Proof', 'Pricing', 'FAQ', 'Lead capture', 'Privacy and data seams documented', 'Analytics handoff']
+    }
+    if (lower.includes('disaster restore') || lower.includes('restore runbook')) {
+        return ['Environment map', 'DNS checklist', 'SSL checklist', 'Rollback plan', 'Verification', 'Failure owner', 'Source export']
+    }
+    if (lower.includes('cutover') || lower.includes('parallel run') || (lower.includes('migration') && !lower.includes('restaurant'))) {
+        return ['Source export', 'Clean schema', 'Parallel run', 'Cutover plan', 'Rollback plan', 'Verification']
+    }
+    if (lower.includes('seo') || lower.includes('redirect')) {
         return ['Search proof', 'Pricing', 'FAQ', 'Redirect checklist', 'Lead capture', 'Launch handoff']
     }
     if (lower.includes('calendar') || lower.includes('shared state') || lower.includes('reminders')) {

@@ -13,7 +13,6 @@ const config = {
         auth: process.env.FRONTEND_AUTH_API || defaultPublicApiUrl,
         api_wss: process.env.NEXT_PUBLIC_API_WS || 'wss://api.hanasand.com/api/ws',
         api_client_wss: toWsUrl(resolveApiUrl()),
-        beekeeper: process.env.NEXT_PUBLIC_BEEKEEPER_API || process.env.BEEKEEPER_API_URL || 'https://beekeeper.login.no/api',
         cdn_wss: process.env.NEXT_PUBLIC_CDN_WS || 'wss://cdn.hanasand.com/api/ws',
         cdn: process.env.NEXT_PUBLIC_CDN || 'https://cdn.hanasand.com/api',
         internal: process.env.NEXT_PUBLIC_INTERNAL_API || process.env.INTERNAL_API || 'https://internal.hanasand.com/api',
