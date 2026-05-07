@@ -2687,3 +2687,101 @@ test('share page AI protects secrets and sandbox boundaries for real permission 
 
     expect(handledPrompts).toHaveLength(sandboxSafetyStories.length)
 })
+
+test('share page AI queues browser proof asynchronously before apply gating', async ({ page, context, baseURL }) => {
+    test.setTimeout(60_000)
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-async-proof',
+                alias: body.path || body.name || body.id || 'app-async-proof',
+                path: body.path || body.name || body.id || 'app-async-proof',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-async-proof'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: 'export default function Page() { return <main><h1>Before</h1></main> }',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/ai', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    'Prepared async proof change.',
+                    '<hanasand-tool>{"action":"browser_task","url":"https://hanasand.com/s/app-async-proof","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>',
+                    '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"export default function Page() { return <main><h1>After async proof</h1></main> }"}</hanasand-tool>',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    let browserTaskStarted = false
+    await page.route('**/api/tools/browser/task', async (route) => {
+        browserTaskStarted = true
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url: 'https://hanasand.com/s/app-async-proof',
+                title: 'Async proof',
+                screenshotPath: '/tmp/async-proof.png',
+                structure: {
+                    headings: ['After async proof'],
+                    links: [],
+                    buttons: [],
+                    inputs: [],
+                    forms: [],
+                    hasViewportMeta: true,
+                },
+                consoleMessages: [],
+                pageErrors: [],
+            }),
+        })
+    })
+
+    await page.goto('/s/app-async-proof?new=1&chat=1')
+    const promptBox = await openWorkspaceChat(page)
+    await promptBox.fill('verify public page without blocking the chat')
+    await page.locator('input[name="shareChatPromptFallback"]').evaluate((element) => {
+        (element as HTMLInputElement).value = 'verify public page without blocking the chat'
+    })
+    await promptBox.dispatchEvent('input')
+    await page.getByRole('button', { name: 'Send message' }).click({ force: true })
+
+    await expect(page.getByText('Prepared async proof change.')).toBeVisible({ timeout: 2500 })
+    await expect(page.getByText('Browser verification queued for 1 target. You can keep reviewing while proof runs.')).toBeVisible()
+    await expect(page.getByText('Proof queued')).toBeVisible()
+    await expect(page.getByText('Verification queue')).toBeVisible()
+    await expect(page.getByText('Browser proof is queued before these changes can be applied.')).toBeVisible()
+    expect(browserTaskStarted).toBe(true)
+
+    await expect(page.getByText('Browser proof visible for https://hanasand.com/s/app-async-proof.')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Completed')).toBeVisible()
+})

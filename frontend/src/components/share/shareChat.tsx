@@ -84,7 +84,14 @@ type RunSummary = {
     pendingChanges: number
     browserProofs: number
     tokenCap: number
-    status: 'completed' | 'error'
+    status: 'completed' | 'error' | 'queued'
+}
+
+type BrowserProofJob = {
+    id: string
+    url: string
+    status: 'queued' | 'running' | 'completed' | 'error'
+    error?: string
 }
 
 export default function ShareChat({
@@ -106,8 +113,10 @@ export default function ShareChat({
     const [browserEvidence, setBrowserEvidence] = useState<BrowserEvidence[]>([])
     const [lastRun, setLastRun] = useState<RunSummary | null>(null)
     const [lastBrowserCalls, setLastBrowserCalls] = useState<ToolCall[]>([])
+    const [browserProofJobs, setBrowserProofJobs] = useState<BrowserProofJob[]>([])
     const [retryingProof, setRetryingProof] = useState(false)
     const [hydrated, setHydrated] = useState(false)
+    const proofQueueRunRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const formRef = useRef<HTMLFormElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
@@ -130,7 +139,7 @@ export default function ShareChat({
             : pendingEdit?.status === 'applied'
                 ? 'Applied'
                 : 'Ready'
-    const proofApplyBlocked = pendingEdit?.status === 'pending' && lastRun?.status === 'error' && lastRun.browserProofs > 0
+    const proofApplyBlocked = pendingEdit?.status === 'pending' && Boolean(lastRun?.browserProofs) && lastRun?.status !== 'completed'
 
     useEffect(() => {
         setHydrated(true)
@@ -173,7 +182,10 @@ export default function ShareChat({
         setStartedAt(Date.now())
         setPendingEdit(null)
         setLastRun(null)
+        setBrowserProofJobs([])
         const runStartedAt = Date.now()
+        const proofRunId = randomId()
+        proofQueueRunRef.current = proofRunId
 
         try {
             const tokenCap = 2200
@@ -199,8 +211,6 @@ export default function ShareChat({
             const pendingChanges = buildPendingChanges(toolCalls, activeShare, tree || null, editingContent)
             const browserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
             const boundedBrowserCalls = browserCalls.slice(0, 3)
-            let browserProofs = browserCalls.length
-            let browserProofHadIssues = false
             const visibleContent = stripToolTags(rawContent).trim()
                 || (pendingChanges.length ? `Prepared ${pendingChanges.length} file change${pendingChanges.length === 1 ? '' : 's'}.` : rawContent)
 
@@ -220,28 +230,37 @@ export default function ShareChat({
             }
             setLastBrowserCalls(boundedBrowserCalls)
             if (browserCalls.length) {
-                const results = await Promise.all(boundedBrowserCalls.map(runBrowserEvidenceTool))
-                const visibleResults = results.filter(Boolean) as BrowserEvidence[]
-                browserProofs = visibleResults.length
-                browserProofHadIssues = visibleResults.length !== boundedBrowserCalls.length
-                    || visibleResults.some((result) => Boolean(result.pageErrors?.filter(Boolean).length))
-                if (visibleResults.length) {
-                    setBrowserEvidence((current) => [...visibleResults, ...current].slice(0, 5))
-                    setMessages((current) => [...current, ...visibleResults.map((result) => ({
-                        id: randomId(),
-                        role: 'tool' as const,
-                        content: summarizeBrowserEvidence(result),
-                        createdAt: new Date().toISOString(),
-                    }))])
-                }
+                const jobs = boundedBrowserCalls.map((call) => ({
+                    id: randomId(),
+                    url: call.url || 'about:blank',
+                    status: 'queued' as const,
+                }))
+                setBrowserProofJobs(jobs)
+                setMessages((current) => [...current, {
+                    id: randomId(),
+                    role: 'tool',
+                    content: `Browser verification queued for ${boundedBrowserCalls.length} target${boundedBrowserCalls.length === 1 ? '' : 's'}. You can keep reviewing while proof runs.`,
+                    createdAt: new Date().toISOString(),
+                }])
+                setLastRun({
+                    durationMs: Date.now() - runStartedAt,
+                    pendingChanges: pendingChanges.length,
+                    browserProofs: boundedBrowserCalls.length,
+                    tokenCap,
+                    status: 'queued',
+                })
+                window.setTimeout(() => {
+                    void processBrowserProofQueue(proofRunId, boundedBrowserCalls, pendingChanges.length, tokenCap, runStartedAt)
+                }, 0)
+            } else {
+                setLastRun({
+                    durationMs: Date.now() - runStartedAt,
+                    pendingChanges: pendingChanges.length,
+                    browserProofs: 0,
+                    tokenCap,
+                    status: response.ok ? 'completed' : 'error',
+                })
             }
-            setLastRun({
-                durationMs: Date.now() - runStartedAt,
-                pendingChanges: pendingChanges.length,
-                browserProofs,
-                tokenCap,
-                status: response.ok && !browserProofHadIssues ? 'completed' : 'error',
-            })
         } catch {
             setMessages((current) => [...current, {
                 id: randomId(),
@@ -261,6 +280,48 @@ export default function ShareChat({
             setStartedAt(null)
             window.setTimeout(() => inputRef.current?.focus(), 0)
         }
+    }
+
+    async function processBrowserProofQueue(runId: string, calls: ToolCall[], pendingChanges: number, tokenCap: number, runStartedAt: number) {
+        const results: BrowserEvidence[] = []
+        let hadIssues = calls.length === 0
+        for (const call of calls) {
+            if (proofQueueRunRef.current !== runId) {
+                return
+            }
+            const url = call.url || 'about:blank'
+            setBrowserProofJobs((current) => current.map((job) => job.url === url ? { ...job, status: 'running' } : job))
+            const result = await runBrowserEvidenceTool(call)
+            if (proofQueueRunRef.current !== runId) {
+                return
+            }
+            if (result) {
+                results.push(result)
+                const issue = result.pageErrors?.filter(Boolean)[0]
+                hadIssues = hadIssues || Boolean(issue)
+                setBrowserEvidence((current) => [result, ...current].slice(0, 5))
+                setMessages((current) => [...current, {
+                    id: randomId(),
+                    role: 'tool',
+                    content: summarizeBrowserEvidence(result),
+                    createdAt: new Date().toISOString(),
+                }])
+                setBrowserProofJobs((current) => current.map((job) => job.url === url ? { ...job, status: issue ? 'error' : 'completed', error: issue } : job))
+            } else {
+                hadIssues = true
+                setBrowserProofJobs((current) => current.map((job) => job.url === url ? { ...job, status: 'error', error: 'Browser proof did not return.' } : job))
+            }
+        }
+        if (proofQueueRunRef.current !== runId) {
+            return
+        }
+        setLastRun({
+            durationMs: Date.now() - runStartedAt,
+            pendingChanges,
+            browserProofs: results.length,
+            tokenCap,
+            status: hadIssues || results.length !== calls.length ? 'error' : 'completed',
+        })
     }
 
     function readSubmittedPrompt(form?: HTMLFormElement) {
@@ -285,32 +346,28 @@ export default function ShareChat({
 
         setRetryingProof(true)
         const runStartedAt = Date.now()
-        try {
-            const results = await Promise.all(lastBrowserCalls.map(runBrowserEvidenceTool))
-            const visibleResults = results.filter(Boolean) as BrowserEvidence[]
-            const browserProofHadIssues = visibleResults.length !== lastBrowserCalls.length
-                || visibleResults.some((result) => Boolean(result.pageErrors?.filter(Boolean).length))
-
-            if (visibleResults.length) {
-                setBrowserEvidence((current) => [...visibleResults, ...current].slice(0, 5))
-                setMessages((current) => [...current, ...visibleResults.map((result) => ({
-                    id: randomId(),
-                    role: 'tool' as const,
-                    content: summarizeBrowserEvidence(result),
-                    createdAt: new Date().toISOString(),
-                }))])
-            }
-
-            setLastRun({
-                durationMs: Date.now() - runStartedAt,
-                pendingChanges: pendingEdit?.changes.length || 0,
-                browserProofs: visibleResults.length,
-                tokenCap: lastRun?.tokenCap || 2200,
-                status: browserProofHadIssues ? 'error' : 'completed',
-            })
-        } finally {
-            setRetryingProof(false)
-        }
+        const proofRunId = randomId()
+        proofQueueRunRef.current = proofRunId
+        setBrowserProofJobs(lastBrowserCalls.map((call) => ({
+            id: randomId(),
+            url: call.url || 'about:blank',
+            status: 'queued',
+        })))
+        setLastRun({
+            durationMs: 0,
+            pendingChanges: pendingEdit?.changes.length || 0,
+            browserProofs: lastBrowserCalls.length,
+            tokenCap: lastRun?.tokenCap || 2200,
+            status: 'queued',
+        })
+        setMessages((current) => [...current, {
+            id: randomId(),
+            role: 'tool',
+            content: `Browser proof retry queued for ${lastBrowserCalls.length} target${lastBrowserCalls.length === 1 ? '' : 's'}.`,
+            createdAt: new Date().toISOString(),
+        }])
+        void processBrowserProofQueue(proofRunId, lastBrowserCalls, pendingEdit?.changes.length || 0, lastRun?.tokenCap || 2200, runStartedAt)
+            .finally(() => setRetryingProof(false))
     }
 
     async function applyPendingEdit() {
@@ -410,9 +467,40 @@ export default function ShareChat({
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser proof{lastRun.browserProofs === 1 ? '' : 's'}</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k cap</span>
-                        <span className={`rounded-full border px-2 py-0.5 ${lastRun.status === 'completed' ? 'border-emerald-300/15 text-emerald-100/62' : 'border-red-300/15 text-red-100/70'}`}>
-                            {lastRun.status === 'completed' ? 'Completed' : 'Needs retry'}
+                        <span className={`rounded-full border px-2 py-0.5 ${
+                            lastRun.status === 'completed'
+                                ? 'border-emerald-300/15 text-emerald-100/62'
+                                : lastRun.status === 'queued'
+                                    ? 'border-amber-200/15 text-amber-50/70'
+                                    : 'border-red-300/15 text-red-100/70'
+                        }`}>
+                            {lastRun.status === 'completed' ? 'Completed' : lastRun.status === 'queued' ? 'Proof queued' : 'Needs retry'}
                         </span>
+                    </div>
+                </div>
+            ) : null}
+
+            {browserProofJobs.length ? (
+                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
+                    <div className='grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
+                        <div className='flex min-w-0 items-center gap-1.5'>
+                            <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                            <span className='font-semibold text-bright/70'>Verification queue</span>
+                            <span className='truncate text-bright/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} active</span>
+                        </div>
+                        <div className='flex min-w-0 flex-wrap gap-1.5'>
+                            {browserProofJobs.map((job) => (
+                                <span key={job.id} className={`max-w-full truncate rounded-full border px-2 py-0.5 ${
+                                    job.status === 'completed'
+                                        ? 'border-emerald-300/15 text-emerald-100/62'
+                                        : job.status === 'error'
+                                            ? 'border-red-300/15 text-red-100/70'
+                                            : 'border-amber-200/15 text-amber-50/70'
+                                }`}>
+                                    {job.status === 'running' ? 'Running' : job.status === 'queued' ? 'Queued' : job.status === 'completed' ? 'Done' : 'Retry'} · {job.url}
+                                </span>
+                            ))}
+                        </div>
                     </div>
                 </div>
             ) : null}
@@ -546,7 +634,7 @@ export default function ShareChat({
                     ) : null}
                     {proofApplyBlocked ? (
                         <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
-                            <span>Browser proof needs retry before these changes can be applied.</span>
+                            <span>{lastRun?.status === 'queued' ? 'Browser proof is queued before these changes can be applied.' : 'Browser proof needs retry before these changes can be applied.'}</span>
                             {lastBrowserCalls.length ? (
                                 <button
                                     type='button'
