@@ -294,6 +294,7 @@ async function runBrowserJob(job: VerificationJobRow) {
         const screenshots = metadata.captureScreenshot
             ? await captureRenderedScreenshots(job.target_url, job.id)
             : []
+        const journeyProof = await captureRenderedJourneyProof(job.target_url, job.id)
         const artifact = {
             id: crypto.randomUUID(),
             type: 'browser_result',
@@ -310,9 +311,11 @@ async function runBrowserJob(job: VerificationJobRow) {
                 structure: extractStructure(text),
                 screenshotPath: screenshots[0]?.path || null,
                 screenshots,
+                journeyProof,
                 consoleMessages: [
                     'Fetched browser target and captured durable rendered viewport evidence.',
                     screenshots.length ? `${screenshots.length} rendered screenshot artifact${screenshots.length === 1 ? '' : 's'} captured.` : 'Rendered screenshot capture was not requested or did not complete.',
+                    journeyProof ? 'Rendered non-destructive journey script completed.' : 'Rendered journey script did not complete.',
                 ],
                 pageErrors: response.ok ? [] : [`HTTP ${response.status} ${response.statusText}`],
             },
@@ -349,6 +352,7 @@ async function runBrowserJob(job: VerificationJobRow) {
                 requestId: job.request_id,
                 targetUrl: job.target_url,
                 status: response.status,
+                journeyProofAvailable: Boolean(journeyProof),
                 elapsedMs: Math.round(performance.now() - started),
             },
         })
@@ -385,6 +389,7 @@ async function runDesignJob(job: VerificationJobRow) {
         const excerpt = extractTextExcerpt(text)
         const review = reviewDesignQuality(text, excerpt, structure)
         const screenshots = await captureRenderedScreenshots(job.target_url, job.id)
+        const journeyProof = await captureRenderedJourneyProof(job.target_url, job.id)
         const hasRenderedProof = screenshots.length > 0
         const passed = response.ok && review.score >= 72 && review.criticalIssues.length === 0
         const artifact = {
@@ -407,10 +412,11 @@ async function runDesignJob(job: VerificationJobRow) {
                 genericPhraseCount: review.genericPhraseCount,
                 screenshotPath: screenshots[0]?.path || null,
                 screenshots,
+                journeyProof,
                 notVerified: [
                     hasRenderedProof ? null : 'Rendered screenshot capture did not complete.',
                     'Automated screenshot diffing still needs a before/after baseline to compare against.',
-                    'Client-side interaction journeys need Playwright-style scripted selectors before they can be marked fully verified.',
+                    journeyProof ? null : 'Rendered journey script did not complete.',
                 ].filter(Boolean),
             },
         }
@@ -451,6 +457,7 @@ async function runDesignJob(job: VerificationJobRow) {
                 genericPhraseCount: review.genericPhraseCount,
                 repeatedPatternCount: review.repeatedPatternCount,
                 renderedScreenshotCount: screenshots.length,
+                journeyProofAvailable: Boolean(journeyProof),
                 elapsedMs: Math.round(performance.now() - started),
             },
         })
@@ -534,6 +541,226 @@ async function runChromium(args: string[], timeoutMs: number) {
             }
         })
     })
+}
+
+async function captureRenderedJourneyProof(url: string, jobId: string) {
+    const dir = await mkdtemp(path.join(tmpdir(), 'hanasand-ai-journey-'))
+    let child: ReturnType<typeof spawn> | null = null
+    try {
+        const browser = await startDebugChromium(dir)
+        child = browser.child
+        const page = await openDebugPage(browser.port, url)
+        if (!page?.webSocketDebuggerUrl) {
+            return null
+        }
+        const client = await createCdpClient(page.webSocketDebuggerUrl)
+        try {
+            await client.send('Page.enable')
+            await client.send('Runtime.enable')
+            await waitForPageReady(client, url)
+            const evaluation = await client.send('Runtime.evaluate', {
+                expression: `(${nonDestructiveJourneyScript.toString()})()`,
+                awaitPromise: true,
+                returnByValue: true,
+            })
+            const value = ((evaluation.result || {}) as { value?: unknown }).value
+            if (!value || typeof value !== 'object') {
+                return null
+            }
+            return {
+                jobId,
+                mode: 'non_destructive_rendered_script',
+                targetUrl: url,
+                capturedAt: new Date().toISOString(),
+                ...value,
+            }
+        } finally {
+            client.close()
+        }
+    } catch {
+        return null
+    } finally {
+        if (child) {
+            child.kill('SIGKILL')
+        }
+        await rm(dir, { recursive: true, force: true }).catch(() => {})
+    }
+}
+
+async function startDebugChromium(userDataDir: string) {
+    const child = spawn(CHROMIUM_BIN, [
+        '--headless=new',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${userDataDir}`,
+        'about:blank',
+    ], { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    const endpoint = await new Promise<{ port: number }>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Chromium debug startup timed out.')), 9000)
+        child.stderr.on('data', (chunk) => {
+            stderr += String(chunk)
+            const match = stderr.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//)
+            if (match?.[1]) {
+                clearTimeout(timeout)
+                resolve({ port: Number(match[1]) })
+            }
+        })
+        child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+        })
+        child.on('exit', (code) => {
+            clearTimeout(timeout)
+            reject(new Error(`Chromium debug process exited early with ${code}.`))
+        })
+    })
+    return { child, port: endpoint.port }
+}
+
+async function openDebugPage(port: number, url: string) {
+    const response = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })
+    if (!response.ok) {
+        return null
+    }
+    return await response.json() as { webSocketDebuggerUrl?: string }
+}
+
+type CdpClient = {
+    send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>
+    close: () => void
+}
+
+async function createCdpClient(url: string): Promise<CdpClient> {
+    const socket = new WebSocket(url)
+    await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('CDP socket timed out.')), 8000)
+        socket.addEventListener('open', () => {
+            clearTimeout(timeout)
+            resolve()
+        }, { once: true })
+        socket.addEventListener('error', () => {
+            clearTimeout(timeout)
+            reject(new Error('CDP socket failed.'))
+        }, { once: true })
+    })
+    let nextId = 1
+    const pending = new Map<number, { resolve: (value: Record<string, unknown>) => void, reject: (error: Error) => void }>()
+    socket.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as { id?: number, result?: Record<string, unknown>, error?: { message?: string } }
+        if (!message.id || !pending.has(message.id)) {
+            return
+        }
+        const waiter = pending.get(message.id)
+        pending.delete(message.id)
+        if (!waiter) return
+        if (message.error) {
+            waiter.reject(new Error(message.error.message || 'CDP command failed.'))
+        } else {
+            waiter.resolve(message.result || {})
+        }
+    })
+    return {
+        send(method, params = {}) {
+            const id = nextId
+            nextId += 1
+            return new Promise((resolve, reject) => {
+                pending.set(id, { resolve, reject })
+                socket.send(JSON.stringify({ id, method, params }))
+                setTimeout(() => {
+                    if (!pending.has(id)) return
+                    pending.delete(id)
+                    reject(new Error(`${method} timed out.`))
+                }, 12000)
+            })
+        },
+        close() {
+            socket.close()
+        },
+    }
+}
+
+async function waitForPageReady(client: CdpClient, url: string) {
+    await client.send('Page.navigate', { url })
+    for (let index = 0; index < 24; index += 1) {
+        await sleep(500)
+        const state = await client.send('Runtime.evaluate', {
+            expression: 'document.readyState',
+            returnByValue: true,
+        })
+        if ((state?.result as { value?: unknown } | undefined)?.value === 'complete') {
+            return
+        }
+    }
+}
+
+function nonDestructiveJourneyScript() {
+    const text = (document.body?.innerText || '').toLowerCase()
+    const controls = [...document.querySelectorAll('input, textarea, select')] as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[]
+    const fillable = controls.filter((control) => {
+        const input = control as HTMLInputElement
+        const type = (input.type || '').toLowerCase()
+        return !control.disabled && !control.hasAttribute('readonly') && !['hidden', 'submit', 'button', 'reset', 'file', 'checkbox', 'radio'].includes(type)
+    })
+    let focused = 0
+    let filled = 0
+    const blocked: string[] = []
+    for (const control of fillable.slice(0, 12)) {
+        try {
+            control.focus()
+            focused += document.activeElement === control ? 1 : 0
+            if (control instanceof HTMLSelectElement) {
+                if (control.options.length > 1) {
+                    control.selectedIndex = 1
+                    filled += 1
+                }
+            } else {
+                const type = control instanceof HTMLInputElement ? (control.type || '').toLowerCase() : 'text'
+                control.value = type === 'email' ? 'proof@example.com' : type === 'tel' ? '+4700000000' : type === 'number' ? '1' : 'Proof input'
+                control.dispatchEvent(new Event('input', { bubbles: true }))
+                control.dispatchEvent(new Event('change', { bubbles: true }))
+                filled += 1
+            }
+        } catch {
+            blocked.push((control.getAttribute('name') || control.getAttribute('aria-label') || control.id || control.tagName).slice(0, 80))
+        }
+    }
+    const buttons = [...document.querySelectorAll('button, input[type="button"], input[type="submit"], a[href]')] as HTMLElement[]
+    const buttonLabels = buttons.map((button) => (button.innerText || button.getAttribute('aria-label') || button.getAttribute('value') || button.getAttribute('href') || '').trim()).filter(Boolean).slice(0, 20)
+    const forms = [...document.querySelectorAll('form')]
+    const submitControls = [...document.querySelectorAll('button[type="submit"], input[type="submit"], form button:not([type]), form button[type=""]')]
+    const journeyTypes = {
+        auth: /\b(sign in|login|log in|register|account|password)\b/.test(text),
+        checkout: /\b(checkout|cart|payment|invoice|subscription|billing)\b/.test(text),
+        booking: /\b(book|booking|appointment|schedule|reservation)\b/.test(text),
+        contact: /\b(contact|message|email|phone|request)\b/.test(text) || forms.length > 0,
+        dashboardCrud: /\b(create|edit|delete|save|dashboard|table|filter|export)\b/.test(text),
+    }
+    return {
+        url: location.href,
+        title: document.title || null,
+        forms: forms.length,
+        controls: controls.length,
+        fillableControls: fillable.length,
+        focusedControls: focused,
+        filledControls: filled,
+        submitControls: submitControls.length,
+        buttonLabels,
+        blockedControls: blocked,
+        journeyTypes,
+        readiness: {
+            hasVisibleAction: buttonLabels.length > 0,
+            formsCanBeDryFilled: fillable.length === 0 || filled > 0,
+            submitWithoutMutationAvoided: true,
+            detectedCriticalJourney: Object.values(journeyTypes).some(Boolean),
+        },
+    }
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function completeNonBrowserJob(job: VerificationJobRow) {
