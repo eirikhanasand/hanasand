@@ -171,6 +171,7 @@ export default function ShareChat({
     const [qualityReport, setQualityReport] = useState<QualityReport | null>(null)
     const [retryingProof, setRetryingProof] = useState(false)
     const [hydrated, setHydrated] = useState(false)
+    const [builderWorkflowOpen, setBuilderWorkflowOpen] = useState(false)
     const proofQueueRunRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const formRef = useRef<HTMLFormElement | null>(null)
@@ -184,6 +185,8 @@ export default function ShareChat({
     const pendingEditBlocksNewRun = pendingEdit?.status === 'pending' || pendingEdit?.status === 'applying'
     const canSend = hydrated && !loading && !pendingEditBlocksNewRun
     const proofApplyBlocked = pendingEdit?.status === 'pending' && Boolean(lastRun?.browserProofs) && lastRun?.status !== 'completed'
+    const hasBuilderActivity = Boolean(pendingEdit || qualityReport || browserProofJobs.length || browserEvidence.length || lastRun?.status === 'queued')
+    const showBuilderWorkflow = builderWorkflowOpen || hasBuilderActivity
     const projectState = getPlainProjectState({
         loading,
         elapsedSeconds,
@@ -578,53 +581,68 @@ export default function ShareChat({
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
                         <Sparkles className='h-4 w-4 text-[#f07d33]' />
-                        Build with Hanasand
+                        AI assistant
                     </div>
-                    <p className='truncate text-xs text-bright/45'>{share?.path || 'Tell us what you want to launch.'}</p>
+                    <p className='truncate text-xs text-bright/45'>{showBuilderWorkflow ? 'Optional builder workflow is open.' : 'Ask questions or open the builder when you want it.'}</p>
                 </div>
-                <span className='hidden rounded-full border border-bright/10 px-2 py-1 text-[10px] font-medium text-bright/45 sm:inline-flex'>
-                    {projectState.label}
-                </span>
-            </div>
-            <div className='border-b border-bright/8 bg-black/12 p-3'>
-                <div className={`grid gap-3 rounded-2xl border p-3 ${
-                    projectState.tone === 'success'
-                        ? 'border-emerald-300/15 bg-emerald-950/10'
-                        : projectState.tone === 'danger'
-                            ? 'border-red-300/15 bg-red-950/12'
-                            : projectState.tone === 'attention'
-                                ? 'border-amber-200/15 bg-amber-950/12'
-                                : 'border-bright/8 bg-bright/[0.035]'
-                } sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center`}>
-                    <div className='flex min-w-0 items-start gap-3'>
-                        <ProjectStateIcon state={projectState} loading={loading} />
-                        <div className='min-w-0'>
-                            <div className='flex flex-wrap items-center gap-2'>
-                                <p className='text-sm font-semibold text-bright/88'>{projectState.label}</p>
-                                {loading ? <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/45'>{elapsedSeconds}s</span> : null}
-                            </div>
-                            <p className='mt-1 text-xs leading-5 text-bright/56'>{projectState.detail}</p>
-                        </div>
-                    </div>
+                <div className='flex shrink-0 items-center gap-1 rounded-full border border-bright/8 bg-black/18 p-1 text-[11px]'>
                     <button
                         type='button'
-                        onClick={() => void primaryAction.onClick()}
-                        disabled={primaryAction.disabled}
-                        className='inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full bg-bright px-4 text-sm font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-45'
+                        onClick={() => setBuilderWorkflowOpen(false)}
+                        className={`h-7 cursor-pointer rounded-full px-3 font-medium transition ${showBuilderWorkflow ? 'text-bright/45 hover:bg-bright/8 hover:text-bright/72' : 'bg-bright text-background'}`}
                     >
-                        {primaryAction.label}
-                        <ChevronRight className='h-4 w-4' />
+                        Ask
                     </button>
-                    <p className='text-xs leading-5 text-bright/45 sm:col-span-2'>{primaryAction.detail}</p>
-                </div>
-                <div className='mt-2 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
-                    <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label={pendingEdit?.status === 'pending' ? 'Changes waiting for review' : 'Project files'} value={pendingEdit?.status === 'pending' ? `${pendingEdit.changes.length}` : treePaths.length ? `${treePaths.length}` : '1'} />
-                    <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Page checks' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
-                    <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
+                    <button
+                        type='button'
+                        onClick={() => setBuilderWorkflowOpen(true)}
+                        className={`h-7 cursor-pointer rounded-full px-3 font-medium transition ${showBuilderWorkflow ? 'bg-bright text-background' : 'text-bright/45 hover:bg-bright/8 hover:text-bright/72'}`}
+                    >
+                        Build
+                    </button>
                 </div>
             </div>
+            {showBuilderWorkflow ? (
+                <div className='border-b border-bright/8 bg-black/12 p-3'>
+                    <div className={`grid gap-3 rounded-2xl border p-3 ${
+                        projectState.tone === 'success'
+                            ? 'border-emerald-300/15 bg-emerald-950/10'
+                            : projectState.tone === 'danger'
+                                ? 'border-red-300/15 bg-red-950/12'
+                                : projectState.tone === 'attention'
+                                    ? 'border-amber-200/15 bg-amber-950/12'
+                                    : 'border-bright/8 bg-bright/[0.035]'
+                    } sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center`}>
+                        <div className='flex min-w-0 items-start gap-3'>
+                            <ProjectStateIcon state={projectState} loading={loading} />
+                            <div className='min-w-0'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <p className='text-sm font-semibold text-bright/88'>{projectState.label}</p>
+                                    {loading ? <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/45'>{elapsedSeconds}s</span> : null}
+                                </div>
+                                <p className='mt-1 text-xs leading-5 text-bright/56'>{projectState.detail}</p>
+                            </div>
+                        </div>
+                        <button
+                            type='button'
+                            onClick={() => void primaryAction.onClick()}
+                            disabled={primaryAction.disabled}
+                            className='inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full bg-bright px-4 text-sm font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-45'
+                        >
+                            {primaryAction.label}
+                            <ChevronRight className='h-4 w-4' />
+                        </button>
+                        <p className='text-xs leading-5 text-bright/45 sm:col-span-2'>{primaryAction.detail}</p>
+                    </div>
+                    <div className='mt-2 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
+                        <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label={pendingEdit?.status === 'pending' ? 'Changes waiting for review' : 'Project files'} value={pendingEdit?.status === 'pending' ? `${pendingEdit.changes.length}` : treePaths.length ? `${treePaths.length}` : '1'} />
+                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Page checks' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
+                        <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
+                    </div>
+                </div>
+            ) : null}
 
-            {lastRun ? (
+            {showBuilderWorkflow && lastRun ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
                     <div className='flex flex-wrap items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
@@ -645,7 +663,7 @@ export default function ShareChat({
                 </div>
             ) : null}
 
-            {browserProofJobs.length ? (
+            {showBuilderWorkflow && browserProofJobs.length ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
                     <div className='grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <div className='flex min-w-0 items-center gap-1.5'>
@@ -670,11 +688,11 @@ export default function ShareChat({
                 </div>
             ) : null}
 
-            {qualityReport ? (
+            {showBuilderWorkflow && qualityReport ? (
                 <QualityGatePanel report={qualityReport} />
             ) : null}
 
-            {proofTarget?.url ? (
+            {showBuilderWorkflow && proofTarget?.url ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
                     <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
                         <div className='flex min-w-0 items-center gap-1.5'>
@@ -689,7 +707,7 @@ export default function ShareChat({
                 </div>
             ) : null}
 
-            {browserEvidence[0] ? (
+            {showBuilderWorkflow && browserEvidence[0] ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
                     <div className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62 sm:grid-cols-[minmax(0,1fr)_auto]'>
                         <div className='flex min-w-0 items-start gap-1.5'>
@@ -717,7 +735,7 @@ export default function ShareChat({
                                 <Sparkles className='h-5 w-5' />
                             </div>
                             <h3 className='text-base font-semibold text-bright/90'>Ready when you are.</h3>
-                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>Ask for a change and review the summary before it lands.</p>
+                            <p className='mt-1 max-w-xs text-sm leading-5 text-bright/48'>Ask normally, or switch to Build when you want Hanasand to prepare project changes.</p>
                         </div>
                     </div>
                 ) : messages.map((message) => {
@@ -834,6 +852,7 @@ export default function ShareChat({
                     <div className='max-h-72 space-y-2 overflow-auto'>
                         {pendingEdit.changes.map((change) => <ChangeSummaryCard key={change.id} change={change} />)}
                     </div>
+                    <ReviewEvidencePanel evidence={browserEvidence[0] || null} lastRun={lastRun} />
                     {pendingEdit.error ? <ErrorNotice compact className='mt-2' message={pendingEdit.error} /> : null}
                 </div>
             ) : null}
@@ -950,6 +969,59 @@ function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
     )
 }
 
+function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence | null, lastRun: RunSummary | null }) {
+    const issues = evidence?.pageErrors?.filter(Boolean) || []
+    const consoleMessages = evidence?.consoleMessages?.filter(Boolean) || []
+    const screenshotState = evidence?.screenshotPath ? 'Screenshot saved' : lastRun?.browserProofs ? 'Screenshot not available yet' : 'Screenshot not run yet'
+    return (
+        <section className='mt-3 rounded-2xl border border-bright/8 bg-black/24 p-3'>
+            <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <div className='flex items-center gap-2'>
+                        <ClipboardCheck className='h-4 w-4 text-[#f07d33]' />
+                        <h4 className='text-sm font-semibold text-bright/84'>Proof for this review</h4>
+                    </div>
+                    <p className='mt-1 text-xs leading-5 text-bright/48'>
+                        {evidence ? 'A browser check is attached to the review.' : 'No browser check has finished for this review yet.'}
+                    </p>
+                </div>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
+                    issues.length
+                        ? 'border-red-300/15 text-red-100/70'
+                        : evidence
+                            ? 'border-emerald-300/15 text-emerald-100/62'
+                            : 'border-bright/8 text-bright/45'
+                }`}>
+                    {issues.length ? 'Needs fix' : evidence ? 'Attached' : 'Pending'}
+                </span>
+            </div>
+            <div className='mt-3 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Screenshot</span>
+                    <span className='font-medium text-bright/68'>{screenshotState}</span>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Page issues</span>
+                    <span className='font-medium text-bright/68'>{issues.length ? `${issues.length} found` : evidence ? 'None found' : 'Not checked'}</span>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Logs</span>
+                    <span className='font-medium text-bright/68'>{consoleMessages.length ? `${consoleMessages.length} message${consoleMessages.length === 1 ? '' : 's'}` : evidence ? 'Quiet' : 'Not checked'}</span>
+                </div>
+            </div>
+            <details className='mt-3 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5'>
+                <summary className='cursor-pointer text-xs font-medium text-bright/58'>Advanced logs</summary>
+                <div className='mt-2 grid gap-2 text-xs text-bright/58 sm:grid-cols-2'>
+                    <EvidenceList title='Page address' items={evidence?.url ? [evidence.url] : []} />
+                    <EvidenceList title='Screenshot path' items={evidence?.screenshotPath ? [evidence.screenshotPath] : []} />
+                    <EvidenceList title='Console messages' items={consoleMessages} />
+                    <EvidenceList title='Page errors' items={issues} />
+                </div>
+            </details>
+        </section>
+    )
+}
+
 async function approvePendingShareChange(pendingEdit: PendingEdit, change: PendingShareChange, share: Share) {
     const response = await aiClientRequest('/tools/ai', {
         method: 'POST',
@@ -981,9 +1053,9 @@ async function approvePendingShareChange(pendingEdit: PendingEdit, change: Pendi
     return {
         ok: false as const,
         error: [
-            `Safety policy blocked ${change.path}.`,
-            payload?.error || 'Review the file path and content before applying.',
-            payload?.decision?.safeAlternative ? `Safer path: ${payload.decision.safeAlternative}` : '',
+            `Hanasand could not safely apply ${plainPathLabel(change.path)}.`,
+            beginnerActionFailure(payload?.error),
+            payload?.decision?.safeAlternative ? `Try this instead: ${payload.decision.safeAlternative}` : '',
         ].filter(Boolean).join(' '),
     }
 }
@@ -1020,6 +1092,23 @@ function friendlyChatError(status: number) {
 
 function wait(ms: number) {
     return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function beginnerActionFailure(error?: string) {
+    const value = error || ''
+    if (/env|secret|token|credential|ssh key|private key/i.test(value)) {
+        return 'This looks like a secret or private setting. Use a placeholder or connect it from the secure settings page.'
+    }
+    if (/production|database|backup|delete|destructive|wipe|drop|truncate/i.test(value)) {
+        return 'This could affect real data. Try a preview, dry run, backup, or staging copy first.'
+    }
+    if (/domain|dns|ssl|certificate/i.test(value)) {
+        return 'This looks like a domain or SSL setup problem. Check the domain records and certificate status before publishing.'
+    }
+    if (/build|deploy|runtime|log/i.test(value)) {
+        return 'The app needs a build or deploy check before it can be published. Open the advanced logs for details.'
+    }
+    return 'Review the summary and try the smallest safer change.'
 }
 
 function buildPrompt(prompt: string, share: Share, editingContent: string, treePaths: string[], previewUrl: string | null) {

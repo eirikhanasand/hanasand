@@ -15,7 +15,7 @@ import useMovable from '@/hooks/movable'
 import copy from '@/utils/copy'
 import { Activity, Copy, Eye, GitBranch, Highlighter, Info as InfoIcon, KeyRound, ListOrdered, MessageSquare, Package, RefreshCw, Smartphone, TerminalSquare, X } from 'lucide-react'
 import Link from 'next/link'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import Box from '../box/box'
 import PhoneSimulator from './phoneSimulator'
 import SidebarTooltip from './sidebarTooltip'
@@ -74,6 +74,7 @@ export default function Metadata({
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'right', setHide: setShowMetadata })
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const [activePanel, setActivePanel] = useState<MetadataPanel>('workspace')
+    const [isCompactViewport, setIsCompactViewport] = useState(false)
     HideIfLittleSpace({ set: setShowMetadata, minWidth: 1180 })
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
         initialState: false,
@@ -81,16 +82,28 @@ export default function Metadata({
         onClear: () => setDidCopy(false)
     })
 
+    useEffect(() => {
+        const updateCompactViewport = () => setIsCompactViewport(window.innerWidth < 640)
+        updateCompactViewport()
+        window.addEventListener('resize', updateCompactViewport)
+        return () => window.removeEventListener('resize', updateCompactViewport)
+    }, [])
+
     if (!showMetadata) {
         const color = isConnected ? 'stroke-green-600/20 group-hover:stroke-green-600' : 'stroke-extralight'
+        const compactStyle = isCompactViewport ? { right: 16, bottom: 88 } : { top: position.y, left: position.x }
         return (
             <button
                 type='button'
                 aria-label='Open share metadata'
-                onMouseDown={(event) => handleMouseDown(event)}
+                onMouseDown={(event) => {
+                    if (!isCompactViewport) {
+                        handleMouseDown(event)
+                    }
+                }}
                 onClick={handleOpen}
-                className={`group ${sharedStyles}`}
-                style={{ top: position.y, left: position.x }}
+                className={`group ${isCompactViewport ? 'fixed right-4 bottom-22 grid place-items-center rounded-lg border border-bright/10 bg-background/80 p-3 shadow-2xl shadow-black/20 backdrop-blur-md' : sharedStyles}`}
+                style={compactStyle}
             >
                 <h1>
                     <InfoIcon className={!isConnected ? color : 'stroke-light/50 group-hover:stroke-bright'} />
