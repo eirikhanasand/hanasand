@@ -42,6 +42,7 @@ export default function ChatPane({
         || activeConversation?.metrics?.status === 'preparing'
         || activeConversation?.metrics?.status === 'generating'
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
+    const hasReadyModel = isConnected && clients.length > 0
     const lastMessageKey = useMemo(() => {
         const lastMessage = activeConversation?.messages.at(-1)
         return `${lastMessage?.id || 'empty'}:${lastMessage?.content.length || 0}:${lastMessage?.pending ? 'pending' : 'done'}`
@@ -132,7 +133,7 @@ export default function ChatPane({
                             </Link>
                             <StatusChip
                                 icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />}
-                                label={isThinking ? 'Thinking...' : isConnected ? 'Ready' : 'Offline'}
+                                label={isThinking ? 'Thinking...' : hasReadyModel ? 'Ready' : 'Offline'}
                                 accent={isThinking}
                             />
                             {latestArtifacts.length ? (
