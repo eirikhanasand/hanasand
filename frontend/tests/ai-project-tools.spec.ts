@@ -686,6 +686,96 @@ test('AI website workbench handles reliability, handoff, and low-bloat pressure 
     await context.close()
 })
 
+test('AI website workbench handles accessibility, messy scope, and evidence pressure stories', async ({ browser, baseURL }) => {
+    const stories = [
+        ['unlabeled button', 'Workbench controls are named: search chats, open editor, and workspace details are keyboard-readable.'],
+        ['where do i see the files', 'Use the Editor link to inspect files; attached workspaces also show project files in the details rail.'],
+        ['too gray', 'Art direction workspace ready: warmer contrast, sharper hierarchy, premium without fintech gloss.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Premium Visual Direction"}</hanasand-tool>'],
+        ['rent tools nearby', 'Nearby tool rental MVP ready: listings, search, availability request, and owner contact.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Nearby Tool Rental Marketplace"}</hanasand-tool>'],
+        ['legal should only comment', 'Legal should be reviewer-only; engineering can be editor. Keep review handoff visible.'],
+        ['looks like a template', 'Template rescue workspace ready: keep the offer, change visual system, then verify.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Brand Rescue Workspace"}</hanasand-tool>'],
+        ['public or private', 'Exposure lives in Deploy and Release history. If missing, run a deploy healthcheck before claiming public access.'],
+        ['test broke', 'Running the check first; no guessing.\n<hanasand-tool>{"action":"run_terminal_command","command":"npm test","timeoutMs":20000}</hanasand-tool>'],
+        ['add login', 'I can build an auth-shaped demo UI now, but real authentication needs configured backend/session handling.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Auth Demo Shell"}</hanasand-tool>'],
+        ['housing help', 'Accessible housing support service page ready.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Housing Help Service"}</hanasand-tool>'],
+        ['sell my presets', 'Preset storefront skeleton ready with licensing and honest checkout placeholder.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Preset Storefront"}</hanasand-tool>'],
+        ['refunds, bugs, chaos', 'Support chaos dashboard ready with refunds, bugs, SLA, and severity triage.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Support Chaos Dashboard"}</hanasand-tool>'],
+        ['prod secrets', 'Do not paste production secrets into chat. Use env vars or a managed secret path.'],
+        ['metrics look good', 'I will label metrics as demo/sample unless you provide verified numbers.'],
+        ['look at it, not the code', 'Browser-first visual review needs a workspace first, so I am creating one before screenshot evidence.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Visual Review Workspace"}</hanasand-tool>'],
+        ['another agent taking over', 'Continuity path: record changed files, checks, release state, and next steps in the visible workbench.'],
+        ['is it stuck', 'Status should distinguish Offline, Thinking, Ready, Tool complete, and Tool error without mixed signals.'],
+        ['iphone', 'Mobile proof workspace ready; verify the narrow viewport or name the blocker next.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Mobile Proof Workspace"}</hanasand-tool>'],
+        ['booking, payments, crm, and ads', 'Scope cut: build booking first, stub payments honestly, defer CRM and ads until the first workflow works.\n<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"Booking First Workflow"}</hanasand-tool>'],
+        ['show evidence', 'Evidence-first summary: changed surface, check output, and artifact links before commentary.\n<hanasand-tool>{"action":"run_terminal_command","command":"pwd && ls","timeoutMs":8000}</hanasand-tool>'],
+    ] as const
+
+    const prompts = [
+        'i only tab around. what does this unlabeled button do?',
+        'where do i see the files?',
+        'too gray. make it feel expensive but not fintech.',
+        'marketplace idea, dunno, people rent tools nearby',
+        'legal should only comment, eng can edit',
+        'client says it looks like a template. fix that.',
+        'is preview public or private rn?',
+        'test broke. stop guessing.',
+        'add login but don\'t make me deal with auth yet',
+        'people need to apply for housing help. make it simple.',
+        'sell my presets. fast.',
+        'angry customers, refunds, bugs, chaos. dashboard.',
+        'i can paste prod secrets if easier',
+        'make metrics look good',
+        'look at it, not the code',
+        'will this survive another agent taking over?',
+        'is it stuck?',
+        'client only checks on iphone.',
+        'make booking, payments, crm, and ads today',
+        'less talk. show evidence.',
+    ]
+
+    const { context, page } = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: 'Default compact ambiguity update.',
+        promptResponses: stories.map(([match, content]) => ({ match, content })),
+    })
+
+    await expect(page.getByRole('button', { name: 'Search chats' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Open editor' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Hide workspace details' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Hide workspace details' }).click()
+    await expect(page.getByRole('button', { name: 'Show workspace details' })).toBeVisible()
+    await page.getByRole('button', { name: 'Show workspace details' }).click()
+    await expect(page.getByText('No workspace attached')).toBeVisible()
+
+    for (const [index, prompt] of prompts.entries()) {
+        await test.step(`story ${941 + index}`, async () => {
+            const storyContent = stories[index][1]
+            await page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill(prompt)
+            await page.getByRole('button', { name: 'Send' }).click()
+            await expect(page.getByText(storyContent.split('\n')[0])).toBeVisible({ timeout: 10000 })
+            const toolText = expectedToolCompletionText(storyContent)
+            if (toolText) {
+                await expect(page.getByText(toolText).last()).toBeVisible({ timeout: 10000 })
+            }
+        })
+    }
+
+    await expect(page.getByText('Do not paste production secrets into chat.')).toBeVisible()
+    await expect(page.getByText('I will label metrics as demo/sample')).toBeVisible()
+    await expect(page.getByText('Scope cut: build booking first')).toBeVisible()
+    await expect(page.getByText('Tool complete').first()).toBeVisible()
+
+    const lastPromptRequest = await page.evaluate(() => (window as typeof window & {
+        __lastAiPromptRequest?: { messages?: { role: string, content: string }[] }
+    }).__lastAiPromptRequest)
+    const systemPrompt = lastPromptRequest?.messages?.find((message) => message.role === 'system')?.content || ''
+    expect(systemPrompt).toContain('Do not run terminal, read_share, or update_share tools before a workspace is attached')
+
+    await context.close()
+})
+
 function expectedToolCompletionText(content: string) {
     if (content.includes('"action":"scaffold_nextjs_docker"')) {
         const projectName = content.match(/"projectName":"([^"]+)"/)?.[1]

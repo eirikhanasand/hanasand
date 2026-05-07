@@ -40,8 +40,8 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                     New
                 </button>
                 <div className='flex items-center gap-1'>
-                    <IconButton icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' className='grid h-9 w-9 place-items-center rounded-full text-[#a0a09b] transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                    <IconButton label='Search chats' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
+                    <Link href='/s' aria-label='Open editor' className='grid h-9 w-9 place-items-center rounded-full text-[#a0a09b] transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -141,18 +141,18 @@ function ConversationList({
                         <div className='truncate text-sm'>{conversation.title}</div>
                     </div>
                     <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100'>
-                        <MiniButton icon={<Pencil className='h-3.5 w-3.5' />} onClick={(event) => {
+                        <MiniButton label={`Rename ${conversation.title}`} icon={<Pencil className='h-3.5 w-3.5' />} onClick={(event) => {
                             event.stopPropagation()
                             const nextTitle = window.prompt('Rename chat', conversation.title)?.trim()
                             if (nextTitle) {
                                 void onRenameConversation(conversation.id, nextTitle)
                             }
                         }} />
-                        <MiniButton icon={archived ? <ArchiveRestore className='h-3.5 w-3.5' /> : <Archive className='h-3.5 w-3.5' />} onClick={(event) => {
+                        <MiniButton label={archived ? `Restore ${conversation.title}` : `Archive ${conversation.title}`} icon={archived ? <ArchiveRestore className='h-3.5 w-3.5' /> : <Archive className='h-3.5 w-3.5' />} onClick={(event) => {
                             event.stopPropagation()
                             void onArchiveConversation(conversation.id, !archived)
                         }} />
-                        <MiniButton danger icon={<Trash2 className='h-3.5 w-3.5' />} onClick={(event) => {
+                        <MiniButton label={`Delete ${conversation.title}`} danger icon={<Trash2 className='h-3.5 w-3.5' />} onClick={(event) => {
                             event.stopPropagation()
                             void onDeleteConversation(conversation.id)
                         }} />
@@ -163,25 +163,27 @@ function ConversationList({
     )
 }
 
-function IconButton({ icon, active = false, onClick }: { icon: React.ReactNode, active?: boolean, onClick: () => void }) {
+function IconButton({ label, icon, active = false, onClick }: { label: string, icon: React.ReactNode, active?: boolean, onClick: () => void }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${active ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${active ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )
 }
 
 function MiniButton({
+    label,
     icon,
     danger = false,
     onClick,
 }: {
+    label: string
     icon: React.ReactNode
     danger?: boolean
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${danger ? 'text-[#d29a95] hover:bg-red-500/10' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${danger ? 'text-[#d29a95] hover:bg-red-500/10' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
             {icon}
         </button>
     )

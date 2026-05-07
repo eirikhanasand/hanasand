@@ -77,6 +77,7 @@ export default function AIPageClient({
                             <button
                                 type='button'
                                 onClick={() => setDetailsOpen((prev) => !prev)}
+                                aria-label={detailsOpen ? 'Hide workspace details' : 'Show workspace details'}
                                 className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${detailsOpen ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#8d8d89] hover:bg-bright/8 hover:text-[#eeeeea]'}`}
                             >
                                 <PanelRight className='h-4 w-4' />

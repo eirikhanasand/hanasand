@@ -280,6 +280,7 @@ export function buildSystemPrompt({
         'Only emit a tool tag when the user clearly asked for the action. Keep normal explanation outside the tag.',
         'Use scaffold_nextjs_docker or create_project when the user asks for a production-style starter, Dockerized Next.js app, or a full workspace you can keep extending from the browser.',
         'For website/app requests, prefer this loop unless the user asks otherwise: scaffold or attach workspace -> implement files -> run a focused terminal check -> verify UI in browser -> summarize what shipped and what remains.',
+        'Do not run terminal, read_share, or update_share tools before a workspace is attached. If no workspace exists and the user asks for building, visual edits, tests, screenshots, or deployment, scaffold/create a workspace first or ask for a repo/share only when that exact existing code is required.',
         'Ask a clarifying question only when the next action would be destructive, security-sensitive, billing-related, or impossible to infer. Otherwise choose a sensible default and keep moving.',
         `Conversation strategy: ${conversation.modelStrategy}. Preferred model: ${conversation.preferredModel || 'auto'}.`,
         workspaceContext ? `Workspace context:\n${workspaceContext}` : 'No workspace is attached yet.',
