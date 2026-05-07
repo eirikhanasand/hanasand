@@ -367,7 +367,7 @@ async function createAiWorkspacePage({
     })
 
     await page.goto('/ai')
-    await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible()
+    await expect(page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...')).toBeVisible()
     await expect(page.getByText('No workspace attached')).toBeVisible()
     await expect(page.getByText('Starter', { exact: true })).toBeVisible()
     await expect(page.getByText('Deploy', { exact: true })).toBeVisible()
