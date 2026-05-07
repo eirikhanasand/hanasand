@@ -26,6 +26,14 @@ type GeneratedBuilderResponse = {
     }
 }
 type CommonCacheCategory = NonNullable<GeneratedBuilderResponse['cache']>['category']
+type ModelToolStrategy = {
+    route: 'tool_first' | 'small_model' | 'strong_model'
+    difficulty: 'deterministic' | 'small' | 'strong'
+    reason: string
+    maxTokens: number
+    temperature: number
+    principles: string[]
+}
 
 const commonResponseCache = new Map<string, {
     response: GeneratedBuilderResponse
@@ -150,7 +158,8 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         })
     }
 
-    const builderResponse = buildShareProjectResponse(prompt)
+    const strategy = classifyModelToolStrategy(prompt, context, body.billingMode)
+    const builderResponse = strategy.route === 'tool_first' ? buildShareProjectResponse(prompt) : null
     if (builderResponse) {
         await recordCommonCacheHit({
             actorId,
@@ -171,14 +180,16 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             startedAt: Date.now(),
             toolCalls: parseGeneratedToolCalls(typeof builderResponse.message === 'string' ? builderResponse.message : '').length,
             cache: builderResponse.cache,
+            strategy,
         })
-        return res.send(await enforceGeneratedToolPolicy(req, actorId, builderResponse))
+        return res.send(await enforceGeneratedToolPolicy(req, actorId, {
+            ...builderResponse,
+            modelStrategy: strategy,
+        }))
     }
 
     const clients = listGptClients('gpt')
-    const preferredClient = clients
-        .filter((client) => client.model.status !== 'error')
-        .sort((left, right) => (right.model.tps || 0) - (left.model.tps || 0))[0]
+    const preferredClient = selectModelClient(clients, strategy)
 
     if (!preferredClient) {
         const fallback = buildShareProjectResponse(prompt)
@@ -202,8 +213,12 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
                 startedAt: Date.now(),
                 toolCalls: parseGeneratedToolCalls(typeof fallback.message === 'string' ? fallback.message : '').length,
                 cache: fallback.cache,
+                strategy,
             })
-            return res.send(fallback)
+            return res.send({
+                ...fallback,
+                modelStrategy: strategy,
+            })
         }
         await recordToolAiEconomics({
             actorId,
@@ -215,6 +230,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             responseText: 'No connected model client.',
             model: 'none',
             startedAt: Date.now(),
+            strategy,
         })
         return res.send({
             status: 'connecting',
@@ -230,9 +246,10 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         const completion = await requestCompletionWithRetry({
             conversationId,
             clientName: preferredClient.name,
-            maxTokens: Math.min(Math.max(Number(maxTokens) || 900, 300), 4200),
+            maxTokens: Math.min(Math.max(Number(maxTokens) || strategy.maxTokens, 300), strategy.route === 'strong_model' ? 6200 : 4200),
             prompt,
             context,
+            strategy,
         })
         await recordToolAiEconomics({
             actorId,
@@ -247,12 +264,14 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             metrics: completion.metrics,
             startedAt,
             toolCalls: parseGeneratedToolCalls(completion.content || '').length,
+            strategy,
         })
 
         return res.send(await enforceGeneratedToolPolicy(req, actorId, {
             status: 'completed',
             provider: 'hanasand-ai',
             model: preferredClient.name,
+            modelStrategy: strategy,
             message: redactAgentText(completion.content || ''),
             artifacts: completion.artifacts || [],
             metrics: completion.metrics || null,
@@ -281,6 +300,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
                 startedAt: Date.now(),
                 toolCalls: parseGeneratedToolCalls(typeof fallback.message === 'string' ? fallback.message : '').length,
                 cache: fallback.cache,
+                strategy,
             })
             return res.send(await enforceGeneratedToolPolicy(req, actorId, fallback))
         }
@@ -338,6 +358,7 @@ type ToolAiEconomicsInput = {
     startedAt: number
     toolCalls?: number
     cache?: GeneratedBuilderResponse['cache']
+    strategy?: ModelToolStrategy
 }
 
 async function enforceGeneratedToolPolicy(req: FastifyRequest, actorId: string | null, response: Record<string, unknown>) {
@@ -395,6 +416,7 @@ async function recordToolAiEconomics({
     startedAt,
     toolCalls = 0,
     cache,
+    strategy,
 }: ToolAiEconomicsInput) {
     if (!actorId) {
         return
@@ -442,6 +464,9 @@ async function recordToolAiEconomics({
             cacheKey: cache?.key || null,
             cacheCategory: cache?.category || null,
             keyMetric: 'verified useful project progress per minute per NOK',
+            modelStrategy: strategy?.route || null,
+            taskDifficulty: strategy?.difficulty || null,
+            routingReason: strategy?.reason || null,
         },
     })
 }
@@ -549,18 +574,108 @@ function safetyMessage(decision: Awaited<ReturnType<typeof evaluateAgentActionPo
     ].join('\n')
 }
 
+function classifyModelToolStrategy(prompt: string, context?: string, billingMode: string = 'standard'): ModelToolStrategy {
+    const lower = `${prompt}\n${context || ''}`.toLowerCase()
+    const asksForGoldenPath = /\b(scaffold|starter|dockerfile|docker file|compose|docker compose|self-hostable|runnable project|deploy check|deployment check|package metadata|dependencies|env example|health check)\b/.test(lower)
+    const complexArchitecture = /\b(architecture|architect|multi[- ]file|refactor|migration|bug hunt|debug across|race condition|auth flow|permissions|database schema|distributed|queue|worker|rollback|security review|incident|production bug|performance regression)\b/.test(lower)
+    const simpleEdit = /\b(copy|summarize|rename|small edit|simple page|landing page|one page|diagnose|explain|fix typo|css|style|button|text|readme)\b/.test(lower)
+    const contextIsLarge = (context?.length || 0) > 18_000
+
+    if (asksForGoldenPath && !complexArchitecture) {
+        return {
+            route: 'tool_first',
+            difficulty: 'deterministic',
+            reason: 'Common scaffold, Docker, compose, dependency, or deploy-check work is safer and cheaper through deterministic generators before model tokens.',
+            maxTokens: 900,
+            temperature: 0.1,
+            principles: [
+                'Use golden-path generators for common app types.',
+                'Prefer deterministic package, Docker, compose, and deploy checks over model guessing.',
+                'Cache common scaffolds, package metadata, deployment fixes, and diagnostics.',
+            ],
+        }
+    }
+
+    if (complexArchitecture || contextIsLarge || billingMode === 'priority' || billingMode === 'verified') {
+        return {
+            route: 'strong_model',
+            difficulty: 'strong',
+            reason: complexArchitecture
+                ? 'Architecture, multi-file refactor, bug-hunt, production, or security language needs stronger reasoning.'
+                : contextIsLarge
+                    ? 'Large context should be summarized by tools and handled by a stronger lane.'
+                    : 'Paid verified/priority mode favors stronger reasoning for project quality.',
+            maxTokens: 3200,
+            temperature: 0.18,
+            principles: [
+                'Use stronger local or hosted models for architecture, multi-file refactors, and bug hunts.',
+                'Inspect with tools before reading long context into the model.',
+                'Prefer focused evidence over broad narration.',
+            ],
+        }
+    }
+
+    return {
+        route: 'small_model',
+        difficulty: 'small',
+        reason: simpleEdit
+            ? 'Small edit, summary, diagnostic, or simple page request can run on a fast local lane.'
+            : 'Default to a fast local lane unless the task proves architectural.',
+        maxTokens: 1400,
+        temperature: 0.2,
+        principles: [
+            'Use small local models for edits, summaries, diagnostics, and simple pages.',
+            'Read less raw context; use tools to inspect exactly what matters.',
+            'Escalate when the task becomes architectural or multi-file.',
+        ],
+    }
+}
+
+function selectModelClient(clients: GPT_Client[], strategy: ModelToolStrategy) {
+    const available = clients.filter((client) => client.model.status !== 'error')
+    if (!available.length) {
+        return null
+    }
+
+    return available
+        .map((client) => ({ client, score: scoreClientForStrategy(client, strategy) }))
+        .sort((left, right) => right.score - left.score)[0]?.client || null
+}
+
+function scoreClientForStrategy(client: GPT_Client, strategy: ModelToolStrategy) {
+    const lanes = client.lanes || []
+    const strongLanes = lanes.filter((lane) => lane.tier === 'strong').length
+    const fastLanes = lanes.filter((lane) => lane.tier !== 'strong').length
+    const availableRequests = lanes.reduce((sum, lane) => sum + Math.max(0, lane.availableRequests), 0)
+    const queuedRequests = lanes.reduce((sum, lane) => sum + Math.max(0, lane.queuedRequests), 0)
+    const modelText = `${client.name} ${client.displayName || ''} ${client.modelId || ''} ${client.profile || ''}`.toLowerCase()
+    const modelLooksStrong = /\b(strong|coder|32b|72b|70b|deepseek|qwen|architect|reason)\b/.test(modelText)
+    const modelLooksFast = /\b(fast|small|7b|14b|lane|draft)\b/.test(modelText)
+    const tps = client.model.tps || 0
+    const capacityScore = availableRequests * 20 - queuedRequests * 8
+    const speedScore = Math.min(100, tps)
+
+    if (strategy.route === 'strong_model') {
+        return capacityScore + speedScore + strongLanes * 90 + (modelLooksStrong ? 80 : 0) - (modelLooksFast ? 25 : 0)
+    }
+
+    return capacityScore + speedScore + fastLanes * 60 + (modelLooksFast ? 45 : 0) + (modelLooksStrong ? 10 : 0)
+}
+
 async function requestCompletionWithRetry({
     conversationId,
     clientName,
     maxTokens,
     prompt,
     context,
+    strategy,
 }: {
     conversationId: string
     clientName: string
     maxTokens: number
     prompt: string
     context?: string
+    strategy: ModelToolStrategy
 }) {
     let lastError: unknown
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -569,7 +684,7 @@ async function requestCompletionWithRetry({
                 conversationId,
                 clientName,
                 maxTokens,
-                temperature: 0.2,
+                temperature: strategy.temperature,
                 messages: [
                     {
                         role: 'system',
@@ -579,6 +694,9 @@ async function requestCompletionWithRetry({
                             'When asked to edit a share project, emit one or more Hanasand tool tags with complete replacement content for each file that should change.',
                             'Supported share tool actions are update_share and upsert_share. Prefer upsert_share for creating or replacing files by path.',
                             'For project-building requests, include complete runnable files, not fragments: package.json, README, source, environment example, Dockerfile, and docker-compose.yml where relevant.',
+                            'Model and tool strategy: small local lanes are for edits, summaries, diagnostics, and simple pages; stronger lanes are for architecture, multi-file refactors, and bug hunts; deterministic tools and golden-path generators are preferred for scaffolds, Dockerfiles, compose, deploy checks, package facts, and common app shapes.',
+                            'Agent principle: read less raw context, let tools inspect more. Ask for or emit focused tool calls instead of restating large file trees. Use live package/library metadata or project files before recommending versions, APIs, or defaults.',
+                            `Current routing decision: ${strategy.route} (${strategy.reason}).`,
                             'Avoid generic placeholder slop. Include concrete copy, accessible labels, responsive structure, validation, health checks, and no hardcoded secrets.',
                         ].join(' '),
                     },
