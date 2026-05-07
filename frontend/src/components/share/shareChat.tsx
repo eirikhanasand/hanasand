@@ -5,8 +5,8 @@ import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
-import { ArrowUp, Check, Code2, ExternalLink, Globe2, Loader2, Sparkles } from 'lucide-react'
-import { Dispatch, FormEvent, SetStateAction, useMemo, useRef, useState } from 'react'
+import { ArrowUp, Check, Code2, ExternalLink, Gauge, Globe2, Loader2, ShieldCheck, Sparkles } from 'lucide-react'
+import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 
 type ShareChatProps = {
@@ -67,11 +67,36 @@ export default function ShareChat({
     const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
+    const [startedAt, setStartedAt] = useState<number | null>(null)
+    const [elapsedSeconds, setElapsedSeconds] = useState(0)
     const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null)
     const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 120), [tree])
     const canSend = input.trim().length > 0 && !loading && Boolean(share)
+    const phaseLabel = loading
+        ? elapsedSeconds < 4
+            ? 'Scoping'
+            : elapsedSeconds < 14
+                ? 'Preparing'
+                : 'Still working'
+        : pendingEdit?.status === 'pending'
+            ? 'Review'
+            : pendingEdit?.status === 'applied'
+                ? 'Applied'
+                : 'Ready'
+
+    useEffect(() => {
+        if (!startedAt) {
+            setElapsedSeconds(0)
+            return
+        }
+
+        const updateElapsed = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
+        updateElapsed()
+        const interval = window.setInterval(updateElapsed, 1000)
+        return () => window.clearInterval(interval)
+    }, [startedAt])
 
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -89,6 +114,8 @@ export default function ShareChat({
         setMessages((current) => [...current, userMessage])
         setInput('')
         setLoading(true)
+        setStartedAt(Date.now())
+        setPendingEdit(null)
 
         try {
             const response = await requestShareChat({
@@ -137,6 +164,7 @@ export default function ShareChat({
             }])
         } finally {
             setLoading(false)
+            setStartedAt(null)
             window.setTimeout(() => inputRef.current?.focus(), 0)
         }
     }
@@ -203,6 +231,20 @@ export default function ShareChat({
                     {treePaths.length ? `${treePaths.length} files` : 'Current file'}
                 </span>
             </div>
+            <div className='grid grid-cols-3 gap-2 border-b border-bright/8 bg-black/12 px-3 py-2 text-[11px] text-bright/58'>
+                <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
+                    {loading ? <Loader2 className='h-3.5 w-3.5 shrink-0 animate-spin text-[#f07d33]' /> : <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />}
+                    <span className='truncate'>{phaseLabel}{loading ? ` · ${elapsedSeconds}s` : ''}</span>
+                </div>
+                <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
+                    <Code2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                    <span className='truncate'>{treePaths.length ? `${treePaths.length} context files` : 'Current file context'}</span>
+                </div>
+                <div className='flex min-w-0 items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1'>
+                    <ShieldCheck className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                    <span className='truncate'>Review gate</span>
+                </div>
+            </div>
 
             <div className={`flex-1 space-y-3 overflow-y-auto px-3 py-4 ${mode === 'workspace' ? 'lg:px-6 lg:py-5' : ''}`}>
                 {messages.length === 0 ? (
@@ -229,7 +271,7 @@ export default function ShareChat({
                 {loading ? (
                     <div className='flex items-center gap-2 text-sm text-bright/55'>
                         <Loader2 className='h-4 w-4 animate-spin' />
-                        Thinking
+                        {phaseLabel} changes
                     </div>
                 ) : null}
                 {browserTarget ? (
