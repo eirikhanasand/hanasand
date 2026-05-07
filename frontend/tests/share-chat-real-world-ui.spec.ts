@@ -2778,7 +2778,7 @@ test('share page AI queues browser proof asynchronously before apply gating', as
     await expect(page.getByText('Prepared async proof change.')).toBeVisible({ timeout: 2500 })
     await expect(page.getByText('Browser verification queued for 1 target. You can keep reviewing while proof runs.')).toBeVisible()
     await expect(page.getByText('Proof queued')).toBeVisible()
-    await expect(page.getByText('Verification queue')).toBeVisible()
+    await expect(page.getByText('Verification queue', { exact: true })).toBeVisible()
     await expect(page.getByText('Browser proof is queued before these changes can be applied.')).toBeVisible()
     expect(browserTaskStarted).toBe(true)
 
