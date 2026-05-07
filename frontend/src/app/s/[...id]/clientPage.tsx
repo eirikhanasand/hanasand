@@ -172,19 +172,21 @@ export default function ClientPage({
 
     return (
         <div className='flex w-full h-full max-w-[100vw] min-w-0 overflow-hidden gap-1 p-1 md:gap-2 md:p-2'>
-            <Explorer
-                showExplorer={showExplorer}
-                setShowExplorer={setShowExplorer}
-                openFolders={openFolders}
-                tree={workspaceTree}
-                share={share}
-                setShare={setShare}
-                editingContent={editingContent}
-                setEditorPatch={setEditorPatch}
-                setError={setError}
-                setPageTree={setWorkspaceTree}
-                panelRequest={explorerPanelRequest}
-            />
+            <div className={chatOpen ? 'hidden md:contents' : 'contents'}>
+                <Explorer
+                    showExplorer={showExplorer}
+                    setShowExplorer={setShowExplorer}
+                    openFolders={openFolders}
+                    tree={workspaceTree}
+                    share={share}
+                    setShare={setShare}
+                    editingContent={editingContent}
+                    setEditorPatch={setEditorPatch}
+                    setError={setError}
+                    setPageTree={setWorkspaceTree}
+                    panelRequest={explorerPanelRequest}
+                />
+            </div>
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
                 <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/72 px-2 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-md'>
                     <div className='min-w-0 flex flex-1 items-center gap-3'>

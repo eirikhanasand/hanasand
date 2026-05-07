@@ -171,6 +171,55 @@ test('share chat surfaces progress, context, and review gates for ambiguous app 
     expect(handledPrompts).toHaveLength(stories.length)
 })
 
+test('share chat keeps the mobile chat viewport unobscured by the explorer rail', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+    await page.setViewportSize({ width: 520, height: 820 })
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-mobile-chat-story',
+                alias: body.path || body.name || body.id || 'app-mobile-chat-story',
+                path: body.path || body.name || body.id || 'app-mobile-chat-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-mobile-chat-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.goto('/s/app-mobile-chat-861?new=1')
+    await expect(page.getByRole('button', { name: 'Files' })).toHaveCount(1)
+    await page.getByRole('button', { name: 'Open workspace chat' }).click()
+
+    await expect(page.getByText('Chat workspace')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Files' })).toHaveCount(0)
+    await expect(page.getByPlaceholder('Ask Hanasand AI to change this project...')).toBeVisible()
+    await expect(page.getByText('No auto-apply')).toBeVisible()
+})
+
 test('share chat makes no-auto-apply and pending-file state explicit for transparency stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
