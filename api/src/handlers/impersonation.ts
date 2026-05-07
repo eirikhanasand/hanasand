@@ -5,6 +5,17 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 type RoleRow = { id: string, name?: string }
 type StartBody = { target_id?: string, reason?: string }
+type EventQuery = {
+    q?: string
+    actor?: string
+    target?: string
+    method?: string
+    path?: string
+    session?: string
+    from?: string
+    to?: string
+    limit?: string
+}
 
 function isAdminRole(role: RoleRow) {
     const id = role.id.toLowerCase()
@@ -141,6 +152,62 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         return res.status(403).send({ error: 'Only admins can view impersonation history.' })
     }
 
+    const query = req.query as EventQuery
+    const where: string[] = []
+    const values: Array<string | number | boolean | string[] | Date | null> = []
+    const add = (value: string | number | boolean | string[] | Date | null) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    const q = String(query.q || '').trim()
+    const actorFilter = String(query.actor || '').trim()
+    const targetFilter = String(query.target || '').trim()
+    const methodFilter = String(query.method || '').trim().toUpperCase()
+    const pathFilter = String(query.path || '').trim()
+    const sessionFilter = String(query.session || '').trim()
+    const fromFilter = String(query.from || '').trim()
+    const toFilter = String(query.to || '').trim()
+    const parsedLimit = Number(query.limit || 200)
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 500) : 200
+
+    if (q) {
+        const placeholder = add(`%${q}%`)
+        where.push(`(
+            e.actor_id ILIKE ${placeholder}
+            OR actor.name ILIKE ${placeholder}
+            OR e.target_id ILIKE ${placeholder}
+            OR target.name ILIKE ${placeholder}
+            OR e.path ILIKE ${placeholder}
+            OR e.method ILIKE ${placeholder}
+            OR e.ip ILIKE ${placeholder}
+            OR e.user_agent ILIKE ${placeholder}
+            OR e.session_id::text ILIKE ${placeholder}
+        )`)
+    }
+    if (actorFilter) {
+        const placeholder = add(`%${actorFilter}%`)
+        where.push('(e.actor_id ILIKE ' + placeholder + ' OR actor.name ILIKE ' + placeholder + ')')
+    }
+    if (targetFilter) {
+        const placeholder = add(`%${targetFilter}%`)
+        where.push('(e.target_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
+    }
+    if (methodFilter) {
+        where.push(`e.method = ${add(methodFilter)}`)
+    }
+    if (pathFilter) {
+        where.push(`e.path ILIKE ${add(`%${pathFilter}%`)}`)
+    }
+    if (sessionFilter) {
+        where.push(`e.session_id::text ILIKE ${add(`%${sessionFilter}%`)}`)
+    }
+    if (fromFilter && !Number.isNaN(Date.parse(fromFilter))) {
+        where.push(`e.created_at >= ${add(new Date(fromFilter).toISOString())}`)
+    }
+    if (toFilter && !Number.isNaN(Date.parse(toFilter))) {
+        where.push(`e.created_at <= ${add(new Date(toFilter).toISOString())}`)
+    }
+
     const result = await run(`
         SELECT
             e.id,
@@ -157,10 +224,11 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         FROM impersonation_events e
         LEFT JOIN users actor ON actor.id = e.actor_id
         LEFT JOIN users target ON target.id = e.target_id
+        ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC
-        LIMIT 200
-    `)
-    return res.send({ events: result.rows })
+        LIMIT ${add(limit)}
+    `, values)
+    return res.send({ events: result.rows, filters: { q, actor: actorFilter, target: targetFilter, method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit } })
 }
 
 export async function getImpersonationCurrent(req: FastifyRequest, res: FastifyReply) {

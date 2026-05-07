@@ -188,6 +188,13 @@ async function main() {
         events.body.events
     )
 
+    const filtered = await request(`/impersonation/events?q=${encodeURIComponent(targetId)}&actor=${encodeURIComponent(adminId)}&target=${encodeURIComponent(targetId)}&method=GET&path=${encodeURIComponent('/user/full')}&session=${encodeURIComponent(sessionId.slice(0, 8))}&limit=10`, {
+        headers: authHeaders(adminId, adminToken),
+    })
+    expect(filtered.response.status === 200 && Array.isArray(filtered.body?.events), 'Filtered audit fetch should succeed.', filtered.body)
+    expect(filtered.body.events.length >= 1 && filtered.body.events.length <= 10, 'Filtered audit fetch should respect filters and limit.', filtered.body.events)
+    expect(filtered.body.events.every(event => event.actor_id === adminId && event.target_id === targetId && event.method === 'GET' && event.session_id === sessionId), 'Filtered audit events should match requested filters.', filtered.body.events)
+
     const stop = await request('/impersonation', {
         method: 'DELETE',
         headers: authHeaders(adminId, adminToken, { 'x-impersonation-token': impersonationToken }),
@@ -216,6 +223,7 @@ async function main() {
             'actor/target response headers',
             'sensitive action guardrail',
             'audit events',
+            'audit filters',
             'stop and revoked-token rejection',
         ],
     }, null, 2))
