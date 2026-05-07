@@ -262,6 +262,29 @@ const browserRetryStories: AppStory[] = [
     { id: 1140, prompt: 'are we still honest enough for production', expected: 'production-honesty' },
 ]
 
+const proofGateStories: AppStory[] = [
+    { id: 1141, prompt: 'dont let me apply if proof failed', expected: 'apply-blocked-after-proof-fail' },
+    { id: 1142, prompt: 'designer says no unverified apply', expected: 'designer-no-unverified-apply' },
+    { id: 1143, prompt: 'newbie might click apply anyway', expected: 'newbie-apply-guard' },
+    { id: 1144, prompt: 'corporate reviewer requires evidence gate', expected: 'corporate-evidence-gate' },
+    { id: 1145, prompt: 'ops wants failed checks to block release', expected: 'ops-release-block' },
+    { id: 1146, prompt: 'agency client must not ship failed proof', expected: 'agency-proof-gate' },
+    { id: 1147, prompt: 'support says apply button is dangerous here', expected: 'support-apply-danger' },
+    { id: 1148, prompt: 'founder says prevent accidental bad deploy', expected: 'founder-accidental-deploy' },
+    { id: 1149, prompt: 'accessibility proof failed, block apply', expected: 'a11y-apply-block' },
+    { id: 1150, prompt: 'pricing check failed, dont let apply through', expected: 'pricing-apply-block' },
+    { id: 1151, prompt: 'mobile proof failed, require retry first', expected: 'mobile-retry-first' },
+    { id: 1152, prompt: 'compliance needs a hard gate before apply', expected: 'compliance-hard-gate' },
+    { id: 1153, prompt: 'investor page proof failed, no apply', expected: 'investor-no-apply' },
+    { id: 1154, prompt: 'restaurant booking proof failed, stop apply', expected: 'restaurant-stop-apply' },
+    { id: 1155, prompt: 'terminal agents let me miss failed proof', expected: 'terminal-proof-gate' },
+    { id: 1156, prompt: 'handoff should show apply is blocked', expected: 'handoff-apply-blocked' },
+    { id: 1157, prompt: 'client says do not ship unverified work', expected: 'client-unverified-block' },
+    { id: 1158, prompt: 'designer needs retry before visual apply', expected: 'designer-visual-retry' },
+    { id: 1159, prompt: 'beginner needs obvious retry first', expected: 'beginner-obvious-retry' },
+    { id: 1160, prompt: 'are we still making this production safe', expected: 'production-safe-gate' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1474,4 +1497,111 @@ test('share page AI marks the last run as needing retry when browser proof fails
     }
 
     expect(handledPrompts).toHaveLength(browserRetryStories.length)
+})
+
+test('share page AI blocks applying pending edits when browser proof needs retry', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-proof-gate-story',
+                alias: body.path || body.name || body.id || 'app-proof-gate-story',
+                path: body.path || body.name || body.id || 'app-proof-gate-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-proof-gate-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        expect(body.url).toContain('https://hanasand.com/s/app-proof-gate-')
+        await route.fulfill({
+            status: 504,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'Browser proof gateway timeout.' }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = proofGateStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-proof-gate-${matchingStory!.id}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Apply must stay blocked until browser proof succeeds.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Apply stays blocked while proof needs retry.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of proofGateStories) {
+        const expectedUrl = `https://hanasand.com/s/app-proof-gate-${story.id}`
+        await page.goto(`/s/app-proof-gate-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Apply must stay blocked until browser proof succeeds.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Needs retry', { exact: true })).toBeVisible()
+        await expect(page.getByText('Browser proof needs retry before these changes can be applied.')).toBeVisible()
+        const applyButton = page.getByRole('button', { name: 'Retry proof first' })
+        await expect(applyButton).toBeVisible()
+        await expect(applyButton).toBeDisabled()
+        await expect(page.getByText('Apply', { exact: true })).not.toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('1 issues')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(proofGateStories.length)
 })

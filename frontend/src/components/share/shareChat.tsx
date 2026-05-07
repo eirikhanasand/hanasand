@@ -124,6 +124,7 @@ export default function ShareChat({
             : pendingEdit?.status === 'applied'
                 ? 'Applied'
                 : 'Ready'
+    const proofApplyBlocked = pendingEdit?.status === 'pending' && lastRun?.status === 'error' && lastRun.browserProofs > 0
 
     useEffect(() => {
         if (!startedAt) {
@@ -245,7 +246,7 @@ export default function ShareChat({
     }
 
     async function applyPendingEdit() {
-        if (!share || !pendingEdit || pendingEdit.status === 'applying') {
+        if (!share || !pendingEdit || pendingEdit.status === 'applying' || proofApplyBlocked) {
             return
         }
 
@@ -444,14 +445,19 @@ export default function ShareChat({
                         </div>
                         <button
                             type='button'
-                            disabled={pendingEdit.status === 'applying' || pendingEdit.status === 'applied'}
+                            disabled={pendingEdit.status === 'applying' || pendingEdit.status === 'applied' || proofApplyBlocked}
                             onClick={applyPendingEdit}
                             className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-bright/10 px-3 text-xs font-medium text-bright/72 transition hover:bg-bright/8 disabled:cursor-default disabled:opacity-55'
                         >
                             {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
-                            {pendingEdit.status === 'applied' ? 'Applied' : 'Apply'}
+                            {proofApplyBlocked ? 'Retry proof first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply'}
                         </button>
                     </div>
+                    {proofApplyBlocked ? (
+                        <div className='mb-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
+                            Browser proof needs retry before these changes can be applied.
+                        </div>
+                    ) : null}
                     <div className='max-h-56 space-y-2 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2'>
                         {pendingEdit.changes.map((change) => (
                             <details key={change.id} open={pendingEdit.changes.length <= 2} className='rounded-md border border-bright/8 bg-black/18 p-2'>
