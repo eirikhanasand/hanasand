@@ -6,8 +6,8 @@ import Link from 'next/link'
 export default async function GreetingNav({ text, id }: { text: string, id: string }) {
     const Cookies = await cookies()
     const rolesCookie = Cookies.get('roles')?.value
-    const roles = parseCookie<Role[]>(rolesCookie, [])
-    const isAdmin = roles.some((role) => role.id.includes('admin'))
+    const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
+    const isAdmin = roles.some((role) => typeof role === 'string' ? role.includes('admin') : role.id?.includes('admin'))
 
     return (
         <div className='flex w-full rounded-lg justify-between items-center'>

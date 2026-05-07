@@ -18,8 +18,8 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const userId = Cookies.get('id')?.value
     const token = Cookies.get('access_token')?.value
     const rolesCookie = Cookies.get('roles')?.value
-    const roles = parseCookie<Role[]>(rolesCookie, [])
-    const isAdmin = roles.some((role) => role.id.includes('admin'))
+    const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
+    const isAdmin = roles.some((role) => typeof role === 'string' ? role.includes('admin') : role.id?.includes('admin'))
     const isSelf = profileId === userId
 
     if (!name || !userId || !token) {

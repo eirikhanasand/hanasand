@@ -44,16 +44,16 @@ export default function TrafficDashboard({
     topUAs,
     topIPs
 }: DashboardProps) {
-    const [metrics] = useState<MetricSummary[]>(serverMetrics)
-    const [blocklist, setBlocklist] = useState<BlocklistEntry[]>(serverBlocklist)
-    const [logs] = useState<RequestLog[]>(serverLogs)
-    const [UAs] = useState<UAMetrics[]>(topUAs)
-    const [IPs] = useState<IPMetrics[]>(topIPs)
+    const [metrics] = useState<MetricSummary[]>(Array.isArray(serverMetrics) ? serverMetrics : [])
+    const [blocklist, setBlocklist] = useState<BlocklistEntry[]>(Array.isArray(serverBlocklist) ? serverBlocklist : [])
+    const [logs] = useState<RequestLog[]>(Array.isArray(serverLogs) ? serverLogs : [])
+    const [UAs] = useState<UAMetrics[]>(Array.isArray(topUAs) ? topUAs : [])
+    const [IPs] = useState<IPMetrics[]>(Array.isArray(topIPs) ? topIPs : [])
     const [showBlockModal, setShowBlockModal] = useState(false)
     const [editingBlock, setEditingBlock] = useState<BlocklistEntry | null>(null)
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
-    const { data: domains } = useWS<DomainTPS[]>({ initialState: topDomains, path: '/tps/:id', replace: true })
+    const { data: domains } = useWS<DomainTPS[]>({ initialState: Array.isArray(topDomains) ? topDomains : [], path: '/tps/:id', replace: true })
     const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm backdrop-blur-md'
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -138,7 +138,7 @@ export default function TrafficDashboard({
                         <div className='mt-2'>
                             <h3 className='text-xs font-medium text-bright/58'>Top paths</h3>
                             <ul className='mt-1 grid gap-1 text-xs text-bright/48'>
-                                {ipMetric.top_paths.map((path, idx) => (
+                                {(Array.isArray(ipMetric.top_paths) ? ipMetric.top_paths : []).map((path, idx) => (
                                     <li key={idx} className='flex min-w-0 justify-between gap-2'>
                                         <span className='min-w-0 truncate'>{path.path}</span>
                                         <span className='shrink-0 text-bright/36'>{path.hits}</span>
@@ -160,7 +160,7 @@ export default function TrafficDashboard({
                         <div className='mt-2'>
                             <h3 className='text-xs font-medium text-bright/58'>Top paths</h3>
                             <ul className='mt-1 grid gap-1 text-xs text-bright/48'>
-                                {ua.top_paths.map((path, idx) => (
+                                {(Array.isArray(ua.top_paths) ? ua.top_paths : []).map((path, idx) => (
                                     <li key={idx} className='flex min-w-0 justify-between gap-2'>
                                         <span className='min-w-0 truncate'>{path.path}</span>
                                         <span className='shrink-0 text-bright/36'>{path.hits}</span>

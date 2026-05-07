@@ -24,11 +24,66 @@ export function toPageState(payload: GetVulnerabilities | string): Vulnerability
         return { data: null, error: 'The vulnerability API returned an unexpected response.' }
     }
 
-    return { data: payload, error: null }
+    return {
+        data: {
+            ...payload,
+            imageCount: Number(payload.imageCount) || payload.images.length,
+            images: payload.images.map(normalizeImageReport),
+            scanStatus: {
+                ...getFallbackStatus(),
+                ...payload.scanStatus,
+            },
+        },
+        error: null,
+    }
 }
 
 export function impactScore(image: ImageVulnerabilityReport) {
-    return image.severity.critical * 1000 + image.severity.high * 100 + image.severity.medium * 10 + image.severity.low
+    return (Number(image.severity?.critical) || 0) * 1000
+        + (Number(image.severity?.high) || 0) * 100
+        + (Number(image.severity?.medium) || 0) * 10
+        + (Number(image.severity?.low) || 0)
+}
+
+function normalizeSeverity(value: Partial<ImageVulnerabilityReport['severity']> | undefined): ImageVulnerabilityReport['severity'] {
+    return {
+        critical: Number(value?.critical) || 0,
+        high: Number(value?.high) || 0,
+        medium: Number(value?.medium) || 0,
+        low: Number(value?.low) || 0,
+        unknown: Number(value?.unknown) || 0,
+    }
+}
+
+function normalizeImageReport(image: Partial<ImageVulnerabilityReport>): ImageVulnerabilityReport {
+    return {
+        image: image.image || 'Unknown image',
+        scannedAt: image.scannedAt || '',
+        totalVulnerabilities: Number(image.totalVulnerabilities) || 0,
+        severity: normalizeSeverity(image.severity),
+        groups: Array.isArray(image.groups)
+            ? image.groups.map((group) => ({
+                source: group.source || 'Unknown source',
+                total: Number(group.total) || 0,
+                severity: normalizeSeverity(group.severity),
+            }))
+            : [],
+        vulnerabilities: Array.isArray(image.vulnerabilities)
+            ? image.vulnerabilities.map((vulnerability) => ({
+                id: vulnerability.id || 'unknown',
+                title: vulnerability.title || 'Untitled finding',
+                severity: vulnerability.severity || 'unknown',
+                source: vulnerability.source || '',
+                packageName: vulnerability.packageName || null,
+                packageType: vulnerability.packageType || null,
+                installedVersion: vulnerability.installedVersion || null,
+                fixedVersion: vulnerability.fixedVersion || null,
+                description: vulnerability.description || null,
+                references: Array.isArray(vulnerability.references) ? vulnerability.references : [],
+            }))
+            : [],
+        scanError: image.scanError || null,
+    }
 }
 
 function formatDuration(totalSeconds: number) {

@@ -10,6 +10,7 @@ import getLogs from '@/utils/traffic/getLogs'
 import getMetrics from '@/utils/traffic/getMetrics'
 import getUAs from '@/utils/traffic/getUAs'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import type { TrafficDomains, TrafficMetrics, TrafficRecords } from '@/utils/monitoring/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,9 +34,9 @@ export default async function Page({
         getIPs(),
     ])
 
-    const domainOptions = typeof domains === 'object' && 'domains' in domains ? domains.domains : []
-    const trafficMetrics = typeof metrics === 'string' ? null : metrics
-    const trafficRecords = typeof records === 'string' ? null : records
+    const domainOptions = isTrafficDomains(domains) ? domains.domains : []
+    const trafficMetrics = isTrafficMetrics(metrics) ? metrics : null
+    const trafficRecords = isTrafficRecords(records) ? records : null
 
     return (
         <DashboardPage>
@@ -75,4 +76,22 @@ export default async function Page({
             </div>
         </DashboardPage>
     )
+}
+
+function isTrafficDomains(value: unknown): value is TrafficDomains {
+    return Boolean(value && typeof value === 'object' && Array.isArray((value as TrafficDomains).domains))
+}
+
+function isTrafficMetrics(value: unknown): value is TrafficMetrics {
+    return Boolean(
+        value
+        && typeof value === 'object'
+        && Array.isArray((value as TrafficMetrics).top_domains)
+        && Array.isArray((value as TrafficMetrics).top_methods)
+        && Array.isArray((value as TrafficMetrics).top_status_codes)
+    )
+}
+
+function isTrafficRecords(value: unknown): value is TrafficRecords {
+    return Boolean(value && typeof value === 'object' && Array.isArray((value as TrafficRecords).result))
 }

@@ -21,7 +21,7 @@ export default async function page() {
     const serviceStatus = await getStatus()
     const fallbackDomains = typeof monitoringTraffic === 'string'
         ? []
-        : monitoringTraffic.top_domains
+        : (Array.isArray(monitoringTraffic.top_domains) ? monitoringTraffic.top_domains : [])
             .map((domain) => {
                 const name = normalizeDomainName(domain.key)
                 return name ? { name, tps: domain.count } : null

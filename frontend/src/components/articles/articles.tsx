@@ -34,8 +34,8 @@ export default async function Articles({
     errorPath
 }: ArticlesProps) {
     const response = await fetchArticles<typeof recent>(recent, backfill)
-    const articles: Article[] = Array.isArray(response) ? response : recent ? response.recent : response.articles
-    const allArticles: Article[] = Array.isArray(response) ? articles : response.articles
+    const articles = normalizeArticles(Array.isArray(response) ? response : recent ? response.recent : response.articles)
+    const allArticles = normalizeArticles(Array.isArray(response) ? articles : response.articles)
     const displayed = max ? allArticles.slice(max) : allArticles
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
 
@@ -117,6 +117,37 @@ function Article({ article }: ArticleProps) {
             </article>
         </Link>
     )
+}
+
+function normalizeArticles(value: unknown): Article[] {
+    if (!Array.isArray(value)) {
+        return []
+    }
+
+    return value.flatMap((article) => {
+        if (!article || typeof article !== 'object') {
+            return []
+        }
+
+        const item = article as Partial<Article> & { created_at?: string }
+        const title = item.title || item.id || 'Untitled article'
+        return [{
+            ...item,
+            id: item.id || title,
+            size: Number(item.size) || 0,
+            title,
+            created: item.created || item.created_at || new Date(0).toISOString(),
+            modified: item.modified || item.created || item.created_at || new Date(0).toISOString(),
+            content: item.content || '',
+            metadata: {
+                description: item.metadata?.description || '',
+                image: item.metadata?.image || '',
+                wordCount: Number(item.metadata?.wordCount) || 0,
+                estimatedMinutes: Number(item.metadata?.estimatedMinutes) || 0,
+                ...(item.metadata || {}),
+            },
+        } as Article]
+    })
 }
 
 function EmptyArticles() {

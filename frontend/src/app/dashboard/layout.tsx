@@ -13,8 +13,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const impersonatingId = cookieStore.get('impersonating_id')?.value || headerStore.get('x-impersonating-id') || ''
     const impersonatingName = cookieStore.get('impersonating_name')?.value || headerStore.get('x-impersonating-name') || ''
     const rolesCookie = cookieStore.get('roles')?.value
-    const roles = parseCookie<Role[]>(rolesCookie, [])
-    const isAdmin = roles.some((role) => role.id.includes('admin'))
+    const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
+    const isAdmin = roles.some((role) => typeof role === 'string' ? role.includes('admin') : role.id?.includes('admin'))
 
     if (!id || !token) {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')

@@ -54,13 +54,15 @@ export async function getMonitoringOverview(): Promise<MonitoringOverview> {
 
     const traffic = typeof metrics === 'string' ? null : metrics
     const vulnerabilityData = typeof vulnerabilities === 'string' ? null : vulnerabilities
+    const topDomains = Array.isArray(traffic?.top_domains) ? traffic.top_domains : []
+    const images = Array.isArray(vulnerabilityData?.images) ? vulnerabilityData.images : []
 
     return {
         requestsToday: traffic?.total_requests || 0,
-        activeDomains: traffic?.top_domains.length || 0,
-        totalVulnerabilities: vulnerabilityData?.images.reduce((sum, image) => sum + image.totalVulnerabilities, 0) || 0,
-        criticalVulnerabilities: vulnerabilityData?.images.reduce((sum, image) => sum + image.severity.critical, 0) || 0,
+        activeDomains: topDomains.length,
+        totalVulnerabilities: images.reduce((sum, image) => sum + (Number(image.totalVulnerabilities) || 0), 0),
+        criticalVulnerabilities: images.reduce((sum, image) => sum + (Number(image.severity?.critical) || 0), 0),
         imagesScanned: vulnerabilityData?.imageCount || 0,
-        scanRunning: vulnerabilityData?.scanStatus.isRunning || false,
+        scanRunning: Boolean(vulnerabilityData?.scanStatus?.isRunning),
     }
 }
