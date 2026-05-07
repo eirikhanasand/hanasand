@@ -239,6 +239,17 @@ async function createAiWorkspacePage({
                 url: body.url || 'https://example.com',
                 title: 'Preview OK',
                 textExcerpt: 'Ready preview with visible hero, CTA, pricing, and mobile-friendly content.',
+                structure: {
+                    headings: ['Ready preview', 'Pricing', 'Contact'],
+                    links: [
+                        { text: 'Contact support', href: '/contact' },
+                        { text: 'Pricing', href: '/pricing' },
+                    ],
+                    buttons: ['Get started', 'Book demo'],
+                    inputs: ['Email address / email'],
+                    forms: ['Email address / email | Get started'],
+                    hasViewportMeta: true,
+                },
                 screenshotPath: null,
                 consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
                 pageErrors: [],
@@ -967,6 +978,87 @@ test('AI website workbench handles browser-evidence stories without terminal-onl
     const systemPrompt = lastPromptRequest?.messages?.find((message) => message.role === 'system')?.content || ''
     expect(systemPrompt).toContain('Use browser_task for preview/public-page checks')
     expect(systemPrompt).toContain('verify UI in browser')
+
+    await context.close()
+})
+
+test('AI website workbench handles structured browser evidence stories quickly', async ({ browser, baseURL }) => {
+    const stories = [
+        ['cannot find contact', 'Checking links, buttons, and forms before editing contact visibility.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['hierarchy feels flat', 'Heading structure first, then one visual hierarchy pass.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['pricing is obvious', 'Pricing proof check queued: headings, links, buttons.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['phone users only', 'Mobile readiness needs viewport evidence before a claim.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>'],
+        ['buy fast', 'Checkout CTA audit: buttons/forms first, payment claims later.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['screen readers matter', 'Accessibility first pass: visible labels, inputs, forms, and headings.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['investor opens', 'Investor demo triage: title, headings, CTAs, errors, then biggest visible risk.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['blank page', 'Blank-page evidence: status, title, text, headings, and page errors.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['what changed', 'Proof bundle: browser structure, command output, release state, compact handoff.'],
+        ['copy is generic', 'Reading visible headings and CTAs before rewriting copy.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['can people book', 'Booking proof check: forms and buttons before saying yes.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['vendor onboarding', 'Onboarding structure check: headings, forms, links, status cues.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['prove it works', 'Page facts first: title, headings, links, buttons, errors.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['screenshot', 'Screenshot may be unavailable; structured browser evidence still runs.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>'],
+        ['click pricing', 'Pricing CTA check: pricing links/buttons before changing copy.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['another agent', 'Persist structured browser evidence for the next agent: title, headings, links, buttons.'],
+        ['looks bad', 'Inspect visible structure first, then choose one focused improvement.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['right docs', 'Compliance docs check: headings and links before any audit claim.\n<hanasand-tool>{"action":"browser_task","url":"https://example.com","timeoutMs":16000}</hanasand-tool>'],
+        ['original objective', 'Drift check: structured browser evidence improves speed, proof, context, and UI clarity; screenshots remain the gap.'],
+        ['terminal agents', 'Hanasand contrast: structured browser proof and artifacts reduce scrollback, compaction, and session ambiguity.'],
+    ] as const
+
+    const prompts = [
+        'customers cannot find contact',
+        'the hierarchy feels flat',
+        'make sure pricing is obvious',
+        'phone users only',
+        'people need to buy fast',
+        'screen readers matter',
+        'investor opens this in an hour',
+        'users see a blank page',
+        'client asks what changed',
+        'copy is generic',
+        'can people book',
+        'vendor onboarding must be clear',
+        'prove it works',
+        'screenshot',
+        'people do not click pricing',
+        'another agent will continue',
+        'looks bad',
+        'does this show the right docs',
+        'are we still on the original objective',
+        'why is Hanasand better than terminal agents',
+    ]
+
+    const { context, page } = await createAiWorkspacePage({
+        browser,
+        baseURL,
+        promptCompleteContent: 'Default structured browser evidence update.',
+        promptResponses: stories.map(([match, content]) => ({ match, content })),
+    })
+
+    for (const [index, prompt] of prompts.entries()) {
+        await test.step(`story ${1001 + index}`, async () => {
+            const storyContent = stories[index][1]
+            await page.getByPlaceholder('Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...').fill(prompt)
+            await page.getByRole('button', { name: 'Send' }).click()
+            await expect(page.getByText(storyContent.split('\n')[0])).toBeVisible({ timeout: 10000 })
+            const toolText = expectedToolCompletionText(storyContent)
+            if (toolText) {
+                await expect(page.getByText(toolText).last()).toBeVisible({ timeout: 10000 })
+            }
+        })
+    }
+
+    await expect(page.getByText('Viewport meta: present').first()).toBeVisible()
+    await expect(page.getByText('Headings:').first()).toBeVisible()
+    await expect(page.getByText('- Ready preview').first()).toBeVisible()
+    await expect(page.getByText('Links:').first()).toBeVisible()
+    await expect(page.getByText('- Contact support -> /contact').first()).toBeVisible()
+    await expect(page.getByText('Buttons:').first()).toBeVisible()
+    await expect(page.getByText('- Get started').first()).toBeVisible()
+    await expect(page.getByText('Inputs/forms:').first()).toBeVisible()
+    await expect(page.getByText('- Email address / email').first()).toBeVisible()
+    await expect(page.getByText('screenshots remain the gap')).toBeVisible()
 
     await context.close()
 })

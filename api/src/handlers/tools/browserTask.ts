@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 
 const MAX_EXCERPT_LENGTH = 5000
+const MAX_STRUCTURE_ITEMS = 20
 
 export default async function browserTaskTool(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -45,6 +46,7 @@ export default async function browserTaskTool(req: FastifyRequest, res: FastifyR
         const text = await response.text()
         const title = extractTitle(text)
         const textExcerpt = extractTextExcerpt(text)
+        const structure = extractStructure(text)
         const warnings = [
             'Fetched browser target without executing client-side JavaScript.',
             'Screenshot capture is not available in this lightweight server task yet.',
@@ -58,6 +60,7 @@ export default async function browserTaskTool(req: FastifyRequest, res: FastifyR
             url: response.url || target.toString(),
             title,
             textExcerpt,
+            structure,
             screenshotPath: null,
             consoleMessages: warnings,
             pageErrors: response.ok ? [] : [`HTTP ${response.status} ${response.statusText}`],
@@ -70,6 +73,7 @@ export default async function browserTaskTool(req: FastifyRequest, res: FastifyR
             url: target.toString(),
             title: null,
             textExcerpt: '',
+            structure: emptyStructure(),
             screenshotPath: null,
             consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
             pageErrors: [error instanceof Error ? error.message : String(error)],
@@ -92,6 +96,85 @@ function extractTextExcerpt(html: string) {
         .replace(/\s+/g, ' ')
         .trim()
     return text.slice(0, MAX_EXCERPT_LENGTH)
+}
+
+function extractStructure(html: string) {
+    return {
+        headings: extractTaggedText(html, /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi),
+        links: extractLinks(html),
+        buttons: extractTaggedText(html, /<button[^>]*>([\s\S]*?)<\/button>/gi),
+        inputs: extractInputs(html),
+        forms: extractFormSummaries(html),
+        hasViewportMeta: /<meta\s+[^>]*name=["']viewport["'][^>]*>/i.test(html),
+    }
+}
+
+function emptyStructure() {
+    return {
+        headings: [],
+        links: [],
+        buttons: [],
+        inputs: [],
+        forms: [],
+        hasViewportMeta: false,
+    }
+}
+
+function extractTaggedText(html: string, pattern: RegExp) {
+    return [...html.matchAll(pattern)]
+        .map((match) => stripTags(match[1] || ''))
+        .filter(Boolean)
+        .slice(0, MAX_STRUCTURE_ITEMS)
+}
+
+function extractLinks(html: string) {
+    return [...html.matchAll(/<a\s+([^>]*?)>([\s\S]*?)<\/a>/gi)]
+        .map((match) => ({
+            text: stripTags(match[2] || ''),
+            href: extractAttribute(match[1] || '', 'href'),
+        }))
+        .filter((link) => link.text || link.href)
+        .slice(0, MAX_STRUCTURE_ITEMS)
+}
+
+function extractInputs(html: string) {
+    return [...html.matchAll(/<(input|textarea|select)\s+([^>]*?)(?:\/?>|>[\s\S]*?<\/\1>)/gi)]
+        .map((match) => {
+            const attrs = match[2] || ''
+            return [
+                extractAttribute(attrs, 'aria-label'),
+                extractAttribute(attrs, 'placeholder'),
+                extractAttribute(attrs, 'name'),
+                extractAttribute(attrs, 'id'),
+                extractAttribute(attrs, 'type'),
+            ].filter(Boolean).join(' / ')
+        })
+        .filter(Boolean)
+        .slice(0, MAX_STRUCTURE_ITEMS)
+}
+
+function extractFormSummaries(html: string) {
+    return [...html.matchAll(/<form\b[^>]*>([\s\S]*?)<\/form>/gi)]
+        .map((match) => {
+            const body = match[1] || ''
+            const inputs = extractInputs(body).slice(0, 8)
+            const buttons = extractTaggedText(body, /<button[^>]*>([\s\S]*?)<\/button>/gi).slice(0, 4)
+            return [...inputs, ...buttons].join(' | ')
+        })
+        .filter(Boolean)
+        .slice(0, 8)
+}
+
+function extractAttribute(attributes: string, name: string) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const match = attributes.match(new RegExp(`${escaped}\\s*=\\s*["']([^"']*)["']`, 'i'))
+    return decodeHtml(match?.[1] || '').trim()
+}
+
+function stripTags(value: string) {
+    return decodeHtml(value.replace(/<[^>]+>/g, ' '))
+        .replace(/\s+/g, ' ')
+        .trim()
 }
 
 function decodeHtml(value: string) {

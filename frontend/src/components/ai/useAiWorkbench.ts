@@ -1602,6 +1602,14 @@ export default function useAiWorkbench({
                     url?: string
                     title?: string
                     textExcerpt?: string
+                    structure?: {
+                        headings?: string[]
+                        links?: { text?: string, href?: string }[]
+                        buttons?: string[]
+                        inputs?: string[]
+                        forms?: string[]
+                        hasViewportMeta?: boolean
+                    }
                     screenshotPath?: string | null
                     consoleMessages?: string[]
                     pageErrors?: string[]
@@ -1609,10 +1617,24 @@ export default function useAiWorkbench({
                 } | null
                 const consoleMessages = Array.isArray(payload?.consoleMessages) ? payload.consoleMessages : []
                 const pageErrors = Array.isArray(payload?.pageErrors) ? payload.pageErrors : []
+                const structure = payload?.structure || {}
                 const message = [
                     `Tool browser_task executed for URL: ${payload?.url || toolCall.url}`,
                     `Title: ${payload?.title || '<none>'}`,
                     `Screenshot: ${payload?.screenshotPath || '<none>'}`,
+                    `Viewport meta: ${structure.hasViewportMeta ? 'present' : 'missing/unknown'}`,
+                    '',
+                    'Headings:',
+                    formatStringList(structure.headings),
+                    '',
+                    'Links:',
+                    formatLinkList(structure.links),
+                    '',
+                    'Buttons:',
+                    formatStringList(structure.buttons),
+                    '',
+                    'Inputs/forms:',
+                    formatStringList([...(structure.inputs || []), ...(structure.forms || [])]),
                     '',
                     'Page errors:',
                     pageErrors.length ? pageErrors.join('\n') : '<none>',
@@ -1757,4 +1779,17 @@ export default function useAiWorkbench({
         runtimeState,
         setResumeNotice,
     }
+}
+
+function formatStringList(items: string[] | undefined) {
+    const visible = (items || []).map((item) => item.trim()).filter(Boolean).slice(0, 12)
+    return visible.length ? visible.map((item) => `- ${item}`).join('\n') : '<none>'
+}
+
+function formatLinkList(items: { text?: string, href?: string }[] | undefined) {
+    const visible = (items || [])
+        .filter((item) => item.text || item.href)
+        .slice(0, 12)
+        .map((item) => `- ${[item.text, item.href].filter(Boolean).join(' -> ')}`)
+    return visible.length ? visible.join('\n') : '<none>'
 }
