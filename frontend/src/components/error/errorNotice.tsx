@@ -6,6 +6,10 @@ type ErrorNoticeProps = {
     variant?: 'error' | 'info' | 'success'
     compact?: boolean
     className?: string
+    actionLabel?: string
+    onAction?: () => void
+    secondaryActionLabel?: string
+    onSecondaryAction?: () => void
 }
 
 const variants = {
@@ -32,6 +36,10 @@ export default function ErrorNotice({
     variant = 'error',
     compact = false,
     className = '',
+    actionLabel,
+    onAction,
+    secondaryActionLabel,
+    onSecondaryAction,
 }: ErrorNoticeProps) {
     if (!message || typeof message === 'boolean') {
         return null
@@ -45,9 +53,31 @@ export default function ErrorNotice({
             <div className={`absolute inset-y-2 left-0 w-0.5 rounded-r ${tone.accent}`} />
             <div className='flex min-w-0 items-start gap-2.5'>
                 <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone.iconTone}`} />
-                <div className='min-w-0'>
+                <div className='min-w-0 flex-1'>
                     {title ? <p className='text-xs font-medium text-bright/86'>{title}</p> : null}
                     <p className={`${compact ? 'text-xs' : 'text-sm'} font-normal leading-5 text-bright/64`}>{message}</p>
+                    {(actionLabel && onAction) || (secondaryActionLabel && onSecondaryAction) ? (
+                        <div className='mt-2 flex flex-wrap gap-2'>
+                            {actionLabel && onAction ? (
+                                <button
+                                    type='button'
+                                    onClick={onAction}
+                                    className='rounded-md border border-bright/10 bg-bright/[0.055] px-2.5 py-1 text-xs font-semibold text-bright/72 transition hover:bg-bright/10 hover:text-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f07d33]'
+                                >
+                                    {actionLabel}
+                                </button>
+                            ) : null}
+                            {secondaryActionLabel && onSecondaryAction ? (
+                                <button
+                                    type='button'
+                                    onClick={onSecondaryAction}
+                                    className='rounded-md px-2.5 py-1 text-xs font-semibold text-bright/48 transition hover:bg-bright/8 hover:text-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f07d33]'
+                                >
+                                    {secondaryActionLabel}
+                                </button>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>

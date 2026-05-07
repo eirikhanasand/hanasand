@@ -35,6 +35,7 @@ export default function Terminal({
     const [command, setCommand] = useState('')
     const { isConnected, participants, chunks, status, credentials, lifecycle, sendInput, sendResize, reconnect, restart } = useTerminal({ share, active: open && Boolean(share) })
     const lastOpenRef = useRef(open)
+    const commandInputRef = useRef<HTMLInputElement | null>(null)
 
     function handleMouseDown(e: ReactMouseEvent) {
         setIsDragging(true)
@@ -66,7 +67,7 @@ export default function Terminal({
             setHeight(0)
         } else {
             setOpen(true)
-            setHeight(shareTerminalHeight > 0 ? shareTerminalHeight : DEFAULT_TERMINAL_HEIGHT)
+            setHeight(preferredTerminalHeight(shareTerminalHeight))
         }
     }, [open, setOpen, shareTerminalHeight])
 
@@ -134,7 +135,8 @@ export default function Terminal({
 
     useEffect(() => {
         if (open && !lastOpenRef.current) {
-            setHeight(shareTerminalHeight > 0 ? shareTerminalHeight : DEFAULT_TERMINAL_HEIGHT)
+            setHeight(preferredTerminalHeight(shareTerminalHeight))
+            window.setTimeout(() => commandInputRef.current?.focus(), 120)
         }
         lastOpenRef.current = open
     }, [open, shareTerminalHeight])
@@ -175,7 +177,7 @@ export default function Terminal({
             {/* Console container */}
             <div
                 data-testid='share-terminal-panel'
-                className={`fixed inset-x-0 w-screen max-w-none overflow-hidden bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
+                className={`fixed inset-x-0 flex w-screen max-w-none flex-col overflow-hidden bg-[#1e1e1e] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-all duration-150 ease-in-out z-100 ${open ? 'visible' : 'invisible'}`}
                 style={{
                     bottom: 0,
                     height: open ? `${height}px` : '0px',
@@ -184,14 +186,16 @@ export default function Terminal({
                 {/* Resize handle */}
                 <div
                     onMouseDown={handleMouseDown}
+                    role='separator'
+                    aria-label='Resize terminal panel'
                     className='group absolute top-0 w-full h-2 cursor-row-resize hover:bg-light/10'
                 >
                     <div className='mx-auto w-10 h-1 bg-extralight group-hover:bg-white/30 rounded-full mt-1.25' />
                 </div>
 
                 {/* Header bar */}
-                <div className='flex h-[38px] shrink-0 justify-between items-center gap-3 px-3 py-1 bg-dark/60 text-xs text-gray-400 border-t border-light/20'>
-                    <div className='flex min-w-0 items-center gap-2'>
+                <div className='flex min-h-[38px] shrink-0 flex-wrap justify-between gap-2 px-3 py-1.5 bg-dark/60 text-xs text-gray-400 border-t border-light/20'>
+                    <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                         <span className='font-semibold text-bright/78'>Browser terminal</span>
                         <span>{isConnected
                             ? <Wifi className='w-3.5 h-3.5 stroke-green-500' />
@@ -204,7 +208,7 @@ export default function Terminal({
                             <Eye className='h-3.5 w-3.5' />
                             <h1>{participants}</h1>
                         </span>
-                        <span className='max-w-[55vw] truncate text-bright/55'>
+                        <span className='max-w-[42vw] truncate text-bright/55 sm:max-w-[55vw]'>
                             {status}
                         </span>
                     </div>
@@ -238,7 +242,7 @@ export default function Terminal({
                     </div>
                 </div>
 
-                <div className='h-[calc(100%-38px)] min-w-0 w-full overflow-hidden px-2 pb-2 pt-0 text-sm font-mono text-gray-300'>
+                <div className='relative min-h-0 w-full flex-1 overflow-hidden px-2 pb-2 pt-0 text-sm font-mono text-gray-300'>
                     {share && <TerminalViewer
                         open={open}
                         share={share}
@@ -250,16 +254,18 @@ export default function Terminal({
                     />}
                     <form
                         onSubmit={handleCommandSubmit}
-                        className='absolute inset-x-2 bottom-2 z-20 flex items-center gap-2 rounded-md border border-bright/10 bg-[#171a14]/96 px-2 py-1.5 shadow-lg backdrop-blur'
+                        className='absolute inset-x-2 bottom-2 z-20 flex flex-wrap items-center gap-2 rounded-md border border-bright/10 bg-[#171a14]/96 px-2 py-1.5 shadow-lg backdrop-blur sm:flex-nowrap'
                     >
                         <span className='rounded bg-bright/7 px-2 py-1 text-[11px] font-semibold text-bright/52'>
                             Command
                         </span>
                         <input
+                            ref={commandInputRef}
+                            aria-label='Terminal command'
                             value={command}
                             onChange={(event) => setCommand(event.target.value)}
                             placeholder={isConnected ? 'Run a command...' : 'Terminal is reconnecting...'}
-                            className='min-w-0 flex-1 bg-transparent px-1 text-sm text-bright outline-none placeholder:text-bright/34'
+                            className='min-w-0 flex-1 bg-transparent px-1 text-sm text-bright outline-none placeholder:text-bright/34 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9de18f]'
                             autoComplete='off'
                             spellCheck={false}
                         />
@@ -317,4 +323,16 @@ function lifecycleTone(lifecycle: TerminalLifecycle) {
         default:
             return 'border-bright/10 bg-bright/5 text-bright/48'
     }
+}
+
+function preferredTerminalHeight(savedHeight: number) {
+    if (typeof window === 'undefined') {
+        return savedHeight > 0 ? savedHeight : DEFAULT_TERMINAL_HEIGHT
+    }
+
+    if (window.innerWidth < 768) {
+        return Math.min(Math.max(window.innerHeight * 0.58, 280), window.innerHeight * 0.78)
+    }
+
+    return savedHeight > 0 ? savedHeight : DEFAULT_TERMINAL_HEIGHT
 }

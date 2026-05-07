@@ -112,12 +112,25 @@ export default function Code({
 
     if (!share) {
         return (
-            <main className='grid h-full w-full place-items-center overflow-hidden rounded-lg outline outline-dark'>
-                <div className='max-w-md rounded-2xl bg-dark/35 px-6 py-5 text-center outline outline-dark'>
-                    <h1 className='text-lg font-semibold text-bright/90'>Loading workspace...</h1>
-                    <p className='mt-2 text-sm leading-6 text-bright/55'>
-                        Hanasand is reconnecting to this share and restoring the editor state.
-                    </p>
+            <main
+                aria-busy='true'
+                aria-label='Loading workspace editor'
+                className='grid h-full w-full overflow-hidden rounded-lg outline outline-dark'
+            >
+                <div className='flex h-full min-h-0 w-full'>
+                    <div className='hidden w-12 shrink-0 border-r border-bright/8 bg-bright/[0.018] p-2 sm:block'>
+                        {Array.from({ length: 14 }).map((_, index) => (
+                            <div key={index} className='mb-2 h-3 rounded bg-bright/8' />
+                        ))}
+                    </div>
+                    <div className='min-w-0 flex-1 space-y-3 p-4'>
+                        <div className='h-4 w-44 animate-pulse rounded bg-bright/12' />
+                        <div className='h-3 w-11/12 animate-pulse rounded bg-bright/8' />
+                        <div className='h-3 w-9/12 animate-pulse rounded bg-bright/8' />
+                        <div className='h-3 w-10/12 animate-pulse rounded bg-bright/8' />
+                        <div className='mt-5 h-3 w-7/12 animate-pulse rounded bg-bright/8' />
+                        <div className='h-3 w-8/12 animate-pulse rounded bg-bright/8' />
+                    </div>
                 </div>
             </main>
         )

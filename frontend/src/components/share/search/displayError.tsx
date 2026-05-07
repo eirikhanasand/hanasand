@@ -1,11 +1,18 @@
 import ErrorNotice from '@/components/error/errorNotice'
 
-export default function DisplayError({ error }: { error: string | boolean | null }) {
+type DisplayErrorProps = {
+    error: string | boolean | null
+    onRetry?: () => void
+    onDismiss?: () => void
+}
+
+export default function DisplayError({ error, onRetry, onDismiss }: DisplayErrorProps) {
     if (!error) {
         return null
     }
 
     const isCmdW = error === 'cmdw'
+    const canRetry = typeof error === 'string' && /(failed|unable|could not|error|reconnecting|unavailable)/i.test(error)
 
     return (
         <div className='pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-center px-4 text-bright/80'>
@@ -23,6 +30,10 @@ export default function DisplayError({ error }: { error: string | boolean | null
                     <ErrorNotice
                         message={error}
                         title='Workspace notice'
+                        actionLabel={canRetry && onRetry ? 'Retry' : undefined}
+                        onAction={canRetry ? onRetry : undefined}
+                        secondaryActionLabel={onDismiss ? 'Dismiss' : undefined}
+                        onSecondaryAction={onDismiss}
                     />
                 )}
             </div>

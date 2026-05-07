@@ -70,6 +70,7 @@ export default function ClientPage({
     const [workspaceCreated, setWorkspaceCreated] = useState(!autoCreate)
     const [editorPatch, setEditorPatch] = useState<{ value: string; nonce: number } | null>(null)
     const [chatOpen, setChatOpen] = useState(false)
+    const [explorerPanelRequest, setExplorerPanelRequest] = useState<{ panel: 'files' | 'search'; nonce: number } | null>(null)
     const hasCreatedWorkspace = useRef(false)
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const maxWidth = 'max-w-full'
@@ -98,6 +99,39 @@ export default function ClientPage({
             setRenderSite(false)
         }
     }, [renderSite, runtimeCapability.hasHttpSurface])
+
+    useEffect(() => {
+        function handleShortcut(event: KeyboardEvent) {
+            const key = event.key.toLowerCase()
+            const usesModifier = event.metaKey || event.ctrlKey
+            if (!usesModifier) {
+                return
+            }
+
+            if (key === 's') {
+                event.preventDefault()
+                setSaveState('saving')
+                setEditorPatch({ value: editingContent, nonce: Date.now() })
+                setRemoteNotice('Save requested.')
+                return
+            }
+
+            if (key === '`') {
+                event.preventDefault()
+                setTerminalOpen(true)
+                return
+            }
+
+            if (key === 'f') {
+                event.preventDefault()
+                setShowExplorer(true)
+                setExplorerPanelRequest({ panel: 'search', nonce: Date.now() })
+            }
+        }
+
+        window.addEventListener('keydown', handleShortcut)
+        return () => window.removeEventListener('keydown', handleShortcut)
+    }, [editingContent])
 
     useEffect(() => {
         if (!autoCreate || hasCreatedWorkspace.current) {
@@ -137,7 +171,7 @@ export default function ClientPage({
     }, [autoCreate, editingContent, id, replaceUrlOnCreate, setError])
 
     return (
-        <div className='flex w-full h-full max-w-[100vw] min-w-0 overflow-hidden p-2 gap-2'>
+        <div className='flex w-full h-full max-w-[100vw] min-w-0 overflow-hidden gap-1 p-1 md:gap-2 md:p-2'>
             <Explorer
                 showExplorer={showExplorer}
                 setShowExplorer={setShowExplorer}
@@ -149,6 +183,7 @@ export default function ClientPage({
                 setEditorPatch={setEditorPatch}
                 setError={setError}
                 setPageTree={setWorkspaceTree}
+                panelRequest={explorerPanelRequest}
             />
             <div className={`flex-1 flex flex-col min-h-full min-w-0 w-full gap-2 overflow-hidden text-foreground ${maxWidth}`}>
                 <div className='flex min-h-10 items-center justify-between gap-2 rounded-xl border border-bright/10 bg-background/72 px-2 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-md'>
@@ -170,6 +205,7 @@ export default function ClientPage({
                     </div>
                     <button
                         type='button'
+                        aria-label={chatOpen ? 'Back to code editor' : 'Open workspace chat'}
                         onClick={() => setChatOpen(prev => !prev)}
                         className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#f07d33]/35 hover:bg-[#f07d33]/12 hover:text-bright'
                     >
@@ -337,7 +373,11 @@ export default function ClientPage({
                 setShowExplorer={setShowExplorer}
                 setShowMetaData={setShowMetaData}
             />
-            <DisplayError error={error} />
+            <DisplayError
+                error={error}
+                onRetry={() => window.location.reload()}
+                onDismiss={() => setError(null)}
+            />
         </div>
     )
 }

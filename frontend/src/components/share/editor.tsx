@@ -148,7 +148,7 @@ export default function Editor({
     }, [codeRef, editingContent, searchParams])
 
     return (
-        <main className='w-full h-full relative overflow-hidden outline outline-dark rounded-lg'>
+        <main aria-label='Code editor' className='w-full h-full relative overflow-hidden outline outline-dark rounded-lg'>
             {editingContent.trim().length <= 0 && (
                 <EmptyEditorState
                     displayLineNumbers={displayLineNumbers}
@@ -178,6 +178,7 @@ export default function Editor({
             </div>
             <textarea
                 ref={inputRef}
+                aria-label='Workspace editor'
                 value={editingContent}
                 onChange={handleEditorChange}
                 onClick={handleWordClick}
@@ -191,6 +192,10 @@ export default function Editor({
                     }
                 }}
                 className={`sync-scroll min-w-full min-h-full bg-transparent text-transparent resize-none rounded-lg pt-2 mr-2 text-sm font-mono overflow-auto outline-none caret-gray-200 absolute z-10 top-0 left-0 ${lines.length > 100 ? 'pb-[100vh]' : ''}`}
+                autoCapitalize='off'
+                autoComplete='off'
+                autoCorrect='off'
+                spellCheck={false}
                 style={{
                     paddingLeft: displayLineNumbers ? `${lineNumberWidth + 14}px` : '14px',
                     whiteSpace: 'pre',

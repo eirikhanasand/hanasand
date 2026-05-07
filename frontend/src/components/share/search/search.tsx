@@ -30,6 +30,7 @@ export default function Search({
     const [action, setAction] = useState<string | null>(null)
     const keys = useKeyPress(['meta', 'control', 'k', 'arrowup', 'arrowdown', 'enter'])
     const inputRef = useRef<HTMLInputElement>(null)
+    const previousFocusRef = useRef<HTMLElement | null>(null)
     const router = useRouter()
 
     function act(action: string) {
@@ -50,7 +51,12 @@ export default function Search({
 
     useEffect(() => {
         if (keys['k'] && (keys['meta'] || keys['control'])) {
-            setVisible(prev => !prev)
+            setVisible(prev => {
+                if (!prev) {
+                    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+                }
+                return !prev
+            })
         }
     }, [keys])
 
@@ -99,6 +105,8 @@ export default function Search({
     useEffect(() => {
         if (visible && inputRef.current) {
             inputRef.current.focus()
+        } else if (!visible) {
+            previousFocusRef.current?.focus()
         }
     }, [visible])
 
@@ -137,12 +145,18 @@ export default function Search({
     }
 
     if (!visible) {
-        return
+        return null
     }
 
     return (
         <div onClick={() => setVisible(false)} className='absolute inset-0 z-80 grid place-items-start justify-center bg-background/28 px-3 pt-[12vh] backdrop-blur-md'>
-            <div onClick={(e) => e.stopPropagation()} className='z-10 grid max-h-[72vh] w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-bright/10 bg-background/88 p-2 shadow-2xl shadow-black/35'>
+            <div
+                role='dialog'
+                aria-modal='true'
+                aria-label='Command palette'
+                onClick={(e) => e.stopPropagation()}
+                className='z-10 grid max-h-[72vh] w-full max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-bright/10 bg-background/88 p-2 shadow-2xl shadow-black/35'
+            >
                 <div className='flex min-h-12 items-center justify-between gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-3'>
                     <div className='flex min-w-0 flex-1 items-center gap-2'>
                         <SearchCode className='h-4 w-4 shrink-0 stroke-[#f07d33]' />

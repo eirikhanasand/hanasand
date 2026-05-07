@@ -24,6 +24,7 @@ type ExplorerProps = {
     setEditorPatch: Dispatch<SetStateAction<{ value: string; nonce: number } | null>>
     setError: Dispatch<SetStateAction<string | boolean | null>>
     setPageTree: Dispatch<SetStateAction<Tree | null>>
+    panelRequest?: { panel: 'files' | 'search'; nonce: number } | null
 }
 
 export default function Explorer({
@@ -37,6 +38,7 @@ export default function Explorer({
     setEditorPatch,
     setError,
     setPageTree,
+    panelRequest,
 }: ExplorerProps) {
     const { position, handleMouseDown, handleOpen } = useMovable({ side: 'left', setHide: setShowExplorer })
     const [activePanel, setActivePanel] = useState<'files' | 'search'>('files')
@@ -80,6 +82,15 @@ export default function Explorer({
     }, [serverTree, setPageTree])
 
     useEffect(() => {
+        if (!panelRequest) {
+            return
+        }
+
+        setActivePanel(panelRequest.panel)
+        setShowExplorer(true)
+    }, [panelRequest?.nonce, setShowExplorer])
+
+    useEffect(() => {
         const shareId = share?.id
         if (tree || !shareId) {
             return
@@ -118,7 +129,7 @@ export default function Explorer({
         return (
             <div
                 onMouseDown={(event) => handleMouseDown(event)}
-                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-background/80 p-2 shadow-2xl shadow-black/30 backdrop-blur-md'
+                className='absolute z-100 grid gap-2 rounded-xl border border-bright/10 bg-background/80 p-2 shadow-2xl shadow-black/30 backdrop-blur-md max-md:bottom-16 max-md:left-2 max-md:top-auto'
                 style={{
                     top: position.y,
                     left: position.x,
@@ -155,7 +166,7 @@ export default function Explorer({
     }
 
     return (
-        <div className='flex h-full min-w-fit gap-2'>
+        <div className='fixed inset-y-2 left-2 z-[120] flex min-w-0 gap-2 md:relative md:inset-auto md:z-auto md:h-full md:min-w-fit'>
             <nav className='relative z-50 flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-visible rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
                 <SidebarTooltip label='Close'>
                     <button type='button' aria-label='Close left sidebar' onClick={() => setShowExplorer(false)} className='grid h-10 w-10 place-items-center rounded-lg text-bright/55 transition hover:bg-bright/10 hover:text-bright'>
@@ -205,22 +216,17 @@ export default function Explorer({
                     setError={setError}
                 />
             ) : (
-                <div className='relative z-10 h-full w-[15vw] min-w-60 overflow-auto rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md'>
+                <div className='relative z-10 h-full w-[min(18rem,calc(100vw-5rem))] overflow-auto rounded-xl border border-bright/10 bg-background/82 p-2 shadow-2xl shadow-black/20 backdrop-blur-md md:w-[15vw] md:min-w-60'>
                     {(!tree || !share) && <div className='w-full'>
-                        <ErrorNotice
-                            compact
-                            message={treeLoading && share ? 'Loading file tree...' : 'Unable to load file tree.'}
-                            variant={treeLoading && share ? 'info' : 'error'}
-                        />
-                        {!treeLoading && share ? (
-                            <button
-                                type='button'
-                                aria-label='Retry loading file tree'
-                                onClick={() => void recoverTree(share.id)}
-                                className='mt-3 inline-flex rounded-lg border border-bright/10 bg-bright/[0.045] px-3 py-2 text-xs font-medium text-bright/70 transition hover:bg-bright/8 hover:text-bright'
-                            >
-                                Retry
-                            </button>
+                        {treeLoading || !share ? <TreeSkeleton /> : null}
+                        {share && !treeLoading ? (
+                            <ErrorNotice
+                                compact
+                                message='Unable to load file tree.'
+                                title='File tree unavailable'
+                                actionLabel='Retry'
+                                onAction={() => void recoverTree(share.id)}
+                            />
                         ) : null}
                     </div>}
                     {visibleTree && share && (
@@ -292,4 +298,20 @@ function filterTree(tree: Tree, query: string): Tree {
 
         return ownMatch ? [item] : []
     })
+}
+
+function TreeSkeleton() {
+    return (
+        <div aria-label='Loading file tree' className='space-y-3 p-2'>
+            <div className='h-4 w-28 animate-pulse rounded bg-bright/12' />
+            <div className='space-y-2'>
+                {Array.from({ length: 7 }).map((_, index) => (
+                    <div key={index} className='flex items-center gap-2'>
+                        <div className='h-4 w-4 animate-pulse rounded bg-bright/8' />
+                        <div className={`h-3 animate-pulse rounded bg-bright/8 ${index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-36' : 'w-28'}`} />
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
 }

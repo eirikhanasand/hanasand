@@ -162,7 +162,7 @@ export default function WorkspaceSearchPanel({
     }
 
     return (
-        <section className='flex h-full min-w-[310px] max-w-[420px] flex-col overflow-hidden rounded-xl border border-bright/10 bg-background/82 shadow-2xl shadow-black/30 backdrop-blur-md'>
+        <section className='flex h-full w-[min(22rem,calc(100vw-5rem))] flex-col overflow-hidden rounded-xl border border-bright/10 bg-background/82 shadow-2xl shadow-black/30 backdrop-blur-md md:min-w-[310px] md:max-w-[420px]'>
             <header className='flex items-center justify-between border-b border-bright/10 px-3 py-3'>
                 <div>
                     <p className='text-[11px] font-semibold uppercase tracking-[0.22em] text-bright/45'>Search</p>
@@ -180,6 +180,7 @@ export default function WorkspaceSearchPanel({
                 <div className='relative'>
                     <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/35' />
                     <input
+                        aria-label='Search files'
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder='Search files'
@@ -189,6 +190,7 @@ export default function WorkspaceSearchPanel({
                 <div className='relative'>
                     <Replace className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/35' />
                     <input
+                        aria-label='Replace text'
                         value={replacement}
                         onChange={(event) => setReplacement(event.target.value)}
                         placeholder='Replace'
@@ -196,8 +198,8 @@ export default function WorkspaceSearchPanel({
                     />
                 </div>
                 <div className='grid grid-cols-2 gap-2'>
-                    <input value={include} onChange={(event) => setInclude(event.target.value)} placeholder='files to include' className={inputClass} />
-                    <input value={exclude} onChange={(event) => setExclude(event.target.value)} placeholder='files to exclude' className={inputClass} />
+                    <input aria-label='Files to include' value={include} onChange={(event) => setInclude(event.target.value)} placeholder='files to include' className={inputClass} />
+                    <input aria-label='Files to exclude' value={exclude} onChange={(event) => setExclude(event.target.value)} placeholder='files to exclude' className={inputClass} />
                 </div>
                 <div className='flex items-center justify-between gap-2'>
                     <div className='flex items-center gap-1'>
