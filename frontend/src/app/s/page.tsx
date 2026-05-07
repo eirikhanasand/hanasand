@@ -5,9 +5,9 @@ import randomId from '@/utils/random/randomId'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Production Workspace',
-    description: 'Build, verify, deploy, and recover websites with visible proof in Hanasand.',
+    description: 'Build, verify, deploy, and recover websites in Hanasand.',
     path: '/s',
-    keywords: ['production workspace', 'hanasand ai', 'verified deploy', 'website rollback', 'visible proof'],
+    keywords: ['production workspace', 'hanasand ai', 'verified deploy', 'website rollback'],
 })
 
 export default function ShareEntryPage() {
