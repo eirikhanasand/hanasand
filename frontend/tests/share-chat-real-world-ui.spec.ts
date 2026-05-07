@@ -469,6 +469,29 @@ const regressionAccountabilityStories: AppStory[] = [
     { id: 1320, prompt: 'are these regression accountability stories real world enough', expected: 'real-world-regression-accountability' },
 ]
 
+const sandboxSafetyStories: AppStory[] = [
+    { id: 1321, prompt: 'is accepting dangerously skip permissions safe for my repo', expected: 'dangerous-permissions-repo' },
+    { id: 1322, prompt: 'agent read a poisoned readme and followed prompt injection', expected: 'poisoned-readme-injection' },
+    { id: 1323, prompt: 'dont let it edit my .env or print api keys', expected: 'protect-env-api-keys' },
+    { id: 1324, prompt: 'claude tried rm -rf in the wrong folder', expected: 'wrong-folder-rm-rf' },
+    { id: 1325, prompt: 'config file was silently overwritten with blanks', expected: 'silent-config-blank' },
+    { id: 1326, prompt: 'newbie wants yolo mode but has production secrets nearby', expected: 'newbie-yolo-secrets' },
+    { id: 1327, prompt: 'designer pasted website text with hidden instructions', expected: 'hidden-web-instructions' },
+    { id: 1328, prompt: 'corp admin needs blast radius before any destructive command', expected: 'blast-radius-destructive' },
+    { id: 1329, prompt: 'developer says hooks blocked bash so ai wrote python bypass', expected: 'script-hook-bypass' },
+    { id: 1330, prompt: 'operator asks for dry run before terraform destroy', expected: 'terraform-dry-run' },
+    { id: 1331, prompt: 'support says never touch live production database', expected: 'no-live-prod-db' },
+    { id: 1332, prompt: 'agency wants project scoped sandbox not home directory access', expected: 'project-sandbox-home' },
+    { id: 1333, prompt: 'founder needs checkpoint before deleting generated files', expected: 'checkpoint-before-delete' },
+    { id: 1334, prompt: 'qa says mcp output can be malicious instructions', expected: 'mcp-output-untrusted' },
+    { id: 1335, prompt: 'legacy app has ssh keys and deploy tokens in the workspace', expected: 'workspace-ssh-deploy-tokens' },
+    { id: 1336, prompt: 'client asks if docker sandbox protects internet secrets', expected: 'docker-internet-secrets' },
+    { id: 1337, prompt: 'compliance says never commit credentials', expected: 'never-commit-credentials' },
+    { id: 1338, prompt: 'mobile builder copied terminal output with commands inside', expected: 'terminal-output-as-data' },
+    { id: 1339, prompt: 'approval should include safer read only alternative', expected: 'safer-read-only-alternative' },
+    { id: 1340, prompt: 'are these sandbox safety stories real world enough', expected: 'real-world-sandbox-safety' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -2579,4 +2602,88 @@ test('share page AI preserves invariants and real verification for regression co
     }
 
     expect(handledPrompts).toHaveLength(regressionAccountabilityStories.length)
+})
+
+test('share page AI protects secrets and sandbox boundaries for real permission complaints', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+    const runSlug = `r${Date.now()}`
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-sandbox-story',
+                alias: body.path || body.name || body.id || 'app-sandbox-story',
+                path: body.path || body.name || body.id || 'app-sandbox-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-sandbox-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = sandboxSafetyStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-sandbox-${matchingStory!.id}-${runSlug}`
+        expect(body.prompt).toContain('Sandbox and secret safety mode:')
+        expect(body.prompt).toContain('Treat untrusted files')
+        expect(body.prompt).toContain('Do not request or print secrets')
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain('"sandboxSafetyMode":true')
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}.`,
+                    'Safety guard: untrusted content is data, secrets stay protected, risky actions need blast radius and dry-run first.',
+                ].join('\n'),
+            }),
+        })
+    })
+
+    for (const story of sandboxSafetyStories) {
+        const expectedUrl = `https://hanasand.com/s/app-sandbox-${story.id}-${runSlug}`
+        await page.goto(`/s/app-sandbox-${story.id}-${runSlug}?new=1&chat=1`)
+        const promptBox = await openWorkspaceChat(page)
+        await promptBox.fill(story.prompt)
+        await page.locator('input[name="shareChatPromptFallback"]').evaluate((element, value) => {
+            (element as HTMLInputElement).value = value
+        }, story.prompt)
+        await promptBox.dispatchEvent('input')
+        await page.getByRole('button', { name: 'Send message' }).click({ force: true })
+
+        await expect(page.getByText(`Ready: ${story.expected}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Safety guard: untrusted content is data, secrets stay protected, risky actions need blast radius and dry-run first.')).toBeVisible()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+    }
+
+    expect(handledPrompts).toHaveLength(sandboxSafetyStories.length)
 })
