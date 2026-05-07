@@ -73,6 +73,7 @@ import ingestStatus from './handlers/status/ingest.ts'
 import deactivateUser from './handlers/user/deactivateUser.ts'
 import { getSessions, revokeSession, revokeSessions } from './handlers/auth/sessions.ts'
 import httpRequestTool from './handlers/tools/httpRequest.ts'
+import browserTaskTool from './handlers/tools/browserTask.ts'
 import getExecutionTargets from './handlers/tools/getExecutionTargets.ts'
 import aiTool from './handlers/tools/ai.ts'
 import { getLogs, getLogServices, getRealtimeLogs } from './handlers/logs/get.ts'
@@ -262,6 +263,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Coding tools
     fastify.get('/tools/execution-targets', getExecutionTargets)
     fastify.post('/tools/http/request', httpRequestTool)
+    fastify.post('/tools/browser/task', browserTaskTool)
     fastify.post('/tools/ai', aiTool)
 
     // Agent automations

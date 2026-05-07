@@ -71,7 +71,7 @@ export default function useAiWorkbench({
     const hydrateShareFileRef = useRef<(rootId: string, filePath: string) => Promise<string | null>>(async () => null)
     const handleSocketMessageRef = useRef<(message: GptSocketMessage) => void>(() => {})
     const executeAssistantToolsRef = useRef<(conversation: AIConversation, message: AIConversationMessage) => Promise<void>>(async () => {})
-    const runToolCallRef = useRef<(conversation: AIConversation, toolCall: AiToolCall) => Promise<{ ok: boolean, message: string }>>(async () => ({ ok: false, message: 'Tool unavailable.' }))
+    const runToolCallRef = useRef<(conversation: AIConversation, toolCall: AiToolCall) => Promise<{ ok: boolean, message: string, artifacts?: AIArtifact[] }>>(async () => ({ ok: false, message: 'Tool unavailable.' }))
     const refreshRuntimeRef = useRef<() => Promise<void>>(async () => {})
     const [clients, setClients] = useState<GPT_Client[]>([])
     const [participants, setParticipants] = useState(initialRuntimeState?.connectedClientCount || 0)
@@ -1513,6 +1513,7 @@ export default function useAiWorkbench({
                     metadata: {
                         tool: toolCall.action,
                         toolState: result.ok ? 'completed' : 'error',
+                        ...(result.artifacts ? { artifacts: result.artifacts } : {}),
                     },
                 }
 
@@ -1583,6 +1584,57 @@ export default function useAiWorkbench({
                 return {
                     ok: response.ok,
                     message: `HTTP ${toolCall.method || 'GET'} ${toolCall.url}\nStatus: ${response.status}\n\n${body.slice(0, 12000)}`,
+                }
+            }
+
+            if (toolCall.action === 'browser_task' && toolCall.url) {
+                const response = await aiClientRequest('/tools/browser/task', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        url: toolCall.url,
+                        timeoutMs: toolCall.timeoutMs,
+                        captureScreenshot: toolCall.captureScreenshot,
+                    }),
+                })
+
+                const payload = await response.json().catch(() => null) as {
+                    ok?: boolean
+                    url?: string
+                    title?: string
+                    textExcerpt?: string
+                    screenshotPath?: string | null
+                    consoleMessages?: string[]
+                    pageErrors?: string[]
+                    error?: string
+                } | null
+                const consoleMessages = Array.isArray(payload?.consoleMessages) ? payload.consoleMessages : []
+                const pageErrors = Array.isArray(payload?.pageErrors) ? payload.pageErrors : []
+                const message = [
+                    `Tool browser_task executed for URL: ${payload?.url || toolCall.url}`,
+                    `Title: ${payload?.title || '<none>'}`,
+                    `Screenshot: ${payload?.screenshotPath || '<none>'}`,
+                    '',
+                    'Page errors:',
+                    pageErrors.length ? pageErrors.join('\n') : '<none>',
+                    '',
+                    'Console:',
+                    consoleMessages.length ? consoleMessages.join('\n') : '<none>',
+                    '',
+                    'Text excerpt:',
+                    payload?.textExcerpt || payload?.error || '<none>',
+                ].join('\n')
+
+                return {
+                    ok: response.ok && payload?.ok !== false,
+                    message,
+                    artifacts: [
+                        {
+                            kind: 'link',
+                            title: payload?.title || 'Browser target',
+                            url: payload?.url || toolCall.url,
+                            content: payload?.textExcerpt || null,
+                        },
+                    ] satisfies AIArtifact[],
                 }
             }
 

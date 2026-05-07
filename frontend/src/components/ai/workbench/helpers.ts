@@ -6,7 +6,7 @@ import randomId from '@/utils/random/randomId'
 import { listTreePaths } from '../shareTree'
 
 export type AiToolCall = {
-    action: 'read_share' | 'update_share' | 'http_request' | 'scaffold_nextjs_docker' | 'create_vm' | 'create_project' | 'run_terminal_command'
+    action: 'read_share' | 'update_share' | 'http_request' | 'browser_task' | 'scaffold_nextjs_docker' | 'create_vm' | 'create_project' | 'run_terminal_command'
     shareId?: string
     path?: string
     content?: string
@@ -18,6 +18,7 @@ export type AiToolCall = {
     vmName?: string
     command?: string
     timeoutMs?: number
+    captureScreenshot?: boolean
 }
 
 export function deriveLastToolState(conversations: AIConversation[]): AIRuntimeToolRun | null {
@@ -273,6 +274,7 @@ export function buildSystemPrompt({
         '<hanasand-tool>{"action":"read_share","shareId":"optional"}</hanasand-tool>',
         '<hanasand-tool>{"action":"update_share","shareId":"optional","path":"optional","content":"new file content"}</hanasand-tool>',
         '<hanasand-tool>{"action":"http_request","url":"https://...","method":"GET","headers":{"Accept":"application/json"},"body":"optional"}</hanasand-tool>',
+        '<hanasand-tool>{"action":"browser_task","url":"https://...","captureScreenshot":true,"timeoutMs":20000}</hanasand-tool>',
         '<hanasand-tool>{"action":"scaffold_nextjs_docker","projectName":"optional","shareId":"optional"}</hanasand-tool>',
         '<hanasand-tool>{"action":"create_vm","vmName":"northstar-admin"}</hanasand-tool>',
         '<hanasand-tool>{"action":"create_project","projectName":"Northstar Admin","vmName":"northstar-admin","shareId":"optional"}</hanasand-tool>',
@@ -280,6 +282,7 @@ export function buildSystemPrompt({
         'Only emit a tool tag when the user clearly asked for the action. Keep normal explanation outside the tag.',
         'Use scaffold_nextjs_docker or create_project when the user asks for a production-style starter, Dockerized Next.js app, or a full workspace you can keep extending from the browser.',
         'For website/app requests, prefer this loop unless the user asks otherwise: scaffold or attach workspace -> implement files -> run a focused terminal check -> verify UI in browser -> summarize what shipped and what remains.',
+        'Use browser_task for preview/public-page checks, visual QA requests, mobile/browser evidence, and "look at it" requests after a workspace or URL exists. It should produce URL, title, text excerpt, console/page errors, and screenshot availability before you claim the UI works.',
         'Do not run terminal, read_share, or update_share tools before a workspace is attached. If no workspace exists and the user asks for building, visual edits, tests, screenshots, or deployment, scaffold/create a workspace first or ask for a repo/share only when that exact existing code is required.',
         'Ask a clarifying question only when the next action would be destructive, security-sensitive, billing-related, or impossible to infer. Otherwise choose a sensible default and keep moving.',
         `Conversation strategy: ${conversation.modelStrategy}. Preferred model: ${conversation.preferredModel || 'auto'}.`,
