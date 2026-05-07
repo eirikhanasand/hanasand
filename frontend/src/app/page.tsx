@@ -6,15 +6,15 @@ import { buildRouteMetadata } from './seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand',
-    description: 'Hanasand workspace tools for shares, checks, uploads, links, and status.',
+    description: 'Hanasand is an autonomous production assistant that builds, verifies, deploys, and recovers websites with visible proof.',
     path: '/',
-    keywords: ['hanasand', 'workspace', 'shares', 'status', 'tools'],
+    keywords: ['hanasand', 'autonomous production assistant', 'website deploy', 'website verification', 'rollback'],
 })
 
 const primaryTools = [
     {
-        title: 'Share workspace',
-        description: 'Open a fresh browser workspace with files, notes, and chat.',
+        title: 'Production workspace',
+        description: 'Build websites with reviewable changes, rendered proof, deploy checks, and recovery evidence.',
         href: '/s',
         icon: Link2,
     },
@@ -57,10 +57,10 @@ export default async function Page({
             <LogoutClient logoutServer={logout} />
             <section className='grid min-h-[calc(100vh-8rem)] content-center gap-10'>
                 <div className='max-w-3xl'>
-                    <p className='mb-4 text-xs font-medium uppercase tracking-[0.24em] text-bright/38'>Workspace</p>
+                    <p className='mb-4 text-xs font-medium uppercase tracking-[0.24em] text-bright/38'>Autonomous production assistant</p>
                     <h1 className='text-4xl font-semibold tracking-[-0.02em] text-[#f4f4ef] md:text-6xl'>Hanasand</h1>
                     <p className='mt-5 max-w-2xl text-base leading-7 text-bright/55 md:text-lg'>
-                        Practical tools for sharing work, checking infrastructure, and moving files without extra ceremony.
+                        Not another AI website generator. Hanasand builds, verifies, deploys, and recovers websites with visible proof before changes land.
                     </p>
                     <div className='mt-7 flex flex-wrap gap-3'>
                         <Link href='/login' className='inline-flex items-center gap-2 rounded-full border border-bright/12 bg-bright/10 px-4 py-2.5 text-sm font-medium text-[#f4f4ef] transition-colors hover:bg-bright/14'>
@@ -68,7 +68,7 @@ export default async function Page({
                             Log in
                         </Link>
                         <Link href='/s' className='inline-flex items-center gap-2 rounded-full border border-bright/10 px-4 py-2.5 text-sm font-medium text-bright/70 transition-colors hover:bg-bright/8 hover:text-[#f4f4ef]'>
-                            New share
+                            Build with proof
                             <ArrowUpRight className='h-4 w-4' />
                         </Link>
                     </div>

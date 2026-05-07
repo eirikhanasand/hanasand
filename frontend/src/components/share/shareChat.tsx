@@ -77,7 +77,33 @@ type BrowserEvidence = {
     consoleMessages?: string[]
     pageErrors?: string[]
     quality?: BrowserQuality
+    journeyProof?: BrowserJourneyProof
     fetchedAt: string
+}
+
+type BrowserJourneyProof = {
+    mode?: string
+    forms?: number
+    controls?: number
+    fillableControls?: number
+    focusedControls?: number
+    filledControls?: number
+    submitControls?: number
+    buttonLabels?: string[]
+    blockedControls?: string[]
+    journeyTypes?: {
+        auth?: boolean
+        checkout?: boolean
+        booking?: boolean
+        contact?: boolean
+        dashboardCrud?: boolean
+    }
+    readiness?: {
+        hasVisibleAction?: boolean
+        formsCanBeDryFilled?: boolean
+        detectedCriticalJourney?: boolean
+        submitWithoutMutationAvoided?: boolean
+    }
 }
 
 type BrowserQuality = {
@@ -1093,16 +1119,23 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
     const issues = evidence?.pageErrors?.filter(Boolean) || []
     const consoleMessages = evidence?.consoleMessages?.filter(Boolean) || []
     const screenshotState = evidence?.screenshotPath ? 'Screenshot saved' : lastRun?.browserProofs ? 'Screenshot not available yet' : 'Screenshot not run yet'
+    const journey = evidence?.journeyProof
+    const journeyLabels = journeyTypeLabels(journey)
+    const journeyState = journey?.readiness?.submitWithoutMutationAvoided
+        ? 'Safe dry-run complete'
+        : journey
+            ? 'Journey inspected'
+            : 'Not run yet'
     return (
         <section className='mt-3 rounded-2xl border border-bright/8 bg-black/24 p-3'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2'>
                         <ClipboardCheck className='h-4 w-4 text-[#f07d33]' />
-                        <h4 className='text-sm font-semibold text-bright/84'>Proof for this review</h4>
+                        <h4 className='text-sm font-semibold text-bright/84'>Production proof for this review</h4>
                     </div>
                     <p className='mt-1 text-xs leading-5 text-bright/48'>
-                        {evidence ? 'A browser check is attached to the review.' : 'No browser check has finished for this review yet.'}
+                        {evidence ? 'Rendered screenshots, logs, and safe journey checks are attached to the review.' : 'No durable production proof has finished for this review yet.'}
                     </p>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
@@ -1115,10 +1148,14 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
                     {issues.length ? 'Needs fix' : evidence ? 'Attached' : 'Pending'}
                 </span>
             </div>
-            <div className='mt-3 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
+            <div className='mt-3 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-4'>
                 <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
                     <span className='block text-bright/35'>Screenshot</span>
                     <span className='font-medium text-bright/68'>{screenshotState}</span>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
+                    <span className='block text-bright/35'>Journey proof</span>
+                    <span className='font-medium text-bright/68'>{journeyState}</span>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
                     <span className='block text-bright/35'>Page issues</span>
@@ -1134,6 +1171,11 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
                 <div className='mt-2 grid gap-2 text-xs text-bright/58 sm:grid-cols-2'>
                     <EvidenceList title='Page address' items={evidence?.url ? [evidence.url] : []} />
                     <EvidenceList title='Screenshot path' items={evidence?.screenshotPath ? [evidence.screenshotPath] : []} />
+                    <EvidenceList title='Journey proof' items={journey ? [
+                        `${journey.filledControls || 0}/${journey.fillableControls || 0} fields safely filled`,
+                        `Mutation avoided: ${journey.readiness?.submitWithoutMutationAvoided ? 'yes' : 'unknown'}`,
+                        `Critical path: ${journeyLabels.length ? journeyLabels.join(', ') : 'not detected'}`,
+                    ] : []} />
                     <EvidenceList title='Console messages' items={consoleMessages} />
                     <EvidenceList title='Page errors' items={issues} />
                 </div>
@@ -1521,6 +1563,7 @@ function browserEvidenceFromVerificationJob(url: string, job: NonNullable<Verifi
     const structure = typeof data.structure === 'object' && data.structure ? data.structure as BrowserEvidence['structure'] : emptyBrowserStructure()
     const consoleMessages = Array.isArray(data.consoleMessages) ? data.consoleMessages.filter((item): item is string => typeof item === 'string') : []
     const pageErrors = Array.isArray(data.pageErrors) ? data.pageErrors.filter((item): item is string => typeof item === 'string') : []
+    const journeyProof = typeof data.journeyProof === 'object' && data.journeyProof ? data.journeyProof as BrowserJourneyProof : undefined
     const jobError = job.status === 'failed' && job.error ? [job.error] : []
     return {
         id: randomId(),
@@ -1535,6 +1578,7 @@ function browserEvidenceFromVerificationJob(url: string, job: NonNullable<Verifi
         ],
         pageErrors: [...jobError, ...pageErrors],
         quality: typeof data.quality === 'object' && data.quality ? data.quality as BrowserQuality : undefined,
+        journeyProof,
         fetchedAt: new Date().toISOString(),
     }
 }
@@ -1593,14 +1637,16 @@ function delay(ms: number) {
 function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
     const structure = evidence.structure || emptyBrowserStructure()
     const issues = evidence.pageErrors?.filter(Boolean) || []
+    const journey = evidence.journeyProof
+    const journeyLabels = journeyTypeLabels(journey)
     return (
         <article className='overflow-hidden rounded-2xl border border-bright/10 bg-black/24'>
             <div className='flex items-center justify-between gap-3 border-b border-bright/8 px-3 py-2'>
                 <div className='flex min-w-0 items-center gap-2'>
                     <ScanSearch className='h-4 w-4 shrink-0 text-[#f07d33]' />
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-bright/84'>Page check</p>
-                        <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'The page opened and basic checks completed.'}</p>
+                        <p className='truncate text-sm font-semibold text-bright/84'>Visible production proof</p>
+                        <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'Rendered screenshot and safe journey checks completed.'}</p>
                     </div>
                 </div>
                 <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open checked page'>
@@ -1619,11 +1665,24 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                     <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Screenshot</p>
                     <p className='mt-1 text-bright/72'>{evidence.screenshotPath ? 'Saved for review' : 'Not available yet'}</p>
                 </div>
+                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Journey proof</p>
+                    <p className='mt-1 text-bright/72'>{journey?.readiness?.submitWithoutMutationAvoided ? 'Dry-run completed safely' : journey ? 'Rendered journey inspected' : 'Not available yet'}</p>
+                </div>
+                <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Critical path</p>
+                    <p className='mt-1 text-bright/72'>{journeyLabels.length ? journeyLabels.join(', ') : 'No specific journey detected'}</p>
+                </div>
                 <details className='rounded-lg border border-bright/8 bg-black/16 p-2 sm:col-span-2'>
                     <summary className='cursor-pointer text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Advanced details</summary>
                     <div className='mt-2 grid gap-2 sm:grid-cols-2'>
                         <EvidenceList title='Links' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
                         <EvidenceList title='Page address' items={[evidence.url]} />
+                        <EvidenceList title='Journey dry run' items={journey ? [
+                            `${journey.filledControls || 0}/${journey.fillableControls || 0} fields safely filled`,
+                            `${journey.focusedControls || 0}/${journey.controls || 0} controls focus-tested`,
+                            `Mutation avoided: ${journey.readiness?.submitWithoutMutationAvoided ? 'yes' : 'unknown'}`,
+                        ] : []} />
                         <EvidenceList title='Console messages' items={evidence.consoleMessages} />
                         <EvidenceList title='Page errors' items={issues} />
                     </div>
@@ -2128,13 +2187,28 @@ function emptyBrowserStructure() {
 function summarizeBrowserEvidence(evidence: BrowserEvidence) {
     const structure = evidence.structure || emptyBrowserStructure()
     const issueCount = evidence.pageErrors?.filter(Boolean).length || 0
+    const journey = evidence.journeyProof
     return [
-        `Browser proof visible for ${evidence.url}.`,
+        `Production proof visible for ${evidence.url}.`,
         `Headings: ${structure.headings?.slice(0, 3).join(', ') || '<none>'}.`,
         `Links/buttons/forms: ${(structure.links?.length || 0)}/${(structure.buttons?.length || 0)}/${((structure.inputs?.length || 0) + (structure.forms?.length || 0))}.`,
         `Viewport: ${structure.hasViewportMeta ? 'present' : 'missing/unknown'}. Screenshot: ${evidence.screenshotPath ? 'available' : 'not available yet'}.`,
+        journey ? `Journey dry run: ${journey.filledControls || 0} controls safely filled, mutation avoided: ${journey.readiness?.submitWithoutMutationAvoided ? 'yes' : 'unknown'}.` : 'Journey dry run: not available yet.',
         issueCount ? `Page issues: ${issueCount}.` : 'Page issues: none.',
     ].join('\n')
+}
+
+function journeyTypeLabels(journey?: BrowserJourneyProof) {
+    if (!journey?.journeyTypes) {
+        return []
+    }
+    return [
+        journey.journeyTypes.auth ? 'auth' : null,
+        journey.journeyTypes.checkout ? 'checkout' : null,
+        journey.journeyTypes.booking ? 'booking' : null,
+        journey.journeyTypes.contact ? 'contact' : null,
+        journey.journeyTypes.dashboardCrud ? 'dashboard' : null,
+    ].filter(Boolean) as string[]
 }
 
 function formatRunDuration(durationMs: number) {
