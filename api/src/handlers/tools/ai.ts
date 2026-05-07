@@ -14,6 +14,27 @@ type GeneratedProject = {
     files: GeneratedFile[]
 }
 
+type GeneratedBuilderResponse = {
+    status: 'completed'
+    provider: 'hanasand-ai'
+    model: 'share-builder'
+    message: string
+    cache?: {
+        hit: boolean
+        key: string
+        category: 'scaffold' | 'diagnostic' | 'package_metadata' | 'deployment_fix'
+    }
+}
+type CommonCacheCategory = NonNullable<GeneratedBuilderResponse['cache']>['category']
+
+const commonResponseCache = new Map<string, {
+    response: GeneratedBuilderResponse
+    hits: number
+    createdAt: number
+    updatedAt: number
+}>()
+const MAX_COMMON_RESPONSE_CACHE_ITEMS = 80
+
 export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
     res.header('Cache-Control', 'no-store, no-cache, max-age=0, must-revalidate')
     res.header('Vary', 'Authorization, Cookie')
@@ -131,6 +152,13 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
 
     const builderResponse = buildShareProjectResponse(prompt)
     if (builderResponse) {
+        await recordCommonCacheHit({
+            actorId,
+            prompt,
+            context,
+            response: builderResponse,
+            billingMode: body.billingMode,
+        })
         await recordToolAiEconomics({
             actorId,
             billingMode: body.billingMode,
@@ -142,6 +170,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
             model: String(builderResponse.model || 'share-builder'),
             startedAt: Date.now(),
             toolCalls: parseGeneratedToolCalls(typeof builderResponse.message === 'string' ? builderResponse.message : '').length,
+            cache: builderResponse.cache,
         })
         return res.send(await enforceGeneratedToolPolicy(req, actorId, builderResponse))
     }
@@ -154,6 +183,13 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
     if (!preferredClient) {
         const fallback = buildShareProjectResponse(prompt)
         if (fallback) {
+            await recordCommonCacheHit({
+                actorId,
+                prompt,
+                context,
+                response: fallback,
+                billingMode: body.billingMode,
+            })
             await recordToolAiEconomics({
                 actorId,
                 billingMode: body.billingMode,
@@ -165,6 +201,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
                 model: String(fallback.model || 'share-builder'),
                 startedAt: Date.now(),
                 toolCalls: parseGeneratedToolCalls(typeof fallback.message === 'string' ? fallback.message : '').length,
+                cache: fallback.cache,
             })
             return res.send(fallback)
         }
@@ -225,6 +262,13 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
         req.log.error({ error, promptLength: prompt.length, clientName: preferredClient.name }, 'Hanasand AI tool request failed')
         const fallback = buildShareProjectResponse(prompt)
         if (fallback) {
+            await recordCommonCacheHit({
+                actorId,
+                prompt,
+                context,
+                response: fallback,
+                billingMode: body.billingMode,
+            })
             await recordToolAiEconomics({
                 actorId,
                 billingMode: body.billingMode,
@@ -236,6 +280,7 @@ export default async function aiTool(req: FastifyRequest, res: FastifyReply) {
                 model: preferredClient.name,
                 startedAt: Date.now(),
                 toolCalls: parseGeneratedToolCalls(typeof fallback.message === 'string' ? fallback.message : '').length,
+                cache: fallback.cache,
             })
             return res.send(await enforceGeneratedToolPolicy(req, actorId, fallback))
         }
@@ -292,6 +337,7 @@ type ToolAiEconomicsInput = {
     metrics?: GPT_ModelMetrics | null
     startedAt: number
     toolCalls?: number
+    cache?: GeneratedBuilderResponse['cache']
 }
 
 async function enforceGeneratedToolPolicy(req: FastifyRequest, actorId: string | null, response: Record<string, unknown>) {
@@ -348,6 +394,7 @@ async function recordToolAiEconomics({
     metrics,
     startedAt,
     toolCalls = 0,
+    cache,
 }: ToolAiEconomicsInput) {
     if (!actorId) {
         return
@@ -391,7 +438,45 @@ async function recordToolAiEconomics({
             toolCalls,
             durationMs,
             costNok: estimatedCostNok,
+            cacheHit: Boolean(cache?.hit),
+            cacheKey: cache?.key || null,
+            cacheCategory: cache?.category || null,
             keyMetric: 'verified useful project progress per minute per NOK',
+        },
+    })
+}
+
+async function recordCommonCacheHit({
+    actorId,
+    prompt,
+    context,
+    response,
+    billingMode = 'standard',
+}: {
+    actorId: string | null
+    prompt: string
+    context?: string
+    response: GeneratedBuilderResponse
+    billingMode?: 'draft' | 'standard' | 'verified' | 'priority'
+}) {
+    if (!actorId || !response.cache?.hit) {
+        return
+    }
+    const estimatedSavedTokens = Math.max(1, estimateTokens(response.message) + estimateTokens(context || '') + estimateTokens(prompt))
+    await recordAiUsageEvent({
+        ownerId: actorId,
+        actorId,
+        kind: 'cache_hit',
+        units: estimatedSavedTokens,
+        billableUnits: 0,
+        estimatedCostNok: 0,
+        billingMode,
+        outcome: 'cached',
+        metadata: {
+            cacheKey: response.cache.key,
+            cacheCategory: response.cache.category,
+            estimatedSavedTokens,
+            message: 'Reused a common scaffold/diagnostic response instead of regenerating it.',
         },
     })
 }
@@ -525,13 +610,28 @@ function directChatResponse(prompt: string) {
     return null
 }
 
-export function buildShareProjectResponse(prompt: string) {
+export function buildShareProjectResponse(prompt: string): GeneratedBuilderResponse | null {
     if (!/\b(build|create|make|generate|scaffold|website|site|app|bot|api|backend|worker|queue|dashboard|portal|tool|starter|page|fix|repair|rebuild|self-hostable|runnable project)\b/i.test(prompt)) {
         return null
     }
 
+    const cacheKey = commonBuilderCacheKey(prompt)
+    const cached = commonResponseCache.get(cacheKey)
+    if (cached) {
+        cached.hits += 1
+        cached.updatedAt = Date.now()
+        return {
+            ...cached.response,
+            cache: {
+                key: cached.response.cache?.key || cacheKey,
+                category: cached.response.cache?.category || cacheCategoryForPrompt(prompt),
+                hit: true,
+            },
+        }
+    }
+
     const project = inferProject(prompt)
-    return {
+    const response: GeneratedBuilderResponse = {
         status: 'completed',
         provider: 'hanasand-ai',
         model: 'share-builder',
@@ -539,7 +639,68 @@ export function buildShareProjectResponse(prompt: string) {
             `Prepared a ${project.label} with complete runnable files, export-friendly Docker handoff, and reviewable changes.`,
             ...project.files.map((file) => toolTag(file.path, file.content)),
         ].join('\n\n'),
+        cache: {
+            hit: false,
+            key: cacheKey,
+            category: cacheCategoryForPrompt(prompt),
+        },
     }
+    rememberCommonResponse(cacheKey, response)
+    return response
+}
+
+function rememberCommonResponse(key: string, response: GeneratedBuilderResponse) {
+    commonResponseCache.set(key, {
+        response,
+        hits: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+    })
+    if (commonResponseCache.size <= MAX_COMMON_RESPONSE_CACHE_ITEMS) {
+        return
+    }
+    const oldest = [...commonResponseCache.entries()]
+        .sort((left, right) => left[1].updatedAt - right[1].updatedAt)[0]?.[0]
+    if (oldest) {
+        commonResponseCache.delete(oldest)
+    }
+}
+
+function commonBuilderCacheKey(prompt: string) {
+    const lower = prompt.toLowerCase()
+    const title = slugify(titleFromPrompt(prompt))
+    const projectKind = /\b(worker|queue|background|redis|job|transcode|import)\b/.test(lower)
+        ? 'worker'
+        : /\b(api|backend|fastify)\b/.test(lower) && !/\bpage|website|site|frontend|landing\b/.test(lower)
+            ? 'api'
+            : /\b(discord|bot|slack|telegram|server status bot|game server)\b/.test(lower)
+                ? 'bot'
+                : 'website'
+    const capabilities = [
+        /\bdocker|compose|self-host|runnable\b/.test(lower) ? 'docker' : null,
+        /\bcheckout|payment|stripe|invoice\b/.test(lower) ? 'commerce' : null,
+        /\bauth|login|account\b/.test(lower) ? 'auth' : null,
+        /\bredis|queue|worker|background\b/.test(lower) ? 'queue' : null,
+        /\bpostgres|database|migration\b/.test(lower) ? 'database' : null,
+        /\bhealth|ready|metrics|monitor\b/.test(lower) ? 'ops' : null,
+        /\bmobile|offline|safari\b/.test(lower) ? 'mobile' : null,
+    ].filter(Boolean).join('-') || 'standard'
+    const sections = pageSectionsFor(lower).slice(0, 5).map(slugify).join('-')
+    return [cacheCategoryForPrompt(prompt), projectKind, title, capabilities, sections].join(':').slice(0, 220)
+}
+
+function cacheCategoryForPrompt(prompt: string): CommonCacheCategory {
+    const lower = prompt.toLowerCase()
+    if (/\b(package|dependency|dependencies|npm|bun|pnpm|version|metadata)\b/.test(lower)) {
+        return 'package_metadata'
+    }
+    if (/\b(deploy|deployment|vercel|netlify|docker|compose|ssl|domain|env|build failed|runtime)\b/.test(lower)) {
+        return 'deployment_fix'
+    }
+    if (/\b(diagnostic|debug|why failed|error|logs|fix|repair)\b/.test(lower)) {
+        return 'diagnostic'
+    }
+    return 'scaffold'
 }
 
 function inferProject(prompt: string): GeneratedProject {
