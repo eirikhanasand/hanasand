@@ -285,6 +285,29 @@ const proofGateStories: AppStory[] = [
     { id: 1160, prompt: 'are we still making this production safe', expected: 'production-safe-gate' },
 ]
 
+const proofRecoveryStories: AppStory[] = [
+    { id: 1161, prompt: 'the proof failed, now make the retry obvious', expected: 'retry-proof-action' },
+    { id: 1162, prompt: 'designer says unblock only after real proof', expected: 'designer-proof-unlocks' },
+    { id: 1163, prompt: 'newbie needs one button to recover', expected: 'newbie-one-button-retry' },
+    { id: 1164, prompt: 'corporate reviewer wants failed then passed evidence', expected: 'corporate-proof-recovery' },
+    { id: 1165, prompt: 'ops says browser flakes should not kill momentum', expected: 'ops-flaky-recovery' },
+    { id: 1166, prompt: 'agency client needs apply after retry succeeds', expected: 'agency-retry-apply' },
+    { id: 1167, prompt: 'support wants no terminal instructions for retry', expected: 'support-visible-retry' },
+    { id: 1168, prompt: 'founder says do not make me rerun the whole prompt', expected: 'founder-no-rerun-prompt' },
+    { id: 1169, prompt: 'accessibility proof timed out then recovered', expected: 'a11y-proof-recovered' },
+    { id: 1170, prompt: 'pricing check retry passed, allow apply', expected: 'pricing-retry-passed' },
+    { id: 1171, prompt: 'mobile proof should recover inside the panel', expected: 'mobile-panel-recovery' },
+    { id: 1172, prompt: 'compliance needs blocked until green proof', expected: 'compliance-green-proof' },
+    { id: 1173, prompt: 'investor page should not need a second AI answer', expected: 'investor-no-second-answer' },
+    { id: 1174, prompt: 'restaurant owner asks what to click after timeout', expected: 'restaurant-timeout-click' },
+    { id: 1175, prompt: 'terminal agents lose me after a failed tool', expected: 'terminal-failure-recovery' },
+    { id: 1176, prompt: 'handoff needs proof retry result visible', expected: 'handoff-retry-result' },
+    { id: 1177, prompt: 'client asks can I apply now after retry', expected: 'client-apply-after-retry' },
+    { id: 1178, prompt: 'designer wants no apply until screenshot comes back', expected: 'designer-screenshot-unlock' },
+    { id: 1179, prompt: 'beginner says I dont understand failed proof', expected: 'beginner-failed-proof-flow' },
+    { id: 1180, prompt: 'are we still removing friction without lying', expected: 'production-recovery-truth' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1604,4 +1627,146 @@ test('share page AI blocks applying pending edits when browser proof needs retry
     }
 
     expect(handledPrompts).toHaveLength(proofGateStories.length)
+})
+
+test('share page AI lets users retry failed browser proof without rerunning the prompt', async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000)
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-proof-recovery-story',
+                alias: body.path || body.name || body.id || 'app-proof-recovery-story',
+                path: body.path || body.name || body.id || 'app-proof-recovery-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-proof-recovery-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    const proofAttempts = new Map<string, number>()
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        expect(body.url).toContain('https://hanasand.com/s/app-proof-recovery-')
+        const url = body.url || ''
+        const attempts = proofAttempts.get(url) || 0
+        proofAttempts.set(url, attempts + 1)
+
+        if (attempts === 0) {
+            await route.fulfill({
+                status: 504,
+                contentType: 'application/json',
+                body: JSON.stringify({ error: 'Browser proof gateway timeout.' }),
+            })
+            return
+        }
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url,
+                title: 'Recovered preview',
+                screenshotPath: `/browser-proof/${url.split('-').pop()}.png`,
+                structure: {
+                    headings: ['Recovered proof'],
+                    links: [{ text: 'Open page', href: url }],
+                    buttons: ['Apply'],
+                    inputs: [],
+                    forms: [],
+                    hasViewportMeta: true,
+                },
+                consoleMessages: [],
+                pageErrors: [],
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = proofRecoveryStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${matchingStory!.id}`
+        expect(body.maxTokens).toBe(2200)
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Retry proof should recover without rerunning the prompt.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Retry proof unlocks apply after browser evidence succeeds.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of proofRecoveryStories) {
+        const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${story.id}`
+        await page.goto(`/s/app-proof-recovery-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Retry proof should recover without rerunning the prompt.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Needs retry', { exact: true })).toBeVisible()
+        await expect(page.getByText('Browser proof needs retry before these changes can be applied.')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Retry proof first' })).toBeDisabled()
+        const retryButton = page.getByRole('button', { name: 'Retry proof', exact: true })
+        await expect(retryButton).toBeVisible()
+        await retryButton.click()
+
+        await expect(page.getByText('Completed', { exact: true })).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Needs retry', { exact: true })).not.toBeVisible()
+        await expect(page.getByText('Browser proof needs retry before these changes can be applied.')).not.toBeVisible()
+        await expect(page.getByText('Browser proof: Recovered preview')).toBeVisible()
+        await expect(page.getByText('0 issues')).toBeVisible()
+        await expect(page.getByText('Screenshot captured')).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Apply' })).toBeEnabled()
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(3200)
+        expect(proofAttempts.get(expectedUrl)).toBe(2)
+    }
+
+    expect(handledPrompts).toHaveLength(proofRecoveryStories.length)
 })

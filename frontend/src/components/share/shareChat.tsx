@@ -5,7 +5,7 @@ import randomId from '@/utils/random/randomId'
 import { findTreeFileId, listTreePaths } from '@/components/ai/shareTree'
 import { updateShare } from '@/utils/share/put'
 import postShare from '@/utils/share/post'
-import { ArrowUp, Check, Code2, ExternalLink, Gauge, Globe2, Loader2, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowUp, Check, Code2, ExternalLink, Gauge, Globe2, Loader2, RotateCw, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react'
 import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -105,6 +105,8 @@ export default function ShareChat({
     const [browserTarget, setBrowserTarget] = useState<BrowserTarget | null>(null)
     const [browserEvidence, setBrowserEvidence] = useState<BrowserEvidence[]>([])
     const [lastRun, setLastRun] = useState<RunSummary | null>(null)
+    const [lastBrowserCalls, setLastBrowserCalls] = useState<ToolCall[]>([])
+    const [retryingProof, setRetryingProof] = useState(false)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
     const proofTarget = previewUrl
@@ -182,6 +184,7 @@ export default function ShareChat({
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, share, tree || null, editingContent)
             const browserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
+            const boundedBrowserCalls = browserCalls.slice(0, 3)
             let browserProofs = browserCalls.length
             let browserProofHadIssues = false
             const visibleContent = stripToolTags(rawContent).trim()
@@ -201,11 +204,12 @@ export default function ShareChat({
                     status: 'pending',
                 })
             }
+            setLastBrowserCalls(boundedBrowserCalls)
             if (browserCalls.length) {
-                const results = await Promise.all(browserCalls.slice(0, 3).map(runBrowserEvidenceTool))
+                const results = await Promise.all(boundedBrowserCalls.map(runBrowserEvidenceTool))
                 const visibleResults = results.filter(Boolean) as BrowserEvidence[]
                 browserProofs = visibleResults.length
-                browserProofHadIssues = visibleResults.length !== browserCalls.slice(0, 3).length
+                browserProofHadIssues = visibleResults.length !== boundedBrowserCalls.length
                     || visibleResults.some((result) => Boolean(result.pageErrors?.filter(Boolean).length))
                 if (visibleResults.length) {
                     setBrowserEvidence((current) => [...visibleResults, ...current].slice(0, 5))
@@ -242,6 +246,41 @@ export default function ShareChat({
             setLoading(false)
             setStartedAt(null)
             window.setTimeout(() => inputRef.current?.focus(), 0)
+        }
+    }
+
+    async function retryBrowserProof() {
+        if (!lastBrowserCalls.length || retryingProof) {
+            return
+        }
+
+        setRetryingProof(true)
+        const runStartedAt = Date.now()
+        try {
+            const results = await Promise.all(lastBrowserCalls.map(runBrowserEvidenceTool))
+            const visibleResults = results.filter(Boolean) as BrowserEvidence[]
+            const browserProofHadIssues = visibleResults.length !== lastBrowserCalls.length
+                || visibleResults.some((result) => Boolean(result.pageErrors?.filter(Boolean).length))
+
+            if (visibleResults.length) {
+                setBrowserEvidence((current) => [...visibleResults, ...current].slice(0, 5))
+                setMessages((current) => [...current, ...visibleResults.map((result) => ({
+                    id: randomId(),
+                    role: 'tool' as const,
+                    content: summarizeBrowserEvidence(result),
+                    createdAt: new Date().toISOString(),
+                }))])
+            }
+
+            setLastRun({
+                durationMs: Date.now() - runStartedAt,
+                pendingChanges: pendingEdit?.changes.length || 0,
+                browserProofs: visibleResults.length,
+                tokenCap: lastRun?.tokenCap || 2200,
+                status: browserProofHadIssues ? 'error' : 'completed',
+            })
+        } finally {
+            setRetryingProof(false)
         }
     }
 
@@ -454,8 +493,19 @@ export default function ShareChat({
                         </button>
                     </div>
                     {proofApplyBlocked ? (
-                        <div className='mb-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
-                            Browser proof needs retry before these changes can be applied.
+                        <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
+                            <span>Browser proof needs retry before these changes can be applied.</span>
+                            {lastBrowserCalls.length ? (
+                                <button
+                                    type='button'
+                                    onClick={retryBrowserProof}
+                                    disabled={retryingProof}
+                                    className='inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-red-200/15 px-2.5 text-[11px] font-medium text-red-50/82 transition hover:bg-red-100/10 disabled:cursor-default disabled:opacity-55'
+                                >
+                                    {retryingProof ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <RotateCw className='h-3.5 w-3.5' />}
+                                    Retry proof
+                                </button>
+                            ) : null}
                         </div>
                     ) : null}
                     <div className='max-h-56 space-y-2 overflow-auto rounded-lg border border-bright/8 bg-black/24 p-2'>
