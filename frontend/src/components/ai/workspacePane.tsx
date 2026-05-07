@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { ExternalLink, FolderGit2, RefreshCcw, Rocket, ServerCog, Share2, TerminalSquare, UsersRound } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ExternalLink, FolderGit2, RefreshCcw, Rocket, ServerCog, Share2, ShieldCheck, TerminalSquare, UsersRound } from 'lucide-react'
 import { listTreePaths } from './shareTree'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -37,7 +37,7 @@ type WorkspacePaneProps = {
     onRefreshRepo: (repoId: string) => void | Promise<void>
     onRevokeRepoCredential: (repoId: string) => void | Promise<void>
     onScaffoldStarter: (template: 'nextjs_docker', projectName?: string | null) => void | Promise<void>
-    onStartDeployment: (input: { vmName: string, port: string, healthPath: string, accessPolicy: AIDeploymentAccessPolicy }) => void | Promise<void>
+    onStartDeployment: (input: { vmName: string, port: string, healthPath: string, accessPolicy: AIDeploymentAccessPolicy, environment: AIDeploymentEnvironment }) => void | Promise<void>
     onInviteCollaborator: (input: { userId: string, role: 'reviewer' | 'editor' }) => void | Promise<void>
     onRollbackRelease: (releaseId: string) => void | Promise<void>
     onRemoveCollaborator: (userId: string) => void | Promise<void>
@@ -89,6 +89,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     const [deployPort, setDeployPort] = useState('3000')
     const [deployHealthPath, setDeployHealthPath] = useState('/')
     const [deployAccessPolicy, setDeployAccessPolicy] = useState<AIDeploymentAccessPolicy>('owner_only')
+    const [deployEnvironment, setDeployEnvironment] = useState<AIDeploymentEnvironment>('staging')
     const [collaboratorUserId, setCollaboratorUserId] = useState('')
     const [collaboratorRole, setCollaboratorRole] = useState<'reviewer' | 'editor'>('editor')
     const activeRepoId = typeof activeConversation?.workspaceMeta?.repositoryId === 'string'
@@ -121,6 +122,17 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     const deployActors = Array.from(new Set(deployments.map((deployment) => deployment.startedBy || deployment.ownerId).filter(Boolean)))
     const releaseActors = Array.from(new Set(releases.map((release) => release.createdBy || release.ownerId).filter(Boolean)))
     const latestRelease = releases[0] || null
+    const envPlaceholders = detectEnvPlaceholders(activeRepo)
+    const deployProfile = buildDeployProfile({
+        environment: deployEnvironment,
+        vmName: deployVmName,
+        port: deployPort,
+        healthPath: deployHealthPath,
+        accessPolicy: deployAccessPolicy,
+        activeRepo,
+        activeConversation,
+        envPlaceholders,
+    })
 
     useEffect(() => {
         if (!activeRepo) {
@@ -297,7 +309,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             <Panel
                 icon={<RefreshCcw className='h-4 w-4' />}
                 title='Release history'
-                subtitle='Track current vs previous deployable states and mark a rollback target.'
+                subtitle='Rollback targets and launch evidence per release.'
             >
                 {releases.length ? (
                     <div className='max-h-52 space-y-2 overflow-y-auto pr-1'>
@@ -329,7 +341,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                         disabled={rollbackPendingId === release.id}
                                         className='mt-3 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
                                     >
-                                        {rollbackPendingId === release.id ? 'Marking...' : 'Mark rollback target'}
+                                        {rollbackPendingId === release.id ? 'Preparing...' : 'Rollback to this release'}
                                     </button>
                                 ) : null}
                             </div>
@@ -378,8 +390,32 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             <Panel
                 icon={<ServerCog className='h-4 w-4' />}
                 title='Deploy'
-                subtitle='Orchestrate one VM target and record healthcheck progress.'
+                subtitle='One-click launch path with owned infrastructure evidence.'
             >
+                <div className='grid grid-cols-2 gap-2'>
+                    {(['staging', 'production'] as AIDeploymentEnvironment[]).map((environment) => (
+                        <button
+                            key={environment}
+                            type='button'
+                            onClick={() => setDeployEnvironment(environment)}
+                            className={`rounded-xl px-3 py-2 text-sm font-semibold outline transition-colors ${deployEnvironment === environment ? 'bg-[#f07d33]/12 text-[#f07d33] outline-[#f07d33]/20' : 'bg-dark/30 text-bright/62 outline-dark hover:text-bright/86'}`}
+                        >
+                            {environment === 'production' ? 'Production' : 'Staging'}
+                        </button>
+                    ))}
+                </div>
+                <div className='rounded-xl bg-dark/30 px-3 py-3 text-xs text-bright/58 outline outline-dark'>
+                    <div className='flex items-center gap-2 text-bright/82'>
+                        <ShieldCheck className='h-3.5 w-3.5 text-[#f07d33]' />
+                        <span className='font-semibold'>{deployProfile.title}</span>
+                    </div>
+                    <div className='mt-2 grid gap-1'>
+                        <div>Domain: {deployProfile.domain}</div>
+                        <div>SSL: {deployProfile.ssl}</div>
+                        <div>Logs: {deployProfile.logs}</div>
+                        <div>Rollback: {deployProfile.rollback}</div>
+                    </div>
+                </div>
                 {availableVmTargets.length ? (
                     <div className='flex flex-wrap gap-2'>
                         {availableVmTargets.slice(0, 8).map((target) => (
@@ -399,6 +435,29 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
                 </div>
                 <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
+                <div className='rounded-xl bg-dark/30 px-3 py-3 outline outline-dark'>
+                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-bright/30'>Deploy checklist</div>
+                    <div className='grid gap-1.5'>
+                        {deployProfile.checklist.map((item) => (
+                            <ChecklistItem key={item.label} label={item.label} state={item.state} />
+                        ))}
+                    </div>
+                </div>
+                <div className='rounded-xl bg-dark/30 px-3 py-3 outline outline-dark'>
+                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-bright/30'>Env placeholders</div>
+                    {envPlaceholders.length ? (
+                        <div className='flex flex-wrap gap-1.5'>
+                            {envPlaceholders.slice(0, 10).map((name) => (
+                                <span key={name} className='rounded-full bg-bright/8 px-2 py-1 text-[10px] text-bright/62 outline outline-bright/5'>
+                                    {name}=required
+                                </span>
+                            ))}
+                            {envPlaceholders.length > 10 ? <span className='text-[10px] text-bright/38'>+{envPlaceholders.length - 10} more</span> : null}
+                        </div>
+                    ) : (
+                        <div className='text-xs text-bright/42'>No required env vars detected from imported files. Secrets are never echoed here.</div>
+                    )}
+                </div>
                 {activeRepo ? (
                     <div className='text-xs text-bright/42'>
                         Suggested for {activeRepo.stackType.replaceAll('_', ' ')}: {activeRepo.stackType === 'nextjs_docker' ? '3000 and /' : '3001 and /ready'}.
@@ -422,11 +481,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 ) : null}
                 <button
                     type='button'
-                    onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy })}
+                    onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy, environment: deployEnvironment })}
                     disabled={deployPending}
                     className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
-                    {deployPending ? 'Checking deploy...' : 'Start VM deploy check'}
+                    {deployPending ? 'Launching...' : `Deploy to ${deployEnvironment}`}
                 </button>
                 {deployments.length ? (
                     <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>
@@ -444,7 +503,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                         {deployment.status}
                                     </span>
                                 </div>
-                                {deployment.failureReason ? <div className='mt-2 text-xs text-amber-100/75'>{deployment.failureReason}</div> : null}
+                                {deployment.failureReason ? (
+                                    <div className='mt-2 rounded-lg bg-amber-500/8 px-2.5 py-2 text-xs text-amber-100/78 outline outline-amber-200/10'>
+                                        {deployment.failureReason}
+                                    </div>
+                                ) : null}
                                 <div className='mt-2 space-y-1'>
                                     {deployment.events.slice(-3).map((event) => (
                                         <div key={`${deployment.id}-${event.stage}-${event.timestamp}`} className='text-[11px] text-bright/42'>
@@ -639,6 +702,99 @@ function PreviewLink({ href, emptyText }: { href: string | null | undefined, emp
             <ExternalLink className='h-3 w-3 shrink-0' />
         </a>
     )
+}
+
+function ChecklistItem({ label, state }: { label: string, state: 'ready' | 'needs_input' | 'automatic' }) {
+    const ready = state === 'ready' || state === 'automatic'
+
+    return (
+        <div className='flex items-center justify-between gap-3 rounded-lg bg-dark/26 px-2.5 py-2 text-xs text-bright/58 outline outline-dark'>
+            <span className='min-w-0 truncate'>{label}</span>
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${ready ? 'bg-emerald-500/12 text-emerald-300' : 'bg-amber-500/12 text-amber-200'}`}>
+                {ready ? <CheckCircle2 className='h-3 w-3' /> : <AlertTriangle className='h-3 w-3' />}
+                {state === 'automatic' ? 'auto' : state === 'ready' ? 'ready' : 'needed'}
+            </span>
+        </div>
+    )
+}
+
+function detectEnvPlaceholders(repo: AIImportedRepo | null) {
+    if (!repo) {
+        return []
+    }
+
+    const names = new Set<string>()
+    for (const file of repo.files) {
+        const path = file.path.toLowerCase()
+        const content = file.content || ''
+        if (path.endsWith('.env.example') || path.endsWith('.env.template') || path === '.env.example') {
+            for (const line of content.split('\n')) {
+                const match = line.match(/^\s*([A-Z][A-Z0-9_]{1,80})\s*=/)
+                if (match) {
+                    names.add(match[1])
+                }
+            }
+        }
+
+        for (const match of content.matchAll(/\b(?:process\.env|import\.meta\.env)\.([A-Z][A-Z0-9_]{1,80})\b/g)) {
+            names.add(match[1])
+        }
+    }
+
+    return Array.from(names)
+        .filter((name) => !['NODE_ENV', 'PORT', 'HOST', 'HOSTNAME'].includes(name))
+        .sort()
+}
+
+function buildDeployProfile({
+    environment,
+    vmName,
+    port,
+    healthPath,
+    accessPolicy,
+    activeRepo,
+    activeConversation,
+    envPlaceholders,
+}: {
+    environment: AIDeploymentEnvironment
+    vmName: string
+    port: string
+    healthPath: string
+    accessPolicy: AIDeploymentAccessPolicy
+    activeRepo: AIImportedRepo | null
+    activeConversation: AIConversation | null
+    envPlaceholders: string[]
+}) {
+    const service = sanitizeLabel(activeRepo?.name || activeConversation?.title || 'workspace')
+    const domain = environment === 'production'
+        ? `${service}.hanasand.com`
+        : `${service}.staging.hanasand.com`
+    const checklist: Array<{ label: string, state: 'ready' | 'needs_input' | 'automatic' }> = [
+        { label: `Target VM: ${vmName || 'choose a VM'}`, state: vmName ? 'ready' : 'needs_input' },
+        { label: `Domain profile: ${domain}`, state: 'automatic' },
+        { label: 'SSL certificate after route is live', state: 'automatic' },
+        { label: `Health check: ${port || 'port'}${healthPath || '/'}`, state: port && healthPath ? 'ready' : 'needs_input' },
+        { label: envPlaceholders.length ? `${envPlaceholders.length} env placeholder${envPlaceholders.length === 1 ? '' : 's'} detected` : 'No env placeholders detected', state: 'automatic' },
+        { label: `Access policy: ${accessPolicy.replaceAll('_', ' ')}`, state: 'ready' },
+        { label: 'Build logs, deploy events, and rollback target recorded', state: 'automatic' },
+    ]
+
+    return {
+        title: `${environment === 'production' ? 'Production' : 'Staging'} infrastructure profile`,
+        domain,
+        ssl: 'Automatic after domain route responds',
+        logs: 'Build, healthcheck, VM bridge, and release events',
+        rollback: 'Previous release is selectable from release history',
+        checklist,
+    }
+}
+
+function sanitizeLabel(value: string) {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'workspace'
 }
 
 function PathBadge({

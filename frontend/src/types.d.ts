@@ -664,6 +664,8 @@ type AIStackType = 'nextjs_docker' | 'fastify_postgres' | 'fastify_worker_redis'
 
 type AIDeploymentAccessPolicy = 'owner_only' | 'collaborators' | 'public_preview'
 
+type AIDeploymentEnvironment = 'staging' | 'production'
+
 type AIReleaseStatus = 'current' | 'superseded' | 'failed' | 'rollback_target' | 'rolled_back' | 'restored_source'
 
 type AIRelease = {
@@ -1119,6 +1121,8 @@ type AIDeployment = {
 type AIStackType = 'nextjs_docker' | 'fastify_postgres' | 'fastify_worker_redis' | 'unknown'
 
 type AIDeploymentAccessPolicy = 'owner_only' | 'collaborators' | 'public_preview'
+
+type AIDeploymentEnvironment = 'staging' | 'production'
 
 type AIReleaseStatus = 'current' | 'superseded' | 'failed' | 'rollback_target' | 'rolled_back' | 'restored_source'
 

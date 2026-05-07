@@ -13,7 +13,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
     }
 
     const disabled = !capability.canDeploy
-    const label = disabled ? 'No deploy target' : terminalOpen ? 'Terminal open' : 'Deploy'
+    const label = disabled ? 'No deploy target' : terminalOpen ? 'Deployment terminal open' : 'Launch'
     const stateClass = disabled
         ? 'cursor-not-allowed border-bright/8 bg-black/36 text-bright/34'
         : 'cursor-pointer border-[#f07d33]/25 bg-[#f07d33]/12 text-[#ffb77c] hover:border-[#f07d33]/45 hover:bg-[#f07d33]/18 hover:text-[#ffd5b4]'
@@ -21,7 +21,7 @@ export default function Deploy({ setTerminalOpen, terminalOpen, capability }: De
     return (
         <button
             type='button'
-            aria-label={disabled ? `Deployment unavailable: ${capability.reason}` : terminalOpen ? 'Terminal open for deployment commands' : 'Open terminal for deployment commands'}
+            aria-label={disabled ? `Deployment unavailable: ${capability.reason}` : terminalOpen ? 'Terminal open for deployment commands' : 'Open launch path with deployment commands'}
             title={capability.reason}
             disabled={disabled}
             onClick={() => {

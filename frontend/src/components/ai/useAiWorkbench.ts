@@ -975,11 +975,13 @@ export default function useAiWorkbench({
         port,
         healthPath,
         accessPolicy,
+        environment,
     }: {
         vmName: string
         port: string
         healthPath: string
         accessPolicy: AIDeploymentAccessPolicy
+        environment: AIDeploymentEnvironment
     }) => {
         if (!activeConversation) {
             setStatusNotice('Open a conversation before starting a deploy.')
@@ -1008,6 +1010,7 @@ export default function useAiWorkbench({
                     port,
                     healthPath,
                     accessPolicy,
+                    environment,
                 }),
             })
             const payload = await response.json().catch(() => null) as { deployment?: AIDeployment, quota?: AIDeployQuota, error?: string } | null
