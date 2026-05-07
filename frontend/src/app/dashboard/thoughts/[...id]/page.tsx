@@ -15,7 +15,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     return (
         <div className='h-full'>
-            <div className='p-16'>
+            <div className='px-4 py-8 md:px-10 lg:px-16'>
                 <EditorClient thought={thought} />
             </div>
         </div>
