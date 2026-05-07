@@ -1,11 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { auditAgentAction, evaluateAgentActionPolicy } from '#utils/ai/actionPolicy.ts'
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
 const HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
 export default async function httpRequestTool(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
+    const { valid, id: actorId } = await tokenWrapper(req, res)
     if (!valid) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
@@ -29,6 +30,34 @@ export default async function httpRequestTool(req: FastifyRequest, res: FastifyR
     const target = new URL(url)
     if (!['http:', 'https:'].includes(target.protocol)) {
         return res.status(400).send({ error: 'Only http and https requests are supported.' })
+    }
+
+    const approval = parseApproval(req.body)
+    const policyDecision = await evaluateAgentActionPolicy({
+        action: 'http_request',
+        actorId,
+        method: normalizedMethod,
+        target: target.toString(),
+        content: body,
+        approved: approval.approved,
+        approvalId: approval.approvalId,
+        metadata: { host: target.hostname },
+    })
+    await auditAgentAction(req, {
+        action: 'http_request',
+        actorId,
+        method: normalizedMethod,
+        target: target.toString(),
+        content: body,
+        approved: approval.approved,
+        approvalId: approval.approvalId,
+        metadata: { host: target.hostname },
+    }, policyDecision)
+    if (policyDecision.status === 'blocked') {
+        return res.status(403).send({ error: policyDecision.reason, decision: policyDecision })
+    }
+    if (policyDecision.status === 'checkpoint_required') {
+        return res.status(409).send({ error: policyDecision.reason, decision: policyDecision })
     }
 
     const started = performance.now()
@@ -63,6 +92,14 @@ export default async function httpRequestTool(req: FastifyRequest, res: FastifyR
         })
     } finally {
         clearTimeout(timeout)
+    }
+}
+
+function parseApproval(body: unknown) {
+    const input = body && typeof body === 'object' ? body as { approved?: unknown, approvalId?: unknown } : {}
+    return {
+        approved: input.approved === true,
+        approvalId: typeof input.approvalId === 'string' ? input.approvalId : null,
     }
 }
 

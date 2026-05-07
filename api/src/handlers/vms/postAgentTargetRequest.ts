@@ -4,6 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
 import { agentTargetSelect } from '#utils/vms/agentTargetQuery.ts'
 import config from '#constants'
+import { auditAgentAction, evaluateAgentActionPolicy } from '#utils/ai/actionPolicy.ts'
 
 type VMRow = {
     name: string
@@ -18,6 +19,8 @@ type RequestBody = {
     url?: string
     headers?: Record<string, unknown>
     body?: string
+    approved?: boolean
+    approvalId?: string
 }
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
@@ -91,6 +94,34 @@ export default async function postAgentTargetRequest(req: FastifyRequest, res: F
             })
         }
 
+        const approval = parseApproval(body)
+        const policyDecision = await evaluateAgentActionPolicy({
+            action: 'vm_http_request',
+            actorId: userId,
+            method,
+            target: targetUrl.toString(),
+            content: requestBody,
+            approved: approval.approved,
+            approvalId: approval.approvalId,
+            metadata: { vmName: vm.name, allowedHosts },
+        })
+        await auditAgentAction(req, {
+            action: 'vm_http_request',
+            actorId: userId,
+            method,
+            target: targetUrl.toString(),
+            content: requestBody,
+            approved: approval.approved,
+            approvalId: approval.approvalId,
+            metadata: { vmName: vm.name, allowedHosts },
+        }, policyDecision)
+        if (policyDecision.status === 'blocked') {
+            return res.status(403).send({ error: policyDecision.reason, decision: policyDecision })
+        }
+        if (policyDecision.status === 'checkpoint_required') {
+            return res.status(409).send({ error: policyDecision.reason, decision: policyDecision })
+        }
+
         const internalResponse = await fetch(`${config.internal_api}/vm/${encodeURIComponent(vm.name)}/request`, {
             method: 'POST',
             headers: {
@@ -123,6 +154,13 @@ export default async function postAgentTargetRequest(req: FastifyRequest, res: F
     } catch (error) {
         req.log.error({ err: error, vmId: id, userId }, 'Unable to proxy VM-local HTTP request.')
         return res.status(500).send({ error: 'Unable to run request through VM target.' })
+    }
+}
+
+function parseApproval(body: RequestBody) {
+    return {
+        approved: body.approved === true,
+        approvalId: typeof body.approvalId === 'string' ? body.approvalId : null,
     }
 }
 

@@ -1,11 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { auditAgentAction, evaluateAgentActionPolicy } from '#utils/ai/actionPolicy.ts'
 
 const MAX_EXCERPT_LENGTH = 5000
 const MAX_STRUCTURE_ITEMS = 20
 
 export default async function browserTaskTool(req: FastifyRequest, res: FastifyReply) {
-    const { valid } = await tokenWrapper(req, res)
+    const { valid, id: actorId } = await tokenWrapper(req, res)
     if (!valid) {
         return res.status(401).send({ error: 'Unauthorized.' })
     }
@@ -29,6 +30,27 @@ export default async function browserTaskTool(req: FastifyRequest, res: FastifyR
 
     if (!['http:', 'https:'].includes(target.protocol)) {
         return res.status(400).send({ error: 'Only http and https browser tasks are supported.' })
+    }
+
+    const policyDecision = await evaluateAgentActionPolicy({
+        action: 'browser_task',
+        actorId,
+        method: 'GET',
+        target: target.toString(),
+        metadata: { host: target.hostname },
+    })
+    await auditAgentAction(req, {
+        action: 'browser_task',
+        actorId,
+        method: 'GET',
+        target: target.toString(),
+        metadata: { host: target.hostname },
+    }, policyDecision)
+    if (policyDecision.status === 'blocked') {
+        return res.status(403).send({ error: policyDecision.reason, decision: policyDecision })
+    }
+    if (policyDecision.status === 'checkpoint_required') {
+        return res.status(409).send({ error: policyDecision.reason, decision: policyDecision })
     }
 
     const started = performance.now()

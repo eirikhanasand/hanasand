@@ -378,6 +378,12 @@ export default function ShareChat({
         setPendingEdit((current) => current ? { ...current, status: 'applying', error: undefined } : current)
         const applied: Share[] = []
         for (const change of pendingEdit.changes) {
+            const policyCheck = await approvePendingShareChange(pendingEdit, change, share)
+            if (!policyCheck.ok) {
+                setPendingEdit((current) => current ? { ...current, status: 'error', error: policyCheck.error } : current)
+                return
+            }
+
             const updated = change.shareId
                 ? await updateShare(change.shareId, {
                     content: change.content,
@@ -714,6 +720,44 @@ export default function ShareChat({
             </form>
         </section>
     )
+}
+
+async function approvePendingShareChange(pendingEdit: PendingEdit, change: PendingShareChange, share: Share) {
+    const response = await aiClientRequest('/tools/ai', {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'audit_agent_action',
+            toolAction: 'share_file_write',
+            approved: true,
+            approvalId: pendingEdit.id,
+            target: change.path,
+            path: change.path,
+            content: change.content,
+            metadata: {
+                shareId: change.shareId || null,
+                rootShareId: share.id,
+                created: Boolean(change.created),
+                checkpoint: 'share_pending_edit_apply',
+                changeCount: pendingEdit.changes.length,
+            },
+        }),
+    })
+    if (response.ok) {
+        return { ok: true as const }
+    }
+
+    const payload = await response.json().catch(() => null) as {
+        error?: string
+        decision?: { safeAlternative?: string }
+    } | null
+    return {
+        ok: false as const,
+        error: [
+            `Safety policy blocked ${change.path}.`,
+            payload?.error || 'Review the file path and content before applying.',
+            payload?.decision?.safeAlternative ? `Safer path: ${payload.decision.safeAlternative}` : '',
+        ].filter(Boolean).join(' '),
+    }
 }
 
 async function requestShareChat(init: RequestInit & { body?: BodyInit | null }) {
