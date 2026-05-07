@@ -311,12 +311,20 @@ export default function ShareChat({
 
             {browserEvidence[0] ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
-                    <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
-                        <div className='flex min-w-0 items-center gap-1.5'>
+                    <div className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62 sm:grid-cols-[minmax(0,1fr)_auto]'>
+                        <div className='flex min-w-0 items-start gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='truncate'>Browser proof visible · {browserEvidence[0].structure?.headings?.length || 0} headings · {browserEvidence[0].structure?.links?.length || 0} links</span>
+                            <div className='min-w-0'>
+                                <p className='truncate font-semibold text-bright/72'>Browser proof: {browserEvidence[0].title || 'Untitled page'}</p>
+                                <p className='truncate font-mono text-bright/42'>{browserEvidence[0].url}</p>
+                            </div>
                         </div>
-                        <span className='shrink-0 text-bright/42'>{browserEvidence.length} saved</span>
+                        <div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end'>
+                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].structure?.headings?.length || 0} headings</span>
+                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].pageErrors?.filter(Boolean).length || 0} issues</span>
+                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].screenshotPath ? 'Screenshot captured' : 'No screenshot'}</span>
+                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/42'>{browserEvidence.length} saved</span>
+                        </div>
                     </div>
                 </div>
             ) : null}

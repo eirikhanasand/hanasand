@@ -193,6 +193,29 @@ const visibleProofTargetStories: AppStory[] = [
     { id: 1080, prompt: 'are we still reducing token bloat', expected: 'target-reduces-bloat' },
 ]
 
+const evidenceSummaryStories: AppStory[] = [
+    { id: 1081, prompt: 'looks broken, show me fast', expected: 'broken-fast-proof' },
+    { id: 1082, prompt: 'designer says the top feels off', expected: 'designer-scan-proof' },
+    { id: 1083, prompt: 'newbie asks if it is safe to trust', expected: 'newbie-proof-summary' },
+    { id: 1084, prompt: 'corporate reviewer needs issue count now', expected: 'corporate-issue-count' },
+    { id: 1085, prompt: 'mobile complaint, dont make me read logs', expected: 'mobile-no-logs' },
+    { id: 1086, prompt: 'agency client wants screenshot status visible', expected: 'agency-screenshot-state' },
+    { id: 1087, prompt: 'ops says prove which page failed', expected: 'ops-failed-url' },
+    { id: 1088, prompt: 'investor link is live soon, no essays', expected: 'investor-compact-proof' },
+    { id: 1089, prompt: 'accessibility concern, show evidence status', expected: 'a11y-evidence-status' },
+    { id: 1090, prompt: 'pricing page might be wrong', expected: 'pricing-proof-strip' },
+    { id: 1091, prompt: 'support needs the proof title visible', expected: 'support-proof-title' },
+    { id: 1092, prompt: 'founder hates terminal scrollback', expected: 'founder-no-scrollback' },
+    { id: 1093, prompt: 'restaurant owner asks what browser saw', expected: 'restaurant-browser-saw' },
+    { id: 1094, prompt: 'compliance wants errors before edits', expected: 'compliance-errors-first' },
+    { id: 1095, prompt: 'designer asks if screenshot happened', expected: 'designer-screenshot-proof' },
+    { id: 1096, prompt: 'total beginner says just tell me if it worked', expected: 'beginner-worked-proof' },
+    { id: 1097, prompt: 'another agent continues after me', expected: 'handoff-proof-strip' },
+    { id: 1098, prompt: 'sales page looks scammy, verify visible claims', expected: 'sales-claims-proof' },
+    { id: 1099, prompt: 'public sector buyer needs quick audit surface', expected: 'public-sector-proof' },
+    { id: 1100, prompt: 'are we drifting or shipping useful websites', expected: 'shipping-drift-proof' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -1050,4 +1073,127 @@ test('share page AI shows the browser proof target before users send ambiguous p
     }
 
     expect(handledPrompts).toHaveLength(visibleProofTargetStories.length)
+})
+
+test('share page AI summarizes browser evidence in the chat status strip for fast handoff', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-evidence-summary-story',
+                alias: body.path || body.name || body.id || 'app-evidence-summary-story',
+                path: body.path || body.name || body.id || 'app-evidence-summary-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-evidence-summary-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        const storyId = Number(body.url?.match(/app-proof-strip-(\d+)/)?.[1] || 0)
+        expect(storyId).toBeGreaterThanOrEqual(1081)
+        const hasScreenshot = storyId % 2 === 0
+        const hasIssue = storyId % 3 === 0
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url: body.url,
+                title: `Proof Strip ${storyId}`,
+                textExcerpt: 'Compact proof strip with title, URL, issue count, and screenshot state.',
+                structure: {
+                    headings: [`Proof strip ${storyId}`, 'Fast handoff'],
+                    links: [{ text: 'Open checked page', href: body.url }],
+                    buttons: ['Review proof'],
+                    inputs: [],
+                    forms: [],
+                    hasViewportMeta: true,
+                },
+                screenshotPath: hasScreenshot ? `/screenshots/proof-strip-${storyId}.png` : null,
+                consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
+                pageErrors: hasIssue ? ['Visible issue found in proof strip test'] : [],
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
+        const matchingStory = evidenceSummaryStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-proof-strip-${matchingStory!.id}`
+        expect(body.maxTokens).toBeLessThanOrEqual(2200)
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        expect(body.context?.length || 0).toBeLessThan(9_500)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. Proof summary is visible in the chat strip.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Fast proof summary, no terminal scrollback, manual apply.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of evidenceSummaryStories) {
+        const expectedUrl = `https://hanasand.com/s/app-proof-strip-${story.id}`
+        await page.goto(`/s/app-proof-strip-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. Proof summary is visible in the chat strip.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText(`Browser proof: Proof Strip ${story.id}`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText(expectedUrl).first()).toBeVisible()
+        await expect(page.getByText('2 headings').first()).toBeVisible()
+        await expect(page.getByText(`${story.id % 3 === 0 ? 1 : 0} issues`).first()).toBeVisible()
+        await expect(page.getByText(story.id % 2 === 0 ? 'Screenshot captured' : 'No screenshot').first()).toBeVisible()
+        await expect(page.getByText(`Browser proof visible for ${expectedUrl}.`)).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(evidenceSummaryStories.length)
 })
