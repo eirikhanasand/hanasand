@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Bot, Cpu, Gauge, HardDrive, MemoryStick, Zap } from 'lucide-react'
+import { Bot, Cpu, Gauge, HardDrive, MemoryStick, Target, Zap } from 'lucide-react'
 import DisplayClient from './displayClient'
 import Metric from './metric'
 
@@ -36,11 +36,12 @@ export default function GPT_Content({
 
     return (
         <div className='w-full space-y-4'>
-            <div className='grid w-full gap-4 md:grid-cols-2 xl:grid-cols-6'>
+            <div className='grid w-full gap-4 md:grid-cols-2 xl:grid-cols-4'>
                 <SummaryCard title='RAM load' icon={<MemoryStick className='h-4 w-4' />} metric={totalLoad.ram} />
                 <SummaryCard title='CPU load' icon={<Cpu className='h-4 w-4' />} metric={totalLoad.cpu} />
                 <SummaryCard title='GPU load' icon={<HardDrive className='h-4 w-4' />} metric={totalLoad.gpu} />
                 <ThroughputCard tps={totalLoad.tps} />
+                <UsefulProgressCard />
                 <CapacityCard active={capacity.active} available={capacity.available} max={capacity.max} lanes={lanes.length} />
                 <PowerCard watts={power.watts} monthlyKwh={power.monthlyKwh} />
                 <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
@@ -115,6 +116,23 @@ function ThroughputCard({ tps }: { tps: number }) {
                     Live generation
                 </div>
             </div>
+        </div>
+    )
+}
+
+function UsefulProgressCard() {
+    return (
+        <div className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
+            <div className='flex items-center justify-between text-bright/35'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em]'>Useful progress</span>
+                <Target className='h-4 w-4' />
+            </div>
+            <div className='mt-3 text-lg font-semibold leading-6 text-bright/90'>
+                Verified progress / min / NOK
+            </div>
+            <p className='mt-2 text-xs leading-5 text-bright/45'>
+                Key metric: not "tokens/sec." For this product, it is verified useful project progress per minute per NOK.
+            </p>
         </div>
     )
 }
