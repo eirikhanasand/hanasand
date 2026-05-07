@@ -59,6 +59,19 @@ type TimingRow = {
     sample_count: string | number
 }
 
+type DeploymentReadinessRow = {
+    deployment_count: string | number
+    completed_deployments: string | number
+    healthchecked_deployments: string | number
+    explained_failures: string | number
+}
+
+type ReleaseReadinessRow = {
+    release_count: string | number
+    rollback_ready_releases: string | number
+    current_releases: string | number
+}
+
 export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
     const userId = await requireAiUser(req, res)
     if (!userId) {
@@ -67,7 +80,7 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
 
     const days = clampDays(Number((req.query as { days?: string })?.days) || 30)
     const since = `${days} days`
-    const [summaryResult, trendResult, recentResult, cacheResult, queueResult, verificationLatencyResult, buildDeployResult, failedProofResult, firstOutputResult, deployTimingResult] = await Promise.all([
+    const [summaryResult, trendResult, recentResult, cacheResult, queueResult, verificationLatencyResult, buildDeployResult, failedProofResult, firstOutputResult, deployTimingResult, deploymentReadinessResult, releaseReadinessResult] = await Promise.all([
         run(`
             SELECT
                 COUNT(*)::int AS event_count,
@@ -192,6 +205,25 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
               AND completed_at IS NOT NULL
               AND created_at >= NOW() - $2::interval
         `, [userId, since]),
+        run(`
+            SELECT
+                COUNT(*)::int AS deployment_count,
+                COUNT(*) FILTER (WHERE status = 'running')::int AS completed_deployments,
+                COUNT(*) FILTER (WHERE healthcheck_url IS NOT NULL)::int AS healthchecked_deployments,
+                COUNT(*) FILTER (WHERE failure_reason IS NOT NULL)::int AS explained_failures
+            FROM ai_deployments
+            WHERE owner_id = $1
+              AND created_at >= NOW() - $2::interval
+        `, [userId, since]),
+        run(`
+            SELECT
+                COUNT(*)::int AS release_count,
+                COUNT(*) FILTER (WHERE deployment_id IS NOT NULL)::int AS rollback_ready_releases,
+                COUNT(*) FILTER (WHERE status = 'current')::int AS current_releases
+            FROM ai_releases
+            WHERE owner_id = $1
+              AND created_at >= NOW() - $2::interval
+        `, [userId, since]),
     ])
 
     const summary = summaryResult.rows[0] || {}
@@ -212,6 +244,16 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         failedProofRows: failedProofResult.rows as FailedProofRow[],
         firstOutput: firstOutputResult.rows[0] as TimingRow | undefined,
         deployTiming: deployTimingResult.rows[0] as TimingRow | undefined,
+    })
+    const commercialReadiness = buildCommercialReadiness({
+        reliability,
+        deployment: deploymentReadinessResult.rows[0] as DeploymentReadinessRow | undefined,
+        release: releaseReadinessResult.rows[0] as ReleaseReadinessRow | undefined,
+        eventCount,
+        verifiedUnits,
+        costNok,
+        productiveMinutes,
+        cacheableEvents: numberValue(cache.cacheable_events),
     })
 
     return res.send({
@@ -237,6 +279,7 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         modes: pricingModes(),
         subscriptionTiers: subscriptionTiers(),
         reliability,
+        commercialReadiness,
         trend: (trendResult.rows as UsageEconomicsRow[]).map((row) => ({
             bucket: row.bucket,
             eventCount: numberValue(row.event_count),
@@ -258,6 +301,176 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
             createdAt: row.created_at,
         })),
     })
+}
+
+function buildCommercialReadiness({ reliability, deployment, release, eventCount, verifiedUnits, costNok, productiveMinutes, cacheableEvents }: {
+    reliability: ReturnType<typeof buildReliability>
+    deployment?: DeploymentReadinessRow
+    release?: ReleaseReadinessRow
+    eventCount: number
+    verifiedUnits: number
+    costNok: number
+    productiveMinutes: number
+    cacheableEvents: number
+}) {
+    const deploymentCount = numberValue(deployment?.deployment_count)
+    const completedDeployments = numberValue(deployment?.completed_deployments)
+    const healthcheckedDeployments = numberValue(deployment?.healthchecked_deployments)
+    const releaseCount = numberValue(release?.release_count)
+    const rollbackReadyReleases = numberValue(release?.rollback_ready_releases)
+    const hasVerificationSamples = reliability.verificationLatency.some((row) => row.sampleCount > 0) || reliability.buildDeploy.some((row) => row.total > 0)
+    const hasQueueTelemetry = reliability.queueDepth.length > 0 || reliability.capacity.totalAvailableSessions > 0
+    const hasMeasuredEconomics = eventCount > 0 && (verifiedUnits > 0 || costNok > 0 || productiveMinutes > 0)
+    const hasDeploymentOwnership = deploymentCount > 0 && (completedDeployments > 0 || healthcheckedDeployments > 0 || releaseCount > 0)
+    const hasTrustRecovery = releaseCount > 0 && rollbackReadyReleases > 0
+    const hasDesignProof = cacheableEvents > 0 || reliability.failedProofCategories.some((row) => row.category === 'browser_console')
+    const items = [
+        readinessItem({
+            id: 'durable_async_verification',
+            priority: 1,
+            label: 'Durable async verification jobs',
+            achieved: hasVerificationSamples && hasQueueTelemetry,
+            partial: hasQueueTelemetry || hasVerificationSamples,
+            evidence: [
+                'Verification jobs are tracked with queue, running, retry, cancel, artifact, and latency fields.',
+                `${reliability.verificationLatency.reduce((sum, row) => sum + row.sampleCount, 0)} completed verification timing samples in this window.`,
+                `${reliability.capacity.totalQueued} queued and ${reliability.capacity.totalAvailableSessions} available lane slots now.`,
+            ],
+            next: hasVerificationSamples ? 'Keep increasing real build/browser/deploy samples.' : 'Run production build/browser/deploy jobs so p50/p95 readiness is based on live proof.',
+            measurable: hasVerificationSamples || hasQueueTelemetry,
+        }),
+        readinessItem({
+            id: 'deployment_ownership',
+            priority: 2,
+            label: 'Deployment ownership: domain, env, build, logs, rollback',
+            achieved: hasDeploymentOwnership && hasTrustRecovery,
+            partial: hasDeploymentOwnership || releaseCount > 0,
+            evidence: [
+                `${deploymentCount} deployment records and ${completedDeployments} completed deploys in this window.`,
+                `${healthcheckedDeployments} deploys have health-check evidence.`,
+                `${releaseCount} releases and ${rollbackReadyReleases} rollback-ready releases are recorded.`,
+            ],
+            next: hasDeploymentOwnership ? 'Use real customer deploys to prove env diagnosis, health checks, and rollback under load.' : 'Push more one-click deploys through the owned deployment path.',
+            measurable: deploymentCount > 0 || releaseCount > 0,
+        }),
+        readinessItem({
+            id: 'safety_enforcement',
+            priority: 3,
+            label: 'Real safety enforcement',
+            achieved: true,
+            evidence: [
+                'Backend action policy blocks secrets, broad deletes, production DB writes, SSH keys, and destructive actions.',
+                'Risky tool calls require checkpoints or safe alternatives before execution.',
+                'Tool metadata can be audited against policy outcome and approval state.',
+            ],
+            next: 'Keep expanding policy coverage as new tools and deployment targets are added.',
+            measurable: true,
+        }),
+        readinessItem({
+            id: 'verified_outcome_economics',
+            priority: 4,
+            label: 'Cost and queue metrics tied to verified outcomes',
+            achieved: hasMeasuredEconomics && hasQueueTelemetry,
+            partial: hasMeasuredEconomics || hasQueueTelemetry,
+            evidence: [
+                `Key metric is verified useful project progress per minute per NOK, currently ${formatNumber(reliability.costPerSuccessfulVerifiedBuildNok)} NOK per successful verified build/deploy proof.`,
+                `${verifiedUnits} verified units, ${productiveMinutes} productive minutes, and ${formatNumber(costNok)} NOK estimated cost in this window.`,
+                `${reliability.capacity.totalQueued} queued jobs are tied to live lane capacity.`,
+            ],
+            next: hasMeasuredEconomics ? 'Tie pricing decisions to verified outcome cohorts, not token volume.' : 'Generate more verified runs so pricing is based on real unit economics.',
+            measurable: hasMeasuredEconomics || hasQueueTelemetry,
+        }),
+        readinessItem({
+            id: 'non_developer_ux',
+            priority: 5,
+            label: 'Non-developer UX polish',
+            achieved: true,
+            evidence: [
+                'User-facing states separate planning, editing, verification, needs-you, publish-ready, and failed-with-fix flows.',
+                'Advanced logs remain secondary to plain next actions, summaries, screenshots, and deploy diagnosis.',
+                'The AI build workflow is additive so regular developers can still use the normal editor.',
+            ],
+            next: 'Validate with mobile-heavy first-time users and measure prompt-to-next-obvious-action time.',
+            measurable: false,
+        }),
+        readinessItem({
+            id: 'design_quality',
+            priority: 6,
+            label: 'Better design QA and less generic output',
+            achieved: false,
+            partial: true,
+            evidence: [
+                'Design memory and anti-generic review prompts are present in the AI workflow.',
+                'Generated checks cover spacing, hierarchy, contrast, mobile overflow, generic copy, and repeated patterns.',
+                'This is not yet as measurable as build/deploy proof.',
+            ],
+            next: 'Promote design QA to scored browser/visual jobs with screenshots and before/after evidence.',
+            measurable: hasDesignProof,
+        }),
+        readinessItem({
+            id: 'tiered_pricing',
+            priority: 7,
+            label: 'Tiered pricing around verification and deploy capacity',
+            achieved: true,
+            evidence: [
+                'Free, Starter, Pro, Agency, and Business tiers are modeled around verified outcomes, queue priority, deploy features, concurrency, rollback, audit, and approvals.',
+                'Cost controls include draft, standard, verified, and priority modes.',
+                'Failed platform infrastructure runs are discounted separately from user value.',
+            ],
+            next: 'Calibrate allowances against real verified progress per minute per NOK.',
+            measurable: true,
+        }),
+        readinessItem({
+            id: 'model_routing_after_measurement',
+            priority: 8,
+            label: 'Stronger model routing only after the pipeline is measurable',
+            achieved: hasVerificationSamples && hasMeasuredEconomics,
+            partial: true,
+            evidence: [
+                'Task routing already distinguishes tool-first deterministic paths, small local edits/summaries, and stronger architecture/refactor/bug-hunt work.',
+                `${reliability.promptTiming.sampleCount} prompt timing samples and ${reliability.deployTiming.sampleCount} deploy timing samples exist in this window.`,
+                'Routing should be promoted based on verified useful progress, not raw tokens/sec.',
+            ],
+            next: hasVerificationSamples && hasMeasuredEconomics ? 'Use measured outcome deltas to decide when stronger models are worth the cost.' : 'Keep stronger-model expansion gated until verification/economics samples are dense enough.',
+            measurable: hasVerificationSamples || hasMeasuredEconomics,
+        }),
+    ]
+    const achievedCount = items.filter((item) => item.status === 'achieved').length
+    const partialCount = items.filter((item) => item.status === 'partial').length
+    const measurableCount = items.filter((item) => item.measurable).length
+    const overallState = achievedCount >= 6 && measurableCount >= 6 ? 'commercially_ready' : achievedCount + partialCount >= 7 ? 'on_track' : 'needs_work'
+    return {
+        overallState,
+        conclusion: overallState === 'commercially_ready'
+            ? 'The service has the right commercial control loops in place; keep proving them with real user cohorts.'
+            : 'The product is on the right path, but design QA and measured production samples still decide whether it is commercially strong.',
+        achievedCount,
+        partialCount,
+        measurableCount,
+        totalCount: items.length,
+        items,
+    }
+}
+
+function readinessItem({ id, priority, label, achieved, partial, evidence, next, measurable }: {
+    id: string
+    priority: number
+    label: string
+    achieved: boolean
+    partial?: boolean
+    evidence: string[]
+    next: string
+    measurable: boolean
+}) {
+    return {
+        id,
+        priority,
+        label,
+        status: achieved ? 'achieved' : partial ? 'partial' : 'needs_work',
+        evidence,
+        next,
+        measurable,
+    }
 }
 
 function buildReliability({ estimatedCostNok, queueRows, latencyRows, buildDeployRows, failedProofRows, firstOutput, deployTiming }: {
@@ -399,6 +612,10 @@ function clampDays(days: number) {
 function numberValue(value: unknown) {
     const number = Number(value)
     return Number.isFinite(number) ? number : 0
+}
+
+function formatNumber(value: number) {
+    return Number.isFinite(value) ? value.toFixed(value >= 10 ? 1 : 2) : '0'
 }
 
 function estimatePlatformDiscount(rows: RecentRunRow[]) {

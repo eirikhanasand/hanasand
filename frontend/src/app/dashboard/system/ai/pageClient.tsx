@@ -114,6 +114,23 @@ type AIEconomics = {
             totalAvailableSessions: number
         }
     }
+    commercialReadiness: {
+        overallState: string
+        conclusion: string
+        achievedCount: number
+        partialCount: number
+        measurableCount: number
+        totalCount: number
+        items: {
+            id: string
+            priority: number
+            label: string
+            status: 'achieved' | 'partial' | 'needs_work'
+            evidence: string[]
+            next: string
+            measurable: boolean
+        }[]
+    }
     trend: {
         bucket: string
         eventCount: number
@@ -247,6 +264,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
             </div>
 
             <ReliabilityPanel reliability={economics.reliability} />
+            <CommercialReadinessPanel readiness={economics.commercialReadiness} />
 
             <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
@@ -431,6 +449,70 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                     </div>
                 </div>
             </div>
+        </div>
+    )
+}
+
+function CommercialReadinessPanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
+    const tone = readiness.overallState === 'commercially_ready'
+        ? 'bg-emerald-400/8 text-emerald-100/80 outline-emerald-300/15'
+        : readiness.overallState === 'on_track'
+            ? 'bg-sky-400/8 text-sky-100/80 outline-sky-300/15'
+            : 'bg-amber-400/8 text-amber-100/80 outline-amber-300/15'
+
+    return (
+        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                <div>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Commercial readiness</p>
+                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Priority order toward a paid service</h3>
+                    <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>{readiness.conclusion}</p>
+                </div>
+                <div className={`rounded-lg px-3 py-2 text-sm font-semibold outline ${tone}`}>
+                    {formatKind(readiness.overallState)}
+                    <p className='mt-1 text-xs font-normal opacity-80'>
+                        {readiness.achievedCount} achieved · {readiness.partialCount} partial · {readiness.measurableCount}/{readiness.totalCount} measurable
+                    </p>
+                </div>
+            </div>
+
+            <div className='mt-4 grid gap-3 xl:grid-cols-2'>
+                {readiness.items.map((item) => (
+                    <article key={item.id} className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
+                        <div className='flex items-start justify-between gap-3'>
+                            <div>
+                                <p className='text-xs font-medium uppercase tracking-[0.16em] text-bright/35'>Priority {item.priority}</p>
+                                <h4 className='mt-1 text-sm font-semibold text-bright/86'>{item.label}</h4>
+                            </div>
+                            <ReadinessBadge status={item.status} measurable={item.measurable} />
+                        </div>
+                        <div className='mt-3 space-y-1.5'>
+                            {item.evidence.slice(0, 3).map((line) => (
+                                <p key={line} className='text-xs leading-5 text-bright/48'>{line}</p>
+                            ))}
+                        </div>
+                        <div className='mt-3 rounded-md border border-bright/8 bg-black/18 px-3 py-2'>
+                            <p className='text-xs font-medium text-bright/72'>Next</p>
+                            <p className='mt-1 text-xs leading-5 text-bright/48'>{item.next}</p>
+                        </div>
+                    </article>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function ReadinessBadge({ status, measurable }: { status: AIEconomics['commercialReadiness']['items'][number]['status'], measurable: boolean }) {
+    const label = status === 'achieved' ? 'Achieved' : status === 'partial' ? 'Partial' : 'Needs work'
+    const tone = status === 'achieved'
+        ? 'border-emerald-300/15 bg-emerald-400/8 text-emerald-100/76'
+        : status === 'partial'
+            ? 'border-sky-300/15 bg-sky-400/8 text-sky-100/76'
+            : 'border-amber-300/15 bg-amber-400/8 text-amber-100/76'
+    return (
+        <div className='flex flex-col items-end gap-1'>
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
+            <span className='text-[10px] uppercase tracking-[0.12em] text-bright/32'>{measurable ? 'measured' : 'needs proof'}</span>
         </div>
     )
 }
