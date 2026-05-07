@@ -170,6 +170,29 @@ const shareEvidenceTargetStories: AppStory[] = [
     { id: 1060, prompt: 'ambiguous: fix the thing users see', expected: 'visible-thing' },
 ]
 
+const visibleProofTargetStories: AppStory[] = [
+    { id: 1061, prompt: 'wait, what page are you checking', expected: 'visible-target' },
+    { id: 1062, prompt: 'designer wants to know the exact inspected page', expected: 'designer-visible-target' },
+    { id: 1063, prompt: 'newbie needs the link shown before sending', expected: 'newbie-visible-link' },
+    { id: 1064, prompt: 'corporate reviewer asks for source of proof', expected: 'corporate-proof-source' },
+    { id: 1065, prompt: 'ops says do not hide the target in logs', expected: 'ops-visible-target' },
+    { id: 1066, prompt: 'agency client wants the page url in the ui', expected: 'agency-visible-url' },
+    { id: 1067, prompt: 'support wants to avoid checking the wrong share', expected: 'support-right-share' },
+    { id: 1068, prompt: 'founder is worried about hallucinated browser checks', expected: 'founder-proof-target' },
+    { id: 1069, prompt: 'accessibility reviewer needs target before proof', expected: 'a11y-target-visible' },
+    { id: 1070, prompt: 'pricing proof must show which page was read', expected: 'pricing-target-visible' },
+    { id: 1071, prompt: 'mobile bug is only on this share', expected: 'mobile-target-visible' },
+    { id: 1072, prompt: 'compliance asks for evidence source', expected: 'compliance-source' },
+    { id: 1073, prompt: 'investor handoff needs visible page source', expected: 'investor-source' },
+    { id: 1074, prompt: 'restaurant owner asks what page you inspected', expected: 'restaurant-source' },
+    { id: 1075, prompt: 'terminal agents hide too much state', expected: 'terminal-state-visible' },
+    { id: 1076, prompt: 'another agent should not guess the url', expected: 'handoff-no-guess' },
+    { id: 1077, prompt: 'client says prove the exact thing users see', expected: 'exact-visible-proof' },
+    { id: 1078, prompt: 'designer says no hidden context please', expected: 'designer-no-hidden-context' },
+    { id: 1079, prompt: 'beginner asks why proof is trustworthy', expected: 'beginner-trust' },
+    { id: 1080, prompt: 'are we still reducing token bloat', expected: 'target-reduces-bloat' },
+]
+
 async function addLocalAuthCookies(context: BrowserContext, baseURL: string | undefined) {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     const hostname = new URL(cookieUrl).hostname
@@ -910,4 +933,121 @@ test('share page AI uses the current share URL for browser evidence instead of g
     }
 
     expect(handledPrompts).toHaveLength(shareEvidenceTargetStories.length)
+})
+
+test('share page AI shows the browser proof target before users send ambiguous prompts', async ({ page, context, baseURL }) => {
+    await addLocalAuthCookies(context, baseURL)
+
+    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+        const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: body.id || 'app-visible-proof-target-story',
+                alias: body.path || body.name || body.id || 'app-visible-proof-target-story',
+                path: body.path || body.name || body.id || 'app-visible-proof-target-story',
+                content: body.content || '',
+                owner: 'playwright-user',
+                parent: '',
+                type: body.type || 'folder',
+                tree: [],
+            }),
+        })
+    })
+
+    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+        const shareId = route.request().url().split('/').pop() || 'app-visible-proof-target-story'
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                id: shareId,
+                alias: shareId,
+                path: shareId,
+                content: '',
+                owner: 'playwright-user',
+                parent: '',
+                type: 'file',
+            }),
+        })
+    })
+
+    await page.route('**/api/tools/browser/task', async (route) => {
+        const body = route.request().postDataJSON() as { url?: string }
+        expect(body.url).toContain('https://hanasand.com/s/app-visible-target-')
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                url: body.url,
+                title: 'Visible Target Evidence',
+                textExcerpt: 'The proof target is visible before the user sends.',
+                structure: {
+                    headings: ['Visible proof target', 'Trustworthy evidence'],
+                    links: [{ text: 'Current target', href: body.url }],
+                    buttons: ['Review'],
+                    inputs: [],
+                    forms: [],
+                    hasViewportMeta: true,
+                },
+                screenshotPath: null,
+                consoleMessages: ['Fetched browser target without executing client-side JavaScript.'],
+                pageErrors: [],
+            }),
+        })
+    })
+
+    const handledPrompts: string[] = []
+    await page.route('**/api/tools/ai', async (route) => {
+        const body = route.request().postDataJSON() as { prompt?: string, context?: string }
+        const matchingStory = visibleProofTargetStories.find((story) => body.prompt?.includes(story.prompt))
+        expect(matchingStory).toBeTruthy()
+        const expectedUrl = `https://hanasand.com/s/app-visible-target-${matchingStory!.id}`
+        expect(body.prompt).toContain(`Current share page: ${expectedUrl}`)
+        expect(body.context).toContain(expectedUrl)
+        handledPrompts.push(matchingStory!.prompt)
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: [
+                    `Ready: ${matchingStory!.expected}. The proof target was visible before the check.`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'browser_task',
+                        url: expectedUrl,
+                        captureScreenshot: true,
+                        timeoutMs: 16000,
+                    })}</hanasand-tool>`,
+                    `<hanasand-tool>${JSON.stringify({
+                        action: 'upsert_share',
+                        path: 'app/page.tsx',
+                        content: `export default function Page() { return <main><h1>${matchingStory!.expected}</h1><p>Visible proof target, compact response, manual apply.</p></main> }`,
+                    })}</hanasand-tool>`,
+                ].join('\n\n'),
+            }),
+        })
+    })
+
+    for (const story of visibleProofTargetStories) {
+        const expectedUrl = `https://hanasand.com/s/app-visible-target-${story.id}`
+        await page.goto(`/s/app-visible-target-${story.id}?new=1`)
+        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await expect(page.getByText('Current share target')).toBeVisible()
+        await expect(page.getByText(expectedUrl)).toBeVisible()
+
+        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        const startedAt = Date.now()
+        await page.getByRole('button', { name: 'Send message' }).click()
+
+        await expect(page.getByText(`Ready: ${story.expected}. The proof target was visible before the check.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText(`Browser proof visible for ${expectedUrl}.`)).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Visible proof target').last()).toBeVisible()
+        await expect(page.getByText('1 pending change')).toBeVisible()
+        await expect(page.getByText('hanasand-tool')).not.toBeVisible()
+        expect(Date.now() - startedAt).toBeLessThan(2500)
+    }
+
+    expect(handledPrompts).toHaveLength(visibleProofTargetStories.length)
 })

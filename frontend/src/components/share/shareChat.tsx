@@ -98,6 +98,11 @@ export default function ShareChat({
     const [browserEvidence, setBrowserEvidence] = useState<BrowserEvidence[]>([])
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const treePaths = useMemo(() => listTreePaths(tree || null).slice(0, 80), [tree])
+    const proofTarget = previewUrl
+        ? { label: 'Preview target', url: previewUrl }
+        : share
+            ? { label: 'Current share target', url: buildShareEvidenceUrl(share) }
+            : null
     const canSend = input.trim().length > 0 && !loading && Boolean(share)
     const phaseLabel = loading
         ? elapsedSeconds < 4
@@ -288,6 +293,21 @@ export default function ShareChat({
                     </span>
                 </div>
             </div>
+
+            {proofTarget?.url ? (
+                <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
+                    <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
+                        <div className='flex min-w-0 items-center gap-1.5'>
+                            <Globe2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
+                            <span className='shrink-0 font-semibold text-bright/68'>{proofTarget.label}</span>
+                            <span className='truncate font-mono text-bright/42'>{proofTarget.url}</span>
+                        </div>
+                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open current AI proof target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
+                            <ExternalLink className='h-3.5 w-3.5' />
+                        </a>
+                    </div>
+                </div>
+            ) : null}
 
             {browserEvidence[0] ? (
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
