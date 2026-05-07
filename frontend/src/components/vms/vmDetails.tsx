@@ -1,4 +1,5 @@
 import Field from './field'
+import ErrorNotice from '@/components/error/errorNotice'
 
 type VMDetailsProps = {
     boxStyle: string
@@ -32,7 +33,13 @@ export default function VMDetails({ boxStyle, boxTitleStyle, vm, details }: VMDe
                 <Field title='Virtual Socket ID' value={details.volatile_vsock_id} />
                 <Field title='Architecture' value={details.architecture} />
                 {uniqueArchitecture && <Field title='Config Architecture' value={details.config_architecture} />}
-            </div> : <h1>Unable to get details. Please try again later, refresh the page, or check again using the button in the top right.'</h1>}
+            </div> : <ErrorNotice
+                compact
+                variant='info'
+                className='mt-3'
+                title='Details unavailable'
+                message='Refresh the VM to try loading image, power state, and architecture details again.'
+            />}
         </div>
     )
 }

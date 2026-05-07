@@ -1,3 +1,5 @@
+import ErrorNotice from '@/components/error/errorNotice'
+
 type VMAccessProps = {
     boxStyle: string
     boxTitleStyle: string
@@ -28,7 +30,13 @@ export default function VMAccess({ boxStyle, boxTitleStyle, connection }: VMAcce
                     )}
                 </div>
             ) : (
-                <h1>Unable to load VM access details right now.</h1>
+                <ErrorNotice
+                    compact
+                    variant='info'
+                    className='mt-3'
+                    title='Access details unavailable'
+                    message='Refresh the VM to try loading SSH user, host, and certificate information again.'
+                />
             )}
         </div>
     )
