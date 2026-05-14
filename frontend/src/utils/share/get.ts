@@ -8,31 +8,35 @@ type GetShareProps = {
 }
 
 export async function getShare({ id, token, userId }: GetShareProps): Promise<Share | string> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), Math.max(config.abortTimeout, 10000))
+
     try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), Math.max(config.abortTimeout, 10000))
         const response = await fetch(`${config.url.cdn}/share/${id}`, {
             headers: getShareHeaders(token, userId),
             cache: 'no-store',
             signal: controller.signal
         })
 
-        clearTimeout(timeout)
+        if (response.status === 404 || response.status === 410) {
+            return `Share ${id} not found.`
+        }
+
         if (!response.ok) {
-            throw new Error('Failed to fetch share')
+            throw new Error(`Failed to fetch share ${id}: ${response.status}`)
         }
 
         const data = await response.json()
         return data
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-        console.error(error)
-        if (error.name === 'AbortError') {
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
             console.warn('Request aborted (timeout reached)')
             return 'Unable to load share.'
-        } else {
-            console.error(`Fetch failed: ${error}`)
-            return `Share ${id} not found.`
         }
+
+        console.warn(error)
+        return `Share ${id} not found.`
+    } finally {
+        clearTimeout(timeout)
     }
 }
