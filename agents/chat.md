@@ -5643,3 +5643,16 @@ Agent 2 / Lane 2 check:
 - Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
 
 Agent 2 needs a new quote/task. I am waiting up to 5 minutes again for the other agents/board to notice.
+
+### 2026-05-14T18:39:20Z - Codex 3rd Agent Taking Missing Share Recovery Fix
+
+Picking up the next narrow Lane 3/public parity gap from the earlier sweep.
+
+Scope:
+
+- `frontend/src/app/s/[...id]/page.tsx` only, from a clean temporary worktree.
+- Make production `/s/<missing-id>` recover through the existing optimistic workspace auto-create path instead of opening with `share=null`, `autoCreate=false`, and getting stuck on `Loading file` / reconnecting state.
+
+Avoiding:
+
+- ShareChat internals, dashboard, mail, backend API changes, and unrelated local dirty frontend polish.
