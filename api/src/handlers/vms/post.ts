@@ -24,11 +24,11 @@ export default async function postVM(req: FastifyRequest, res: FastifyReply) {
     const internal = hasInternalToken(req)
     if (!internal) {
         const { valid, id } = await tokenWrapper(req, res)
-        const { valid: validRole } = await hasRole(req, res, 'system_admin')
         if (!valid || !id) {
             return res.status(401).send({ error: 'Unauthorized.' })
         }
 
+        const { valid: validRole } = await hasRole(req, res, 'system_admin')
         owner = validRole ? owner || id : id
         created_by = validRole ? created_by || id : id
     }
