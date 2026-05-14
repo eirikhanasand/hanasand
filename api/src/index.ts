@@ -103,6 +103,11 @@ async function start() {
         await ensureSchema()
         if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
             await provisionExistingMailAccounts().catch(error => {
+                if (isMailAdminConfigError(error)) {
+                    fastify.log.debug('Mail account startup provisioning skipped because mail administration is not configured')
+                    return
+                }
+
                 fastify.log.warn({ error }, 'Failed to provision mail accounts on startup')
             })
         }
@@ -116,6 +121,10 @@ async function start() {
         fastify.log.error(error)
         process.exit(1)
     }
+}
+
+function isMailAdminConfigError(error: unknown) {
+    return error instanceof Error && error.message.includes('MAIL_ADMIN_PASSWORD is required')
 }
 
 function main() {
