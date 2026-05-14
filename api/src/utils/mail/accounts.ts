@@ -108,7 +108,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
 
     return {
         userId,
-        username: address,
+        username,
         address,
         password: secret,
         principalId: storedPrincipalId,
@@ -139,7 +139,7 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
     const existing = await getMailAccount(user.id)
     const account = existing
         ? {
-            username: existing.mail_address,
+            username: existing.mail_username,
             address: existing.mail_address,
             password: decryptMailSecret(existing.mail_password_encrypted),
         }
