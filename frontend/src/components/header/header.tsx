@@ -1,10 +1,9 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import Upload from '@/components/menu/uploadIcon'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { Eye, LinkIcon, Flame, ActivityIcon, Sparkles } from 'lucide-react'
+import { ActivityIcon, Sparkles } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -15,10 +14,6 @@ import ViewModeToggle from './viewModeToggle'
 export default function Header({ token, path: serverPath }: { token: boolean, path: string }) {
     const baseStyles = 'group rounded-lg h-11 w-11 md:h-12 md:w-12 grid place-items-center cursor-pointer transition-colors hover:bg-bright/8'
     const pathname = usePathname() || serverPath
-    const isUpload = pathname.includes('/upload')
-    const isLink = pathname.endsWith('/g') || pathname.includes('/g/')
-    const isPwned = pathname.includes('/pwned')
-    const isTest = pathname.includes('/test')
     const isStatus = pathname.includes('/status')
     const isShare = pathname.endsWith('/s') || pathname.includes('/s/')
     const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
@@ -35,20 +30,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     </Link>
                 </div>
                 <div className='hidden md:flex items-center'>
-                    <Upload baseStyles={baseStyles} isUpload={isUpload} href='/upload' />
                     <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' />
-                    <Link href='/g' className={baseStyles}>
-                        <LinkIcon className={`${isLink && 'stroke-blue-400'} group-hover:stroke-blue-400`} />
-                    </Link>
-                    <Link href='/pwned' className='group relative grid place-items-center'>
-                        <div className={baseStyles}>
-                            <Eye />
-                        </div>
-                        <div className={`${!isPwned && 'hidden'} group-hover:block rounded-full pointer-events-none bg-green-600 w-1.25 h-1.25 absolute z-100 self-center`} />
-                    </Link>
-                    <Link href='/test' className={baseStyles}>
-                        <Flame className={`group-hover:stroke-[#f07d33] ${isTest && 'stroke-[#f07d33]'}`} />
-                    </Link>
                     <Link href='/status' className={baseStyles}>
                         <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
                     </Link>
