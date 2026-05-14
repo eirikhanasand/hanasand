@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
+import { isMailAdminConfigError, mailAdminUnavailablePayload } from '#utils/mail/config.ts'
 import { createMailRule } from '#utils/mail/filters.ts'
 
 export default async function postMailFilter(req: FastifyRequest, res: FastifyReply) {
@@ -32,6 +33,10 @@ export default async function postMailFilter(req: FastifyRequest, res: FastifyRe
 
         return res.status(201).send(rule)
     } catch (error) {
+        if (isMailAdminConfigError(error)) {
+            return res.status(503).send(mailAdminUnavailablePayload())
+        }
+
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to create filter.' })
     }

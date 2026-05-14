@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
+import { isMailAdminConfigError, mailAdminUnavailablePayload } from '#utils/mail/config.ts'
 import { ensureMailbox, moveMessage, patchMessageKeywords } from '#utils/mail/jmap.ts'
 
 type ActionBody = {
@@ -58,6 +59,10 @@ export default async function postMailAction(req: FastifyRequest, res: FastifyRe
 
         return res.send({ ok: true })
     } catch (error) {
+        if (isMailAdminConfigError(error)) {
+            return res.status(503).send(mailAdminUnavailablePayload())
+        }
+
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to update message.' })
     }

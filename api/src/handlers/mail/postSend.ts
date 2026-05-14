@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { getMailAccess } from '#utils/mail/accounts.ts'
+import { isMailAdminConfigError, isMailServiceConnectionError, mailAdminUnavailablePayload, mailServiceUnavailablePayload } from '#utils/mail/config.ts'
 import { parseAddressInput } from '#utils/mail/helpers.ts'
 import { storeSentMessage, uploadAttachment } from '#utils/mail/jmap.ts'
 import { rememberRecentRecipients } from '#utils/mail/recentRecipients.ts'
@@ -96,7 +97,27 @@ export default async function postSendMail(req: FastifyRequest, res: FastifyRepl
                 sentMessageId: sendResult.sentMessageId,
             })
     } catch (error) {
+        if (isMailAdminConfigError(error)) {
+            return res.status(503).send(mailAdminUnavailablePayload())
+        }
+
+        if (isRecipientRejectedError(error)) {
+            return res.status(400).send({
+                error: 'The mail server rejected the recipient. Check the address or send to a Hanasand mailbox.',
+                code: 'MAIL_RECIPIENT_REJECTED',
+                retryable: false,
+            })
+        }
+
+        if (isMailServiceConnectionError(error)) {
+            return res.status(502).send(mailServiceUnavailablePayload('sending mail'))
+        }
+
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to send mail.' })
     }
+}
+
+function isRecipientRejectedError(error: unknown) {
+    return error instanceof Error && /recipient|relay not allowed|550 5\.1\./i.test(error.message)
 }
