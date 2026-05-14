@@ -5,7 +5,7 @@ import './page.css'
 
 export const metadata: Metadata = {
     title: 'Motivation | Eirik Hanasand',
-    description: 'The restored Hanasand motivation wall: a slow-scrolling archive of saved quotes and notes.',
+    description: 'The restored Hanasand motivation wall: a slow-scrolling archive of motivational quotes.',
 }
 
 export default function MotivationPage() {
@@ -22,7 +22,7 @@ export default function MotivationPage() {
                 <Link href='/eirik' className='font-semibold text-bright/82 transition hover:text-bright'>Eirik</Link>
                 <span className='text-bright/24'>/</span>
                 <span>motivation wall</span>
-                <span className='rounded-full border border-white/10 px-2 py-0.5 text-bright/38'>{uniqueQuotes.length} notes</span>
+                <span className='rounded-full border border-white/10 px-2 py-0.5 text-bright/38'>{uniqueQuotes.length} quotes</span>
             </div>
 
             <div className='eirik-quote-wall grid px-4 py-24 sm:grid-cols-2 md:grid-cols-4 md:px-8'>

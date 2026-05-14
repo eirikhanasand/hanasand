@@ -180,7 +180,6 @@ type Note = {
     title: string
     content: string
     source: string
-    owner_id: string
     created_at: string
     updated_at: string
 }
