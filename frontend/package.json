@@ -14,6 +14,7 @@
     "lint:fix": "eslint ./src ./tests ./scripts --fix",
     "lint": "bun run lint:eslint && bun run lint:guardrails",
     "test:article-fallback": "bun scripts/check-article-fallback.mjs",
+    "test:public-archive": "bun scripts/check-public-archive.mjs",
     "test:e2e": "bun scripts/run-playwright-status.mjs",
     "test:e2e:auth": "bun scripts/run-playwright-status.mjs tests/auth.spec.ts",
     "test:e2e:mail": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright mail workspace' bun scripts/run-playwright-status.mjs tests/mail.spec.ts",
