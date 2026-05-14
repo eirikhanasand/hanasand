@@ -9,7 +9,7 @@ import { DashboardPage } from '@/components/dashboard/ui'
 
 export default async function Page(props: { params: Promise<{ id: string[] }> }) {
     const params = await props.params
-    const id = params.id[0]
+    const id = params.id.join('/')
     const Cookies = await cookies()
     const token = Cookies.get('access_token')?.value
     const userId = Cookies.get('id')?.value

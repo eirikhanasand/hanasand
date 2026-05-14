@@ -1,4 +1,6 @@
-import git, { ensureRepo } from './git.ts'
+import { access } from 'fs/promises'
+import { join } from 'path'
+import git, { ensureRepo, LOCAL_REPO_PATH } from './git.ts'
 
 const refreshIntervalMs = 300000
 let lastRefresh = 0
@@ -24,6 +26,17 @@ export default async function ensureRepositoryUpToDate() {
 }
 
 async function refreshRepository() {
+    if (!(await hasGitMetadata())) {
+        lastRefresh = Date.now()
+        return
+    }
+
+    const workingTreeStatus = await git('status --porcelain')
+    if (workingTreeStatus.trim()) {
+        lastRefresh = Date.now()
+        return
+    }
+
     try {
         await git('rev-parse --abbrev-ref --symbolic-full-name @{u}')
     } catch {
@@ -33,4 +46,13 @@ async function refreshRepository() {
 
     await git('pull --rebase', 60000)
     lastRefresh = Date.now()
+}
+
+async function hasGitMetadata() {
+    try {
+        await access(join(LOCAL_REPO_PATH, '.git'))
+        return true
+    } catch {
+        return false
+    }
 }

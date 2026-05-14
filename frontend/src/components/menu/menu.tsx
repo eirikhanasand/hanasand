@@ -7,13 +7,14 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Dashboard from '@/components/dashboard/dashboard'
 import ShareIcon from './shareIcon'
+import isSharePath from '@/utils/routes/isSharePath'
 
 export default function Menu() {
     const [open, setOpen] = useState(false)
     const [token, setToken] = useState<boolean>(false)
     const path = usePathname()
     const baseStyles = 'group rounded-lg h-12 w-12 grid place-items-center cursor-pointer transition-colors hover:bg-bright/8'
-    const isShare = path === '/s' || path.startsWith('/s/')
+    const isShare = isSharePath(path)
     const isStatus = path.includes('/status')
     const isAI = path.includes('/ai')
 

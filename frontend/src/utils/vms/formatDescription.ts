@@ -1,6 +1,6 @@
 export default function formatDescription(input?: string | null) {
     if (!input) {
-        return 'Unknown'
+        return 'Image pending'
     }
 
     if (!input.includes(' ') || input.length <= 2) {

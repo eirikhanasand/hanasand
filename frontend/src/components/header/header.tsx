@@ -10,12 +10,13 @@ import Dashboard from '@/components/dashboard/dashboard'
 import Menu from '@/components/menu/menu'
 import Link from 'next/link'
 import ViewModeToggle from './viewModeToggle'
+import isSharePath from '@/utils/routes/isSharePath'
 
 export default function Header({ token, path: serverPath }: { token: boolean, path: string }) {
     const baseStyles = 'group rounded-lg h-11 w-11 md:h-12 md:w-12 grid place-items-center cursor-pointer transition-colors hover:bg-bright/8'
     const pathname = usePathname() || serverPath
     const isStatus = pathname.includes('/status')
-    const isShare = pathname.endsWith('/s') || pathname.includes('/s/')
+    const isShare = isSharePath(pathname)
     const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')

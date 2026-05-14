@@ -88,7 +88,7 @@ export function Composer({
                 <div className='flex items-center justify-between gap-3 border-b border-white/8 pb-3'>
                     <div>
                         <p className='text-[10px] uppercase tracking-[0.28em] text-bright/34'>{state.mode}</p>
-                        <h3 className='mt-1 text-base font-semibold text-bright'>Compose</h3>
+                        <h3 className='mt-1 text-base font-semibold text-bright'>Create message</h3>
                     </div>
                     <button type='button' className={toolbarButton} onClick={onClose}>Close</button>
                 </div>

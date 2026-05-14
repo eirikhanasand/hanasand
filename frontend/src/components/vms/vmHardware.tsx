@@ -12,7 +12,7 @@ export default function VMHardware({ boxStyle, boxTitleStyle, vm }: VMDetailsPro
             <h1 className={boxTitleStyle}>Hardware</h1>
             <Field title='CPU' value={vm.limits_cpu} />
             <Field title='Memory' value={vm.limits_memory} />
-            <Field title='Disk' value={'missing'} />
+            <Field title='Disk' value='Not reported' />
         </div>
     )
 }

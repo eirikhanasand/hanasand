@@ -144,7 +144,6 @@ function normalizeMailOverview(payload: Partial<MailOverview>): MailOverview {
         },
         mailboxUser,
         mailboxAddress,
-        mailPassword: payload.mailPassword || '',
         accessibleAccounts: payload.accessibleAccounts || [],
         mailboxes: payload.mailboxes || [],
         selectedMailboxId: payload.selectedMailboxId || null,

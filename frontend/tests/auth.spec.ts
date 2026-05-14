@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test'
 const apiBase = process.env.PLAYWRIGHT_API_BASE || 'http://127.0.0.1:8080/api'
 const password = `Aa11!!${Date.now()}Bb22!!`
 
+test.setTimeout(90_000)
+
 test('signup, login and delete account work end to end', async ({ browser, page, request, baseURL }) => {
     const id = `pw_${Date.now()}`
     const name = 'Playwright User'

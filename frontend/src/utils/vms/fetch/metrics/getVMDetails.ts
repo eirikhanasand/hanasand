@@ -3,7 +3,7 @@ import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export default async function getVMDetails(id: string, token: string, userId: string): Promise<VMDetails | null> {
     try {
-        const response = await fetchWithRetry(`${config.url.api}/vm/details/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/details/${encodeURIComponent(id)}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 id: userId

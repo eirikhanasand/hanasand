@@ -67,7 +67,9 @@ function authHeaders() {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`/api/backend${path}`, {
         ...init,
+        cache: 'no-store',
         headers: {
+            'Cache-Control': 'no-cache',
             ...authHeaders(),
             ...(init?.headers || {}),
         },

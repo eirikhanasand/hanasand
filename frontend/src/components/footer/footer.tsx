@@ -4,6 +4,7 @@ import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Activity, ArrowUpRight, BookOpen, FolderArchive, Sparkles } from 'lucide-react'
+import isSharePath from '@/utils/routes/isSharePath'
 
 const footerGroups = [
     {
@@ -37,7 +38,7 @@ const footerGroups = [
 
 export default function Footer() {
     const pathname = usePathname()
-    const isShare = pathname === '/s' || pathname.startsWith('/s/')
+    const isShare = isSharePath(pathname)
     const year = new Date().getFullYear()
 
     return (
@@ -48,11 +49,11 @@ export default function Footer() {
                         <span className='grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/8 font-serif text-base text-bright shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'>H</span>
                         <span className='grid gap-0.5'>
                             <span>hanasand</span>
-                            <span className='text-[11px] font-normal text-bright/34'>production assistant</span>
+                            <span className='text-[11px] font-normal text-bright/34'>operations workspace</span>
                         </span>
                     </Link>
                     <p className='mt-4 max-w-md text-sm leading-6 text-bright/42'>
-                        Build, verify, deploy, and recover websites with visible proof before changes land.
+                        A focused surface for projects, service status, uploads, short links, and account access.
                     </p>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-bright/8 px-2.5 py-1 text-[11px] text-bright/44'>

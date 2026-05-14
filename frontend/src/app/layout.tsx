@@ -5,6 +5,7 @@ import BackgroundSketches from '@/components/background/backgroundSketches'
 import './globals.css'
 import Header from '@/components/header/header'
 import DetachedBoxHost from '@/components/box/detachedBoxHost'
+import isSharePath from '@/utils/routes/isSharePath'
 export { default as metadata } from './metadata'
 export { default as viewport } from './metadata'
 
@@ -14,7 +15,7 @@ export default async function layout({ children }: { children: ReactNode }) {
     const token = Boolean(Cookies.get('access_token')?.value) || false
     const theme = Cookies.get('theme')?.value || 'dark'
     const path = Headers.get('x-current-path') || ''
-    const isShare = path.startsWith('/s')
+    const isShare = isSharePath(path)
     const isDashboard = path.startsWith('/dashboard')
     const isProfile = path.startsWith('/profile')
     const isAppSurface = isShare || path.startsWith('/ai') || isDashboard || isProfile

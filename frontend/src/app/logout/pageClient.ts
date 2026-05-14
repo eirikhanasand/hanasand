@@ -28,8 +28,9 @@ export default function LogoutPageClient({ path }: { path?: string }) {
                     }
                 }
 
-                if (path) {
-                    router.push(path)
+                const safePath = getSafeLocalPath(path)
+                if (safePath) {
+                    router.push(safePath)
                 } else {
                     router.push(`/?${queryString}&logout=true`)
                 }
@@ -39,4 +40,32 @@ export default function LogoutPageClient({ path }: { path?: string }) {
             }
         })()
     })
+}
+
+function getSafeLocalPath(path?: string) {
+    if (!path || !path.startsWith('/') || path.startsWith('//') || hasControlCharacter(path)) {
+        return ''
+    }
+
+    try {
+        const parsed = new URL(path, window.location.origin)
+        if (parsed.origin !== window.location.origin) {
+            return ''
+        }
+
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    } catch {
+        return ''
+    }
+}
+
+function hasControlCharacter(value: string) {
+    for (let index = 0; index < value.length; index += 1) {
+        const code = value.charCodeAt(index)
+        if (code < 32 || code === 127) {
+            return true
+        }
+    }
+
+    return false
 }

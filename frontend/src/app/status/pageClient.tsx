@@ -70,7 +70,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
     }
 
     return (
-        <div className='grid gap-4 h-full'>
+        <div className='grid min-h-full gap-4 pb-6'>
             <section className='grid gap-4'>
                 <div className='flex flex-wrap items-start justify-between gap-4'>
                     <div>

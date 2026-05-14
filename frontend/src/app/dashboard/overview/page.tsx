@@ -5,12 +5,17 @@ import { Activity, Radar, ShieldAlert, Sparkles } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import parseCookie from '@/utils/cookies/parseCookie'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
     const cookieStore = await cookies()
     const token = cookieStore.get('access_token')?.value
+    const rolesCookie = cookieStore.get('roles')?.value
+    const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
+    const roleIds = roles.map((role) => typeof role === 'string' ? role : role.id || '')
+    const canManageSystem = roleIds.includes('administrator') || roleIds.includes('admin') || roleIds.includes('system_admin')
 
     if (!token) {
         redirect('/logout?path=/login%3Fpath%3D/dashboard/overview%26expired=true')
@@ -45,10 +50,10 @@ export default async function Page() {
                         </span>
                     </div>
                     <div className='mt-4 grid gap-3 md:grid-cols-3'>
-                        <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />
-                        <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />
+                        {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />}
+                        {canManageSystem && <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />}
                         <ActionLink href='/status' title='Status' body='Synthetic checks, latency, uptime, and current service state.' />
-                        <ActionLink href='/dashboard/backup' title='Backup' body='Critical state locations, restore order, and resilience notes.' />
+                        {canManageSystem && <ActionLink href='/dashboard/backup' title='Backup' body='Critical state locations, restore order, and resilience notes.' />}
                     </div>
                 </DashboardPanel>
 

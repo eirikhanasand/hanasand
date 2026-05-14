@@ -21,7 +21,7 @@ async function openWorkspaceChat(page: Page) {
 }
 
 async function mockShareApi(page: Page) {
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -39,7 +39,7 @@ async function mockShareApi(page: Page) {
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'ask-build-workflow'
         await route.fulfill({
             status: 200,
@@ -62,7 +62,7 @@ test('share chat keeps Ask read-only and Build reviewable without showing raw co
     await mockShareApi(page)
 
     const workflowRequests: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { context?: string }
         const contextPayload = JSON.parse(body.context || '{}') as { workflow?: string, writesAllowed?: boolean }
         workflowRequests.push(`${contextPayload.workflow}:${contextPayload.writesAllowed}`)
@@ -99,6 +99,7 @@ test('share chat keeps Ask read-only and Build reviewable without showing raw co
     await page.goto('/s/ask-build-workflow?new=1')
     await openWorkspaceChat(page)
 
+    await page.getByRole('button', { name: 'Ask' }).click()
     await expect(page.getByText('Ask mode will not change files.')).toBeVisible()
     await expect(page.getByText('Build is opt-in.')).toHaveCount(0)
     await page.getByPlaceholder('Ask about this project...').fill('explain what this is')
@@ -126,7 +127,7 @@ test('share chat flags generic AI-looking design and remembers brand style cues'
     await mockShareApi(page)
 
     let run = 0
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string }
         const contextPayload = JSON.parse(body.context || '{}') as { designDifferentiationMode?: boolean, designMemory?: { tokens?: string[] } | null }
         expect(contextPayload.designDifferentiationMode).toBe(true)
@@ -197,7 +198,7 @@ test('share chat sends niche design briefs and expects brand kit asset guidance'
     await addLocalAuthCookies(context, baseURL)
     await mockShareApi(page)
 
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { context?: string, prompt?: string }
         const contextPayload = JSON.parse(body.context || '{}') as {
             designBrief?: {

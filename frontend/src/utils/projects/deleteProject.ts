@@ -3,11 +3,11 @@
 import config from '@/config'
 import { getCookie } from '../cookies/cookies'
 
-export default async function deleteProject(id: string): Promise<{ status: number, message: string }> {
+export default async function deleteProject(projectId: string): Promise<{ status: number, message: string }> {
     try {
         const token = getCookie('access_token')
-        const id = getCookie('id')
-        if (!token || !id) {
+        const userId = getCookie('id')
+        if (!token || !userId) {
             return {
                 status: 401,
                 message: 'Please log in to delete projects.'
@@ -16,11 +16,11 @@ export default async function deleteProject(id: string): Promise<{ status: numbe
 
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
-        const response = await fetch(`${config.url.api}/project/${id}`, {
+        const response = await fetch(`${config.url.api}/project/${projectId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'id': id
+                'id': userId
             },
             signal: controller.signal
         })
@@ -32,13 +32,13 @@ export default async function deleteProject(id: string): Promise<{ status: numbe
 
         return {
             status: response.status,
-            message: `Deleted project ${id}.`
+            message: `Deleted project ${projectId}.`
         }
     } catch (error) {
         console.log(error)
         return {
             status: 500,
-            message: `Failed to delete project ${id}.`
+            message: `Failed to delete project ${projectId}.`
         }
     }
 }

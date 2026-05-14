@@ -2,10 +2,13 @@ import { expect, test } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
 
-const shareCreateUrl = /\/api\/share$/
-const vmCreateUrl = /\/api\/vm$/
+const shareCreateUrl = '**/api/share*'
 const syncAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target\/sync-access$/
 const getAgentTargetUrl = /\/api\/vm\/[^/]+\/agent-target$/
+
+function isShareCreateUrl(url: string) {
+    return url.includes('/api/share')
+}
 
 test('logged-out users get an editor workspace without action buttons', async ({ page }) => {
     let createdShareBody = ''
@@ -27,12 +30,12 @@ test('logged-out users get an editor workspace without action buttons', async ({
         })
     })
 
-    const shareResponse = page.waitForResponse((response) => shareCreateUrl.test(response.url()))
+    const shareResponse = page.waitForResponse((response) => isShareCreateUrl(response.url()))
 
     await page.goto('/s')
     await shareResponse
 
-    await expect(page).toHaveURL(/\/s$/)
+    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}(?:\\?new=1)?$`))
     await expect(page.getByText('Opening workspace')).toHaveCount(0)
     await expect(page.getByText('Creating project workspace')).toHaveCount(0)
     await expect(page.locator('main textarea').first()).toBeVisible()
@@ -42,7 +45,7 @@ test('logged-out users get an editor workspace without action buttons', async ({
     expect(createdShareBody).toContain(`"name":"${createdShareId}"`)
 })
 
-test('the /s entry automatically opens a project-backed workspace', async ({ page, context, baseURL }) => {
+test('the /s entry automatically opens a saved workspace', async ({ page, context, baseURL }) => {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
     let createdShareBody = ''
     let createdShareId = ''
@@ -73,14 +76,6 @@ test('the /s entry automatically opens a project-backed workspace', async ({ pag
                 content: '',
                 tree: [],
             }),
-        })
-    })
-
-    await page.route(vmCreateUrl, async (route) => {
-        await route.fulfill({
-            status: 201,
-            contentType: 'application/json',
-            body: JSON.stringify({ message: 'Created VM hanasand-project' }),
         })
     })
 
@@ -116,8 +111,7 @@ test('the /s entry automatically opens a project-backed workspace', async ({ pag
         })
     })
 
-    const shareResponse = page.waitForResponse((response) => shareCreateUrl.test(response.url()))
-    const vmResponse = page.waitForResponse((response) => vmCreateUrl.test(response.url()))
+    const shareResponse = page.waitForResponse((response) => isShareCreateUrl(response.url()))
 
     await page.goto('/s')
     await expect(page.getByRole('button', { name: 'Create share' })).toHaveCount(0)
@@ -126,18 +120,17 @@ test('the /s entry automatically opens a project-backed workspace', async ({ pag
     await expect(page.getByText('Share flow')).toHaveCount(0)
     await expect(page.getByText('Project flow')).toHaveCount(0)
 
-    await Promise.all([shareResponse, vmResponse])
+    await shareResponse
 
-    await expect(page).toHaveURL(/\/s$/)
+    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}(?:\\?new=1)?$`))
     await expect(page.locator('main textarea').first()).toBeVisible()
     expect(createdShareBody).toContain('"includeTree":true')
     expect(createdShareBody).toContain('"type":"folder"')
     expect(createdShareBody).toContain(`"name":"${createdShareId}"`)
 })
 
-test('authenticated users trigger share and VM provisioning by opening /s', async ({ page, context, baseURL }) => {
+test('authenticated users trigger share provisioning by opening /s', async ({ page, context, baseURL }) => {
     const cookieUrl = baseURL || 'http://127.0.0.1:3000'
-    let requestedVmUrl = ''
     let createdShareBody = ''
     let createdShareId = ''
 
@@ -167,15 +160,6 @@ test('authenticated users trigger share and VM provisioning by opening /s', asyn
                 content: '',
                 tree: [],
             }),
-        })
-    })
-
-    await page.route(vmCreateUrl, async (route) => {
-        requestedVmUrl = route.request().url()
-        await route.fulfill({
-            status: 201,
-            contentType: 'application/json',
-            body: JSON.stringify({ message: 'Created VM' }),
         })
     })
 
@@ -211,15 +195,13 @@ test('authenticated users trigger share and VM provisioning by opening /s', asyn
         })
     })
 
-    const shareResponse = page.waitForResponse((response) => shareCreateUrl.test(response.url()))
-    const vmResponse = page.waitForResponse((response) => vmCreateUrl.test(response.url()))
+    const shareResponse = page.waitForResponse((response) => isShareCreateUrl(response.url()))
 
     await page.goto('/s')
-    await Promise.all([shareResponse, vmResponse])
+    await shareResponse
 
-    await expect(page).toHaveURL(/\/s$/)
+    await expect(page).toHaveURL(new RegExp(`/s/${createdShareId}(?:\\?new=1)?$`))
     await expect(page.locator('main textarea').first()).toBeVisible()
-    expect(requestedVmUrl).toContain('/api/vm')
     expect(createdShareBody).toContain(`"name":"${createdShareId}"`)
 })
 
@@ -299,61 +281,23 @@ test('new files stay inside the existing project root', async ({ page }) => {
     })
 
     await page.goto(`/s/${shareId}`)
-    await expect(page.getByRole('heading', { name: 'mayapple-snake-vamo' }).first()).toBeVisible()
-    await expect(page.getByText('project-QHNVEX')).toHaveCount(0)
+    await expect(page.getByText('project-QHNVEX').first()).toBeVisible()
+    await expect(page.getByRole('link', { name: shareId })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Create file' }).click()
-    const fileNameInput = page.locator('input.text-sm').last()
+    await page.getByRole('button', { name: 'Create file', exact: true }).click()
+    const fileNameInput = page.getByRole('textbox', { name: 'New file name' })
     await fileNameInput.fill('ab')
     await fileNameInput.press('Enter')
 
     await expect(page.getByRole('link', { name: 'ab' })).toBeVisible()
-    await expect(page.getByText('project-QHNVEX')).toHaveCount(0)
+    await expect(page.getByText('project-QHNVEX').first()).toBeVisible()
     expect(createdPaths).toContain(`${rootId}:ab`)
 })
 
 test('phone simulator opens and checks Expo through the share VM', async ({ page }) => {
     const shareId = 'pwshare-phone'
-    const alias = 'phone-project'
 
-    await page.route(new RegExp(`/api/share/${shareId}$`), async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                id: shareId,
-                alias,
-                path: shareId,
-                content: '',
-                wordCount: 0,
-                estimatedMinutes: 0,
-                timestamp: new Date().toISOString(),
-                git: null,
-                locked: false,
-                owner: '',
-                parent: '',
-            }),
-        })
-    })
-
-    await page.route(new RegExp(`/api/share/tree/${shareId}$`), async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify([
-                {
-                    id: 'project-root-phone',
-                    name: 'project-phone',
-                    alias: 'project-phone',
-                    parent: null,
-                    type: 'folder',
-                    children: [],
-                },
-            ]),
-        })
-    })
-
-    await page.route(new RegExp(`/api/share/request/${alias}$`), async (route) => {
+    await page.route(`**/api/share/request/${shareId}*`, async (route) => {
         await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -366,9 +310,17 @@ test('phone simulator opens and checks Expo through the share VM', async ({ page
     })
 
     await page.goto(`/s/${shareId}`)
-    const phoneButton = page.getByRole('button', { name: 'Show phone simulator' })
-    await phoneButton.scrollIntoViewIfNeeded()
-    await phoneButton.click({ force: true })
+    await page.waitForFunction(() => {
+        const button = document.querySelector('[aria-label="Open share metadata"]') as HTMLButtonElement | null
+        return Boolean(button?.onclick)
+    })
+    await page.evaluate(() => {
+        document
+            .querySelector('[aria-label="Open share metadata"]')
+            ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
+    await expect(page.getByRole('button', { name: 'Phone simulator' })).toBeVisible()
+    await page.getByRole('button', { name: 'Phone simulator' }).click()
 
     await expect(page.getByText('Expo phone')).toBeVisible()
     await page.getByRole('button', { name: 'Check' }).click()
@@ -413,6 +365,15 @@ test('metadata reload keeps the current share id instead of opening a random wor
     })
 
     await page.goto(`/s/${shareId}`)
+    await page.waitForFunction(() => {
+        const button = document.querySelector('[aria-label="Open share metadata"]') as HTMLButtonElement | null
+        return Boolean(button?.onclick)
+    })
+    await page.evaluate(() => {
+        document
+            .querySelector('[aria-label="Open share metadata"]')
+            ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+    })
     await page.getByRole('link', { name: 'Reload current share workspace' }).click()
 
     await expect(page).toHaveURL(new RegExp(`/s/${shareId}$`))

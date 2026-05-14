@@ -19,21 +19,19 @@ export async function getUserShares({ id, token }: GetUserSharesProps): Promise<
         })
 
         clearTimeout(timeout)
+        if (response.status === 404) {
+            return []
+        }
+
         if (!response.ok) {
             throw new Error(`Failed to fetch shares for user ${id}`)
         }
 
         const data = await response.json()
         return data
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-        console.error(error)
-        if (error.name === 'AbortError') {
-            console.warn('Request aborted (timeout reached)')
-            return 'Unable to load shares.'
-        } else {
-            console.error(`Fetch failed: ${error}`)
-            return 'Shares not found.'
-        }
+    } catch (error) {
+        return error instanceof Error && error.name === 'AbortError'
+            ? 'Unable to load shares.'
+            : []
     }
 }

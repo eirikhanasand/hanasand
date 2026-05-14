@@ -6,15 +6,15 @@ import { buildRouteMetadata } from './seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand',
-    description: 'Hanasand builds, verifies, deploys, and recovers websites with visible proof.',
+    description: 'Hanasand is a focused workspace for projects, service status, uploads, and short links.',
     path: '/',
-    keywords: ['hanasand', 'autonomous production assistant', 'website deploy', 'website verification', 'rollback'],
+    keywords: ['hanasand', 'operations workspace', 'service status', 'uploads', 'short links'],
 })
 
 const primaryTools = [
     {
         title: 'Production workspace',
-        description: 'Build websites with reviewable changes, rendered proof, deploy checks, and recovery evidence.',
+        description: 'Open the shared project surface for reviewable work and handoffs.',
         href: '/s',
         icon: Link2,
     },
@@ -26,7 +26,7 @@ const primaryTools = [
     },
     {
         title: 'AI assistant',
-        description: 'Plan, edit, verify, deploy, and recover projects with visible proof.',
+        description: 'Plan, edit, and verify project work in the AI workspace.',
         href: '/ai',
         icon: Sparkles,
     },
@@ -57,10 +57,10 @@ export default async function Page({
             <LogoutClient logoutServer={logout} />
             <section className='grid min-h-[calc(100vh-8rem)] content-center gap-8'>
                 <div className='max-w-3xl'>
-                    <p className='mb-4 text-xs font-medium uppercase tracking-[0.24em] text-bright/38'>Autonomous production assistant</p>
+                    <p className='mb-4 text-xs font-medium uppercase tracking-[0.24em] text-bright/38'>Operations workspace</p>
                     <h1 className='text-4xl font-semibold text-bright md:text-6xl'>Hanasand</h1>
                     <p className='mt-5 max-w-2xl text-base leading-7 text-bright/55'>
-                        Build, verify, deploy, and recover websites with visible proof before changes land.
+                        Manage projects, service status, uploads, short links, and account access from one focused workspace.
                     </p>
                     <div className='mt-7 flex flex-wrap gap-3'>
                         <Link href='/login' className='inline-flex items-center gap-2 rounded-lg border border-bright/12 bg-bright/10 px-4 py-2.5 text-sm font-medium text-bright transition-colors hover:bg-bright/14'>

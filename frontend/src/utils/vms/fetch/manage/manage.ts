@@ -4,6 +4,10 @@ import { getCookie } from '@/utils/cookies/cookies'
 
 export default async function manageVM(id: string, action: 'start' | 'stop' | 'restart'): Promise<string | null> {
     try {
+        if (!id.trim()) {
+            return 'This virtual machine is missing its instance name.'
+        }
+
         const token = safeDecode(getCookie('access_token') || '')
         const userId = getCookie('id')
         if (!token || !userId) {
@@ -21,14 +25,13 @@ export default async function manageVM(id: string, action: 'start' | 'stop' | 'r
             retries: 2,
         })
 
-        const data = await response.json()
+        const data = await readResponse(response)
         if (!response.ok) {
-            throw new Error(data?.error || `Error running ${action} for VM ${id}.`)
+            throw new Error(data?.error || data?.message || `Unable to ${action} ${id}.`)
         }
 
         return data?.message || data?.status || `${action} completed for ${id}.`
     } catch (error) {
-        console.log(error)
         return error instanceof Error ? error.message : `Failed to ${action} vm.`
     }
 }
@@ -38,5 +41,19 @@ function safeDecode(value: string) {
         return decodeURIComponent(value)
     } catch {
         return value
+    }
+}
+
+async function readResponse(response: Response): Promise<{ error?: string, message?: string, status?: string }> {
+    const text = await response.text()
+    if (!text.trim()) {
+        return {}
+    }
+
+    try {
+        const data = JSON.parse(text)
+        return data && typeof data === 'object' ? data : { message: String(data) }
+    } catch {
+        return response.ok ? { message: text } : { error: text }
     }
 }

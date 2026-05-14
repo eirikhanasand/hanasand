@@ -543,7 +543,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     disabled={deployPending}
                     className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
-                    {deployPending ? 'Launching...' : `Deploy to ${deployEnvironment}`}
+                    {deployPending ? 'Checking VM deploy...' : 'Start VM deploy check'}
                 </button>
                 {deployments.length ? (
                     <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>

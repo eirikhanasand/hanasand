@@ -1,4 +1,5 @@
 import config from '@/config'
+import { findFallbackArticle, replaceDraftArticle } from './fallbackArticles'
 
 export default async function fetchArticle(id: string): Promise<Article | null> {
     try {
@@ -11,16 +12,15 @@ export default async function fetchArticle(id: string): Promise<Article | null> 
         clearTimeout(timeout)
         if (!response.ok) {
             if (response.status === 404) {
-                return null
+                return findFallbackArticle(id)
             }
 
             throw new Error('This page does not exist.')
         }
 
         const data = await response.json()
-        return data
-    } catch (error) {
-        console.error(error)
-        return null
+        return replaceDraftArticle(data)
+    } catch {
+        return findFallbackArticle(id)
     }
 }

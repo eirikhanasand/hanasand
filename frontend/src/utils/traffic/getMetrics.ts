@@ -17,8 +17,7 @@ export default async function fetchMetrics(metric: 'path' | 'ip' | 'user_agent' 
 
         const data = await response.json()
         return Array.isArray(data) ? data as TrafficSummaryMetric[] : []
-    } catch (error) {
-        console.log(error)
+    } catch {
         return []
     }
 }

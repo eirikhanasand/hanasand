@@ -197,11 +197,12 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                     </div>
                     <button
                         data-testid='mail-compose-button'
-                        className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20'
+                        disabled={!overview}
+                        className='inline-flex h-8 items-center gap-1.5 rounded-xl bg-orange-400/14 px-3 text-[11px] font-medium text-orange-100 transition hover:bg-orange-400/20 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-bright/28'
                         onClick={() => setComposer({ ...emptyComposer, open: true })}
                     >
                         <MailPlus className='h-3.5 w-3.5' />
-                        Compose
+                        Create
                     </button>
 
                     {overview?.actor.canAccessAnyMailbox && (
@@ -455,7 +456,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     <p>ManageSieve `{overview.settings.host}:{overview.settings.managesievePort}`</p>
                                     <p className='mt-1'>Username `{overview.settings.username}`</p>
                                     <p>Address `{overview.settings.address}`</p>
-                                    <p>Password `{overview.mailPassword}`</p>
+                                    <p>Password is hidden. Use account settings to rotate client credentials.</p>
                                 </div>
                             )}
                         </details>

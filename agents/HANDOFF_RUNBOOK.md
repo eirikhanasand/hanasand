@@ -23,9 +23,12 @@ Infer "Hanasand server" from local context before asking the parent agent:
 - shell alias: `ssh hanasand`
 - SSH config host: `Host hanasand`
 - current target: `hanasand@hanasand.com`, port `222`
-- app path: `/home/hanasand/hanasand`
+- dirty working repo path: `/home/hanasand/hanasand`
+- clean deploy checkout path: `/home/hanasand/hanasand-deploy-64d9339`
 - OpenResty path: `/home/hanasand/openresty`
-- expected app restart from `/home/hanasand/hanasand`: `docker compose up -d --build`
+- expected app deploy path: `cd /home/hanasand/hanasand-deploy-64d9339 && git fetch github main && git pull --ff-only github main`
+- expected app restart from the deploy checkout: `docker compose -p hanasand up -d --build`
+- if only the web/API images need replacing after a successful build, use `docker compose -p hanasand up -d --no-deps frontend api`
 - active web server: Docker container `openresty`
 - expected OpenResty verification: `cd /home/hanasand/openresty && docker compose exec -T openresty openresty -t`
 

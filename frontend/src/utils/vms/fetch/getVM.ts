@@ -6,7 +6,7 @@ export default async function getVM(id: string, token?: string, userId?: string)
     try {
         const accessToken = token || getCookie('access_token')
         const idHeader = userId || getCookie('id')
-        const response = await fetchWithRetry(`${config.url.api}/vm/${id}`, {
+        const response = await fetchWithRetry(`${config.url.api}/vm/${encodeURIComponent(id)}`, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 id: idHeader || ''

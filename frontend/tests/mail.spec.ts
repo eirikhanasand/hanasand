@@ -135,7 +135,7 @@ async function authenticateContext(context: BrowserContext, auth: {
 }
 
 function composeButton(page: Page) {
-    return page.getByTestId('mail-compose-button').or(page.getByRole('button', { name: 'Compose' }))
+    return page.getByTestId('mail-compose-button')
 }
 
 function composeForm(page: Page) {

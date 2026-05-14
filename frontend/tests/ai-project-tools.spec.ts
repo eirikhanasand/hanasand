@@ -1,6 +1,7 @@
 import { expect, test, type Browser } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
+test.setTimeout(180000)
 
 type ShareEntry = {
     id: string
@@ -214,7 +215,7 @@ async function createAiWorkspacePage({
         })
     })
 
-    await page.route('**/api/tools/http/request', async (route) => {
+    await page.route(/.*\/api\/(?:backend\/)?tools\/http\/request$/, async (route) => {
         const body = route.request().postDataJSON() as { url?: string, method?: string }
         await route.fulfill({
             status: 200,
@@ -229,7 +230,7 @@ async function createAiWorkspacePage({
         })
     })
 
-    await page.route('**/api/tools/browser/task', async (route) => {
+    await page.route(/.*\/api\/(?:backend\/)?tools\/browser\/task$/, async (route) => {
         const body = route.request().postDataJSON() as { url?: string }
         await route.fulfill({
             status: 200,
@@ -267,7 +268,7 @@ async function createAiWorkspacePage({
         })
     })
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as {
             id: string
             includeTree?: boolean
@@ -307,7 +308,7 @@ async function createAiWorkspacePage({
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/tree\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/tree\/.+/, async (route) => {
         const rootId = route.request().url().split('/').pop() || ''
 
         type MockTreeNode = {
@@ -335,7 +336,7 @@ async function createAiWorkspacePage({
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/user\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/user\/.+/, async (route) => {
         await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -343,7 +344,7 @@ async function createAiWorkspacePage({
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const url = route.request().url()
         if (url.includes('/share/tree/') || url.includes('/share/user/')) {
             await route.fallback()

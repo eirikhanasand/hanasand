@@ -69,9 +69,9 @@ export default function AIPageClient({
                 {showHeader ? (
                     <div className='flex h-14 items-center justify-between border-b border-bright/10 px-5'>
                         <div className='min-w-0'>
-                            <h1 className='truncate text-sm font-semibold text-[#eeeeea]'>
+                            <p className='truncate text-sm font-semibold text-[#eeeeea]'>
                                 {ai.activeConversation?.title || 'Workspace'}
-                            </h1>
+                            </p>
                         </div>
                         <div className='flex items-center gap-2'>
                             <button

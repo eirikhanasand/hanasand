@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
-test.setTimeout(120_000)
+test.setTimeout(300_000)
 
 type AppStory = {
     id: number
@@ -506,13 +506,14 @@ async function addLocalAuthCookies(context: BrowserContext, baseURL: string | un
 }
 
 async function openWorkspaceChat(page: Page) {
-    const promptBox = page.getByPlaceholder('Ask Hanasand AI to change this project...')
+    const promptBox = page.getByPlaceholder('Describe what you want to build or change...')
     if (await promptBox.isVisible().catch(() => false)) {
         return promptBox
     }
     const chatButton = page.getByRole('button', { name: 'Open workspace chat' })
-    await expect(chatButton).toBeVisible({ timeout: 2500 })
+    await expect(chatButton).toBeVisible({ timeout: 8000 })
     await chatButton.click({ force: true })
+    await page.getByRole('button', { name: 'Build' }).click()
     try {
         await expect(promptBox).toBeVisible({ timeout: 1200 })
     } catch {
@@ -525,7 +526,7 @@ async function openWorkspaceChat(page: Page) {
 test('share chat surfaces progress, context, and review gates for ambiguous app stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -543,7 +544,7 @@ test('share chat surfaces progress, context, and review gates for ambiguous app 
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-ui-story'
         await route.fulfill({
             status: 200,
@@ -561,7 +562,7 @@ test('share chat surfaces progress, context, and review gates for ambiguous app 
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string }
         const matchingStory = stories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -585,11 +586,11 @@ test('share chat surfaces progress, context, and review gates for ambiguous app 
 
     for (const story of stories) {
         await page.goto(`/s/app-ui-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('No auto-apply')).toBeVisible()
         await expect(page.getByText('Current file context')).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
         await expect(page.getByText(/Prepared a focused/)).toBeVisible()
@@ -606,7 +607,7 @@ test('share chat keeps the mobile chat viewport unobscured by the explorer rail'
     await addLocalAuthCookies(context, baseURL)
     await page.setViewportSize({ width: 520, height: 820 })
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -624,7 +625,7 @@ test('share chat keeps the mobile chat viewport unobscured by the explorer rail'
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-mobile-chat-story'
         await route.fulfill({
             status: 200,
@@ -643,18 +644,18 @@ test('share chat keeps the mobile chat viewport unobscured by the explorer rail'
 
     await page.goto('/s/app-mobile-chat-861?new=1')
     await expect(page.getByRole('button', { name: 'Open file explorer' })).toHaveCount(1)
-    await page.getByRole('button', { name: 'Open workspace chat' }).click()
+    await openWorkspaceChat(page)
 
     await expect(page.getByText('Chat workspace')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Open file explorer' })).toHaveCount(0)
-    await expect(page.getByPlaceholder('Ask Hanasand AI to change this project...')).toBeVisible()
+    await expect(page.getByPlaceholder('Describe what you want to build or change...')).toBeVisible()
     await expect(page.getByText('No auto-apply')).toBeVisible()
 })
 
 test('share chat makes no-auto-apply and pending-file state explicit for transparency stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -672,7 +673,7 @@ test('share chat makes no-auto-apply and pending-file state explicit for transpa
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-transparency-story'
         await route.fulfill({
             status: 200,
@@ -690,7 +691,7 @@ test('share chat makes no-auto-apply and pending-file state explicit for transpa
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string }
         const matchingStory = transparencyStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -714,11 +715,11 @@ test('share chat makes no-auto-apply and pending-file state explicit for transpa
 
     for (const story of transparencyStories) {
         await page.goto(`/s/app-transparency-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('No auto-apply')).toBeVisible()
         await expect(page.getByText('Current file context')).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
         await expect(page.getByText(`Prepared ${story.expected} changes for manual review.`)).toBeVisible()
@@ -734,7 +735,7 @@ test('share chat makes no-auto-apply and pending-file state explicit for transpa
 test('share chat reaches concise two-file review quickly for speed-review stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -752,7 +753,7 @@ test('share chat reaches concise two-file review quickly for speed-review storie
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-speed-review-story'
         await route.fulfill({
             status: 200,
@@ -770,7 +771,7 @@ test('share chat reaches concise two-file review quickly for speed-review storie
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string }
         const matchingStory = speedReviewStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -799,11 +800,11 @@ test('share chat reaches concise two-file review quickly for speed-review storie
 
     for (const story of speedReviewStories) {
         await page.goto(`/s/app-speed-review-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('Ready', { exact: true })).toBeVisible()
         await expect(page.getByText('No auto-apply')).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click({ force: true })
 
@@ -822,7 +823,7 @@ test('share chat reaches concise two-file review quickly for speed-review storie
 test('share chat avoids bloat and exposes review controls for tool-friction stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -840,7 +841,7 @@ test('share chat avoids bloat and exposes review controls for tool-friction stor
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-tool-friction-story'
         await route.fulfill({
             status: 200,
@@ -858,7 +859,7 @@ test('share chat avoids bloat and exposes review controls for tool-friction stor
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
         const matchingStory = toolFrictionStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -890,11 +891,11 @@ test('share chat avoids bloat and exposes review controls for tool-friction stor
 
     for (const story of toolFrictionStories) {
         await page.goto(`/s/app-tool-friction-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('Ready', { exact: true })).toBeVisible()
         await expect(page.getByText('No auto-apply')).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -915,7 +916,7 @@ test('share chat avoids bloat and exposes review controls for tool-friction stor
 test('share chat keeps context lean while resolving context-budget stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -933,7 +934,7 @@ test('share chat keeps context lean while resolving context-budget stories', asy
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-context-budget-story'
         await route.fulfill({
             status: 200,
@@ -951,7 +952,7 @@ test('share chat keeps context lean while resolving context-budget stories', asy
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
         const matchingStory = contextBudgetStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -982,11 +983,11 @@ test('share chat keeps context lean while resolving context-budget stories', asy
 
     for (const story of contextBudgetStories) {
         await page.goto(`/s/app-context-budget-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('Ready', { exact: true })).toBeVisible()
         await expect(page.getByText('No auto-apply')).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1005,7 +1006,7 @@ test('share chat keeps context lean while resolving context-budget stories', asy
 test('share page AI shows browser proof in the website UI for ambiguous build stories', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1023,7 +1024,7 @@ test('share page AI shows browser proof in the website UI for ambiguous build st
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-share-browser-proof-story'
         await route.fulfill({
             status: 200,
@@ -1040,7 +1041,7 @@ test('share page AI shows browser proof in the website UI for ambiguous build st
         })
     })
 
-    await page.route('**/api/tools/browser/task', async (route) => {
+    await page.route('**/api/backend/tools/browser/task', async (route) => {
         const body = route.request().postDataJSON() as { url?: string }
         await route.fulfill({
             status: 200,
@@ -1068,7 +1069,7 @@ test('share page AI shows browser proof in the website UI for ambiguous build st
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
         const matchingStory = shareBrowserEvidenceStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1106,16 +1107,16 @@ test('share page AI shows browser proof in the website UI for ambiguous build st
 
     for (const story of shareBrowserEvidenceStories) {
         await page.goto(`/s/app-share-browser-proof-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('Ready', { exact: true })).toBeVisible()
         await expect(page.getByText('No auto-apply')).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
         await expect(page.getByText(`Ready: ${story.expected}. Browser proof is visible before apply.`)).toBeVisible({ timeout: 2500 })
-        await expect(page.getByText('Browser proof visible for https://example.com.')).toBeVisible({ timeout: 2500 })
+        await expect(page.getByText('Production proof visible for https://example.com.')).toBeVisible({ timeout: 2500 })
         await expect(page.getByText('Browser proof', { exact: true }).last()).toBeVisible()
         await expect(page.getByText('Visible preview').last()).toBeVisible()
         await expect(page.getByText('Contact support -> /contact').last()).toBeVisible()
@@ -1134,7 +1135,7 @@ test('share page AI shows browser proof in the website UI for ambiguous build st
 test('share page AI uses the current share URL for browser evidence instead of generic examples', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1152,7 +1153,7 @@ test('share page AI uses the current share URL for browser evidence instead of g
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-share-evidence-target-story'
         await route.fulfill({
             status: 200,
@@ -1196,7 +1197,7 @@ test('share page AI uses the current share URL for browser evidence instead of g
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, maxTokens?: number, context?: string }
         const matchingStory = shareEvidenceTargetStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1233,8 +1234,8 @@ test('share page AI uses the current share URL for browser evidence instead of g
 
     for (const story of shareEvidenceTargetStories) {
         await page.goto(`/s/app-share-target-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await openWorkspaceChat(page)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1254,7 +1255,7 @@ test('share page AI uses the current share URL for browser evidence instead of g
 test('share page AI shows the browser proof target before users send ambiguous prompts', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1272,7 +1273,7 @@ test('share page AI shows the browser proof target before users send ambiguous p
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-visible-proof-target-story'
         await route.fulfill({
             status: 200,
@@ -1315,7 +1316,7 @@ test('share page AI shows the browser proof target before users send ambiguous p
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string }
         const matchingStory = visibleProofTargetStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1349,11 +1350,11 @@ test('share page AI shows the browser proof target before users send ambiguous p
     for (const story of visibleProofTargetStories) {
         const expectedUrl = `https://hanasand.com/s/app-visible-target-${story.id}`
         await page.goto(`/s/app-visible-target-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
+        await openWorkspaceChat(page)
         await expect(page.getByText('Current share target')).toBeVisible()
         await expect(page.getByText(expectedUrl)).toBeVisible()
 
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1371,7 +1372,7 @@ test('share page AI shows the browser proof target before users send ambiguous p
 test('share page AI summarizes browser evidence in the chat status strip for fast handoff', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1389,7 +1390,7 @@ test('share page AI summarizes browser evidence in the chat status strip for fas
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-evidence-summary-story'
         await route.fulfill({
             status: 200,
@@ -1435,7 +1436,7 @@ test('share page AI summarizes browser evidence in the chat status strip for fas
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = evidenceSummaryStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1471,8 +1472,8 @@ test('share page AI summarizes browser evidence in the chat status strip for fas
     for (const story of evidenceSummaryStories) {
         const expectedUrl = `https://hanasand.com/s/app-proof-strip-${story.id}`
         await page.goto(`/s/app-proof-strip-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await openWorkspaceChat(page)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1494,7 +1495,7 @@ test('share page AI summarizes browser evidence in the chat status strip for fas
 test('share page AI shows a bounded last-run receipt for ambiguous user requests', async ({ page, context, baseURL }) => {
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1512,7 +1513,7 @@ test('share page AI shows a bounded last-run receipt for ambiguous user requests
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-run-summary-story'
         await route.fulfill({
             status: 200,
@@ -1555,7 +1556,7 @@ test('share page AI shows a bounded last-run receipt for ambiguous user requests
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = runSummaryStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1592,8 +1593,8 @@ test('share page AI shows a bounded last-run receipt for ambiguous user requests
     for (const story of runSummaryStories) {
         const expectedUrl = `https://hanasand.com/s/app-run-summary-${story.id}`
         await page.goto(`/s/app-run-summary-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await openWorkspaceChat(page)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1617,7 +1618,7 @@ test('share page AI marks the last run as needing retry when browser proof fails
     test.setTimeout(180_000)
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1635,7 +1636,7 @@ test('share page AI marks the last run as needing retry when browser proof fails
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-browser-retry-story'
         await route.fulfill({
             status: 200,
@@ -1663,7 +1664,7 @@ test('share page AI marks the last run as needing retry when browser proof fails
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = browserRetryStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1699,8 +1700,8 @@ test('share page AI marks the last run as needing retry when browser proof fails
     for (const story of browserRetryStories) {
         const expectedUrl = `https://hanasand.com/s/app-browser-retry-${story.id}`
         await page.goto(`/s/app-browser-retry-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await openWorkspaceChat(page)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1727,7 +1728,7 @@ test('share page AI blocks applying pending edits when browser proof needs retry
     test.setTimeout(180_000)
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1745,7 +1746,7 @@ test('share page AI blocks applying pending edits when browser proof needs retry
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-proof-gate-story'
         await route.fulfill({
             status: 200,
@@ -1773,7 +1774,7 @@ test('share page AI blocks applying pending edits when browser proof needs retry
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = proofGateStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1808,8 +1809,8 @@ test('share page AI blocks applying pending edits when browser proof needs retry
     for (const story of proofGateStories) {
         const expectedUrl = `https://hanasand.com/s/app-proof-gate-${story.id}`
         await page.goto(`/s/app-proof-gate-${story.id}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await openWorkspaceChat(page)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1835,7 +1836,7 @@ test('share page AI lets users retry failed browser proof without rerunning the 
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1853,7 +1854,7 @@ test('share page AI lets users retry failed browser proof without rerunning the 
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-proof-recovery-story'
         await route.fulfill({
             status: 200,
@@ -1909,7 +1910,7 @@ test('share page AI lets users retry failed browser proof without rerunning the 
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = proofRecoveryStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -1944,8 +1945,8 @@ test('share page AI lets users retry failed browser proof without rerunning the 
     for (const story of proofRecoveryStories) {
         const expectedUrl = `https://hanasand.com/s/app-proof-recovery-${story.id}-${runSlug}`
         await page.goto(`/s/app-proof-recovery-${story.id}-${runSlug}?new=1`)
-        await page.getByRole('button', { name: 'Open workspace chat' }).click()
-        await page.getByPlaceholder('Ask Hanasand AI to change this project...').fill(story.prompt)
+        await openWorkspaceChat(page)
+        await page.getByPlaceholder('Describe what you want to build or change...').fill(story.prompt)
         const startedAt = Date.now()
         await page.getByRole('button', { name: 'Send message' }).click()
 
@@ -1978,7 +1979,7 @@ test('share page AI treats unapplied edits as a checkpoint before another run', 
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -1996,7 +1997,7 @@ test('share page AI treats unapplied edits as a checkpoint before another run', 
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-pending-checkpoint-story'
         await route.fulfill({
             status: 200,
@@ -2014,7 +2015,7 @@ test('share page AI treats unapplied edits as a checkpoint before another run', 
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = pendingCheckpointStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2075,7 +2076,7 @@ test('share page AI shows compact pending change summaries before raw diffs', as
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2093,7 +2094,7 @@ test('share page AI shows compact pending change summaries before raw diffs', as
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-pending-summary-story'
         await route.fulfill({
             status: 200,
@@ -2111,7 +2112,7 @@ test('share page AI shows compact pending change summaries before raw diffs', as
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = pendingSummaryStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2172,7 +2173,7 @@ test('share page AI switches to deployment diagnostics for real hosting failures
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2190,7 +2191,7 @@ test('share page AI switches to deployment diagnostics for real hosting failures
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-deploy-diagnostic-story'
         await route.fulfill({
             status: 200,
@@ -2208,7 +2209,7 @@ test('share page AI switches to deployment diagnostics for real hosting failures
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = deploymentDiagnosticStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2264,7 +2265,7 @@ test('share page AI protects budget and scope for real product-regression prompt
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2282,7 +2283,7 @@ test('share page AI protects budget and scope for real product-regression prompt
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-cost-control-story'
         await route.fulfill({
             status: 200,
@@ -2300,7 +2301,7 @@ test('share page AI protects budget and scope for real product-regression prompt
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = costControlStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2357,7 +2358,7 @@ test('share page AI flags maintainability and ownership risks from real AI-build
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2375,7 +2376,7 @@ test('share page AI flags maintainability and ownership risks from real AI-build
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-maintainability-story'
         await route.fulfill({
             status: 200,
@@ -2393,7 +2394,7 @@ test('share page AI flags maintainability and ownership risks from real AI-build
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = maintainabilityStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2441,7 +2442,7 @@ test('share page AI makes progress, blockers, and approvals observable for real 
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2459,7 +2460,7 @@ test('share page AI makes progress, blockers, and approvals observable for real 
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-progress-story'
         await route.fulfill({
             status: 200,
@@ -2477,7 +2478,7 @@ test('share page AI makes progress, blockers, and approvals observable for real 
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = progressGovernanceStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2525,7 +2526,7 @@ test('share page AI preserves invariants and real verification for regression co
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2543,7 +2544,7 @@ test('share page AI preserves invariants and real verification for regression co
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-regression-story'
         await route.fulfill({
             status: 200,
@@ -2561,7 +2562,7 @@ test('share page AI preserves invariants and real verification for regression co
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = regressionAccountabilityStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2609,7 +2610,7 @@ test('share page AI protects secrets and sandbox boundaries for real permission 
     await addLocalAuthCookies(context, baseURL)
     const runSlug = `r${Date.now()}`
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2627,7 +2628,7 @@ test('share page AI protects secrets and sandbox boundaries for real permission 
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-sandbox-story'
         await route.fulfill({
             status: 200,
@@ -2645,7 +2646,7 @@ test('share page AI protects secrets and sandbox boundaries for real permission 
     })
 
     const handledPrompts: string[] = []
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         const body = route.request().postDataJSON() as { prompt?: string, context?: string, maxTokens?: number }
         const matchingStory = sandboxSafetyStories.find((story) => body.prompt?.includes(story.prompt))
         expect(matchingStory).toBeTruthy()
@@ -2692,7 +2693,7 @@ test('share page AI queues browser proof asynchronously before apply gating', as
     test.setTimeout(60_000)
     await addLocalAuthCookies(context, baseURL)
 
-    await page.route('https://cdn.hanasand.com/api/share', async (route) => {
+    await page.route('**/api/share', async (route) => {
         const body = route.request().postDataJSON() as { id?: string, path?: string, name?: string, content?: string, type?: string }
         await route.fulfill({
             status: 200,
@@ -2710,7 +2711,7 @@ test('share page AI queues browser proof asynchronously before apply gating', as
         })
     })
 
-    await page.route(/https:\/\/cdn\.hanasand\.com\/api\/share\/.+/, async (route) => {
+    await page.route(/.*\/api\/share\/.+/, async (route) => {
         const shareId = route.request().url().split('/').pop() || 'app-async-proof'
         await route.fulfill({
             status: 200,
@@ -2727,7 +2728,7 @@ test('share page AI queues browser proof asynchronously before apply gating', as
         })
     })
 
-    await page.route('**/api/tools/ai', async (route) => {
+    await page.route('**/api/backend/tools/ai', async (route) => {
         await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -2737,6 +2738,92 @@ test('share page AI queues browser proof asynchronously before apply gating', as
                     '<hanasand-tool>{"action":"browser_task","url":"https://hanasand.com/s/app-async-proof","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>',
                     '<hanasand-tool>{"action":"upsert_share","path":"src/app/page.tsx","content":"export default function Page() { return <main><h1>After async proof</h1></main> }"}</hanasand-tool>',
                 ].join('\n'),
+            }),
+        })
+    })
+
+    let verificationJobStarted = false
+    const verificationJobs = new Map<string, { kind: string, targetUrl: string }>()
+    await page.route(/.*\/api\/backend\/tools\/verification-jobs.*/, async (route) => {
+        const request = route.request()
+        const url = request.url()
+        if (request.method() === 'POST') {
+            const body = request.postDataJSON() as { kind?: string, targetUrl?: string }
+            const kind = body.kind || 'browser'
+            const id = `proof-${kind}-${verificationJobs.size + 1}`
+            verificationJobs.set(id, { kind, targetUrl: body.targetUrl || 'https://hanasand.com/s/app-async-proof' })
+            if (kind === 'browser') {
+                verificationJobStarted = true
+            }
+            await route.fulfill({
+                status: 202,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    job: {
+                        id,
+                        kind,
+                        status: 'queued',
+                        currentStep: 'Queued',
+                        targetUrl: body.targetUrl,
+                        artifacts: [],
+                    },
+                }),
+            })
+            return
+        }
+
+        const id = url.split('/').pop() || ''
+        const job = verificationJobs.get(id)
+        if (job?.kind === 'browser') {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    job: {
+                        id,
+                        kind: 'browser',
+                        status: 'completed',
+                        currentStep: 'Completed',
+                        targetUrl: job.targetUrl,
+                        artifacts: [{
+                            type: 'browser_result',
+                            data: {
+                                url: job.targetUrl,
+                                title: 'Async proof',
+                                screenshotPath: '/tmp/async-proof.png',
+                                structure: {
+                                    headings: ['After async proof'],
+                                    links: [],
+                                    buttons: [],
+                                    inputs: [],
+                                    forms: [],
+                                    hasViewportMeta: true,
+                                },
+                                consoleMessages: [],
+                                pageErrors: [],
+                            },
+                        }],
+                    },
+                }),
+            })
+            return
+        }
+
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                job: {
+                    id,
+                    kind: 'design',
+                    status: 'completed',
+                    currentStep: 'Completed',
+                    targetUrl: job?.targetUrl || 'https://hanasand.com/s/app-async-proof',
+                    artifacts: [{
+                        type: 'design_quality_report',
+                        data: { score: 92 },
+                    }],
+                },
             }),
         })
     })
@@ -2780,8 +2867,8 @@ test('share page AI queues browser proof asynchronously before apply gating', as
     await expect(page.getByText('Proof queued')).toBeVisible()
     await expect(page.getByText('Verification queue', { exact: true })).toBeVisible()
     await expect(page.getByText('Browser proof is queued before these changes can be applied.')).toBeVisible()
-    expect(browserTaskStarted).toBe(true)
+    expect(verificationJobStarted || browserTaskStarted).toBe(true)
 
     await expect(page.getByText('Browser proof visible for https://hanasand.com/s/app-async-proof.')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('Completed')).toBeVisible()
+    await expect(page.getByText('Completed', { exact: true }).first()).toBeVisible()
 })

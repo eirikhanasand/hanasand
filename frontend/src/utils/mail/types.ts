@@ -98,7 +98,6 @@ export type MailOverview = {
     }
     mailboxUser: string
     mailboxAddress: string
-    mailPassword: string
     accessibleAccounts: Array<{ id: string, name: string, address: string }>
     mailboxes: MailboxItem[]
     selectedMailboxId: string | null

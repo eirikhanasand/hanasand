@@ -13,7 +13,7 @@ export default fp(async (fastify) => {
 
             fastify.stats = Buffer.from(JSON.stringify(stats))
             fastify.docker = Buffer.from(JSON.stringify(docker))
-            fastify.log.info('Cached queries refreshed')
+            fastify.log.debug('Cached queries refreshed')
         } catch (error) {
             fastify.log.warn({ error }, 'Cached query refresh failed')
         }

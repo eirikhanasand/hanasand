@@ -1,6 +1,7 @@
 'use client'
 
 import RestartButtons from '@/components/vms/restartButtons'
+import VMHardware from '@/components/vms/vmHardware'
 
 const smokeVm = {
     name: 'folder/test vm',
@@ -18,6 +19,9 @@ export default function VmSmokePage() {
                 </p>
                 <div className='mt-6 inline-flex rounded-2xl border border-white/10 bg-black/18 p-4'>
                     <RestartButtons vm={smokeVm} forceVisible />
+                </div>
+                <div className='mt-6'>
+                    <VMHardware boxStyle='rounded-xl border border-white/10 bg-black/18 p-4' boxTitleStyle='text-base font-medium text-bright' vm={smokeVm} />
                 </div>
             </div>
         </main>

@@ -7,14 +7,24 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Missing URL' }, { status: 400 })
     }
 
-    try {
-        if (url.toString().includes('https://')) {
-            const parts = url.toString().split('https://')
-            if (parts.length > 2) {
-                url = `https://${parts[1]}`
-            }
+    if (url.toString().includes('https://')) {
+        const parts = url.toString().split('https://')
+        if (parts.length > 2) {
+            url = `https://${parts[1]}`
         }
+    }
 
+    try {
+        const parsedUrl = new URL(url)
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return NextResponse.json({ error: 'URL must use http or https' }, { status: 400 })
+        }
+        url = parsedUrl.toString()
+    } catch {
+        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
+    }
+
+    try {
         let buffer: ArrayBuffer
         let contentType: string
 

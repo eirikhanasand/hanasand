@@ -1274,23 +1274,35 @@ export default function useAiWorkbench({
             },
         ]
 
-        setConversations((prev) => prev.map((conversation) => conversation.id === activeConversation.id
-            ? {
-                ...conversation,
-                activeModel: resolvedModel,
-                title: conversation.messages.length ? conversation.title : prompt.slice(0, 72),
-                updatedAt: new Date().toISOString(),
-                messages: [...conversation.messages, userMessage, assistantMessage],
-            }
-            : conversation))
-        setComposer('')
-
-        await patchConversation(activeConversation.id, {
+        const optimisticUpdatedAt = new Date().toISOString()
+        const optimisticTitle = activeConversation.messages.length ? activeConversation.title : prompt.slice(0, 72)
+        const optimisticConversation: AIConversation = {
+            ...activeConversation,
             activeModel: resolvedModel,
-            title: activeConversation.messages.length ? activeConversation.title : prompt.slice(0, 72),
+            title: optimisticTitle,
+            updatedAt: optimisticUpdatedAt,
+            messages: [...activeConversation.messages, userMessage, assistantMessage],
+        }
+
+        conversationsRef.current = conversationsRef.current.map((conversation) => (
+            conversation.id === activeConversation.id ? optimisticConversation : conversation
+        ))
+        setConversations((prev) => {
+            const next = prev.map((conversation) => (
+                conversation.id === activeConversation.id
+                    ? {
+                        ...conversation,
+                        activeModel: resolvedModel,
+                        title: conversation.messages.length ? conversation.title : prompt.slice(0, 72),
+                        updatedAt: optimisticUpdatedAt,
+                        messages: [...conversation.messages, userMessage, assistantMessage],
+                    }
+                    : conversation
+            ))
+            conversationsRef.current = next
+            return next
         })
-        await persistMessage(activeConversation.id, userMessage)
-        await persistMessage(activeConversation.id, assistantMessage)
+        setComposer('')
 
         socket.send(JSON.stringify({
             type: 'prompt_request',
@@ -1300,6 +1312,17 @@ export default function useAiWorkbench({
             maxTokens: 1024,
             temperature: 0.35,
         }))
+
+        void Promise.all([
+            patchConversation(activeConversation.id, {
+                activeModel: resolvedModel,
+                title: activeConversation.messages.length ? activeConversation.title : prompt.slice(0, 72),
+            }),
+            persistMessage(activeConversation.id, userMessage),
+            persistMessage(activeConversation.id, assistantMessage),
+        ]).catch(() => {
+            setStatusNotice('Chat history is syncing slowly. The live response was still sent to the model.')
+        })
     }
 
     const persistAssistantMessageFromEvent = useCallback(async (message: GptSocketMessage) => {
@@ -1316,8 +1339,8 @@ export default function useAiWorkbench({
             return
         }
 
-        const lastMessage = conversation.messages[conversation.messages.length - 1]
-        if (!lastMessage || lastMessage.role !== 'assistant') {
+        const lastMessage = conversation.messages[findLatestAssistantIndex(conversation.messages)]
+        if (!lastMessage) {
             return
         }
 
@@ -1363,13 +1386,17 @@ export default function useAiWorkbench({
             return nextConversations
         })
 
-        await persistMessage(message.conversationId, assistantMessage)
         if (message.type === 'prompt_complete') {
-            await executeAssistantToolsRef.current(conversation, {
+            void executeAssistantToolsRef.current(conversation, {
                 ...assistantMessage,
                 content: rawContent,
+            }).catch(() => {
+                setStatusNotice('The model answered, but the local tool run could not be started.')
             })
         }
+        void persistMessage(message.conversationId, assistantMessage).catch(() => {
+            setStatusNotice('Chat history is syncing slowly. The live response is still available.')
+        })
     }, [persistMessage])
 
     useEffect(() => {
@@ -1455,18 +1482,31 @@ export default function useAiWorkbench({
 
                     if (message.type === 'prompt_delta' || message.type === 'prompt_complete') {
                         const messages = [...conversation.messages]
-                        const lastMessage = messages[messages.length - 1]
-                        if (lastMessage?.role === 'assistant') {
-                            messages[messages.length - 1] = {
-                                ...lastMessage,
-                                modelName: message.clientName || lastMessage.modelName || conversation.activeModel,
-                                content: message.content || `${lastMessage.content}${message.delta || ''}`,
+                        const assistantIndex = findLatestAssistantIndex(messages)
+                        if (assistantIndex >= 0) {
+                            const assistant = messages[assistantIndex]
+                            messages[assistantIndex] = {
+                                ...assistant,
+                                modelName: message.clientName || assistant.modelName || conversation.activeModel,
+                                content: message.content || `${assistant.content}${message.delta || ''}`,
                                 pending: message.type === 'prompt_delta',
                                 metadata: {
-                                    ...(lastMessage.metadata || {}),
-                                    artifacts: message.artifacts || (lastMessage.metadata?.artifacts as AIArtifact[] | undefined) || [],
+                                    ...(assistant.metadata || {}),
+                                    artifacts: message.artifacts || (assistant.metadata?.artifacts as AIArtifact[] | undefined) || [],
                                 },
                             }
+                        } else if (message.type === 'prompt_complete') {
+                            messages.push({
+                                id: `${conversation.id}-assistant-${Date.now()}`,
+                                role: 'assistant',
+                                content: message.content || '',
+                                pending: false,
+                                createdAt: new Date().toISOString(),
+                                modelName: message.clientName || conversation.activeModel,
+                                metadata: {
+                                    artifacts: message.artifacts || [],
+                                },
+                            })
                         }
 
                         return {
@@ -1506,7 +1546,17 @@ export default function useAiWorkbench({
 
             for (const toolCall of toolCalls) {
                 const latestConversation = conversationsRef.current.find((entry) => entry.id === conversation.id) || conversation
-                const result = await runToolCallRef.current(latestConversation, toolCall)
+                let result: Awaited<ReturnType<typeof runToolCallRef.current>>
+                try {
+                    result = await runToolCallRef.current(latestConversation, toolCall)
+                } catch (error) {
+                    result = {
+                        ok: false,
+                        message: error instanceof Error
+                            ? `Tool ${toolCall.action} failed: ${error.message}`
+                            : `Tool ${toolCall.action} failed.`,
+                    }
+                }
                 const toolMessage: AIConversationMessage = {
                     id: crypto.randomUUID(),
                     role: 'tool',
@@ -1520,14 +1570,18 @@ export default function useAiWorkbench({
                     },
                 }
 
-                setConversations((prev) => prev.map((entry) => entry.id === conversation.id
-                    ? {
-                        ...entry,
-                        updatedAt: new Date().toISOString(),
-                        messages: [...entry.messages, toolMessage],
-                    }
-                    : entry))
-                await persistMessage(conversation.id, toolMessage)
+                setConversations((prev) => {
+                    const next = prev.map((entry) => entry.id === conversation.id
+                        ? {
+                            ...entry,
+                            updatedAt: new Date().toISOString(),
+                            messages: [...entry.messages, toolMessage],
+                        }
+                        : entry)
+                    conversationsRef.current = next
+                    return next
+                })
+                void persistMessage(conversation.id, toolMessage)
             }
         }
     }, [persistMessage])
@@ -1795,4 +1849,14 @@ function formatLinkList(items: { text?: string, href?: string }[] | undefined) {
         .slice(0, 12)
         .map((item) => `- ${[item.text, item.href].filter(Boolean).join(' -> ')}`)
     return visible.length ? visible.join('\n') : '<none>'
+}
+
+function findLatestAssistantIndex(messages: AIConversationMessage[]) {
+    for (let index = messages.length - 1; index >= 0; index--) {
+        if (messages[index]?.role === 'assistant') {
+            return index
+        }
+    }
+
+    return -1
 }

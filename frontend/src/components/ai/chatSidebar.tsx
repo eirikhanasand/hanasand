@@ -60,7 +60,7 @@ export default function ChatSidebar(props: ChatSidebarProps) {
             ) : null}
 
             <div className='mb-3 flex items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
-                <span>Chats</span>
+                <span>Chat</span>
                 <span>{conversations.length}</span>
             </div>
 

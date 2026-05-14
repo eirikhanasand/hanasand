@@ -200,7 +200,7 @@ export default function ClientPage({
                         {chatOpen ? (
                             <div className='flex min-w-0 items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
                                 <MessageSquare className='h-4 w-4 shrink-0 text-[#f07d33]' />
-                                <span className='truncate'>Chat</span>
+                                <span className='truncate'>Chat workspace</span>
                             </div>
                         ) : openFiles.length ? (
                             <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />

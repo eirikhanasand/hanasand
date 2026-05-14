@@ -17,6 +17,7 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
     const terminalRef = useRef<Terminal | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
     const renderedChunkCountRef = useRef(0)
+    const latestChunksRef = useRef(chunks)
     const resizeObserverRef = useRef<ResizeObserver | null>(null)
     const fitTimeoutRef = useRef<number | null>(null)
     const lastSizeRef = useRef({ cols: 0, rows: 0 })
@@ -67,6 +68,10 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
     }, [clearScheduledFit, sendResize])
 
     useEffect(() => {
+        latestChunksRef.current = chunks
+    }, [chunks])
+
+    useEffect(() => {
         if (!containerRef.current || terminalRef.current) {
             return
         }
@@ -105,6 +110,8 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
         const inputDisposable = term.onData((data) => {
             sendInput(data)
         })
+        writeTerminalChunks(term, latestChunksRef.current)
+        renderedChunkCountRef.current = latestChunksRef.current.length
 
         const refit = () => scheduleFit()
         const refitWithFocus = () => scheduleFit(true, 50)
@@ -163,21 +170,7 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             return
         }
 
-        const nextChunks = chunks.slice(renderedChunkCountRef.current)
-        nextChunks.forEach((chunk) => {
-            try {
-                const parsed = JSON.parse(chunk) as { content?: string }
-                const content = cleanTerminalOutput(parsed.content || '')
-                if (content) {
-                    terminalRef.current?.write(content)
-                }
-            } catch {
-                const content = cleanTerminalOutput(chunk)
-                if (content) {
-                    terminalRef.current?.write(content)
-                }
-            }
-        })
+        writeTerminalChunks(terminalRef.current, chunks.slice(renderedChunkCountRef.current))
         renderedChunkCountRef.current = chunks.length
     }, [chunks, share.id])
 
@@ -208,6 +201,24 @@ export default function TerminalViewer({ open, share, chunks, status, sendInput,
             />
         </div>
     )
+}
+
+function writeTerminalChunks(terminal: Terminal, chunks: string[]) {
+    chunks.forEach((chunk) => {
+        const content = parseTerminalContent(chunk)
+        if (content) {
+            terminal.write(content)
+        }
+    })
+}
+
+function parseTerminalContent(chunk: string) {
+    try {
+        const parsed = JSON.parse(chunk) as { content?: string }
+        return cleanTerminalOutput(parsed.content || '')
+    } catch {
+        return cleanTerminalOutput(chunk)
+    }
 }
 
 function cleanTerminalOutput(content: string) {

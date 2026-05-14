@@ -36,7 +36,7 @@ export default function VMNetwork({ boxStyle, boxTitleStyle, vm, details }: VMDe
 
 function formatFlag(value: string) {
     if (!value) {
-        return 'Unknown'
+        return 'Not reported'
     }
 
     const normalized = value.toLowerCase()

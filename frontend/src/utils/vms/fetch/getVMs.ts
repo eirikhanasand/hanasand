@@ -26,8 +26,7 @@ export default async function getVMs(id: string, tokenOverride?: string, userIdO
 
         const data = await response.json()
         return data
-    } catch (error) {
-        console.log(error)
+    } catch {
         return []
     }
 }

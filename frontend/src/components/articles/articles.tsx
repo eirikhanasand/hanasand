@@ -23,6 +23,7 @@ type RecentProps = {
     recent: Article[]
     max?: number
     includeTitle?: boolean
+    emptyMessage?: string
 }
 
 export default async function Articles({
@@ -38,6 +39,7 @@ export default async function Articles({
     const allArticles = normalizeArticles(Array.isArray(response) ? articles : response.articles)
     const displayed = max ? allArticles.slice(max) : allArticles
     const message = error && error === '404' ? `The article '${errorPath}' does not exist.` : error
+    const hasAnyArticles = articles.length > 0 || displayed.length > 0
 
     return (
         <section className='grid gap-6 px-4 py-8 md:px-12 lg:px-16'>
@@ -51,19 +53,19 @@ export default async function Articles({
                     Notes, project writeups, and longer-form context from Hanasand.
                 </p>
             </div>
-            <Recent recent={articles} max={max} includeTitle={includeRecentTitle} />
-            {recent && articles.length > 0 && <All recent={displayed} max={max} includeTitle={includeRecentTitle} />}
+            <Recent recent={articles} max={max} includeTitle={includeRecentTitle} emptyMessage={hasAnyArticles ? 'No recent articles right now.' : 'No articles are published here yet.'} />
+            {recent && displayed.length > 0 && <All recent={displayed} max={max} includeTitle={includeRecentTitle} />}
         </section>
     )
 }
 
-function Recent({ recent, max, includeTitle = true }: RecentProps) {
+function Recent({ recent, max, includeTitle = true, emptyMessage = 'No articles are published here yet.' }: RecentProps) {
     const displayed = max ? recent.slice(0, max) : recent
 
     return (
         <div className='grid gap-3'>
             {includeTitle && <h2 className='text-sm font-semibold uppercase tracking-[0.16em] text-bright/38'>Recently published</h2>}
-            {displayed.length === 0 ? <EmptyArticles /> : null}
+            {displayed.length === 0 ? <EmptyArticles message={emptyMessage} /> : null}
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 {displayed.map((article) => <Article
                     key={article.title}
@@ -150,14 +152,14 @@ function normalizeArticles(value: unknown): Article[] {
     })
 }
 
-function EmptyArticles() {
+function EmptyArticles({ message }: { message: string }) {
     return (
         <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-center'>
             <div className='grid gap-3'>
                 <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/4'>
                     <FileText className='h-5 w-5 text-[#f0a17a]' />
                 </div>
-                <p className='text-sm text-bright/50'>No articles are published here yet.</p>
+                <p className='text-sm text-bright/50'>{message}</p>
             </div>
         </div>
     )

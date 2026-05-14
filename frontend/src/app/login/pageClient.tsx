@@ -23,6 +23,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const [resetUserId, setResetUserId] = useState('')
     const [resetCode, setResetCode] = useState('')
     const [busy, setBusy] = useState(false)
+    const [hydrated, setHydrated] = useState(false)
     const [signupName, setSignupName] = useState('')
     const [signupUsername, setSignupUsername] = useState('')
     const [signupPassword, setSignupPassword] = useState('')
@@ -210,6 +211,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         if (token && id) {
             router.push('/dashboard')
         }
+        setHydrated(true)
     }, [router])
 
     return (
@@ -230,6 +232,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             <form
                                 className='flex w-full flex-col gap-2 self-center'
                                 onSubmit={handleSubmit}
+                                method='post'
                             >
                                 <input
                                     type='text'
@@ -248,6 +251,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 <div className='mt-1 flex items-center gap-3'>
                                     <button
                                         type='submit'
+                                        disabled={!hydrated}
                                         className='group inline-flex h-9 min-w-24 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white'
                                     >
                                         Log in
@@ -255,15 +259,17 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     </button>
                                     <button
                                         type='button'
+                                        disabled={!hydrated}
                                         onClick={() => changeMode('signup')}
-                                        className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'
+                                        className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78 disabled:cursor-not-allowed disabled:text-bright/25'
                                     >
                                         Sign up
                                     </button>
                                     <button
                                         type='button'
+                                        disabled={!hydrated}
                                         onClick={() => changeMode('request-reset')}
-                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-bright/42 transition hover:bg-white/6 hover:text-bright/72'
+                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-bright/42 transition hover:bg-white/6 hover:text-bright/72 disabled:cursor-not-allowed disabled:text-bright/25'
                                     >
                                         Forgot?
                                     </button>
@@ -276,6 +282,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                         <form
                             className='flex w-full flex-col gap-2 self-center'
                             onSubmit={handleSignup}
+                            method='post'
                         >
                             <input
                                 type='text'
@@ -313,7 +320,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             <div className='mt-1 flex items-center gap-3'>
                                 <button
                                     type='submit'
-                                    disabled={busy || !canCreateAccount}
+                                    disabled={!hydrated || busy || !canCreateAccount}
                                     className='group inline-flex h-9 min-w-36 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
                                 >
                                     {busy ? 'Creating' : 'Create account'}
@@ -331,7 +338,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     )}
 
                     {mode === 'request-reset' && (
-                        <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest}>
+                        <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest} method='post'>
                             <input
                                 type='text'
                                 name='resetUserId'
@@ -356,7 +363,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     )}
 
                     {mode === 'verify-reset' && (
-                        <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetVerify}>
+                        <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetVerify} method='post'>
                             <ResetCodeInput
                                 value={resetCode}
                                 setValue={setResetCode}

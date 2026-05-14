@@ -81,6 +81,7 @@ export default function NewFile({
             }
             <input
                 autoFocus
+                aria-label={isCreatingNewFile === 'folder' ? 'New folder name' : 'New file name'}
                 value={newFileName}
                 onChange={(e) => setNewFileName(e.target.value)}
                 className='text-sm text-bright/80 outline-none'

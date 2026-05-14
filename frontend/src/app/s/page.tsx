@@ -4,10 +4,10 @@ import { buildRouteMetadata } from '../seo'
 import randomId from '@/utils/random/randomId'
 
 export const metadata: Metadata = buildRouteMetadata({
-    title: 'Production Workspace',
-    description: 'Build, verify, deploy, and recover websites in Hanasand.',
+    title: 'Workspace',
+    description: 'Open a Hanasand workspace for notes, files, chat, and shareable project handoffs.',
     path: '/s',
-    keywords: ['production workspace', 'hanasand ai', 'verified deploy', 'website rollback'],
+    keywords: ['workspace', 'hanasand ai', 'project handoff', 'shareable workspace'],
 })
 
 export default function ShareEntryPage() {

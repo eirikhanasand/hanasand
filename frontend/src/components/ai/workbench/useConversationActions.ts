@@ -62,18 +62,17 @@ export function useConversationActions({
             return
         }
 
-        try {
-            setStatusNotice(null)
-            const response = await aiClientRequest(`/ai/conversations/${id}`, {
-                method: 'PUT',
-                body: JSON.stringify(toConversationPayload({ id, ...patch } as AIConversation)),
-            })
+        setStatusNotice(null)
+        void aiClientRequest(`/ai/conversations/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(toConversationPayload({ id, ...patch } as AIConversation)),
+        }).then((response) => {
             if (!response.ok) {
                 throw new Error('Unable to save conversation changes.')
             }
-        } catch (error) {
+        }).catch((error) => {
             setStatusNotice(error instanceof Error ? error.message : 'Unable to save conversation changes.')
-        }
+        })
     }, [isAuthenticated, setStatusNotice, updateLocalConversation])
 
     const renameConversation = useCallback(async (id: string, title: string) => {

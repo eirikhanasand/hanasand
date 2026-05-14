@@ -23,14 +23,17 @@ export default async function Page(props: {
     const shareTerminalHeight = Number(Cookies.get('shareTerminalHeight')?.value) || 0
     const openFolders = parseCookieJson<string[]>(openFoldersCookie?.value, [])
     const openFiles = parseCookieJson<OpenFile[]>(openFilesCookie?.value, [])
-    const [tree, share] = isNewWorkspace
+    const [fetchedTree, fetchedShare] = isNewWorkspace
         ? [createOptimisticTree(id), createOptimisticShare(id)] as const
         : await Promise.all([
             getTree({ id, token, userId }),
             getShare({ id, token, userId }),
         ])
-    const safeShare = typeof share === 'string' ? null : share
-    const isProject = safeShare && safeShare.alias !== safeShare.id && Array.isArray(tree) && flattenTree(tree).length > 1
+    const safeShare = typeof fetchedShare === 'string' ? null : fetchedShare
+    const shouldCreateWorkspace = isNewWorkspace || !safeShare
+    const tree = shouldCreateWorkspace ? createOptimisticTree(id) : fetchedTree
+    const share = shouldCreateWorkspace ? createOptimisticShare(id) : safeShare
+    const isProject = safeShare && safeShare.alias !== safeShare.id && Array.isArray(fetchedTree) && flattenTree(fetchedTree).length > 1
 
     if (!isNewWorkspace && isProject) {
         redirect(`/p/${safeShare.alias}?file=${safeShare.id}`)
@@ -47,13 +50,13 @@ export default async function Page(props: {
         <div className='w-full h-[92.5vh]'>
             <SharePageClient
                 id={id}
-                share={safeShare}
+                share={share}
                 openFolders={openFolders}
                 tree={tree}
                 sharePageWidth={sharePageWidth}
                 shareTerminalHeight={shareTerminalHeight}
                 serverOpenFiles={openFiles}
-                autoCreate={isNewWorkspace}
+                autoCreate={shouldCreateWorkspace}
                 initialChatOpen={initialChatOpen}
                 replaceUrlOnCreate
             />

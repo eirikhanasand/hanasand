@@ -826,10 +826,6 @@ function inferProject(prompt: string): GeneratedProject {
     const title = titleFromPrompt(prompt)
     const slug = slugify(title)
 
-    if (/\b(gallery|image review|photo|photographer)\b/.test(lower)) {
-        return websiteProject(title, slug, pageSectionsFor(lower), lower)
-    }
-
     if (/\b(discord|bot|slack|telegram|server status bot|game server)\b/.test(lower)) {
         return botProject(title, slug, lower.includes('discord') ? 'Discord' : 'Chat')
     }
@@ -840,6 +836,10 @@ function inferProject(prompt: string): GeneratedProject {
 
     if (/\b(worker|queue|background|redis|job|transcode|import)\b/.test(lower) && !/\bwebsite|web site|page|frontend|landing\b/.test(lower)) {
         return workerProject(title, slug, lower)
+    }
+
+    if (/\b(gallery|image review|photo|photographer)\b/.test(lower)) {
+        return websiteProject(title, slug, pageSectionsFor(lower), lower)
     }
 
     if (/\b(page|website|web site|site|frontend|landing|concept)\b/.test(lower)) {
@@ -893,6 +893,18 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('warranty claim') || lower.includes('claim triage')) {
         return ['Service categories', 'Response metrics', 'Cost tiers', 'Customer quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
     }
+    if (lower.includes('emergency shelter') || lower.includes('shelter directory')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('food pantry') || lower.includes('pantry site') || lower.includes('food bank')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('disaster supply') || lower.includes('supply pickup')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('refugee services') || lower.includes('services navigator') || lower.includes('public defender') || lower.includes('legal aid')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
     if (lower.includes('public records') || lower.includes('records request')) {
         return ['Permit categories', 'Service metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
     }
@@ -905,11 +917,53 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('therapist booking')) {
         return ['Service sections', 'Booking metrics', 'Pricing bands', 'Client quotes', 'Launch tasks', 'Privacy rules']
     }
+    if ((lower.includes('restaurant allergy') || lower.includes('allergy booking') || lower.includes('allergen')) && lower.includes('recall')) {
+        return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Privacy rules', 'Recall checklist', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('restaurant site') || lower.includes('restaurant allergy') || lower.includes('allergy booking')) {
+        return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Launch checklist', 'Privacy rules', 'Beginner deployment']
+    }
     if (lower.includes('repair shop') || lower.includes('pet groomer') || lower.includes('local service website')) {
         return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Launch checklist', 'Beginner deployment']
     }
     if (lower.includes('field service dispatch')) {
         return ['Service categories', 'Response metrics', 'Pricing cards', 'Testimonials', 'Onboarding tasks', 'Beginner deployment']
+    }
+    if (lower.includes('senior transport') || lower.includes('transport booking')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Customer quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('tenant move out') || lower.includes('move out portal')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Customer quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('tenant rights') || lower.includes('rights hotline')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('utility shutoff') || lower.includes('shutoff assistance') || lower.includes('victim services')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('rural internet outage')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('rural internet') || lower.includes('internet signup')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Customer quotes', 'Application tasks', 'Office hours', 'Plain FAQ', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('storm cleanup') || lower.includes('cleanup volunteer') || lower.includes('storm repair dispatch')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('accessibility repair') || lower.includes('emergency accessibility')) {
+        return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Office hours', 'Plain FAQ', 'Mobile release', 'Offline state']
+    }
+    if (lower.includes('local repair dispatch') || lower.includes('repair dispatch')) {
+        return ['Service categories', 'Response metrics', 'Pricing cards', 'Testimonials', 'Onboarding tasks', 'Beginner deployment']
+    }
+    if (lower.includes('plumbing dispatch') || lower.includes('locksmith dispatch') || lower.includes('locksmith booking') || lower.includes('electrician dispatch')) {
+        return ['Service categories', 'Response metrics', 'Pricing cards', 'Testimonials', 'Onboarding tasks', 'Beginner deployment']
+    }
+    if (lower.includes('community tool library')) {
+        return ['Service categories', 'Lead metrics', 'Pricing cards', 'Testimonials', 'Onboarding tasks', 'Beginner deployment', 'Office hours', 'Plain FAQ']
+    }
+    if (lower.includes('mobile field inspection')) {
+        return ['Service categories', 'Response metrics', 'Pricing cards', 'Testimonials', 'Onboarding tasks', 'Beginner deployment', 'Mobile release', 'Offline state']
     }
     if (lower.includes('trust center') || lower.includes('trustsignal')) {
         return ['Control groups', 'Assurance metrics', 'Plan tiers', 'Customer quotes', 'Evidence tasks', 'Deployment notes']
@@ -1472,6 +1526,12 @@ function apiProject(title: string, slug: string, lower: string): GeneratedProjec
     const customerMessagingNotes = lower.includes('customer messaging') || lower.includes('quota transparency') || lower.includes('rate limit transparency') || lower.includes('cancellation') || lower.includes('failed payment') || lower.includes('invoice')
         ? ' Customer messaging is included for rate limits, quota resets, failed payments, cancellation, and invoice notes so users never see raw backend errors.'
         : ''
+    const schedulingNotes = lower.includes('quiet hours') || lower.includes('timezone') || lower.includes('consent flow')
+        ? ' Consent flow checks, quiet hours, timezone-aware send windows, and batching rules are part of the API contract before any customer messaging is emitted.'
+        : ''
+    const incidentCommunicationNotes = lower.includes('incident communication') || lower.includes('subscriber notice') || lower.includes('postmortems') || lower.includes('slo evidence')
+        ? ' Incident communication includes Subscriber notice drafts, SLO evidence, Postmortems, Failure owner routing, alert review, and SIEM event export so incidents become actionable product flows instead of generic logs.'
+        : ''
     return {
         label: 'API',
         files: [
@@ -1612,7 +1672,7 @@ app.get('/usage-quotas', async () => usageQuotas)
 app.get('/sso-config', async () => ssoConfig)\napp.get('/openapi.json', async () => ({ openapi: '3.1.0', info: { title: '${escapeTs(title)}', version: '0.1.0' }, paths: { '/health': { get: {} }, '/ready': { get: {} }, '/${noun}s': { get: {}, post: {} } } }))\napp.get('/audit-events', async () => auditEvents.slice(-50))\napp.get('/migrations', async () => migrations)\napp.get('/feature-flags', async () => featureFlags)\napp.get('/backup', async (request) => {\n  requireRole(request, process.env.ADMIN_ROLE || 'admin')\n  const snapshot = { records: [...records.values()], auditEvents, exportedAt: new Date().toISOString() }\n  backups.push({ at: snapshot.exportedAt, recordCount: snapshot.records.length, auditCount: snapshot.auditEvents.length, exportedBy: request.headers['x-account-id']?.toString() || 'unknown' })\n  return snapshot\n})\napp.post<{ Body: { records?: RecordItem[] } }>('/restore', async (request, reply) => {\n  requireRole(request, process.env.ADMIN_ROLE || 'admin')\n  if (!Array.isArray(request.body.records)) return reply.code(400).send({ error: 'restore_records_required' })\n  records.clear()\n  for (const record of request.body.records) records.set(record.id, record)\n  auditEvents.push({ at: new Date().toISOString(), action: 'restore', actor: request.headers['x-account-id']?.toString() || 'unknown', redactedSummary: 'restored ' + request.body.records.length + ' records' })\n  return { restored: request.body.records.length }\n})\napp.get<{ Querystring: { limit?: string; cursor?: string } }>('/${noun}s', async (request) => {\n  const ownerId = request.headers['x-account-id']?.toString()\n  const limit = Math.min(Math.max(Number(request.query.limit || 25), 1), 100)\n  const cursor = Number(request.query.cursor || 0)\n  const cacheKey = JSON.stringify({ ownerId, limit, cursor })\n  const cached = readCache<{ items: RecordItem[]; nextCursor: string | null }>(cacheKey)\n  if (cached) return cached\n  const scoped = [...records.values()].filter((record) => !ownerId || record.ownerId === ownerId)\n  const result = { items: scoped.slice(cursor, cursor + limit), nextCursor: cursor + limit < scoped.length ? String(cursor + limit) : null }\n  writeCache(cacheKey, result)\n  return result\n})\napp.post<{ Body: { title?: string; status?: RecordItem['status']; ownerId?: string; idempotencyKey?: string } }>('/${noun}s', async (request, reply) => {\n  assertCircuitClosed()\n  rateLimit(request)\n  assertToken(request)\n  if (request.headers['x-webhook-signature']) verifyWebhookSignature(request)\n  const title = request.body.title?.trim()\n  if (!title) return reply.code(400).send({ error: 'title_required', message: 'Title is required.' })\n  if (request.body.idempotencyKey && idempotency.has(request.body.idempotencyKey)) {\n    return records.get(idempotency.get(request.body.idempotencyKey)!)\n  }\n  return await withTransaction(async () => {\n    const id = crypto.randomUUID()\n    const record = { id, title, status: request.body.status || 'open', ownerId: request.body.ownerId || request.headers['x-account-id']?.toString() || 'demo-owner', schemaVersion: 1, failureOwner: process.env.FAILURE_OWNER || 'unassigned', createdAt: new Date().toISOString(), idempotencyKey: request.body.idempotencyKey }\n    records.set(id, record)\n    cache.clear()\n    metrics.writes += 1\n    appendAudit({ action: 'create_${noun}', actor: record.ownerId, recordId: id, redactedSummary: redact(title) })\n    outboxEvents.push({ id: crypto.randomUUID(), type: 'create_${noun}', payload: { id, ownerId: record.ownerId }, status: 'pending' })\n    if (request.body.idempotencyKey) idempotency.set(request.body.idempotencyKey, id)\n    return reply.code(201).send(record)\n  })\n})\napp.delete<{ Params: { id: string } }>('/${noun}s/:id', async (request, reply) => {\n  requireRole(request, process.env.ADMIN_ROLE || 'admin')\n  const hold = retentionHolds.get(request.params.id)\n  if (hold) return reply.code(409).send({ error: 'retention_hold_active', hold })\n  records.delete(request.params.id)\n  cache.clear()\n  appendAudit({ action: 'delete_${noun}', actor: request.headers['x-account-id']?.toString() || 'unknown', recordId: request.params.id, redactedSummary: 'deleted record' })\n  return { deleted: request.params.id }\n})\n\napp.setErrorHandler((error, _request, reply) => {\n  const statusCode = 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500\n  if (statusCode >= 500) recordCircuitFailure()\n  reply.code(statusCode).send({ error: statusCode >= 500 ? 'internal_error' : 'request_error', message: error.message, requestId: requestId(_request) })\n})\n\nawait app.listen({ port: Number(process.env.PORT || 3000), host: '0.0.0.0' })\n`,
             },
             readme(title, [
-                `Fastify ${noun} API with health/readiness routes, validation, idempotency, scoped records, pagination, PII redaction, audit events, webhook signature seam, RBAC role checks, backup/restore, migrations, feature flags, CORS allowlist, request IDs, OpenAPI, metrics, cache TTL, transaction rollback, RLS policy notes, data residency, retention holds, immutable audit hash chain, outbox events, circuit breaker, secrets rotation, contract tests, dependency review, threat model, DPIA, SLOs, incident drills, synthetic checks, schema rollback, vulnerability findings, alerting, SIEM export, access reviews, data classification, backup verification, release evidence, chaos drills, rollback approvals, change requests, egress policy, encryption plan, API version history, schema drift, tenant quotas, SSO/JWKS seams with jwksUri, security headers, rate limiting, schema versioning, failure owner, and safe token handling.${domainNotes}${supportNotes}${customerMessagingNotes}`,
+                `Fastify ${noun} API with health/readiness routes, validation, idempotency, scoped records, pagination, PII redaction, audit events, webhook signature seam, RBAC role checks, backup/restore, migrations, feature flags, CORS allowlist, request IDs, OpenAPI, metrics, cache TTL, transaction rollback, RLS policy notes, data residency, retention holds, immutable audit hash chain, outbox events, circuit breaker, secrets rotation, contract tests, dependency review, threat model, DPIA, SLOs, incident drills, synthetic checks, schema rollback, vulnerability findings, alerting, SIEM export, access reviews, data classification, backup verification, release evidence, chaos drills, rollback approvals, change requests, egress policy, encryption plan, API version history, schema drift, tenant quotas, SSO/JWKS seams with jwksUri, security headers, rate limiting, schema versioning, failure owner, and safe token handling.${domainNotes}${supportNotes}${customerMessagingNotes}${schedulingNotes}${incidentCommunicationNotes}`,
                 'Docker Compose keeps deployment portable and inspectable.',
                 'Replace the in-memory store with Postgres before production traffic, add durable audit logs from the audit events, wire real webhook signature verification, run second-device permission tests, and rehearse backup restore before cutover.',
             ]),
@@ -1622,8 +1682,20 @@ app.get('/sso-config', async () => ssoConfig)\napp.get('/openapi.json', async ()
 
 function workerProject(title: string, slug: string, lower: string): GeneratedProject {
     const queueName = lower.includes('image') ? 'image-jobs' : lower.includes('invoice') ? 'invoice-jobs' : 'work-jobs'
-    const workerDomainNotes = lower.includes('customer messaging') || lower.includes('support macro')
+    const workerDomainNotes = lower.includes('customer messaging') || lower.includes('support macro') || lower.includes('failed payment') || lower.includes('invoice') || lower.includes('dunning')
         ? ' Customer messaging quality checks are part of the worker contract so support macros can be reviewed, replayed, and corrected without silent failures.'
+        : ''
+    const workerBillingNotes = lower.includes('failed payment') || lower.includes('invoice') || lower.includes('dunning')
+        ? ' Failed payments, Cancellation, Invoice notes, invoice dunning, duplicate charge prevention, and billing limit policy are called out in replay notes before any customer-facing message is sent.'
+        : ''
+    const workerSchedulingNotes = lower.includes('quiet hours') || lower.includes('timezone') || lower.includes('digest')
+        ? ' Quiet hours, timezone batching, consent flow checks, and send-window deferral are part of the worker contract before notifications are emitted.'
+        : ''
+    const workerMediaNotes = lower.includes('media asset') || lower.includes('photo review') || lower.includes('image review')
+        ? ' Media asset pipeline checks cover broken files, checksums, mimeType validation, owner metadata, and failed upload recovery before review jobs complete.'
+        : ''
+    const workerAccessNotes = lower.includes('access review') || lower.includes('access package') || lower.includes('access export')
+        ? ' Access export workers expose /access-reviews evidence, data portability status, reviewer handoff, and audit evidence pack references before packages leave the queue.'
         : ''
     return {
         label: 'worker queue',
@@ -1782,6 +1854,7 @@ export function replayDeadLetter(id: string) {
                 path: 'src/index.ts',
                 content: `import 'dotenv/config'\nimport Fastify from 'fastify'\nimport { cancelJob, circuitBreaker, enqueue, jobs, outboxEvents, poisonJobs, replayDeadLetter, replayRequests } from './queue.js'\n\nconst app = Fastify({ logger: true })\napp.get('/health', async () => ({ ok: true, service: '${escapeTs(title)}' }))\napp.get('/api/worker-status', async () => ({ queue: '${queueName}', total: jobs.length, queued: jobs.filter((job) => job.status === 'queued').length, dead: jobs.filter((job) => job.status === 'dead').length, retrying: jobs.filter((job) => job.status === 'failed').length, cancelled: jobs.filter((job) => job.status === 'cancelled').length, poison: poisonJobs.length, outbox: outboxEvents.length, replays: replayRequests.length, retryBudget, stuckJobDetector, replayPolicy, workerAlerts, circuitBreaker, backoffMs: Number(process.env.BACKOFF_MS || 500) }))\napp.get('/api/jobs', async () => jobs)
 app.get('/api/replay-requests', async () => replayRequests)
+app.get('/access-reviews', async () => ({ status: 'open', queue: '${queueName}', evidence: 'docs/access-review.md', reviewers: ['ops@example.com'] }))
 app.get('/api/stuck-jobs', async () => jobs.filter((job) => job.leaseUntil && job.leaseUntil < Date.now() && job.status === 'running'))\napp.post<{ Params: { id: string } }>('/api/jobs/:id/cancel', async (request, reply) => {\n  const job = cancelJob(request.params.id)\n  if (!job) return reply.code(404).send({ error: 'job_not_found' })\n  return job\n})\napp.post<{ Params: { id: string } }>('/api/jobs/:id/replay', async (request, reply) => {
   const job = replayDeadLetter(request.params.id)
   if (!job) return reply.code(404).send({ error: 'dead_letter_not_found' })
@@ -1795,7 +1868,7 @@ app.post<{ Body: { name?: string; payload?: Record<string, unknown> } }>('/api/j
     job.nextRunAt = Date.now() + Number(process.env.BACKOFF_MS || 500) * job.attempts\n    events.push({ at: new Date().toISOString(), message: job.status + ' ' + job.name, jobId: job.id })\n    if (job.status === 'dead') poisonJobs.push(job)\n    circuitBreaker.failures += 1\n    if (circuitBreaker.failures >= circuitBreaker.threshold) circuitBreaker.openedUntil = Date.now() + 30_000\n  }\n}\nconsole.log('queue snapshot', { jobs, events })\n`,
             },
             readme(title, [
-                `Queue starter with enqueue API, idempotency guard, worker entrypoint, retry/dead-letter states, poison job quarantine, cancellation endpoint, backoff schedule, leases, heartbeats, outbox events, circuit breaker, dead-letter replay endpoint, retry budget, stuck-job detector, replay policy, worker alerts, event log, and status endpoint.${workerDomainNotes}`,
+                `Queue starter with enqueue API, idempotency guard, worker entrypoint, retry/dead-letter states, poison job quarantine, cancellation endpoint, backoff schedule, leases, heartbeats, outbox events, circuit breaker, dead-letter replay endpoint, retry budget, stuck-job detector, replay policy, worker alerts, event log, access review endpoint, and status endpoint.${workerDomainNotes}${workerBillingNotes}${workerSchedulingNotes}${workerMediaNotes}${workerAccessNotes}`,
                 'Redis is included in Docker Compose as the production replacement seam; the starter runs locally with an in-memory queue.',
                 'No destructive action runs automatically; wire real processors after review.',
             ]),

@@ -18,6 +18,18 @@ import ErrorNotice from '@/components/error/errorNotice'
 const defaultRunAt = () => new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)
 const defaultTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 const maxActiveAutomations = 10
+const newAutomationDraft = (prompt = ''): AutomationPayload => ({
+    name: 'Check in later',
+    prompt,
+    scheduleKind: 'interval',
+    intervalMinutes: 30,
+    runAt: defaultRunAt(),
+    status: 'active',
+    actionType: 'agent_prompt',
+    timezone: defaultTimezone(),
+    modelName: null,
+    notifyOn: 'failure',
+})
 
 export default function AutomationsClient() {
     const [automations, setAutomations] = useState<AgentAutomation[]>([])
@@ -25,18 +37,7 @@ export default function AutomationsClient() {
     const [selectedId, setSelectedId] = useState('')
     const [busy, setBusy] = useState('')
     const [status, setStatus] = useState('')
-    const [draft, setDraft] = useState<AutomationPayload>({
-        name: 'Check in later',
-        prompt: 'Review the current task and summarize what changed since the last check.',
-        scheduleKind: 'interval',
-        intervalMinutes: 30,
-        runAt: defaultRunAt(),
-        status: 'active',
-        actionType: 'agent_prompt',
-        timezone: defaultTimezone(),
-        modelName: null,
-        notifyOn: 'failure',
-    })
+    const [draft, setDraft] = useState<AutomationPayload>(newAutomationDraft('Review the current task and summarize what changed since the last check.'))
 
     const selected = useMemo(() => automations.find(item => item.id === selectedId) || null, [automations, selectedId])
     const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
@@ -101,12 +102,10 @@ export default function AutomationsClient() {
         setBusy(`delete-${id}`)
         try {
             await deleteAutomation(id)
+            setAutomations(current => current.filter(item => item.id !== id))
             setSelectedId('')
-            setDraft({
-                ...draft,
-                name: 'Check in later',
-                prompt: '',
-            })
+            setRuns([])
+            setDraft(newAutomationDraft())
             await load('')
             setStatus('Automation removed.')
         } catch (error) {
@@ -132,18 +131,19 @@ export default function AutomationsClient() {
     function newAutomation() {
         setSelectedId('')
         setRuns([])
-        setDraft({
-            name: 'Check in later',
-            prompt: '',
-            scheduleKind: 'interval',
-            intervalMinutes: 30,
-            runAt: defaultRunAt(),
-            status: 'active',
-            actionType: 'agent_prompt',
-            timezone: defaultTimezone(),
-            modelName: null,
-            notifyOn: 'failure',
-        })
+        setDraft(newAutomationDraft())
+        setStatus('Draft ready.')
+    }
+
+    function cancelDraft() {
+        if (selected) {
+            setDraft(toDraft(selected))
+            setStatus('Changes discarded.')
+            return
+        }
+
+        setDraft(newAutomationDraft())
+        setStatus('Draft reset.')
     }
 
     return (
@@ -154,7 +154,7 @@ export default function AutomationsClient() {
                         <p className='text-[10px] font-semibold uppercase tracking-[0.24em] text-bright/32'>Scheduled</p>
                         <h2 className='text-sm font-semibold text-bright/86'>{activeAutomationCount}/{maxActiveAutomations} active</h2>
                     </div>
-                    <button className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/6 text-bright/72 hover:bg-white/10' onClick={newAutomation} title='New automation'>
+                    <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/6 text-bright/72 hover:bg-white/10' onClick={newAutomation} title='New automation' aria-label='New automation'>
                         <Plus className='h-4 w-4' />
                     </button>
                 </div>
@@ -260,9 +260,12 @@ export default function AutomationsClient() {
                     </div>
 
                     <div className='flex flex-wrap items-center gap-2'>
-                        <button className='inline-flex items-center gap-2 rounded-lg border border-white/12 bg-white/10 px-3 py-2 text-sm font-semibold text-bright hover:bg-white/14 disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
+                        <button type='button' className='inline-flex items-center gap-2 rounded-lg border border-white/12 bg-white/10 px-3 py-2 text-sm font-semibold text-bright hover:bg-white/14 disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
                             <WandSparkles className='h-4 w-4' />
                             {selected ? 'Save changes' : 'Create automation'}
+                        </button>
+                        <button type='button' className='rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-bright/58 hover:bg-white/6 hover:text-bright/82' onClick={cancelDraft} disabled={busy === 'save'}>
+                            Cancel
                         </button>
                         {status && <span className='text-sm text-bright/48'>{status}</span>}
                     </div>
@@ -298,7 +301,7 @@ export default function AutomationsClient() {
 
 function IconButton({ label, icon, onClick, tone = 'default', disabled = false }: { label: string, icon: React.ReactNode, onClick: () => void, tone?: 'default' | 'danger', disabled?: boolean }) {
     return (
-        <button title={label} disabled={disabled} onClick={onClick} className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm disabled:opacity-50 ${tone === 'danger' ? 'border-red-300/20 bg-red-400/10 text-red-100' : 'border-white/10 bg-white/6 text-bright/72 hover:bg-white/10'}`}>
+        <button type='button' title={label} disabled={disabled} onClick={onClick} className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm disabled:opacity-50 ${tone === 'danger' ? 'border-red-300/20 bg-red-400/10 text-red-100' : 'border-white/10 bg-white/6 text-bright/72 hover:bg-white/10'}`}>
             {icon}
             {label}
         </button>

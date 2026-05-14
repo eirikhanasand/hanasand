@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from
 import { matchApiKeyScope, validateApiKey } from '#utils/auth/apiKeys.ts'
 import { validateSession } from '#utils/auth/session.ts'
 import { getRateLimitSettings, registerRateLimitRoute } from '#utils/rateLimit/config.ts'
+import hasInternalToken from '#utils/auth/internalToken.ts'
 
 type Bucket = {
     count: number
@@ -35,6 +36,10 @@ export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
         }
 
         if (!path.startsWith('/api')) {
+            return
+        }
+
+        if (isTrustedStatusIngest(req, path)) {
             return
         }
 
@@ -107,6 +112,12 @@ function isInfrastructureWebSocketPath(path: string) {
     return path.startsWith('/api/client/ws/')
 }
 
+function isTrustedStatusIngest(req: FastifyRequest, path: string) {
+    return req.method.toUpperCase() === 'POST'
+        && path === '/api/status/ingest'
+        && hasInternalToken(req)
+}
+
 function resolveRouteRule(settings: RateLimitSettings, method: string, route: string, scope: RateLimitScope) {
     const override = settings.overrides.find((entry) =>
         entry.enabled
@@ -140,13 +151,6 @@ async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActo
         }
     }
 
-    if (isInternalIp(ip)) {
-        return {
-            scope: 'internal',
-            identifier: `ip:${ip}`,
-        }
-    }
-
     const authHeader = req.headers.authorization
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1]
@@ -163,6 +167,18 @@ async function resolveRateLimitActor(req: FastifyRequest): Promise<RateLimitActo
                 scope: session.roles.some((role) => isInternalRole(role.id, role.name)) ? 'internal' : 'authenticated',
                 identifier: `user:${session.user.id}`,
             }
+        }
+
+        return {
+            scope: 'anonymous',
+            identifier: `ip:${ip}`,
+        }
+    }
+
+    if (isInternalIp(ip)) {
+        return {
+            scope: 'internal',
+            identifier: `ip:${ip}`,
         }
     }
 

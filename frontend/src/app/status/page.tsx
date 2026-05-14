@@ -31,7 +31,7 @@ export default async function page() {
     const topUAs = Array.isArray(topUAsUnparsed) ? topUAsUnparsed : []
 
     return (
-        <div className='h-full overflow-hidden px-8 py-4 md:px-16 lg:px-32'>
+        <div className='min-h-[90.5vh] px-4 py-4 md:px-16 lg:px-32'>
             <StatusDashboard
                 metrics={metrics}
                 domainMetrics={domainMetrics}

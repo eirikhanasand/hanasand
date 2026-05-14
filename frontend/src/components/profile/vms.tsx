@@ -59,10 +59,10 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
                     {vms.map(vm => <VMRow update={update} key={vm.name} vm={vm} />)}
                 </div>
             ) : (
-                <div className='flex gap-1 text-sm text-bright/42'>
-                    <span>No VMs found! Click</span>
-                    <Link href='/s' className='text-bright/72 underline underline-offset-4'>here</Link>
-                    <span>to create your first project.</span>
+                <div className='flex flex-wrap gap-x-1 text-sm text-bright/48'>
+                    <span>No managed VMs yet.</span>
+                    <Link href='/s' className='text-bright/78 underline underline-offset-4'>Create a project</Link>
+                    <span>to provision one.</span>
                 </div>
             )}
         </DashboardPanel>

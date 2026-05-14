@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, BrainCircuit, CalendarClock, Database, DatabaseBackup, FileWarning, Gauge, Inbox, LayoutDashboard, Network, NotebookText, ScanSearch, ScrollText, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck } from 'lucide-react'
+import { AlarmClockCheck, BrainCircuit, CalendarClock, Database, DatabaseBackup, FileWarning, FolderKanban, Gauge, Inbox, LayoutDashboard, Network, NotebookText, ScanSearch, ScrollText, Server, Settings2, Share2, ShieldCheck, Sparkles, UserRound, UserRoundCheck } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -15,9 +15,13 @@ type Item = {
 export default function DashboardSidebar({
     id,
     isAdmin,
+    canManageSystem,
+    canManageContent,
 }: {
     id: string
     isAdmin: boolean
+    canManageSystem: boolean
+    canManageContent: boolean
 }) {
     const pathname = usePathname()
     const mode = useSyncExternalStore(
@@ -35,17 +39,26 @@ export default function DashboardSidebar({
 
     const items: Item[] = [
         { href: '/dashboard', label: 'Overview', icon: <LayoutDashboard className='h-4 w-4' /> },
+        { href: '/dashboard/vms', label: 'VMs', icon: <Server className='h-4 w-4' /> },
+        { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
+        { href: '/dashboard/shares', label: 'Shares', icon: <Share2 className='h-4 w-4' /> },
         { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
         { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
-        { href: '/dashboard/traffic', label: 'Traffic', icon: <Network className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
-        { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> },
-        { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Sparkles className='h-4 w-4' /> },
-        { href: '/dashboard/vulnerabilities', label: 'Vulnerabilities', icon: <ScanSearch className='h-4 w-4' /> },
-        { href: '/dashboard/articles', label: 'Articles', icon: <ScrollText className='h-4 w-4' /> },
-        { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
+
+    if (canManageSystem) {
+        items.splice(7, 0, { href: '/dashboard/traffic', label: 'Traffic', icon: <Network className='h-4 w-4' /> })
+        items.splice(8, 0, { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> })
+        items.splice(9, 0, { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Sparkles className='h-4 w-4' /> })
+        items.splice(10, 0, { href: '/dashboard/vulnerabilities', label: 'Vulnerabilities', icon: <ScanSearch className='h-4 w-4' /> })
+    }
+
+    if (canManageContent) {
+        items.splice(items.length - 1, 0, { href: '/dashboard/articles', label: 'Articles', icon: <ScrollText className='h-4 w-4' /> })
+        items.splice(items.length - 1, 0, { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> })
+    }
 
     if (isAdmin) {
         items.splice(4, 0, { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> })
@@ -58,6 +71,9 @@ export default function DashboardSidebar({
     }
 
     const compact = mode === 'compact'
+    const activeHref = items
+        .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`)))
+        .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
     return (
         <aside className={`dashboard-sidebar-sticky h-fit max-h-full overflow-auto rounded-xl border border-white/10 bg-background/82 p-2 backdrop-blur-md ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
@@ -77,7 +93,7 @@ export default function DashboardSidebar({
 
             <nav className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1'>
                 {items.map((item) => {
-                    const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
+                    const active = item.href === activeHref
 
                     return (
                         <Link

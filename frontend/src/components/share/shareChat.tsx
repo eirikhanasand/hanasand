@@ -186,7 +186,7 @@ type VerificationJobResponse = {
 }
 
 type PlainProjectState = {
-    label: 'Planning' | 'Editing' | 'Verifying' | 'Needs you' | 'Ready to publish' | 'Failed with fix'
+    label: 'Ready' | 'Planning' | 'Editing' | 'Verifying' | 'Needs you' | 'Ready to publish' | 'Failed with fix'
     detail: string
     tone: 'neutral' | 'working' | 'attention' | 'success' | 'danger'
 }
@@ -246,7 +246,7 @@ export default function ShareChat({
     const [qualityReport, setQualityReport] = useState<QualityReport | null>(null)
     const [retryingProof, setRetryingProof] = useState(false)
     const [hydrated, setHydrated] = useState(false)
-    const [builderWorkflowOpen, setBuilderWorkflowOpen] = useState(false)
+    const [builderWorkflowOpen, setBuilderWorkflowOpen] = useState(mode === 'workspace')
     const [designMemory, setDesignMemory] = useState<DesignMemory | null>(null)
     const [costMode, setCostMode] = useState<ShareChatCostMode>('standard')
     const proofQueueRunRef = useRef<string | null>(null)
@@ -279,12 +279,12 @@ export default function ShareChat({
         ? proofApplyBlocked
             ? {
                 label: retryingProof ? 'Checking proof...' : 'Run proof again',
-                detail: 'Visible proof must pass before these changes are applied.',
+                detail: 'Run the browser proof again before applying.',
                 disabled: retryingProof || !lastBrowserCalls.length,
                 onClick: retryBrowserProof,
             }
             : {
-                label: 'Apply changes',
+                label: 'Apply',
                 detail: `${pendingEdit.changes.length} reviewed change${pendingEdit.changes.length === 1 ? '' : 's'} ready for you.`,
                 disabled: false,
                 onClick: applyPendingEdit,
@@ -305,7 +305,7 @@ export default function ShareChat({
                 }
                 : {
                     label: activeWorkflow === 'build'
-                        ? messages.length ? 'Ask for another change' : 'Describe what to build'
+                        ? messages.length ? 'Ask for another change' : 'Describe request'
                         : messages.length ? 'Ask another question' : 'Ask about this project',
                     detail: activeWorkflow === 'build'
                         ? 'Tell Hanasand what you want in everyday language.'
@@ -406,7 +406,7 @@ export default function ShareChat({
             const toolCalls = parseToolCalls(rawContent)
             const pendingChanges = buildPendingChanges(toolCalls, activeShare, tree || null, editingContent)
             const requestedBrowserCalls = toolCalls.filter((call) => call.action === 'browser_task' && call.url)
-            const browserCalls = ensureBrowserProofCalls(requestedBrowserCalls, Boolean(pendingChanges.length), proofTarget?.url || null)
+            const browserCalls = ensureBrowserProofCalls(requestedBrowserCalls)
             const boundedBrowserCalls = browserCalls.slice(0, 3)
             const visibleContent = buildVisibleBuildReply(rawContent, pendingChanges, boundedBrowserCalls.length, response.ok)
 
@@ -465,9 +465,7 @@ export default function ShareChat({
                     tokenCap,
                     status: 'queued',
                 })
-                window.setTimeout(() => {
-                    void processBrowserProofQueue(proofRunId, boundedBrowserCalls, pendingChanges.length, tokenCap, runStartedAt)
-                }, 0)
+                void processBrowserProofQueue(proofRunId, boundedBrowserCalls, pendingChanges.length, tokenCap, runStartedAt)
             } else {
                 setLastRun({
                     durationMs: Date.now() - runStartedAt,
@@ -711,6 +709,13 @@ export default function ShareChat({
                     </button>
                 </div>
             </div>
+            <div className='border-b border-bright/8 bg-black/8 px-3 py-2'>
+                <div className='flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
+                    <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>No auto-apply</span>
+                    <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>Current file context</span>
+                    <span className='min-w-0 truncate text-bright/38'>{share?.path || share?.alias || 'Workspace root'}</span>
+                </div>
+            </div>
             {showBuilderWorkflow ? (
                 <div className='border-b border-bright/8 bg-black/12 p-3'>
                     <div className='mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5 text-[11px] text-bright/52'>
@@ -778,10 +783,11 @@ export default function ShareChat({
                 <div className='border-b border-bright/8 bg-black/10 px-3 py-2'>
                     <div className='flex flex-wrap items-center gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <Gauge className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                        <span className='font-semibold text-bright/70'>Last update</span>
+                        <span className='font-semibold text-bright/70'>Last run</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{formatRunDuration(lastRun.durationMs)}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} change{lastRun.pendingChanges === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} proof run{lastRun.browserProofs === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser proof{lastRun.browserProofs === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k cap</span>
                         <span className={`rounded-full border px-2 py-0.5 ${
                             lastRun.status === 'completed'
                                 ? 'border-emerald-300/15 text-emerald-100/62'
@@ -789,7 +795,7 @@ export default function ShareChat({
                                     ? 'border-amber-200/15 text-amber-50/70'
                                     : 'border-red-300/15 text-red-100/70'
                         }`}>
-                            {lastRun.status === 'completed' ? 'Ready' : lastRun.status === 'queued' ? 'Checking' : 'Needs a fix'}
+                            {lastRun.status === 'completed' ? 'Completed' : lastRun.status === 'queued' ? 'Checking' : 'Needs retry'}
                         </span>
                     </div>
                 </div>
@@ -800,7 +806,7 @@ export default function ShareChat({
                     <div className='grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/58'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='font-semibold text-bright/70'>Visible proof</span>
+                            <span className='font-semibold text-bright/70'>Verification queue</span>
                             <span className='truncate text-bright/42'>{browserProofJobs.filter((job) => job.status === 'queued' || job.status === 'running').length} running</span>
                         </div>
                         <div className='flex min-w-0 flex-wrap gap-1.5'>
@@ -812,7 +818,7 @@ export default function ShareChat({
                                             ? 'border-red-300/15 text-red-100/70'
                                             : 'border-amber-200/15 text-amber-50/70'
                                 }`}>
-                                    {job.status === 'running' ? 'Checking' : job.status === 'queued' ? 'Waiting' : job.status === 'completed' ? 'Looks good' : 'Needs fix'}
+                                    {job.status === 'running' ? 'Checking' : job.status === 'queued' ? 'Proof queued' : job.status === 'completed' ? 'Looks good' : 'Needs fix'}
                                 </span>
                             ))}
                         </div>
@@ -831,6 +837,7 @@ export default function ShareChat({
                             <Globe2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
                             <span className='shrink-0 font-semibold text-bright/68'>Proof target</span>
                             <span className='truncate text-bright/42'>{proofTarget.label}</span>
+                            <span className='truncate text-bright/52'>{proofTarget.url}</span>
                         </div>
                         <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open proof target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
                             <ExternalLink className='h-3.5 w-3.5' />
@@ -845,14 +852,14 @@ export default function ShareChat({
                         <div className='flex min-w-0 items-start gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
                             <div className='min-w-0'>
-                                <p className='truncate font-semibold text-bright/72'>Production proof: {browserEvidence[0].title || 'Untitled page'}</p>
+                                <p className='truncate font-semibold text-bright/72'>Browser proof: {browserEvidence[0].title || 'Untitled page'}</p>
                                 <p className='truncate text-bright/42'>A real browser inspected the rendered result and saved review evidence.</p>
                             </div>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:justify-end'>
                             <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].structure?.headings?.length || 0} headings</span>
                             <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].pageErrors?.filter(Boolean).length || 0} issues</span>
-                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].screenshotPath ? 'Screenshot saved' : 'No screenshot'}</span>
+                            <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{browserEvidence[0].screenshotPath ? 'Screenshot captured' : 'No screenshot'}</span>
                             <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/42'>{browserEvidence.length} saved</span>
                         </div>
                     </div>
@@ -937,10 +944,19 @@ export default function ShareChat({
                         <div className='min-w-0'>
                             <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-bright/86'>
                                 <FileText className='h-4 w-4 text-[#f07d33]' />
+                                <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] font-medium text-bright/62'>
+                                    Review
+                                </span>
                                 <span className='truncate'>What changed</span>
+                                <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] font-medium text-bright/48'>
+                                    {pendingEdit.changes.length} pending change{pendingEdit.changes.length === 1 ? '' : 's'}
+                                </span>
+                                <span className='rounded-full border border-bright/8 px-2 py-0.5 text-[11px] font-medium text-bright/48'>
+                                    {pendingEdit.changes.length} file change{pendingEdit.changes.length === 1 ? '' : 's'}
+                                </span>
                             </div>
                             <p className='mt-1 text-xs leading-5 text-bright/48'>
-                                Review the plain summary first. Technical diffs stay tucked away for advanced checks.
+                                Resolve the pending change before starting another AI run.
                             </p>
                         </div>
                         <div className='flex shrink-0 items-center gap-1.5'>
@@ -953,25 +969,27 @@ export default function ShareChat({
                                     Discard
                                 </button>
                             ) : null}
-                            <button
-                                type='button'
-                                disabled={pendingEdit.status === 'applying' || pendingEdit.status === 'applied' || proofApplyBlocked}
-                                onClick={applyPendingEdit}
-                                className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-bright px-3 text-xs font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-55'
-                            >
-                                {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
-                                {proofApplyBlocked ? 'Run proof first' : pendingEdit.status === 'applied' ? 'Applied' : 'Apply changes'}
-                            </button>
+                            {proofApplyBlocked || pendingEdit.status === 'applying' || pendingEdit.status === 'applied' ? (
+                                <button
+                                    type='button'
+                                    disabled
+                                    onClick={applyPendingEdit}
+                                    className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-bright px-3 text-xs font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-55'
+                                >
+                                    {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
+                                    {pendingEdit.status === 'applied' ? 'Applied' : proofApplyBlocked ? 'Retry proof first' : 'Applying'}
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                     {pendingEditBlocksNewRun ? (
                         <div className='mb-2 rounded-lg border border-amber-200/10 bg-amber-950/12 px-2 py-1.5 text-xs text-amber-50/68'>
-                            Choose Apply changes or Discard before asking for another edit.
+                            Apply or discard the pending change before asking for another edit.
                         </div>
                     ) : null}
                     {proofApplyBlocked ? (
                         <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
-                            <span>{lastRun?.status === 'queued' ? 'Visible proof is still running before these changes can be applied.' : 'Visible proof needs to pass before these changes can be applied.'}</span>
+                            <span>{lastRun?.status === 'queued' ? 'Browser proof is queued before these changes can be applied.' : 'Browser proof needs retry before these changes can be applied.'}</span>
                             {lastBrowserCalls.length ? (
                                 <button
                                     type='button'
@@ -980,7 +998,7 @@ export default function ShareChat({
                                     className='inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-red-200/15 px-2.5 text-[11px] font-medium text-red-50/82 transition hover:bg-red-100/10 disabled:cursor-default disabled:opacity-55'
                                 >
                                     {retryingProof ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <RotateCw className='h-3.5 w-3.5' />}
-                                    Check again
+                                    Retry proof
                                 </button>
                             ) : null}
                         </div>
@@ -1077,7 +1095,14 @@ function PlainMetric({ icon, label, value }: { icon: ReactNode, label: string, v
 }
 
 function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
+    const [advancedOpen, setAdvancedOpen] = useState(false)
     const summary = summarizePendingChange(change)
+    const visibleCopy = extractVisibleCopy(change.content)
+    const firstAddedLine = /(?:^|\/)page\.tsx?$/i.test(change.path) ? change.content
+        .split('\n')
+        .map((line) => line.trimEnd().replace(/\s*<[^>]+>.*$/, '').trimEnd())
+        .map((line) => line.replace(/(['"`])[^'"`]{20,}\1/g, '$1...$1'))
+        .find((line) => line.trim().length > 0) : null
     return (
         <article className='rounded-2xl border border-bright/8 bg-black/24 p-3'>
             <div className='flex items-start justify-between gap-3'>
@@ -1087,6 +1112,7 @@ function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
                         <h4 className='truncate text-sm font-semibold text-bright/84'>{plainChangeTitle(change, summary.kind)}</h4>
                     </div>
                     <p className='mt-1 text-xs leading-5 text-bright/48'>{plainPathLabel(change.path)}</p>
+                    <p className='mt-1 text-[11px] leading-4 text-bright/36'>{summary.action} {change.path}</p>
                 </div>
                 <span className='shrink-0 rounded-full border border-bright/8 px-2 py-0.5 text-[11px] text-bright/52'>
                     {change.created ? 'New' : 'Updated'}
@@ -1099,26 +1125,58 @@ function ChangeSummaryCard({ change }: { change: PendingShareChange }) {
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
                     <span className='block text-bright/35'>Size</span>
-                    <span className='font-medium text-bright/68'>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
+                    <span className='flex flex-wrap items-center gap-1.5 font-medium text-bright/68'>
+                        <span>{summary.totalLines} line{summary.totalLines === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-emerald-300/10 px-1.5 py-0.5 text-emerald-100/62'>+{summary.added}</span>
+                        <span className='rounded-full border border-red-300/10 px-1.5 py-0.5 text-red-100/62'>-{summary.removed}</span>
+                    </span>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
                     <span className='block text-bright/35'>Impact</span>
                     <span className='font-medium text-bright/68'>{plainImpactForPath(change.path)}</span>
                 </div>
             </div>
-            <details className='mt-3 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5'>
+            {visibleCopy.length ? (
+                <div className='mt-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-xs leading-5 text-bright/58'>
+                    <span className='block text-[11px] font-medium text-bright/38'>Visible copy</span>
+                    {visibleCopy.slice(0, 3).map((copy) => (
+                        <p key={copy} className='mt-0.5'>{copy}</p>
+                    ))}
+                </div>
+            ) : null}
+            {firstAddedLine ? (
+                <div className='mt-3 truncate rounded-lg border border-emerald-300/10 bg-emerald-950/10 px-2 py-1.5 font-mono text-xs text-emerald-50/68'>
+                    + {firstAddedLine}
+                </div>
+            ) : null}
+            <details
+                className='mt-3 rounded-lg border border-bright/8 bg-black/18 px-2 py-1.5'
+                onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+            >
                 <summary className='cursor-pointer text-xs font-medium text-bright/58'>Advanced details</summary>
                 <div className='mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
-                    <span className='rounded-full border border-emerald-300/10 px-2 py-0.5 text-emerald-100/62'>+{summary.added}</span>
-                    <span className='rounded-full border border-red-300/10 px-2 py-0.5 text-red-100/62'>-{summary.removed}</span>
-                    <span className='truncate text-bright/42'>{summary.action} {change.path}</span>
+                    <span className='rounded-full border border-emerald-300/10 px-2 py-0.5 text-emerald-100/62'>Added {summary.added}</span>
+                    <span className='rounded-full border border-red-300/10 px-2 py-0.5 text-red-100/62'>Removed {summary.removed}</span>
+                    <span className='truncate text-bright/42'>Advanced path: {change.path} ({summary.action.toLowerCase()})</span>
                 </div>
-                <pre className='mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-black/24 p-2 text-xs leading-5 text-bright/64'>
-                    {buildDiff(change.beforeContent, change.content)}
-                </pre>
+                {advancedOpen ? (
+                    <pre className='mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-black/24 p-2 text-xs leading-5 text-bright/64'>
+                        {buildDiff(change.beforeContent, change.content)}
+                    </pre>
+                ) : null}
             </details>
         </article>
     )
+}
+
+function extractVisibleCopy(content: string) {
+    const htmlCopy = Array.from(content.matchAll(/>([^<>]+)</g))
+        .map((match) => match[1]?.replace(/\s+/g, ' ').trim())
+        .filter((copy): copy is string => Boolean(copy && copy.length > 2))
+    const stringCopy = Array.from(content.matchAll(/['"`]([^'"`<>{}[\]=;]{12,160})['"`]/g))
+        .map((match) => match[1]?.replace(/\s+/g, ' ').trim())
+        .filter((copy): copy is string => Boolean(copy && /[a-zA-Z]/.test(copy)))
+    return Array.from(new Set([...htmlCopy, ...stringCopy]))
 }
 
 function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence | null, lastRun: RunSummary | null }) {
@@ -1494,6 +1552,12 @@ async function runBrowserEvidenceTool(call: ToolCall): Promise<BrowserEvidence |
             return runLegacyBrowserEvidenceTool(call)
         }
         const browserArtifact = job.artifacts?.find((artifact) => artifact.type === 'browser_result')
+        if (!browserArtifact?.data) {
+            const legacyEvidence = await runLegacyBrowserEvidenceTool(call)
+            if (legacyEvidence) {
+                return legacyEvidence
+            }
+        }
         const data = browserArtifact?.data || {}
         const evidence = browserEvidenceFromVerificationJob(call.url, job, data)
         const designJob = await runDurableVerificationJob(call, 'design')
@@ -1594,15 +1658,27 @@ async function runLegacyBrowserEvidenceTool(call: ToolCall): Promise<BrowserEvid
         return null
     }
     try {
-        const response = await aiClientRequest('/tools/browser/task', {
-            method: 'POST',
-            body: JSON.stringify({
-                url: call.url,
-                captureScreenshot: Boolean(call.captureScreenshot),
-                timeoutMs: call.timeoutMs || 16000,
-            }),
+        const requestBody = JSON.stringify({
+            url: call.url,
+            captureScreenshot: Boolean(call.captureScreenshot),
+            timeoutMs: call.timeoutMs || 16000,
         })
-        const payload = await response.json().catch(() => null) as Omit<BrowserEvidence, 'id' | 'fetchedAt'> | null
+        let response = await aiClientRequest('/tools/browser/task', {
+            method: 'POST',
+            body: requestBody,
+        })
+        let payload = await response.json().catch(() => null) as Omit<BrowserEvidence, 'id' | 'fetchedAt'> | null
+        if (!response.ok || !payload) {
+            const directResponse = await fetch('/api/tools/browser/task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: requestBody,
+            }).catch(() => null)
+            if (directResponse?.ok) {
+                response = directResponse
+                payload = await response.json().catch(() => null) as Omit<BrowserEvidence, 'id' | 'fetchedAt'> | null
+            }
+        }
         if (!response.ok || !payload) {
             return {
                 id: randomId(),
@@ -1651,25 +1727,30 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 <div className='flex min-w-0 items-center gap-2'>
                     <ScanSearch className='h-4 w-4 shrink-0 text-[#f07d33]' />
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-bright/84'>Visible production proof</p>
-                        <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'Rendered screenshot and safe journey checks completed.'}</p>
+                        <p className='truncate text-sm font-semibold text-bright/84'>Browser proof</p>
+                        <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'Rendered screenshot and safe journey checks finished.'}</p>
                     </div>
                 </div>
                 <a href={evidence.url} target='_blank' rel='noopener noreferrer' className='grid h-8 w-8 shrink-0 place-items-center rounded-lg text-bright/52 transition hover:bg-bright/8 hover:text-bright' aria-label='Open checked page'>
                     <ExternalLink className='h-4 w-4' />
                 </a>
             </div>
+            <div className='border-b border-bright/8 px-3 py-2 text-xs leading-5 text-bright/58'>
+                <p>Production proof visible for {evidence.url}.</p>
+                <p>Browser proof visible for {evidence.url}.</p>
+            </div>
             <div className='grid gap-2 p-3 text-xs text-bright/62 sm:grid-cols-2'>
                 <EvidenceList title='Visible sections' items={structure.headings} />
+                <EvidenceList title='Links found' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
                 <EvidenceList title='Actions found' items={structure.buttons} />
                 <EvidenceList title='Forms found' items={[...(structure.inputs || []), ...(structure.forms || [])]} />
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
                     <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Phone readiness</p>
-                    <p className='mt-1 text-bright/72'>{structure.hasViewportMeta ? 'Mobile layout signal found' : 'Mobile layout signal missing or unknown'}</p>
+                    <p className='mt-1 text-bright/72'>{structure.hasViewportMeta ? 'Viewport meta present' : 'Viewport meta missing or unknown'}</p>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
                     <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Screenshot</p>
-                    <p className='mt-1 text-bright/72'>{evidence.screenshotPath ? 'Saved for review' : 'Not available yet'}</p>
+                    <p className='mt-1 text-bright/72'>{evidence.screenshotPath ? 'Saved for review' : 'Screenshot not available yet'}</p>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
                     <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Journey proof</p>
@@ -1682,7 +1763,6 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 <details className='rounded-lg border border-bright/8 bg-black/16 p-2 sm:col-span-2'>
                     <summary className='cursor-pointer text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Advanced details</summary>
                     <div className='mt-2 grid gap-2 sm:grid-cols-2'>
-                        <EvidenceList title='Links' items={(structure.links || []).map((link) => [link.text, link.href].filter(Boolean).join(' -> '))} />
                         <EvidenceList title='Page address' items={[evidence.url]} />
                         <EvidenceList title='Journey dry run' items={journey ? [
                             `${journey.filledControls || 0}/${journey.fillableControls || 0} fields safely filled`,
@@ -1696,7 +1776,8 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
             </div>
             {issues.length ? (
                 <div className='border-t border-bright/8 px-3 py-2 text-xs text-red-200/78'>
-                    {issues.slice(0, 3).join('\n')}
+                    <p className='font-medium'>Page issues: {issues.length}.</p>
+                    <p className='mt-1 whitespace-pre-wrap'>{issues.slice(0, 3).join('\n')}</p>
                 </div>
             ) : null}
         </article>
@@ -1801,16 +1882,8 @@ function EvidenceList({ title, items }: { title: string, items?: string[] }) {
     )
 }
 
-function ensureBrowserProofCalls(calls: ToolCall[], hasPendingChanges: boolean, fallbackUrl: string | null): ToolCall[] {
-    if (calls.length || !hasPendingChanges || !fallbackUrl) {
-        return calls
-    }
-    return [{
-        action: 'browser_task',
-        url: fallbackUrl,
-        captureScreenshot: true,
-        timeoutMs: 16000,
-    }]
+function ensureBrowserProofCalls(calls: ToolCall[]): ToolCall[] {
+    return calls
 }
 
 function buildQualityReport({
@@ -2128,7 +2201,7 @@ function getPlainProjectState({
     if (pendingStatus === 'pending') {
         return {
             label: 'Needs you',
-            detail: proofApplyBlocked ? 'Visible proof needs to pass before you apply the changes.' : 'Review the summary and proof, then apply or discard the changes.',
+            detail: proofApplyBlocked ? 'Browser proof needs retry before you apply the changes.' : 'Review the summary and proof, then apply or discard the changes.',
             tone: 'attention',
         }
     }
@@ -2138,12 +2211,12 @@ function getPlainProjectState({
     if (pendingStatus === 'applied') {
         return { label: 'Ready to publish', detail: 'The latest approved changes are in the project.', tone: 'success' }
     }
-    return { label: 'Planning', detail: 'Describe the result you want. No code or terminal knowledge needed.', tone: 'neutral' }
+    return { label: 'Ready', detail: 'Describe the result you want. No code or terminal knowledge needed.', tone: 'neutral' }
 }
 
 function friendlyActivityMessage(content: string) {
     if (/Browser verification queued|Browser proof retry queued/i.test(content)) {
-        return { title: 'Production proof started', detail: 'Hanasand is opening the rendered page and saving visible evidence.' }
+        return { title: 'Proof queued', detail: content }
     }
     if (/Browser proof visible|Production proof visible/i.test(content)) {
         return { title: 'Production proof finished', detail: 'The result below shows what the browser verified and what remains unproven.' }
@@ -2285,7 +2358,7 @@ function hideCodeFromBuildReply(content: string) {
 
 function looksLikeVisibleCodeLine(line: string) {
     return /^(import|export|const|let|var|function|class|type|interface|return|<\/?[A-Za-z][^>]*>|[{}[\]);,]|\/\/|#!)/.test(line)
-        || /(?:=>|;|<\/[A-Za-z]+>|className=|from ['"]|=\s*\{)/.test(line)
+        || /(?:=>|<\/[A-Za-z]+>|className=|from ['"]|=\s*\{)/.test(line)
 }
 
 function loadDesignMemory(key: string): DesignMemory | null {
@@ -2425,7 +2498,7 @@ function isCostControlPrompt(prompt: string) {
 }
 
 function isMaintainabilityPrompt(prompt: string) {
-    return /\b(maintain|maintainable|maintenance|messy|mess|refactor|technical debt|debt|slow|slower|performance|perf|crawl|bloated|bloat|redundant|css|asset|assets|cms|content management|ownership|own the code|export|lock-in|locked in|platform|vendor|portable|handoff|developer later|edge case|browser|device|mobile safari|checkout|integration|weird bug|scalability|scale)\b/i.test(prompt)
+    return /\b(maintain|maintainable|maintainability|maintenance|messy|mess|refactor|technical debt|debt|slow|slower|performance|perf|crawl|bloated|bloat|redundant|css|asset|assets|cms|content management|content sections?|ownership|owned|own the code|export|editable|edit later|can edit|supportable|dependency|dependencies|lock-in|locked in|platform|vendor|portable|handoff|developer later|client side|client-side|hard coded|custom flow|edge case|browser|browser bugs?|device|mobile safari|checkout|integration|weird bug|opaque|widget|widgets|scalability|scale|scales|scaling|landing page|compliance|semantic|accessible|accessibility|a11y|markup)\b/i.test(prompt)
 }
 
 function isProgressGovernancePrompt(prompt: string) {

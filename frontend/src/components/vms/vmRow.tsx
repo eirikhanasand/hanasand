@@ -7,9 +7,11 @@ import RestartButtons from './restartButtons'
 
 export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) {
     const type = vm.type === 'virtual-machine' ? 'VM' : 'Container'
-    const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Unknown'
+    const status = vm.status ? upperCaseFirstLetter(vm.status) : 'Status pending'
     const accessUserCount = Array.isArray(vm.access_users) ? vm.access_users.length : 0
+    const owner = vm.owner || vm.created_by || 'Unassigned'
     const ipAddress = vm.device_eth0_ipv4_address || 'No IPv4'
+    const lastChecked = vm.last_checked ? smallDate(vm.last_checked) : 'Not checked yet'
 
     return (
         <Link
@@ -21,7 +23,7 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
             `}
         >
             <h1 className='truncate'>{vm.name}</h1>
-            <h1 className='truncate'>{vm.owner}</h1>
+            <h1 className='truncate'>{owner}</h1>
             <h1>{metrics ? `${metrics.cpu_usage_percent}%` : vm.limits_cpu}</h1>
             <h1>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory}</h1>
             <h1>{smallDate(vm.created)}</h1>
@@ -31,7 +33,7 @@ export default function VmRow({ vm, metrics }: { vm: VM; metrics?: VMMetrics }) 
                 <Tag color='orange' text={formatDescription(vm.config_image_description)} />
                 <Tag color='blue' text={type} />
                 <Tag color='blue' icon='pencil' text={String(accessUserCount)} />
-                <Tag color='green' icon='refresh' text={vm.last_checked ? smallDate(vm.last_checked) : 'Unknown'} />
+                <Tag color='green' icon='refresh' text={lastChecked} />
                 <Tag color='blue' text={ipAddress} />
             </div>
             <div className='flex justify-end'>

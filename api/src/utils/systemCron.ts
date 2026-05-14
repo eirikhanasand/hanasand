@@ -33,7 +33,7 @@ export type ManagedCronUpdate = {
 
 const CRON_USER = process.env.MANAGED_CRON_USER || process.env.HOST_USER || 'hanasand'
 const CRON_SPOOL_DIR = process.env.MANAGED_CRON_SPOOL_DIR || '/host/cron/crontabs'
-const HOST_HOME_PREFIX = process.env.MANAGED_CRON_HOST_HOME_PREFIX || '/host/home'
+const MANAGED_LOG_ROOT = process.env.MANAGED_CRON_LOG_ROOT || ''
 const CRON_WRITE_USER = process.env.MANAGED_CRON_WRITE_USER || 'bun'
 
 export const managedCronDefinitions: ManagedCronDefinition[] = [
@@ -268,6 +268,7 @@ function renderManagedBlock(entries: Map<string, { schedule: string, enabled: bo
 async function readLastLogLine(logPath?: string) {
     if (!logPath) return { line: null, createdAt: null }
     const hostPath = toHostPath(logPath)
+    if (!hostPath) return { line: null, createdAt: null }
     if (!existsSync(hostPath)) return { line: null, createdAt: null }
     try {
         const [contents, details] = await Promise.all([
@@ -286,7 +287,7 @@ async function readLastLogLine(logPath?: string) {
 
 function toHostPath(path: string) {
     if (path.startsWith('/home/')) {
-        return `${HOST_HOME_PREFIX}${path.slice('/home'.length)}`
+        return MANAGED_LOG_ROOT ? `${MANAGED_LOG_ROOT}${path.slice('/home'.length)}` : ''
     }
     return path
 }
