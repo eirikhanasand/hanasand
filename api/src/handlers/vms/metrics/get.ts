@@ -20,10 +20,6 @@ export default async function getVMMetrics(req: FastifyRequest, res: FastifyRepl
             result = await run('SELECT * FROM vm_metrics ORDER BY created_at DESC')
         }
 
-        if (result.rows.length === 0) {
-            return res.status(404).send({ error: 'Metrics not found' })
-        }
-
         return res.send(result.rows)
     } catch (error) {
         console.error(error)
