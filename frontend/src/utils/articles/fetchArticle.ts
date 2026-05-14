@@ -12,7 +12,7 @@ export default async function fetchArticle(id: string): Promise<Article | null> 
         clearTimeout(timeout)
         if (!response.ok) {
             if (response.status === 404) {
-                return null
+                return findFallbackArticle(id)
             }
 
             throw new Error('This page does not exist.')
