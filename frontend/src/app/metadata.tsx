@@ -1,10 +1,14 @@
 import type { Viewport, Metadata } from 'next'
 
+const title = 'Hanasand'
+const description = 'Autonomous production assistant for building, verifying, deploying, and recovering websites with visible proof.'
+const image = 'https://hanasand.com/favicon.ico'
+
 const metadata: Metadata = {
-    title: 'Hanasand',
-    keywords: ['hanasand', 'portfolio', 'developer', 'pwned', 'editor', 'markdown', 'load test', 'cdn', 'upload', 'image', 'code'],
+    title,
+    keywords: ['hanasand', 'ai coding', 'website builder', 'production assistant', 'deploy websites', 'verified builds', 'portfolio', 'developer tools'],
     authors: [{ name: 'Eirik Hanasand', url: 'https://hanasand.com' }],
-    description: 'Welcome to Hanasand',
+    description,
     creator: 'Eirik Hanasand',
     publisher: 'Eirik Hanasand',
     metadataBase: new URL('https://hanasand.com'),
@@ -12,13 +16,13 @@ const metadata: Metadata = {
         canonical: '/',
     },
     openGraph: {
-        title: 'Hanasand',
-        description: 'Welcome to Hanasand',
+        title,
+        description,
         url: 'https://hanasand.com',
         siteName: 'Hanasand',
         images: [
             {
-                url: 'https://hanasand.com/favicon.ico',
+                url: image,
                 width: 600,
                 height: 600,
                 alt: 'Hanasand Logo',
@@ -29,9 +33,9 @@ const metadata: Metadata = {
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'Hanasand',
-        description: 'Welcome to Hanasand',
-        images: ['https://hanasand.com/favicon.ico'],
+        title,
+        description,
+        images: [image],
     },
     robots: {
         index: true,
