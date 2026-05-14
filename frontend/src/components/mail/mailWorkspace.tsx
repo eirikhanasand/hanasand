@@ -455,7 +455,7 @@ export default function MailWorkspace({ mailboxUser }: Props) {
                                     <p>ManageSieve `{overview.settings.host}:{overview.settings.managesievePort}`</p>
                                     <p className='mt-1'>Username `{overview.settings.username}`</p>
                                     <p>Address `{overview.settings.address}`</p>
-                                    <p>Password `{overview.mailPassword}`</p>
+                                    <p>Password is hidden. Use account settings to rotate client credentials.</p>
                                 </div>
                             )}
                         </details>
