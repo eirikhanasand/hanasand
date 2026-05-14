@@ -6,6 +6,7 @@ import { getMailHealth } from '#utils/mail/health.ts'
 import { getMailboxList, getMessage, listMessages } from '#utils/mail/jmap.ts'
 import { mailConfig } from '#utils/mail/config.ts'
 import { listRecentRecipients } from '#utils/mail/recentRecipients.ts'
+import { addressForUser } from '#utils/mail/helpers.ts'
 
 export default async function getMailOverview(req: FastifyRequest, res: FastifyReply) {
     const { valid, id } = await tokenWrapper(req, res)
@@ -84,6 +85,39 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
                 settings: settingsFor(repairedAccess),
             })
     } catch (error) {
+        const query = req.query as { mailboxUser?: string }
+        if (isMailSetupUnavailable(error)) {
+            const targetUser = query.mailboxUser || id
+            const address = addressForUser(targetUser)
+            return res
+                .header('Cache-Control', 'no-store, private, max-age=0, must-revalidate')
+                .send({
+                    actor: { id, canAccessAnyMailbox: false },
+                    mailboxUser: targetUser,
+                    mailboxAddress: address,
+                    mailPassword: '',
+                    accessibleAccounts: [{ id: targetUser, name: targetUser, address }],
+                    mailboxes: [],
+                    selectedMailboxId: null,
+                    messages: [],
+                    selectedMessage: null,
+                    filters: [],
+                    recentRecipients: [],
+                    health: {
+                        status: 'warning',
+                        checkedAt: new Date().toISOString(),
+                        queueDepth: 0,
+                        smtpBannerLatencyMs: null,
+                        checks: [{
+                            id: 'mail-admin',
+                            label: 'Mail setup',
+                            status: 'warning',
+                            detail: 'Mail administration is not configured on this environment.',
+                        }],
+                    },
+                    settings: settingsFor({ username: address, address }),
+                })
+        }
         req.log.error(error)
         return res.status(500).send({ error: error instanceof Error ? error.message : 'Unable to load mailbox.' })
     }
@@ -114,6 +148,10 @@ async function repairMailAccessIfNeeded(access: MailAccess, onRepair: (error: Er
 
 function isMailAuthError(error: unknown) {
     return error instanceof Error && /\b401\b/.test(error.message)
+}
+
+function isMailSetupUnavailable(error: unknown) {
+    return error instanceof Error && error.message.includes('MAIL_ADMIN_PASSWORD is required')
 }
 
 function settingsFor(access: { username: string, address: string }) {
