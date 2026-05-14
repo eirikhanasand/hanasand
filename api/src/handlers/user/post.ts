@@ -79,6 +79,11 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
         await run(userQuery, [normalizedId])
         if (process.env.SKIP_MAIL_PROVISIONING !== '1') {
             await ensureMailAccountForUser(normalizedId, name, password).catch(error => {
+                if (isMailAdminConfigError(error)) {
+                    req.log.debug({ userId: normalizedId }, 'Mail provisioning skipped because mail administration is not configured')
+                    return
+                }
+
                 req.log.warn({ error, userId: normalizedId }, 'Failed to provision mail account during signup')
             })
         }
@@ -118,4 +123,8 @@ export default async function postUser(req: FastifyRequest, res: FastifyReply) {
 
         return res.status(500).send({ error: error.message })
     }
+}
+
+function isMailAdminConfigError(error: unknown) {
+    return error instanceof Error && error.message.includes('MAIL_ADMIN_PASSWORD is required')
 }
