@@ -48,6 +48,9 @@ fastify.addHook('onResponse', async (req, res) => {
     if (res.statusCode < 400) {
         return
     }
+    if (res.statusCode === 401 || res.statusCode === 403) {
+        return
+    }
 
     const referer = req.headers.referer || req.headers.referrer || ''
     const refererText = Array.isArray(referer) ? referer.join(', ') : referer
