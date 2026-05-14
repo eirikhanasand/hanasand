@@ -1,0 +1,19 @@
+@keyframes eirik-quote-wall-scroll {
+    0% {
+        transform: translateY(0%);
+    }
+
+    100% {
+        transform: translateY(-100%);
+    }
+}
+
+.eirik-quote-wall {
+    display: grid;
+    gap: 4rem;
+    animation: eirik-quote-wall-scroll 500s linear infinite;
+}
+
+.eirik-quote-wall:hover {
+    animation-play-state: paused;
+}
