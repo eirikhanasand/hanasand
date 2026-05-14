@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Plus, Trash2 } from 'lucide-react'
+import { Check, LockKeyhole, Plus, Trash2 } from 'lucide-react'
 import { createNote, deleteNote, fetchNotes, updateNote } from '@/utils/notes/client'
 import { DashboardPanel } from '@/components/dashboard/ui'
 
@@ -85,6 +85,13 @@ export default function NotesClient() {
     return (
         <div className='grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]'>
             <DashboardPanel className='min-h-80 p-3'>
+                <div className='mb-3 rounded-lg border border-white/8 bg-white/[0.035] p-3 text-xs leading-5 text-bright/48'>
+                    <div className='mb-1 flex items-center gap-2 font-semibold text-bright/70'>
+                        <LockKeyhole className='h-3.5 w-3.5' />
+                        Private to you
+                    </div>
+                    Notes sync across dashboard, editor, and mobile surfaces. Quotes live separately on the motivation wall.
+                </div>
                 <button
                     onClick={() => {
                         setSelectedId('')
@@ -110,7 +117,7 @@ export default function NotesClient() {
                             <div className='mt-1 truncate text-xs text-bright/42'>{formatNoteDate(note.updated_at)}</div>
                         </button>
                     ))}
-                    {!notes.length && <div className='rounded-xl border border-dashed border-white/10 p-5 text-center text-sm text-bright/40'>No notes yet.</div>}
+                    {!notes.length && <div className='rounded-lg border border-dashed border-white/10 p-5 text-center text-sm text-bright/40'>No private notes yet.</div>}
                 </div>
             </DashboardPanel>
 
@@ -125,11 +132,11 @@ export default function NotesClient() {
                     <textarea
                         value={draft.content}
                         onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
-                        placeholder='Write a note...'
+                        placeholder='Write a private note...'
                         className='min-h-96 resize-none rounded-xl border border-white/10 bg-black/18 px-4 py-3 text-sm leading-6 text-bright outline-none transition placeholder:text-bright/30 focus:border-white/18'
                     />
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <p className='text-sm text-bright/45'>{message || (busy ? 'Working...' : selected ? `Source: ${selected.source}` : 'Shared across app, website, and desktop.')}</p>
+                        <p className='text-sm text-bright/45'>{message || (busy ? 'Working...' : selected ? `Last edited from ${formatSource(selected.source)}.` : 'Private notes are editable here and available to the authenticated app surfaces.')}</p>
                         <div className='flex gap-2'>
                             {selected && (
                                 <button onClick={() => void remove()} className='flex items-center gap-2 rounded-xl border border-red-300/16 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/16'>
@@ -153,4 +160,9 @@ function formatNoteDate(value: string) {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatSource(value: string) {
+    if (!value) return 'app'
+    return value.replace(/[-_]/g, ' ')
 }

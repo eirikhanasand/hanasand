@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function ThoughtPage() {
+export default function NotesPage() {
     redirect('/dashboard/notes')
 }

@@ -54,7 +54,7 @@ const personalProjects = [
     },
     {
         title: 'Motivation wall',
-        description: 'The restored old quote wall: a slow, black-background stream of saved notes.',
+        description: 'The restored old quote wall: a slow, black-background stream of motivational quotes.',
         href: '/eirik/motivation',
         icon: BookOpen,
         tag: 'archive',
@@ -90,6 +90,7 @@ const olderWork = [
     'Discord bot work for organization, infrastructure, and community automation.',
     'Markdown, editor, upload, CDN, and short-link experiments.',
     'Service status, monitoring, and route-hardening tools that later fed the product workspace.',
+    'Private notes are now a separate authenticated workspace feature, not part of the public quote wall.',
 ]
 
 export default async function EirikPage() {

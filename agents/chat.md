@@ -266,3 +266,86 @@ Active scope for this pass:
 - Read-mostly dashboard/admin route smoke outside mail and tests.
 - Candidate routes: `/dashboard/overview`, `/dashboard/traffic`, `/dashboard/system`, `/dashboard/system/cron`, `/dashboard/system/rate-limits`, `/dashboard/vulnerabilities`, `/dashboard/notes`, `/dashboard/articles`, `/dashboard/thoughts`, `/dashboard/automations`.
 - I will only make a small implementation edit if the smoke finds a clear isolated blocker outside the files reserved by agent 1, agent 3, and the personal-site lane.
+
+### 2026-05-14T10:53:01Z - Codex 2nd Agent Dashboard Route QA Update
+
+Changed files:
+
+- `frontend/src/app/dashboard/layout.tsx`
+- `frontend/src/app/dashboard/overview/page.tsx`
+- `frontend/src/app/profile/[...id]/page.tsx`
+- `frontend/src/components/dashboard/dashboardSidebar.tsx`
+
+What changed:
+
+- Made the dashboard sidebar role-aware instead of showing system/content admin links to every authenticated user.
+- Normal users now see only Overview, VMs, Projects, Shares, Mail, Automations, Notes, and Profile.
+- System-only links are gated behind `system_admin`/admin roles; content links are gated behind `content_admin`/admin roles.
+- `/dashboard/overview` no longer shows or prefetches system-only action cards for normal users, avoiding background `notAllowed` logout redirects.
+
+Verification:
+
+- `npm run build` in `frontend/` passed.
+- `npx tsc --noEmit` in `frontend/` passed.
+- Created throwaway local API users for authenticated route smoke; no tokens or credentials printed.
+- Browser smoke against rebuilt frontend on `127.0.0.1:3200` checked desktop and mobile normal-user `/dashboard`, `/dashboard/overview`, `/dashboard/vms`, `/dashboard/projects`, `/dashboard/shares`, `/dashboard/automations`, and `/dashboard/notes`.
+- Verified no horizontal overflow, no page errors, and normal-user sidebar/action links no longer include Traffic, System, AI Metrics, Vulnerabilities, Articles, or Thoughts.
+- Screenshots saved under `/tmp/hanasand-dashboard-sidebar-permissions-20260514` and `/tmp/hanasand-dashboard-overview-permissions-final-20260514`.
+
+### 2026-05-14T10:54:00Z - Codex 2nd Agent Continuing Profile/Account Route QA
+
+I am doing a narrow follow-up on profile/account routes because the previous sidebar permission fix also changed `frontend/src/app/profile/[...id]/page.tsx`.
+
+Active scope:
+
+- Smoke `/profile/:id`, `/profile`, `/user/:id`, `/users`, `/role`, and account-deletion/restore-facing pages where they can be tested without mail or admin-only secrets.
+- I will keep this mostly read-only and only patch a clear isolated blocker outside the mail/test/personal-site lanes.
+
+### 2026-05-14T10:55:47Z - Codex 2nd Agent Profile/Account Route QA Update
+
+No implementation changes in this pass.
+
+Verification:
+
+- `npm run build` in `frontend/` passed.
+- `npx tsc --noEmit` in `frontend/` passed.
+- Created a throwaway local API user for authenticated route smoke; no tokens or credentials printed.
+- Browser smoke against rebuilt frontend on `127.0.0.1:3200` checked desktop and mobile:
+  - `/profile` redirects to `/profile/:id`.
+  - `/profile/:id` renders profile, sessions, VMs, certificates, and account controls with the role-aware sidebar.
+  - `/user/:id` redirects to `/profile/:id`.
+  - `/user` and `/users` redirect to `/dashboard`.
+  - `/role`, `/reserved-usernames`, and `/account-pending-deletion?id=missing&restoreToken=missing` render without page errors.
+- Verified no horizontal overflow or console/page errors on the checked routes.
+- Screenshots saved under `/tmp/hanasand-profile-account-qa-20260514`.
+
+### 2026-05-14T10:56:35Z - Codex 2nd Agent Continuing Public Content Route QA
+
+I am continuing in the non-mail route QA lane and avoiding the active personal/footer/home, mail, AI/workbench, and test-file lanes.
+
+Active scope:
+
+- Public content/archive routes: `/about`, `/contact`, `/gallery`, `/thoughts`, `/thought`, `/article`, and representative missing-detail redirects/errors.
+- I will start with smoke verification and only make a small implementation edit if there is a clear user-facing blocker outside other agents' reserved areas.
+
+### 2026-05-14T11:03:00Z - Codex Personal Notes/Quotes Separation
+
+I am taking the follow-up user request to separate motivational quotes from private notes.
+
+Active scope:
+
+- Keep `/eirik/motivation` as the forever-scrolling motivational quote wall.
+- Make public `/thoughts` stop looking like a public personal notes surface.
+- Tighten `/dashboard/notes` language around private editable notes for dashboard/editor/mobile use.
+- Confirm the notes API remains owner-scoped and avoid exposing note ownership details in client payloads.
+
+Files I expect to touch:
+
+- `frontend/src/app/eirik/**`
+- `frontend/src/app/notes/**`
+- `frontend/src/app/thoughts/**`
+- `frontend/src/app/dashboard/notes/**`
+- `frontend/src/types.d.ts`
+- `api/src/handlers/notes.ts`
+
+I will avoid the mail stack, AI workbench, share editor internals, and active dashboard/sidebar route QA files unless a direct notes/privacy bug requires it.

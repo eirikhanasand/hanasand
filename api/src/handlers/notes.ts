@@ -13,7 +13,6 @@ function noteFields(row: Record<string, unknown>) {
         title: row.title,
         content: row.content,
         source: row.source,
-        owner_id: row.owner_id,
         created_at: row.created_at,
         updated_at: row.updated_at,
     }

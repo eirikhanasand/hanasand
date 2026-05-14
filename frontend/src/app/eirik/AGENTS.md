@@ -6,7 +6,8 @@ Do not rewrite `/eirik` into the autonomous production assistant marketing surfa
 
 If improving this route:
 
-- Keep personal projects visible, including password exposure checks, media upload experiments, short links, test/load tools, quotes, articles, and mobile/event app work.
+- Keep personal projects visible, including password exposure checks, media upload experiments, short links, test/load tools, motivational quotes, articles, and mobile/event app work.
+- Keep quotes and notes separate. Quotes belong to the public personal motivation wall. Notes are private authenticated workspace/mobile/editor data and must not be exposed as a public archive.
 - Prefer production-quality presentation over removal.
 - Keep `/eirik/motivation` as the restored old quotes wall experience.
 - Avoid changing mail-stack, dashboard, AI-agent, or shared editor behavior from this route.
