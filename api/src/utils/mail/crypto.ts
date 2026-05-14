@@ -24,6 +24,14 @@ export function decryptMailSecret(value: string) {
     return decrypted.toString('utf8')
 }
 
+export function tryDecryptMailSecret(value: string) {
+    try {
+        return decryptMailSecret(value)
+    } catch {
+        return null
+    }
+}
+
 export function generateMailSecret() {
     return crypto.randomBytes(24).toString('base64url')
 }

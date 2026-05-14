@@ -1,6 +1,6 @@
 import run from '#db'
 import { mailConfig } from './config.ts'
-import { decryptMailSecret, encryptMailSecret, generateMailSecret } from './crypto.ts'
+import { encryptMailSecret, generateMailSecret, tryDecryptMailSecret } from './crypto.ts'
 import { addressForUser, addressesForUser, mailboxLocalPartForUser } from './helpers.ts'
 import { type AdminPatch, createPrincipal, ensureSetting, findPrincipalByName, patchPrincipal } from './stalwartAdmin.ts'
 
@@ -43,8 +43,9 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
     const allAddresses = addressesForUser(userId)
     const principal = await findPrincipalByName(username, 'individual')
     const inheritedSecret = principal?.secrets?.find(secret => !secret.startsWith('otpauth://')) || null
+    const storedSecret = existing ? getStoredMailSecret(existing) : null
     const secret = preferredSecret
-        || (existing ? decryptMailSecret(existing.mail_password_encrypted) : null)
+        || storedSecret
         || inheritedSecret
         || generateMailSecret()
 
@@ -137,11 +138,12 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
 
     const user = userResult.rows[0] as UserRow
     const existing = await getMailAccount(user.id)
-    const account = existing
+    const storedPassword = existing ? getStoredMailSecret(existing) : null
+    const account = existing && storedPassword
         ? {
             username: existing.mail_username,
             address: existing.mail_address,
-            password: decryptMailSecret(existing.mail_password_encrypted),
+            password: storedPassword,
         }
         : await ensureMailAccountForUser(user.id, user.name)
 
@@ -188,6 +190,16 @@ export async function listAccessibleMailAccounts(actorId: string) {
 export async function getMailAccount(userId: string) {
     const result = await run('SELECT * FROM mail_accounts WHERE user_id = $1', [userId])
     return (result.rows[0] as MailAccountRow | undefined) || null
+}
+
+function getStoredMailSecret(account: MailAccountRow) {
+    const secret = tryDecryptMailSecret(account.mail_password_encrypted)
+    if (secret) {
+        return secret
+    }
+
+    console.warn(`Ignoring undecryptable stored mail secret for ${account.user_id}; account will be resynced.`)
+    return null
 }
 
 async function ensureDomainPrincipal() {
