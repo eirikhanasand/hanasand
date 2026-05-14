@@ -25,12 +25,46 @@ type LxdState = {
     }>
 }
 
+type LxdOperation = {
+    id?: string
+    status?: string
+    description?: string
+    resources?: Record<string, string[]>
+}
+
+type LxdOperations = {
+    pending?: LxdOperation[]
+    running?: LxdOperation[]
+}
+
 type LxdResponse<T> = {
     status_code: number
     status: string
     error?: string
     metadata: T
     operation?: string
+}
+
+type LxdRequestOptions = { method?: string, body?: unknown }
+type LxdRequest = <T>(path: string, options?: LxdRequestOptions) => Promise<LxdResponse<T>>
+type VmDetails = ReturnType<typeof mapDetails>
+type VmDetailsWriter = (details: VmDetails) => Promise<void>
+
+let lxdRequestImpl: LxdRequest = defaultLxdRequest
+let vmDetailsWriter: VmDetailsWriter = writeVmDetailsToDb
+
+export function setLxdRequestForTest(request: LxdRequest) {
+    lxdRequestImpl = request
+    return () => {
+        lxdRequestImpl = defaultLxdRequest
+    }
+}
+
+export function setVmDetailsWriterForTest(writer: VmDetailsWriter) {
+    vmDetailsWriter = writer
+    return () => {
+        vmDetailsWriter = writeVmDetailsToDb
+    }
 }
 
 export async function canUseLocalLxd() {
@@ -88,14 +122,9 @@ export async function setLocalLxdInstanceState(name: string, action: 'start' | '
         return refreshLocalLxdDetails(name)
     }
 
-    const response = await lxdRequest<unknown>(`/1.0/instances/${encodeURIComponent(name)}/state`, {
-        method: 'PUT',
-        body: {
-            action,
-            timeout: 60,
-            force: true,
-        },
-    })
+    await waitForInstanceOperations(name, 120)
+
+    const response = await requestStateTransition(name, action)
     await waitForOperation(response.operation, 90)
     return refreshLocalLxdDetails(name)
 }
@@ -119,6 +148,90 @@ async function waitForOperation(operation: string | undefined, timeoutSeconds: n
     }
 
     await lxdRequest(`/1.0/operations/${id}/wait?timeout=${timeoutSeconds}`)
+}
+
+async function waitForOperationId(id: string | undefined, timeoutSeconds: number) {
+    if (!id) {
+        return
+    }
+
+    await lxdRequest(`/1.0/operations/${encodeURIComponent(id)}/wait?timeout=${timeoutSeconds}`)
+}
+
+async function waitForInstanceOperations(name: string, timeoutSeconds: number) {
+    const deadline = Date.now() + timeoutSeconds * 1000
+
+    while (Date.now() < deadline) {
+        const operations = await lxdRequest<LxdOperations>('/1.0/operations?recursion=1')
+            .then(response => response.metadata)
+            .catch(() => null)
+        const matches = getInstanceOperations(name, operations)
+        if (matches.length === 0) {
+            return
+        }
+
+        for (const operation of matches) {
+            const remaining = Math.max(1, Math.ceil((deadline - Date.now()) / 1000))
+            await waitForOperationId(operation.id, remaining)
+        }
+        await sleep(250)
+    }
+
+    throw new Error(`Timed out waiting for LXD operations to finish for ${name}.`)
+}
+
+function getInstanceOperations(name: string, operations: LxdOperations | null) {
+    const allOperations = [
+        ...(operations?.pending || []),
+        ...(operations?.running || []),
+    ]
+
+    return allOperations.filter(operation => {
+        const description = (operation.description || '').toLowerCase()
+        const isCreateLike = /creat|copy|clon|snapshot|restore/.test(description)
+        const instanceResources = operation.resources?.instances || []
+        const matchesInstance = instanceResources.some(resource => {
+            const resourceName = decodeURIComponent(resource.split('/').pop() || '')
+            return resourceName === name
+        })
+
+        return matchesInstance && isCreateLike
+    })
+}
+
+async function requestStateTransition(name: string, action: 'start' | 'stop') {
+    const path = `/1.0/instances/${encodeURIComponent(name)}/state`
+    const body = {
+        action,
+        timeout: 60,
+        force: true,
+    }
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            return await lxdRequest<unknown>(path, {
+                method: 'PUT',
+                body,
+            })
+        } catch (error) {
+            if (!isBusyCreateOperation(error) || attempt === 2) {
+                throw error
+            }
+
+            await waitForInstanceOperations(name, 120)
+            await sleep(750)
+        }
+    }
+
+    throw new Error(`Failed to ${action} ${name}.`)
+}
+
+function isBusyCreateOperation(error: unknown) {
+    return error instanceof Error && /busy running a ["']?(?:create|copy|clone|snapshot|restore)["']? operation/i.test(error.message)
+}
+
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function mapDetails(instance: LxdInstance, state: LxdState | null) {
@@ -167,6 +280,10 @@ function mapDetails(instance: LxdInstance, state: LxdState | null) {
 }
 
 async function upsertVmDetails(details: ReturnType<typeof mapDetails>) {
+    await vmDetailsWriter(details)
+}
+
+async function writeVmDetailsToDb(details: VmDetails) {
     await run(`
         INSERT INTO vm_details (
             name, status, type, architecture, created, last_used,
@@ -237,7 +354,11 @@ async function upsertVmDetails(details: ReturnType<typeof mapDetails>) {
     ])
 }
 
-async function lxdRequest<T>(path: string, options: { method?: string, body?: unknown } = {}) {
+async function lxdRequest<T>(path: string, options: LxdRequestOptions = {}) {
+    return lxdRequestImpl<T>(path, options)
+}
+
+async function defaultLxdRequest<T>(path: string, options: LxdRequestOptions = {}) {
     const response = await requestJson<LxdResponse<T>>(path, options)
     if (response.status_code >= 400 || response.error) {
         throw new Error(response.error || `LXD returned ${response.status_code}`)
