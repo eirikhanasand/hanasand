@@ -139,6 +139,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Index handler
     fastify.get('/', indexHandler)
+    fastify.get('/health', async () => ({ ok: true, service: 'hanasand_api' }))
 
     // Desktop app update feed
     fastify.get('/app', getAppUpdate)
