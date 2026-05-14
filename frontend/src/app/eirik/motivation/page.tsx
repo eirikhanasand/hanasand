@@ -1,12 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import quotes from '../../quotes/quotes.json'
+import { buildRouteMetadata } from '../../seo'
 import './page.css'
 
-export const metadata: Metadata = {
-    title: 'Motivation | Eirik Hanasand',
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Motivation',
     description: 'The restored Hanasand motivation wall: a slow-scrolling archive of motivational quotes.',
-}
+    path: '/eirik/motivation',
+    keywords: ['motivation quotes', 'eirik hanasand', 'personal archive', 'quote wall'],
+})
 
 export default function MotivationPage() {
     const uniqueQuotes = Array.from(new Set(Array.isArray(quotes) ? quotes : []))
