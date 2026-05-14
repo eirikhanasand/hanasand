@@ -43,11 +43,13 @@ type EmailRecord = {
 
 const CORE = 'urn:ietf:params:jmap:core'
 const MAIL = 'urn:ietf:params:jmap:mail'
+const JMAP_TIMEOUT_MS = Number(process.env.MAIL_JMAP_TIMEOUT_MS || 8000)
 
 export async function getMailSession(username: string, password: string) {
     const response = await fetch(new URL('/jmap/session', ensureTrailingSlash(mailConfig.internalUrl)), {
         headers: authHeaders(username, password),
         cache: 'no-store',
+        signal: AbortSignal.timeout(JMAP_TIMEOUT_MS),
     })
 
     if (!response.ok) {
@@ -137,6 +139,7 @@ export async function uploadAttachment(username: string, password: string, filen
         method: 'POST',
         headers: authHeaders(username, password),
         body: formData,
+        signal: AbortSignal.timeout(JMAP_TIMEOUT_MS),
     })
 
     if (!response.ok) {
@@ -213,7 +216,10 @@ export async function downloadBlob(username: string, password: string, blobId: s
         .replace('{name}', encodeURIComponent(name))
         .replace('{type}', '*/*')
 
-    const response = await fetch(url, { headers: authHeaders(username, password) })
+    const response = await fetch(url, {
+        headers: authHeaders(username, password),
+        signal: AbortSignal.timeout(JMAP_TIMEOUT_MS),
+    })
     if (!response.ok) {
         throw new Error(`Unable to fetch blob (${response.status}).`)
     }
@@ -252,6 +258,7 @@ async function jmapCall<T = unknown>(username: string, password: string, session
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ using, methodCalls }),
+        signal: AbortSignal.timeout(JMAP_TIMEOUT_MS),
     })
 
     if (!response.ok) {

@@ -22,11 +22,13 @@ export async function sendMailViaSmtp(params: {
     attachments?: SmtpAttachment[]
 }) {
     const smtpHost = getInternalSmtpHost()
+    const requireTls = shouldRequireTls(smtpHost)
     const transport = nodemailer.createTransport({
         host: smtpHost,
-        port: mailConfig.smtpPort,
+        port: mailConfig.internalSmtpPort,
         secure: false,
-        requireTLS: true,
+        requireTLS: requireTls,
+        ignoreTLS: !requireTls,
         auth: {
             user: params.username,
             pass: params.password,
@@ -63,4 +65,13 @@ function getInternalSmtpHost() {
     } catch {
         return mailConfig.host
     }
+}
+
+function shouldRequireTls(host: string) {
+    const configured = process.env.MAIL_SMTP_REQUIRE_TLS
+    if (configured !== undefined) {
+        return configured === '1' || configured.toLowerCase() === 'true'
+    }
+
+    return !['127.0.0.1', 'localhost', 'host.docker.internal', 'stalwart'].includes(host)
 }

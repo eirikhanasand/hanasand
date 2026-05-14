@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 
 const mailHost = process.env.MAIL_HOST || 'mail.hanasand.com'
 const mailInternalUrl = process.env.MAIL_INTERNAL_URL || process.env.MAIL_JMAP_INTERNAL_URL || 'http://127.0.0.1:8081'
+const mailInternalSmtpPort = Number(process.env.MAIL_SMTP_INTERNAL_PORT || process.env.MAIL_SMTP_LOCAL_PORT || process.env.MAIL_SMTP_PORT || 587)
 const mailAdminUser = process.env.MAIL_ADMIN_USERNAME || 'admin'
 const mailAdminPassword = process.env.MAIL_ADMIN_PASSWORD || ''
 const mailDomain = process.env.MAIL_DOMAIN || 'hanasand.com'
@@ -34,6 +35,7 @@ export const mailConfig = {
     adminPassword: mailAdminPassword,
     imapPort: Number(process.env.MAIL_IMAP_PORT || 993),
     smtpPort: Number(process.env.MAIL_SMTP_PORT || 587),
+    internalSmtpPort: mailInternalSmtpPort,
     managesievePort: Number(process.env.MAIL_MANAGESIEVE_PORT || 4190),
     encryptionKey: crypto.createHash('sha256').update(serviceKeySource).digest(),
     systemMailboxOwner,

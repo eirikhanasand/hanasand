@@ -18,6 +18,20 @@ const fastify = Fastify({
 const port = Number(process.env.PORT) || 8081
 
 fastify.decorate('cachedIPMetrics', { status: 200, data: Buffer.from(JSON.stringify([])) })
+fastify.removeContentTypeParser('application/json')
+fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    const text = Buffer.isBuffer(body) ? body.toString('utf8') : body
+    if (!text.trim()) {
+        done(null, {})
+        return
+    }
+
+    try {
+        done(null, JSON.parse(text))
+    } catch (error) {
+        done(error as Error, undefined)
+    }
+})
 
 fastify.register(websocketPlugin)
 fastify.register(cors, {

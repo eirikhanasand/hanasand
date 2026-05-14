@@ -5,6 +5,10 @@ import type { MailHealth, MailHealthCheck } from './types.ts'
 import { mailConfig } from './config.ts'
 import { fetchMailQueueSummary } from './stalwartAdmin.ts'
 
+const DNS_TIMEOUT_MS = Number(process.env.MAIL_DNS_TIMEOUT_MS || 2500)
+const MAIL_HEALTH_FETCH_TIMEOUT_MS = Number(process.env.MAIL_HEALTH_FETCH_TIMEOUT_MS || 3000)
+const SOCKET_TIMEOUT_MS = Number(process.env.MAIL_SOCKET_TIMEOUT_MS || 2500)
+
 export async function getMailHealth(): Promise<MailHealth> {
     const checkedAt = new Date().toISOString()
     const checks: MailHealthCheck[] = []
@@ -101,10 +105,10 @@ async function resolveDnsWithResolvers(name: string, type: 'A' | 'PTR') {
 
     try {
         if (type === 'A') {
-            return await resolver.resolve4(name)
+            return await withDeadline(resolver.resolve4(name), DNS_TIMEOUT_MS, [])
         }
 
-        return await resolver.reverse(name)
+        return await withDeadline(resolver.reverse(name), DNS_TIMEOUT_MS, [])
     } catch {
         return []
     }
@@ -125,7 +129,7 @@ async function resolveTxtReliably(name: string) {
         try {
             const resolver = new dns.Resolver()
             resolver.setServers(servers)
-            const records = await resolver.resolveTxt(name)
+            const records = await withDeadline(resolver.resolveTxt(name), DNS_TIMEOUT_MS, [])
             const values = records.map(parts => parts.join(''))
             if (values.length) {
                 return values
@@ -141,14 +145,14 @@ async function resolveTxtReliably(name: string) {
 async function resolveTxtFromAuthoritative(name: string) {
     const zone = extractZone(name)
     try {
-        const nsRecords = await dns.resolveNs(zone)
+        const nsRecords = await withDeadline(dns.resolveNs(zone), DNS_TIMEOUT_MS, [])
         for (const ns of nsRecords) {
             try {
-                const addresses = await dns.resolve4(ns)
+                const addresses = await withDeadline(dns.resolve4(ns), DNS_TIMEOUT_MS, [])
                 for (const address of addresses) {
                     const resolver = new dns.Resolver()
                     resolver.setServers([address])
-                    const records = await resolver.resolveTxt(name)
+                    const records = await withDeadline(resolver.resolveTxt(name), DNS_TIMEOUT_MS, [])
                     const values = records.map(parts => parts.join(''))
                     if (values.length) {
                         return values
@@ -172,7 +176,7 @@ function extractZone(name: string) {
 
 async function safeFetchText(url: string) {
     try {
-        const response = await fetch(url)
+        const response = await fetch(url, { signal: AbortSignal.timeout(MAIL_HEALTH_FETCH_TIMEOUT_MS) })
         if (!response.ok) {
             return ''
         }
@@ -209,7 +213,7 @@ function measureSmtpBannerLatency(host: string, port: number) {
             resolve(value)
         }
 
-        socket.setTimeout(10_000)
+        socket.setTimeout(SOCKET_TIMEOUT_MS)
         socket.once('data', () => finish(Date.now() - startedAt))
         socket.once('timeout', () => finish(null))
         socket.once('error', () => finish(null))
@@ -240,12 +244,19 @@ function inspectImplicitTls(host: string, port: number, servername: string) {
             })
         })
 
-        socket.setTimeout(10_000, () => {
+        socket.setTimeout(SOCKET_TIMEOUT_MS, () => {
             socket.destroy()
             resolve({ status: 'error', detail: `Unable to complete TLS handshake on port ${port}.` })
         })
         socket.once('error', () => resolve({ status: 'error', detail: `Unable to complete TLS handshake on port ${port}.` }))
     })
+}
+
+function withDeadline<T>(work: Promise<T>, timeoutMs: number, fallback: T) {
+    return Promise.race([
+        work,
+        new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs)),
+    ])
 }
 
 function summarize(checks: MailHealthCheck[]): MailHealth['status'] {
