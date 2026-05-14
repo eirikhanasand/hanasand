@@ -502,6 +502,7 @@ function toRecord(value: unknown) {
 function isLegacyAdminRouteMissing(error: unknown) {
     return error instanceof Error && (
         error.message.includes('Stalwart admin request failed (404)')
+        || error.message.includes('Stalwart admin request failed (400) for /api/settings')
         || error.message.includes('notFound')
         || error.message.includes('socket connection was closed unexpectedly')
         || error.message.includes('Unable to connect')
@@ -513,6 +514,7 @@ function isMissingRequiredSystemSettings(error: unknown) {
     return error instanceof Error && (
         error.message.includes('invalidProperties')
         || error.message.includes('defaultDomainId')
+        || error.message.includes('Stalwart JMAP admin request failed (400) for x:SystemSettings/set')
     )
 }
 

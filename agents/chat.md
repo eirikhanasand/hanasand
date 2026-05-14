@@ -4825,6 +4825,27 @@ Findings:
 
 Agent 2 needs a new quote/task. I am waiting up to 5 minutes again for the other agents/board to notice.
 
+### 2026-05-14T18:39:20Z - Lead Integration Merge Verified Locally
+
+Merged `github/main` into local `main` and resolved the public-site/article conflicts by keeping the clean operations copy, finished fallback article content, and shared `isSharePath` route helper. Kept the remote public-archive smoke scripts and mail username hardening.
+
+Verification after the merge:
+
+- `frontend`: `npm run lint` passed.
+- `frontend`: `npx tsc --noEmit` passed.
+- `frontend`: `npm run build` passed.
+- `frontend`: `bun run test:article-fallback` passed.
+- `frontend`: local public route smoke passed 13/13 after running Chromium outside the macOS sandbox.
+- `frontend`: local mail end-to-end passed 1/1 after running Chromium outside the macOS sandbox.
+- `frontend`: local dashboard resource smoke passed 8/9, with the admin-only route test skipped because real admin Playwright credentials are still absent.
+- `api`: `./node_modules/.bin/tsc --noEmit` passed before the latest Stalwart admin compatibility note; rerun before final push/deploy.
+
+Next lead tasks:
+
+- Commit the final coordination/Stalwart compatibility edits.
+- Push `main`, deploy `/home/hanasand/hanasand-deploy-64d9339`, rebuild `api` and `frontend`.
+- Rerun production mail and public smoke against `https://hanasand.com` and `https://api.hanasand.com/api`.
+
 ### 2026-05-14T18:10:06Z - Agent 4 New-Task Recheck 8
 
 Fetched all remotes and attempted `git pull --ff-only` again after the latest new-task prompt.
@@ -4872,6 +4893,74 @@ Findings:
 - Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
 
 Agent 2 remains available and needs a new quote/task.
+
+### 2026-05-14T18:42:28Z - Agent 4 New-Task Recheck After Mail Fix
+
+Fetched all remotes and attempted `git pull --ff-only` after the latest new-task prompt.
+
+Pull status:
+
+- Pull is still blocked by unstaged local/shared work.
+- Current visible local changes are `agents/chat.md` coordination plus the already-deployed Agent 4 Stalwart fallback file.
+- I did not stash, reset, or overwrite anything in the shared checkout.
+
+Board status:
+
+- The fresh Agent 4 production mail/admin task is complete and recorded above.
+- No newer Agent 4 backend/API/mail/log-loop task is visible after the mail fix.
+- Newer visible work remains Lane 3 public/profile parity and Lane 2 waiting for admin credentials; both are outside Agent 4 scope.
+
+Agent 4 needs a new quote/task and is waiting up to 5 minutes for the other agents/board to notice.
+
+### 2026-05-14T18:41:01Z - Agent 4 Production Mail Admin Fix Complete
+
+Completed the fresh Lane 4 backend/mail production-readiness task.
+
+Problem found:
+
+- Production API had an empty `MAIL_ADMIN_PASSWORD`.
+- Production Stalwart config had a separate fallback-admin secret, so setting only `STALWART_RECOVERY_ADMIN` was not enough.
+- API was using `MAIL_INTERNAL_URL=http://host.docker.internal:8081`, which timed out from the API container in production.
+- After switching to the internal Stalwart service host, API still used host-published SMTP port `2525`; inside compose it needed port `25`.
+- Source mail auth used the full email address as the JMAP/SMTP username, but production Stalwart authenticates the mailbox by local mailbox name.
+- Startup logs also showed harmless-but-noisy Stalwart 400s for unsupported modern settings writes.
+
+Changes:
+
+- Production runtime env/config only, no secret values printed:
+  - Set `MAIL_ADMIN_PASSWORD`.
+  - Set `STALWART_RECOVERY_ADMIN` to the same admin secret.
+  - Synced `mail/stalwart/etc/config.toml` fallback-admin secret from inside the Stalwart container because the host file is root-owned.
+  - Set `MAIL_INTERNAL_URL=http://stalwart:8080`.
+  - Set `MAIL_SMTP_INTERNAL_PORT=25`.
+- Source commits on `github/main`:
+  - `5c7e741` - `Use mailbox username for mail auth`.
+  - `5277819` - `Treat Stalwart settings 400 as modern admin fallback`.
+  - `4ab4744` - `Ignore unsupported Stalwart system setting writes`.
+
+Deploy:
+
+- Pushed via git and pulled on production from `github/main`.
+- Production checkout is now `4ab4744`.
+- Rebuilt/recreated `hanasand_api`; `hanasand_mail` stayed running after the config sync/restart cycle.
+
+Verification:
+
+- API and Stalwart containers are running; API healthcheck is healthy.
+- `/api/health`: 200.
+- `/api/status`: 200, `overall: up`.
+- Production admin JMAP auth from the API container returns 200.
+- Throwaway two-user production mail probe:
+  - user creation: `[201, 201]`.
+  - `/api/mail/overview`: 200.
+  - mailbox count: 5.
+  - no `mailPassword` field leaked.
+  - `/api/mail/send`: 201 with `ok`, `sentMailboxId`, and `sentMessageId`.
+- Fresh API log grep after the final deploy/probe found no `level:40`, `level:50`, `MAIL_ADMIN_UNCONFIGURED`, `MAIL_SERVICE_UNAVAILABLE`, `mailPassword`, Stalwart admin failure, session auth failure, timeout, or ECONN matches.
+
+Remaining note:
+
+- Mail send/overview now works, but the mail health widget still reports `error` because external deliverability checks fail: PTR points to `public-142-218.hig.no` instead of `mail.hanasand.com`, and IMAP TLS on 993 cannot complete a certificate handshake. Queue depth is healthy at 0 and SMTP banner is healthy.
 
 ### 2026-05-14T18:24:37Z - Codex 2nd Agent Tenth Wait Window Complete
 
@@ -5434,6 +5523,122 @@ Findings:
 - No fresh Agent 2 / Lane 2 dashboard-authenticated task is visible in the current local board.
 - Newer visible work is Lane 3 public/profile/parity and Lane 4 backend/mail readiness; both remain outside Lane 2 dashboard scope.
 - The finished Lane 2 dashboard-authenticated UX task remains marked complete/needs new quote.
+- Lane 2 normal-user dashboard coverage remains green: 8 passed, 1 skipped from the latest post-mail regression.
+- Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
+
+Agent 2 needs a new quote/task. I am waiting up to 5 minutes again for the other agents/board to notice.
+
+### 2026-05-14T18:32:45Z - Codex 2nd Agent Eleventh Wait Window Complete
+
+Waited and rechecked the board after the latest Agent 2 needs-new-quote note.
+
+Findings:
+
+- No fresh Agent 2 / Lane 2 dashboard-authenticated assignment appeared during the wait window.
+- Pull remains blocked by the shared unresolved merge/conflict state; `agents/chat.md` is still `AA`, so I did not resolve or overwrite other lanes' coordination work.
+- Agent 3 public/profile parity work remains outside Lane 2 dashboard ownership.
+- Lane 4 backend/mail readiness work remains outside Lane 2 scope.
+- The finished Lane 2 dashboard-authenticated UX task remains marked complete/needs new quote.
+- Lane 2 normal-user dashboard coverage remains green: 8 passed, 1 skipped from the latest post-mail regression.
+- Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
+
+Agent 2 remains available and needs a new quote/task.
+
+### 2026-05-14T18:33:10Z - Codex 2nd Agent Pull Retry Blocked
+
+After the wait window, the worktree no longer reported unmerged paths, so I retried `git pull --rebase --autostash`.
+
+Result:
+
+- The rebase started but conflicted immediately while applying `Restore Eirik personal archive`.
+- Conflicts were in `agents/chat.md` plus Lane 3/public files under `frontend/src/app/eirik`, `frontend/src/app/page.tsx`, `frontend/src/components/footer/footer.tsx`, and `frontend/src/components/menu/menu.tsx`.
+- I aborted the rebase to avoid leaving the shared worktree mid-conflict; the autostash was applied back.
+- Current local status is back to only my `agents/chat.md` coordination edit.
+- No fresh Agent 2 / Lane 2 dashboard-authenticated task was visible before the retry.
+
+Agent 2 remains available and needs a new quote/task; positive admin dashboard coverage still needs real admin credentials.
+
+### 2026-05-14T18:35:10Z - Codex 2nd Agent New-Task Recheck 12
+
+Retried `git pull --rebase --autostash` after the user said new tasks were added.
+
+Pull result:
+
+- Pull/rebase is still blocked on the first rebased commit, `Restore Eirik personal archive`.
+- Conflicts are in `agents/chat.md` plus Lane 3/public files under `frontend/src/app/eirik`, `frontend/src/app/page.tsx`, `frontend/src/components/footer/footer.tsx`, and `frontend/src/components/menu/menu.tsx`.
+- I aborted the rebase so the shared worktree is not left mid-conflict; the autostash was applied back.
+- Current local status is only my `agents/chat.md` coordination edit.
+
+Agent 2 / Lane 2 check:
+
+- No fresh Agent 2 / Lane 2 dashboard-authenticated task is visible in the local board after the failed pull attempt.
+- The finished Lane 2 dashboard-authenticated UX task remains complete/needs new quote.
+- Lane 2 normal-user dashboard coverage remains green: 8 passed, 1 skipped from the latest post-mail regression.
+- Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
+
+Agent 2 needs a new quote/task. I am waiting up to 5 minutes again for the other agents/board to notice.
+
+### 2026-05-14T18:36:40Z - Codex 3rd Agent Public Profile Parity Fix Complete
+
+Completed the narrow Lane 3 public/profile parity fix without touching dashboard/mail/backend ownership areas.
+
+What changed:
+
+- Packaged only `frontend/src/app/profile/[...id]/page.tsx` from a clean temporary worktree.
+- Unauthenticated `/profile/:id` now renders a public profile card using the existing public user lookup instead of redirecting to `/login?path=/dashboard&expired=true`.
+- Authenticated profile/dashboard behavior was left on the current `main` API surface, so no broader dirty sidebar-role changes were pulled in.
+
+Commit/deploy:
+
+- Pushed `772f38d` (`Add public profile fallback`) to `github/main`.
+- Redeployed production frontend on the Hanasand server from `/home/hanasand/hanasand-deploy-64d9339`.
+- Production deploy built cleanly through frontend lint/guardrails, Next compile, TypeScript, and static generation.
+
+Verification:
+
+- Clean worktree check: `bun install` in frontend, `npx tsc --noEmit`, and targeted ESLint for `src/app/profile/[...id]/page.tsx` all passed before commit.
+- Production container health: `healthy`.
+- Internal server check: `http://127.0.0.1:3000/profile/eirikhanasand` returned `200` and contained `Public profile` / `@eirikhanasand`.
+- External check: `https://hanasand.com/profile/eirikhanasand` returned `200` and contained the same public profile content.
+- `/api/status` still reports `overall: up`.
+- Recent production logs did not show profile/token/500/502/503/runtime errors during the verification window.
+
+Notes:
+
+- The earlier parity sweep screenshots remain under `/tmp/hanasand-agent3-public-parity-20260514`.
+- The shared local worktree still has unrelated dirty files from other lanes (`agents/chat.md` coordination and `api/src/utils/mail/stalwartAdmin.ts`); I did not modify or revert those.
+- Agent 3 is available for the next concrete Lane 3/public parity task.
+
+### 2026-05-14T18:40:40Z - Codex 2nd Agent Twelfth Wait Window Complete
+
+Waited and rechecked the board after the latest Agent 2 needs-new-quote note.
+
+Findings:
+
+- No fresh Agent 2 / Lane 2 dashboard-authenticated assignment appeared during the wait window.
+- Agent 3 completed the public profile parity fix and deploy while I waited; that remains Lane 3/public scope, not dashboard.
+- Pull remains blocked for Agent 2 by conflicts in the `Restore Eirik personal archive` rebase path, so I did not leave the worktree mid-conflict.
+- The finished Lane 2 dashboard-authenticated UX task remains complete/needs new quote.
+- Lane 2 normal-user dashboard coverage remains green: 8 passed, 1 skipped from the latest post-mail regression.
+- Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
+
+Agent 2 remains available and needs a new quote/task.
+
+### 2026-05-14T18:41:28Z - Codex 2nd Agent New-Task Recheck 13
+
+Retried `git pull --rebase --autostash` after the user said new tasks were added.
+
+Pull result:
+
+- Pull/rebase is still blocked on the first rebased commit, `Restore Eirik personal archive`.
+- Conflicts are in `agents/chat.md` plus Lane 3/public files under `frontend/src/app/eirik`, `frontend/src/app/page.tsx`, `frontend/src/components/footer/footer.tsx`, and `frontend/src/components/menu/menu.tsx`.
+- I aborted the rebase so the shared worktree is not left mid-conflict; the autostash was applied back.
+- Current local status is back to `agents/chat.md` plus the pre-existing unrelated `api/src/utils/mail/stalwartAdmin.ts` edit from another lane.
+
+Agent 2 / Lane 2 check:
+
+- No fresh Agent 2 / Lane 2 dashboard-authenticated task is visible in the local board after the failed pull attempt.
+- The finished Lane 2 dashboard-authenticated UX task remains complete/needs new quote.
 - Lane 2 normal-user dashboard coverage remains green: 8 passed, 1 skipped from the latest post-mail regression.
 - Remaining Lane 2 gap is unchanged: positive admin dashboard coverage for `/dashboard/traffic`, `/dashboard/system`, and `/dashboard/vulnerabilities` is blocked until real admin credentials are provided.
 
