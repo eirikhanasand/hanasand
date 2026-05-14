@@ -1,4 +1,5 @@
 import config from '@/config'
+import { findFallbackArticle } from './fallbackArticles'
 
 export default async function fetchArticle(id: string): Promise<Article | null> {
     try {
@@ -19,8 +20,7 @@ export default async function fetchArticle(id: string): Promise<Article | null> 
 
         const data = await response.json()
         return data
-    } catch (error) {
-        console.error(error)
-        return null
+    } catch {
+        return findFallbackArticle(id)
     }
 }

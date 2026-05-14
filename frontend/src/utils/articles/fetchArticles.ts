@@ -1,4 +1,5 @@
 import config from '@/config'
+import fallbackArticles from './fallbackArticles'
 
 export default async function fetchArticles<T extends boolean>(
     recent?: T,
@@ -27,10 +28,9 @@ export default async function fetchArticles<T extends boolean>(
 
         const data = await response.json()
         return data
-    } catch (error) {
-        console.log(error)
+    } catch {
         // @ts-expect-error The type is inferred based on recent, but doesnt
         // directly extend true, leading TypeScript to raise an error
-        return (recent ? { recent: [], articles: [] } : [])
+        return (recent ? { recent: fallbackArticles.slice(0, 4), articles: fallbackArticles.slice(4) } : fallbackArticles)
     }
 }
