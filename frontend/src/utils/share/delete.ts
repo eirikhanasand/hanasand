@@ -9,7 +9,7 @@ export async function deleteShare(id: string, token?: string | null, userId?: st
     const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
 
     try {
-        const response = await fetch(`${config.url.cdn}/share/${id}`, {
+        const response = await fetch(`${config.url.api}/share/${id}`, {
             method: 'DELETE',
             headers: {
                 Authorization: `Bearer ${token}`,
