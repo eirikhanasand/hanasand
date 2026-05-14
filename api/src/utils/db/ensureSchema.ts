@@ -105,6 +105,24 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(target_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, target_id, method, path, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS share (
+            id TEXT PRIMARY KEY,
+            path TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            git TEXT,
+            locked BOOLEAN NOT NULL DEFAULT FALSE,
+            owner TEXT NOT NULL DEFAULT 'anonymous',
+            parent TEXT NOT NULL DEFAULT '',
+            alias TEXT NOT NULL DEFAULT '',
+            type TEXT NOT NULL DEFAULT 'file' CHECK (type IN ('file', 'folder')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_share_owner_updated ON share(owner, updated_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_share_parent ON share(parent)')
+    await run('CREATE INDEX IF NOT EXISTS idx_share_alias ON share(alias)')
+    await run(`
         CREATE TABLE IF NOT EXISTS password_reset_codes (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -66,6 +66,7 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             externalMembers: [],
         })
         : principal.id
+    const storedPrincipalId = typeof principalId === 'number' ? principalId : null
 
     if (principal) {
         const principalEmails = new Set(principal.emails || [])
@@ -103,14 +104,14 @@ export async function ensureMailAccountForUser(userId: string, displayName: stri
             mail_password_encrypted = EXCLUDED.mail_password_encrypted,
             principal_id = EXCLUDED.principal_id,
         updated_at = NOW()
-    `, [userId, username, address, encryptMailSecret(secret), principalId])
+    `, [userId, username, address, encryptMailSecret(secret), storedPrincipalId])
 
     return {
         userId,
-        username,
+        username: address,
         address,
         password: secret,
-        principalId,
+        principalId: storedPrincipalId,
     }
 }
 
@@ -138,7 +139,7 @@ export async function getMailAccess(actorId: string, mailboxUser?: string) {
     const existing = await getMailAccount(user.id)
     const account = existing
         ? {
-            username: existing.mail_username,
+            username: existing.mail_address,
             address: existing.mail_address,
             password: decryptMailSecret(existing.mail_password_encrypted),
         }

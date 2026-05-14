@@ -79,6 +79,17 @@ import aiTool from './handlers/tools/ai.ts'
 import { cancelVerificationJob, getVerificationJob, getVerificationJobs, postVerificationJob } from './handlers/tools/verificationJobs.ts'
 import { getLogs, getLogServices, getRealtimeLogs } from './handlers/logs/get.ts'
 import ingestLog from './handlers/logs/ingest.ts'
+import {
+    getLegacyBlocklistOverview,
+    getLegacyTrafficDomains,
+    getLegacyTrafficIps,
+    getLegacyTrafficMetrics,
+    getLegacyTrafficRecent,
+    getLegacyTrafficRecords,
+    getLegacyTrafficSummary,
+    getLegacyTrafficTps,
+    getLegacyTrafficUserAgents,
+} from './handlers/traffic/legacy.ts'
 import getAiWorkspace from './handlers/ai/getWorkspace.ts'
 import getAiRuntime from './handlers/ai/getRuntime.ts'
 import postAiConversation from './handlers/ai/postConversation.ts'
@@ -115,6 +126,7 @@ import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/de
 import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
 import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
 import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
+import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
 
 /**
  * Defines the routes available in the API.
@@ -210,6 +222,18 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.put('/notes/:id', putNote)
     fastify.delete('/notes/:id', deleteNote)
 
+    // Share workspaces
+    fastify.get('/share/tree/:id', getShareTree)
+    fastify.get('/share/user/:id', getUserShares)
+    fastify.get('/share/lock/:id', toggleShareLock)
+    fastify.get('/share/:id', getShare)
+    fastify.post('/share', postShare)
+    fastify.put('/share/:id', putShare)
+    fastify.delete('/share/:id', deleteShare)
+    fastify.get('/projects/user/:id', getUserProjects)
+    fastify.get('/project/:alias', getProject)
+    fastify.delete('/project/:alias', deleteProject)
+
     // Certificates
     fastify.get('/certificates/:id', getCertificate)
     fastify.get('/certificates/user/:id', getUserCertificates)
@@ -219,6 +243,11 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Vms
     fastify.get('/vms/agent/targets', getAgentTargets)
+    fastify.get('/vm/metrics', getVMMetrics)
+    fastify.get('/vm/metrics/:id', getVMMetrics)
+    fastify.post('/vm/metrics', postVMMetrics)
+    fastify.put('/vm/metrics/:id', putVMMetrics)
+    fastify.delete('/vm/metrics/:id', deleteVMMetrics)
     fastify.get('/vm/:id/agent-target', getAgentTarget)
     fastify.post('/vm/:id/agent-target/sync-access', postAgentTargetSyncAccess)
     fastify.post('/vm/:id/request', postAgentTargetRequest)
@@ -240,17 +269,21 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.delete('/vm/:id', deleteVM)
     fastify.delete('/vms', deleteVMs)
 
-    // Vm metrics
-    fastify.get('/vm/metrics', getVMMetrics)
-    fastify.get('/vm/metrics/:id', getVMMetrics)
-    fastify.post('/vm/metrics', postVMMetrics)
-    fastify.put('/vm/metrics/:id', putVMMetrics)
-    fastify.delete('/vm/metrics/:id', deleteVMMetrics)
-
     // Server metrics
     fastify.get('/metrics', getMetrics)
     fastify.get('/status', getStatus)
     fastify.post('/status/ingest', ingestStatus)
+
+    // Legacy CDN/Queenbee traffic read compatibility
+    fastify.get('/traffic/summary', getLegacyTrafficSummary)
+    fastify.get('/traffic/recent', getLegacyTrafficRecent)
+    fastify.get('/traffic/tps', getLegacyTrafficTps)
+    fastify.get('/traffic/ips', getLegacyTrafficIps)
+    fastify.get('/traffic/uas', getLegacyTrafficUserAgents)
+    fastify.get('/traffic/domains', getLegacyTrafficDomains)
+    fastify.get('/traffic/metrics', getLegacyTrafficMetrics)
+    fastify.get('/traffic/records', getLegacyTrafficRecords)
+    fastify.get('/blocklist/overview', getLegacyBlocklistOverview)
 
     // Desktop agent direct-connect discovery
     fastify.get('/desktop-agent/presence', getDesktopAgentPresence)

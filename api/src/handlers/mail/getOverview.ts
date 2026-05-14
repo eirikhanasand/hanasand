@@ -18,7 +18,7 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
         const access = await getMailAccess(id, query.mailboxUser)
         const accessibleAccounts = await listAccessibleMailAccounts(id)
         const recentRecipients = await listRecentRecipients(id, access.targetUser)
-        const health = await getMailHealth().catch(error => {
+        const health = await withDeadline(getMailHealth(), 3500, null).catch(error => {
             req.log.warn({ error }, 'Failed to collect mail health checks')
             return null
         })
@@ -90,6 +90,13 @@ export default async function getMailOverview(req: FastifyRequest, res: FastifyR
 }
 
 type MailAccess = Awaited<ReturnType<typeof getMailAccess>>
+
+function withDeadline<T>(work: Promise<T>, timeoutMs: number, fallback: T) {
+    return Promise.race([
+        work,
+        new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs)),
+    ])
+}
 
 async function repairMailAccessIfNeeded(access: MailAccess, onRepair: (error: Error) => void) {
     try {
