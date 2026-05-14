@@ -38,7 +38,9 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
 
         const vmPayload = await vmResponse.json().catch(() => ({} as { vm_ip?: string }))
         if (!vmResponse.ok) {
-            void recordTerminalFailure(vmName, `Internal VM lookup returned ${vmResponse.status}.`)
+            if (!isExpectedVmLookupMiss(vmResponse.status)) {
+                void recordTerminalFailure(vmName, `Internal VM lookup returned ${vmResponse.status}.`)
+            }
             return res.status(vmResponse.status).send(vmPayload)
         }
 
@@ -66,6 +68,10 @@ export default async function getVmConnection(req: FastifyRequest, res: FastifyR
         void recordTerminalFailure(vmName, error)
         return res.status(500).send({ error: 'Unable to load VM connection details.' })
     }
+}
+
+function isExpectedVmLookupMiss(statusCode: number) {
+    return statusCode === 401 || statusCode === 403 || statusCode === 404
 }
 
 async function recordTerminalFailure(vmName: string, error: unknown) {
