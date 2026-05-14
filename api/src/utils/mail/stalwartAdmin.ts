@@ -514,6 +514,7 @@ function isMissingRequiredSystemSettings(error: unknown) {
     return error instanceof Error && (
         error.message.includes('invalidProperties')
         || error.message.includes('defaultDomainId')
+        || error.message.includes('Stalwart JMAP admin request failed (400) for x:SystemSettings/set')
     )
 }
 
