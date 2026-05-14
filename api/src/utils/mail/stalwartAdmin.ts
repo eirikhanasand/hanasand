@@ -502,6 +502,7 @@ function toRecord(value: unknown) {
 function isLegacyAdminRouteMissing(error: unknown) {
     return error instanceof Error && (
         error.message.includes('Stalwart admin request failed (404)')
+        || error.message.includes('Stalwart admin request failed (400) for /api/settings')
         || error.message.includes('notFound')
         || error.message.includes('socket connection was closed unexpectedly')
         || error.message.includes('Unable to connect')
