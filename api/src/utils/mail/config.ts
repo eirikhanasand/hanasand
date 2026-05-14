@@ -57,3 +57,31 @@ export function requireMailAdminConfig() {
 
     return mailConfig
 }
+
+export function isMailAdminConfigError(error: unknown) {
+    return error instanceof Error && error.message.includes('MAIL_ADMIN_PASSWORD is required')
+}
+
+export function mailAdminUnavailablePayload() {
+    return {
+        error: 'Mail is not available yet because mail administration is not configured on this environment.',
+        code: 'MAIL_ADMIN_UNCONFIGURED',
+        retryable: false,
+    }
+}
+
+export function isMailServiceConnectionError(error: unknown) {
+    if (!(error instanceof Error)) {
+        return false
+    }
+
+    return /certificate|fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|Unable to reach mail session endpoint/i.test(error.message)
+}
+
+export function mailServiceUnavailablePayload(action: string) {
+    return {
+        error: `Mail is temporarily unavailable while ${action}.`,
+        code: 'MAIL_SERVICE_UNAVAILABLE',
+        retryable: true,
+    }
+}
