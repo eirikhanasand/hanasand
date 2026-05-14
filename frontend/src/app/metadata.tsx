@@ -1,12 +1,12 @@
 import type { Viewport, Metadata } from 'next'
 
 const title = 'Hanasand'
-const description = 'Autonomous production assistant for building, verifying, deploying, and recovering websites with visible proof.'
+const description = 'A focused workspace for projects, service status, uploads, short links, and account access.'
 const image = 'https://hanasand.com/favicon.ico'
 
 const metadata: Metadata = {
     title,
-    keywords: ['hanasand', 'ai coding', 'website builder', 'production assistant', 'deploy websites', 'verified builds', 'portfolio', 'developer tools'],
+    keywords: ['hanasand', 'operations workspace', 'service status', 'uploads', 'short links', 'projects', 'personal archive'],
     authors: [{ name: 'Eirik Hanasand', url: 'https://hanasand.com' }],
     description,
     creator: 'Eirik Hanasand',
