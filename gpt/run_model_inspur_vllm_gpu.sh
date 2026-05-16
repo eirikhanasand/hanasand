@@ -276,7 +276,11 @@ fi
 
 build_lane_plan "$detected_gpus"
 
-if [ ! -d "$VLLM_VENV" ]; then
+if [ ! -x "$VLLM_VENV/bin/python" ]; then
+  if [ -d "$VLLM_VENV" ]; then
+    echo "vLLM virtualenv exists but is incomplete; rebuilding ${VLLM_VENV}."
+    rm -rf "$VLLM_VENV"
+  fi
   python3 -m venv "$VLLM_VENV"
 fi
 

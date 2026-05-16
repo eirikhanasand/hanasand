@@ -32,6 +32,7 @@ services:
     image: hanasand_api
     mem_limit: 1g
     cpus: "2.0"
+    restart: always
     build:
       context: ./api
       dockerfile: ./Dockerfile

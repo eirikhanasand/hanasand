@@ -6,6 +6,7 @@
   "scripts": {
     "start": "bun src/index.ts",
     "start:local": "PORT=${PORT:-8080} bun src/index.ts",
+    "test": "bun scripts/index.ts",
     "lint": "eslint ./src ./scripts",
     "lint:fix": "eslint ./src ./scripts --fix",
     "audit": "bun scripts/audit-hanasand-api.mjs",
@@ -19,6 +20,7 @@
     "smoke:ai-quotas": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-ai-quotas.mjs",
     "smoke:ai-stack-contracts": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-ai-stack-contracts.ts",
     "smoke:ai-deploy-defaults": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-ai-deploy-defaults.ts",
+    "smoke:inspur-model-client": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-inspur-model-client.mjs",
     "smoke:app-update": "bun scripts/guard-production-smoke.mjs && bun scripts/smoke-app-update.ts",
     "smoke:git-import": "bun scripts/guard-production-smoke.mjs && bun scripts/e2e-git-import-complaints.ts",
     "smoke:notes": "bun scripts/guard-production-smoke.mjs && API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} bun scripts/smoke-notes.mjs",
