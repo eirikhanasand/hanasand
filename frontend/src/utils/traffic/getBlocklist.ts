@@ -9,8 +9,7 @@ export default async function getBlocklist() {
 
         const data = await response.json()
         return data
-    } catch (error) {
-        console.log(error)
+    } catch {
         return []
     }
 }

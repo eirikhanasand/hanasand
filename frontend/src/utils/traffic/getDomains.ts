@@ -21,8 +21,7 @@ export default async function getDomains() {
             if (name.includes(' ')) return false
             return name.includes('.') || name === 'localhost'
         })
-    } catch (error) {
-        console.log(error)
+    } catch {
         return []
     }
 }

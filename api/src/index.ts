@@ -10,6 +10,7 @@ import fp from '#utils/refresh/fp.ts'
 import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import recordLog from '#utils/logs/recordLog.ts'
+import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 
 const fastify = Fastify({
@@ -42,6 +43,9 @@ fastify.register(cors, {
 fastify.register(fp)
 fastify.register(ws)
 fastify.register(rateLimit)
+fastify.addHook('onResponse', async (req, res) => {
+    recordTraffic(req, res)
+})
 fastify.register(apiRoutes, { prefix: '/api' })
 fastify.get('/', IndexHandler)
 fastify.addHook('onResponse', async (req, res) => {

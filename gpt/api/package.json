@@ -8,6 +8,9 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "bun src/index.ts",
+    "test": "bun scripts/index.ts",
+    "test:model-loopback": "RUN_MODEL_TESTS=1 bun scripts/index.ts --only=model-loopback",
+    "test:mac-validation-profile": "RUN_MODEL_TESTS=1 bun scripts/index.ts --only=mac-validation-profile",
     "lint": "eslint ./src ./scripts ./distless",
     "lint:fix": "eslint ./src ./scripts ./distless --fix",
     "orchestration:demo": "bun scripts/orchestration-demo.ts",

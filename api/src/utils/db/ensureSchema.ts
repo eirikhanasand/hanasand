@@ -165,6 +165,23 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS traffic_events (
+            id BIGSERIAL PRIMARY KEY,
+            domain TEXT NOT NULL DEFAULT '',
+            path TEXT NOT NULL DEFAULT '',
+            method TEXT NOT NULL DEFAULT '',
+            status INT NOT NULL DEFAULT 0,
+            ip TEXT NOT NULL DEFAULT '',
+            user_agent TEXT NOT NULL DEFAULT '',
+            referer TEXT NOT NULL DEFAULT '',
+            request_time_ms INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_created_at ON traffic_events(created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_domain_created_at ON traffic_events(domain, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_path_created_at ON traffic_events(path, created_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS desktop_agent_presence (
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             device_id TEXT NOT NULL,

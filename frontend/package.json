@@ -13,12 +13,14 @@
     "lint:eslint": "eslint ./src ./tests ./scripts",
     "lint:fix": "eslint ./src ./tests ./scripts --fix",
     "lint": "bun run lint:eslint && bun run lint:guardrails",
-    "test:article-fallback": "bun scripts/check-article-fallback.mjs",
-    "test:public-archive": "bun scripts/check-public-archive.mjs",
-    "test:e2e": "bun scripts/run-playwright-status.mjs",
-    "test:e2e:auth": "bun scripts/run-playwright-status.mjs tests/auth.spec.ts",
-    "test:e2e:mail": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright mail workspace' bun scripts/run-playwright-status.mjs tests/mail.spec.ts",
-    "test:e2e:ai": "PLAYWRIGHT_STATUS_CHECK_NAME='Playwright AI workspace' bun scripts/run-playwright-status.mjs tests/ai-workspace.spec.ts"
+    "test": "bun scripts/index.ts",
+    "test:status-traffic": "bun scripts/index.ts --only=status-traffic",
+    "test:article-fallback": "bun scripts/index.ts --only=article-fallback",
+    "test:public-archive": "RUN_SERVER_TESTS=1 bun scripts/index.ts --only=public-archive",
+    "test:e2e": "RUN_E2E=1 bun scripts/index.ts --only=e2e",
+    "test:e2e:auth": "RUN_E2E=1 bun scripts/index.ts --only=e2e-auth",
+    "test:e2e:mail": "RUN_E2E=1 bun scripts/index.ts --only=e2e-mail",
+    "test:e2e:ai": "RUN_E2E=1 bun scripts/index.ts --only=e2e-ai"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.4",

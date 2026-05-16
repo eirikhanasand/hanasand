@@ -6,7 +6,6 @@ import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { AlertTriangle, ArrowUp, Bot, CheckCircle2, ChevronDown, ExternalLink, FolderKanban, LoaderCircle, PanelRightOpen, Sparkles, X } from 'lucide-react'
-import config from '../../config'
 
 type ChatPaneProps = {
     activeConversation: AIConversation | null
@@ -21,6 +20,12 @@ type ChatPaneProps = {
     onPreferredModelChange: (value: string | null) => void
     onSend: () => void
 }
+
+const EMPTY_CHAT_TOOLTIPS = [
+    'Describe the change you want, attach the relevant workspace, and I will keep the work tied to files.',
+    'Ask for a plan, a code edit, a review pass, or browser verification before release.',
+    'Start from a bug, a repo, a screenshot, or a blank workspace and keep the handoff visible.',
+]
 
 export default function ChatPane({
     activeConversation,
@@ -37,7 +42,7 @@ export default function ChatPane({
     const [showArtifacts, setShowArtifacts] = useState(false)
     const [modelMenuOpen, setModelMenuOpen] = useState(false)
     const [previewArtifact, setPreviewArtifact] = useState<AIArtifact | null>(null)
-    const [emptyTooltip, setEmptyTooltip] = useState('Tell me what is on your mind, and I’ll help from there.')
+    const emptyTooltip = useMemo(() => pickTooltip(EMPTY_CHAT_TOOLTIPS) || EMPTY_CHAT_TOOLTIPS[0], [])
     const isThinking = Boolean(activeConversation?.messages.at(-1)?.pending)
         || activeConversation?.metrics?.status === 'preparing'
         || activeConversation?.metrics?.status === 'generating'
@@ -48,7 +53,7 @@ export default function ChatPane({
         : awaitingResponse
             ? 'Waiting for the current agent turn to finish.'
             : !hasReadyModel
-                ? 'Model offline: connect a model lane to send prompts.'
+                ? 'Model lane not connected yet. You can still open the editor, attach context, or sign in to continue when a runner is available.'
                 : null
     const lastMessageKey = useMemo(() => {
         const lastMessage = activeConversation?.messages.at(-1)
@@ -63,21 +68,6 @@ export default function ChatPane({
         container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
     }, [lastMessageKey])
 
-    useEffect(() => {
-        let cancelled = false
-        fetch(`${config.url.api.replace(/\/$/, '')}/tooltips?surface=ai-chat-empty`, { cache: 'no-store' })
-            .then((response) => response.ok ? response.json() : null)
-            .then((payload) => {
-                if (cancelled) return
-                const selected = pickTooltip(Array.isArray(payload?.tooltips) ? payload.tooltips : [])
-                if (selected) setEmptyTooltip(selected)
-            })
-            .catch(() => {})
-        return () => {
-            cancelled = true
-        }
-    }, [])
-
     const latestArtifacts = activeConversation?.messages.flatMap((message) =>
         Array.isArray(message.metadata?.artifacts) ? message.metadata.artifacts as AIArtifact[] : []
     ) || []
@@ -86,7 +76,7 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'No model connected'
+    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Model lane unavailable'
 
     return (
         <Fragment>
@@ -103,7 +93,7 @@ export default function ChatPane({
                                     className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-medium text-[#f0a63a] transition-colors hover:text-[#ffc46d] disabled:cursor-not-allowed disabled:text-[#777772]'
                                     title={selectedModelLabel}
                                 >
-                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'No model connected'}</span>
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Model lane unavailable'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
@@ -156,7 +146,7 @@ export default function ChatPane({
                 <div className={`grid min-h-0 flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
                     <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-8 md:px-12 xl:px-24'>
                         {!activeConversation?.messages.length ? (
-                            <EmptyComposerState tooltip={emptyTooltip} />
+                            <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} />
                         ) : activeConversation.messages.map((message) => (
                             <article key={message.id} className={`max-w-3xl rounded-[1.25rem] border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#464640] bg-[#272724]/95 text-[#f1eee7] shadow-[0_18px_60px_rgba(0,0,0,0.22)]' : message.error ? 'border-[#5d3835] bg-[#241b1a] text-[#e6c1bd]' : message.role === 'tool' ? 'border-[#333331] bg-[#1d1d1d] text-[#d3d3ce]' : 'border-transparent bg-transparent text-[#eeeeea]'}`}>
                                 {message.role === 'tool' || message.role === 'assistant' ? (
@@ -248,7 +238,7 @@ export default function ChatPane({
     )
 }
 
-function EmptyComposerState({ tooltip }: { tooltip: string }) {
+function EmptyComposerState({ tooltip, hasReadyModel }: { tooltip: string, hasReadyModel: boolean }) {
     const greeting = 'What can I help you with?'
 
     return (
@@ -261,8 +251,20 @@ function EmptyComposerState({ tooltip }: { tooltip: string }) {
                     {greeting}
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#9a9a95]'>
-                    {tooltip}
+                    {hasReadyModel
+                        ? tooltip
+                        : 'Attach a workspace or open the editor while a model lane is unavailable. The handoff, files, deploy state, and review context stay visible either way.'}
                 </p>
+                {!hasReadyModel ? (
+                    <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#b7b7b2]'>
+                        <Link href='/s' className='rounded-full border border-bright/10 px-3 py-1.5 transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                            Open editor
+                        </Link>
+                        <Link href='/login' className='rounded-full border border-bright/10 px-3 py-1.5 transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                            Sign in
+                        </Link>
+                    </div>
+                ) : null}
             </div>
         </div>
     )

@@ -9,8 +9,7 @@ export default async function fetchLogs(sortBy: 'hits' | 'last_seen' = 'last_see
 
         const data = await response.json()
         return data
-    } catch (error) {
-        console.log(error)
+    } catch {
         return []
     }
 }

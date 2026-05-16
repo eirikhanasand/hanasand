@@ -176,10 +176,11 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                     name={domain.name}
                     tps={domain.tps} />
                 )}
+                {!domainsSortedByTps.length && <EmptyTrafficCard text='Waiting for the first live traffic sample.' />}
             </div>
 
             {/* Metrics */}
-            <h1 className='font-semibold text-lg'>Most visited subdomains</h1>
+            <h1 className='font-semibold text-lg text-bright'>Most visited subdomains</h1>
             <div className='grid md:grid-cols-5 gap-4'>
                 {serverDomainMetrics.map((d, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
@@ -194,10 +195,11 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                         <span className='text-xs text-almostbright'>Total: {d.hits_total}</span>
                     </div>
                 ))}
+                {!serverDomainMetrics.length && <EmptyTrafficCard text='Subdomain rankings will appear after traffic is recorded.' />}
             </div>
 
             {/* Top endpoints */}
-            <h1 className='font-semibold text-lg'>Top endpoints</h1>
+            <h1 className='font-semibold text-lg text-bright'>Top endpoints</h1>
             <div className='grid md:grid-cols-5 gap-4'>
                 {serverMetrics.map((m, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
@@ -211,7 +213,16 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                         <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
                     </div>
                 ))}
+                {!serverMetrics.length && <EmptyTrafficCard text='Endpoint rankings will appear after traffic is recorded.' />}
             </div>
+        </div>
+    )
+}
+
+function EmptyTrafficCard({ text }: { text: string }) {
+    return (
+        <div className='glass-card rounded-2xl p-4 text-sm text-bright/45 md:col-span-2'>
+            {text}
         </div>
     )
 }

@@ -12,6 +12,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 COPY . .
+RUN bun run test
 RUN bun run lint
 RUN bun run build
 

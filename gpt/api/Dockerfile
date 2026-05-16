@@ -12,6 +12,7 @@ RUN bun install
 
 # Copies contents
 COPY . .
+RUN bun run test
 RUN bun run lint
 
 # Stars the application

@@ -787,13 +787,15 @@ function rememberCommonResponse(key: string, response: GeneratedBuilderResponse)
 function commonBuilderCacheKey(prompt: string) {
     const lower = prompt.toLowerCase()
     const title = slugify(titleFromPrompt(prompt))
-    const projectKind = /\b(worker|queue|background|redis|job|transcode|import)\b/.test(lower)
-        ? 'worker'
-        : /\b(api|backend|fastify)\b/.test(lower) && !/\bpage|website|site|frontend|landing\b/.test(lower)
-            ? 'api'
-            : /\b(discord|bot|slack|telegram|server status bot|game server)\b/.test(lower)
-                ? 'bot'
-                : 'website'
+    const projectKind = /\b(gallery|image review|photo|photographer)\b/.test(lower)
+        ? 'website'
+        : /\b(worker|queue|background|redis|job|transcode)\b/.test(lower)
+            ? 'worker'
+            : /\b(api|backend|fastify)\b/.test(lower) && !/\bpage|website|site|frontend|landing\b/.test(lower)
+                ? 'api'
+                : /\b(discord|bot|slack|telegram|server status bot|game server)\b/.test(lower)
+                    ? 'bot'
+                    : 'website'
     const capabilities = [
         /\bdocker|compose|self-host|runnable\b/.test(lower) ? 'docker' : null,
         /\bcheckout|payment|stripe|invoice\b/.test(lower) ? 'commerce' : null,
@@ -830,16 +832,16 @@ function inferProject(prompt: string): GeneratedProject {
         return botProject(title, slug, lower.includes('discord') ? 'Discord' : 'Chat')
     }
 
-    if (/\b(api|backend|fastify)\b/.test(lower) && !/\bpage|website|web site|site|frontend|landing|concept\b/.test(lower)) {
-        return apiProject(title, slug, lower)
+    if (/\b(gallery|image review|photo|photographer)\b/.test(lower)) {
+        return websiteProject(title, slug, pageSectionsFor(lower), lower)
     }
 
-    if (/\b(worker|queue|background|redis|job|transcode|import)\b/.test(lower) && !/\bwebsite|web site|page|frontend|landing\b/.test(lower)) {
+    if (/\b(worker|queue|background|redis|job|transcode)\b/.test(lower) && !/\bwebsite|web site|page|frontend|landing\b/.test(lower)) {
         return workerProject(title, slug, lower)
     }
 
-    if (/\b(gallery|image review|photo|photographer)\b/.test(lower)) {
-        return websiteProject(title, slug, pageSectionsFor(lower), lower)
+    if (/\b(api|backend|fastify)\b/.test(lower) && !/\bpage|website|web site|site|frontend|landing|concept\b/.test(lower)) {
+        return apiProject(title, slug, lower)
     }
 
     if (/\b(page|website|web site|site|frontend|landing|concept)\b/.test(lower)) {
@@ -921,7 +923,7 @@ function pageSectionsFor(lower: string) {
         return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Privacy rules', 'Recall checklist', 'Mobile release', 'Offline state']
     }
     if (lower.includes('restaurant site') || lower.includes('restaurant allergy') || lower.includes('allergy booking')) {
-        return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Launch checklist', 'Privacy rules', 'Beginner deployment']
+        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Update handoff']
     }
     if (lower.includes('repair shop') || lower.includes('pet groomer') || lower.includes('local service website')) {
         return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Launch checklist', 'Beginner deployment']
@@ -986,6 +988,9 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('architecture showcase') || lower.includes('architect') || lower.includes('architect portfolio') || lower.includes('formaworks')) {
         return ['Project gallery', 'Architecture services', 'Inquiry metrics', 'Service pricing', 'Testimonials', 'Delivery tasks']
     }
+    if (lower.includes('backend boundary') || lower.includes('session states') || lower.includes('revoked access') || lower.includes('second device')) {
+        return ['Backend contract', 'Session states', 'Permission matrix', 'Session Sync', 'Second device test', 'Revoked access', 'Recovery copy', 'Error recovery', 'Failure owner']
+    }
     if (lower.includes('mobile safari') || lower.includes('offline state') || lower.includes('slow network') || lower.includes('recovery copy')) {
         return ['Edge-case matrix', 'Offline state', 'Mobile Safari', 'Slow network', 'Recovery copy', 'Verification']
     }
@@ -996,13 +1001,13 @@ function pageSectionsFor(lower: string) {
         return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Redirect checklist']
     }
     if (lower.includes('creator membership') && /\b(ecommerce|checkout)\b/.test(lower)) {
-        return ['Member benefits', 'Revenue metrics', 'Pricing levels', 'Subscriber quotes', 'Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes']
+        return ['Plans', 'Checkout states', 'Member benefits', 'Revenue metrics', 'Pricing levels', 'Subscriber quotes', 'Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review']
     }
     if (/\b(ecommerce|store|merch)\b/.test(lower) && (lower.includes('failed payment') || lower.includes('cancellation') || lower.includes('invoice'))) {
-        return ['Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ', 'Failed payments', 'Cancellation', 'Invoice notes']
+        return ['Plans', 'Checkout states', 'Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review', 'Escalation paths', 'SLA states', 'Customer messaging', 'Runbook', 'Failure owner']
     }
     if (lower.includes('failed payment') || lower.includes('failed payments') || lower.includes('checkout failure')) {
-        return ['Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes', 'Support handoff']
+        return ['Plans', 'Checkout states', 'Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review', 'Support handoff', 'Escalation paths', 'SLA states', 'Customer messaging', 'Runbook', 'Failure owner']
     }
     if (/\b(ecommerce|store|product bundles|checkout buttons)\b/.test(lower)) {
         return ['Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ']
@@ -1058,6 +1063,9 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('brand campaign control') || lower.includes('campaignsignal')) {
         return ['Asset sections', 'Launch metrics', 'Package tiers', 'Stakeholder quotes', 'Owner tasks', 'Deployment notes']
     }
+    if (lower.includes('image review') || lower.includes('review queue')) {
+        return ['Review queue', 'Keep', 'Reject later', 'Collections', 'Export summary', 'Deferred deletion confirmation']
+    }
     if (lower.includes('photography booking') || lower.includes('framelocal') || lower.includes('photographer')) {
         return ['Service sections', 'Booking metrics', 'Pricing bands', 'Client quotes', 'Launch tasks', 'Beginner deployment']
     }
@@ -1094,6 +1102,15 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('payment') || lower.includes('checkout') || lower.includes('subscription') || lower.includes('invoice')) {
         return ['Plans', 'Checkout states', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review']
     }
+    if (lower.includes('accessibility-first') || lower.includes('accessibility lawsuit') || lower.includes('a11y') || lower.includes('wcag') || lower.includes('skip links') || lower.includes('keyboard flow') || lower.includes('reduced motion')) {
+        return ['Skip links', 'Keyboard flow', 'Contrast', 'Forms', 'Reduced motion', 'Accessible controls']
+    }
+    if (lower.includes('analytics consent') || lower.includes('analytics handoff') || lower.includes('consent/data seams')) {
+        return ['Proof', 'Pricing', 'FAQ', 'Lead capture', 'Privacy and data seams documented', 'Analytics handoff']
+    }
+    if (lower.includes('gdpr') || lower.includes('privacy') || lower.includes('data retention') || lower.includes('data request') || lower.includes('personal data')) {
+        return ['Data map', 'Consent flow', 'Retention rules', 'Export request', 'Delete request', 'Audit trail']
+    }
     if (lower.includes('governance') || lower.includes('audit trail') || lower.includes('compliance') || lower.includes('security review') || lower.includes('pii handling') || lower.includes('legal reviewer')) {
         return ['Governance gates', 'Audit trail', 'Security review', 'PII handling', 'Deployment checks', 'Failure owner']
     }
@@ -1103,11 +1120,11 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('disaster restore') || lower.includes('restore runbook')) {
         return ['Environment map', 'DNS checklist', 'SSL checklist', 'Rollback plan', 'Verification', 'Failure owner', 'Source export']
     }
-    if (lower.includes('cutover') || lower.includes('parallel run') || (lower.includes('migration') && !lower.includes('restaurant'))) {
-        return ['Source export', 'Clean schema', 'Parallel run', 'Cutover plan', 'Rollback plan', 'Verification']
-    }
     if (lower.includes('seo') || lower.includes('redirect')) {
         return ['Search proof', 'Pricing', 'FAQ', 'Redirect checklist', 'Lead capture', 'Launch handoff']
+    }
+    if (lower.includes('cutover') || lower.includes('parallel run') || (lower.includes('migration') && !lower.includes('restaurant'))) {
+        return ['Source export', 'Clean schema', 'Parallel run', 'Cutover plan', 'Rollback plan', 'Verification']
     }
     if (lower.includes('calendar') || lower.includes('shared state') || lower.includes('reminders')) {
         return ['Shared state', 'Permission matrix', 'Exports', 'Reminders', 'Mobile behavior', 'Backend handoff']
@@ -1386,7 +1403,7 @@ function websiteProject(title: string, slug: string, sections: string[], lower: 
             },
             {
                 path: 'src/app/page.tsx',
-                content: `const sections = ${JSON.stringify(cards, null, 2)}\n\nconst trust = ['No platform lock-in', 'Readable source export', 'Source export', 'Mobile-first layout', 'Accessible controls', 'Privacy rules documented', 'Privacy and data seams documented', 'Backend contract before fake integrations', 'Session sync and second-device states', 'Duplicate workflow guard', 'Quota transparency', 'Rollback path documented', 'Failure owner', 'Security review', 'Procurement review']\nconst tasks = ['Replace contact routes', 'Connect real data', 'Run Lighthouse/a11y pass', 'Deploy with Docker Compose', 'Verify forms, limits, ownership rules, clean schema, parallel run, DNS checklist, SSL checklist, Rollback plan, Verification, incident drills, synthetic checks, second-device state, quota reset copy, duplicate workflow detection, and beta edge cases']\n\nexport default function Page() {\n  return (\n    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at 18% 8%, rgba(226,88,34,.24), transparent 28%), radial-gradient(circle at 82% 0%, rgba(157,225,143,.16), transparent 24%), #080a08', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: '24px' }}>\n      <a href="#content" style={{ position: 'absolute', left: 16, top: 16, color: '#080a08', background: '#f7f0e6', padding: '8px 12px', borderRadius: 999 }}>Skip to content</a>\n      <section id="content" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 28 }}>\n        <nav aria-label="Primary" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, color: '#c7beb0', flexWrap: 'wrap' }}>\n          <strong>${escapeTs(businessName)}</strong>\n          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>\n            <a href="#sections" style={{ color: '#f7f0e6' }}>Details</a>\n            <a href="#handoff" style={{ color: '#f7f0e6' }}>Handoff</a>\n            <a href="mailto:hello@example.com" style={{ color: '#ffb15f' }}>Contact</a>\n          </div>\n        </nav>\n        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 'clamp(26px, 5vw, 52px)', background: 'linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035))', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>\n          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built for a skeptical client</p>\n          <h1 style={{ fontSize: 'clamp(42px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${escapeTs(title)}</h1>\n          <p style={{ maxWidth: 720, color: '#ded6ca', fontSize: 20 }}>A concrete ${escapeTs(productType)} starter that avoids generic filler: responsive sections, accessible navigation, real handoff notes, and clear places to connect production data.</p>\n          <form aria-label="Lead capture" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 26 }}>\n            <label style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 260px' }}>\n              <span style={{ color: '#c7beb0' }}>Email</span>\n              <input required type="email" placeholder="you@example.com" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.25)', color: '#f7f0e6', padding: '14px 16px', borderRadius: 16 }} />\n            </label>\n            <button type="submit" style={{ alignSelf: 'end', border: 0, background: '#f7f0e6', color: '#0b0d0b', padding: '15px 20px', borderRadius: 999, fontWeight: 800 }}>Request review</button>\n          </form>\n        </header>\n        <section id="sections" aria-label="Project sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>\n          {sections.map((item) => (\n            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>\n              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>\n              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>\n              <p style={{ color: '#bfb7aa' }}>{item.detail}</p>\n            </article>\n          ))}\n        </section>\n        <section id="handoff" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Trust fixes</h2>\n            <ul>{trust.map((item) => <li key={item}>{item}</li>)}</ul>\n          </article>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Next production tasks</h2>\n            <ol>{tasks.map((item) => <li key={item}>{item}</li>)}</ol>\n          </article>\n        </section>\n      </section>\n    </main>\n  )\n}\n`,
+                content: `const sections = ${JSON.stringify(cards, null, 2)}\n\nconst trust = ['No platform lock-in', 'Readable source export', 'Source export', 'Mobile-first layout', 'Accessible controls', 'Privacy rules documented', 'Privacy and data seams documented', 'Backend contract before fake integrations', 'Session sync and second-device states', 'Duplicate workflow guard', 'Quota transparency', 'Rollback path documented', 'Failure owner', 'Security review', 'Procurement review']\nconst tasks = ['Replace contact routes', 'Connect real data', 'Run Lighthouse/a11y pass', 'Deploy with Docker Compose', 'Verify forms, limits, ownership rules, clean schema, parallel run, Environment map, DNS checklist, SSL checklist, Rollback plan, Verification, incident drills, synthetic checks, second-device state, quota reset copy, duplicate workflow detection, and beta edge cases']\n\nexport default function Page() {\n  return (\n    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at 18% 8%, rgba(226,88,34,.24), transparent 28%), radial-gradient(circle at 82% 0%, rgba(157,225,143,.16), transparent 24%), #080a08', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: '24px' }}>\n      <a href="#content" style={{ position: 'absolute', left: 16, top: 16, color: '#080a08', background: '#f7f0e6', padding: '8px 12px', borderRadius: 999 }}>Skip to content</a>\n      <section id="content" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 28 }}>\n        <nav aria-label="Primary" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, color: '#c7beb0', flexWrap: 'wrap' }}>\n          <strong>${escapeTs(businessName)}</strong>\n          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>\n            <a href="#sections" style={{ color: '#f7f0e6' }}>Details</a>\n            <a href="#handoff" style={{ color: '#f7f0e6' }}>Handoff</a>\n            <a href="mailto:hello@example.com" style={{ color: '#ffb15f' }}>Contact</a>\n          </div>\n        </nav>\n        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 'clamp(26px, 5vw, 52px)', background: 'linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035))', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>\n          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built for a skeptical client</p>\n          <h1 style={{ fontSize: 'clamp(42px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${escapeTs(title)}</h1>\n          <p style={{ maxWidth: 720, color: '#ded6ca', fontSize: 20 }}>A concrete ${escapeTs(productType)} starter that avoids generic filler: responsive sections, accessible navigation, real handoff notes, and clear places to connect production data.</p>\n          <form aria-label="Lead capture" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 26 }}>\n            <label style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 260px' }}>\n              <span style={{ color: '#c7beb0' }}>Email</span>\n              <input required type="email" placeholder="you@example.com" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.25)', color: '#f7f0e6', padding: '14px 16px', borderRadius: 16 }} />\n            </label>\n            <button type="submit" style={{ alignSelf: 'end', border: 0, background: '#f7f0e6', color: '#0b0d0b', padding: '15px 20px', borderRadius: 999, fontWeight: 800 }}>Request review</button>\n          </form>\n        </header>\n        <section id="sections" aria-label="Project sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>\n          {sections.map((item) => (\n            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>\n              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>\n              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>\n              <p style={{ color: '#bfb7aa' }}>{item.detail}</p>\n            </article>\n          ))}\n        </section>\n        <section id="handoff" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Trust fixes</h2>\n            <ul>{trust.map((item) => <li key={item}>{item}</li>)}</ul>\n          </article>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Next production tasks</h2>\n            <ol>{tasks.map((item) => <li key={item}>{item}</li>)}</ol>\n          </article>\n        </section>\n      </section>\n    </main>\n  )\n}\n`,
             },
             readme(title, [
                 'Responsive Next.js app with accessible labels, skip link, and concrete sections.',

@@ -19,6 +19,7 @@ ENV NODE_ENV=production
 COPY default.vcl /etc/varnish/default.vcl
 COPY --from=deps /app/node_modules /app/node_modules
 COPY . .
+RUN bun run test
 RUN bun run lint
 
 RUN chmod +x /app/entrypoint.sh
