@@ -229,8 +229,8 @@ function EmptyEditorState({
             <div className='pointer-events-auto w-full max-w-2xl rounded-xl border border-bright/10 bg-background/72 p-3 shadow-2xl shadow-black/20 backdrop-blur-md'>
                 <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0'>
-                        <h2 className='text-sm font-medium text-bright/82'>Empty editor</h2>
-                        <p className='mt-1 text-xs leading-5 text-bright/42'>Type here to edit the selected item, or choose a starter below.</p>
+                        <h2 className='text-sm font-medium text-bright/82'>Empty file</h2>
+                        <p className='mt-1 text-xs leading-5 text-bright/42'>Start typing, or choose a starter below.</p>
                     </div>
                     <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
                 </div>
