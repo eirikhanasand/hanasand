@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises'
+import fsSync from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { pathToFileURL, fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { chromium } from 'playwright'
 import { buildShareProjectResponse } from '../src/handlers/tools/ai.ts'
 
 type ToolFile = { action: string; path: string; content: string }
@@ -10,8 +13,6 @@ type Story = { id: number; title: string; prompt: string; kind: Kind; mustMentio
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..', '..')
 const outRoot = path.join(repoRoot, 'sandbox', 'share-chat-reddit-production-stories')
-const playwrightModule = await import(pathToFileURL(path.join(repoRoot, 'frontend/node_modules/playwright/index.js')).href)
-const { chromium } = playwrightModule as typeof import('playwright')
 
 const stories: Story[] = [
     { id: 441, title: 'Privacy Consent Exit Site', kind: 'website', prompt: 'Create privacy consent exit site with privacy rules consent export delete tracking audit support bundle browser verification and exit plan.', mustMention: [/docs\/privacy-rules\.md/i, /docs\/exit-plan\.md/i, /docs\/support-bundle\.md/i, /docs\/browser-verification\.md/i, /consent/i, /export.*delete|delete.*export/i, /tracking audit/i], browserMustSee: [/Privacy Rules/i, /Browser Verification/i, /Request review/i] },
@@ -142,7 +143,7 @@ async function verifyInBrowser(browser: Awaited<ReturnType<typeof chromium.launc
 await fs.rm(outRoot, { recursive: true, force: true })
 await fs.mkdir(outRoot, { recursive: true })
 const results = []
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({ headless: true, executablePath: findChromiumExecutable() })
 try {
     for (const story of stories) {
         console.log(`REVIEW ${story.id} ${story.title}`)
@@ -170,3 +171,31 @@ const failed = results.filter((result) => !result.ok)
 await fs.writeFile(path.join(outRoot, 'results.json'), JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2))
 if (failed.length) throw new Error(`${failed.length} reddit production stories failed.`)
 console.log(`All ${results.length} reddit production stories passed with Playwright browser verification.`)
+
+function findChromiumExecutable() {
+    for (const executablePath of chromiumExecutableCandidates()) {
+        if (fsSync.existsSync(executablePath)) {
+            return executablePath
+        }
+    }
+
+    return undefined
+}
+
+function chromiumExecutableCandidates() {
+    const cacheRoot = path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
+    const cached = fsSync.existsSync(cacheRoot)
+        ? fsSync.readdirSync(cacheRoot)
+            .filter(entry => entry.startsWith('chromium_headless_shell-'))
+            .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }))
+            .map(entry => path.join(cacheRoot, entry, 'chrome-headless-shell-mac-arm64', 'chrome-headless-shell'))
+        : []
+
+    return [
+        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        ...cached,
+    ].filter(Boolean)
+}
