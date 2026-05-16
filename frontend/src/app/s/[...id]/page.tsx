@@ -47,7 +47,7 @@ export default async function Page(props: {
     }
 
     return (
-        <div className='w-full h-[92.5vh]'>
+        <div className='w-full h-full'>
             <SharePageClient
                 id={id}
                 share={share}
