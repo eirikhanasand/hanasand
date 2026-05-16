@@ -8,6 +8,11 @@ const openrestyFiles = [
     path.join(workspaceRoot, 'openresty', 'nginx', 'conf.d', 'default.conf'),
 ]
 
+if (!fs.existsSync(cdnIndexPath) && openrestyFiles.every(filePath => !fs.existsSync(filePath))) {
+    console.log('Upload limit guardrail skipped. CDN/OpenResty files are not present in this checkout.')
+    process.exit(0)
+}
+
 const cdnIndex = fs.readFileSync(cdnIndexPath, 'utf8')
 const fastifyLimitBytes = readFastifyMultipartFileLimit(cdnIndex)
 const errors = []

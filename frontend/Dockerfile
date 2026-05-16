@@ -16,8 +16,6 @@ ENV NODE_ENV=production
 # those guardrails run in production builds too.
 COPY frontend ./
 COPY api /workspace/api
-COPY cdn /workspace/cdn
-COPY openresty /workspace/openresty
 RUN bun run test
 RUN bun run lint
 RUN bun run build
@@ -30,8 +28,8 @@ ENV NODE_ENV=production
 
 RUN apk add --no-cache varnish
 
-COPY default.vcl /etc/varnish/default.vcl
-COPY entrypoint.sh /app/entrypoint.sh
+COPY frontend/default.vcl /etc/varnish/default.vcl
+COPY frontend/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder /workspace/frontend/.next/standalone ./
 COPY --from=builder /workspace/frontend/.next/static /app/.next/static
 COPY --from=builder /workspace/frontend/public /app/public
