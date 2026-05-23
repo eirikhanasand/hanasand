@@ -2,7 +2,7 @@ FROM oven/bun:1.3.11 AS deps
 
 WORKDIR /workspace/frontend
 
-COPY frontend/package.json frontend/bun.lock* ./
+COPY frontend/package.json frontend/bun.lock* frontend/bunfig.toml ./
 RUN bun install
 
 FROM deps AS builder
