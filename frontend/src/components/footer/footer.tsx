@@ -3,7 +3,7 @@
 import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ArrowUpRight, BookOpen, FolderArchive, Sparkles } from 'lucide-react'
+import { Activity, ArrowUpRight, BookOpen, Globe, Sparkles } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 
 const footerGroups = [
@@ -17,16 +17,16 @@ const footerGroups = [
         ],
     },
     {
-        title: 'Eirik',
+        title: 'Personal',
         links: [
-            { label: 'Personal archive', href: '/eirik' },
-            { label: 'Motivation wall', href: '/eirik/motivation' },
+            { label: 'About', href: '/eirik' },
+            { label: 'Motivational Quotes', href: '/eirik/motivation' },
             { label: 'Articles', href: '/articles' },
             { label: 'Contact', href: '/contact' },
         ],
     },
     {
-        title: 'Older tools',
+        title: 'Other tools',
         links: [
             { label: 'Password check', href: '/pwned' },
             { label: 'Upload media', href: '/upload' },
@@ -53,7 +53,7 @@ export default function Footer() {
                         </span>
                     </Link>
                     <p className='mt-4 max-w-md text-sm leading-6 text-bright/42'>
-                        A focused surface for projects, service status, uploads, short links, and account access.
+                        A focused surface for projects.
                     </p>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-bright/8 px-2.5 py-1 text-[11px] text-bright/44'>
@@ -61,8 +61,8 @@ export default function Footer() {
                             product workspace
                         </span>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-bright/8 px-2.5 py-1 text-[11px] text-bright/44'>
-                            <FolderArchive className='h-3.5 w-3.5 text-bright/42' />
-                            personal archive
+                            <Globe className='h-3.5 w-3.5 text-bright/42' />
+                            history
                         </span>
                     </div>
                 </div>

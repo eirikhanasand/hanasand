@@ -234,7 +234,7 @@ function EmptyEditorState({
                     </div>
                     <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
                 </div>
-                <div className='mt-3 grid gap-1.5 rounded-lg border border-bright/8 bg-bright/[0.025] p-2.5 text-xs text-bright/46 sm:grid-cols-3'>
+                <div className='mt-3 grid gap-1.5 rounded-lg border border-bright/8 bg-bright/2.5 p-2.5 text-xs text-bright/46 sm:grid-cols-3'>
                     {firstRunSteps.map((step) => (
                         <div key={step} className='flex min-w-0 items-center gap-1.5'>
                             <CheckCircle2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]/80' />
