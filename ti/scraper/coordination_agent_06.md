@@ -1,33 +1,52 @@
-Status: active_task_z
+Status: active_task_aa
 
 ## CURRENT ASSIGNMENT - READ FIRST
 
-Task Z still active: Evidence Cutover Promotion Gate And Backup-Restore Drill
+Task AA: Durable Evidence Backend And Object Store Cutover
 
-Finish evidence cutover promotion gates and backup/restore drills. Do not wait for another prompt. Convert certification into final dry-run promotion gates for raw capture storage, object integrity, Postgres-like repository migration, replay, retention, deletion audit, redaction, legal hold, and claim-ledger promotion. Include clean promotion, missing object, hash mismatch, object-store write failure, stale extractor replay, retired source, duplicate claim, cursor gap, restricted redaction, graph hold, legal hold, retention expiry, and restore drill fixtures. Wire to `/v1/evidence/claim-ledger`, `/v1/evidence/cutover-report`, `/v1/contracts`, `/v1/intel/search.claimLedger`, Agent 07, Agent 08, Agent 09, and Agent 10. Verify storage/evidence/API/full tests, typecheck, route inventory, mounted evidence proof, contract-index, and cutover rehearsal/plan.
+Move the evidence layer from useful in-memory/file fixtures toward a production-ready persistence boundary. This is a multi-day enterprise storage program, not a small ticket.
 
-# Agent 06 Summary
+Scope:
+- Own a durable evidence backend interface that can support Postgres/object-store deployment later while keeping Bun tests deterministic now.
+- Model immutable raw public captures separately from extracted intelligence: capture metadata, content hash, canonical URL, fetch state, source id, run id, tenant id, timestamps, parser profile, redaction status, and provenance.
+- Add object-store style contracts for public HTML/text/PDF snapshots and screenshot hashes without requiring binary blob writes in tests.
+- Add claim ledger persistence for victim/company claims, actor claims, CVE claims, malware/tool claims, TTP claims, and source conflict/contradiction records.
+- Preserve restricted metadata safety: metadata-only records, hash-only unsafe source identifiers, no raw leaked files, no credentials, no object keys, no private content, no actor interaction.
+- Wire read models that API/search can use without knowing whether storage is memory, file-backed, or future Postgres/object-store.
+- Add migration docs and tests proving idempotent writes, duplicate capture handling, replay, retention metadata, legal hold metadata, and no-leak serialization.
 
-- Added raw evidence contracts for retention classes, sensitivity flags, content hashes, object references, redaction decisions, legal hold, capture provenance, dedupe keys, and replayable pipeline inputs.
-- Added object-store/Postgres repository interfaces, production transaction boundaries, in-memory object evidence support, and replay-job persistence.
-- Extended the in-memory scraper store with immutable capture writes, duplicate suppression, metadata-only enforcement for sensitive/leak captures, replay reconstruction/results, discovery/live-search evidence, immutable cursor deltas, promotion validation, retention simulation, and evidence query helpers.
-- Added discovery, live-search snapshot, cursor delta, backup integrity, and cutover rehearsal contracts covering Agent 09 cursor readiness and Agent 10 promotion-gate/object-integrity fields.
-- Added compact `/v1/evidence/replay-plan` and `/v1/evidence/cutover-report` DTOs and mounted API routes with pass, stale snapshot hold, missing object hold, restricted metadata redaction, and graph export blocker examples.
-- Added runtime public-channel evidence persistence via `persistTelegramPublicRuntimeEvidence`: applies Agent 04 source cursor patches, stores connector source-health metadata, persists public-channel discovery rows, promotes safe message text into captures/extractions, appends connector-backed new/edited/deleted/unavailable cursor deltas, writes relationship-promotion deltas, and emits replayable live-search snapshots without raw media or private-channel material.
-- Added Task R/S evidence trust ledger contracts via `EvidenceTrustLedgerReport` and compact cutover DTO `trustLedger`: stable ledger IDs from Agent 07 metadata keys with deterministic fallback, claim-level source/capture/hash/extractor/evidence-stage/confidence provenance, graph relationship IDs, review state, retention/redaction state, replayability, duplicate claim suppression, since-cursor promoted/downgraded/expired/redacted/blocked/contradicted counts, missing-object/hash/redaction/source-retirement/stale-extractor blockers, and safe-output guarantees for public answer and soak gates.
-- Added Task T claim-ledger API/persistence cutover surface: dedicated non-mutating `GET /v1/evidence/trust-ledger` DTO/contract, mounted endpoint proof, compact object-integrity/redaction/cutover links, safe-output guarantees, min-confidence query support, and proof docs.
-- Added Task U claim-ledger route proof and replay semantics: `GET /v1/evidence/claim-ledger` alias for Agent 07/08 consumers, mounted safe provenance proof, cursor counts for added/promoted/downgraded/expired/contradicted/review-required claim deltas, and cutover fixtures for restart replay, duplicate suppression, retired sources, missing objects, hash/redaction/graph holds, and legal-hold state.
-- Added Task V evidence-ledger enforcement for claim promotion holds: compact `enforcement` state on claim-ledger/cutover/live-search claimLedger surfaces, release holds/warnings, dry-run repair packets, public API impact, and Agent 07 answer, Agent 08 graph export, and Agent 10 release-packet downstream decisions.
-- Added Task X evidence persistence cutover/replay certification: compact `certification` DTOs on claim-ledger, cutover-report, live-search SLA, and `/v1/contracts`, covering object-store integrity, Postgres-like repository boundaries, cursor/restart replay, retention/deletion audit, duplicate suppression, redaction, legal hold, repair fixtures, and Agent 07/08/10 release decisions.
-- Added/expanded storage, API, runtime evidence, and mounted Bun smoke tests covering immutability, dedupe, tenant isolation, sensitive redaction, provenance chains, polling/replay, retention, object refs, SQL indexes, cutover readiness, public-channel connector handoff persistence, trust-ledger gating, and safe DTO behavior.
-- Added/expanded evidence migrations and docs for storage design, API contracts, cutover runbooks, endpoint proof commands, runtime public-channel persistence, trust-ledger gates, retention jobs, replay queues, backup/restore, deletion audit, and partitioning expectations.
-- Verified `bun test` and `bun run check` are green.
-- Verified `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run rehearse:cutover examples/cutover-rehearsal-pass.json` are green.
+Proof requirements:
+- Add or extend storage tests for durable evidence replay, capture dedupe, claim ledger persistence, analyst review state, and cross-run provenance.
+- Keep existing search useful-answer measurements green.
+- Run `bun run check`, targeted storage/API tests, and full `bun test` when touching shared store contracts.
+- Update this file with progress, changed files, proof commands, and remaining integration needs.
 
-Superseded by active Task Z below; do not request another assignment until Task Z proof is complete.
+Progress 2026-05-24:
+- Extended `FileBackedScraperStore` snapshots to persist and rehydrate evidence deltas, analyst metadata review tasks, source activation packets, victim notification packets, analyst claim-ledger entries, and analyst-loop snapshots.
+- Added replay-job snapshot hydration so completed extractor replay state, diff metadata, and immutable-capture replay guarantees survive file-backed restarts.
+- Added storage cutover coverage proving file-backed restart replay for replay jobs, evidence cursors, and metadata-only analyst claim workflow rows without unsafe material.
+- Product usefulness measurement remains green: cold/on-demand search and captured clear-web search both show 100% useful-answer rate and 1.0 average expected fact recall; restricted metadata-only leak claims expose defensive metadata fields only.
 
-## Main-Agent Task 2026-05-24 Z: Evidence Cutover Promotion Gate And Backup-Restore Drill
+Changed files:
+- `src/storage/fileBackedScraperStore.ts`
+- `src/tests/storageCutover.test.ts`
+- Existing search usefulness work remains in `scripts/measure-search-product.ts`, `src/api/server.ts`, `src/pipeline/intelligenceProfiles.ts`, and `src/pipeline/actorProfileFusion.ts`.
 
-Own evidence cutover promotion gates and backup/restore drills. Convert Task X certification into a final dry-run promotion gate for raw capture storage, object integrity, Postgres-like repository migration, replay, retention, deletion audit, redaction, legal hold, and claim-ledger promotion.
+Proof commands:
+- `bun run measure:search-product`
+- `bun run check`
+- `bun test src/tests/storageCutover.test.ts src/tests/storage.test.ts`
+- `bun test`
 
-Deliver fixtures for clean promotion, missing object, hash mismatch, object-store write failure, stale extractor replay, retired source, duplicate claim, cursor gap, restricted redaction, graph hold, legal hold, retention expiry, and restore drill. Wire into `/v1/evidence/claim-ledger`, `/v1/evidence/cutover-report`, `/v1/contracts`, `/v1/intel/search.claimLedger`, Agent 07 public answer state, Agent 08 graph/STIX certification, Agent 09 contract index, and Agent 10 RC gates. Verify storage/evidence/API/full tests, typecheck, route inventory, mounted evidence proof, contract-index proof, and cutover rehearsal/plan compatibility.
+Remaining integration needs:
+- Continue Task AA with object-store manifest/export-import contracts, deeper Postgres/object-store repository cutover fixtures, and broader API read-model coverage across memory/file-backed/future durable stores.
+
+## QUEUED NEXT TASKS - CONTINUE AFTER CURRENT PROOF
+
+Task AB: Claim Ledger API And Analyst Review Persistence
+
+Expose API-ready read/write contracts for claim review: promote, hold, contradict, mark duplicate, attach provenance, attach confidence, set retention/legal-hold status, and emit graph/STIX eligibility. Make it safe for frontend analyst workflows and background workers.
+
+Task AC: Evidence Retention, Replay, And Disaster Recovery Contract
+
+Build retention and replay contracts for enterprise operation: point-in-time replay of public captures, hash verification, retention class enforcement, legal hold preservation, redaction repair replay, and disaster-recovery export/import manifests.

@@ -21,6 +21,9 @@ interface StatusProofResult {
   certificationScenarios: string[];
   killSwitchDrillScenarios: string[];
   emergencyStopCertificationScenarios: string[];
+  nonBlockingScenarios: string[];
+  analystOperationScenarios: string[];
+  isolationHarnessScenarios: string[];
   redactionProof: {
     noUnsafeUrls: boolean;
     noCredentials: boolean;
@@ -35,6 +38,9 @@ interface StatusProofResult {
     certificationMetadataOnly: boolean;
     killSwitchDrillsMetadataOnly: boolean;
     emergencyStopCertificationMetadataOnly: boolean;
+    nonBlockingSearchMetadataOnly: boolean;
+    analystOperationsMetadataOnly: boolean;
+    isolationHarnessMetadataOnly: boolean;
   };
 }
 
@@ -51,6 +57,63 @@ type EmergencyStopCertificationProof = {
     rcGate: string;
     controls: { canHold: boolean; canPauseWorkers: boolean; canRollback: boolean; canEmergencyStop: boolean; publicApiBlockedState: boolean };
     proof: { noUnsafeAccess: boolean; noDataExposure: boolean; noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean; noRawPayloads: boolean; noRawUrls: boolean; hashOnlyEvidence: boolean };
+    noLeakSerialization: { passed: boolean };
+  }>;
+};
+
+type NonBlockingSearchProof = {
+  metadataOnly: boolean;
+  safeForApi: boolean;
+  nonBlockingPublicSearch: boolean;
+  maxPublicSearchAddedLatencyMs: number;
+  observedScenarios: string[];
+  packets: Array<{
+    publicSearchAction: string;
+    proof: { doesNotBlockPublicSearch: boolean; doesNotPromoteRestrictedFacts: boolean; noUnsafeAccess: boolean; noDataExposure: boolean; noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean; noRawPayloads: boolean; noRawUrls: boolean; hashOnlyEvidence: boolean };
+    noLeakSerialization: { passed: boolean };
+  }>;
+};
+
+type AnalystOperationsProof = {
+  metadataOnly: boolean;
+  safeForApi: boolean;
+  dryRunOnly: boolean;
+  observedScenarios: string[];
+  victimNotificationPacketCount: number;
+  noLeakSerialization: { passed: boolean };
+  packets: Array<{
+    metadataOnly: boolean;
+    safeForApi: boolean;
+    dryRunOnly: boolean;
+    schedulerIsolation: { directEgressAllowed: boolean };
+    proof: {
+      noStolenFilesDownloaded: boolean;
+      noCredentials: boolean;
+      noAuthBypass: boolean;
+      noCaptchaSolving: boolean;
+      noPrivateAccess: boolean;
+      noThreatActorInteraction: boolean;
+      noRawUnsafeUrls: boolean;
+      metadataOnlyAllowedFields: boolean;
+    };
+    noLeakSerialization: { passed: boolean };
+  }>;
+};
+
+type IsolationHarnessProof = {
+  metadataOnly: boolean;
+  safeForApi: boolean;
+  dryRunOnly: boolean;
+  nonNetworked: boolean;
+  observedScenarios: string[];
+  legalSecurityEvidencePacketCount: number;
+  noLeakSerialization: { passed: boolean };
+  packets: Array<{
+    nonNetworked: boolean;
+    connectorBoundary: { approvedProxyRequired: boolean; directEgressAllowed: boolean; accountStateAllowed: boolean };
+    workerIsolation: { isolatedPoolRequired: boolean; killSwitchPropagates: boolean; timeoutAttributed: boolean };
+    complianceEvidence: { legalReviewReady: boolean; securityReviewReady: boolean; agent10ReleaseGate: string };
+    proof: { noNetworkCalls: boolean; approvedProxyOnly: boolean; directEgressBlocked: boolean; noRawPayloads: boolean; noCredentialStorage: boolean; noPrivateAccess: boolean; noThreatActorInteraction: boolean; noCaptchaSolving: boolean; unsafeTargetsBlocked: boolean };
     noLeakSerialization: { passed: boolean };
   }>;
 };
@@ -95,6 +158,9 @@ async function runStatusRoute(): Promise<StatusProofResult> {
       connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
       killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; killSwitchPropagation: { publicApiState: string }; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
       emergencyStopCertification: EmergencyStopCertificationProof;
+      nonBlockingSearch: NonBlockingSearchProof;
+      analystOperations: AnalystOperationsProof;
+      isolationHarness: IsolationHarnessProof;
       agent10ReleasePacket: { decision: string; metadataOnly: boolean; safeForApi: boolean; runtimeProofName: string; emergencyStopState: string; agent09WarningCodes: string[]; governancePacketIds: string[]; auditReplayScenarios: string[]; certificationPacketIds: string[]; certificationScenarios: string[]; killSwitchDrillPacketIds: string[]; killSwitchDrillScenarios: string[]; emergencyStopCertificationPacketIds: string[]; emergencyStopCertificationScenarios: string[] };
     };
   };
@@ -122,6 +188,9 @@ async function runIntelSearch(
       connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
       killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; killSwitchPropagation: { publicApiState: string }; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
       emergencyStopCertification: EmergencyStopCertificationProof;
+      nonBlockingSearch: NonBlockingSearchProof;
+      analystOperations: AnalystOperationsProof;
+      isolationHarness: IsolationHarnessProof;
       agent10ReleasePacket: { decision: string; metadataOnly: boolean; safeForApi: boolean; runtimeProofName: string; emergencyStopState: string; agent09WarningCodes: string[]; governancePacketIds: string[]; auditReplayScenarios: string[]; certificationPacketIds: string[]; certificationScenarios: string[]; killSwitchDrillPacketIds: string[]; killSwitchDrillScenarios: string[]; emergencyStopCertificationPacketIds: string[]; emergencyStopCertificationScenarios: string[] };
     };
   };
@@ -151,6 +220,9 @@ function proofResult(
     connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
     killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; killSwitchPropagation: { publicApiState: string }; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
     emergencyStopCertification: EmergencyStopCertificationProof;
+    nonBlockingSearch: NonBlockingSearchProof;
+    analystOperations: AnalystOperationsProof;
+    isolationHarness: IsolationHarnessProof;
     agent10ReleasePacket: { decision: string; metadataOnly: boolean; safeForApi: boolean; runtimeProofName: string; emergencyStopState: string; agent09WarningCodes: string[]; governancePacketIds: string[]; auditReplayScenarios: string[]; certificationPacketIds: string[]; certificationScenarios: string[]; killSwitchDrillPacketIds: string[]; killSwitchDrillScenarios: string[]; emergencyStopCertificationPacketIds: string[]; emergencyStopCertificationScenarios: string[] };
   },
   expectedPartialState?: string,
@@ -178,6 +250,15 @@ function proofResult(
     ),
     emergencyStopCertificationMetadataOnly: payload.emergencyStopCertification.metadataOnly && payload.emergencyStopCertification.safeForApi && payload.emergencyStopCertification.dryRunOnly && payload.emergencyStopCertification.noLeakSerialization.passed && payload.emergencyStopCertification.packets.every((packet) =>
       packet.metadataOnly && packet.safeForApi && packet.dryRunOnly && packet.rcGate === "restricted_metadata_emergency_stop_certification_rc" && packet.noLeakSerialization.passed && packet.proof.noUnsafeAccess && packet.proof.noDataExposure && packet.proof.noContact && packet.proof.noDownload && packet.proof.noCredentialBypass && packet.proof.noCaptchaSolving && packet.proof.noStealth && packet.proof.noRawPayloads && packet.proof.noRawUrls && packet.proof.hashOnlyEvidence
+    ),
+    nonBlockingSearchMetadataOnly: payload.nonBlockingSearch.metadataOnly && payload.nonBlockingSearch.safeForApi && payload.nonBlockingSearch.nonBlockingPublicSearch && payload.nonBlockingSearch.maxPublicSearchAddedLatencyMs === 0 && payload.nonBlockingSearch.packets.every((packet) =>
+      packet.publicSearchAction === "continue_clear_web_and_public_channel" && packet.noLeakSerialization.passed && packet.proof.doesNotBlockPublicSearch && packet.proof.doesNotPromoteRestrictedFacts && packet.proof.noUnsafeAccess && packet.proof.noDataExposure && packet.proof.noContact && packet.proof.noDownload && packet.proof.noCredentialBypass && packet.proof.noCaptchaSolving && packet.proof.noStealth && packet.proof.noRawPayloads && packet.proof.noRawUrls && packet.proof.hashOnlyEvidence
+    ),
+    analystOperationsMetadataOnly: payload.analystOperations.metadataOnly && payload.analystOperations.safeForApi && payload.analystOperations.dryRunOnly && payload.analystOperations.victimNotificationPacketCount > 0 && payload.analystOperations.noLeakSerialization.passed && payload.analystOperations.packets.every((packet) =>
+      packet.metadataOnly && packet.safeForApi && packet.dryRunOnly && packet.schedulerIsolation.directEgressAllowed === false && packet.noLeakSerialization.passed && packet.proof.noStolenFilesDownloaded && packet.proof.noCredentials && packet.proof.noAuthBypass && packet.proof.noCaptchaSolving && packet.proof.noPrivateAccess && packet.proof.noThreatActorInteraction && packet.proof.noRawUnsafeUrls && packet.proof.metadataOnlyAllowedFields
+    ),
+    isolationHarnessMetadataOnly: payload.isolationHarness.metadataOnly && payload.isolationHarness.safeForApi && payload.isolationHarness.dryRunOnly && payload.isolationHarness.nonNetworked && payload.isolationHarness.legalSecurityEvidencePacketCount > 0 && payload.isolationHarness.noLeakSerialization.passed && payload.isolationHarness.packets.every((packet) =>
+      packet.nonNetworked && packet.connectorBoundary.approvedProxyRequired && packet.connectorBoundary.directEgressAllowed === false && packet.connectorBoundary.accountStateAllowed === false && packet.workerIsolation.isolatedPoolRequired && packet.workerIsolation.killSwitchPropagates && packet.workerIsolation.timeoutAttributed && packet.complianceEvidence.legalReviewReady && packet.complianceEvidence.securityReviewReady && packet.noLeakSerialization.passed && packet.proof.noNetworkCalls && packet.proof.approvedProxyOnly && packet.proof.directEgressBlocked && packet.proof.noRawPayloads && packet.proof.noCredentialStorage && packet.proof.noPrivateAccess && packet.proof.noThreatActorInteraction && packet.proof.noCaptchaSolving && packet.proof.unsafeTargetsBlocked
     )
   };
   const queryOk = expectedPartialState
@@ -213,9 +294,26 @@ function proofResult(
     && payload.emergencyStopCertification.observedScenarios.includes("public_api_blocked_state")
     && payload.emergencyStopCertification.packets.some((packet) => packet.controls.publicApiBlockedState)
     && payload.agent10ReleasePacket.emergencyStopCertificationPacketIds.length === payload.emergencyStopCertification.packets.length;
+  const nonBlockingOk = payload.nonBlockingSearch.observedScenarios.length > 0
+    && (scenario !== "status_route" || payload.nonBlockingSearch.observedScenarios.includes("public_api_blocked_state"))
+    && (scenario !== "intel_search_actor" || payload.nonBlockingSearch.observedScenarios.includes("ransomware_query"))
+    && (scenario !== "intel_search_unknown" || payload.nonBlockingSearch.observedScenarios.includes("actor_query"));
+  const analystOperationsOk = payload.analystOperations.observedScenarios.includes("victim_notification_packet")
+    && payload.analystOperations.observedScenarios.includes("raw_payload_blocked")
+    && payload.analystOperations.observedScenarios.includes("emergency_stop_rollback")
+    && (scenario !== "intel_search_actor" || payload.analystOperations.observedScenarios.includes("actor_leak_site_claim"))
+    && (scenario !== "intel_search_unknown" || payload.analystOperations.observedScenarios.includes("made_up_actor_query"));
+  const isolationHarnessOk = payload.isolationHarness.observedScenarios.includes("proxy_boundary_proof")
+    && payload.isolationHarness.observedScenarios.includes("kill_switch_propagation")
+    && payload.isolationHarness.observedScenarios.includes("timeout_attribution")
+    && payload.isolationHarness.observedScenarios.includes("raw_payload_denied")
+    && payload.isolationHarness.observedScenarios.includes("unsafe_form_contact_detection")
+    && payload.isolationHarness.observedScenarios.includes("credential_storage_denied")
+    && payload.isolationHarness.observedScenarios.includes("private_access_denied")
+    && payload.isolationHarness.observedScenarios.includes("threat_actor_interaction_denied");
   return {
     scenario,
-    ok: status === 200 && queryOk && proofKindsOk && remediationOk && slaOk && Object.values(redactionProof).every(Boolean),
+    ok: status === 200 && queryOk && proofKindsOk && remediationOk && slaOk && nonBlockingOk && analystOperationsOk && isolationHarnessOk && Object.values(redactionProof).every(Boolean),
     status,
     endpoint,
     expectedOutput: endpoint === "/v1/intel/search"
@@ -233,6 +331,9 @@ function proofResult(
     certificationScenarios: payload.connectorCertification.observedScenarios,
     killSwitchDrillScenarios: payload.killSwitchDrills.observedScenarios,
     emergencyStopCertificationScenarios: payload.emergencyStopCertification.observedScenarios,
+    nonBlockingScenarios: payload.nonBlockingSearch.observedScenarios,
+    analystOperationScenarios: payload.analystOperations.observedScenarios,
+    isolationHarnessScenarios: payload.isolationHarness.observedScenarios,
     redactionProof
   };
 }

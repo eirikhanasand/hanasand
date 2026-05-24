@@ -671,11 +671,13 @@ function liveSummaryBullets(query: string, dtos: TiSearchResultDto[], deltas: Ev
   const victims = mergeStrings(dtos.flatMap((dto) => dto.targets.victims));
   const ttps = mergeStrings(dtos.flatMap((dto) => dto.ttps));
   const indicatorCount = sum(dtos.map((dto) => dto.datasets.indicatorCount));
+  const malwareNotes = mergeStrings(dtos.flatMap((dto) => dto.summaryBullets.filter((bullet) => bullet.startsWith("Observed malware/tooling includes "))));
   const vulnerabilityNotes = mergeStrings(dtos.flatMap((dto) => dto.summaryBullets.filter((bullet) => bullet.startsWith("Referenced vulnerabilities include "))));
   return [
     `${query} has ${dtos.length} staged evidence items (${deltas.added} added, ${deltas.promoted} promoted, ${deltas.downgraded} downgraded, ${deltas.blocked} blocked).`,
     ...(victims.length ? [`Current target observations include ${victims.slice(0, 4).join(", ")}.`] : []),
     ...(ttps.length ? [`Grounded TTP observations include ${ttps.slice(0, 4).join(", ")}.`] : []),
+    ...malwareNotes.slice(0, 2),
     ...vulnerabilityNotes.slice(0, 2),
     ...(indicatorCount > 0 ? [`Extracted indicator observations include ${indicatorCount} IOC values.`] : []),
     ...mergeStrings(dtos.flatMap((dto) => dto.confidenceCaveats)).slice(0, 2)
@@ -689,6 +691,7 @@ function summaryBullets(profile: ActorQueryExtractionProfile): string[] {
     bullets.push(`Targets include ${[...uniqueValues(profile.victimOrganizations), ...uniqueValues(profile.targetSectors)].slice(0, 4).join(", ")}.`);
   }
   if (profile.attackTechniques.length) bullets.push(`Grounded TTP hints include ${uniqueValues(profile.attackTechniques).join(", ")}.`);
+  if (profile.malwareAndTooling.length) bullets.push(`Observed malware/tooling includes ${uniqueValues(profile.malwareAndTooling).join(", ")}.`);
   if (profile.cves.length) bullets.push(`Referenced vulnerabilities include ${mergeStrings(profile.cves.map(entityOrIndicatorValue)).join(", ")}.`);
   if (profile.infrastructureIndicators.length) bullets.push(`${profile.infrastructureIndicators.length} infrastructure/IOC values extracted with provenance.`);
   bullets.push(`Attribution signal: ${profile.attribution.signal} (${Math.round(profile.attribution.confidence * 100)}%).`);

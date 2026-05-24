@@ -752,9 +752,11 @@ function enrichSearchSummary(summary: string[], input: {
   infrastructure: string[];
   restrictedMetadataFacts: string[];
 }): string[] {
+  const [leadSummary, ...remainingSummary] = summary;
   return mergeStrings([
-    ...summary,
+    ...(leadSummary ? [leadSummary] : []),
     ...input.restrictedMetadataFacts,
+    ...remainingSummary,
     ...(input.malwareTools.length ? [`Observed malware/tooling includes ${input.malwareTools.slice(0, 4).join(", ")}.`] : []),
     ...(input.vulnerabilities.length ? [`Referenced vulnerabilities include ${input.vulnerabilities.slice(0, 4).join(", ")}.`] : []),
     ...(input.infrastructure.length ? [`Infrastructure and indicator observations include ${input.infrastructure.slice(0, 4).join(", ")}.`] : [])
@@ -777,14 +779,13 @@ function restrictedMetadataFactBullets(evidence: StagedEvidenceInput[]): string[
     const country = stringValue(leakSite.claimedCountry);
     const postStatus = stringValue(leakSite.postStatus);
     const facts = [
-      victim ? `company ${victim}` : undefined,
-      actor ? `actor ${actor}` : undefined,
+      victim && actor ? `${victim} listed by ${actor}` : victim ? `company ${victim}` : actor ? `actor ${actor}` : undefined,
       affectedAccounts ? `${affectedAccounts} affected accounts` : undefined,
       accountSubjects ? `affected users ${accountSubjects}` : undefined,
       datasetSize ? `dataset size ${datasetSize}` : undefined,
+      claimedDate ? `claimed date ${claimedDate}` : undefined,
       actorStatement ? `actor demand/statement: ${actorStatement}` : undefined,
       dataCategory ? `data category ${dataCategory}` : undefined,
-      claimedDate ? `claimed date ${claimedDate}` : undefined,
       sector ? `sector ${sector}` : undefined,
       country ? `country ${country}` : undefined,
       postStatus ? `post status ${postStatus}` : undefined

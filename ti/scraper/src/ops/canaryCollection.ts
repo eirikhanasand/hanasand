@@ -28,6 +28,13 @@ export interface CanaryActivationResult {
   rejected: Array<{ sourceId: string; reason: string }>;
 }
 
+export interface CanaryDeactivationResult {
+  generatedAt: string;
+  operatorId: string;
+  paused: Array<{ sourceId: string; sourceName: string; from: SourceRecord["status"]; to: "paused" }>;
+  alreadyInactive: string[];
+}
+
 export interface CanaryCollectionCycleResult {
   generatedAt: string;
   mode: "production_canary";
@@ -41,6 +48,12 @@ export interface CanaryCollectionCycleResult {
   incidentCount: number;
   latestCaptureIds: string[];
   errors: Array<{ taskId?: string; sourceId?: string; message: string }>;
+  health: {
+    freshnessSeconds: number;
+    errorRate: number;
+    duplicateRate: number;
+    promotionYield: number;
+  };
 }
 
 export interface CanaryOperatorSummary {
@@ -61,6 +74,27 @@ export interface CanaryOperatorSummary {
     leased: number;
     deadLetters: number;
   };
+  schedulerHealth: {
+    freshnessSeconds: number;
+    errorRate: number;
+    duplicateRate: number;
+    promotionYield: number;
+    healthySourceCount: number;
+    degradedSourceCount: number;
+    failingSourceCount: number;
+  };
+  evidenceStorage: {
+    metadataStore: "file_backed_or_repository";
+    externalObjectCaptureCount: number;
+    inlineCaptureCount: number;
+    missingObjectReferenceCount: number;
+  };
+  blockedOrHeldItems: Array<{
+    sourceId?: string;
+    taskId?: string;
+    reason: string;
+    state: "blocked" | "held" | "dead_letter";
+  }>;
   latestCaptures: Array<{
     captureId: string;
     sourceId: string;
@@ -159,6 +193,52 @@ export function activatePublicCanarySources(input: {
   return { generatedAt, operatorId, activated, alreadyActive, rejected };
 }
 
+export function pausePublicCanarySources(input: {
+  store: ScraperStore;
+  tenantId?: string;
+  operatorId?: string;
+  now?: string;
+}): CanaryDeactivationResult {
+  const generatedAt = input.now ?? nowIso();
+  const operatorId = input.operatorId ?? "canary-operator";
+  const paused: CanaryDeactivationResult["paused"] = [];
+  const alreadyInactive: string[] = [];
+
+  for (const source of input.store.listSources()) {
+    if (source.metadata?.canaryPortfolio !== true) continue;
+    if (input.tenantId && source.tenantId && source.tenantId !== input.tenantId) continue;
+    if (source.status !== "active" && source.status !== "degraded" && source.status !== "probation") {
+      alreadyInactive.push(source.id);
+      continue;
+    }
+    const updated: SourceRecord = {
+      ...source,
+      status: "paused",
+      updatedAt: generatedAt,
+      lifecycle: [
+        ...(source.lifecycle ?? []),
+        {
+          at: generatedAt,
+          from: source.status,
+          to: "paused",
+          reason: "operator_request",
+          actorId: operatorId,
+          note: "Reversible public canary pause; source remains approved but no longer schedules collection."
+        }
+      ],
+      crawlState: {
+        retryCount: source.crawlState?.retryCount ?? 0,
+        ...source.crawlState,
+        nextEligibleAt: undefined
+      }
+    };
+    input.store.saveSource(updated);
+    paused.push({ sourceId: updated.id, sourceName: updated.name, from: source.status, to: "paused" });
+  }
+
+  return { generatedAt, operatorId, paused, alreadyInactive };
+}
+
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   const generatedAt = options.now?.() ?? nowIso();
   const fetcher = options.fetch ?? fetch;
@@ -180,7 +260,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   let queuedTaskCount = 0;
   for (const source of sources) {
     if (!sourceDue(source, generatedAt)) continue;
-    options.frontier.enqueueTask(taskForSource(source, generatedAt, options.tenantId));
+    options.frontier.enqueueTask(taskForSource(source, generatedAt, options.tenantId, maxBytes));
     options.store.saveSource({
       ...source,
       updatedAt: generatedAt,
@@ -255,7 +335,13 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     duplicateCaptureCount,
     incidentCount,
     latestCaptureIds,
-    errors
+    errors,
+    health: {
+      freshnessSeconds: latestFreshnessSeconds(options.store, generatedAt),
+      errorRate: rate(failedTaskCount, leasedTaskCount),
+      duplicateRate: rate(duplicateCaptureCount, duplicateCaptureCount + insertedCaptureCount),
+      promotionYield: rate(incidentCount, insertedCaptureCount)
+    }
   };
 }
 
@@ -265,9 +351,10 @@ export function buildCanaryOperatorSummary(input: {
   generatedAt?: string;
 }): CanaryOperatorSummary {
   const generatedAt = input.generatedAt ?? nowIso();
-  const activeSources = input.store.listSources()
-    .filter((source) => source.status === "active" && source.metadata?.canaryPortfolio === true)
-    .map((source) => ({
+  const canarySources = input.store.listSources()
+    .filter((source) => source.metadata?.canaryPortfolio === true);
+  const activeSourceRecords = canarySources.filter((source) => source.status === "active");
+  const activeSources = activeSourceRecords.map((source) => ({
       sourceId: source.id,
       sourceName: source.name,
       type: source.type,
@@ -290,6 +377,8 @@ export function buildCanaryOperatorSummary(input: {
       contentHash: capture.contentHash,
       title: typeof capture.metadata.title === "string" ? capture.metadata.title : undefined
     }));
+  const canaryCaptures = input.store.listCaptures()
+    .filter((capture) => input.store.getSource(capture.sourceId)?.metadata?.canaryPortfolio === true);
   const incidents = input.store.listIncidents();
   const reviewReasons = new Map<string, number>();
   let confidenceSum = 0;
@@ -307,6 +396,36 @@ export function buildCanaryOperatorSummary(input: {
       leased: input.frontier.leasedSnapshot().length,
       deadLetters: input.frontier.deadLetterSnapshot().length
     },
+    schedulerHealth: {
+      freshnessSeconds: latestFreshnessSeconds(input.store, generatedAt),
+      errorRate: sourceErrorRate(activeSourceRecords),
+      duplicateRate: canaryDuplicateRate(canaryCaptures),
+      promotionYield: rate(incidents.length, Math.max(1, canaryCaptures.length)),
+      healthySourceCount: activeSourceRecords.filter((source) => source.health?.status === "healthy").length,
+      degradedSourceCount: activeSourceRecords.filter((source) => source.health?.status === "degraded").length,
+      failingSourceCount: activeSourceRecords.filter((source) => source.health?.status === "failing").length
+    },
+    evidenceStorage: {
+      metadataStore: "file_backed_or_repository",
+      externalObjectCaptureCount: canaryCaptures.filter((capture) => capture.storageKind === "external_object").length,
+      inlineCaptureCount: canaryCaptures.filter((capture) => capture.storageKind !== "external_object").length,
+      missingObjectReferenceCount: canaryCaptures.filter((capture) => capture.storageKind === "external_object" && !capture.objectRef).length
+    },
+    blockedOrHeldItems: [
+      ...input.frontier.deadLetterSnapshot().map((dead) => ({
+        taskId: dead.taskId,
+        sourceId: dead.task?.sourceId,
+        reason: dead.reason,
+        state: "dead_letter" as const
+      })),
+      ...canarySources
+        .filter((source) => source.status !== "active")
+        .map((source) => ({
+          sourceId: source.id,
+          reason: source.status === "approved" ? "approved but not active" : `source status is ${source.status}`,
+          state: source.status === "quarantined" || source.status === "disabled" || source.status === "rejected" ? "blocked" as const : "held" as const
+        }))
+    ],
     latestCaptures,
     extraction: {
       captureCount: latestCaptures.length,
@@ -421,7 +540,7 @@ function externalizedCapture(capture: RawCapture, objectStore: ObjectEvidenceSto
   };
 }
 
-function taskForSource(source: SourceRecord, queuedAt: string, tenantId?: string): CollectionTask {
+function taskForSource(source: SourceRecord, queuedAt: string, tenantId: string | undefined, maxBytes: number): CollectionTask {
   return {
     id: stableId("canary-task", `${source.id}:${queuedAt}`),
     tenantId: tenantId ?? source.tenantId,
@@ -436,7 +555,7 @@ function taskForSource(source: SourceRecord, queuedAt: string, tenantId?: string
     sourceConcurrencyKey: source.id,
     fairnessKey: "public-canary",
     crawlBudgetKey: "public-canary",
-    maxBytes: 512_000,
+    maxBytes,
     planning: {
       budgetClass: "background_refresh",
       decision: "selected",
@@ -466,6 +585,8 @@ function canaryRejection(source: SourceRecord): string | undefined {
 }
 
 function sourceDue(source: SourceRecord, now: string): boolean {
+  const backoffUntil = source.crawlState?.backoffUntil;
+  if (backoffUntil && Date.parse(backoffUntil) > Date.parse(now)) return false;
   const nextEligibleAt = source.crawlState?.nextEligibleAt;
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(now);
 }
@@ -508,9 +629,34 @@ function updateSourceFailure(store: ScraperStore, source: SourceRecord, at: stri
     crawlState: {
       retryCount: failures,
       ...source.crawlState,
-      backoffUntil: new Date(Date.parse(at) + Math.min(3600, failures * 300) * 1000).toISOString()
+      backoffUntil: new Date(Date.parse(at) + Math.min(3600, failures * 300) * 1000).toISOString(),
+      nextEligibleAt: new Date(Date.parse(at) + Math.min(3600, failures * 300) * 1000).toISOString()
     }
   });
+}
+
+function rate(numerator: number, denominator: number): number {
+  return denominator > 0 ? Number((numerator / denominator).toFixed(3)) : 0;
+}
+
+function latestFreshnessSeconds(store: ScraperStore, generatedAt: string): number {
+  const latest = store.listCaptures()
+    .filter((capture) => store.getSource(capture.sourceId)?.metadata?.canaryPortfolio === true)
+    .map((capture) => Date.parse(capture.collectedAt))
+    .filter((timestamp) => Number.isFinite(timestamp))
+    .sort((a, b) => b - a)[0];
+  return latest ? Math.max(0, Math.floor((Date.parse(generatedAt) - latest) / 1000)) : 0;
+}
+
+function sourceErrorRate(sources: SourceRecord[]): number {
+  if (sources.length === 0) return 0;
+  return Number((sources.reduce((sum, source) => sum + (source.health?.errorRate ?? 0), 0) / sources.length).toFixed(3));
+}
+
+function canaryDuplicateRate(captures: RawCapture[]): number {
+  if (captures.length === 0) return 0;
+  const uniqueHashes = new Set(captures.map((capture) => `${capture.sourceId}:${capture.canonicalUrl ?? capture.url}:${capture.contentHash}`));
+  return rate(captures.length - uniqueHashes.size, captures.length);
 }
 
 function updateRunProgress(store: ScraperStore, task: CollectionTask, at: string, incidentDelta: number): void {

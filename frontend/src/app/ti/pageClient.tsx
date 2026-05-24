@@ -19,7 +19,7 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
                 setResult(next)
                 setQuery(next.query)
             }
-        }, Math.max(5, result.refreshAfterSeconds) * 1000)
+        }, Math.max(3, result.refreshAfterSeconds) * 1000)
 
         return () => window.clearTimeout(timer)
     }, [result])

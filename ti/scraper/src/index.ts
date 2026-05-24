@@ -4,14 +4,25 @@ import { FocusedFrontier } from "./frontier/frontier.ts";
 import { startCanaryCollectionLoop } from "./ops/canaryCollection.ts";
 import { createLogger } from "./ops/logger.ts";
 import { InMemorySourceRegistry } from "./registry/sourceRegistry.ts";
+import { FileBackedScraperStore } from "./storage/fileBackedScraperStore.ts";
 import { FileObjectEvidenceStore } from "./storage/fileObjectStore.ts";
-import { InMemoryScraperStore } from "./storage/memoryStore.ts";
 
 const config = loadRuntimeConfig();
 const logger = createLogger(Bun.env.SCRAPER_LOG_LEVEL === "debug" ? "debug" : "info");
-const store = new InMemoryScraperStore();
+const store = new FileBackedScraperStore({
+  snapshotPath: Bun.env.TI_EVIDENCE_METADATA_PATH ?? "/tmp/ti-scraper-evidence/metadata/scraper-store.json"
+});
 const registry = new InMemorySourceRegistry();
-const frontier = new FocusedFrontier();
+const frontier = new FocusedFrontier({
+  maxQueueSize: Number(Bun.env.TI_CANARY_MAX_QUEUE_SIZE ?? "500"),
+  defaultPerSourceConcurrency: 1,
+  crawlBudgetPolicies: {
+    "public-canary": {
+      taskLimit: Number(Bun.env.TI_CANARY_BUDGET_TASKS ?? "1000"),
+      byteLimit: Number(Bun.env.TI_CANARY_BUDGET_BYTES ?? "512000000")
+    }
+  }
+});
 const objectStore = new FileObjectEvidenceStore({
   rootDir: Bun.env.TI_EVIDENCE_OBJECT_DIR ?? "/tmp/ti-scraper-evidence"
 });
@@ -51,7 +62,9 @@ logger.info("ti-scraper started", {
   apiVersion: config.apiVersion,
   memoryTargetMb: config.limits.maxMemoryMbTarget,
   memoryCeilingMb: config.limits.maxMemoryMbCeiling,
-  publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false"
+  publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false",
+  evidenceMetadataPath: Bun.env.TI_EVIDENCE_METADATA_PATH ?? "/tmp/ti-scraper-evidence/metadata/scraper-store.json",
+  evidenceObjectDir: Bun.env.TI_EVIDENCE_OBJECT_DIR ?? "/tmp/ti-scraper-evidence"
 });
 
 process.on("SIGTERM", () => {

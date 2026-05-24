@@ -1,22 +1,30 @@
-Status: active_task_ab
+Status: active_task_ac
 
 ## CURRENT ASSIGNMENT - READ FIRST
 
-Task AB: Real-Time Public Answer Delta Contract And Analyst-Grade Freshness Semantics
+Task AC: Extraction Evaluation Dashboard And Field-Level Quality Gates
 
-Own the next public answer layer after Task AA. Do not wait for another prompt. Build the scraper-native contract that lets `hanasand.com/ti` update actor/search results within seconds without refresh while staying compact and honest. The page should start with immediate known context or `Searching`, then progressively merge clear-web captures, public-channel hints, restricted metadata holds, graph deltas, claim-ledger gates, source caveats, and freshness changes as deltas arrive.
+Build the quality layer that tells analysts and operators whether scraper output is actually useful. This should make actor queries reliable, current, and explainable instead of merely returning text.
 
-Deliver a typed answer-delta model and fixtures for APT29, APT42, Turla, Volt Typhoon, Scattered Spider, Akira, random actor, made-up actor, CVE, malware/tool, victim/ransomware, country, sector, provider unavailable, scraper unavailable, queue pressure, no approved sources, policy blocked, restricted held, contradiction, stale source, low confidence, and review-required states. Include stable `runId`, `pollCursor`/`deltaCursor`, `refreshAfterSeconds: 3`, generated `updated` timestamps, observed `lastSeen` only when evidence supports it, compact public copy, no default actor, no local-cache language, no seeded-demo smell, and no bloated policy paragraphs.
+Scope:
+- Define field-level quality gates for actor summary, aliases, recent activity, targets, sectors, countries, tools, malware, CVEs, TTPs, campaigns, infrastructure, datasets, victim/company claims, IOCs, confidence, freshness, and provenance.
+- Add evaluation fixtures for APT29, APT42, Turla, Volt Typhoon, Scattered Spider, Akira, LockBit-style ransomware, CVE/advisory queries, malware/tool queries, and unknown/random actor queries.
+- Track useful-answer rate, expected fact recall, stale-fact suppression, contradiction handling, source-family diversity, evidence count, confidence bands, citation availability, and freshness per field.
+- Emit API-ready dashboard DTOs that Agent 09 can expose compactly and Agent 10 can use in release gates.
+- Feed low-quality states back into source activation, parser repair, graph review holds, and analyst review queues.
+- Keep language honest: if the system is searching, say `Searching`; if partial, explain which fields are fresh/old/low-confidence without demo prose or cache-scented filler.
 
-Wire this to `/v1/intel/search`, `/v1/quality/evaluate`, `/v1/contracts`, Agent 02 scheduler cursors, Agent 03/04 evidence promotion, Agent 05 restricted holds, Agent 06 claim ledger, Agent 08 graph deltas, Agent 09 public wrapper compatibility, and Agent 10 release board. Verify pipeline/API/full tests, typecheck, route inventory, search-quality mounted proof, scraper-native proof, public POST compatibility fixtures, and a small contract doc explaining how the frontend should poll and merge deltas.
+Proof requirements:
+- Add targeted tests for field-level gates, stale recent-activity suppression, contradiction flags, query cross-talk, random actor behavior, and no raw unsafe evidence in quality DTOs.
+- Update docs with quality gate definitions and dashboard semantics.
+- Run `bun run check`, focused quality/API tests, and route inventory if route contracts change.
 
-# Agent 07 Summary
+## QUEUED NEXT TASKS - CONTINUE AFTER CURRENT PROOF
 
-- Added `publicTiAnswer.ux` with `ti.public_answer_ux.v1` compact public `/ti` copy, `Searching` unknown-query behavior, 3-second polling hints, source caveats, evidence-stage labels, and public wrapper compatibility fields.
-- Clamped public `refreshAfterSeconds` and `nextPollSeconds` hints to seconds-level polling while preserving internal scheduler and run state.
-- Added explicit freshness semantics: `Updated` is response-generation time, and `Last seen` is shown only when evidence supplies an observed timestamp.
-- Removed bloated partial and blocked public summary prose, and added APT42 alias support for public actor queries.
-- Published UX semantics, fixture matrix, banned-copy rules, no-default-query rule, and public POST compatibility from `/v1/contracts`.
-- Expanded API assertions for contract fixtures, compact copy, no local-cache/default-APT29 copy, 3-second polling, searching state, freshness, and no-result behavior.
-- Verified `bun test`, `bun run check`, `bun run check:route-inventory`, `bun run check:search-quality-mounted`, and `bun run check:scraper-native-search` are green.
-- Superseded by active Task AB above; do not request another assignment until Task AB proof is complete.
+Task AD: Entity Resolution And Actor Profile Workbench
+
+Build entity resolution contracts for actor aliases, ransomware rebrands, company/victim normalization, country/sector mapping, malware/tool aliases, CVE mentions, and infrastructure dedupe. Expose review states and confidence reasons so analysts can correct bad merges.
+
+Task AE: Recent Activity And Timeliness Ground Truth Harness
+
+Build a timeliness harness that prevents stale actor activity from looking current. It should score latest-source dates, source freshness, field freshness, query-class expectations, and gaps for high-activity actors like APT29 where no credible result should claim old activity is latest.

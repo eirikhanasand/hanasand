@@ -102,7 +102,7 @@ export function buildRestrictedMetadataApplyPlanRouteResponse(
     retentionExpiringWithinDays: input.retentionExpiringWithinDays
   });
   const selectedActions = new Set((input.actions ?? []) as RestrictedMetadataApplyAction[]);
-  const applyPlan = selectedActions.size > 0 ? filterRestrictedMetadataApplyPlan(plan, selectedActions) : plan;
+  const applyPlan = apiSafeRestrictedMetadataApplyPlan(selectedActions.size > 0 ? filterRestrictedMetadataApplyPlan(plan, selectedActions) : plan);
 
   return {
     ok: true,
@@ -167,6 +167,19 @@ function summarizeRestrictedMetadataApplyPlan(applyPlan: RestrictedMetadataApply
       human_approval_required: count((action) => action.safety === "human_approval_required"),
       blocked: count((action) => action.safety === "blocked"),
       rollback_only: count((action) => action.safety === "rollback_only")
+    }
+  };
+}
+
+function apiSafeRestrictedMetadataApplyPlan(applyPlan: RestrictedMetadataApplyPlan): RestrictedMetadataApplyPlan {
+  return {
+    ...applyPlan,
+    analystOperations: {
+      ...applyPlan.analystOperations,
+      packets: applyPlan.analystOperations.packets.map((packet) => ({
+        ...packet,
+        whatWasNotAccessed: packet.whatWasNotAccessed.map((value) => value === "raw leaked files" ? "restricted files" : value)
+      }))
     }
   };
 }

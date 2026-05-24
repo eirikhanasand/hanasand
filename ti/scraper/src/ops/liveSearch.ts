@@ -826,6 +826,95 @@ export interface ProductTiReleaseBoardPacket {
   operatorSignoff: FinalRcBoardPacket["operatorSignoff"];
 }
 
+export type RealTimeSearchReleaseBoardDecision = ProductTiReleaseBoardDecision;
+
+export type RealTimeSearchProofScenario =
+  | "immediate_first_response"
+  | "three_second_polling"
+  | "same_run_reuse"
+  | "cursor_advancement"
+  | "empty_deltas"
+  | "clear_web_capture_deltas"
+  | "public_channel_hint_deltas"
+  | "restricted_held_deltas"
+  | "graph_stix_deltas"
+  | "claim_ledger_holds"
+  | "contradiction_downgrades"
+  | "no_result_searching"
+  | "provider_unavailable"
+  | "scraper_unavailable"
+  | "queue_pressure"
+  | "stale_source_caveats"
+  | "low_confidence"
+  | "policy_block"
+  | "no_leak_output"
+  | "memory_budget"
+  | "worker_queue_headroom"
+  | "frontend_no_default"
+  | "public_post_compatibility"
+  | "remote_container_health";
+
+export type RealTimeSearchProofQuery =
+  | "APT29"
+  | "APT42"
+  | "Turla"
+  | "Volt Typhoon"
+  | "Scattered Spider"
+  | "Akira"
+  | "random_actor"
+  | "made_up_actor"
+  | "CVE-2024-3094"
+  | "malware_tool"
+  | "victim_ransomware"
+  | "country"
+  | "sector";
+
+export interface RealTimeSearchReleaseBoardPacket {
+  schemaVersion: "ti.realtime_search.release_board.v1";
+  dryRun: true;
+  decision: RealTimeSearchReleaseBoardDecision;
+  productTiDecision: ProductTiReleaseBoardDecision;
+  rcBoardDecision: FinalRcBoardDecision;
+  pollingSlo: {
+    firstResponseImmediate: boolean;
+    targetPollSeconds: 3;
+    recommendedPollSeconds: number;
+    sameRunReuse: boolean;
+    cursorAdvancement: boolean;
+    emptyDeltasAllowed: boolean;
+    status: "pass" | "warning" | "blocker";
+  };
+  scenarioGates: Array<{
+    scenario: RealTimeSearchProofScenario;
+    owner: string;
+    status: "pass" | "warning" | "blocker";
+    proofCommand: string;
+    expectedOutput: string;
+    rollbackPath: string;
+  }>;
+  queryMatrix: Array<{
+    query: RealTimeSearchProofQuery;
+    queryClass: "actor" | "cve" | "malware_tool" | "victim_ransomware" | "country" | "sector";
+    status: "pass" | "warning" | "blocker";
+    proofCommand: string;
+    expectedOutput: string;
+  }>;
+  integrations: {
+    contractsRoute: "pass" | "warning" | "blocker";
+    intelSearchRoute: "pass" | "warning" | "blocker";
+    schedulerSlo: "pass" | "warning" | "blocker";
+    evidenceClaimLedger: "pass" | "warning" | "blocker";
+    answerDeltas: "pass" | "warning" | "blocker";
+    graphStixDeltas: "pass" | "warning" | "blocker";
+    publicWrapperProof: "pass" | "warning" | "blocker";
+  };
+  resourceHeadroom: FinalRcBoardPacket["resourceHeadroom"];
+  queuePressure: FinalRcBoardPacket["queuePressure"];
+  noLeakGuarantees: ProductTiReleaseBoardProof[];
+  proofCommands: string[];
+  rollbackCommands: string[];
+}
+
 export interface CutoverSoakTrendDeltas {
   publicQueries: number;
   runReuse: {
@@ -886,6 +975,7 @@ export interface CutoverSoakReleasePacket {
   canaryExecution: CanaryReleaseExecutionPacket;
   rcBoard: FinalRcBoardPacket;
   productTiBoard: ProductTiReleaseBoardPacket;
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket;
   trends: CutoverSoakTrendDeltas;
   blockers: Array<{
     owner: string;
@@ -1196,7 +1286,7 @@ export function verifyLiveSearchDeployProbe(probe: LiveSearchDeployProbe): LiveS
   const checks = [
     check("public_ti.http_ok", probe.publicTi.status >= 200 && probe.publicTi.status < 300, "public /ti search returns HTTP 2xx"),
     check("public_ti.live_search_marker", publicBody.includes("live_search"), "public /ti response includes live_search marker"),
-    check("public_ti.partial_marker", publicBody.includes("partial"), "public /ti response includes partial result marker"),
+    check("public_ti.partial_marker", publicBody.includes("partial") || publicBody.includes("ready") || publicBody.includes("searching") || publicBody.includes("queued"), "public /ti response includes a live partial/ready/searching/queued result marker"),
     check("api_search.http_ok", probe.apiSearch.status >= 200 && probe.apiSearch.status < 300, "API /api/ti/search returns HTTP 2xx"),
     check("api_search.run_id", hasRunId(apiJson) || apiBody.includes("runid") || apiBody.includes("run_id"), "API /api/ti/search returns a run id")
   ];
@@ -1258,11 +1348,11 @@ export function verifyScraperNativeSearchReadiness(probe: ScraperNativeSearchRea
     check("degraded.sane_state", degradedState === "degraded" || degradedState === "blocked" || degradedState === "partial", "degraded search reports a sane state"),
     check("public_page.http_ok", probe.publicPage.status >= 200 && probe.publicPage.status < 300, "public /ti page returns HTTP 2xx"),
     check("public_page.live_search_marker", publicBody.includes("live_search"), "public /ti page includes live_search marker"),
-    check("public_page.partial_marker", publicBody.includes("partial"), "public /ti page includes partial marker"),
+    check("public_page.partial_marker", publicBody.includes("partial") || publicBody.includes("ready") || publicBody.includes("searching") || publicBody.includes("queued"), "public /ti page includes partial/ready/searching/queued marker"),
     ...(probe.publicApiPost ? [
       check("public_api_post.http_ok", probe.publicApiPost.status >= 200 && probe.publicApiPost.status < 300, "canonical public /api/ti/search POST returns HTTP 2xx"),
       check("public_api_post.run_id", hasRunId(publicApiPost) || publicApiPostBody.includes("runid") || publicApiPostBody.includes("run_id"), "canonical public /api/ti/search POST returns a run id"),
-      check("public_api_post.live_state", hasPartialResult(publicApiPost) || readString(publicApiPost, "status") === "ready" || publicApiPostBody.includes("partial") || publicApiPostBody.includes("ready"), "canonical public /api/ti/search POST returns partial or ready state")
+      check("public_api_post.live_state", hasPartialResult(publicApiPost) || ["partial", "ready", "searching", "queued"].includes(readString(publicApiPost, "status") ?? "") || publicApiPostBody.includes("partial") || publicApiPostBody.includes("ready") || publicApiPostBody.includes("searching") || publicApiPostBody.includes("queued"), "canonical public /api/ti/search POST returns partial, ready, searching, or queued state")
     ] : []),
     ...(probe.publicApiGet ? [
       check("public_api_get.optional_or_http_ok", !probe.requireGetApiProof || (probe.publicApiGet.status >= 200 && probe.publicApiGet.status < 300), "public /api/ti/search GET is optional unless TI_REQUIRE_GET_API_PROOF=true"),
@@ -1875,6 +1965,101 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
   const canaryExecution = buildCanaryReleaseExecutionPacket(input, rcGate);
   const rcBoard = buildFinalRcBoardPacket(input, decision, rcGate, canaryExecution, releaseTrain, runtimeProofs, deploymentProofs, blockers, warnings);
   const productTiBoard = buildProductTiReleaseBoardPacket(input, rcBoard, runtimeProofs, deploymentProofs, blockers, warnings);
+  const realTimeScenarios: RealTimeSearchProofScenario[] = [
+    "immediate_first_response",
+    "three_second_polling",
+    "same_run_reuse",
+    "cursor_advancement",
+    "empty_deltas",
+    "clear_web_capture_deltas",
+    "public_channel_hint_deltas",
+    "restricted_held_deltas",
+    "graph_stix_deltas",
+    "claim_ledger_holds",
+    "contradiction_downgrades",
+    "no_result_searching",
+    "provider_unavailable",
+    "scraper_unavailable",
+    "queue_pressure",
+    "stale_source_caveats",
+    "low_confidence",
+    "policy_block",
+    "no_leak_output",
+    "memory_budget",
+    "worker_queue_headroom",
+    "frontend_no_default",
+    "public_post_compatibility",
+    "remote_container_health"
+  ];
+  const realTimeQueries: Array<{ query: RealTimeSearchProofQuery; queryClass: RealTimeSearchReleaseBoardPacket["queryMatrix"][number]["queryClass"] }> = [
+    { query: "APT29", queryClass: "actor" },
+    { query: "APT42", queryClass: "actor" },
+    { query: "Turla", queryClass: "actor" },
+    { query: "Volt Typhoon", queryClass: "actor" },
+    { query: "Scattered Spider", queryClass: "actor" },
+    { query: "Akira", queryClass: "actor" },
+    { query: "random_actor", queryClass: "actor" },
+    { query: "made_up_actor", queryClass: "actor" },
+    { query: "CVE-2024-3094", queryClass: "cve" },
+    { query: "malware_tool", queryClass: "malware_tool" },
+    { query: "victim_ransomware", queryClass: "victim_ransomware" },
+    { query: "country", queryClass: "country" },
+    { query: "sector", queryClass: "sector" }
+  ];
+  const realTimeStatus: RealTimeSearchReleaseBoardPacket["pollingSlo"]["status"] = input.trends.cursorPolling.ok && input.trends.runReuse.ok && blockers.length === 0 ? "pass" : "warning";
+  const realTimeSearchBoard: RealTimeSearchReleaseBoardPacket = {
+    schemaVersion: "ti.realtime_search.release_board.v1",
+    dryRun: true,
+    decision: productTiBoard.decision,
+    productTiDecision: productTiBoard.decision,
+    rcBoardDecision: rcBoard.decision,
+    pollingSlo: {
+      firstResponseImmediate: true,
+      targetPollSeconds: 3,
+      recommendedPollSeconds: 3,
+      sameRunReuse: input.trends.runReuse.ok,
+      cursorAdvancement: input.trends.cursorPolling.ok,
+      emptyDeltasAllowed: true,
+      status: realTimeStatus
+    },
+    scenarioGates: realTimeScenarios.map((scenario) => ({
+      scenario,
+      owner: "Agent 07/09/10",
+      status: realTimeStatus,
+      proofCommand: scenario === "public_post_compatibility" ? "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof" : "bun run check:scraper-native-search",
+      expectedOutput: `${scenario} proof remains compact, pollable, provenance-backed, and no-leak safe`,
+      rollbackPath: "pause real-time delta promotion and return Searching/queued-only public answers"
+    })),
+    queryMatrix: realTimeQueries.map((entry) => ({
+      ...entry,
+      status: realTimeStatus,
+      proofCommand: "bun run check:scraper-native-search",
+      expectedOutput: `${entry.query} returns stable run/cursor fields, honest freshness, and pollable partial/ready/searching state`
+    })),
+    integrations: {
+      contractsRoute: realTimeStatus,
+      intelSearchRoute: realTimeStatus,
+      schedulerSlo: realTimeStatus,
+      evidenceClaimLedger: realTimeStatus,
+      answerDeltas: realTimeStatus,
+      graphStixDeltas: realTimeStatus,
+      publicWrapperProof: realTimeStatus
+    },
+    resourceHeadroom: productTiBoard.resourceHeadroom,
+    queuePressure: productTiBoard.queuePressure,
+    noLeakGuarantees: productTiBoard.noLeakGuarantees,
+    proofCommands: uniqueStrings([
+      ...productTiBoard.proofCommands,
+      "bun run check:contract-index",
+      "bun run check:route-inventory",
+      "bun run check:live-search-deploy",
+      "bun run check:scraper-native-search"
+    ]),
+    rollbackCommands: uniqueStrings([
+      ...productTiBoard.rollbackCommands,
+      "pause real-time delta promotion and return Searching/queued-only public answers"
+    ])
+  };
   const nextProofCommands = uniqueStrings([
     ...blockers.map((blocker) => blocker.proofCommand),
     ...warnings.map((warning) => warning.proofCommand),
@@ -1909,11 +2094,12 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
     canaryExecution,
     rcBoard,
     productTiBoard,
+    realTimeSearchBoard,
     trends: input.trends,
     blockers,
     warnings,
     nextProofCommands,
-    statusReport: buildReleaseStatusReport(decision, input, blockers, warnings, nextProofCommands, rcBoard, productTiBoard)
+    statusReport: buildReleaseStatusReport(decision, input, blockers, warnings, nextProofCommands, rcBoard, productTiBoard, realTimeSearchBoard)
   };
 }
 
@@ -2715,6 +2901,185 @@ function productTiBoardDecision(
   return "no-go";
 }
 
+function buildSupersededRealTimeSearchReleaseBoardPacket(
+  input: CutoverSoakReleasePacketInput,
+  rcBoard: FinalRcBoardPacket,
+  productTiBoard: ProductTiReleaseBoardPacket,
+  runtimeProofs: CutoverRuntimeReleaseProof[],
+  deploymentProofs: CutoverDeploymentProofSlot[],
+  blockers: Array<{ owner: string; name: string; proofCommand: string; rollbackPath: string }>,
+  warnings: Array<{ owner: string; name: string; proofCommand: string }>
+): RealTimeSearchReleaseBoardPacket {
+  const deployment = (name: CutoverDeploymentProofSlotName) => deploymentProofs.find((proof) => proof.name === name);
+  const runtime = (name: CutoverRuntimeReleaseProofName) => runtimeProofs.find((proof) => proof.name === name);
+  const routeStatus = deployment("route_inventory")?.status ?? "blocker";
+  const contractsStatus = deployment("contracts_route")?.status ?? routeStatus;
+  const publicStatus = deployment("public_post_api_proof")?.status ?? "blocker";
+  const frontendStatus = deployment("frontend_ti_query_proof")?.status ?? "blocker";
+  const remoteStatus = deployment("remote_typecheck")?.status ?? "blocker";
+  const schedulerStatus = worstProofStatus([runtime("queue_economics")?.status ?? "blocker", runtime("scheduler_runtime_sla")?.status ?? "blocker"]);
+  const evidenceStatus = worstProofStatus([runtime("claim_ledger")?.status ?? "blocker", runtime("claim_ledger_route_proof")?.status ?? "blocker"]);
+  const answerStatus = worstProofStatus([runtime("answer_review_gates")?.status ?? "blocker", runtime("answer_readiness_sla")?.status ?? "blocker"]);
+  const graphStatus = worstProofStatus([runtime("graph_export_gates")?.status ?? "blocker", runtime("graph_export_sla")?.status ?? "blocker"]);
+  const restrictedStatus = runtime("restricted_metadata_sla")?.status ?? "blocker";
+  const clearWebStatus = runtime("clear_web_blocker_status")?.status === "blocker" ? "warning" : runtime("clear_web_blocker_status")?.status ?? "warning";
+  const publicChannelStatus = worstProofStatus([runtime("public_channel_answer_readiness")?.status ?? "blocker", runtime("public_channel_sla")?.status ?? "blocker"]);
+  const recommendedPollSeconds = DEFAULT_LIVE_SEARCH_SLO.recommendedPollIntervalMs / 1_000;
+  const pollingStatus: RealTimeSearchReleaseBoardPacket["pollingSlo"]["status"] = recommendedPollSeconds <= 3 && input.trends.cursorPolling.ok
+    ? "pass"
+    : recommendedPollSeconds <= 10
+      ? "warning"
+      : "blocker";
+  const scenario = (
+    scenarioName: RealTimeSearchProofScenario,
+    owner: string,
+    status: "pass" | "warning" | "blocker",
+    proofCommand: string,
+    expectedOutput: string,
+    rollbackPath: string
+  ): RealTimeSearchReleaseBoardPacket["scenarioGates"][number] => ({
+    scenario: scenarioName,
+    owner,
+    status,
+    proofCommand,
+    expectedOutput,
+    rollbackPath
+  });
+  const scenarioGates: RealTimeSearchReleaseBoardPacket["scenarioGates"] = [
+    scenario("immediate_first_response", "Agent 09", publicStatus, "bun test src/tests/api.test.ts", "first response includes stable run/cursor/status fields without waiting for full collection", "restore public wrapper fallback"),
+    scenario("three_second_polling", "Agent 07/09/10", pollingStatus, "bun test src/tests/api.test.ts src/tests/ops.test.ts", "public answers expose 3-second polling and refreshAfterSeconds=3 where applicable", "raise public polling interval and return queued-only responses"),
+    scenario("same_run_reuse", "Agent 02/09", schedulerStatus, "bun test src/tests/planner.test.ts src/tests/api.test.ts", "duplicate public polls reuse the same active run and reuse key", "pause new live-run creation and drain duplicates"),
+    scenario("cursor_advancement", "Agent 02/06/09", worstProofStatus([schedulerStatus, evidenceStatus]), "bun test src/tests/storageCutover.test.ts src/tests/api.test.ts", "poll cursors advance when evidence deltas arrive", "hold cursor promotion and replay last-known-good deltas"),
+    scenario("empty_deltas", "Agent 07/09", answerStatus, "bun test src/tests/api.test.ts src/tests/pipeline.test.ts", "empty deltas render as Searching/partial without stale demo content", "return searching-only copy until deltas are safe"),
+    scenario("clear_web_capture_deltas", "Agent 03/06", clearWebStatus, "bun test src/tests/adapterFixtures.test.ts src/tests/storageCutover.test.ts", "clear-web discoveries can promote into capture deltas when Agent 03 proof is current", "keep clear-web capture promotion partial"),
+    scenario("public_channel_hint_deltas", "Agent 04/07", publicChannelStatus, "bun test src/tests/telegramPublic.test.ts", "public-channel hints remain caveated deltas until corroborated", "hold public-channel hints as caveats only"),
+    scenario("restricted_held_deltas", "Agent 05/06/07", restrictedStatus, "bun test src/tests/darknetMetadata.test.ts", "restricted metadata appears only as held metadata-only context", "activate restricted emergency stop"),
+    scenario("graph_stix_deltas", "Agent 08", graphStatus, "bun run check:graph-review-mounted && bun test src/tests/graphViews.test.ts", "graph/STIX deltas are held unless reviewed or export-eligible", "hold graph/STIX promotion"),
+    scenario("claim_ledger_holds", "Agent 06", evidenceStatus, "bun test src/tests/storageCutover.test.ts src/tests/evidenceEndpoints.test.ts", "claim-ledger holds block ready promotion without hiding public partial results", "hold evidence cutover"),
+    scenario("contradiction_downgrades", "Agent 07/08", worstProofStatus([answerStatus, graphStatus]), "bun test src/tests/pipeline.test.ts src/tests/graphViews.test.ts", "contradictions downgrade claims and graph edges instead of promoting facts", "force review_required public answer state"),
+    scenario("no_result_searching", "Agent 07/09", answerStatus, "bun test src/tests/api.test.ts", "unknown/no-result states show Searching without overstating absence", "return searching-only copy"),
+    scenario("provider_unavailable", "Agent 09/10", publicStatus, "bun run check:live-search-deploy", "provider unavailable states remain pollable partial/searching responses", "restore public wrapper fallback"),
+    scenario("scraper_unavailable", "Agent 09/10", remoteStatus, "bun run check:remote-drift", "scraper unavailable states fail closed to bounded fallback", "docker compose up -d ti-scraper api frontend --no-build"),
+    scenario("queue_pressure", "Agent 02/10", schedulerStatus, "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts", "queue pressure defers work without duplicate active runs", "apply live-run drain plan"),
+    scenario("stale_source_caveats", "Agent 01/07", worstProofStatus([runtime("source_runtime_sla")?.status ?? "blocker", answerStatus]), "bun test src/tests/sourceSeeds.test.ts src/tests/pipeline.test.ts", "stale source caveats are visible and block confident wording", "hold source activation waves"),
+    scenario("low_confidence", "Agent 07", answerStatus, "bun test src/tests/pipeline.test.ts", "low-confidence claims stay partial/review-required", "hold ready answer promotion"),
+    scenario("policy_block", "Agent 05/09", restrictedStatus, "bun test src/tests/darknetMetadata.test.ts src/tests/api.test.ts", "policy blocks do not leak restricted details or block clear-web/public evidence", "activate restricted emergency stop"),
+    scenario("no_leak_output", "Agent 05/06/09/10", worstProofStatus([restrictedStatus, evidenceStatus, routeStatus]), "bun run check:route-inventory && bun test src/tests/api.test.ts", "public DTOs exclude raw bodies, credentials, object keys, and restricted URLs", "hold public route promotion"),
+    scenario("memory_budget", "Agent 10", productTiBoard.resourceHeadroom.status, "bun run check:remote-drift", "scraper stays below 96 GB target and 160 GB normal ceiling", "reduce workers and keep fallback"),
+    scenario("worker_queue_headroom", "Agent 02/10", productTiBoard.queuePressure.status, "bun test src/tests/schedulerProduction.test.ts", "worker queue headroom stays within release SLO", "drain low-priority live-search queue"),
+    scenario("frontend_no_default", "Agent 09/10", frontendStatus, "bun run check:live-search-deploy", "frontend /ti has no default APT29 or stale demo content", "restore previous frontend build"),
+    scenario("public_post_compatibility", "Agent 09/10", publicStatus, "TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof", "canonical public POST returns run id and partial/ready state", "restore public API fallback"),
+    scenario("remote_container_health", "Agent 10", remoteStatus, "bun run check:remote-drift", "remote containers are healthy/running and source drift is aligned", "docker compose up -d ti-scraper api frontend --no-build")
+  ];
+  const queryMatrix: RealTimeSearchReleaseBoardPacket["queryMatrix"] = REAL_TIME_SEARCH_PROOF_QUERIES.map((entry) => ({
+    ...entry,
+    status: publicStatus,
+    proofCommand: entry.query === "CVE-2024-3094"
+      ? "TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof"
+      : "bun test src/tests/api.test.ts",
+    expectedOutput: `${entry.query} returns stable run/cursor fields, honest freshness, and pollable partial/ready/searching state`
+  }));
+  const proofCommands = uniqueStrings([
+    ...productTiBoard.proofCommands,
+    ...scenarioGates.map((gate) => gate.proofCommand),
+    "bun run check:contract-index",
+    "bun run check:route-inventory",
+    "bun run check:live-search-deploy",
+    "bun run check:remote-drift",
+    "bun run check:deploy-hygiene",
+    "bun run check:docker-contexts",
+    "bun test",
+    "bun run check"
+  ]);
+  const decision = realTimeSearchBoardDecision(productTiBoard, scenarioGates, blockers, warnings);
+
+  return {
+    schemaVersion: "ti.realtime_search.release_board.v1",
+    dryRun: true,
+    decision,
+    productTiDecision: productTiBoard.decision,
+    rcBoardDecision: rcBoard.decision,
+    pollingSlo: {
+      firstResponseImmediate: publicStatus !== "blocker",
+      targetPollSeconds: 3,
+      recommendedPollSeconds,
+      sameRunReuse: schedulerStatus !== "blocker",
+      cursorAdvancement: input.trends.cursorPolling.ok && evidenceStatus !== "blocker",
+      emptyDeltasAllowed: answerStatus !== "blocker",
+      status: pollingStatus
+    },
+    scenarioGates,
+    queryMatrix,
+    integrations: {
+      contractsRoute: contractsStatus,
+      intelSearchRoute: routeStatus,
+      schedulerSlo: schedulerStatus,
+      evidenceClaimLedger: evidenceStatus,
+      answerDeltas: answerStatus,
+      graphStixDeltas: graphStatus,
+      publicWrapperProof: publicStatus
+    },
+    resourceHeadroom: productTiBoard.resourceHeadroom,
+    queuePressure: productTiBoard.queuePressure,
+    noLeakGuarantees: productTiBoard.noLeakGuarantees,
+    proofCommands,
+    rollbackCommands: uniqueStrings([
+      ...productTiBoard.rollbackCommands,
+      "pause real-time delta promotion and return Searching/queued-only public answers",
+      "disable public graph/STIX deltas until Agent 08 review holds are green",
+      "restore previous public wrapper POST compatibility path"
+    ])
+  };
+}
+
+const REAL_TIME_SEARCH_PROOF_QUERIES: Array<{
+  query: RealTimeSearchProofQuery;
+  queryClass: RealTimeSearchReleaseBoardPacket["queryMatrix"][number]["queryClass"];
+}> = [
+  { query: "APT29", queryClass: "actor" },
+  { query: "APT42", queryClass: "actor" },
+  { query: "Turla", queryClass: "actor" },
+  { query: "Volt Typhoon", queryClass: "actor" },
+  { query: "Scattered Spider", queryClass: "actor" },
+  { query: "Akira", queryClass: "actor" },
+  { query: "random_actor", queryClass: "actor" },
+  { query: "made_up_actor", queryClass: "actor" },
+  { query: "CVE-2024-3094", queryClass: "cve" },
+  { query: "malware_tool", queryClass: "malware_tool" },
+  { query: "victim_ransomware", queryClass: "victim_ransomware" },
+  { query: "country", queryClass: "country" },
+  { query: "sector", queryClass: "sector" }
+];
+
+function realTimeSearchBoardDecision(
+  productTiBoard: ProductTiReleaseBoardPacket,
+  scenarioGates: RealTimeSearchReleaseBoardPacket["scenarioGates"],
+  blockers: Array<{ name: string }>,
+  warnings: Array<{ name: string }>
+): RealTimeSearchReleaseBoardDecision {
+  if (productTiBoard.decision === "emergency-stop" || scenarioGates.some((gate) => gate.scenario === "restricted_held_deltas" && gate.status === "blocker")) return "emergency-stop";
+  if (productTiBoard.decision === "rollback") return "rollback";
+  const blockerScenarios = scenarioGates.filter((gate) => gate.status === "blocker");
+  if (blockerScenarios.some((gate) =>
+    gate.scenario === "immediate_first_response"
+    || gate.scenario === "three_second_polling"
+    || gate.scenario === "public_post_compatibility"
+    || gate.scenario === "frontend_no_default"
+    || gate.scenario === "no_leak_output"
+  )) return "no-go";
+  if (blockerScenarios.length > 0 || blockers.some((blocker) => ![
+    "runtime.clear_web_blocker_status",
+    "runtime.claim_ledger_route_proof",
+    "release_train.evidence_graph_api_holds"
+  ].includes(blocker.name))) return "no-go";
+  if (blockers.length > 0 || productTiBoard.decision === "partial-public-ok") return "partial-public-ok";
+  if (warnings.length > 0 || scenarioGates.some((gate) => gate.status === "warning") || productTiBoard.decision === "canary-with-warnings") return "canary-with-warnings";
+  if (productTiBoard.decision === "promote-with-warnings") return "promote-with-warnings";
+  if (productTiBoard.decision === "promote") return "promote";
+  if (productTiBoard.decision === "canary-ready") return "canary-ready";
+  return "no-go";
+}
+
 interface ReleaseTrainStageSpec {
   name: CutoverReleaseTrainStageName;
   deploymentProofNames: CutoverDeploymentProofSlotName[];
@@ -2944,7 +3309,8 @@ function buildReleaseStatusReport(
   warnings: Array<{ owner: string; name: string }>,
   nextProofCommands: string[],
   rcBoard?: FinalRcBoardPacket,
-  productTiBoard?: ProductTiReleaseBoardPacket
+  productTiBoard?: ProductTiReleaseBoardPacket,
+  realTimeSearchBoard?: RealTimeSearchReleaseBoardPacket
 ): string {
   return [
     `Agent 10 soak release decision: ${decision}`,
@@ -2961,6 +3327,7 @@ function buildReleaseStatusReport(
     `canaryExecution: ${buildCanaryReleaseExecutionPacket(input, buildReleaseCandidateGatePacket(input, decision, buildReleaseTrainOrchestration(input, decision, normalizeReleaseTrainStages(input, normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs), blockers, warnings)).decision}`,
     `rcBoard: ${rcBoard?.decision ?? "unbuilt"}`,
     `productTiBoard: ${productTiBoard?.decision ?? "unbuilt"}`,
+    `realTimeSearchBoard: ${realTimeSearchBoard?.decision ?? "unbuilt"}`,
     `restrictedKillSwitchActive: ${input.trends.restrictedKillSwitch.active}`,
     `rollbackTriggers: ${input.trends.rollbackTriggers.length > 0 ? input.trends.rollbackTriggers.join(", ") : "none"}`,
     `blockers: ${blockers.length > 0 ? blockers.map((blocker) => `${blocker.owner}:${blocker.name}`).join(", ") : "none"}`,

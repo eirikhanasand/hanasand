@@ -59,6 +59,7 @@ function validateStixObject(
   else if (object.type === "indicator") validateIndicator(object, path, issues);
   else if (object.type === "report") validateReport(object, path, objectIds, issues);
   else if (object.type === "observed-data") validateObservedData(object, path, issues);
+  else if (object.type === "attack-pattern") validateAttackPattern(object, path, issues);
 
   if (object.type !== "identity" && object.type !== "relationship" && object.type !== "observed-data" && !object.name) {
     issue(issues, `${path}.name`, "named STIX domain objects require a name");
@@ -66,6 +67,19 @@ function validateStixObject(
 
   if (object.type !== "identity" && object.type !== "report" && object.x_ti_provenance !== undefined && !Array.isArray(object.x_ti_provenance)) {
     issue(issues, `${path}.x_ti_provenance`, "x_ti_provenance must be an array when present");
+  }
+}
+
+function validateAttackPattern(object: StixObject, path: string, issues: StixValidationIssue[]): void {
+  const mitreRefs = object.external_references?.filter((reference) => reference.source_name === "mitre-attack") ?? [];
+  for (const [index, reference] of mitreRefs.entries()) {
+    if (!reference.external_id || !/^T\d{4}(?:\.\d{3})?$/.test(reference.external_id)) {
+      issue(issues, `${path}.external_references.${index}.external_id`, "MITRE ATT&CK external_id must use T#### or T####.###");
+    }
+    if (!reference.url) issue(issues, `${path}.external_references.${index}.url`, "MITRE ATT&CK external references require a URL");
+  }
+  if ((object.revoked === true || object.x_mitre_deprecated === true) && object.x_ti_review_state !== "deprecated_review_hold") {
+    issue(issues, `${path}.x_ti_review_state`, "revoked or deprecated ATT&CK techniques must be held as review metadata");
   }
 }
 

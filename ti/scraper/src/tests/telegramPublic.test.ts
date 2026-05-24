@@ -46,6 +46,7 @@ import {
   type TelegramPublicSourcePack,
   type TelegramPublicFetchRequest
 } from "../adapters/telegramPublic.ts";
+import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion.ts";
 
 function source(input: Partial<SourceRecord> = {}): SourceRecord {
   return {
@@ -126,6 +127,116 @@ function collectedTelegramItem(id: number, text: string, metadata: Record<string
 }
 
 describe("TelegramPublicAdapter", () => {
+  test("fuses approved public signal families with duplicate suppression reliability decay and mergeable deltas", () => {
+    const generatedAt = "2026-05-24T12:00:00.000Z";
+    const publicChannel = source({
+      id: "src_channel_apt29",
+      name: "APT29 public channel",
+      tags: ["APT29", "Cozy Bear", "CVE-2026-9999"],
+      metadata: {
+        actors: ["APT29", "Cozy Bear"],
+        sourceFamilies: ["public_channel"],
+        countries: ["United States"],
+        regions: ["North America"],
+        rateLimitResetAt: "2026-05-24T12:05:00.000Z"
+      }
+    });
+    const github = {
+      ...source({ id: "src_github_ghsa", name: "GitHub Security Advisory", tags: ["GHSA", "APT29", "CVE-2026-9999"] }),
+      type: "api",
+      accessMethod: "official_api",
+      url: "https://api.github.com/advisories/GHSA-apt29",
+      metadata: { cves: ["CVE-2026-9999"], sourceFamilies: ["github_advisory"] }
+    } satisfies SourceRecord;
+    const cert = {
+      ...source({ id: "src_cisa_kev", name: "CISA KEV", tags: ["CISA", "APT29", "energy"] }),
+      type: "api",
+      accessMethod: "official_api",
+      url: "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+      metadata: { sectors: ["energy"], countries: ["US"], regions: ["North America"] }
+    } satisfies SourceRecord;
+    const vendor = {
+      ...source({ id: "src_vendor_mandiant", name: "Mandiant APT29 report", tags: ["Mandiant", "APT29"] }),
+      type: "static_web",
+      accessMethod: "public_http",
+      url: "https://www.mandiant.com/resources/blog/apt29-report",
+      metadata: { actors: ["APT29"], languages: ["en"], regions: ["Europe"] }
+    } satisfies SourceRecord;
+    const malware = {
+      ...source({ id: "src_malware_threatfox", name: "ThreatFox malware report feed", tags: ["malware", "CVE-2026-9999"] }),
+      type: "api",
+      accessMethod: "official_api",
+      url: "https://threatfox.abuse.ch/api/",
+      metadata: { cves: ["CVE-2026-9999"], sourceFamilies: ["malware_report_feed"] }
+    } satisfies SourceRecord;
+    const duplicateVendor = {
+      ...source({ id: "src_duplicate_vendor", name: "Duplicate Mandiant mirror", tags: ["APT29"] }),
+      type: "static_web",
+      accessMethod: "public_http",
+      url: "https://www.mandiant.com/resources/blog/apt29-report/"
+    } satisfies SourceRecord;
+    const unavailable = {
+      ...source({
+        id: "src_old_social",
+        name: "Public social APT29 watch",
+        status: "retired",
+        tags: ["social", "APT29"],
+        metadata: { unavailableAt: "2026-05-23T00:00:00.000Z" }
+      }),
+      type: "api",
+      accessMethod: "official_api",
+      url: "https://public.social.example/apt29"
+    } satisfies SourceRecord;
+    const evidence = publicChannelEvidenceFromCollectedItem({
+      ...collectedTelegramItem(99, "APT29 Cozy Bear exploit update for CVE-2026-9999", {
+        editDate: "2026-05-24T11:58:00.000Z"
+      }),
+      sourceId: "src_channel_apt29",
+      collectedAt: generatedAt,
+      publishedAt: "2026-05-24T11:57:00.000Z",
+      contentHash: "hash-public-signal-apt29"
+    });
+
+    const fusion = buildPublicSignalFusionWorkbench({
+      query: "APT29",
+      entityType: "actor",
+      sources: [publicChannel, github, cert, vendor, malware, duplicateVendor, unavailable],
+      evidence: evidence ? [evidence] : [],
+      generatedAt
+    });
+
+    expect(fusion.status).toBe("ready");
+    expect(fusion.familyCoverage.familiesCovered).toEqual(expect.arrayContaining([
+      "public_channel",
+      "github_advisory",
+      "cert_government",
+      "vendor_report",
+      "malware_report_feed"
+    ]));
+    expect(fusion.familyCoverage.diversityScore).toBeGreaterThanOrEqual(1);
+    expect(fusion.selectedSources.find((item) => item.sourceId === "src_channel_apt29")).toMatchObject({
+      rateLimit: { delayed: true },
+      availability: { editedPublicMessages: 1 }
+    });
+    expect(fusion.suppressed.duplicateUrls).toEqual(expect.arrayContaining(["https://www.mandiant.com/resources/blog/apt29-report/"]));
+    expect(fusion.suppressed.unavailableSourceIds).toEqual(expect.arrayContaining(["src_old_social"]));
+    expect(fusion.publicSignalDeltas).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceId: "src_channel_apt29",
+      mergeTarget: "public_channel_partial_evidence",
+      state: "edited",
+      provenance: expect.objectContaining({ publicOnly: true, evidenceBacked: true, safeUrl: true })
+    })]));
+    expect(fusion.analystWorkQueue.map((item) => item.action)).toEqual(expect.arrayContaining(["review_backoff", "review_unavailable", "confirm_public_only_claim"]));
+    expect(fusion.guardrails).toMatchObject({
+      publicOnly: true,
+      privateJoinsUsed: false,
+      accountAutomationUsed: false,
+      rawMediaDownloaded: false,
+      unsafeUrlsExposed: false,
+      publicChannelOnlyClaimsAreCaveated: true
+    });
+  });
+
   test("uses Bot API getUpdates as an official public-channel client without account automation", async () => {
     const requests: RequestInit[] = [];
     const client = new TelegramBotApiClient({

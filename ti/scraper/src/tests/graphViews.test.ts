@@ -3,6 +3,7 @@ import {
   buildActorProfileGraphView,
   buildGraphCutoverReportApiDto,
   buildGraphCutoverReport,
+  buildGraphBackendRepositoryContractDto,
   buildCorrelationGraphQuery,
   buildCorrelationTimeline,
   buildGraphExportEnforcementDto,
@@ -431,8 +432,69 @@ describe("CTI graph persistence and query views", () => {
     expect(coverage.get("accepted_promotion")?.exportEligibleCount).toBeGreaterThan(0);
     expect(coverage.get("stix_export_eligible")?.exportEligibleCount).toBeGreaterThan(0);
     expect(liveUpdate.deltaCounts.added + liveUpdate.deltaCounts.contradicted + liveUpdate.deltaCounts.stale).toBeGreaterThan(0);
+    expect(liveUpdate.deltaStream).toMatchObject({
+      mode: "real_time_answer_graph_delta_stream",
+      responsePolicy: "seconds_level_polling",
+      nextPollSeconds: 3,
+      cursorField: "graph.deltas[].cursor",
+      fixtureCount: 17,
+      reviewHoldPolicy: "hold_unreviewed_public_channel_restricted_weak_missing_ledger_stale_contradicted_rejected",
+      stixEligibilityPolicy: "reviewed_or_promoted_with_provenance_and_ledger",
+      rollbackPolicy: "contradicted_rejected_missing_provenance_or_schema_risk_blocks_export",
+      taxiiBoundary: "descriptor_only_no_server"
+    });
+    expect(liveUpdate.deltaStream.routeBindings).toEqual(expect.arrayContaining(["/v1/intel/search.graph", "/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/contracts"]));
+    expect(liveUpdate.deltaStream.queryCoverage).toEqual(expect.arrayContaining(["actor", "random_actor", "made_up_actor", "cve", "malware_tool", "victim_ransomware", "country", "sector"]));
+    const fixtures = new Map(liveUpdate.deltaStream.fixtures.map((fixture) => [fixture.name, fixture]));
+    for (const name of [
+      "clear_web_capture_promotion",
+      "public_channel_hint",
+      "restricted_metadata_held",
+      "claim_ledger_hold",
+      "missing_ledger_id",
+      "weak_co_mention_pivot",
+      "actor_alias_collision",
+      "contradicted_attribution",
+      "stale_ttp",
+      "new_victim_claim",
+      "new_cve_exploitation_claim",
+      "malware_tool_relation",
+      "infrastructure_relation",
+      "analyst_accepted_promotion",
+      "analyst_rejected_relation",
+      "graph_rollback",
+      "stix_export_eligibility_change"
+    ]) {
+      expect(fixtures.get(name as never)?.agent09CursorState).toBe("pollable");
+    }
+    expect(fixtures.get("public_channel_hint")).toMatchObject({ reviewHold: true, publicAnswerImpact: "pivot", agent07Caveat: "public_channel_hint" });
+    expect(fixtures.get("restricted_metadata_held")).toMatchObject({ reviewHold: true, agent07Caveat: "restricted_held" });
+    expect(fixtures.get("missing_ledger_id")).toMatchObject({ agent06LedgerGate: "hold_missing_ledger" });
+    expect(fixtures.get("contradicted_attribution")).toMatchObject({ status: "blocked", stixImpact: "blocked", agent10ReleaseGate: "rollback" });
+    expect(fixtures.get("stix_export_eligibility_change")?.exportEligibleCount).toBeGreaterThan(0);
     expect(query.liveUpdate.scenarioCoverage.map((scenario) => scenario.name)).toContain("apt42_clear_web");
+    expect(query.liveUpdate.deltaStream.fixtures.map((fixture) => fixture.name)).toContain("graph_rollback");
     expect(query.runtime.liveUpdate.agentHandoffs.agent10ReleaseGate).toBe("graph_live_incremental_gate");
+    const backendContract = buildGraphBackendRepositoryContractDto(snapshot, { generatedAt: "2026-05-24T00:13:00.000Z" });
+    expect(backendContract).toMatchObject({
+      mode: "backend_neutral_graph_repository_contract",
+      backendCandidates: expect.arrayContaining(["memory_snapshot", "postgres_graph_tables", "neo4j"]),
+      tenantScope: "tenant_id_required_on_nodes_edges_provenance_reviews_and_deltas",
+      handoffs: {
+        agent06ClaimLedger: "persist_ledger_ids_with_provenance_support",
+        agent07EntityResolution: "preserve_stable_node_ids_aliases_and_review_states",
+        agent09Api: "serve_same_dtos_from_repository_without_route_shape_changes",
+        agent10DeploymentGate: "verify_repository_replay_before_graph_export_promotion"
+      }
+    });
+    expect(backendContract.operations.map((operation) => operation.kind)).toEqual(expect.arrayContaining(["upsert_node", "upsert_relationship", "append_provenance", "append_review_decision", "record_cursor_delta", "update_export_eligibility"]));
+    expect(backendContract.operations.every((operation) => operation.tenantScoped)).toBe(true);
+    expect(backendContract.reviewWorkflow.acceptedRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendContract.reviewWorkflow.contradictedRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendContract.reviewWorkflow.pendingReviewRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendContract.exportEligibility.readyRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendContract.cursorDeltas.relationshipIds.length).toBeGreaterThan(0);
+    expect(query.runtime.backendContract.mode).toBe("backend_neutral_graph_repository_contract");
   });
 
   test("reports noisy co-mentions and actor alias collisions as integrity and export blockers", () => {

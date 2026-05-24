@@ -31,6 +31,10 @@ const responsiveFixtures = Array.isArray(responsiveAudit.fixtures) ? responsiveA
 const responsivePublicWrapper = isRecord(responsiveAudit.publicWrapper) ? responsiveAudit.publicWrapper : {};
 const responsiveProofCommands = stringArray(responsiveAudit.proofCommands);
 const responsiveFixtureNames = responsiveFixtures.map((fixture) => String(fixture.name ?? ""));
+const deltaAudit = isRecord(record.publicWrapperDeltaAudit) ? record.publicWrapperDeltaAudit : {};
+const deltaFixtures = Array.isArray(deltaAudit.fixtures) ? deltaAudit.fixtures.filter(isRecord) : [];
+const deltaFixtureNames = deltaFixtures.map((fixture) => String(fixture.name ?? ""));
+const deltaStableFields = stringArray(deltaAudit.stableFields);
 
 const checks = [
   response.status === 200,
@@ -42,6 +46,10 @@ const checks = [
   responsivePublicWrapper.canonicalPath === "/api/ti/search",
   responsivePublicWrapper.noDefaultQuery === true,
   responsivePublicWrapper.pollingSeconds === 3,
+  deltaAudit.schemaVersion === "ti.public_wrapper_delta_contract.v1",
+  isRecord(semantics.publicWrapperDeltaAudit) && semantics.publicWrapperDeltaAudit.schemaVersion === "ti.public_wrapper_delta_contract.v1",
+  ["status", "summary", "runId", "refreshAfterSeconds", "pollCursor", "deltaCursor", "updated", "sources", "publicChannel", "restrictedMetadata", "claimLedger", "graph"]
+    .every((field) => deltaStableFields.includes(field)),
   routeTruthAudit.expectedRouteInventoryCount === routes.length,
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/coverage-closeout"),
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/activation-batches"),
@@ -50,6 +58,9 @@ const checks = [
   auditFixtures.some((fixture) => fixture.name === "public_post_compatibility"),
   auditFixtures.some((fixture) => fixture.name === "restricted_emergency_stop"),
   auditFixtures.some((fixture) => fixture.name === "canary_rc_decision"),
+  auditFixtures.some((fixture) => fixture.name === "delta_polling_contract"),
+  auditFixtures.some((fixture) => fixture.name === "empty_delta_poll"),
+  auditFixtures.some((fixture) => fixture.name === "public_post_poll_compatibility"),
   auditFixtures.every((fixture) => fixture.publicPostCompatible === true && fixture.noLeakRequired === true),
   [
     "apt29_actor",
@@ -85,6 +96,35 @@ const checks = [
   responsiveProofCommands.includes("TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search"),
   responsiveProofCommands.includes("TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search"),
   responsiveProofCommands.includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
+  [
+    "first_response",
+    "repeated_poll_same_run_id",
+    "poll_cursor_advancement",
+    "empty_delta",
+    "new_clear_web_capture_delta",
+    "public_channel_hint_delta",
+    "restricted_metadata_held_delta",
+    "graph_relationship_delta",
+    "claim_ledger_hold",
+    "contradiction_downgrade",
+    "no_result_searching",
+    "provider_unavailable",
+    "scraper_unavailable",
+    "queue_pressure",
+    "duplicate_run_reuse",
+    "stale_source",
+    "low_confidence",
+    "policy_block",
+    "final_ready"
+  ].every((name) => deltaFixtureNames.includes(name)),
+  deltaFixtures.every((fixture) =>
+    fixture.pollSeconds === 3
+    && fixture.stableRunId === true
+    && fixture.requiresPollCursor === true
+    && fixture.requiresDeltaCursor === true
+    && fixture.publicPostCompatible === true
+    && fixture.noLeakRequired === true
+  ),
   stringArray(sourceExecution.routes).includes("/v1/intel/search"),
   stringArray(sourceExecution.fields).includes("first10Canary"),
   stringArray(sourceExecution.fields).includes("publicRollout50"),
@@ -120,6 +160,11 @@ console.log(JSON.stringify({
     fixtureNames: responsiveFixtureNames,
     proofCommands: responsiveProofCommands
   },
+  publicWrapperDeltaAudit: {
+    schemaVersion: String(deltaAudit.schemaVersion ?? ""),
+    stableFields: deltaStableFields,
+    fixtureNames: deltaFixtureNames
+  },
   sourceActivationExecutionReadiness: {
     routes: stringArray(sourceExecution.routes),
     fields: stringArray(sourceExecution.fields)
@@ -132,7 +177,7 @@ console.log(JSON.stringify({
     routes: stringArray(evidenceCertification.routes),
     scenarios: stringArray(evidenceCertification.scenarios)
   },
-  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive public wrapper fixtures, source activation, and evidence persistence certification without unsafe leaks"
+  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive/delta public wrapper fixtures, source activation, and evidence persistence certification without unsafe leaks"
 }, null, 2));
 
 if (!ok) process.exit(1);

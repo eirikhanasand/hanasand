@@ -18,13 +18,14 @@ import {
 import {
   activatePublicCanarySources,
   buildCanaryOperatorSummary,
+  pausePublicCanarySources,
   runCanaryCollectionCycle,
   type CanaryFetch
 } from "../ops/canaryCollection.ts";
 import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
 import type { WorkerSupervisor } from "../ops/supervisor.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto } from "../pipeline/actorProfileFusion.ts";
-import type { EvidenceStage } from "../pipeline/intelligenceProfiles.ts";
+import type { EvidenceStage, StagedEvidenceInput } from "../pipeline/intelligenceProfiles.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import {
   buildSearchQualityApiDto,
@@ -36,13 +37,19 @@ import {
 import { createCollectionPlan, createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { RssAdapter } from "../adapters/rss.ts";
 import { StaticWebAdapter, type StaticWebAdapterOptions } from "../adapters/staticWeb.ts";
-import { buildRestrictedMetadataOperationsStatus, planDarknetMetadataLiveSearch, restrictedMetadataConnectorCertificationContract, restrictedMetadataEmergencyStopCertificationContract, restrictedMetadataKillSwitchDrillContract, restrictedMetadataNonBlockingSearchContract } from "../adapters/darknetMetadata.ts";
+import { buildRestrictedMetadataOperationsStatus, planDarknetMetadataLiveSearch, restrictedMetadataAnalystOperationsContract, restrictedMetadataConnectorCertificationContract, restrictedMetadataEmergencyStopCertificationContract, restrictedMetadataIsolationHarnessContract, restrictedMetadataKillSwitchDrillContract, restrictedMetadataNonBlockingSearchContract } from "../adapters/darknetMetadata.ts";
 import { buildTelegramPublicActorReadinessDto, buildTelegramPublicCanaryRollout, buildTelegramPublicCompactSearchSummary, buildTelegramPublicCutoverReport, buildTelegramPublicOperatorControlEffects, buildTelegramPublicOperatorStates, buildTelegramPublicPromotionCanaryProof, buildTelegramPublicPromotionCertification, buildTelegramPublicReliabilityReport, buildTelegramPublicSlaReport, buildTelegramPublicSourcePackCompatibility, buildTelegramPublicSourcePackReadiness, planTelegramPublicSearchBackfill, publicChannelEvidenceFromCapture, type TelegramPublicSourcePack } from "../adapters/telegramPublic.ts";
+import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion.ts";
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
 import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
 import type {
+  AnalystClaimLedgerEntry,
+  AnalystLoopSnapshot,
+  AnalystMetadataReviewTask,
+  AnalystSourceActivationPacket,
+  AnalystVictimNotificationPacket,
   CollectionPlan,
   CollectionRun,
   CollectionTask,
@@ -290,8 +297,31 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       activation,
       guarantees: [
         "only bundled safe public clear-web sources are activated",
-        "no restricted metadata, private channels, authentication, CAPTCHA solving, or raw leak collection is enabled",
+        "no restricted metadata, private channels, authentication, CAPTCHA solving, or restricted payload collection is enabled",
         "activation is audited on source lifecycle and can be reversed with existing pause or retire source controls"
+      ]
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/sources/canary-pause") {
+    const input = await readJson<Record<string, unknown>>(request);
+    if (input.operatorApproval !== true) {
+      return apiError("approval_required", "operatorApproval=true is required to pause canary source collection", 409, {
+        mode: "human_approved_clear_web_canary_pause"
+      });
+    }
+    const pause = pausePublicCanarySources({
+      store: options.store,
+      tenantId: typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined,
+      operatorId: typeof input.approvedBy === "string" ? input.approvedBy : request.headers.get("x-actor-id") ?? "operator",
+      now: typeof input.generatedAt === "string" ? input.generatedAt : nowIso()
+    });
+    return json({
+      pause,
+      guarantees: [
+        "only bundled public canary sources are paused",
+        "source approval and lifecycle history are preserved",
+        "collection can resume through the explicit canary activation operation"
       ]
     });
   }
@@ -850,10 +880,14 @@ async function collectOnDemandClearWebEvidence(input: {
     .slice(0, 3);
 
   for (const source of ranked) {
-    const before = searchQualityEvidence({ query: input.query, tenantId: input.tenantId, options: input.options }).length;
-    if (before > 0) return;
+    const before = searchQualityEvidence({ query: input.query, tenantId: input.tenantId, options: input.options });
+    if (countEvidenceSources(before) >= 2) return;
     await collectSourceForInteractiveSearch(source, input.query, input.tenantId, input.options);
   }
+}
+
+function countEvidenceSources(evidence: StagedEvidenceInput[]): number {
+  return new Set(evidence.map((item) => item.result.capture.sourceId)).size;
 }
 
 async function collectSourceForInteractiveSearch(
@@ -1085,6 +1119,15 @@ async function publicIntelSearchResponse(input: {
     evidence,
     promotionCanary: publicChannelPromotionCanary
   });
+  const publicSignalFusion = buildPublicSignalFusionWorkbench({
+    query: input.query,
+    entityType: input.entityType,
+    tenantId: input.tenantId,
+    sources,
+    sourcePacks: input.options.publicTelegramSourcePacks,
+    evidence,
+    previousUrls: sources.flatMap((source) => Array.isArray(source.metadata?.lastDiscoveredUrls) ? source.metadata.lastDiscoveredUrls.filter((value): value is string => typeof value === "string") : [])
+  });
 
   const publicChannelStatus = evidence.length > 0
     ? "partial"
@@ -1151,7 +1194,7 @@ async function publicIntelSearchResponse(input: {
   const compatibility = liveSearchCompatibilityFields({
     query: input.query,
     planner: live.dto,
-    scheduler,
+    scheduler: scheduler as ReturnType<typeof schedulerSummaryForPlan>,
     actorProfile,
     graph,
     quality,
@@ -1192,6 +1235,19 @@ async function publicIntelSearchResponse(input: {
     graph,
     sla
   });
+  const publicWrapperDelta = publicWrapperDeltaCompatibility({
+    query: input.query,
+    compatibility,
+    scheduler,
+    answerDeltas: Array.isArray(publicAnswer?.deltas) ? publicAnswer.deltas : [],
+    sourceCoverage,
+    publicChannelStatus,
+    publicChannelSummary,
+    restrictedMetadata,
+    claimLedger: evidenceCutover.trustLedger,
+    graph,
+    sla
+  });
 
   return {
     query: input.query,
@@ -1205,6 +1261,7 @@ async function publicIntelSearchResponse(input: {
     graphExport: graph.exportGate,
     answer: actorProfile.answer,
     publicTiAnswer,
+    publicWrapperDelta,
     answerGraphCaveats: graph.enforcement.answerCaveats,
     answerDeltas: Array.isArray(publicAnswer?.deltas) ? publicAnswer.deltas : [],
     reviewGates: Array.isArray(publicAnswer?.reviewGates) ? publicAnswer.reviewGates : [],
@@ -1233,6 +1290,7 @@ async function publicIntelSearchResponse(input: {
       canaryRollout: publicChannelCanaryRollout,
       promotionCanary: publicChannelPromotionCanary,
       promotionCertification: publicChannelPromotionCertification,
+      signalFusion: publicSignalFusion,
       actorReadiness: publicChannelActorReadiness,
       operatorControlEffects: publicChannelOperatorControlEffects,
       applyPlan: {
@@ -1253,7 +1311,7 @@ async function publicIntelSearchResponse(input: {
       queryTerms: backfill.queryTerms,
       notes: publicChannelStatus === "pending_channel_search"
         ? ["No approved public-channel evidence is currently available; review activation recommendations for safe public sources."]
-        : []
+        : publicSignalFusion.caveats
     },
     darknetMetadata,
     restrictedMetadata,
@@ -1430,6 +1488,161 @@ function searchSlaSummary(input: {
       nextCursor: input.nextCursor
     })
   };
+}
+
+function publicWrapperDeltaCompatibility(input: {
+  query: string;
+  compatibility: ReturnType<typeof liveSearchCompatibilityFields>;
+  scheduler: ReturnType<typeof schedulerSummaryForPlan>;
+  answerDeltas: unknown[];
+  sourceCoverage: unknown;
+  publicChannelStatus: string;
+  publicChannelSummary: unknown;
+  restrictedMetadata: unknown;
+  claimLedger: unknown;
+  graph: ReturnType<typeof graphReviewSummaryForQuery>;
+  sla: ReturnType<typeof searchSlaSummary>;
+}) {
+  const claimLedger = record(input.claimLedger) ?? {};
+  const graphDeltas = arrayRecords(input.graph.liveUpdate?.scenarioCoverage)
+    .filter((scenario) => String(scenario.status ?? "").match(/pass|warning/));
+  const publicChannel = record(input.publicChannelSummary) ?? {};
+  const restricted = record(input.restrictedMetadata) ?? {};
+  const answerDeltas = arrayRecords(input.answerDeltas);
+  const sourceCoverage = record(input.sourceCoverage) ?? {};
+  const changedSinceCursor = {
+    cursor: input.compatibility.pollCursor,
+    nextCursor: input.compatibility.deltaCursor,
+    cursorContinuity: input.scheduler.cursorContinuity,
+    empty: input.scheduler.newEvidenceDeltaCount === 0 && answerDeltas.length === 0,
+    counts: {
+      scheduler: input.scheduler.newEvidenceDeltaCount,
+      answer: answerDeltas.length,
+      graph: graphDeltas.length,
+      claimLedgerHolds: stringArray(claimLedger.blockers).length,
+      publicChannelHints: input.publicChannelStatus === "partial" ? 1 : 0,
+      restrictedHeld: stringArray(restricted.blockers).length + stringArray(restricted.warnings).length
+    }
+  };
+  return {
+    schemaVersion: "ti.public_wrapper_delta.v1",
+    query: input.query,
+    stablePublicFields: [
+      "status",
+      "summary",
+      "runId",
+      "refreshAfterSeconds",
+      "pollCursor",
+      "deltaCursor",
+      "updated",
+      "lastSeen",
+      "sources",
+      "recentActivity",
+      "targets",
+      "ttps",
+      "datasets",
+      "warnings",
+      "warningCodes",
+      "sourceCoverage",
+      "publicChannel",
+      "restrictedMetadata",
+      "claimLedger",
+      "graph"
+    ],
+    compatibility: {
+      canonicalMethod: "POST",
+      canonicalPath: "/api/ti/search",
+      mapsTo: "/v1/intel/search",
+      backwardsCompatible: true,
+      noRawProofPayloads: true,
+      runIdStableAcrossPolls: true,
+      refreshAfterSeconds: input.compatibility.refreshAfterSeconds
+    },
+    polling: {
+      runId: input.compatibility.runId,
+      pollCursor: input.compatibility.pollCursor,
+      deltaCursor: input.compatibility.deltaCursor,
+      nextPollSeconds: input.compatibility.nextPollSeconds,
+      updated: input.compatibility.updated,
+      lastSeen: input.compatibility.lastSeen,
+      cursorRequired: true,
+      changedSinceCursor
+    },
+    deltas: {
+      answer: answerDeltas,
+      scheduler: {
+        cursorContinuity: input.scheduler.cursorContinuity,
+        promotedEvidenceCount: input.scheduler.promotedEvidenceCount,
+        newEvidenceDeltaCount: input.scheduler.newEvidenceDeltaCount,
+        partialReasons: input.scheduler.partialReasons
+      },
+      sourceCoverage: {
+        coverageState: String(sourceCoverage.coverageState ?? "unknown"),
+        gaps: uniqueStrings([
+          ...stringArray(sourceCoverage.gaps),
+          ...stringArray(sourceCoverage.coverageGaps)
+        ])
+      },
+      publicChannel: {
+        status: input.publicChannelStatus,
+        hintCount: input.publicChannelStatus === "partial" ? 1 : 0,
+        safeOutput: record(publicChannel.safeOutput) ?? {}
+      },
+      restrictedMetadata: {
+        status: String(restricted.status ?? restricted.state ?? "none"),
+        held: stringArray(restricted.blockers).length > 0 || stringArray(restricted.warnings).length > 0,
+        blockers: stringArray(restricted.blockers),
+        warnings: stringArray(restricted.warnings)
+      },
+      claimLedger: {
+        trustGate: String(claimLedger.trustGate ?? "unknown"),
+        blockers: stringArray(claimLedger.blockers),
+        safeOutput: claimLedger.safeOutput
+      },
+      graph: {
+        relationshipCount: input.graph.relationshipCount,
+        publicFactPolicy: input.graph.publicFactPolicy,
+        exportGate: input.graph.exportGate,
+        liveUpdate: input.graph.liveUpdate
+      }
+    },
+    releaseBoardHandoff: {
+      agent02SchedulerCursors: "scheduler.cursorContinuity | scheduler.latestCursor | scheduler.newEvidenceDeltaCount",
+      agent06ClaimLedger: "claimLedger.trustGate | claimLedger.blockers | claimLedger.safeOutput",
+      agent07AnswerDeltas: "answerDeltas[]",
+      agent08GraphDeltas: "graph.liveUpdate | graph.exportGate",
+      agent10ReleaseBoard: "publicWrapperDelta.compatibility | publicWrapperDelta.polling | publicWrapperDelta.deltas"
+    },
+    noLeakExamples: [
+      { scenario: "public_channel_hint_delta", allowed: ["message URL/hash", "compact claim", "source id"], forbidden: ["raw message body", "media payload", "session token"] },
+      { scenario: "restricted_metadata_held_delta", allowed: ["victim", "actor statement summary", "dataset-size claim", "hash"], forbidden: ["restricted rows", "credentials", "private access material", "restricted URL"] }
+    ]
+  };
+}
+
+function publicWrapperDeltaStableFields(): string[] {
+  return [
+    "status",
+    "summary",
+    "runId",
+    "refreshAfterSeconds",
+    "pollCursor",
+    "deltaCursor",
+    "updated",
+    "lastSeen",
+    "sources",
+    "recentActivity",
+    "targets",
+    "ttps",
+    "datasets",
+    "warnings",
+    "warningCodes",
+    "sourceCoverage",
+    "publicChannel",
+    "restrictedMetadata",
+    "claimLedger",
+    "graph"
+  ];
 }
 
 function searchSlaEnforcement(input: {
@@ -1714,13 +1927,20 @@ function liveSearchCompatibilityFields(input: {
         : "partial";
   const cursor = input.scheduler.latestCursor ?? stableId("cursor", `${input.query}:${input.planner.reuseKey}:${input.scheduler.cursorContinuity}`);
   const publicPollSeconds = publicTiAnswerPollSeconds(input.scheduler.nextPollSeconds);
+  const evidenceStageCounts = record(input.actorProfile.datasets?.evidenceStageCounts) ?? {};
+  const hasObservedEvidence = Object.entries(evidenceStageCounts)
+    .some(([stage, value]) => stage !== "seeded" && typeof value === "number" && value > 0);
+  const recentActivity = record(input.actorProfile.recentActivity) ?? {};
+  const lastSeen = hasObservedEvidence && typeof recentActivity.lastSeen === "string" ? recentActivity.lastSeen : undefined;
   return {
     status,
-    runId: input.planner.activeRunId ?? input.planner.planId,
+    runId: input.planner.activeRunId ?? stableId("run", input.query.toLowerCase()),
     cursor,
     nextCursor: cursor,
     pollCursor: cursor,
     deltaCursor: cursor,
+    updated: nowIso(),
+    lastSeen,
     refreshAfterSeconds: publicPollSeconds,
     nextPollSeconds: publicPollSeconds,
     summary: input.actorProfile.answer?.summary ?? input.actorProfile.summary,
@@ -2595,6 +2815,9 @@ function schedulerSummaryForPlan(input: {
     skippedReasons: skipped,
     captures: input.options?.store.listCaptures() ?? []
   });
+  const persistedAnalystLoop = input.options?.store
+    ? persistTiAnalystLoopSummary(input.options.store, input.plan, input.run, analystLoop)
+    : undefined;
   const poll = pollingSummaryForPlan({
     plan: input.plan,
     run: input.run,
@@ -2650,7 +2873,21 @@ function schedulerSummaryForPlan(input: {
     workerSoakMigration,
     productionAdapterTelemetry,
     canaryControlPlane,
-    analystLoop,
+    analystLoop: persistedAnalystLoop ? {
+      ...analystLoop,
+      persistence: {
+        ...analystLoop.persistence,
+        currentBackend: "in_memory_repository",
+        durable: false,
+        persisted: {
+          reviewTaskIds: persistedAnalystLoop.reviewTaskIds,
+          activationPacketIds: persistedAnalystLoop.activationPacketIds,
+          victimNotificationPacketId: persistedAnalystLoop.victimNotificationPacketId,
+          claimLedgerEntryIds: persistedAnalystLoop.claimLedgerEntryIds,
+          snapshotId: persistedAnalystLoop.snapshotId
+        }
+      }
+    } : analystLoop,
     emergencyBrakeState: input.frontier.groupedSnapshot().queued >= 1_000 ? "armed" : "clear"
   };
 }
@@ -2683,7 +2920,9 @@ function buildTiAnalystLoopSummary(input: {
     .filter((capture) => capture.tenantId === input.plan.tenantId || !input.plan.tenantId)
     .map((capture) => metadataReviewItemFromCapture(capture, input.plan.request.query, input.run?.id))
     .filter((item): item is NonNullable<ReturnType<typeof metadataReviewItemFromCapture>> => Boolean(item));
-  const taskReviewItems = input.plan.reviewRequired.map((task) => metadataReviewItemFromTask(task, input.plan.request.query, input.run?.id));
+  const taskReviewItems: TiAnalystReviewItem[] = input.plan.reviewRequired
+    .filter((task) => task.sourceType === "tor_metadata" || task.sourceType === "i2p_metadata" || task.sourceType === "freenet_metadata")
+    .map((task) => metadataReviewItemFromTask(task, input.plan.request.query, input.run?.id));
   const metadataReviewInbox = dedupeAnalystReviewItems([...captureReviewItems, ...taskReviewItems]).slice(0, 10);
   const needsActivation = allReasons.some((reason) => /activation|approval|legal|operator|restore|metadata-only review/i.test(reason))
     || input.plan.reviewRequired.some((task) => /approval|legal|operator|restore|metadata-only review/i.test(task.reason));
@@ -2696,7 +2935,7 @@ function buildTiAnalystLoopSummary(input: {
         : input.queuedTaskCount > 0
           ? "queued"
           : "ready";
-  const reviewTaskCount = Math.max(input.reviewTaskCount, metadataReviewInbox.length);
+  const reviewTaskCount = metadataReviewInbox.length > 0 ? metadataReviewInbox.length : input.reviewTaskCount;
   const meaningfulWorkCount = input.queuedTaskCount + reviewTaskCount;
   const nextSteps: TiAnalystLoopNextStep[] = [
     ...(input.queuedTaskCount > 0 ? [{
@@ -2757,9 +2996,268 @@ function buildTiAnalystLoopSummary(input: {
       currentBackend: "in_memory",
       targetBackend: "postgres",
       durable: false,
-      missingTables: ["ti_source_registry", "ti_collection_plans", "ti_collection_runs", "ti_review_tasks", "ti_captures", "ti_claim_ledger"],
-      migrationPlan: "Persist source registry, plans, runs, review tasks, captures, and claim ledger before production promotion."
+      schemaMigration: "migrations/004_analyst_loop.sql",
+      schemaTables: [
+        "collection_plans",
+        "collection_tasks",
+        "collection_runs",
+        "metadata_review_tasks",
+        "source_activation_packets",
+        "victim_notification_packets",
+        "claim_ledger_entries",
+        "analyst_loop_snapshots"
+      ],
+      missingRuntimeRepository: ["postgres_analyst_loop_repository", "migration_runner_cutover"],
+      migrationPlan: "Postgres workflow schema is defined; cut runtime from in-memory analyst-loop summaries to repository-backed plans, runs, review tasks, notifications, snapshots, and claim ledger before production promotion."
     }
+  };
+}
+
+function persistTiAnalystLoopSummary(
+  store: ScraperStore,
+  plan: CollectionPlan,
+  run: CollectionRun | undefined,
+  loop: ReturnType<typeof buildTiAnalystLoopSummary>
+): {
+  reviewTaskIds: string[];
+  activationPacketIds: string[];
+  victimNotificationPacketId?: string;
+  claimLedgerEntryIds: string[];
+  snapshotId: string;
+} {
+  const now = nowIso();
+  const parseReviewCount = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const match = value.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k|m|million|thousand)?/i);
+    if (!match) return undefined;
+    const base = Number(match[1]);
+    if (!Number.isFinite(base)) return undefined;
+    const suffix = match[2]?.toLowerCase();
+    if (suffix === "k" || suffix === "thousand") return Math.round(base * 1_000);
+    if (suffix === "m" || suffix === "million") return Math.round(base * 1_000_000);
+    return Math.round(base);
+  };
+  const parseReviewSizeBytes = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const match = value.match(/(\d+(?:\.\d+)?)\s*(GB|MB|TB|PB)/i);
+    if (!match) return undefined;
+    const base = Number(match[1]);
+    if (!Number.isFinite(base)) return undefined;
+    const unit = match[2].toUpperCase();
+    const factor = unit === "PB" ? 1_000_000_000_000_000 : unit === "TB" ? 1_000_000_000_000 : unit === "GB" ? 1_000_000_000 : 1_000_000;
+    return Math.round(base * factor);
+  };
+  const whatWasNotAccessed = () => [
+    "restricted files",
+    "sensitive account material",
+    "private communities",
+    "CAPTCHA or authenticated areas",
+    "threat actor interaction"
+  ];
+  const reviewProvenance = (value: string): Record<string, unknown> => ({
+    summary: value,
+    unsafeMaterialAccessed: false,
+    whatWasNotAccessed: whatWasNotAccessed()
+  });
+  const activationAction = (action: string): {
+    action: AnalystSourceActivationPacket["action"];
+    execution: AnalystSourceActivationPacket["execution"];
+    expectedEffect: string;
+    rollback: string;
+  } => {
+    if (action === "keep_blocked") {
+      return {
+        action: "keep_blocked",
+        execution: "blocked",
+        expectedEffect: "Keep unsafe restricted payload, credential, private-access, or interaction target blocked.",
+        rollback: "No rollback; blocked target remains outside allowed collection."
+      };
+    }
+    if (action === "enable_metadata_only_queue") {
+      return {
+        action: "restore_metadata_only_source",
+        execution: "dry_run_only",
+        expectedEffect: "Queue only metadata fields after explicit approval while raw downloads and interactions disabled.",
+        rollback: "Leave source disabled or move it back to needs_review if approval is not granted."
+      };
+    }
+    return {
+      action: "request_operator_approval",
+      execution: "approval_required",
+      expectedEffect: "Create an approval packet before any metadata-only collection is restored.",
+      rollback: "Reject or expire the approval packet; no source activation occurs from this dry run."
+    };
+  };
+  const notificationFromLoop = (
+    packet: ReturnType<typeof victimNotificationPacketFromReviewItem>,
+    reviewTask: AnalystMetadataReviewTask
+  ): AnalystVictimNotificationPacket => ({
+    id: stableId("victim-notification", `${reviewTask.id}:${packet.sourceHash}`),
+    tenantId: plan.tenantId,
+    reviewTaskId: reviewTask.id,
+    status: "draft",
+    company: reviewTask.company ?? reviewTask.victim ?? "Unknown organization",
+    victim: reviewTask.victim,
+    claimSummary: packet.claimSummary,
+    affectedAccounts: packet.affectedAccounts,
+    datasetSize: packet.datasetSize,
+    actorStatement: packet.actorStatement,
+    claimedAt: packet.claimedDate,
+    observedAt: reviewTask.observedAt,
+    sourceHash: packet.sourceHash,
+    confidence: clampScore(packet.confidence),
+    provenance: reviewTask.provenance,
+    redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"],
+    whatWasNotAccessed: packet.whatWasNotAccessed,
+    safeToSend: false,
+    createdAt: now,
+    updatedAt: now
+  });
+  const claimEntriesFromTask = (task: AnalystMetadataReviewTask): AnalystClaimLedgerEntry[] => {
+    const base = {
+      tenantId: task.tenantId,
+      normalizedQuery: normalizeSearchQuery(plan.request.query),
+      reviewTaskId: task.id,
+      captureId: task.captureId,
+      sourceId: task.sourceId,
+      company: task.company,
+      victim: task.victim,
+      sourceHash: task.sourceHash,
+      confidence: task.confidence,
+      ledgerStatus: "metadata_review" as const,
+      observedAt: task.observedAt,
+      provenance: task.provenance,
+      createdAt: now
+    };
+    const entries: AnalystClaimLedgerEntry[] = [];
+    if (task.company || task.victim) {
+      entries.push({
+        ...base,
+        id: stableId("claim-ledger", `${task.id}:victim:${task.company ?? task.victim}`),
+        claimKind: "victim_claim",
+        claimTextSummary: `${task.company ?? task.victim} was named in a metadata-only leak claim.`
+      });
+    }
+    if (task.affectedAccounts) {
+      entries.push({
+        ...base,
+        id: stableId("claim-ledger", `${task.id}:affected:${task.affectedAccounts}`),
+        claimKind: "affected_accounts_claim",
+        claimTextSummary: `${task.affectedAccounts} were claimed affected.`
+      });
+    }
+    if (task.datasetSize) {
+      entries.push({
+        ...base,
+        id: stableId("claim-ledger", `${task.id}:dataset:${task.datasetSize}`),
+        claimKind: "dataset_size_claim",
+        claimTextSummary: `${task.datasetSize} was claimed as dataset size or volume.`
+      });
+    }
+    if (task.actorStatement) {
+      entries.push({
+        ...base,
+        id: stableId("claim-ledger", `${task.id}:statement:${task.sourceHash}`),
+        claimKind: "actor_statement_claim",
+        claimTextSummary: task.actorStatement.slice(0, 500)
+      });
+    }
+    if (!entries.length) {
+      entries.push({
+        ...base,
+        id: stableId("claim-ledger", `${task.id}:leak`),
+        claimKind: "leak_claim",
+        claimTextSummary: "Metadata-only leak claim requires analyst review."
+      });
+    }
+    return entries;
+  };
+  const reviewTasks = loop.metadataReviewInbox.map((item): AnalystMetadataReviewTask => ({
+    id: item.id,
+    tenantId: plan.tenantId,
+    planId: plan.id,
+    runId: run?.id,
+    taskId: item.taskId || undefined,
+    sourceId: item.sourceId,
+    captureId: "captureId" in item ? item.captureId : undefined,
+    status: item.status === "needs_review" ? "open" : "open",
+    resultState: "metadata_review",
+    company: item.company,
+    victim: item.victim,
+    affectedAccounts: item.affectedAccounts,
+    affectedAccountsCount: parseReviewCount(item.affectedAccounts),
+    accountSubjects: item.accountSubjects ? [item.accountSubjects] : [],
+    datasetSize: item.datasetSize,
+    datasetSizeBytes: parseReviewSizeBytes(item.datasetSize),
+    actorStatement: item.actorStatement,
+    claimedAt: item.claimedDate,
+    observedAt: now,
+    sourceUrl: undefined,
+    sourceHash: item.sourceHash,
+    provenance: reviewProvenance(item.provenance),
+    allowedActions: [...item.allowedActions],
+    confidence: clampScore(item.confidence),
+    unsafeMaterialAccessed: false,
+    whatWasNotAccessed: whatWasNotAccessed(),
+    createdAt: now,
+    updatedAt: now
+  }));
+  for (const task of reviewTasks) store.saveAnalystMetadataReviewTask(task);
+
+  const activationPackets = loop.sourceActivationWorkflow.actions.map((action, index): AnalystSourceActivationPacket => {
+    const mapped = activationAction(action.action);
+    return {
+      id: stableId("activation-packet", `${plan.id}:${run?.id ?? "no-run"}:${action.action}:${action.sourceId ?? "source"}:${index}`),
+      tenantId: plan.tenantId,
+      planId: plan.id,
+      runId: run?.id,
+      sourceId: action.sourceId,
+      action: mapped.action,
+      execution: mapped.execution,
+      reason: action.reason,
+      expectedEffect: mapped.expectedEffect,
+      rollback: mapped.rollback,
+      dryRun: true,
+      createdAt: now
+    };
+  });
+  for (const packet of activationPackets) store.saveAnalystSourceActivationPacket(packet);
+
+  const notification = loop.victimNotificationPacket && reviewTasks[0]?.company
+    ? notificationFromLoop(loop.victimNotificationPacket, reviewTasks[0])
+    : undefined;
+  if (notification) store.saveAnalystVictimNotificationPacket(notification);
+
+  const claimLedgerEntries = reviewTasks.flatMap((task) => claimEntriesFromTask(task));
+  for (const entry of claimLedgerEntries) store.saveAnalystClaimLedgerEntry(entry);
+
+  const snapshot: AnalystLoopSnapshot = {
+    id: stableId("analyst-loop-snapshot", `${plan.id}:${run?.id ?? "no-run"}:${now}:${loop.resultState}`),
+    tenantId: plan.tenantId,
+    planId: plan.id,
+    runId: run?.id,
+    normalizedQuery: normalizeSearchQuery(plan.request.query),
+    resultState: loop.resultState,
+    headline: loop.headline,
+    queuedTasks: loop.runStatusClarity.queuedTasks,
+    reviewTasks: loop.runStatusClarity.reviewTasks,
+    rejectedSources: loop.runStatusClarity.rejectedSources,
+    blockedUnsafeTargets: loop.runStatusClarity.blockedUnsafeTargets,
+    meaningfulWorkCount: loop.runStatusClarity.meaningfulWorkCount,
+    nextSteps: loop.nextSteps,
+    reviewTaskIds: reviewTasks.map((task) => task.id),
+    activationPacketIds: activationPackets.map((packet) => packet.id),
+    victimNotificationPacketId: notification?.id,
+    capturedAt: now
+  };
+  store.saveAnalystLoopSnapshot(snapshot);
+
+  return {
+    reviewTaskIds: reviewTasks.map((task) => task.id),
+    activationPacketIds: activationPackets.map((packet) => packet.id),
+    victimNotificationPacketId: notification?.id,
+    claimLedgerEntryIds: claimLedgerEntries.map((entry) => entry.id),
+    snapshotId: snapshot.id
   };
 }
 
@@ -2769,6 +3267,7 @@ function metadataReviewItemFromTask(task: CollectionTask, query: string, runId: 
     id: stableId("metadata-review", `${runId ?? task.intelRequestId ?? "plan"}:${task.id}`),
     sourceId: task.sourceId,
     taskId: task.id,
+    captureId: "",
     company: parsed.company,
     victim: parsed.company,
     affectedAccounts: parsed.affectedAccounts,
@@ -2840,7 +3339,7 @@ function victimNotificationPacketFromReviewItem(item: TiAnalystReviewItem) {
     sourceHash: item.sourceHash,
     confidence: item.confidence,
     whatWasNotAccessed: [
-      "No raw leaked dataset was downloaded or opened.",
+      "No restricted dataset was downloaded or opened.",
       "No credentials, cookies, private channels, or invite-only areas were accessed.",
       "No CAPTCHA, authentication, or access-control bypass was attempted.",
       "No threat actor interaction was performed."
@@ -2875,6 +3374,171 @@ function sourceActivationActionsForAnalystLoop(
       execution: "blocked" as const
     }] : [])
   ];
+}
+
+function notificationPacketFromAnalystLoop(
+  packet: ReturnType<typeof victimNotificationPacketFromReviewItem>,
+  reviewTask: AnalystMetadataReviewTask,
+  tenantId: string | undefined,
+  now: string
+): AnalystVictimNotificationPacket {
+  return {
+    id: stableId("victim-notification", `${reviewTask.id}:${packet.sourceHash}`),
+    tenantId,
+    reviewTaskId: reviewTask.id,
+    status: "draft",
+    company: reviewTask.company ?? reviewTask.victim ?? "Unknown organization",
+    victim: reviewTask.victim,
+    claimSummary: packet.claimSummary,
+    affectedAccounts: packet.affectedAccounts,
+    datasetSize: packet.datasetSize,
+    actorStatement: packet.actorStatement,
+    claimedAt: packet.claimedDate,
+    observedAt: reviewTask.observedAt,
+    sourceHash: packet.sourceHash,
+    confidence: clampScore(packet.confidence),
+    provenance: reviewTask.provenance,
+    redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"],
+    whatWasNotAccessed: packet.whatWasNotAccessed,
+    safeToSend: false,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function claimLedgerEntriesFromReviewTask(
+  task: AnalystMetadataReviewTask,
+  query: string,
+  now: string
+): AnalystClaimLedgerEntry[] {
+  const base = {
+    tenantId: task.tenantId,
+    normalizedQuery: normalizeSearchQuery(query),
+    reviewTaskId: task.id,
+    captureId: task.captureId,
+    sourceId: task.sourceId,
+    company: task.company,
+    victim: task.victim,
+    sourceHash: task.sourceHash,
+    confidence: task.confidence,
+    ledgerStatus: "metadata_review" as const,
+    observedAt: task.observedAt,
+    provenance: task.provenance,
+    createdAt: now
+  };
+  const entries: AnalystClaimLedgerEntry[] = [];
+  if (task.company || task.victim) {
+    entries.push({
+      ...base,
+      id: stableId("claim-ledger", `${task.id}:victim:${task.company ?? task.victim}`),
+      claimKind: "victim_claim",
+      claimTextSummary: `${task.company ?? task.victim} was named in a metadata-only leak claim.`
+    });
+  }
+  if (task.affectedAccounts) {
+    entries.push({
+      ...base,
+      id: stableId("claim-ledger", `${task.id}:affected:${task.affectedAccounts}`),
+      claimKind: "affected_accounts_claim",
+      claimTextSummary: `${task.affectedAccounts} were claimed affected.`
+    });
+  }
+  if (task.datasetSize) {
+    entries.push({
+      ...base,
+      id: stableId("claim-ledger", `${task.id}:dataset:${task.datasetSize}`),
+      claimKind: "dataset_size_claim",
+      claimTextSummary: `${task.datasetSize} was claimed as dataset size or volume.`
+    });
+  }
+  if (task.actorStatement) {
+    entries.push({
+      ...base,
+      id: stableId("claim-ledger", `${task.id}:statement:${task.sourceHash}`),
+      claimKind: "actor_statement_claim",
+      claimTextSummary: task.actorStatement.slice(0, 500)
+    });
+  }
+  if (!entries.length) {
+    entries.push({
+      ...base,
+      id: stableId("claim-ledger", `${task.id}:leak`),
+      claimKind: "leak_claim",
+      claimTextSummary: "Metadata-only leak claim requires analyst review."
+    });
+  }
+  return entries;
+}
+
+function mapAnalystActivationAction(action: string): {
+  action: AnalystSourceActivationPacket["action"];
+  execution: AnalystSourceActivationPacket["execution"];
+  expectedEffect: string;
+  rollback: string;
+} {
+  if (action === "keep_blocked") {
+    return {
+      action: "keep_blocked",
+      execution: "blocked",
+      expectedEffect: "Keep unsafe restricted payload, credential, private-access, or interaction target blocked.",
+      rollback: "No rollback; blocked target remains outside allowed collection."
+    };
+  }
+  if (action === "enable_metadata_only_queue") {
+    return {
+      action: "restore_metadata_only_source",
+      execution: "dry_run_only",
+      expectedEffect: "Queue only metadata fields after explicit approval while raw payload access remains disabled.",
+      rollback: "Leave source disabled or move it back to needs_review if approval is not granted."
+    };
+  }
+  return {
+    action: "request_operator_approval",
+    execution: "approval_required",
+    expectedEffect: "Create an approval packet before any metadata-only collection is restored.",
+    rollback: "Reject or expire the approval packet; no source activation occurs from this dry run."
+  };
+}
+
+function provenanceRecord(value: string): Record<string, unknown> {
+  return {
+    summary: value,
+    unsafeMaterialAccessed: false,
+    whatWasNotAccessed: defaultAnalystWhatWasNotAccessed()
+  };
+}
+
+function defaultAnalystWhatWasNotAccessed(): string[] {
+  return [
+    "restricted files",
+    "credential material",
+    "private communities",
+    "CAPTCHA or authenticated areas",
+    "threat actor interaction"
+  ];
+}
+
+function parseCountText(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const match = value.replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(k|m|million|thousand)?/i);
+  if (!match) return undefined;
+  const base = Number(match[1]);
+  if (!Number.isFinite(base)) return undefined;
+  const suffix = match[2]?.toLowerCase();
+  if (suffix === "k" || suffix === "thousand") return Math.round(base * 1_000);
+  if (suffix === "m" || suffix === "million") return Math.round(base * 1_000_000);
+  return Math.round(base);
+}
+
+function parseSizeBytes(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const match = value.match(/(\d+(?:\.\d+)?)\s*(GB|MB|TB|PB)/i);
+  if (!match) return undefined;
+  const base = Number(match[1]);
+  if (!Number.isFinite(base)) return undefined;
+  const unit = match[2].toUpperCase();
+  const factor = unit === "PB" ? 1_000_000_000_000_000 : unit === "TB" ? 1_000_000_000_000 : unit === "GB" ? 1_000_000_000 : 1_000_000;
+  return Math.round(base * factor);
 }
 
 function analystLoopHeadline(state: TiAnalystLoopState, count: number): string {
@@ -3698,11 +4362,12 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/auth/integration-notes", surface: "auth", owner: "Agent 09", responseKeys: ["version", "notes"] },
-    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "surfaces", "publicCompatibility", "semantics"] },
+    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "surfaces", "publicCompatibility", "semantics"] },
     { method: "GET", path: "/v1/sources", surface: "sources", owner: "Agent 01/09", responseKeys: ["sources", "nextCursor"] },
     { method: "POST", path: "/v1/sources", surface: "sources", owner: "Agent 01/09", responseKeys: ["source"] },
     { method: "POST", path: "/v1/sources/apply-plan", surface: "sources", owner: "Agent 01/09", responseKeys: ["contract", "applyPlan"] },
     { method: "POST", path: "/v1/sources/canary-activation", surface: "sources", owner: "Agent 01/09", responseKeys: ["activation", "guarantees"] },
+    { method: "POST", path: "/v1/sources/canary-pause", surface: "sources", owner: "Agent 01/09", responseKeys: ["pause", "guarantees"] },
     { method: "POST", path: "/v1/sources/coverage-plan", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries"] },
     { method: "POST", path: "/v1/sources/portfolio", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "portfolio"] },
     { method: "POST", path: "/v1/sources/activation-batches", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "coordination", "executionReadiness.rolloutPromotion"] },
@@ -3723,7 +4388,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "POST", path: "/v1/intel/runs", surface: "intel", owner: "Agent 09", responseKeys: ["run"] },
     { method: "GET", path: "/v1/intel/runs/{id}", surface: "intel", owner: "Agent 09", responseKeys: ["run", "frontier"] },
     { method: "GET", path: "/v1/intel/runs/{id}/results", surface: "intel", owner: "Agent 09", responseKeys: ["run", "results"] },
-    { method: "GET", path: "/v1/intel/search", surface: "search", owner: "Agent 09", responseKeys: ["query", "mode", "status", "runId", "cursor", "nextCursor", "publicTiAnswer"] },
+    { method: "GET", path: "/v1/intel/search", surface: "search", owner: "Agent 09", responseKeys: ["query", "mode", "status", "runId", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "publicTiAnswer", "publicWrapperDelta"] },
     { method: "GET", path: "/v1/quality/evaluate", surface: "quality", owner: "Agent 07/09", responseKeys: ["query", "quality", "examples"] },
     { method: "GET", path: "/v1/graph/review-plan", surface: "graph", owner: "Agent 08/09", responseKeys: ["contract", "reviewPlan"] },
     { method: "GET", path: "/v1/graph/query", surface: "graph", owner: "Agent 08/09", responseKeys: ["contract", "graph"] },
@@ -3755,8 +4420,13 @@ function buildEnterpriseApiContractIndex() {
     "warnings",
     "cursor",
     "nextCursor",
+    "pollCursor",
+    "deltaCursor",
+    "updated",
+    "lastSeen",
     "answer",
-    "publicTiAnswer"
+    "publicTiAnswer",
+    "publicWrapperDelta"
   ];
   const noLeakGuarantees = [
     "no raw Telegram message bodies",
@@ -3931,7 +4601,7 @@ function buildEnterpriseApiContractIndex() {
       publicWrapperResponsiveFixture("graph_evidence_promotion", "APT29 graph promotion", "graph_evidence_promotion", "ready", "ready", [])
     ],
     noLeakExamples: [
-      { scenario: "restricted_hold", allowed: ["actor", "victim", "claimedDataType", "contentHash", "ledgerIds"], forbidden: ["raw leaked files", "credentials", "private invite links", "restricted URLs"] },
+      { scenario: "restricted_hold", allowed: ["actor", "victim", "claimedDataType", "contentHash", "ledgerIds"], forbidden: ["restricted files", "credentials", "private invite links", "restricted URLs"] },
       { scenario: "public_channel_partial", allowed: ["messageUrl", "contentHash", "compactClaim", "sourceId"], forbidden: ["raw message body", "media payload", "session material"] }
     ],
     proofCommands: [
@@ -3946,6 +4616,68 @@ function buildEnterpriseApiContractIndex() {
       "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
     ],
     guarantee: "public wrapper search is compact, no-default-query, no-leak, stable-run-id, 3-second-polling, and uses updated response time instead of fictional lastSeen values"
+  };
+  const publicWrapperDeltaAudit = {
+    schemaVersion: "ti.public_wrapper_delta_contract.v1",
+    owner: "Agent 09",
+    route: "GET /v1/intel/search",
+    publicWrapperRoute: "POST /api/ti/search",
+    stableFields: publicWrapperDeltaStableFields(),
+    cursorContract: {
+      runId: "stable for duplicate/repeated polls",
+      pollCursor: "client-supplied cursor for repeated polling",
+      deltaCursor: "server cursor for the newest visible delta",
+      emptyDelta: "HTTP 200 with stable fields and empty changedSinceCursor",
+      pollingSeconds: 3,
+      updatedSemantics: "updated is response generation time; lastSeen appears only with evidence-backed activity timestamps"
+    },
+    fixtures: [
+      publicWrapperDeltaFixture("first_response", "APT29", "actor", "first_response", "partial", []),
+      publicWrapperDeltaFixture("repeated_poll_same_run_id", "APT29", "actor", "empty_delta", "partial", ["duplicate_run_reuse"]),
+      publicWrapperDeltaFixture("poll_cursor_advancement", "APT42", "actor", "cursor_advancement", "partial", []),
+      publicWrapperDeltaFixture("empty_delta", "Random Actor", "random_actor", "empty_delta", "partial", []),
+      publicWrapperDeltaFixture("new_clear_web_capture_delta", "APT29", "actor", "clear_web_capture", "partial", []),
+      publicWrapperDeltaFixture("public_channel_hint_delta", "Scattered Spider", "actor", "public_channel_hint", "partial", ["public_channel_partial"]),
+      publicWrapperDeltaFixture("restricted_metadata_held_delta", "Akira", "ransomware", "restricted_metadata_held", "blocked", ["metadata_only_leak_claim"]),
+      publicWrapperDeltaFixture("graph_relationship_delta", "Volt Typhoon", "actor", "graph_relationship", "review_required", ["graph_export_hold"]),
+      publicWrapperDeltaFixture("claim_ledger_hold", "Turla", "actor", "claim_ledger_hold", "review_required", ["claim_ledger_hold"]),
+      publicWrapperDeltaFixture("contradiction_downgrade", "Volt Typhoon", "actor", "contradiction_downgrade", "review_required", ["contradicted_reporting"]),
+      publicWrapperDeltaFixture("no_result_searching", "Made Up Actor", "random_actor", "searching", "partial", []),
+      publicWrapperDeltaFixture("provider_unavailable", "APT42", "provider_unavailable", "provider_unavailable", "partial", ["provider_unavailable"]),
+      publicWrapperDeltaFixture("scraper_unavailable", "APT42", "scraper_unavailable", "scraper_unavailable", "partial", ["scraper_unavailable"]),
+      publicWrapperDeltaFixture("queue_pressure", "Scattered Spider", "queue_pressure", "queue_pressure", "partial", ["queue_pressure"]),
+      publicWrapperDeltaFixture("duplicate_run_reuse", "APT29", "duplicate_run_reuse", "empty_delta", "partial", ["duplicate_run_reuse"]),
+      publicWrapperDeltaFixture("stale_source", "Turla", "actor", "stale_source", "review_required", ["stale_evidence"]),
+      publicWrapperDeltaFixture("low_confidence", "Snake", "malware_tool", "low_confidence", "review_required", ["low_confidence"]),
+      publicWrapperDeltaFixture("policy_block", "restricted leak metadata", "policy_block", "policy_blocked", "blocked", ["policy_blocked"]),
+      publicWrapperDeltaFixture("final_ready", "APT29", "actor", "ready", "ready", []),
+      publicWrapperDeltaFixture("cve", "CVE-2026-11111", "cve", "clear_web_capture", "partial", []),
+      publicWrapperDeltaFixture("victim_ransomware", "Fjord Energy AS", "victim", "restricted_metadata_held", "partial", ["metadata_only_leak_claim"]),
+      publicWrapperDeltaFixture("country", "Norway", "country", "clear_web_capture", "partial", []),
+      publicWrapperDeltaFixture("sector", "energy", "sector", "clear_web_capture", "partial", [])
+    ],
+    handoffs: {
+      agent02: ["runId", "pollCursor", "deltaCursor", "scheduler.cursorContinuity"],
+      agent06: ["claimLedger.trustGate", "claimLedger.blockers", "claimLedger.safeOutput"],
+      agent07: ["answerDeltas", "publicTiAnswer.stateMachine.changedSinceCursor"],
+      agent08: ["graph.liveUpdate", "graph.exportGate"],
+      agent10: ["publicWrapperDelta.compatibility", "publicWrapperDelta.polling", "publicWrapperDelta.deltas"]
+    },
+    noLeakExamples: [
+      { scenario: "public_channel_hint_delta", forbidden: ["raw message body", "media payload", "session token"] },
+      { scenario: "restricted_metadata_held_delta", forbidden: ["restricted rows", "credentials", "private access material", "restricted URL"] }
+    ],
+    proofCommands: [
+      "bun test src/tests/api.test.ts src/tests/ops.test.ts",
+      "bun run check",
+      "bun test",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    guarantee: "public delta polling preserves stable wrapper fields across first response, repeated polls, empty deltas, new evidence, holds, downgraded facts, and ready states with compact proof summaries only"
   };
   const routeTruthAudit = {
     schemaVersion: "ti.route_truth_audit.v1",
@@ -3970,6 +4702,9 @@ function buildEnterpriseApiContractIndex() {
       routeTruthAuditFixture("no_approved_sources", "pass", "GET /v1/intel/search", "bun test src/tests/sourceSeeds.test.ts", ["semantics.cutoverScenarios.no_approved_sources", "examples.noApprovedSources", "sourceCoverageGaps"], "return safe blocked/no-result state with remediation gaps"),
       routeTruthAuditFixture("policy_blocked", "pass", "GET /v1/intel/search", "bun test src/tests/api.test.ts", ["semantics.cutoverScenarios.policy_blocked", "examples.policyBlocked", "reviewGates"], "fail closed without raw restricted details"),
       routeTruthAuditFixture("duplicate_run_reuse", "pass", "POST /v1/intel/runs", "bun test src/tests/api.test.ts", ["semantics.cutoverScenarios.duplicate_run_reuse", "idempotency", "cursorPolling"], "attach callers to existing run and preserve cursor continuity"),
+      routeTruthAuditFixture("delta_polling_contract", "pass", "GET /v1/intel/search", "bun test src/tests/api.test.ts", ["publicWrapperDelta", "pollCursor", "deltaCursor", "updated"], "freeze public POST delta polling shape before frontend promotion"),
+      routeTruthAuditFixture("empty_delta_poll", "pass", "GET /v1/intel/search", "bun test src/tests/api.test.ts", ["publicWrapperDelta.polling.changedSinceCursor.empty", "runId", "pollCursor"], "return stable empty-delta response instead of changing shape"),
+      routeTruthAuditFixture("public_post_poll_compatibility", "pass", "POST /api/ti/search", "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search", ["publicWrapperDelta.compatibility", "publicCompatibility.stableFields", "validation.publicProofs"], "restore public wrapper fallback if POST polling drops stable fields"),
       routeTruthAuditFixture("restricted_emergency_stop", "pass", "GET /v1/restricted-metadata/status", "bun test src/tests/darknetMetadata.test.ts", ["restrictedMetadataEmergencyStopCertification", "restrictedMetadataKillSwitchDrills", "noLeakGuarantees"], "hold or roll back public promotion when restricted emergency-stop controls fire"),
       routeTruthAuditFixture("canary_rc_decision", "pass", "GET /v1/contracts", "bun test src/tests/ops.test.ts", ["publicAnswerReleaseCandidate.agent10RcGate", "sourceRolloutPromotionPacket", "schedulerCanaryControlPlane"], "hold RC promotion unless Agent 10 canary gate passes"),
       routeTruthAuditFixture("no_leak_examples", "pass", "GET /v1/contracts", "bun run check:contract-index", ["noLeakGuarantees", "validation.schemaExampleRule", "examples"], "remove or redact any example that exposes raw payloads, credentials, cookies, object keys, or restricted URLs")
@@ -4004,6 +4739,7 @@ function buildEnterpriseApiContractIndex() {
     },
     routeTruthAudit,
     publicWrapperResponsiveAudit,
+    publicWrapperDeltaAudit,
     publicCompatibility: {
       canonicalPublicPath: "/api/ti/search",
       canonicalMethod: "POST",
@@ -4020,6 +4756,7 @@ function buildEnterpriseApiContractIndex() {
           "stateMachine",
           "releaseCandidate",
           "ux",
+          "publicWrapperDelta",
           "safeSummary",
           "recentAttacks",
           "targets",
@@ -4051,6 +4788,7 @@ function buildEnterpriseApiContractIndex() {
       publicAnswerReleaseCandidate,
       publicAnswerUxSemantics,
       publicWrapperResponsiveAudit,
+      publicWrapperDeltaAudit,
       cutoverScenarios,
       cursorPolling: {
         requestFields: ["cursor"],
@@ -4114,6 +4852,20 @@ function buildEnterpriseApiContractIndex() {
         packetFields: ["packetId", "scenario", "publicSearchAction", "restrictedContext", "publicAnswerInfluence", "policyGate", "agent06EvidenceGate", "agent07PublicAnswerState", "agent09WarningCodes", "agent10EmergencyStopBoard", "proof", "noLeakSerialization"],
         guarantee: "restricted Tor/I2P/Freenet/leak-site metadata never blocks clear-web or public-channel search; it remains held metadata-only policy-gated context with no unsafe access, no data exposure, no public-answer promotion, and no-leak serialization"
       },
+      restrictedMetadataAnalystOperations: {
+        field: "restrictedMetadata.analystOperations | analystLoop",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/evidence/claim-ledger", "/v1/contracts"],
+        scenarios: restrictedMetadataAnalystOperationsContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "analystState", "resultState", "schedulerIsolation", "victimNotificationPacket", "claimLedger", "agent01GovernanceGate", "agent02SchedulerGate", "agent06EvidenceGate", "agent07AnswerState", "agent08GraphHold", "agent09WarningCodes", "agent10EmergencyStopGate", "proof", "whatWasNotAccessed", "noLeakSerialization"],
+        guarantee: "restricted-source analyst operations stay metadata-only and victim-safe: approval workflow, proxy isolation, review, notification drafts, claim ledger, retention, redaction, and emergency stop without stolen-file downloads, credentials, auth/CAPTCHA bypass, private access, threat actor interaction, or raw unsafe URLs"
+      },
+      restrictedMetadataIsolationHarness: {
+        field: "restrictedMetadata.isolationHarness",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataIsolationHarnessContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "nonNetworked", "connectorBoundary", "workerIsolation", "deniedOperation", "complianceEvidence", "proof", "noLeakSerialization"],
+        guarantee: "non-networked Tor/I2P/Freenet metadata connector isolation harness proves approved proxy boundaries, kill-switch propagation, timeout attribution, unsafe target denial, no credential storage, no private access, no threat-actor interaction, and Agent 10 compliance evidence without live restricted access"
+      },
       graphExportCertification: {
         field: "graph.certification | readiness.certification | runtime.certification",
         routes: ["/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/intel/search", "/v1/contracts"],
@@ -4157,12 +4909,39 @@ function buildEnterpriseApiContractIndex() {
           "accepted_promotion",
           "stix_export_eligible"
         ],
-        packetFields: ["mode", "responsePolicy", "nextPollSeconds", "cursorField", "deltaCounts", "scenarioCoverage", "weakDiscoveryPolicy", "publicChannelPolicy", "restrictedEvidencePolicy", "stixPolicy", "agentHandoffs", "taxiiBoundary"],
-        guarantee: "incremental live-search graph updates use seconds-level polling; weak discovery, public-channel-only, and restricted-held evidence remain caveated pivots until ledger, review, and STIX gates pass"
+        deltaStreamFixtures: [
+          "clear_web_capture_promotion",
+          "public_channel_hint",
+          "restricted_metadata_held",
+          "claim_ledger_hold",
+          "missing_ledger_id",
+          "weak_co_mention_pivot",
+          "actor_alias_collision",
+          "contradicted_attribution",
+          "stale_ttp",
+          "new_victim_claim",
+          "new_cve_exploitation_claim",
+          "malware_tool_relation",
+          "infrastructure_relation",
+          "analyst_accepted_promotion",
+          "analyst_rejected_relation",
+          "graph_rollback",
+          "stix_export_eligibility_change"
+        ],
+        packetFields: ["mode", "responsePolicy", "nextPollSeconds", "cursorField", "deltaCounts", "scenarioCoverage", "deltaStream", "weakDiscoveryPolicy", "publicChannelPolicy", "restrictedEvidencePolicy", "stixPolicy", "agentHandoffs", "taxiiBoundary"],
+        guarantee: "incremental live-search graph updates use seconds-level polling; graph delta stream fixtures expose review holds, Agent 06 ledger gates, Agent 07 caveats, Agent 09 cursors, Agent 10 release gates, and weak/public/restricted evidence remains caveated until ledger, review, and STIX gates pass"
+      },
+      graphBackendRepository: {
+        field: "graph.runtime.backendContract | readiness.runtime.backendContract",
+        routes: ["/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/intel/search.graph", "/v1/contracts"],
+        backendCandidates: ["memory_snapshot", "postgres_graph_tables", "neo4j"],
+        operations: ["upsert_node", "upsert_relationship", "append_provenance", "append_review_decision", "append_confidence_history", "record_cursor_delta", "update_export_eligibility"],
+        packetFields: ["tenantScope", "operations", "reviewWorkflow", "exportEligibility", "cursorDeltas", "handoffs"],
+        guarantee: "backend-neutral graph repository contract preserves tenant scope, provenance chains, append-only review audit, accepted/rejected/stale/contradicted workflow state, STIX eligibility, and cursor deltas without changing public graph DTOs"
       },
       publicChannelCanary: {
         routes: ["/v1/public-channels/status", "/v1/public-channels/apply-plan", "/v1/intel/search"],
-        fields: ["canaryRollout", "promotionCanary", "promotionCertification", "selectedSources", "pendingCandidates", "sourceHealth", "controls", "agent06EvidenceHandoff", "agent07AnswerCaveats", "agent10ReleaseTrain"],
+        fields: ["canaryRollout", "promotionCanary", "promotionCertification", "signalFusion", "selectedSources", "pendingCandidates", "sourceHealth", "controls", "agent06EvidenceHandoff", "agent07AnswerCaveats", "agent10ReleaseTrain"],
         guarantee: "dry-run only; public approved sources only; no private invite, account automation, raw media, credential, or raw message payload material"
       },
       publicChannelPromotionCanary: {
@@ -4217,13 +4996,13 @@ function buildEnterpriseApiContractIndex() {
       errorEnvelope: commonErrorEnvelope
     },
     surfaces: [
-      contractSurface("search", "GET", "/v1/intel/search", "Agent 09", ["query", "mode", "status", "runId", "cursor", "nextCursor", "sla", "quality", "actorProfile", "answer", "publicTiAnswer"], ["compatibility_fields", "cursor_polling", "sla_enforcement", "public_answer_contract", "no_leak_dto"]),
+      contractSurface("search", "GET", "/v1/intel/search", "Agent 09", ["query", "mode", "status", "runId", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "sla", "quality", "actorProfile", "answer", "publicTiAnswer", "publicWrapperDelta"], ["compatibility_fields", "cursor_polling", "delta_polling", "sla_enforcement", "public_answer_contract", "no_leak_dto"]),
       contractSurface("run_status", "GET", "/v1/intel/runs/{id}", "Agent 09", ["run", "frontier"], ["idempotency_linkage", "scheduler_visibility"]),
       contractSurface("run_results", "GET", "/v1/intel/runs/{id}/results", "Agent 09", ["run", "results"], ["pagination", "include_filters", "safe_capture_dto"]),
       contractSurface("sources", "GET/POST/PATCH", "/v1/sources/*", "Agent 01/09", ["sources", "applyPlan", "queries", "activationWaves", "executionReadiness", "rolloutPromotion", "releasePacket"], ["source_governance", "coverage_closeout", "source_activation_execution_readiness", "source_rollout_promotion_packet", "dry_run_apply_plans"]),
       contractSurface("frontier", "GET/POST", "/v1/frontier/*", "Agent 02/09", ["queue", "summary", "scheduler", "applyPlan"], ["queue_pressure", "worker_queue_cutover", "worker_soak_migration", "scheduler_adapter_telemetry", "scheduler_canary_control_plane", "dry_run_scheduler_repairs"]),
-      contractSurface("public_channels", "GET/POST", "/v1/public-channels/*", "Agent 04/09", ["status", "sla", "promotion", "applyPlan", "canaryRollout"], ["public_channel_sla", "source_pack_readiness", "canary_rollout", "no_raw_payload"]),
-      contractSurface("restricted_metadata", "GET/POST", "/v1/restricted-metadata/*", "Agent 05/09", ["status", "applyPlan", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch"], ["metadata_only", "kill_switch", "safe_hashes", "dry_run_connector_certification", "kill_switch_drills", "emergency_stop_certification", "non_blocking_public_search", "no_leak_serialization"]),
+      contractSurface("public_channels", "GET/POST", "/v1/public-channels/*", "Agent 04/09", ["status", "sla", "promotion", "applyPlan", "canaryRollout", "publicSignalFusion"], ["public_channel_sla", "source_pack_readiness", "canary_rollout", "public_signal_fusion", "no_raw_payload"]),
+      contractSurface("restricted_metadata", "GET/POST", "/v1/restricted-metadata/*", "Agent 05/09", ["status", "applyPlan", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "isolationHarness"], ["metadata_only", "kill_switch", "safe_hashes", "dry_run_connector_certification", "kill_switch_drills", "emergency_stop_certification", "non_blocking_public_search", "analyst_operations_victim_safe", "non_networked_isolation_harness", "no_leak_serialization"]),
       contractSurface("evidence", "GET", "/v1/evidence/*", "Agent 06/09", ["contract", "replayPlan", "cutoverReport", "trustLedger", "certification"], ["claim_ledger", "cursor_replay", "persistence_certification", "no_object_key_leak"]),
       contractSurface("quality", "GET", "/v1/quality/evaluate", "Agent 07/09", ["query", "quality", "publicTiAnswer", "examples"], ["answer_readiness", "public_answer_contract", "review_required_states"]),
       contractSurface("graph", "GET", "/v1/graph/*", "Agent 08/09", ["contract", "graph", "timeline", "reviewPlan", "cutoverReport", "liveUpdate"], ["graph_enforcement", "graph_export_certification", "graph_live_update", "graph_stix_rc_gate", "stix_mapping", "review_workflow"]),
@@ -4351,6 +5130,34 @@ function publicWrapperResponsiveFixture(
     updatedSemantics: "updated is response generation time; lastSeen only appears with evidence timestamps",
     stableFields: ["query", "mode", "status", "runId", "cursor", "nextCursor", "refreshAfterSeconds", "publicTiAnswer"],
     proofCommand: "bun run check:scraper-native-search"
+  };
+}
+
+function publicWrapperDeltaFixture(
+  name: string,
+  query: string,
+  queryClass: string,
+  deltaKind: string,
+  expectedDisplayState: string,
+  warningCodes: string[]
+) {
+  return {
+    name,
+    query,
+    queryClass,
+    deltaKind,
+    expectedDisplayState,
+    warningCodes,
+    route: "GET /v1/intel/search",
+    publicWrapperRoute: "POST /api/ti/search",
+    stableRunId: true,
+    pollSeconds: 3,
+    requiresPollCursor: true,
+    requiresDeltaCursor: true,
+    publicPostCompatible: true,
+    noLeakRequired: true,
+    stableFields: publicWrapperDeltaStableFields(),
+    handoffs: ["Agent 02 scheduler cursors", "Agent 06 claim ledger", "Agent 07 answer deltas", "Agent 08 graph deltas", "Agent 10 release board"]
   };
 }
 

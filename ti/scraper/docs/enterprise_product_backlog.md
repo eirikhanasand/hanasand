@@ -1,0 +1,56 @@
+# Enterprise Product Backlog
+
+This backlog is for the scraper as a production CTI subsystem, not a demo. Work should improve analyst utility, evidence quality, operational reliability, or integration readiness.
+
+## Analyst Utility
+- Real-time public search deltas: stable run/cursor fields, 3-second polling, empty-delta semantics, and progressive updates without page refresh.
+- Actor profile workspace: aliases, recent activity, targeting, infrastructure, tools, CVEs, confidence, contradictions, and freshness per field.
+- Source coverage explainer: why a query has enough coverage, what is missing, which sources were skipped, and what to approve next.
+- Evidence/provenance panel: every claim links to source, capture, hash, timestamp, extractor version, confidence, and review state.
+- Analyst review queues: metadata-only leak claims, weak public-channel hints, graph relationship holds, low-confidence extraction, and source activation requests.
+- Victim-safe workflow: metadata-only victim notification packets, duplicate claim detection, redaction state, legal hold, and explicit “what was not accessed.”
+
+## Collection And Source Onboarding
+- Safe public source packs by query family: APT, ransomware, CVE/advisory, malware/tool, country, sector, campaign, and infrastructure.
+- Source portfolio scoring: trust, reliability, language, geography, sector coverage, evidence yield, parser compatibility, legal/robots freshness, and activation state.
+- Public signal fusion: approved public channels, public advisories, GitHub/security advisories, CERT/NCSC feeds, vendor research, public malware/report feeds, and public social-style sources where legal/API-safe.
+- Dynamic-page adapter plan: Playwright pool with strict isolation, screenshot hashing, max bytes/time, and disabled-by-default browser workers.
+- Restricted metadata operations: Tor/I2P/Freenet/leak-site metadata-only queueing, approvals, proxy isolation, emergency stop, redaction, retention, and legal hold.
+
+## Intelligence Quality
+- Field-level confidence and freshness: each activity, TTP, target, dataset, graph edge, and actor profile field should have evidence stage and confidence.
+- Contradiction handling: competing attribution, stale TTPs, alias collisions, source-family bias, and vendor-marketing suppression.
+- ATT&CK/STIX readiness: reviewed/promoted graph facts export by default; weak discovery/public-channel/restricted metadata remain pivots or holds.
+- Extraction evaluation dashboard: precision-style fixtures for actors, victims, CVEs, IOCs, malware/tools, sectors, countries, and TTPs.
+- Entity resolution: actor aliases, ransomware rebrands, victim normalization, organization-country-sector resolution, and infrastructure dedupe.
+
+## Enterprise Operations
+- Durable backends: Postgres queue/store, object evidence store, OpenSearch/vector/search interface, and graph backend interface with migration and replay proof.
+- Scheduler SLOs: p95 initial latency, p95 partial-result latency, queue age, worker saturation, run reuse, duplicate suppression, retry debt, dead letters, and fairness.
+- Resource controls: 96 GB scraper target, 160 GB ceiling, 500 GB reserve for broader CTI app, browser workers disabled unless allocated, bounded caches, disk-first evidence.
+- Deployment gates: route inventory, contract index, public POST proof matrix, frontend no-default proof, remote drift, Docker context size, backup/restore, and rollback commands.
+- Multi-tenant controls: tenant-scoped source registry, budgets, evidence retention, review queues, and audit logs.
+
+## Current Next Work
+- Agent 01: enterprise source portfolio, coverage gap triage, and onboarding workflow.
+- Agent 02: sub-second public search scheduling, polling contracts, queue pressure, and fairness.
+- Agent 03: dynamic-page, PDF, and public report capture adapter contracts.
+- Agent 04: public signal fusion connectors and analyst source workbench.
+- Agent 05: restricted metadata analyst operations, isolation proof, and victim-safe workflow.
+- Agent 06: durable evidence backend, object-store cutover contracts, and claim ledger persistence.
+- Agent 07: real-time public answer delta contract and freshness semantics.
+- Agent 08: graph delta stream, review holds, and STIX eligibility.
+- Agent 09: public wrapper delta API and compatibility freeze.
+- Agent 10: real-time search release board, polling SLOs, and canary decisioning.
+
+## Queued Agent Programs
+- Agent 01 AC/AD: multi-tenant source governance, analyst approval workbench, source marketplace, and parser capability matrix.
+- Agent 02 AB/AC: durable scheduler backend, worker drain/fairness under load, continuous collection cadence, and freshness SLO engine.
+- Agent 03 AB/AC: dynamic-page/PDF/report capture adapter contracts and parser profile matrix.
+- Agent 04 AC/AD: public advisory/GitHub/CERT signal connector layer and analyst public source workbench UX contracts.
+- Agent 05 AC/AD: restricted connector isolation harness, compliance evidence, victim claim dedupe, and notification workflow.
+- Agent 06 AA/AB: durable evidence backend/object store cutover and claim-ledger analyst review persistence.
+- Agent 07 AC/AD: extraction evaluation dashboard, field-level quality gates, entity resolution, and actor profile workbench.
+- Agent 08 AC/AD: graph backend interface, review workflow persistence, ATT&CK/STIX/TAXII interoperability hardening.
+- Agent 09 AC/AD: enterprise API surface, auth boundary, OpenAPI contract, SDK-friendly polling, and future webhook/SSE boundary.
+- Agent 10 AC/AD: production observability, SLO dashboard, 24h soak automation, release train, disaster recovery, and capacity plan.

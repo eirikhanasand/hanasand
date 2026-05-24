@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mapAttackTechniqueCandidates } from "../export/attack.ts";
 import { buildRelationshipGraph, relationshipConfidence } from "../export/relationships.ts";
 import { exportEvidenceBackedStixBundle, exportPipelineResultToStixBundle } from "../export/stix.ts";
+import { STIX_21_GRAPH_MAPPING_CONTRACT } from "../export/stixContracts.ts";
 import { assertValidStixBundle, validateStixBundle } from "../export/stixValidation.ts";
 import { STIX_21_MEDIA_TYPE, pageBundleForTaxii, taxiiCollectionDescriptor } from "../export/taxii.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
@@ -156,6 +157,44 @@ describe("exchange exports", () => {
     expect(validation.valid).toBe(false);
     expect(validation.issues.some((issue) => issue.path.includes("target_ref"))).toBe(true);
     expect(() => assertValidStixBundle(bundle)).toThrow("Invalid STIX bundle");
+  });
+
+  test("hardens ATT&CK STIX mapping fixtures and deprecated technique validation", () => {
+    expect(STIX_21_GRAPH_MAPPING_CONTRACT.confidenceMapping).toMatchObject({
+      inputRange: "0_to_1_graph_confidence",
+      stixRange: "0_to_100_integer",
+      rounding: "nearest_integer_clamped"
+    });
+    expect(STIX_21_GRAPH_MAPPING_CONTRACT.attackTechniqueHandling).toMatchObject({
+      mitreExternalIdPattern: "T####_optional_subtechnique",
+      revokedOrDeprecatedPolicy: "export_only_as_review_metadata_until_replaced",
+      requiredExternalReferenceFields: ["source_name", "external_id", "url"]
+    });
+    expect(STIX_21_GRAPH_MAPPING_CONTRACT.hardeningFixtures?.map((fixture) => fixture.name)).toEqual(expect.arrayContaining([
+      "actor_uses_tool",
+      "actor_uses_malware",
+      "actor_exploits_cve",
+      "actor_targets_victim",
+      "campaign_uses_ttp",
+      "revoked_deprecated_attack_id"
+    ]));
+    expect(STIX_21_GRAPH_MAPPING_CONTRACT.taxiiBoundary).toBe("descriptor_only_no_server");
+
+    const bundle = exportPipelineResultToStixBundle(fixtureResult(), {
+      producerName: "ti-scraper",
+      generatedAt: "2026-05-24T10:05:00.000Z"
+    });
+    const attackPattern = bundle.objects.find((object) => object.type === "attack-pattern");
+    expect(attackPattern).toBeDefined();
+    if (!attackPattern) throw new Error("expected ATT&CK attack-pattern");
+    attackPattern.external_references = [{ source_name: "mitre-attack", external_id: "T15", url: "https://attack.mitre.org/techniques/T15/" }];
+    expect(validateStixBundle(bundle).issues.some((issue) => issue.path.includes("external_id"))).toBe(true);
+
+    attackPattern.external_references = [{ source_name: "mitre-attack", external_id: "T1566", url: "https://attack.mitre.org/techniques/T1566/" }];
+    attackPattern.x_mitre_deprecated = true;
+    expect(validateStixBundle(bundle).issues.some((issue) => issue.path.includes("x_ti_review_state"))).toBe(true);
+    attackPattern.x_ti_review_state = "deprecated_review_hold";
+    expect(validateStixBundle(bundle).issues.some((issue) => issue.path.includes("x_ti_review_state"))).toBe(false);
   });
 
   test("applies explicit relationship confidence rules", () => {

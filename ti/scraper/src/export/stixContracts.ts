@@ -127,5 +127,25 @@ export const STIX_21_GRAPH_MAPPING_CONTRACT: Stix21MappingContractDto = {
     "x_ti_last_seen",
     "x_ti_tenant_id"
   ],
-  weakEdgePolicy: "Only relationships that pass STIX export readiness become STIX relationship facts. Rejected, contradicted, stale, discovery-only, missing-provenance, unsupported, and below-threshold edges are withheld as x_ti_blocked_relationships metadata."
+  weakEdgePolicy: "Only relationships that pass STIX export readiness become STIX relationship facts. Rejected, contradicted, stale, discovery-only, missing-provenance, unsupported, and below-threshold edges are withheld as x_ti_blocked_relationships metadata.",
+  confidenceMapping: {
+    inputRange: "0_to_1_graph_confidence",
+    stixRange: "0_to_100_integer",
+    rounding: "nearest_integer_clamped",
+    reviewHoldThreshold: 0.5
+  },
+  attackTechniqueHandling: {
+    mitreExternalIdPattern: "T####_optional_subtechnique",
+    revokedOrDeprecatedPolicy: "export_only_as_review_metadata_until_replaced",
+    requiredExternalReferenceFields: ["source_name", "external_id", "url"]
+  },
+  hardeningFixtures: [
+    { name: "actor_uses_tool", graphRelationship: "uses", sourceObject: "intrusion-set", targetObject: "malware/tool", expectedStixRelationship: "uses", exportGate: "accepted and provenance-backed" },
+    { name: "actor_uses_malware", graphRelationship: "uses", sourceObject: "intrusion-set", targetObject: "malware", expectedStixRelationship: "uses", exportGate: "accepted and provenance-backed" },
+    { name: "actor_exploits_cve", graphRelationship: "exploits", sourceObject: "intrusion-set", targetObject: "vulnerability", expectedStixRelationship: "exploits", exportGate: "accepted and provenance-backed" },
+    { name: "actor_targets_victim", graphRelationship: "targets", sourceObject: "intrusion-set", targetObject: "identity/victim", expectedStixRelationship: "targets", exportGate: "accepted and provenance-backed" },
+    { name: "campaign_uses_ttp", graphRelationship: "uses", sourceObject: "report/campaign", targetObject: "attack-pattern", expectedStixRelationship: "uses", exportGate: "ATT&CK id current or reviewed replacement" },
+    { name: "revoked_deprecated_attack_id", graphRelationship: "uses", sourceObject: "intrusion-set", targetObject: "attack-pattern", expectedStixRelationship: "uses", exportGate: "blocked as review metadata until replacement technique is selected" }
+  ],
+  taxiiBoundary: "descriptor_only_no_server"
 };

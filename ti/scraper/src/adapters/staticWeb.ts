@@ -1,10 +1,19 @@
-import type { CollectionTask, SourceRecord } from "../types.ts";
+import type { AdapterRunResult, CollectionTask, SourceRecord } from "../types.ts";
 import { hashContent, normalizeWhitespace, nowIso } from "../utils.ts";
 import type { CollectionAdapter } from "./base.ts";
 import { evaluateTaskForCollection } from "../policy/collectionPolicy.ts";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export type AdapterHttpCache = Map<string, { etag?: string; lastModified?: string }>;
+export type StaticWebFailureCategory =
+  | "policy_blocked"
+  | "robots_blocked"
+  | "not_modified"
+  | "rate_limited"
+  | "not_found"
+  | "http_error"
+  | "too_large"
+  | "unsupported_mime";
 
 export interface StaticWebAdapterOptions {
   fetcher?: Fetcher;
@@ -30,16 +39,21 @@ export class StaticWebAdapter implements CollectionAdapter {
       ? evaluateTaskForCollection(source, task)
       : { allowed: true, metadataOnly: false, reason: "manual run" };
 
-    if (!policy.allowed) return { items: [], discovered: [], warnings: [policy.reason] };
-
+    const startedAt = Date.now();
     const url = task?.targetUrl ?? source.url;
     const warnings: string[] = [];
+    if (!policy.allowed) {
+      return emptyStaticResult(url, [policy.reason], "policy_blocked", startedAt, { policyReason: policy.reason });
+    }
+
     if (!source.legalNotes.trim()) warnings.push("source has no legal notes");
 
     if (this.checkRobots) {
       const robots = await this.getRobotsRules(url);
       if (robots.checked && !robots.allowed) {
-        return { items: [], discovered: [], warnings: [`robots.txt disallows collection for ${url}`] };
+        return emptyStaticResult(url, [`robots.txt disallows collection for ${url}`], "robots_blocked", startedAt, {
+          robotsChecked: true
+        });
       }
       warnings.push(...robots.warnings);
     }
@@ -47,13 +61,44 @@ export class StaticWebAdapter implements CollectionAdapter {
     const headers = createConditionalHeaders(url, this.cache);
     const response = await this.fetcher(url, { headers });
     if (response.status === 304) {
-      return { items: [], discovered: [], warnings: [`Static page not modified for ${url}`] };
+      return emptyStaticResult(url, [`Static page not modified for ${url}`], "not_modified", startedAt, {
+        responseStatus: response.status,
+        statusClass: statusClass(response.status)
+      });
     }
-    if (!response.ok) throw new Error(`Static fetch failed ${response.status} for ${url}`);
+    if (!response.ok) {
+      const failureCategory = httpFailureCategory(response.status);
+      return emptyStaticResult(url, [`Static fetch returned ${response.status} for ${url}`], failureCategory, startedAt, {
+        responseStatus: response.status,
+        statusClass: statusClass(response.status),
+        retryAfterSeconds: retryAfterSeconds(response)
+      });
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!isSupportedStaticMediaType(contentType)) {
+      return emptyStaticResult(url, [`Unsupported static content type ${contentType} for ${url}`], "unsupported_mime", startedAt, {
+        responseStatus: response.status,
+        statusClass: statusClass(response.status),
+        contentType
+      });
+    }
 
     const finalUrl = canonicalizeUrl(response.url || url);
     rememberValidators(finalUrl, response, this.cache);
     const html = await response.text();
+    const contentBytes = byteLength(html);
+    if (task?.maxBytes && contentBytes > task.maxBytes) {
+      return emptyStaticResult(url, [`Static page exceeds maxBytes ${task.maxBytes} for ${url}`], "too_large", startedAt, {
+        responseStatus: response.status,
+        statusClass: statusClass(response.status),
+        finalUrl,
+        contentType,
+        contentBytes,
+        maxBytes: task.maxBytes
+      });
+    }
+
     const canonicalUrl = extractCanonicalUrl(html, finalUrl);
     const rawText = extractReadableText(html);
     const links = extractLinks(html, canonicalUrl);
@@ -83,7 +128,11 @@ export class StaticWebAdapter implements CollectionAdapter {
           finalUrl,
           canonicalUrl,
           responseStatus: response.status,
+          statusClass: statusClass(response.status),
           redirected: response.redirected,
+          contentType,
+          contentBytes,
+          fetchDurationMs: Date.now() - startedAt,
           etag: response.headers.get("etag") ?? undefined,
           lastModified: response.headers.get("last-modified") ?? undefined,
           legalNotes: source.legalNotes,
@@ -115,7 +164,18 @@ export class StaticWebAdapter implements CollectionAdapter {
         novelty: 0.5,
         freshness: 0.5
       })),
-      warnings
+      warnings,
+      metadata: {
+        adapter: "static_web",
+        requestedUrl: url,
+        finalUrl,
+        canonicalUrl,
+        responseStatus: response.status,
+        statusClass: statusClass(response.status),
+        contentType,
+        contentBytes,
+        fetchDurationMs: Date.now() - startedAt
+      }
     };
   }
 
@@ -146,6 +206,27 @@ export class StaticWebAdapter implements CollectionAdapter {
       };
     }
   }
+}
+
+function emptyStaticResult(
+  requestedUrl: string,
+  warnings: string[],
+  failureCategory: StaticWebFailureCategory,
+  startedAt: number,
+  metadata: Record<string, unknown> = {}
+): AdapterRunResult {
+  return {
+    items: [],
+    discovered: [],
+    warnings,
+    metadata: {
+      adapter: "static_web",
+      requestedUrl,
+      failureCategory,
+      fetchDurationMs: Date.now() - startedAt,
+      ...metadata
+    }
+  };
 }
 
 export function extractReadableText(html: string): string {
@@ -236,6 +317,40 @@ interface RobotsRules {
 
 function baseHeaders(): Record<string, string> {
   return { "user-agent": "ti-scraper/0.1 public-cti-research" };
+}
+
+function httpFailureCategory(status: number): StaticWebFailureCategory {
+  if (status === 429) return "rate_limited";
+  if (status === 404) return "not_found";
+  return "http_error";
+}
+
+function statusClass(status: number): string {
+  return `${Math.floor(status / 100)}xx`;
+}
+
+function retryAfterSeconds(response: Response): number | undefined {
+  const value = response.headers.get("retry-after");
+  if (!value) return undefined;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds)) return seconds;
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) return undefined;
+  return Math.max(0, Math.ceil((date - Date.now()) / 1000));
+}
+
+function isSupportedStaticMediaType(value: string | null): boolean {
+  if (!value) return true;
+  const mediaType = value.split(";")[0]?.trim().toLowerCase();
+  return mediaType === "text/html" ||
+    mediaType === "application/xhtml+xml" ||
+    mediaType === "text/plain" ||
+    mediaType === "application/xml" ||
+    mediaType === "text/xml";
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
 
 function shouldIgnoreHref(href: string): boolean {

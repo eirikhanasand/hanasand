@@ -537,6 +537,157 @@ export interface CollectionRun {
   error?: string;
 }
 
+export type AnalystLoopResultState =
+  | "queued"
+  | "metadata_review"
+  | "blocked_unsafe_target"
+  | "needs_source_activation"
+  | "ready";
+
+export type AnalystMetadataReviewStatus =
+  | "open"
+  | "duplicate"
+  | "approval_requested"
+  | "escalated"
+  | "notified"
+  | "closed";
+
+export type AnalystReviewAction =
+  | "notify_company"
+  | "mark_duplicate"
+  | "request_approval"
+  | "escalate";
+
+export type AnalystSourceActivationAction =
+  | "dry_run_packet"
+  | "request_operator_approval"
+  | "request_legal_approval"
+  | "restore_metadata_only_source"
+  | "keep_blocked";
+
+export type AnalystSourceActivationExecution =
+  | "dry_run_only"
+  | "approval_required"
+  | "blocked";
+
+export interface AnalystMetadataReviewTask {
+  id: string;
+  tenantId?: string;
+  planId: string;
+  runId?: string;
+  taskId?: string;
+  sourceId: string;
+  captureId?: string;
+  status: AnalystMetadataReviewStatus;
+  resultState: Extract<AnalystLoopResultState, "metadata_review">;
+  company?: string;
+  victim?: string;
+  affectedAccounts?: string;
+  affectedAccountsCount?: number;
+  accountSubjects: string[];
+  datasetSize?: string;
+  datasetSizeBytes?: number;
+  actorStatement?: string;
+  claimedAt?: string;
+  observedAt: string;
+  sourceUrl?: string;
+  sourceHash: string;
+  provenance: Record<string, unknown>;
+  allowedActions: AnalystReviewAction[];
+  confidence: number;
+  unsafeMaterialAccessed: false;
+  whatWasNotAccessed: string[];
+  duplicateOf?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalystSourceActivationPacket {
+  id: string;
+  tenantId?: string;
+  planId: string;
+  runId?: string;
+  sourceId?: string;
+  action: AnalystSourceActivationAction;
+  execution: AnalystSourceActivationExecution;
+  reason: string;
+  expectedEffect: string;
+  rollback: string;
+  dryRun: true;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdAt: string;
+}
+
+export interface AnalystVictimNotificationPacket {
+  id: string;
+  tenantId?: string;
+  reviewTaskId: string;
+  status: "draft" | "approved" | "sent" | "cancelled";
+  company: string;
+  victim?: string;
+  claimSummary: string;
+  affectedAccounts?: string;
+  datasetSize?: string;
+  actorStatement?: string;
+  claimedAt?: string;
+  observedAt: string;
+  sourceHash: string;
+  confidence: number;
+  provenance: Record<string, unknown>;
+  redactions: string[];
+  whatWasNotAccessed: string[];
+  safeToSend: boolean;
+  approvedBy?: string;
+  sentAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnalystClaimLedgerEntry {
+  id: string;
+  tenantId?: string;
+  normalizedQuery: string;
+  reviewTaskId?: string;
+  captureId?: string;
+  sourceId: string;
+  claimKind: "leak_claim" | "victim_claim" | "dataset_size_claim" | "affected_accounts_claim" | "actor_statement_claim";
+  company?: string;
+  victim?: string;
+  claimTextSummary: string;
+  sourceHash: string;
+  confidence: number;
+  ledgerStatus: "metadata_review" | "trusted" | "duplicate" | "notified" | "blocked" | "closed";
+  observedAt: string;
+  provenance: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AnalystLoopSnapshot {
+  id: string;
+  tenantId?: string;
+  planId: string;
+  runId?: string;
+  normalizedQuery: string;
+  resultState: AnalystLoopResultState;
+  headline: string;
+  queuedTasks: number;
+  reviewTasks: number;
+  rejectedSources: number;
+  blockedUnsafeTargets: number;
+  meaningfulWorkCount: number;
+  nextSteps: Array<{
+    state: AnalystLoopResultState;
+    label: string;
+    detail: string;
+    tone: "ok" | "watch" | "bad";
+  }>;
+  reviewTaskIds: string[];
+  activationPacketIds: string[];
+  victimNotificationPacketId?: string;
+  capturedAt: string;
+}
+
 export interface ApiCaptureDto {
   id: string;
   tenantId?: string;
@@ -1291,6 +1442,73 @@ export interface GraphLiveSearchUpdateScenarioDto {
   summary: string;
 }
 
+export type GraphDeltaStreamFixtureName =
+  | "clear_web_capture_promotion"
+  | "public_channel_hint"
+  | "restricted_metadata_held"
+  | "claim_ledger_hold"
+  | "missing_ledger_id"
+  | "weak_co_mention_pivot"
+  | "actor_alias_collision"
+  | "contradicted_attribution"
+  | "stale_ttp"
+  | "new_victim_claim"
+  | "new_cve_exploitation_claim"
+  | "malware_tool_relation"
+  | "infrastructure_relation"
+  | "analyst_accepted_promotion"
+  | "analyst_rejected_relation"
+  | "graph_rollback"
+  | "stix_export_eligibility_change";
+
+export type GraphDeltaStreamQueryKind =
+  | "actor"
+  | "random_actor"
+  | "made_up_actor"
+  | "cve"
+  | "malware_tool"
+  | "victim_ransomware"
+  | "country"
+  | "sector";
+
+export interface GraphDeltaStreamFixtureDto {
+  name: GraphDeltaStreamFixtureName;
+  status: "emitted" | "held" | "blocked" | "eligible" | "missing";
+  queryKinds: GraphDeltaStreamQueryKind[];
+  relationshipIds: string[];
+  deltaKinds: RelationshipDeltaKind[];
+  workflowStates: AnalystGraphWorkflowState[];
+  reviewStates: GraphRelationshipReviewState[];
+  caveatCodes: GraphIntegrityFindingCode[];
+  evidenceIds: string[];
+  ledgerIds: string[];
+  sourceIds: string[];
+  exportEligibleCount: number;
+  reviewHold: boolean;
+  stixImpact: "eligible" | "held" | "blocked";
+  publicAnswerImpact: "fact" | "pivot" | "caveat" | "hidden";
+  agent06LedgerGate: "complete" | "hold_missing_ledger" | "not_required";
+  agent07Caveat: "none" | "weak_discovery" | "public_channel_hint" | "restricted_held" | "stale" | "contradicted" | "missing_provenance" | "rejected";
+  agent09CursorState: "pollable";
+  agent10ReleaseGate: "pass" | "hold" | "rollback";
+  summary: string;
+}
+
+export interface GraphDeltaStreamContractDto {
+  mode: "real_time_answer_graph_delta_stream";
+  responsePolicy: "seconds_level_polling";
+  nextPollSeconds: 3;
+  cursorField: "graph.deltas[].cursor";
+  fixtureCount: number;
+  fixtures: GraphDeltaStreamFixtureDto[];
+  queryCoverage: GraphDeltaStreamQueryKind[];
+  reviewHoldPolicy: "hold_unreviewed_public_channel_restricted_weak_missing_ledger_stale_contradicted_rejected";
+  stixEligibilityPolicy: "reviewed_or_promoted_with_provenance_and_ledger";
+  rollbackPolicy: "contradicted_rejected_missing_provenance_or_schema_risk_blocks_export";
+  taxiiBoundary: "descriptor_only_no_server";
+  routeBindings: Array<"/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts">;
+}
+
 export interface GraphLiveSearchUpdateDto {
   endpoint: "/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts";
   generatedAt: string;
@@ -1301,6 +1519,7 @@ export interface GraphLiveSearchUpdateDto {
   relationshipCount: number;
   deltaCounts: Record<RelationshipDeltaKind, number>;
   scenarioCoverage: GraphLiveSearchUpdateScenarioDto[];
+  deltaStream: GraphDeltaStreamContractDto;
   weakDiscoveryPolicy: "pivots_and_caveats_only";
   publicChannelPolicy: "hint_until_corroborated_or_reviewed";
   restrictedEvidencePolicy: "held_context_no_public_fact";
@@ -1410,6 +1629,66 @@ export interface GraphRuntimeRelationshipDto {
   exportHolds: GraphIntegrityFindingCode[];
 }
 
+export type GraphRepositoryBackendKind = "memory_snapshot" | "postgres_graph_tables" | "neo4j";
+
+export type GraphRepositoryOperationKind =
+  | "upsert_node"
+  | "upsert_relationship"
+  | "append_provenance"
+  | "append_review_decision"
+  | "append_confidence_history"
+  | "record_cursor_delta"
+  | "update_export_eligibility";
+
+export interface GraphRepositoryOperationDto {
+  kind: GraphRepositoryOperationKind;
+  tableOrLabel: string;
+  idField: string;
+  requiredFields: string[];
+  tenantScoped: boolean;
+  appendOnly: boolean;
+  summary: string;
+}
+
+export interface GraphRepositoryReviewWorkflowDto {
+  acceptedRelationshipIds: string[];
+  rejectedRelationshipIds: string[];
+  staleRelationshipIds: string[];
+  contradictedRelationshipIds: string[];
+  pendingReviewRelationshipIds: string[];
+  decisionActions: GraphReviewDecisionAction[];
+  auditPersistence: "append_only_review_audit";
+}
+
+export interface GraphBackendRepositoryContractDto {
+  mode: "backend_neutral_graph_repository_contract";
+  backendCandidates: GraphRepositoryBackendKind[];
+  tenantScope: "tenant_id_required_on_nodes_edges_provenance_reviews_and_deltas";
+  generatedAt: string;
+  nodeCount: number;
+  relationshipCount: number;
+  provenanceCount: number;
+  cursorDeltaCount: number;
+  operations: GraphRepositoryOperationDto[];
+  reviewWorkflow: GraphRepositoryReviewWorkflowDto;
+  exportEligibility: {
+    readyRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    policy: "persist_readiness_flags_and_recompute_before_stix_export";
+  };
+  cursorDeltas: {
+    cursorField: "graph.deltas[].cursor";
+    relationshipIds: string[];
+    latestChangedAt?: string;
+  };
+  handoffs: {
+    agent06ClaimLedger: "persist_ledger_ids_with_provenance_support";
+    agent07EntityResolution: "preserve_stable_node_ids_aliases_and_review_states";
+    agent09Api: "serve_same_dtos_from_repository_without_route_shape_changes";
+    agent10DeploymentGate: "verify_repository_replay_before_graph_export_promotion";
+  };
+}
+
 export type GraphExportSlaState = "pass" | "warning" | "hold" | "rollback";
 
 export type GraphExportSlaBucket =
@@ -1498,6 +1777,7 @@ export interface GraphRuntimeApiDto {
   enforcement: GraphExportEnforcementDto;
   certification: GraphExportCertificationDto;
   liveUpdate: GraphLiveSearchUpdateDto;
+  backendContract: GraphBackendRepositoryContractDto;
   relationships: GraphRuntimeRelationshipDto[];
   reviewQueue: GraphReviewQueueSummaryDto;
 }
@@ -1560,6 +1840,26 @@ export interface Stix21MappingContractDto {
   externalReferences: string[];
   customProvenanceFields: string[];
   weakEdgePolicy: string;
+  confidenceMapping?: {
+    inputRange: "0_to_1_graph_confidence";
+    stixRange: "0_to_100_integer";
+    rounding: "nearest_integer_clamped";
+    reviewHoldThreshold: number;
+  };
+  attackTechniqueHandling?: {
+    mitreExternalIdPattern: "T####_optional_subtechnique";
+    revokedOrDeprecatedPolicy: "export_only_as_review_metadata_until_replaced";
+    requiredExternalReferenceFields: ["source_name", "external_id", "url"];
+  };
+  hardeningFixtures?: Array<{
+    name: string;
+    graphRelationship: IntelligenceRelationshipType;
+    sourceObject: string;
+    targetObject: string;
+    expectedStixRelationship: string;
+    exportGate: string;
+  }>;
+  taxiiBoundary?: "descriptor_only_no_server";
 }
 
 export type GraphIntegritySeverity = "info" | "warning" | "critical";
@@ -1881,6 +2181,7 @@ export interface StixObject {
   first_observed?: string;
   last_observed?: string;
   number_observed?: number;
+  revoked?: boolean;
   x_ti_provenance?: ExtractionProvenance[];
   x_ti_review_reasons?: string[];
   [key: `x_${string}`]: unknown;

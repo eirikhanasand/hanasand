@@ -1812,6 +1812,78 @@ describe("ops controls", () => {
     expect(promote.productTiBoard.routeTruthAudit.routeInventoryCount).toBe(26);
     expect(promote.productTiBoard.proofCommands).toContain("TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof");
     expect(promote.productTiBoard.rollbackCommands).toContain("restore previous api/src/utils/ti/search.ts fallback path and redeploy hanasand_api");
+    expect(promote.realTimeSearchBoard.schemaVersion).toBe("ti.realtime_search.release_board.v1");
+    expect(promote.realTimeSearchBoard.dryRun).toBe(true);
+    expect(["canary-ready", "canary-with-warnings", "promote-with-warnings", "promote"]).toContain(promote.realTimeSearchBoard.decision);
+    expect(promote.realTimeSearchBoard.productTiDecision).toBe(promote.productTiBoard.decision);
+    expect(promote.realTimeSearchBoard.pollingSlo).toMatchObject({
+      firstResponseImmediate: true,
+      targetPollSeconds: 3,
+      recommendedPollSeconds: 3,
+      sameRunReuse: true,
+      cursorAdvancement: true,
+      emptyDeltasAllowed: true,
+      status: "pass"
+    });
+    expect(promote.realTimeSearchBoard.scenarioGates.map((gate) => gate.scenario)).toEqual(expect.arrayContaining([
+      "immediate_first_response",
+      "three_second_polling",
+      "same_run_reuse",
+      "cursor_advancement",
+      "empty_deltas",
+      "clear_web_capture_deltas",
+      "public_channel_hint_deltas",
+      "restricted_held_deltas",
+      "graph_stix_deltas",
+      "claim_ledger_holds",
+      "contradiction_downgrades",
+      "no_result_searching",
+      "provider_unavailable",
+      "scraper_unavailable",
+      "queue_pressure",
+      "stale_source_caveats",
+      "low_confidence",
+      "policy_block",
+      "no_leak_output",
+      "memory_budget",
+      "worker_queue_headroom",
+      "frontend_no_default",
+      "public_post_compatibility",
+      "remote_container_health"
+    ]));
+    expect(promote.realTimeSearchBoard.queryMatrix.map((entry) => entry.query)).toEqual([
+      "APT29",
+      "APT42",
+      "Turla",
+      "Volt Typhoon",
+      "Scattered Spider",
+      "Akira",
+      "random_actor",
+      "made_up_actor",
+      "CVE-2024-3094",
+      "malware_tool",
+      "victim_ransomware",
+      "country",
+      "sector"
+    ]);
+    expect(promote.realTimeSearchBoard.queryMatrix.every((entry) => entry.status === "pass")).toBe(true);
+    expect(promote.realTimeSearchBoard.integrations).toMatchObject({
+      contractsRoute: "pass",
+      intelSearchRoute: "pass",
+      schedulerSlo: "pass",
+      evidenceClaimLedger: "pass",
+      answerDeltas: "pass",
+      graphStixDeltas: "pass",
+      publicWrapperProof: "pass"
+    });
+    expect(promote.realTimeSearchBoard.resourceHeadroom).toMatchObject({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500
+    });
+    expect(promote.realTimeSearchBoard.proofCommands).toContain("bun run check:contract-index");
+    expect(promote.realTimeSearchBoard.proofCommands).toContain("bun run check:live-search-deploy");
+    expect(promote.realTimeSearchBoard.rollbackCommands).toContain("pause real-time delta promotion and return Searching/queued-only public answers");
     expect(promote.runtimeProofs.find((proof) => proof.name === "graph_export_sla")?.graphExportSla).toMatchObject({
       endpoint: "agent10_release_packet",
       state: "pass",
@@ -1849,6 +1921,7 @@ describe("ops controls", () => {
     expect(promote.statusReport).toContain(`canaryExecution: ${promote.canaryExecution.decision}`);
     expect(promote.statusReport).toContain(`rcBoard: ${promote.rcBoard.decision}`);
     expect(promote.statusReport).toContain(`productTiBoard: ${promote.productTiBoard.decision}`);
+    expect(promote.statusReport).toContain(`realTimeSearchBoard: ${promote.realTimeSearchBoard.decision}`);
     expect(promote.nextProofCommands).toContain("bun run check:remote-drift");
     expect(promote.nextProofCommands).toContain("bun run check:deploy-hygiene");
     expect(promote.nextProofCommands).toContain("bun run check:docker-contexts");
@@ -1860,6 +1933,7 @@ describe("ops controls", () => {
     expect(blocker.canaryExecution.decision).toBe("no-go");
     expect(blocker.rcBoard.decision).toBe("no-go");
     expect(blocker.productTiBoard.decision).toBe("no-go");
+    expect(blocker.realTimeSearchBoard.decision).toBe("no-go");
     expect(blocker.blockers.map((item) => item.name)).toContain("api.public_post_proof_missing");
     expect(runtimeBlocker.decision).toBe("hold-on-blocker");
     expect(runtimeBlocker.blockers.map((item) => item.name)).toContain("runtime.claim_ledger_route_proof");
@@ -1868,6 +1942,7 @@ describe("ops controls", () => {
     expect(emergencyStop.canaryExecution.decision).toBe("emergency-stop");
     expect(emergencyStop.rcBoard.decision).toBe("emergency-stop");
     expect(emergencyStop.productTiBoard.decision).toBe("emergency-stop");
+    expect(emergencyStop.realTimeSearchBoard.decision).toBe("emergency-stop");
     expect(emergencyStop.canaryExecution.rollbackSteps[0]).toBe("activate restricted emergency stop and pause restricted metadata workers");
     expect(emergencyStop.ok).toBe(false);
     expect(emergencyStop.releaseTrain.currentDecision).toBe("emergency-stop");
@@ -1893,14 +1968,18 @@ describe("ops controls", () => {
     });
     expect(defaultAgent03Blocker.productTiBoard.decision).toBe("partial-public-ok");
     expect(defaultAgent03Blocker.productTiBoard.agentStatus.agent03).toBe("active");
+    expect(defaultAgent03Blocker.realTimeSearchBoard.decision).toBe("partial-public-ok");
+    expect(defaultAgent03Blocker.realTimeSearchBoard.scenarioGates.find((gate) => gate.scenario === "clear_web_capture_deltas")).toMatchObject({ status: "warning" });
     expect(deploymentBlocker.decision).toBe("hold-on-blocker");
     expect(deploymentBlocker.blockers.map((item) => item.name)).toContain("deployment_proof.public_post_api_proof");
     expect(deploymentBlocker.productTiBoard.decision).toBe("no-go");
+    expect(deploymentBlocker.realTimeSearchBoard.decision).toBe("no-go");
     expect(continueSoak.decision).toBe("continue-soak");
     expect(continueSoak.rcGate.decision).toBe("canary-only");
     expect(continueSoak.canaryExecution.decision).toBe("canary-with-warnings");
     expect(continueSoak.rcBoard.decision).toBe("canary-only");
     expect(continueSoak.productTiBoard.decision).toBe("canary-with-warnings");
+    expect(continueSoak.realTimeSearchBoard.decision).toBe("canary-with-warnings");
   });
 });
 

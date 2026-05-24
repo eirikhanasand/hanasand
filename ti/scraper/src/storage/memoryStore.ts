@@ -1,4 +1,9 @@
 import type {
+  AnalystClaimLedgerEntry,
+  AnalystLoopSnapshot,
+  AnalystMetadataReviewTask,
+  AnalystSourceActivationPacket,
+  AnalystVictimNotificationPacket,
   CaptureDedupeKey,
   CaptureReplayJob,
   CaptureWriteResult,
@@ -51,6 +56,17 @@ export interface ScraperStore extends CaptureMetadataStore {
   getRun(id: string): CollectionRun | undefined;
   findRunByIdempotencyKey(tenantId: string | undefined, key: string): CollectionRun | undefined;
   listRuns(): CollectionRun[];
+  saveAnalystMetadataReviewTask(task: AnalystMetadataReviewTask): AnalystMetadataReviewTask;
+  getAnalystMetadataReviewTask(id: string): AnalystMetadataReviewTask | undefined;
+  listAnalystMetadataReviewTasks(): AnalystMetadataReviewTask[];
+  saveAnalystSourceActivationPacket(packet: AnalystSourceActivationPacket): AnalystSourceActivationPacket;
+  listAnalystSourceActivationPackets(): AnalystSourceActivationPacket[];
+  saveAnalystVictimNotificationPacket(packet: AnalystVictimNotificationPacket): AnalystVictimNotificationPacket;
+  listAnalystVictimNotificationPackets(): AnalystVictimNotificationPacket[];
+  saveAnalystClaimLedgerEntry(entry: AnalystClaimLedgerEntry): AnalystClaimLedgerEntry;
+  listAnalystClaimLedgerEntries(): AnalystClaimLedgerEntry[];
+  saveAnalystLoopSnapshot(snapshot: AnalystLoopSnapshot): AnalystLoopSnapshot;
+  listAnalystLoopSnapshots(): AnalystLoopSnapshot[];
 }
 
 function objectKey(ref: ObjectStoreRef): string {
@@ -64,6 +80,11 @@ export class InMemoryScraperStore implements ScraperStore {
   private readonly sources = new Map<string, SourceRecord>();
   private readonly plans = new Map<string, CollectionPlan>();
   private readonly runs = new Map<string, CollectionRun>();
+  private readonly analystMetadataReviewTasks = new Map<string, AnalystMetadataReviewTask>();
+  private readonly analystSourceActivationPackets = new Map<string, AnalystSourceActivationPacket>();
+  private readonly analystVictimNotificationPackets = new Map<string, AnalystVictimNotificationPacket>();
+  private readonly analystClaimLedgerEntries = new Map<string, AnalystClaimLedgerEntry>();
+  private readonly analystLoopSnapshots = new Map<string, AnalystLoopSnapshot>();
   private readonly replayJobs = new Map<string, CaptureReplayJob>();
   private readonly discoveryEvidence = new Map<string, DiscoveryEvidence>();
   private readonly liveSearchSnapshots = new Map<string, LiveSearchSnapshot>();
@@ -186,6 +207,21 @@ export class InMemoryScraperStore implements ScraperStore {
     };
     this.replayJobs.set(job.id, job);
     return job;
+  }
+
+  saveReplayJob(job: CaptureReplayJob): CaptureReplayJob {
+    const capture = this.getCapture(job.captureId);
+    if (!capture) throw new Error(`Unknown capture for replay: ${job.captureId}`);
+    const previous = this.replayJobs.get(job.id);
+    if (previous && previous.captureId !== job.captureId) {
+      throw new Error(`Replay job capture cannot change: ${job.id}`);
+    }
+    this.replayJobs.set(job.id, {
+      ...job,
+      tenantId: job.tenantId ?? capture.tenantId,
+      sourceId: job.sourceId || capture.sourceId
+    });
+    return this.replayJobs.get(job.id)!;
   }
 
   recordReplayResult(jobId: string, result: PipelineResult): CaptureReplayJob {
@@ -363,6 +399,61 @@ export class InMemoryScraperStore implements ScraperStore {
 
   listRuns(): CollectionRun[] {
     return [...this.runs.values()];
+  }
+
+  saveAnalystMetadataReviewTask(task: AnalystMetadataReviewTask): AnalystMetadataReviewTask {
+    if (task.unsafeMaterialAccessed !== false) {
+      throw new Error(`Analyst metadata review task must not record unsafe material access: ${task.id}`);
+    }
+    this.analystMetadataReviewTasks.set(task.id, task);
+    return task;
+  }
+
+  getAnalystMetadataReviewTask(id: string): AnalystMetadataReviewTask | undefined {
+    return this.analystMetadataReviewTasks.get(id);
+  }
+
+  listAnalystMetadataReviewTasks(): AnalystMetadataReviewTask[] {
+    return [...this.analystMetadataReviewTasks.values()];
+  }
+
+  saveAnalystSourceActivationPacket(packet: AnalystSourceActivationPacket): AnalystSourceActivationPacket {
+    if (packet.dryRun !== true) {
+      throw new Error(`Analyst source activation packet must be dry-run only: ${packet.id}`);
+    }
+    this.analystSourceActivationPackets.set(packet.id, packet);
+    return packet;
+  }
+
+  listAnalystSourceActivationPackets(): AnalystSourceActivationPacket[] {
+    return [...this.analystSourceActivationPackets.values()];
+  }
+
+  saveAnalystVictimNotificationPacket(packet: AnalystVictimNotificationPacket): AnalystVictimNotificationPacket {
+    this.analystVictimNotificationPackets.set(packet.id, packet);
+    return packet;
+  }
+
+  listAnalystVictimNotificationPackets(): AnalystVictimNotificationPacket[] {
+    return [...this.analystVictimNotificationPackets.values()];
+  }
+
+  saveAnalystClaimLedgerEntry(entry: AnalystClaimLedgerEntry): AnalystClaimLedgerEntry {
+    this.analystClaimLedgerEntries.set(entry.id, entry);
+    return entry;
+  }
+
+  listAnalystClaimLedgerEntries(): AnalystClaimLedgerEntry[] {
+    return [...this.analystClaimLedgerEntries.values()];
+  }
+
+  saveAnalystLoopSnapshot(snapshot: AnalystLoopSnapshot): AnalystLoopSnapshot {
+    this.analystLoopSnapshots.set(snapshot.id, snapshot);
+    return snapshot;
+  }
+
+  listAnalystLoopSnapshots(): AnalystLoopSnapshot[] {
+    return [...this.analystLoopSnapshots.values()];
   }
 
   private recordDiscoveryDelta(kind: EvidenceDeltaKind, evidence: DiscoveryEvidence, promotion?: DiscoveryPromotion): void {

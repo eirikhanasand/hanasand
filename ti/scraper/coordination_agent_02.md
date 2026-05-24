@@ -6,6 +6,16 @@ Task AA: Sub-Second Public Search Scheduling And Polling Contracts
 
 Build the scheduler contract for responsive `/ti` search. Do not wait for another prompt. Deliver run attach/reuse, 3-second polling hints, duplicate public polling suppression, backpressure, abandoned-client cleanup, source activation fanout, no-result `Searching`, live discovery to capture task promotion, public-channel windows, restricted metadata holds, and worker headroom under the 96 GB target and 160 GB ceiling. Cover APT29, APT42, Turla, Volt Typhoon, Scattered Spider, Akira, random actor, ransomware/victim, CVE, malware/tool, country, and sector queries. Wire to `/v1/frontier/status`, `/v1/intel/search.scheduler`, `/v1/frontier/apply-plan`, `/v1/contracts`, Agent 07, Agent 09, and Agent 10. Verify scheduler/API/full tests, typecheck, route inventory, frontier apply-plan, and cutover rehearsal/plan.
 
+## QUEUED NEXT TASKS - CONTINUE AFTER CURRENT PROOF
+
+Task AB: Durable Scheduler Backend, Worker Drain, And Fairness Under Load
+
+After Task AA proof is complete, continue directly into Task AB. Build a production scheduler backend contract that can move from in-memory to Postgres/Redis/NATS without changing public API semantics. Cover leases, acknowledgements, retries, dead letters, cursor replay, abandoned public pollers, active-run reuse, per-tenant budgets, per-source fairness, queue partitions, worker drain, emergency brake, and 24h soak telemetry. Wire to `/v1/frontier/status`, `/v1/frontier/apply-plan`, `/v1/intel/search.scheduler`, Agent 01 activation waves, Agent 06 replay, Agent 09 delta API, and Agent 10 SLO board.
+
+Task AC: Continuous Collection Cadence And Freshness SLO Engine
+
+Build cadence planning for actor/CVE/ransomware/country/sector watches: frequency decisions from source freshness, source reliability, topic volatility, customer watchlists, queue pressure, and evidence yield. Include dry-run changes, rollback, stale-source pause, noisy-source throttling, and fairness proofs. Verify scheduler tests, soak scripts, and route contracts.
+
 # Agent 02 Summary
 
 - Added scheduler production adapter telemetry for embedded memory plus future Postgres, Redis, and NATS scheduler implementations.

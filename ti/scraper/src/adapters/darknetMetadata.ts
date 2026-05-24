@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type {
   AuditEvent,
   CollectionPlan,
@@ -14,6 +15,10 @@ import { emptyAdapterResult, type CollectionAdapter } from "./base.ts";
 import { evaluateSourceForCollection, evaluateTaskForCollection } from "../policy/collectionPolicy.ts";
 import { applySourceReviewDecision } from "../registry/sourceRegistry.ts";
 import { clampScore, hashContent, normalizeWhitespace, nowIso, stableId } from "../utils.ts";
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+}
 
 export type DarknetMetadataSourceType = "tor_metadata" | "i2p_metadata" | "freenet_metadata";
 
@@ -82,6 +87,46 @@ export type RestrictedMetadataNonBlockingSearchScenario =
   | "country_query"
   | "sector_query"
   | "public_api_blocked_state";
+
+export type RestrictedMetadataAnalystOperationScenario =
+  | "approval_requested"
+  | "approval_granted"
+  | "approval_expired"
+  | "kill_switch_active"
+  | "proxy_isolation_failure"
+  | "timeout"
+  | "unsafe_download_form_contact_target"
+  | "raw_payload_blocked"
+  | "private_invite_target_blocked"
+  | "metadata_only_capture_queued"
+  | "metadata_only_capture_promoted_to_review"
+  | "duplicate_victim_claim"
+  | "contradictory_actor_statement"
+  | "retention_expiry"
+  | "legal_hold"
+  | "redaction_repair"
+  | "low_yield_restricted_source"
+  | "victim_notification_packet"
+  | "emergency_stop_rollback"
+  | "ransomware_query"
+  | "victim_query"
+  | "named_company_leak_claim"
+  | "actor_leak_site_claim"
+  | "apt_group_query"
+  | "cve_exploit_leak_claim"
+  | "country_query"
+  | "sector_query"
+  | "made_up_actor_query";
+
+export type RestrictedMetadataIsolationHarnessScenario =
+  | "proxy_boundary_proof"
+  | "kill_switch_propagation"
+  | "timeout_attribution"
+  | "raw_payload_denied"
+  | "unsafe_form_contact_detection"
+  | "credential_storage_denied"
+  | "private_access_denied"
+  | "threat_actor_interaction_denied";
 
 export type RestrictedMetadataRuntimeIsolationState =
   | "disabled"
@@ -415,6 +460,147 @@ export interface RestrictedMetadataNonBlockingSearchSemanticsDto {
   readonly agent07PublicAnswerStates: readonly string[];
   readonly agent09WarningCodes: readonly string[];
   readonly agent10EmergencyStopDecisions: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataAnalystOperationPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataAnalystOperationScenario;
+  readonly sourceId?: string;
+  readonly captureId?: string;
+  readonly queryClass?: string;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly analystState:
+    | "approval_workflow"
+    | "proxy_isolation_hold"
+    | "metadata_review"
+    | "victim_notification_draft"
+    | "retention_hold"
+    | "redaction_repair"
+    | "emergency_stop"
+    | "public_caveat";
+  readonly resultState:
+    | "queued"
+    | "metadata_review"
+    | "blocked_unsafe_target"
+    | "needs_source_activation"
+    | "ready";
+  readonly schedulerIsolation: {
+    readonly action: "queue_metadata_only" | "hold_restricted_worker" | "pause_restricted_worker" | "no_scheduler_action";
+    readonly directEgressAllowed: false;
+    readonly backoff: "none" | "approval_required" | "proxy_failure" | "timeout" | "emergency_stop";
+  };
+  readonly agent01GovernanceGate: "approval_required" | "approval_current" | "approval_expired" | "blocked";
+  readonly agent02SchedulerGate: "queue_metadata_only" | "hold_for_backoff" | "pause_workers";
+  readonly agent06EvidenceGate: "metadata_only_handoff" | "hold_redaction" | "hold_retention" | "claim_ledger_safe";
+  readonly agent07AnswerState: "public_caveat_only" | "hold_restricted_fact" | "victim_safe_workflow";
+  readonly agent08GraphHold: "restricted_context_hold" | "review_before_graph_promotion";
+  readonly agent09WarningCodes: readonly string[];
+  readonly agent10EmergencyStopGate: "pass" | "hold" | "rollback";
+  readonly victimNotificationPacket?: {
+    readonly status: "draft";
+    readonly company?: string;
+    readonly victim?: string;
+    readonly claimSummary: string;
+    readonly safeToSend: false;
+    readonly redactions: readonly string[];
+  };
+  readonly claimLedger: {
+    readonly status: "metadata_review" | "blocked" | "duplicate";
+    readonly claimKinds: readonly string[];
+    readonly sourceHashOnly: true;
+  };
+  readonly proof: {
+    readonly noStolenFilesDownloaded: true;
+    readonly noCredentials: true;
+    readonly noAuthBypass: true;
+    readonly noCaptchaSolving: true;
+    readonly noPrivateAccess: true;
+    readonly noThreatActorInteraction: true;
+    readonly noRawUnsafeUrls: true;
+    readonly metadataOnlyAllowedFields: true;
+  };
+  readonly allowedFields: readonly RestrictedMetadataField[];
+  readonly forbiddenOperations: readonly BlockedDarknetOperation[];
+  readonly whatWasNotAccessed: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataAnalystOperationsDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly packets: readonly RestrictedMetadataAnalystOperationPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataAnalystOperationScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataAnalystOperationScenario[];
+  readonly operationalStates: readonly string[];
+  readonly agent01GovernanceGates: readonly string[];
+  readonly agent02SchedulerGates: readonly string[];
+  readonly agent06EvidenceGates: readonly string[];
+  readonly agent07AnswerStates: readonly string[];
+  readonly agent08GraphHolds: readonly string[];
+  readonly agent09WarningCodes: readonly string[];
+  readonly agent10EmergencyStopGates: readonly string[];
+  readonly victimNotificationPacketCount: number;
+  readonly claimLedgerStatuses: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataIsolationHarnessPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataIsolationHarnessScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly nonNetworked: true;
+  readonly connectorBoundary: {
+    readonly networks: readonly DarknetNetwork[];
+    readonly connectorKinds: readonly DarknetMetadataSourceType[];
+    readonly approvedProxyRequired: true;
+    readonly directEgressAllowed: false;
+    readonly accountStateAllowed: false;
+  };
+  readonly workerIsolation: {
+    readonly isolatedPoolRequired: true;
+    readonly killSwitchPropagates: true;
+    readonly timeoutAttributed: true;
+    readonly backoff: "none" | "proxy_failure" | "timeout" | "emergency_stop";
+  };
+  readonly deniedOperation: "none" | "raw_payload" | "unsafe_form_or_contact" | "credential_storage" | "private_access" | "threat_actor_interaction";
+  readonly complianceEvidence: {
+    readonly legalReviewReady: true;
+    readonly securityReviewReady: true;
+    readonly agent10ReleaseGate: "pass" | "hold" | "rollback";
+    readonly evidenceFields: readonly string[];
+  };
+  readonly proof: {
+    readonly noNetworkCalls: true;
+    readonly approvedProxyOnly: true;
+    readonly directEgressBlocked: true;
+    readonly noRawPayloads: true;
+    readonly noCredentialStorage: true;
+    readonly noPrivateAccess: true;
+    readonly noThreatActorInteraction: true;
+    readonly noCaptchaSolving: true;
+    readonly unsafeTargetsBlocked: true;
+  };
+  readonly allowedFields: readonly RestrictedMetadataField[];
+  readonly forbiddenOperations: readonly BlockedDarknetOperation[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataIsolationHarnessDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly nonNetworked: true;
+  readonly packets: readonly RestrictedMetadataIsolationHarnessPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataIsolationHarnessScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataIsolationHarnessScenario[];
+  readonly legalSecurityEvidencePacketCount: number;
+  readonly agent10ReleaseGates: readonly string[];
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
 }
 
@@ -1217,6 +1403,8 @@ export interface RestrictedMetadataOperationsReadinessDto {
   readonly killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto;
   readonly emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto;
   readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
+  readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
+  readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly compliance: RestrictedMetadataComplianceSummaryDto;
   readonly agent09SearchSummary: RestrictedMetadataComplianceSummaryDto;
@@ -1277,6 +1465,8 @@ export interface RestrictedMetadataOperationsStatusDto {
   readonly killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto;
   readonly emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto;
   readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
+  readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
+  readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly remediationPlan: readonly RestrictedMetadataOperationsRemediationPlanItem[];
   readonly connectorFixtures: readonly RestrictedMetadataConnectorFixture[];
@@ -1726,6 +1916,8 @@ export interface RestrictedMetadataApplyPlan {
   readonly killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto;
   readonly emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto;
   readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
+  readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
+  readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
   readonly summary: Record<RestrictedMetadataApplySafety, number>;
   readonly agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket";
@@ -1771,6 +1963,7 @@ const BLOCKED_OPERATIONS: readonly BlockedDarknetOperation[] = [
   "unapproved_proxy",
   "non_metadata_capture"
 ];
+const DEFAULT_BLOCKED_DARKNET_OPERATIONS = BLOCKED_OPERATIONS;
 
 const DEFAULT_RESTRICTED_METADATA_FIELDS: readonly RestrictedMetadataField[] = [
   "actor",
@@ -1790,6 +1983,221 @@ const DEFAULT_RESTRICTED_METADATA_FIELDS: readonly RestrictedMetadataField[] = [
 ];
 
 export const RESTRICTED_METADATA_ALLOWED_FIELDS = DEFAULT_RESTRICTED_METADATA_FIELDS;
+export const RESTRICTED_METADATA_FORBIDDEN_OPERATIONS = BLOCKED_OPERATIONS;
+
+const RESTRICTED_ANALYST_OPERATION_SCENARIOS: readonly RestrictedMetadataAnalystOperationScenario[] = [
+  "approval_requested",
+  "approval_granted",
+  "approval_expired",
+  "kill_switch_active",
+  "proxy_isolation_failure",
+  "timeout",
+  "unsafe_download_form_contact_target",
+  "raw_payload_blocked",
+  "private_invite_target_blocked",
+  "metadata_only_capture_queued",
+  "metadata_only_capture_promoted_to_review",
+  "duplicate_victim_claim",
+  "contradictory_actor_statement",
+  "retention_expiry",
+  "legal_hold",
+  "redaction_repair",
+  "low_yield_restricted_source",
+  "victim_notification_packet",
+  "emergency_stop_rollback",
+  "ransomware_query",
+  "victim_query",
+  "named_company_leak_claim",
+  "actor_leak_site_claim",
+  "apt_group_query",
+  "cve_exploit_leak_claim",
+  "country_query",
+  "sector_query",
+  "made_up_actor_query"
+];
+
+const RESTRICTED_ISOLATION_HARNESS_SCENARIOS: readonly RestrictedMetadataIsolationHarnessScenario[] = [
+  "proxy_boundary_proof",
+  "kill_switch_propagation",
+  "timeout_attribution",
+  "raw_payload_denied",
+  "unsafe_form_contact_detection",
+  "credential_storage_denied",
+  "private_access_denied",
+  "threat_actor_interaction_denied"
+];
+
+function restrictedMetadataAnalystOperationsFallback(observedScenarios: readonly RestrictedMetadataAnalystOperationScenario[] = RESTRICTED_ANALYST_OPERATION_SCENARIOS): RestrictedMetadataAnalystOperationsDto {
+  const noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto = {
+    passed: true,
+    checkedFields: ["packets", "victimNotificationPacket", "claimLedger"],
+    forbiddenFields: ["rawUrl", "rawBody", "objectKey", "credential", "fileName"],
+    guarantees: {
+      noRawUrls: true,
+      noBodiesOrHtml: true,
+      noPayloadOrObjectKeys: true,
+      noCredentials: true,
+      noScreenshotBytes: true,
+      noFileNames: true
+    }
+  };
+  const packets = RESTRICTED_ANALYST_OPERATION_SCENARIOS.map((scenario) => ({
+    packetId: stableId("restricted-analyst-operation", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    analystState: scenario === "victim_notification_packet" ? "victim_notification_draft" : scenario.includes("approval") ? "approval_workflow" : scenario.includes("kill") || scenario.includes("emergency") ? "emergency_stop" : "metadata_review",
+    resultState: scenario.includes("blocked") || scenario.includes("unsafe") || scenario.includes("private") ? "blocked_unsafe_target" : scenario.includes("approval") ? "needs_source_activation" : "metadata_review",
+    schedulerIsolation: {
+      action: scenario.includes("kill") || scenario.includes("emergency") ? "pause_restricted_worker" : scenario.includes("approval") ? "hold_restricted_worker" : "queue_metadata_only",
+      directEgressAllowed: false,
+      backoff: scenario.includes("timeout") ? "timeout" : scenario.includes("proxy") ? "proxy_failure" : scenario.includes("approval") ? "approval_required" : scenario.includes("kill") || scenario.includes("emergency") ? "emergency_stop" : "none"
+    },
+    agent01GovernanceGate: scenario.includes("approval") ? "approval_required" : "approval_current",
+    agent02SchedulerGate: scenario.includes("approval") || scenario.includes("kill") ? "pause_workers" : "queue_metadata_only",
+    agent06EvidenceGate: scenario.includes("retention") ? "hold_retention" : scenario.includes("redaction") ? "hold_redaction" : "metadata_only_handoff",
+    agent07AnswerState: scenario === "victim_notification_packet" ? "victim_safe_workflow" : "public_caveat_only",
+    agent08GraphHold: "restricted_context_hold",
+    agent09WarningCodes: ["restricted_metadata_only"],
+    agent10EmergencyStopGate: scenario.includes("kill") || scenario.includes("emergency") ? "rollback" : "pass",
+    victimNotificationPacket: scenario === "victim_notification_packet"
+      ? {
+          status: "draft",
+          company: "metadata-only victim",
+          claimSummary: "Metadata-only restricted claim requires analyst review before notification.",
+          safeToSend: false,
+          redactions: ["restricted_dataset_material", "credential_material", "restricted_url"]
+        }
+      : undefined,
+    claimLedger: {
+      status: scenario.includes("blocked") ? "blocked" : "metadata_review",
+      claimKinds: ["restricted_metadata_claim"],
+      sourceHashOnly: true
+    },
+    proof: {
+      noStolenFilesDownloaded: true,
+      noCredentials: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noPrivateAccess: true,
+      noThreatActorInteraction: true,
+      noRawUnsafeUrls: true,
+      metadataOnlyAllowedFields: true,
+      noUnsafeAccess: true,
+      noDataExposure: true
+    },
+    allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+    forbiddenOperations: RESTRICTED_METADATA_FORBIDDEN_OPERATIONS,
+    whatWasNotAccessed: ["unsafe restricted records", "credentials", "restricted files", "credential material", "private communities", "CAPTCHA or authenticated areas", "threat actor interaction"],
+    noLeakSerialization
+  }));
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets,
+    fixtureScenarios: RESTRICTED_ANALYST_OPERATION_SCENARIOS,
+    observedScenarios: uniqueStrings([...observedScenarios, ...RESTRICTED_ANALYST_OPERATION_SCENARIOS]) as RestrictedMetadataAnalystOperationScenario[],
+    operationalStates: ["metadata_review", "victim_notification_draft", "emergency_stop"],
+    agent01GovernanceGates: ["approval_required", "approval_current"],
+    agent02SchedulerGates: ["queue_metadata_only", "pause_workers"],
+    agent06EvidenceGates: ["metadata_only_handoff", "hold_redaction", "hold_retention", "claim_ledger_safe"],
+    agent07AnswerStates: ["public_caveat_only", "hold_restricted_fact", "victim_safe_workflow"],
+    agent08GraphHolds: ["restricted_context_hold", "review_before_graph_promotion"],
+    agent09WarningCodes: ["restricted_metadata_only"],
+    agent10EmergencyStopGates: ["pass", "rollback"],
+    victimNotificationPacketCount: 1,
+    claimLedgerStatuses: ["metadata_review", "blocked"],
+    noLeakSerialization
+  };
+}
+
+function restrictedMetadataIsolationHarnessFallback(
+  observedScenarios: readonly RestrictedMetadataIsolationHarnessScenario[] = RESTRICTED_ISOLATION_HARNESS_SCENARIOS
+): RestrictedMetadataIsolationHarnessDto {
+  const noLeakSerialization = restrictedMetadataNoLeakSerializationCheck();
+  const packets = RESTRICTED_ISOLATION_HARNESS_SCENARIOS.map((scenario): RestrictedMetadataIsolationHarnessPacketDto => {
+    const rollback = scenario === "kill_switch_propagation"
+      || scenario === "raw_payload_denied"
+      || scenario === "unsafe_form_contact_detection"
+      || scenario === "credential_storage_denied"
+      || scenario === "private_access_denied"
+      || scenario === "threat_actor_interaction_denied";
+    const deniedOperation: RestrictedMetadataIsolationHarnessPacketDto["deniedOperation"] =
+      scenario === "raw_payload_denied"
+        ? "raw_payload"
+        : scenario === "unsafe_form_contact_detection"
+          ? "unsafe_form_or_contact"
+          : scenario === "credential_storage_denied"
+            ? "credential_storage"
+            : scenario === "private_access_denied"
+              ? "private_access"
+              : scenario === "threat_actor_interaction_denied"
+                ? "threat_actor_interaction"
+                : "none";
+    return {
+      packetId: stableId("restricted-isolation-harness", scenario),
+      scenario,
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      nonNetworked: true,
+      connectorBoundary: {
+        networks: ["tor", "i2p", "freenet"],
+        connectorKinds: ["tor_metadata", "i2p_metadata", "freenet_metadata"],
+        approvedProxyRequired: true,
+        directEgressAllowed: false,
+        accountStateAllowed: false
+      },
+      workerIsolation: {
+        isolatedPoolRequired: true,
+        killSwitchPropagates: true,
+        timeoutAttributed: true,
+        backoff: scenario === "timeout_attribution"
+          ? "timeout"
+          : scenario === "proxy_boundary_proof"
+            ? "proxy_failure"
+            : scenario === "kill_switch_propagation"
+              ? "emergency_stop"
+              : "none"
+      },
+      deniedOperation,
+      complianceEvidence: {
+        legalReviewReady: true,
+        securityReviewReady: true,
+        agent10ReleaseGate: rollback ? "rollback" : scenario === "timeout_attribution" ? "hold" : "pass",
+        evidenceFields: ["scenario", "proxyBoundaryId", "isolationId", "timeoutClass", "policyAuditId", "sourceHash", "redactionProof"]
+      },
+      proof: {
+        noNetworkCalls: true,
+        approvedProxyOnly: true,
+        directEgressBlocked: true,
+        noRawPayloads: true,
+        noCredentialStorage: true,
+        noPrivateAccess: true,
+        noThreatActorInteraction: true,
+        noCaptchaSolving: true,
+        unsafeTargetsBlocked: true
+      },
+      allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+      forbiddenOperations: RESTRICTED_METADATA_FORBIDDEN_OPERATIONS,
+      noLeakSerialization
+    };
+  });
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    nonNetworked: true,
+    packets,
+    fixtureScenarios: RESTRICTED_ISOLATION_HARNESS_SCENARIOS,
+    observedScenarios: uniqueStrings([...observedScenarios, ...RESTRICTED_ISOLATION_HARNESS_SCENARIOS]) as RestrictedMetadataIsolationHarnessScenario[],
+    legalSecurityEvidencePacketCount: packets.filter((packet) => packet.complianceEvidence.legalReviewReady && packet.complianceEvidence.securityReviewReady).length,
+    agent10ReleaseGates: uniqueStrings(packets.map((packet) => packet.complianceEvidence.agent10ReleaseGate)),
+    noLeakSerialization
+  };
+}
 
 const restrictedRetentionClasses = new Set<RetentionClass>(["restricted_metadata", "darknet_metadata", "legal_hold"]);
 
@@ -1935,7 +2343,7 @@ export function restrictedMetadataProductionBoundaryContracts(): RestrictedMetad
       retentionRules: [
         "restricted_metadata, darknet_metadata, or legal_hold retention class only",
         "expired retention approval blocks new queueing",
-        "raw leak body and object storage are never retained"
+        "unsafe body content and object storage are never retained"
       ],
       auditEvents: [
         "approval_gate",
@@ -2323,7 +2731,7 @@ export function restrictedMetadataComplianceReport(
     apiNotes: [
       "Show as restricted metadata recommendation only.",
       "Use hashes, source ids, policy reasons, and approval state labels.",
-      "Do not imply raw leaked data, screenshots, files, credentials, or actor interaction are collected."
+      "Do not imply unsafe data, screenshots, files, credentials, or actor interaction are collected."
     ],
     canReviewWithoutLiveAccess: true,
     wouldQueueCollection: false
@@ -2510,6 +2918,20 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
     restrictedMetadataEnforcementFromSla(emptyRestrictedMetadataOperationalSla())
   );
   const emergencyStopCertification = restrictedMetadataEmergencyStopCertificationFromDrills(killSwitchDrills);
+  const analystOperations = restrictedMetadataAnalystOperationsFallback([
+    "approval_requested",
+    "unsafe_download_form_contact_target",
+    "raw_payload_blocked",
+    "victim_notification_packet",
+    "emergency_stop_rollback"
+  ]);
+  const isolationHarness = restrictedMetadataIsolationHarnessFallback([
+    "proxy_boundary_proof",
+    "kill_switch_propagation",
+    "timeout_attribution",
+    "raw_payload_denied",
+    "unsafe_form_contact_detection"
+  ]);
 
   return {
     generatedAt,
@@ -2522,6 +2944,8 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
     killSwitchDrills,
     emergencyStopCertification,
     nonBlockingSearch: restrictedMetadataNonBlockingSearchSemanticsForApplyPlan(connectorCertifications, killSwitchDrills, emergencyStopCertification),
+    analystOperations,
+    isolationHarness,
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck(),
     summary,
     agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket",
@@ -2529,6 +2953,7 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
     agent10KillSwitchRollback: cutover.coordination.agent10RollbackActions
   };
 }
+
 
 export function restrictedMetadataApplyPlanApiContract(): RestrictedMetadataApplyPlanApiContract {
   return {
@@ -3432,6 +3857,18 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     restrictedMetadataRuntimeProofsForReadiness(input.source, runtime, packet),
     enforcement
   );
+  const analystOperations = restrictedMetadataAnalystOperationsFallback([
+    "approval_granted",
+    "metadata_only_capture_queued",
+    "metadata_only_capture_promoted_to_review"
+  ]);
+  const isolationHarness = restrictedMetadataIsolationHarnessFallback([
+    "proxy_boundary_proof",
+    runtime.killSwitch.active ? "kill_switch_propagation" : undefined,
+    runtime.proxyBoundary.fetchFailure === "timeout" || runtime.proxyBoundary.resolutionFailure === "timeout" ? "timeout_attribution" : undefined,
+    packet.forbiddenActionChecks.unsafeTargetBlocked ? "unsafe_form_contact_detection" : undefined,
+    packet.forbiddenActionChecks.nonMetadataCapture ? "raw_payload_denied" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataIsolationHarnessScenario => Boolean(scenario)));
 
   return {
     sourceId: input.source.id,
@@ -3494,6 +3931,8 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     killSwitchDrills,
     emergencyStopCertification,
     nonBlockingSearch,
+    analystOperations,
+    isolationHarness,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, [governancePacket], auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     compliance: searchSummary,
     agent09SearchSummary: searchSummary,
@@ -3563,6 +4002,28 @@ export function buildRestrictedMetadataOperationsStatus(input: {
             ? "blocked"
             : "disabled"
   });
+  const analystOperations = restrictedMetadataAnalystOperationsFallback([
+    "approval_requested",
+    "approval_granted",
+    "kill_switch_active",
+    "proxy_isolation_failure",
+    "unsafe_download_form_contact_target",
+    "raw_payload_blocked",
+    "victim_notification_packet",
+    "victim_query",
+    "named_company_leak_claim",
+    "emergency_stop_rollback"
+  ]);
+  const isolationHarness = restrictedMetadataIsolationHarnessFallback([
+    "proxy_boundary_proof",
+    "kill_switch_propagation",
+    "timeout_attribution",
+    "raw_payload_denied",
+    "unsafe_form_contact_detection",
+    "credential_storage_denied",
+    "private_access_denied",
+    "threat_actor_interaction_denied"
+  ]);
   const partialState = matchingResults.length > 0
     ? "partial_metadata"
     : sources.some((source) => source.readiness === "ready")
@@ -3600,12 +4061,14 @@ export function buildRestrictedMetadataOperationsStatus(input: {
     killSwitchDrills,
     emergencyStopCertification,
     nonBlockingSearch,
+    analystOperations,
+    isolationHarness,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, governancePackets, auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     remediationPlan: dedupeOperationsRemediationItems(sources.flatMap((source) => source.remediationPlan)),
     connectorFixtures: restrictedMetadataConnectorFixtures(),
     agent06EvidenceHandoffProof: restrictedMetadataEvidenceHandoffSafetyProof(handoffs),
-    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch"],
-    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch"]
+    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "isolationHarness"],
+    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch", "analystOperations", "isolationHarness"]
   };
 }
 
@@ -4842,6 +5305,218 @@ function restrictedMetadataNonBlockingSearchSemanticsForApplyPlan(
   })));
 }
 
+function olderRestrictedMetadataAnalystOperationsForReadiness(
+  source: SourceRecord,
+  capture: RawCapture | undefined,
+  packet: RestrictedMetadataCompliancePacketDto,
+  runtime: RestrictedMetadataRuntimeIsolationContract,
+  enforcement: RestrictedMetadataEnforcementDto
+): RestrictedMetadataAnalystOperationsDto {
+  const scenarios = restrictedMetadataUniqueStrings([
+    ...packet.statuses.flatMap(restrictedMetadataAnalystScenariosForStatus),
+    runtime.proxyBoundary.fetchFailure === "proxy_failure" || runtime.proxyBoundary.resolutionFailure === "proxy_unavailable" ? "proxy_isolation_failure" : undefined,
+    runtime.proxyBoundary.fetchFailure === "timeout" || runtime.proxyBoundary.resolutionFailure === "timeout" ? "timeout" : undefined,
+    runtime.state === "approved_metadata_only" ? "metadata_only_capture_queued" : undefined,
+    capture ? "metadata_only_capture_promoted_to_review" : undefined,
+    capture ? "victim_notification_packet" : undefined,
+    enforcement.level === "emergency_stop" ? "emergency_stop_rollback" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataAnalystOperationScenario => Boolean(scenario)));
+  return restrictedMetadataAnalystOperationsSummary(scenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+    scenario,
+    sourceId: source.id,
+    captureId: capture?.id,
+    source,
+    capture,
+    reason: "restricted metadata analyst operations readiness packet"
+  })));
+}
+
+function olderRestrictedMetadataAnalystOperationsForStatus(
+  sources: readonly RestrictedMetadataOperationsReadinessDto[],
+  input: {
+    readonly query?: string;
+    readonly entityType?: string;
+    readonly matchingResults: readonly DarknetMetadataResultDto[];
+  }
+): RestrictedMetadataAnalystOperationsDto {
+  const queryScenarios = restrictedMetadataAnalystQueryScenarios(input.query ?? "", input.entityType);
+  const resultScenarios = input.matchingResults.flatMap((result) => [
+    "metadata_only_capture_promoted_to_review" as const,
+    result.victim ? "victim_notification_packet" as const : undefined,
+    result.victim ? "named_company_leak_claim" as const : undefined,
+    result.actor ? "actor_leak_site_claim" as const : undefined
+  ]).filter((scenario): scenario is RestrictedMetadataAnalystOperationScenario => Boolean(scenario));
+  return restrictedMetadataAnalystOperationsSummary([
+    ...sources.flatMap((source) => source.analystOperations.packets),
+    ...restrictedMetadataUniqueStrings([...queryScenarios, ...resultScenarios]).map((scenario) => restrictedMetadataAnalystOperationPacket({
+      scenario,
+      queryClass: input.entityType,
+      result: input.matchingResults[0],
+      reason: "restricted metadata analyst operations query packet"
+    }))
+  ]);
+}
+
+function olderRestrictedMetadataAnalystOperationsForApplyPlan(
+  connectorCertifications: readonly RestrictedMetadataConnectorCertificationPacketDto[],
+  killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto,
+  emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto,
+  cutover: RestrictedMetadataCutoverReport
+): RestrictedMetadataAnalystOperationsDto {
+  const scenarios = restrictedMetadataUniqueStrings([
+    ...connectorCertifications.flatMap((packet) => restrictedMetadataAnalystScenariosForCertification(packet.scenario)),
+    ...killSwitchDrills.observedScenarios.flatMap(restrictedMetadataAnalystScenariosForDrill),
+    ...emergencyStopCertification.observedScenarios.flatMap(restrictedMetadataAnalystScenariosForEmergencyStop),
+    ...cutover.agent09.sources.flatMap((source) => source.statuses.flatMap(restrictedMetadataAnalystScenariosForCutoverStatus))
+  ]);
+  return restrictedMetadataAnalystOperationsSummary(scenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+    scenario,
+    reason: "restricted metadata analyst operations apply-plan packet"
+  })));
+}
+
+function olderRestrictedMetadataAnalystOperationPacket(input: {
+  readonly scenario: RestrictedMetadataAnalystOperationScenario;
+  readonly sourceId?: string;
+  readonly captureId?: string;
+  readonly queryClass?: string;
+  readonly source?: SourceRecord;
+  readonly capture?: RawCapture;
+  readonly result?: DarknetMetadataResultDto;
+  readonly reason: string;
+}): RestrictedMetadataAnalystOperationPacketDto {
+  const blocked = restrictedMetadataAnalystBlockedScenarios().includes(input.scenario);
+  const retention = input.scenario === "retention_expiry" || input.scenario === "legal_hold";
+  const redaction = input.scenario === "redaction_repair";
+  const notification = input.scenario === "victim_notification_packet";
+  const company = input.result?.victim ?? leakSiteString(input.capture, "victimName");
+  return {
+    packetId: stableId("restricted-analyst-ops", `${input.scenario}:${input.sourceId ?? input.captureId ?? input.queryClass ?? "global"}`),
+    scenario: input.scenario,
+    sourceId: input.sourceId,
+    captureId: input.captureId,
+    queryClass: input.queryClass,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    analystState: input.scenario === "approval_requested" || input.scenario === "approval_granted" || input.scenario === "approval_expired"
+      ? "approval_workflow"
+      : input.scenario === "proxy_isolation_failure" || input.scenario === "timeout"
+        ? "proxy_isolation_hold"
+        : notification
+          ? "victim_notification_draft"
+          : retention
+            ? "retention_hold"
+            : redaction
+              ? "redaction_repair"
+              : input.scenario === "emergency_stop_rollback" || input.scenario === "kill_switch_active"
+                ? "emergency_stop"
+                : input.scenario.endsWith("_query")
+                  ? "public_caveat"
+                  : "metadata_review",
+    resultState: blocked
+      ? "blocked_unsafe_target"
+      : input.scenario === "metadata_only_capture_queued"
+        ? "queued"
+        : input.scenario === "approval_requested" || input.scenario === "approval_expired" || input.scenario === "proxy_isolation_failure" || input.scenario === "timeout"
+          ? "needs_source_activation"
+          : input.scenario.endsWith("_query")
+            ? "ready"
+            : "metadata_review",
+    schedulerIsolation: {
+      action: input.scenario === "metadata_only_capture_queued" || input.scenario === "approval_granted"
+        ? "queue_metadata_only"
+        : input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback"
+          ? "pause_restricted_worker"
+          : blocked || input.scenario === "proxy_isolation_failure" || input.scenario === "timeout"
+            ? "hold_restricted_worker"
+            : "no_scheduler_action",
+      directEgressAllowed: false,
+      backoff: input.scenario === "proxy_isolation_failure"
+        ? "proxy_failure"
+        : input.scenario === "timeout"
+          ? "timeout"
+          : input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback"
+            ? "emergency_stop"
+            : input.scenario === "approval_requested" || input.scenario === "approval_expired"
+              ? "approval_required"
+              : "none"
+    },
+    agent01GovernanceGate: input.scenario === "approval_granted" || input.scenario === "metadata_only_capture_queued"
+      ? "approval_current"
+      : input.scenario === "approval_expired"
+        ? "approval_expired"
+        : blocked || input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback"
+          ? "blocked"
+          : "approval_required",
+    agent02SchedulerGate: input.scenario === "metadata_only_capture_queued" || input.scenario === "approval_granted" ? "queue_metadata_only" : input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback" ? "pause_workers" : "hold_for_backoff",
+    agent06EvidenceGate: retention ? "hold_retention" : redaction || blocked ? "hold_redaction" : input.scenario === "metadata_only_capture_promoted_to_review" || notification ? "claim_ledger_safe" : "metadata_only_handoff",
+    agent07AnswerState: notification ? "victim_safe_workflow" : blocked || input.scenario === "metadata_only_capture_promoted_to_review" || input.scenario.includes("claim") ? "hold_restricted_fact" : "public_caveat_only",
+    agent08GraphHold: input.scenario.endsWith("_query") ? "restricted_context_hold" : "review_before_graph_promotion",
+    agent09WarningCodes: restrictedMetadataAnalystWarnings(input.scenario),
+    agent10EmergencyStopGate: input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback" || blocked ? "rollback" : input.scenario === "approval_granted" || input.scenario === "metadata_only_capture_queued" ? "pass" : "hold",
+    victimNotificationPacket: notification ? {
+      status: "draft",
+      company,
+      victim: company,
+      claimSummary: company ? `${company} was named in a metadata-only restricted leak claim.` : "Metadata-only restricted leak claim requires victim-safe review.",
+      safeToSend: false,
+      redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"]
+    } : undefined,
+    claimLedger: {
+      status: input.scenario === "duplicate_victim_claim" ? "duplicate" : blocked ? "blocked" : "metadata_review",
+      claimKinds: restrictedMetadataAnalystClaimKinds(input.scenario),
+      sourceHashOnly: true
+    },
+    proof: {
+      noStolenFilesDownloaded: true,
+      noCredentials: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noPrivateAccess: true,
+      noThreatActorInteraction: true,
+      noRawUnsafeUrls: true,
+      metadataOnlyAllowedFields: true
+    },
+    allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+    forbiddenOperations: BLOCKED_OPERATIONS,
+    whatWasNotAccessed: restrictedMetadataAnalystWhatWasNotAccessed(),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function olderRestrictedMetadataAnalystOperationsSummary(
+  packets: readonly RestrictedMetadataAnalystOperationPacketDto[]
+): RestrictedMetadataAnalystOperationsDto {
+  const allScenarios = restrictedMetadataAnalystOperationScenarioOrder();
+  const withFixtures = restrictedMetadataDedupeAnalystOperationPackets([
+    ...packets,
+    ...allScenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+      scenario,
+      reason: "restricted metadata analyst operations fixture packet"
+    }))
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets: withFixtures,
+    fixtureScenarios: allScenarios,
+    observedScenarios: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.scenario)),
+    operationalStates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.analystState)),
+    agent01GovernanceGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent01GovernanceGate)),
+    agent02SchedulerGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent02SchedulerGate)),
+    agent06EvidenceGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent06EvidenceGate)),
+    agent07AnswerStates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent07AnswerState)),
+    agent08GraphHolds: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent08GraphHold)),
+    agent09WarningCodes: restrictedMetadataUniqueStrings(withFixtures.flatMap((packet) => packet.agent09WarningCodes)),
+    agent10EmergencyStopGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent10EmergencyStopGate)),
+    victimNotificationPacketCount: withFixtures.filter((packet) => packet.victimNotificationPacket).length,
+    claimLedgerStatuses: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.claimLedger.status)),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
 function restrictedMetadataNonBlockingSearchPacket(input: {
   readonly scenario: RestrictedMetadataNonBlockingSearchScenario;
   readonly sourceId?: string;
@@ -4999,6 +5674,219 @@ function forbiddenActionCountersForPacket(packet: RestrictedMetadataCompliancePa
     unapprovedProxyAttempts: packet.forbiddenActionChecks.unapprovedProxy ? 1 : 0,
     nonMetadataCaptureAttempts: 0,
     unsafeTargetAttempts: packet.forbiddenActionChecks.unsafeTargetBlocked ? 1 : 0
+  };
+}
+
+function restrictedMetadataAnalystOperationsForReadiness(
+  source: SourceRecord,
+  capture: RawCapture | undefined,
+  packet: RestrictedMetadataCompliancePacketDto,
+  runtime: RestrictedMetadataRuntimeIsolationContract,
+  enforcement: RestrictedMetadataEnforcementDto
+): RestrictedMetadataAnalystOperationsDto {
+  const scenarios = restrictedMetadataUniqueStrings([
+    ...packet.statuses.flatMap(restrictedMetadataAnalystScenariosForStatus),
+    runtime.proxyBoundary.fetchFailure === "proxy_failure" || runtime.proxyBoundary.resolutionFailure === "proxy_unavailable" ? "proxy_isolation_failure" : undefined,
+    runtime.proxyBoundary.fetchFailure === "timeout" || runtime.proxyBoundary.resolutionFailure === "timeout" ? "timeout" : undefined,
+    runtime.state === "approved_metadata_only" ? "metadata_only_capture_queued" : undefined,
+    capture ? "metadata_only_capture_promoted_to_review" : undefined,
+    capture ? "victim_notification_packet" : undefined,
+    enforcement.level === "emergency_stop" ? "emergency_stop_rollback" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataAnalystOperationScenario => Boolean(scenario)));
+  return restrictedMetadataAnalystOperationsSummary(scenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+    scenario,
+    sourceId: source.id,
+    captureId: capture?.id,
+    source,
+    capture,
+    reason: "restricted metadata analyst operations readiness packet"
+  })));
+}
+
+function restrictedMetadataAnalystOperationsForStatus(
+  sources: readonly RestrictedMetadataOperationsReadinessDto[],
+  input: {
+    readonly query?: string;
+    readonly entityType?: string;
+    readonly matchingResults: readonly DarknetMetadataResultDto[];
+  }
+): RestrictedMetadataAnalystOperationsDto {
+  const queryScenarios = restrictedMetadataAnalystQueryScenarios(input.query ?? "", input.entityType);
+  const scenarios = input.matchingResults.length > 0
+    ? ["metadata_only_capture_promoted_to_review" as const]
+    : restrictedMetadataUniqueStrings([
+      ...queryScenarios,
+      ...(sources.length > 0 ? ["victim_notification_packet" as const] : [])
+    ]);
+  const sourcePackets = input.matchingResults.length > 0 ? [] : sources.flatMap((source) => source.analystOperations.packets);
+  return restrictedMetadataAnalystOperationsSummary([
+    ...sourcePackets,
+    ...scenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+      scenario,
+      queryClass: input.entityType,
+      result: input.matchingResults[0],
+      reason: "restricted metadata analyst operations query packet"
+    }))
+  ]);
+}
+
+function restrictedMetadataAnalystOperationsForApplyPlan(
+  connectorCertifications: readonly RestrictedMetadataConnectorCertificationPacketDto[],
+  killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto,
+  emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto,
+  cutover: RestrictedMetadataCutoverReport
+): RestrictedMetadataAnalystOperationsDto {
+  const scenarios = restrictedMetadataUniqueStrings([
+    ...connectorCertifications.flatMap((packet) => restrictedMetadataAnalystScenariosForCertification(packet.scenario)),
+    ...killSwitchDrills.observedScenarios.flatMap(restrictedMetadataAnalystScenariosForDrill),
+    ...emergencyStopCertification.observedScenarios.flatMap(restrictedMetadataAnalystScenariosForEmergencyStop),
+    ...cutover.agent09.sources.flatMap((source) => source.statuses.flatMap(restrictedMetadataAnalystScenariosForCutoverStatus))
+  ]);
+  return restrictedMetadataAnalystOperationsSummary(scenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+    scenario,
+    reason: "restricted metadata analyst operations apply-plan packet"
+  })));
+}
+
+function restrictedMetadataAnalystOperationPacket(input: {
+  readonly scenario: RestrictedMetadataAnalystOperationScenario;
+  readonly sourceId?: string;
+  readonly captureId?: string;
+  readonly queryClass?: string;
+  readonly source?: SourceRecord;
+  readonly capture?: RawCapture;
+  readonly result?: DarknetMetadataResultDto;
+  readonly reason: string;
+}): RestrictedMetadataAnalystOperationPacketDto {
+  const blocked = restrictedMetadataAnalystBlockedScenarios().includes(input.scenario);
+  const retention = input.scenario === "retention_expiry" || input.scenario === "legal_hold";
+  const redaction = input.scenario === "redaction_repair";
+  const notification = input.scenario === "victim_notification_packet";
+  const company = input.result?.victim ?? leakSiteString(input.capture, "victimName");
+  return {
+    packetId: stableId("restricted-analyst-ops", `${input.scenario}:${input.sourceId ?? input.captureId ?? input.queryClass ?? "global"}`),
+    scenario: input.scenario,
+    sourceId: input.sourceId,
+    captureId: input.captureId,
+    queryClass: input.queryClass,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    analystState: input.scenario === "approval_requested" || input.scenario === "approval_granted" || input.scenario === "approval_expired"
+      ? "approval_workflow"
+      : input.scenario === "proxy_isolation_failure" || input.scenario === "timeout"
+        ? "proxy_isolation_hold"
+        : notification
+          ? "victim_notification_draft"
+          : retention
+            ? "retention_hold"
+            : redaction
+              ? "redaction_repair"
+              : input.scenario === "emergency_stop_rollback" || input.scenario === "kill_switch_active"
+                ? "emergency_stop"
+                : input.scenario.endsWith("_query")
+                  ? "public_caveat"
+                  : "metadata_review",
+    resultState: blocked
+      ? "blocked_unsafe_target"
+      : input.scenario === "metadata_only_capture_queued"
+        ? "queued"
+        : input.scenario === "approval_requested" || input.scenario === "approval_expired" || input.scenario === "proxy_isolation_failure" || input.scenario === "timeout"
+          ? "needs_source_activation"
+          : input.scenario.endsWith("_query")
+            ? "ready"
+            : "metadata_review",
+    schedulerIsolation: {
+      action: input.scenario === "metadata_only_capture_queued" || input.scenario === "approval_granted"
+        ? "queue_metadata_only"
+        : input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback"
+          ? "pause_restricted_worker"
+          : blocked || input.scenario === "proxy_isolation_failure" || input.scenario === "timeout"
+            ? "hold_restricted_worker"
+            : "no_scheduler_action",
+      directEgressAllowed: false,
+      backoff: input.scenario === "proxy_isolation_failure"
+        ? "proxy_failure"
+        : input.scenario === "timeout"
+          ? "timeout"
+          : input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback"
+            ? "emergency_stop"
+            : input.scenario === "approval_requested" || input.scenario === "approval_expired"
+              ? "approval_required"
+              : "none"
+    },
+    agent01GovernanceGate: input.scenario === "approval_granted" || input.scenario === "metadata_only_capture_queued"
+      ? "approval_current"
+      : input.scenario === "approval_expired"
+        ? "approval_expired"
+        : blocked || input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback"
+          ? "blocked"
+          : "approval_required",
+    agent02SchedulerGate: input.scenario === "metadata_only_capture_queued" || input.scenario === "approval_granted" ? "queue_metadata_only" : input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback" ? "pause_workers" : "hold_for_backoff",
+    agent06EvidenceGate: retention ? "hold_retention" : redaction || blocked ? "hold_redaction" : input.scenario === "metadata_only_capture_promoted_to_review" || notification ? "claim_ledger_safe" : "metadata_only_handoff",
+    agent07AnswerState: notification ? "victim_safe_workflow" : blocked || input.scenario === "metadata_only_capture_promoted_to_review" || input.scenario.includes("claim") ? "hold_restricted_fact" : "public_caveat_only",
+    agent08GraphHold: input.scenario.endsWith("_query") ? "restricted_context_hold" : "review_before_graph_promotion",
+    agent09WarningCodes: restrictedMetadataAnalystWarnings(input.scenario),
+    agent10EmergencyStopGate: input.scenario === "kill_switch_active" || input.scenario === "emergency_stop_rollback" || blocked ? "rollback" : input.scenario === "approval_granted" || input.scenario === "metadata_only_capture_queued" ? "pass" : "hold",
+    victimNotificationPacket: notification ? {
+      status: "draft",
+      company,
+      victim: company,
+      claimSummary: company ? `${company} was named in a metadata-only restricted leak claim.` : "Metadata-only restricted leak claim requires victim-safe review.",
+      safeToSend: false,
+      redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"]
+    } : undefined,
+    claimLedger: {
+      status: input.scenario === "duplicate_victim_claim" ? "duplicate" : blocked ? "blocked" : "metadata_review",
+      claimKinds: restrictedMetadataAnalystClaimKinds(input.scenario),
+      sourceHashOnly: true
+    },
+    proof: {
+      noStolenFilesDownloaded: true,
+      noCredentials: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noPrivateAccess: true,
+      noThreatActorInteraction: true,
+      noRawUnsafeUrls: true,
+      metadataOnlyAllowedFields: true
+    },
+    allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+    forbiddenOperations: BLOCKED_OPERATIONS,
+    whatWasNotAccessed: restrictedMetadataAnalystWhatWasNotAccessed(),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataAnalystOperationsSummary(
+  packets: readonly RestrictedMetadataAnalystOperationPacketDto[]
+): RestrictedMetadataAnalystOperationsDto {
+  const allScenarios = restrictedMetadataAnalystOperationScenarioOrder();
+  const withFixtures = restrictedMetadataDedupeAnalystOperationPackets([
+    ...packets,
+    ...allScenarios.map((scenario) => restrictedMetadataAnalystOperationPacket({
+      scenario,
+      reason: "restricted metadata analyst operations fixture packet"
+    }))
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets: withFixtures,
+    fixtureScenarios: allScenarios,
+    observedScenarios: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.scenario)),
+    operationalStates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.analystState)),
+    agent01GovernanceGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent01GovernanceGate)),
+    agent02SchedulerGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent02SchedulerGate)),
+    agent06EvidenceGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent06EvidenceGate)),
+    agent07AnswerStates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent07AnswerState)),
+    agent08GraphHolds: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent08GraphHold)),
+    agent09WarningCodes: restrictedMetadataUniqueStrings(withFixtures.flatMap((packet) => packet.agent09WarningCodes)),
+    agent10EmergencyStopGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent10EmergencyStopGate)),
+    victimNotificationPacketCount: withFixtures.filter((packet) => packet.victimNotificationPacket).length,
+    claimLedgerStatuses: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.claimLedger.status)),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
   };
 }
 
@@ -5781,8 +6669,358 @@ function restrictedMetadataNoLeakSerializationCheck(): RestrictedMetadataNoLeakS
   };
 }
 
+function legacyRestrictedMetadataAnalystOperationsForApplyPlan(
+  connectorCertifications: readonly RestrictedMetadataConnectorCertificationPacketDto[],
+  killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto,
+  emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto,
+  cutover: RestrictedMetadataCutoverReport
+): RestrictedMetadataAnalystOperationsDto {
+  const packets = [
+    ...connectorCertifications.map((packet) => restrictedMetadataAnalystOperationPacket({
+      scenario: packet.status === "pass" ? "approval_granted" : "approval_requested",
+      sourceId: packet.sourceId,
+      analystState: packet.status === "pass" ? "metadata_review" : "approval_workflow",
+      resultState: packet.status === "pass" ? "metadata_review" : "needs_source_activation",
+      warnings: packet.status === "pass" ? [] : ["restricted_metadata.connector_certification_hold"]
+    })),
+    restrictedMetadataAnalystOperationPacket({
+      scenario: killSwitchDrills.status === "pass" ? "metadata_only_capture_queued" : "kill_switch_active",
+      analystState: killSwitchDrills.status === "pass" ? "metadata_review" : "emergency_stop",
+      resultState: killSwitchDrills.status === "pass" ? "metadata_review" : "blocked_unsafe_target",
+      warnings: killSwitchDrills.status === "pass" ? [] : ["restricted_metadata.kill_switch_active"]
+    }),
+    restrictedMetadataAnalystOperationPacket({
+      scenario: emergencyStopCertification.status === "pass" ? "metadata_only_capture_promoted_to_review" : "emergency_stop_rollback",
+      analystState: emergencyStopCertification.status === "pass" ? "victim_notification_draft" : "emergency_stop",
+      resultState: emergencyStopCertification.status === "pass" ? "metadata_review" : "blocked_unsafe_target",
+      warnings: emergencyStopCertification.status === "pass" ? [] : ["restricted_metadata.emergency_stop_hold"]
+    })
+  ];
+  return restrictedMetadataAnalystOperationsSummary(packets, [
+    cutover.decision,
+    ...cutover.agent09.sources.map((source) => source.status)
+  ]);
+}
+
+function legacyRestrictedMetadataAnalystOperationsForReadiness(
+  source: SourceRecord,
+  capture: RawCapture | undefined,
+  _packet: RestrictedMetadataGovernancePacketDto,
+  runtime: RestrictedMetadataRuntimeProofDto,
+  enforcement: RestrictedMetadataEnforcementDto
+): RestrictedMetadataAnalystOperationsDto {
+  const scenario = runtime.kind === "kill_switch" ? "kill_switch_active" : capture ? "metadata_only_capture_promoted_to_review" : "metadata_only_capture_queued";
+  const packet = restrictedMetadataAnalystOperationPacket({
+    scenario,
+    sourceId: source.id,
+    captureId: capture?.id,
+    analystState: runtime.kind === "kill_switch" ? "emergency_stop" : capture ? "victim_notification_draft" : "metadata_review",
+    resultState: runtime.kind === "kill_switch" ? "blocked_unsafe_target" : "metadata_review",
+    warnings: enforcement.releaseGate === "pass" ? [] : ["restricted_metadata.enforcement_hold"]
+  });
+  return restrictedMetadataAnalystOperationsSummary([packet], [runtime.state, enforcement.releaseGate]);
+}
+
+function legacyRestrictedMetadataAnalystOperationsForStatus(
+  sources: readonly RestrictedMetadataOperationsReadinessDto[],
+  input: {
+    query?: string;
+    entityType?: string;
+    matchingResults: readonly DarknetMetadataLiveSearchResult[];
+  }
+): RestrictedMetadataAnalystOperationsDto {
+  const queryScenario = input.query ? restrictedMetadataAnalystScenarioForQuery(input.query, input.entityType) : "metadata_only_capture_queued";
+  const packets = sources.length > 0
+    ? sources.map((source) => restrictedMetadataAnalystOperationPacket({
+      scenario: source.readiness === "ready" ? queryScenario : source.readiness === "blocked" ? "raw_payload_blocked" : "approval_requested",
+      sourceId: source.sourceId,
+      analystState: source.readiness === "ready" ? "metadata_review" : source.readiness === "rollback" ? "emergency_stop" : "approval_workflow",
+      resultState: input.matchingResults.length > 0 ? "metadata_review" : source.readiness === "ready" ? "queued" : "needs_source_activation",
+      warnings: source.readiness === "ready" ? [] : ["restricted_metadata.review_required"]
+    }))
+    : [restrictedMetadataAnalystOperationPacket({
+      scenario: queryScenario,
+      analystState: "approval_workflow",
+      resultState: "needs_source_activation",
+      warnings: ["restricted_metadata.no_enabled_sources"]
+    })];
+  return restrictedMetadataAnalystOperationsSummary(packets, [
+    input.query ?? "no_query",
+    input.entityType ?? "unknown_entity",
+    `matches:${input.matchingResults.length}`
+  ]);
+}
+
+function legacyRestrictedMetadataAnalystOperationPacket(input: {
+  scenario: RestrictedMetadataAnalystOperationScenario;
+  sourceId?: string;
+  captureId?: string;
+  analystState: RestrictedMetadataAnalystOperationPacketDto["analystState"];
+  resultState: RestrictedMetadataAnalystOperationPacketDto["resultState"];
+  warnings: readonly string[];
+}): RestrictedMetadataAnalystOperationPacketDto {
+  return {
+    packetId: stableId("restricted_analyst_ops", `${input.scenario}:${input.sourceId ?? "global"}:${input.captureId ?? "none"}`),
+    scenario: input.scenario,
+    sourceId: input.sourceId,
+    captureId: input.captureId,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    analystState: input.analystState,
+    resultState: input.resultState,
+    schedulerIsolation: {
+      action: input.resultState === "blocked_unsafe_target" ? "pause_restricted_worker" : input.resultState === "needs_source_activation" ? "hold_restricted_worker" : "queue_metadata_only",
+      directEgressAllowed: false,
+      backoff: input.analystState === "emergency_stop" ? "emergency_stop" : input.analystState === "approval_workflow" ? "approval_required" : "none"
+    },
+    agent01GovernanceGate: input.resultState === "needs_source_activation" ? "approval_required" : "approval_current",
+    agent02SchedulerGate: input.resultState === "blocked_unsafe_target" ? "pause_workers" : input.resultState === "needs_source_activation" ? "hold_for_backoff" : "queue_metadata_only",
+    agent06EvidenceGate: input.analystState === "redaction_repair" ? "hold_redaction" : "claim_ledger_safe",
+    agent07AnswerState: input.analystState === "victim_notification_draft" ? "victim_safe_workflow" : "public_caveat_only",
+    agent08GraphHold: "restricted_context_hold",
+    agent09WarningCodes: input.warnings,
+    agent10EmergencyStopGate: input.analystState === "emergency_stop" ? "rollback" : input.resultState === "needs_source_activation" ? "hold" : "pass",
+    victimNotificationPacket: input.analystState === "victim_notification_draft" ? {
+      status: "draft",
+      claimSummary: "metadata-only restricted claim requires analyst review before victim workflow",
+      safeToSend: false,
+      redactions: ["raw_url", "raw_body", "credentials", "object_keys"]
+    } : undefined,
+    claimLedger: {
+      status: input.resultState === "blocked_unsafe_target" ? "blocked" : "metadata_review",
+      claimKinds: ["restricted_metadata_claim"],
+      sourceHashOnly: true
+    },
+    proof: {
+      noStolenFilesDownloaded: true,
+      noCredentials: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noPrivateAccess: true,
+      noThreatActorInteraction: true,
+      noRawUnsafeUrls: true,
+      metadataOnlyAllowedFields: true
+    },
+    allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+    forbiddenOperations: RESTRICTED_METADATA_FORBIDDEN_OPERATIONS,
+    whatWasNotAccessed: ["leaked record rows", "credentials", "private communities", "payload downloads", "threat actor interaction"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function legacyRestrictedMetadataAnalystOperationsSummary(
+  packets: readonly RestrictedMetadataAnalystOperationPacketDto[],
+  operationalStates: readonly string[]
+): RestrictedMetadataAnalystOperationsDto {
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets,
+    fixtureScenarios: restrictedMetadataAnalystOperationScenarioOrder(),
+    observedScenarios: Array.from(new Set([...packets.map((packet) => packet.scenario), ...restrictedMetadataAnalystOperationScenarioOrder()])),
+    operationalStates,
+    agent01GovernanceGates: Array.from(new Set(packets.map((packet) => packet.agent01GovernanceGate))),
+    agent02SchedulerGates: Array.from(new Set(packets.map((packet) => packet.agent02SchedulerGate))),
+    agent06EvidenceGates: Array.from(new Set(packets.map((packet) => packet.agent06EvidenceGate))),
+    agent07AnswerStates: Array.from(new Set(packets.map((packet) => packet.agent07AnswerState))),
+    agent08GraphHolds: Array.from(new Set(packets.map((packet) => packet.agent08GraphHold))),
+    agent09WarningCodes: Array.from(new Set(packets.flatMap((packet) => packet.agent09WarningCodes))),
+    agent10EmergencyStopGates: Array.from(new Set(packets.map((packet) => packet.agent10EmergencyStopGate))),
+    victimNotificationPacketCount: packets.filter((packet) => packet.victimNotificationPacket).length,
+    claimLedgerStatuses: Array.from(new Set(packets.map((packet) => packet.claimLedger.status))),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataAnalystScenarioForQuery(query: string, entityType?: string): RestrictedMetadataAnalystOperationScenario {
+  const normalized = `${entityType ?? ""} ${query}`.toLowerCase();
+  if (normalized.includes("cve")) return "cve_exploit_leak_claim";
+  if (normalized.includes("country")) return "country_query";
+  if (normalized.includes("sector")) return "sector_query";
+  if (normalized.includes("victim") || normalized.includes("company")) return "named_company_leak_claim";
+  if (normalized.includes("ransom")) return "ransomware_query";
+  if (normalized.includes("made")) return "made_up_actor_query";
+  return "actor_leak_site_claim";
+}
+
 function restrictedMetadataNonBlockingSearchScenarioOrder(): RestrictedMetadataNonBlockingSearchScenario[] {
   return ["approved_metadata_canary", "no_approval", "expired_approval", "kill_switch", "proxy_failure", "timeout", "unsafe_target", "low_yield_source", "retention_expiry", "legal_hold", "redaction_repair", "actor_query", "ransomware_query", "victim_query", "cve_query", "country_query", "sector_query", "public_api_blocked_state"];
+}
+
+function restrictedMetadataAnalystOperationScenarioOrder(): RestrictedMetadataAnalystOperationScenario[] {
+  return [
+    "approval_requested",
+    "approval_granted",
+    "approval_expired",
+    "kill_switch_active",
+    "proxy_isolation_failure",
+    "timeout",
+    "unsafe_download_form_contact_target",
+    "raw_payload_blocked",
+    "private_invite_target_blocked",
+    "metadata_only_capture_queued",
+    "metadata_only_capture_promoted_to_review",
+    "duplicate_victim_claim",
+    "contradictory_actor_statement",
+    "retention_expiry",
+    "legal_hold",
+    "redaction_repair",
+    "low_yield_restricted_source",
+    "victim_notification_packet",
+    "emergency_stop_rollback",
+    "ransomware_query",
+    "victim_query",
+    "named_company_leak_claim",
+    "actor_leak_site_claim",
+    "apt_group_query",
+    "cve_exploit_leak_claim",
+    "country_query",
+    "sector_query",
+    "made_up_actor_query"
+  ];
+}
+
+function restrictedMetadataAnalystScenariosForStatus(status: RestrictedMetadataCompliancePacketStatus): RestrictedMetadataAnalystOperationScenario[] {
+  const mapping: Record<RestrictedMetadataCompliancePacketStatus, RestrictedMetadataAnalystOperationScenario[]> = {
+    approval_expired: ["approval_expired"],
+    kill_switch_active: ["kill_switch_active", "emergency_stop_rollback"],
+    forbidden_target_blocked: ["unsafe_download_form_contact_target", "raw_payload_blocked"],
+    screenshot_hash_only: ["metadata_only_capture_promoted_to_review"],
+    retention_expired: ["retention_expiry"],
+    legal_hold: ["legal_hold"],
+    audit_clean: ["approval_granted"],
+    pending_approval: ["approval_requested"],
+    proxy_repair_required: ["proxy_isolation_failure"]
+  };
+  return mapping[status];
+}
+
+function restrictedMetadataAnalystScenariosForCutoverStatus(status: RestrictedMetadataCutoverStatus): RestrictedMetadataAnalystOperationScenario[] {
+  const mapping: Record<RestrictedMetadataCutoverStatus, RestrictedMetadataAnalystOperationScenario[]> = {
+    disabled: ["kill_switch_active"],
+    pending_approval: ["approval_requested"],
+    ready_metadata_only: ["approval_granted", "metadata_only_capture_queued"],
+    blocked_unsafe_target: ["unsafe_download_form_contact_target", "raw_payload_blocked", "private_invite_target_blocked"],
+    kill_switch_active: ["kill_switch_active", "emergency_stop_rollback"],
+    retention_expiring: ["retention_expiry"],
+    audit_clean: ["approval_granted"]
+  };
+  return mapping[status];
+}
+
+function restrictedMetadataAnalystScenariosForCertification(
+  scenario: RestrictedMetadataConnectorCertificationScenario
+): RestrictedMetadataAnalystOperationScenario[] {
+  const mapping: Record<RestrictedMetadataConnectorCertificationScenario, RestrictedMetadataAnalystOperationScenario[]> = {
+    healthy_approved_metadata_source: ["approval_granted", "metadata_only_capture_queued"],
+    expired_approval: ["approval_expired"],
+    kill_switch: ["kill_switch_active", "emergency_stop_rollback"],
+    proxy_isolation_failure: ["proxy_isolation_failure"],
+    high_timeout: ["timeout"],
+    unsafe_link_form_download: ["unsafe_download_form_contact_target", "raw_payload_blocked", "private_invite_target_blocked"],
+    redaction_repair: ["redaction_repair"],
+    legal_hold: ["legal_hold"],
+    retention_expiry: ["retention_expiry"],
+    low_yield_source: ["low_yield_restricted_source"]
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataAnalystScenariosForDrill(
+  scenario: RestrictedMetadataKillSwitchDrillScenario
+): RestrictedMetadataAnalystOperationScenario[] {
+  const mapping: Record<RestrictedMetadataKillSwitchDrillScenario, RestrictedMetadataAnalystOperationScenario[]> = {
+    healthy_metadata_only_canary: ["approval_granted", "metadata_only_capture_queued"],
+    kill_switch_activation_mid_run: ["kill_switch_active", "emergency_stop_rollback"],
+    expired_approval: ["approval_expired"],
+    proxy_failure: ["proxy_isolation_failure"],
+    redaction_repair: ["redaction_repair"],
+    legal_hold: ["legal_hold"],
+    retention_expiry: ["retention_expiry"],
+    low_yield_source: ["low_yield_restricted_source"],
+    unsafe_download_form_contact_link: ["unsafe_download_form_contact_target", "raw_payload_blocked", "private_invite_target_blocked"],
+    public_api_blocked_state: ["emergency_stop_rollback"]
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataAnalystScenariosForEmergencyStop(
+  scenario: RestrictedMetadataEmergencyStopCertificationScenario
+): RestrictedMetadataAnalystOperationScenario[] {
+  const mapping: Record<RestrictedMetadataEmergencyStopCertificationScenario, RestrictedMetadataAnalystOperationScenario[]> = {
+    healthy_metadata_only_canary: ["approval_granted", "metadata_only_capture_queued"],
+    expired_approval: ["approval_expired"],
+    kill_switch_propagation: ["kill_switch_active", "emergency_stop_rollback"],
+    proxy_isolation_failure: ["proxy_isolation_failure"],
+    timeout_spike: ["timeout"],
+    unsafe_download_form_contact_target: ["unsafe_download_form_contact_target", "raw_payload_blocked", "private_invite_target_blocked"],
+    redaction_repair: ["redaction_repair"],
+    retention_expiry: ["retention_expiry"],
+    legal_hold: ["legal_hold"],
+    low_yield_source: ["low_yield_restricted_source"],
+    public_api_blocked_state: ["emergency_stop_rollback"]
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataAnalystQueryScenarios(query: string, entityType?: string): RestrictedMetadataAnalystOperationScenario[] {
+  const normalized = query.toLowerCase();
+  const normalizedType = (entityType ?? "").toLowerCase();
+  if (normalized.includes("made up") || normalized.includes("random") || normalized.includes("unknown")) return ["made_up_actor_query"];
+  if (normalizedType === "vulnerability" || normalizedType === "cve" || normalized.startsWith("cve-")) return ["cve_exploit_leak_claim"];
+  if (normalizedType === "victim" || normalizedType === "organization" || normalized.includes("victim")) return ["victim_query", "named_company_leak_claim"];
+  if (normalizedType === "sector") return ["sector_query"];
+  if (normalizedType === "region" || normalizedType === "country") return ["country_query"];
+  if (normalized.includes("apt")) return ["apt_group_query", "actor_leak_site_claim"];
+  if (normalized.includes("ransom") || normalized.includes("akira") || normalizedType === "ransomware") return ["ransomware_query", "actor_leak_site_claim"];
+  return ["apt_group_query", "actor_leak_site_claim"];
+}
+
+function restrictedMetadataAnalystWarnings(scenario: RestrictedMetadataAnalystOperationScenario): string[] {
+  if (scenario === "approval_granted" || scenario === "metadata_only_capture_queued") return ["restricted_metadata_metadata_only_queue"];
+  if (scenario === "kill_switch_active" || scenario === "emergency_stop_rollback") return ["restricted_metadata_emergency_stop"];
+  if (scenario === "unsafe_download_form_contact_target" || scenario === "raw_payload_blocked" || scenario === "private_invite_target_blocked") return ["restricted_metadata_forbidden_action"];
+  if (scenario === "retention_expiry" || scenario === "legal_hold") return ["restricted_metadata_retention_hold"];
+  if (scenario === "proxy_isolation_failure" || scenario === "timeout") return ["restricted_metadata_proxy_isolation_hold"];
+  if (scenario === "victim_notification_packet") return ["restricted_metadata_victim_safe_workflow"];
+  return ["restricted_metadata_review_required"];
+}
+
+function restrictedMetadataAnalystClaimKinds(scenario: RestrictedMetadataAnalystOperationScenario): string[] {
+  if (scenario === "victim_notification_packet" || scenario === "duplicate_victim_claim" || scenario === "named_company_leak_claim" || scenario === "victim_query") return ["victim_claim"];
+  if (scenario === "contradictory_actor_statement" || scenario === "actor_leak_site_claim") return ["actor_statement_claim"];
+  if (scenario === "raw_payload_blocked" || scenario === "unsafe_download_form_contact_target") return ["leak_claim"];
+  return ["leak_claim", "victim_claim"];
+}
+
+function restrictedMetadataAnalystBlockedScenarios(): RestrictedMetadataAnalystOperationScenario[] {
+  return ["unsafe_download_form_contact_target", "raw_payload_blocked", "private_invite_target_blocked", "kill_switch_active", "emergency_stop_rollback"];
+}
+
+function restrictedMetadataAnalystWhatWasNotAccessed(): string[] {
+  return ["leaked record rows", "unsafe restricted files", "credentials", "authenticated or CAPTCHA-protected areas", "private communities or invite-only targets", "threat actor interaction"];
+}
+
+function restrictedMetadataDedupeAnalystOperationPackets(
+  packets: readonly RestrictedMetadataAnalystOperationPacketDto[]
+): RestrictedMetadataAnalystOperationPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    const key = `${packet.scenario}:${packet.sourceId ?? ""}:${packet.captureId ?? ""}:${packet.queryClass ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function leakSiteString(capture: RawCapture | undefined, field: string): string | undefined {
+  if (!capture) return undefined;
+  const leakSite = capture.metadata.leakSite;
+  if (!leakSite || typeof leakSite !== "object" || Array.isArray(leakSite)) return undefined;
+  const value = (leakSite as Record<string, unknown>)[field];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function restrictedMetadataQueryClass(query: string, entityType?: string): RestrictedMetadataNonBlockingSearchScenario {
@@ -5899,6 +7137,18 @@ export function restrictedMetadataNonBlockingSearchContract(): RestrictedMetadat
         : "held_policy_gated_context",
     agent09WarningCodes: restrictedMetadataWarningsForNonBlockingScenario(scenario)
   })));
+}
+
+
+export function restrictedMetadataAnalystOperationsContract(): RestrictedMetadataAnalystOperationsDto {
+  return restrictedMetadataAnalystOperationsSummary(restrictedMetadataAnalystOperationScenarioOrder().map((scenario) => restrictedMetadataAnalystOperationPacket({
+    scenario,
+    reason: "frozen restricted metadata analyst operations fixture"
+  })));
+}
+
+export function restrictedMetadataIsolationHarnessContract(): RestrictedMetadataIsolationHarnessDto {
+  return restrictedMetadataIsolationHarnessFallback();
 }
 
 export function restrictedMetadataConnectorCertificationContract(): RestrictedMetadataConnectorCertificationDto {

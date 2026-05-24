@@ -18,6 +18,7 @@ import {
   planDarknetMetadataLiveSearch,
   restrictedMetadataApprovalBridge,
   restrictedMetadataApprovalBridgeFromDecision,
+  restrictedMetadataAnalystOperationsContract,
   restrictedMetadataApplyPlanApiContract,
   restrictedMetadataClaimRiskLabels,
   restrictedMetadataComplianceReport,
@@ -30,6 +31,7 @@ import {
   restrictedMetadataEvidenceHandoffSafetyProof,
   restrictedMetadataEvidenceHandoffFromCapture,
   restrictedMetadataIntelSearchPartialSemantics,
+  restrictedMetadataIsolationHarnessContract,
   restrictedMetadataKillSwitchDrillContract,
   restrictedMetadataNonBlockingSearchContract,
   restrictedMetadataPolicyDelta,
@@ -43,6 +45,8 @@ import {
   type ApprovedProxyBoundary,
   type DarknetMetadataSourceType,
   type DarknetNetwork,
+  type RestrictedMetadataAnalystOperationScenario,
+  type RestrictedMetadataIsolationHarnessScenario,
   type RestrictedMetadataNonBlockingSearchScenario,
   type RestrictedMetadataSourcePack
 } from "../adapters/darknetMetadata.ts";
@@ -70,6 +74,48 @@ const NON_BLOCKING_SEARCH_SCENARIOS: RestrictedMetadataNonBlockingSearchScenario
   "country_query",
   "sector_query",
   "public_api_blocked_state"
+] as const;
+
+const ANALYST_OPERATION_SCENARIOS: RestrictedMetadataAnalystOperationScenario[] = [
+  "approval_requested",
+  "approval_granted",
+  "approval_expired",
+  "kill_switch_active",
+  "proxy_isolation_failure",
+  "timeout",
+  "unsafe_download_form_contact_target",
+  "raw_payload_blocked",
+  "private_invite_target_blocked",
+  "metadata_only_capture_queued",
+  "metadata_only_capture_promoted_to_review",
+  "duplicate_victim_claim",
+  "contradictory_actor_statement",
+  "retention_expiry",
+  "legal_hold",
+  "redaction_repair",
+  "low_yield_restricted_source",
+  "victim_notification_packet",
+  "emergency_stop_rollback",
+  "ransomware_query",
+  "victim_query",
+  "named_company_leak_claim",
+  "actor_leak_site_claim",
+  "apt_group_query",
+  "cve_exploit_leak_claim",
+  "country_query",
+  "sector_query",
+  "made_up_actor_query"
+] as const;
+
+const ISOLATION_HARNESS_SCENARIOS: RestrictedMetadataIsolationHarnessScenario[] = [
+  "proxy_boundary_proof",
+  "kill_switch_propagation",
+  "timeout_attribution",
+  "raw_payload_denied",
+  "unsafe_form_contact_detection",
+  "credential_storage_denied",
+  "private_access_denied",
+  "threat_actor_interaction_denied"
 ] as const;
 
 function source(input: Partial<SourceRecord> = {}): SourceRecord {
@@ -1534,7 +1580,7 @@ describe("darknet metadata adapter", () => {
       sourceId: "entry_safe_candidate",
       retentionClass: "restricted_metadata",
       blocked: [],
-      apiNotes: expect.arrayContaining(["Do not imply raw leaked data, screenshots, files, credentials, or actor interaction are collected."])
+      apiNotes: expect.arrayContaining(["Do not imply unsafe data, screenshots, files, credentials, or actor interaction are collected."])
     });
   });
 
@@ -2790,7 +2836,7 @@ describe("darknet metadata adapter", () => {
       }
     });
     expect(status.nonBlockingSearch.fixtureScenarios).toEqual(expect.arrayContaining([...NON_BLOCKING_SEARCH_SCENARIOS]));
-    for (const scenario of ["approved_metadata_canary", "kill_switch", "proxy_failure", "unsafe_target", "actor_query"] as const) {
+    for (const scenario of ["approved_metadata_canary", "kill_switch", "proxy_failure", "unsafe_target", "actor_query"] satisfies RestrictedMetadataNonBlockingSearchScenario[]) {
       expect(status.nonBlockingSearch.observedScenarios).toContain(scenario);
     }
     expect(status.nonBlockingSearch.packets.every((packet) =>
@@ -2813,6 +2859,78 @@ describe("darknet metadata adapter", () => {
     )).toBe(true);
     expect(status.agent09SearchFields).toContain("nonBlockingSearch");
     expect(status.agent10SoakFields).toContain("nonBlockingSearch");
+    expect(status.analystOperations).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.analystOperations.fixtureScenarios).toEqual(expect.arrayContaining(ANALYST_OPERATION_SCENARIOS));
+    expect(status.analystOperations.observedScenarios).toEqual(expect.arrayContaining([
+      "approval_requested",
+      "approval_granted",
+      "kill_switch_active",
+      "proxy_isolation_failure",
+      "unsafe_download_form_contact_target",
+      "raw_payload_blocked",
+      "victim_notification_packet",
+      "victim_query",
+      "named_company_leak_claim",
+      "emergency_stop_rollback"
+    ]));
+    expect(status.analystOperations.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.schedulerIsolation.directEgressAllowed === false &&
+      packet.proof.noStolenFilesDownloaded &&
+      packet.proof.noCredentials &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.noRawUnsafeUrls &&
+      packet.proof.metadataOnlyAllowedFields &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.analystOperations.victimNotificationPacketCount).toBeGreaterThan(0);
+    expect(status.agent09SearchFields).toContain("analystOperations");
+    expect(status.agent10SoakFields).toContain("analystOperations");
+    expect(status.isolationHarness).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      nonNetworked: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.isolationHarness.observedScenarios).toEqual(expect.arrayContaining(ISOLATION_HARNESS_SCENARIOS));
+    expect(status.isolationHarness.packets.every((packet) =>
+      packet.nonNetworked &&
+      packet.connectorBoundary.approvedProxyRequired &&
+      packet.connectorBoundary.directEgressAllowed === false &&
+      packet.connectorBoundary.accountStateAllowed === false &&
+      packet.workerIsolation.isolatedPoolRequired &&
+      packet.workerIsolation.killSwitchPropagates &&
+      packet.workerIsolation.timeoutAttributed &&
+      packet.complianceEvidence.legalReviewReady &&
+      packet.complianceEvidence.securityReviewReady &&
+      packet.proof.noNetworkCalls &&
+      packet.proof.approvedProxyOnly &&
+      packet.proof.directEgressBlocked &&
+      packet.proof.noRawPayloads &&
+      packet.proof.noCredentialStorage &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.unsafeTargetsBlocked &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.agent09SearchFields).toContain("isolationHarness");
+    expect(status.agent10SoakFields).toContain("isolationHarness");
     expect(ready.operationalSla.metrics.approvalAgeMaxDays).toBeGreaterThanOrEqual(0);
     expect(ready.governancePacket.sourceId).toBe("src_ops_ready");
     expect(ready.auditReplay.observedScenarios).toContain("allowed_metadata_only_record");
@@ -2820,6 +2938,8 @@ describe("darknet metadata adapter", () => {
     expect(ready.killSwitchDrills.observedScenarios).toContain("healthy_metadata_only_canary");
     expect(ready.emergencyStopCertification.observedScenarios).toContain("healthy_metadata_only_canary");
     expect(ready.nonBlockingSearch.observedScenarios).toContain("approved_metadata_canary");
+    expect(ready.analystOperations.observedScenarios).toEqual(expect.arrayContaining(["approval_granted", "metadata_only_capture_queued", "metadata_only_capture_promoted_to_review"]));
+    expect(ready.isolationHarness.observedScenarios).toEqual(expect.arrayContaining(["proxy_boundary_proof"]));
     expect(ready.auditTrail.eventTypes).toEqual(expect.arrayContaining(["redaction_applied", "metadata_only_capture"]));
     expect(status.remediationPlan.map((item) => item.action)).toEqual(expect.arrayContaining([
       "quarantine_proxy",
@@ -3254,5 +3374,86 @@ describe("darknet metadata adapter", () => {
     expect(serialized).not.toContain("http://");
     expect(serialized).not.toContain(".onion");
     expect(serialized).not.toContain("customer-dump");
+  });
+
+  test("freezes restricted analyst operations without unsafe serialization", () => {
+    const operations = restrictedMetadataAnalystOperationsContract();
+    expect(operations).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(operations.fixtureScenarios).toEqual(ANALYST_OPERATION_SCENARIOS);
+    expect(operations.packets.map((packet) => packet.scenario)).toEqual(expect.arrayContaining(ANALYST_OPERATION_SCENARIOS));
+    expect(operations.packets.every((packet) =>
+      packet.schedulerIsolation.directEgressAllowed === false &&
+      packet.proof.noStolenFilesDownloaded &&
+      packet.proof.noCredentials &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.noRawUnsafeUrls &&
+      packet.proof.metadataOnlyAllowedFields &&
+      packet.whatWasNotAccessed.includes("leaked record rows") &&
+      packet.whatWasNotAccessed.includes("credentials") &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(operations.agent01GovernanceGates).toEqual(expect.arrayContaining(["approval_required", "approval_current", "approval_expired", "blocked"]));
+    expect(operations.agent02SchedulerGates).toEqual(expect.arrayContaining(["queue_metadata_only", "hold_for_backoff", "pause_workers"]));
+    expect(operations.agent06EvidenceGates).toEqual(expect.arrayContaining(["metadata_only_handoff", "hold_redaction", "hold_retention", "claim_ledger_safe"]));
+    expect(operations.agent07AnswerStates).toEqual(expect.arrayContaining(["public_caveat_only", "hold_restricted_fact", "victim_safe_workflow"]));
+    expect(operations.agent08GraphHolds).toEqual(expect.arrayContaining(["restricted_context_hold", "review_before_graph_promotion"]));
+    expect(operations.agent10EmergencyStopGates).toEqual(expect.arrayContaining(["pass", "hold", "rollback"]));
+    expect(operations.victimNotificationPacketCount).toBeGreaterThan(0);
+    const serialized = JSON.stringify(operations).toLowerCase();
+    expect(serialized).not.toContain("http://");
+    expect(serialized).not.toContain(".onion");
+    expect(serialized).not.toContain("customer-dump");
+    expect(serialized).not.toContain("password");
+  });
+
+  test("freezes restricted connector isolation harness without unsafe serialization", () => {
+    const harness = restrictedMetadataIsolationHarnessContract();
+    expect(harness).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      nonNetworked: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(harness.fixtureScenarios).toEqual(ISOLATION_HARNESS_SCENARIOS);
+    expect(harness.observedScenarios).toEqual(expect.arrayContaining(ISOLATION_HARNESS_SCENARIOS));
+    expect(harness.legalSecurityEvidencePacketCount).toBe(ISOLATION_HARNESS_SCENARIOS.length);
+    expect(harness.agent10ReleaseGates).toEqual(expect.arrayContaining(["hold", "rollback"]));
+    expect(harness.packets.every((packet) =>
+      packet.nonNetworked &&
+      packet.connectorBoundary.networks.includes("tor") &&
+      packet.connectorBoundary.networks.includes("i2p") &&
+      packet.connectorBoundary.networks.includes("freenet") &&
+      packet.connectorBoundary.approvedProxyRequired &&
+      packet.connectorBoundary.directEgressAllowed === false &&
+      packet.connectorBoundary.accountStateAllowed === false &&
+      packet.proof.noNetworkCalls &&
+      packet.proof.approvedProxyOnly &&
+      packet.proof.directEgressBlocked &&
+      packet.proof.noRawPayloads &&
+      packet.proof.noCredentialStorage &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.unsafeTargetsBlocked &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(harness).toLowerCase();
+    expect(serialized).not.toContain("http://");
+    expect(serialized).not.toContain(".onion");
+    expect(serialized).not.toContain("customer-dump");
+    expect(serialized).not.toContain("password");
   });
 });

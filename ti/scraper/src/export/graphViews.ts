@@ -13,7 +13,12 @@ import type {
   GraphCutoverReportDto,
   GraphCursorRelationshipDeltaDto,
   GraphCursorRelationshipKind,
+  GraphDeltaStreamContractDto,
+  GraphDeltaStreamFixtureDto,
+  GraphDeltaStreamFixtureName,
+  GraphDeltaStreamQueryKind,
   GraphEvidenceSupportRecord,
+  GraphBackendRepositoryContractDto,
   GraphExportEnforcementDto,
   GraphExportEnforcementItemDto,
   GraphExportEnforcementState,
@@ -1176,8 +1181,102 @@ export function buildGraphRuntimeApiDto(
       generatedAt,
       relationshipIds: relationships.map((relationship) => relationship.id)
     }),
+    backendContract: buildGraphBackendRepositoryContractDto(snapshot, {
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
     relationships: runtimeRelationships,
     reviewQueue
+  };
+}
+
+export function buildGraphBackendRepositoryContractDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+  } = {}
+): GraphBackendRepositoryContractDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const support = snapshot.evidenceSupport.filter((item) => relationshipIds.has(item.relationshipId));
+  const readiness = checkStixExportReadiness({
+    ...snapshot,
+    relationships,
+    evidenceSupport: support
+  });
+  const deltas = buildRelationshipCursorDeltas({
+    ...snapshot,
+    relationships,
+    evidenceSupport: support
+  }, { generatedAt });
+
+  return {
+    mode: "backend_neutral_graph_repository_contract",
+    backendCandidates: ["memory_snapshot", "postgres_graph_tables", "neo4j"],
+    tenantScope: "tenant_id_required_on_nodes_edges_provenance_reviews_and_deltas",
+    generatedAt,
+    nodeCount: snapshot.nodes.length,
+    relationshipCount: relationships.length,
+    provenanceCount: support.length,
+    cursorDeltaCount: deltas.length,
+    operations: [
+      graphRepositoryOperation("upsert_node", "graph_nodes", "node_id", ["tenant_id", "node_id", "type", "value", "confidence", "first_seen_at", "last_seen_at"], false, "Store stable graph nodes with aliases and confidence for SQL or graph labels."),
+      graphRepositoryOperation("upsert_relationship", "graph_relationships", "relationship_id", ["tenant_id", "relationship_id", "source_ref", "target_ref", "type", "confidence", "review_state"], false, "Store actor/victim/TTP/malware/CVE relationships without changing DTO ids."),
+      graphRepositoryOperation("append_provenance", "graph_evidence_support", "support_id", ["tenant_id", "relationship_id", "source_id", "capture_id", "ledger_ids", "content_hash"], true, "Append provenance chains and Agent 06 ledger ids for every relationship support row."),
+      graphRepositoryOperation("append_review_decision", "graph_review_audit", "decision_id", ["tenant_id", "relationship_id", "action", "reviewer_id", "reason", "decided_at"], true, "Append accepted/rejected/superseded/contradicted/expired decisions without rewriting history."),
+      graphRepositoryOperation("append_confidence_history", "graph_confidence_history", "relationship_id_recorded_at", ["tenant_id", "relationship_id", "confidence", "recorded_at", "reason"], true, "Persist stale, downgraded, contradicted, and promoted confidence changes for replay."),
+      graphRepositoryOperation("record_cursor_delta", "graph_cursor_deltas", "cursor", ["tenant_id", "cursor", "relationship_id", "delta_kind", "workflow_state", "changed_at"], true, "Persist Agent 09 poll cursors for graph deltas."),
+      graphRepositoryOperation("update_export_eligibility", "graph_export_eligibility", "relationship_id", ["tenant_id", "relationship_id", "reviewed", "promoted", "accepted", "included_by_default"], false, "Persist STIX eligibility flags and recompute readiness before export.")
+    ],
+    reviewWorkflow: {
+      acceptedRelationshipIds: uniqueSorted(relationships.filter((relationship) => relationship.reviewState === "accepted").map((relationship) => relationship.id)).slice(0, 25),
+      rejectedRelationshipIds: uniqueSorted(relationships.filter((relationship) => relationship.reviewState === "rejected").map((relationship) => relationship.id)).slice(0, 25),
+      staleRelationshipIds: uniqueSorted(relationships.filter((relationship) => relationship.reviewState === "expired" || relationship.properties?.stale === true).map((relationship) => relationship.id)).slice(0, 25),
+      contradictedRelationshipIds: uniqueSorted(relationships.filter((relationship) => relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true).map((relationship) => relationship.id)).slice(0, 25),
+      pendingReviewRelationshipIds: uniqueSorted(relationships.filter((relationship) => relationship.reviewState === "needs_review" || relationship.reviewState === "unreviewed").map((relationship) => relationship.id)).slice(0, 25),
+      decisionActions: ["request_review", "accept", "reject", "supersede", "mark_contradicted", "resolve_contradiction", "expire", "request_evidence"],
+      auditPersistence: "append_only_review_audit"
+    },
+    exportEligibility: {
+      readyRelationshipIds: uniqueSorted(readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId)).slice(0, 25),
+      heldRelationshipIds: uniqueSorted(readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId)).slice(0, 25),
+      policy: "persist_readiness_flags_and_recompute_before_stix_export"
+    },
+    cursorDeltas: {
+      cursorField: "graph.deltas[].cursor",
+      relationshipIds: uniqueSorted(deltas.map((delta) => delta.relationshipId)).slice(0, 25),
+      latestChangedAt: deltas[0]?.changedAt
+    },
+    handoffs: {
+      agent06ClaimLedger: "persist_ledger_ids_with_provenance_support",
+      agent07EntityResolution: "preserve_stable_node_ids_aliases_and_review_states",
+      agent09Api: "serve_same_dtos_from_repository_without_route_shape_changes",
+      agent10DeploymentGate: "verify_repository_replay_before_graph_export_promotion"
+    }
+  };
+}
+
+function graphRepositoryOperation(
+  kind: GraphBackendRepositoryContractDto["operations"][number]["kind"],
+  tableOrLabel: string,
+  idField: string,
+  requiredFields: string[],
+  appendOnly: boolean,
+  summary: string
+): GraphBackendRepositoryContractDto["operations"][number] {
+  return {
+    kind,
+    tableOrLabel,
+    idField,
+    requiredFields,
+    tenantScoped: true,
+    appendOnly,
+    summary
   };
 }
 
@@ -1265,6 +1364,7 @@ export function buildGraphLiveSearchUpdateDto(
     relationshipCount: scopedSnapshot.relationships.length,
     deltaCounts: relationshipDeltaCounts(deltas),
     scenarioCoverage,
+    deltaStream: graphDeltaStreamContract(scenarioCoverage),
     weakDiscoveryPolicy: "pivots_and_caveats_only",
     publicChannelPolicy: "hint_until_corroborated_or_reviewed",
     restrictedEvidencePolicy: "held_context_no_public_fact",
@@ -1277,6 +1377,310 @@ export function buildGraphLiveSearchUpdateDto(
       agent10ReleaseGate: "graph_live_incremental_gate"
     },
     proofRoutes: ["/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/intel/search.graph", "/v1/contracts"]
+  };
+}
+
+const GRAPH_DELTA_STREAM_FIXTURE_SPECS: Array<{
+  readonly name: GraphDeltaStreamFixtureName;
+  readonly scenario: GraphLiveSearchUpdateScenarioName;
+  readonly coveredStatus: GraphDeltaStreamFixtureDto["status"];
+  readonly queryKinds: GraphDeltaStreamQueryKind[];
+  readonly workflowStates: AnalystGraphWorkflowState[];
+  readonly reviewStates: GraphRelationshipReviewState[];
+  readonly reviewHold: boolean;
+  readonly stixImpact: GraphDeltaStreamFixtureDto["stixImpact"];
+  readonly publicAnswerImpact: GraphDeltaStreamFixtureDto["publicAnswerImpact"];
+  readonly agent06LedgerGate: GraphDeltaStreamFixtureDto["agent06LedgerGate"];
+  readonly agent07Caveat: GraphDeltaStreamFixtureDto["agent07Caveat"];
+  readonly summary: string;
+}> = [
+  {
+    name: "clear_web_capture_promotion",
+    scenario: "apt42_clear_web",
+    coveredStatus: "emitted",
+    queryKinds: ["actor", "random_actor", "made_up_actor", "cve"],
+    workflowStates: ["proposed"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "fact",
+    agent06LedgerGate: "hold_missing_ledger",
+    agent07Caveat: "none",
+    summary: "Clear-web capture promotion emits pollable graph deltas with review and ledger gates."
+  },
+  {
+    name: "public_channel_hint",
+    scenario: "public_channel_only_hint",
+    coveredStatus: "held",
+    queryKinds: ["actor", "victim_ransomware"],
+    workflowStates: ["needs-human-review"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "pivot",
+    agent06LedgerGate: "not_required",
+    agent07Caveat: "public_channel_hint",
+    summary: "Approved public-channel matches stay pivot-only until corroborated or reviewed."
+  },
+  {
+    name: "restricted_metadata_held",
+    scenario: "restricted_held_evidence",
+    coveredStatus: "held",
+    queryKinds: ["victim_ransomware", "actor"],
+    workflowStates: ["needs-human-review"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "hidden",
+    agent06LedgerGate: "hold_missing_ledger",
+    agent07Caveat: "restricted_held",
+    summary: "Restricted metadata remains held context with no public-fact promotion."
+  },
+  {
+    name: "missing_ledger_id",
+    scenario: "missing_ledger_id",
+    coveredStatus: "held",
+    queryKinds: ["actor", "cve"],
+    workflowStates: ["needs-human-review"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "caveat",
+    agent06LedgerGate: "hold_missing_ledger",
+    agent07Caveat: "missing_provenance",
+    summary: "Missing ledger IDs block promotion until Agent 06 evidence gates are complete."
+  },
+  {
+    name: "claim_ledger_hold",
+    scenario: "missing_ledger_id",
+    coveredStatus: "held",
+    queryKinds: ["actor", "cve"],
+    workflowStates: ["needs-human-review"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "caveat",
+    agent06LedgerGate: "hold_missing_ledger",
+    agent07Caveat: "missing_provenance",
+    summary: "Claim-ledger gaps hold graph deltas before public or STIX promotion."
+  },
+  {
+    name: "weak_co_mention_pivot",
+    scenario: "weak_co_mention",
+    coveredStatus: "held",
+    queryKinds: ["actor", "random_actor", "made_up_actor"],
+    workflowStates: ["proposed"],
+    reviewStates: ["unreviewed", "needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "pivot",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "weak_discovery",
+    summary: "Weak co-mentions produce pivots only, not confident exported facts."
+  },
+  {
+    name: "actor_alias_collision",
+    scenario: "weak_co_mention",
+    coveredStatus: "held",
+    queryKinds: ["actor", "made_up_actor"],
+    workflowStates: ["needs-human-review"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "pivot",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "weak_discovery",
+    summary: "Actor alias collisions route to review before answer promotion."
+  },
+  {
+    name: "contradicted_attribution",
+    scenario: "contradicted_relationship",
+    coveredStatus: "blocked",
+    queryKinds: ["actor"],
+    workflowStates: ["contradiction"],
+    reviewStates: ["contradicted"],
+    reviewHold: true,
+    stixImpact: "blocked",
+    publicAnswerImpact: "hidden",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "contradicted",
+    summary: "Contradicted attribution blocks public graph facts and export."
+  },
+  {
+    name: "stale_ttp",
+    scenario: "stale_relationship",
+    coveredStatus: "held",
+    queryKinds: ["actor"],
+    workflowStates: ["stale", "downgraded"],
+    reviewStates: ["expired", "needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "caveat",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "stale",
+    summary: "Stale TTP deltas remain reviewable but not fresh public facts."
+  },
+  {
+    name: "new_victim_claim",
+    scenario: "scattered_spider_clear_web",
+    coveredStatus: "emitted",
+    queryKinds: ["actor", "victim_ransomware", "sector", "country"],
+    workflowStates: ["proposed", "accepted"],
+    reviewStates: ["unreviewed", "accepted"],
+    reviewHold: false,
+    stixImpact: "held",
+    publicAnswerImpact: "caveat",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "none",
+    summary: "New victim claims are pollable deltas with review/export gates."
+  },
+  {
+    name: "new_cve_exploitation_claim",
+    scenario: "cve_exploitation",
+    coveredStatus: "held",
+    queryKinds: ["actor", "cve"],
+    workflowStates: ["needs-human-review", "accepted"],
+    reviewStates: ["needs_review", "accepted"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "caveat",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "none",
+    summary: "CVE exploitation claims are graph deltas and need review for confident export."
+  },
+  {
+    name: "malware_tool_relation",
+    scenario: "scattered_spider_clear_web",
+    coveredStatus: "emitted",
+    queryKinds: ["actor", "malware_tool"],
+    workflowStates: ["proposed", "accepted"],
+    reviewStates: ["unreviewed", "accepted"],
+    reviewHold: false,
+    stixImpact: "held",
+    publicAnswerImpact: "caveat",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "none",
+    summary: "Malware/tool relationships are answer enrichment deltas with provenance."
+  },
+  {
+    name: "infrastructure_relation",
+    scenario: "volt_typhoon_public_channel",
+    coveredStatus: "held",
+    queryKinds: ["actor"],
+    workflowStates: ["proposed", "needs-human-review"],
+    reviewStates: ["needs_review"],
+    reviewHold: true,
+    stixImpact: "held",
+    publicAnswerImpact: "pivot",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "public_channel_hint",
+    summary: "Infrastructure relationships are pollable pivots and stay caveated when public-channel-only."
+  },
+  {
+    name: "analyst_accepted_promotion",
+    scenario: "accepted_promotion",
+    coveredStatus: "eligible",
+    queryKinds: ["actor", "malware_tool", "victim_ransomware"],
+    workflowStates: ["accepted"],
+    reviewStates: ["accepted"],
+    reviewHold: false,
+    stixImpact: "eligible",
+    publicAnswerImpact: "fact",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "none",
+    summary: "Analyst-accepted promotion exposes eligible facts when ledger/provenance pass."
+  },
+  {
+    name: "analyst_rejected_relation",
+    scenario: "weak_co_mention",
+    coveredStatus: "blocked",
+    queryKinds: ["actor", "made_up_actor"],
+    workflowStates: ["rejected"],
+    reviewStates: ["rejected"],
+    reviewHold: true,
+    stixImpact: "blocked",
+    publicAnswerImpact: "hidden",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "rejected",
+    summary: "Analyst-rejected relationships remain hidden from public facts and export."
+  },
+  {
+    name: "graph_rollback",
+    scenario: "missing_provenance",
+    coveredStatus: "blocked",
+    queryKinds: ["actor"],
+    workflowStates: ["contradiction", "rejected", "needs-human-review"],
+    reviewStates: ["contradicted", "rejected", "needs_review"],
+    reviewHold: true,
+    stixImpact: "blocked",
+    publicAnswerImpact: "hidden",
+    agent06LedgerGate: "not_required",
+    agent07Caveat: "missing_provenance",
+    summary: "Rollback fixtures fail closed on missing provenance, contradiction, or rejected relations."
+  },
+  {
+    name: "stix_export_eligibility_change",
+    scenario: "stix_export_eligible",
+    coveredStatus: "eligible",
+    queryKinds: ["actor", "cve", "malware_tool", "sector"],
+    workflowStates: ["accepted"],
+    reviewStates: ["accepted"],
+    reviewHold: false,
+    stixImpact: "eligible",
+    publicAnswerImpact: "fact",
+    agent06LedgerGate: "complete",
+    agent07Caveat: "none",
+    summary: "Accepted relationships with complete provenance become eligible for STIX export."
+  }
+];
+
+function graphDeltaStreamContract(scenarioCoverage: GraphLiveSearchUpdateScenarioDto[]): GraphDeltaStreamContractDto {
+  const byScenario = new Map(scenarioCoverage.map((scenario) => [scenario.name, scenario]));
+  const fixtures: GraphDeltaStreamFixtureDto[] = GRAPH_DELTA_STREAM_FIXTURE_SPECS.map((spec) => {
+    const scenario = byScenario.get(spec.scenario);
+    const status = scenario?.status === "covered"
+      ? spec.coveredStatus
+      : scenario?.status === "blocked"
+        ? "blocked"
+        : scenario?.status === "held"
+          ? "held"
+          : "missing";
+    return {
+      name: spec.name,
+      status,
+      queryKinds: spec.queryKinds,
+      relationshipIds: scenario?.relationshipIds ?? [],
+      deltaKinds: scenario?.deltaKinds ?? [],
+      workflowStates: spec.workflowStates,
+      reviewStates: spec.reviewStates,
+      caveatCodes: scenario?.caveatCodes ?? [],
+      evidenceIds: [],
+      ledgerIds: [],
+      sourceIds: [],
+      exportEligibleCount: scenario?.exportEligibleCount ?? 0,
+      reviewHold: spec.reviewHold || status === "held" || status === "blocked",
+      stixImpact: spec.stixImpact,
+      publicAnswerImpact: spec.publicAnswerImpact,
+      agent06LedgerGate: spec.agent06LedgerGate,
+      agent07Caveat: spec.agent07Caveat,
+      agent09CursorState: "pollable",
+      agent10ReleaseGate: status === "blocked" ? "rollback" : spec.reviewHold ? "hold" : "pass",
+      summary: scenario?.summary ?? spec.summary
+    };
+  });
+  return {
+    mode: "real_time_answer_graph_delta_stream",
+    responsePolicy: "seconds_level_polling",
+    nextPollSeconds: 3,
+    cursorField: "graph.deltas[].cursor",
+    fixtureCount: fixtures.length,
+    fixtures,
+    queryCoverage: ["actor", "random_actor", "made_up_actor", "cve", "malware_tool", "victim_ransomware", "country", "sector"],
+    reviewHoldPolicy: "hold_unreviewed_public_channel_restricted_weak_missing_ledger_stale_contradicted_rejected",
+    stixEligibilityPolicy: "reviewed_or_promoted_with_provenance_and_ledger",
+    rollbackPolicy: "contradicted_rejected_missing_provenance_or_schema_risk_blocks_export",
+    taxiiBoundary: "descriptor_only_no_server",
+    routeBindings: ["/v1/intel/search.graph", "/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/contracts"]
   };
 }
 

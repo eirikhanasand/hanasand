@@ -22,6 +22,7 @@ import {
   type TelegramPublicApplyPlanStep,
   type TelegramPublicSourcePack
 } from "../adapters/telegramPublic.ts";
+import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import { nowIso } from "../utils.ts";
 
@@ -101,6 +102,7 @@ export type PublicChannelStatusRouteResult =
       answerReadiness: ReturnType<typeof buildTelegramPublicCompactSearchSummary>;
       sla: ReturnType<typeof buildTelegramPublicSlaReport>;
       operatorControlEffects: ReturnType<typeof buildTelegramPublicOperatorControlEffects>;
+      publicSignalFusion: ReturnType<typeof buildPublicSignalFusionWorkbench>;
       safeOutput: {
         rawPrivateDataExposed: false;
         rawMediaPayloadsExposed: false;
@@ -318,6 +320,19 @@ export function buildPublicChannelStatusRouteResponse(
     promotionCanary,
     generatedAt: options.generatedAt
   });
+  const publicSignalFusion = buildPublicSignalFusionWorkbench({
+    query: input.query,
+    entityType: input.entityType,
+    sources,
+    sourcePacks: options.publicTelegramSourcePacks,
+    evidence,
+    tenantId: input.tenantId,
+    previousUrls: [
+      ...promotion.duplicateSuppressed.map((item) => item.messageUrl),
+      ...sources.flatMap((source) => Array.isArray(source.metadata?.lastDiscoveredUrls) ? source.metadata.lastDiscoveredUrls.filter((value): value is string => typeof value === "string") : [])
+    ],
+    generatedAt: options.generatedAt
+  });
   const status = publicChannelStatus({
     promotedCount: promotion.promoted.length,
     evidenceCount: evidence.length,
@@ -352,6 +367,7 @@ export function buildPublicChannelStatusRouteResponse(
       answerReadiness,
       sla,
       operatorControlEffects,
+      publicSignalFusion,
       safeOutput: promotion.safeOutput
     }
   };

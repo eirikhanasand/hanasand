@@ -237,25 +237,26 @@ function scoreQuery(fixture: QueryFixture, payload: Record<string, unknown>, lat
 }
 
 async function seedCapturedEvidence(store: InMemoryScraperStore): Promise<void> {
-  const source = measurementSource();
-  store.saveSource(source);
   const fetcher = fixtureFetcher();
   for (const [index, fixture] of fixtures.entries()) {
-    const url = `https://measure.example.test/research/${fixture.slug}?utm_source=search#summary`;
-    await promoteSearchResultToCanonicalCapture(store, source, {
-      query: fixture.query,
-      provider: "fixture_public_search",
-      resultId: `fixture-${fixture.slug}`,
-      title: fixture.title,
-      snippet: fixture.body.slice(0, 180),
-      url,
-      rank: index + 1,
-      observedAt: "2026-05-24T00:00:00.000Z",
-      confidence: 0.78
-    }, {
-      checkRobots: false,
-      fetcher
-    });
+    for (const source of measurementCaptureSources(fixture)) {
+      store.saveSource(source);
+      const url = `https://measure.example.test/research/${fixture.slug}?utm_source=${source.id}#summary`;
+      await promoteSearchResultToCanonicalCapture(store, source, {
+        query: fixture.query,
+        provider: "fixture_public_search",
+        resultId: `fixture-${fixture.slug}-${source.id}`,
+        title: fixture.title,
+        snippet: fixture.body.slice(0, 180),
+        url,
+        rank: index + 1,
+        observedAt: "2026-05-24T00:00:00.000Z",
+        confidence: 0.78
+      }, {
+        checkRobots: false,
+        fetcher
+      });
+    }
   }
 }
 
@@ -408,74 +409,83 @@ function measurementSourcePack(): SeedSourceBundle {
     name: "measured-safe-public-source-pack",
     description: "Synthetic safe-public source pack for product-usefulness measurement.",
     generatedAt: "2026-05-24T00:00:00.000Z",
-    sources: fixtures.map((fixture) => ({
-      id: `src_measure_pack_${fixture.slug.replace(/-/g, "_")}`,
-      name: `Measured ${fixture.title}`,
-      type: "rss",
-      url: `https://measure.example.test/feeds/${fixture.slug}.xml`,
-      accessMethod: "public_http",
-      risk: "low",
-      trustScore: 0.88,
-      language: "en",
-      crawlFrequencySeconds: 3600,
-      legalNotes: "Synthetic safe public CTI feed used to measure on-demand collection behavior.",
-      tags: ["public", "measurement", fixture.entityType],
-      catalog: {
-        canonicalId: `measurement:${fixture.slug}`,
-        publisher: {
-          name: "Measurement Fixture",
-          country: "US",
-          homepage: "https://measure.example.test",
-          trustBasis: "research"
-        },
-        tier: "tier_1",
-        approvalScope: "safe_public_auto",
-        license: "Synthetic measurement content.",
-        legalBasis: "Synthetic public defensive CTI measurement fixture.",
-        reliability: 0.88,
-        intelligenceValue: 0.88,
-        retentionClass: "standard",
-        analystOwner: "agent-06",
-        coverage: {
-          topics: fixture.entityType === "cve" ? ["CVE", "vulnerability", "exploitation"] : ["actor", "threat-report", "TTP"],
-          actors: fixture.entityType === "actor" ? [fixture.query] : [],
-          aliases: [],
-          industries: ["government", "telecommunications", "energy", "manufacturing"],
-          regions: ["global"],
-          countries: ["United States"],
-          languages: ["en"],
-          queryPatterns: [fixture.query]
-        },
-        collection: {
-          freshnessTargetSeconds: 3600,
-          collectionSlaSeconds: 3600,
-          budgetClass: "low",
-          crawlCadenceSeconds: 3600
-        },
-        adapterCompatibility: ["rss"],
-        rollback: {}
-      }
-    }))
+    sources: fixtures.flatMap((fixture) => [
+      measurementPackSource(fixture, "rss"),
+      measurementPackSource(fixture, "static_web")
+    ])
   };
 }
 
-function measurementSource(): SourceRecord {
-  const timestamp = "2026-05-24T00:00:00.000Z";
+function measurementPackSource(fixture: QueryFixture, type: "rss" | "static_web") {
+  const slug = fixture.slug.replace(/-/g, "_");
+  const isRss = type === "rss";
   return {
-    id: "src_measure_clear_web",
-    name: "Measured Clear Web Fixture",
+    id: `src_measure_pack_${slug}_${type}`,
+    name: `Measured ${isRss ? "feed" : "research page"} ${fixture.title}`,
+    type,
+    url: isRss ? `https://measure.example.test/feeds/${fixture.slug}.xml` : `https://measure.example.test/research/${fixture.slug}`,
+    accessMethod: "public_http",
+    risk: "low",
+    trustScore: isRss ? 0.88 : 0.84,
+    language: "en",
+    crawlFrequencySeconds: 3600,
+    legalNotes: "Synthetic safe public CTI source used to measure on-demand collection behavior.",
+    tags: ["public", "measurement", fixture.entityType],
+    catalog: {
+      canonicalId: `measurement:${fixture.slug}:${type}`,
+      publisher: {
+        name: isRss ? "Measurement Feed" : "Measurement Research",
+        country: "US",
+        homepage: "https://measure.example.test",
+        trustBasis: "research"
+      },
+      tier: isRss ? "tier_1" : "tier_2",
+      approvalScope: "safe_public_auto",
+      license: "Synthetic measurement content.",
+      legalBasis: "Synthetic public defensive CTI measurement fixture.",
+      reliability: isRss ? 0.88 : 0.84,
+      intelligenceValue: isRss ? 0.88 : 0.84,
+      retentionClass: "standard",
+      analystOwner: "agent-06",
+      coverage: {
+        topics: fixture.entityType === "cve" ? ["CVE", "vulnerability", "exploitation"] : ["actor", "threat-report", "TTP"],
+        actors: fixture.entityType === "actor" ? [fixture.query] : [],
+        aliases: [],
+        industries: ["government", "telecommunications", "energy", "manufacturing"],
+        regions: ["global"],
+        countries: ["United States"],
+        languages: ["en"],
+        queryPatterns: [fixture.query]
+      },
+      collection: {
+        freshnessTargetSeconds: 3600,
+        collectionSlaSeconds: 3600,
+        budgetClass: "low",
+        crawlCadenceSeconds: 3600
+      },
+      adapterCompatibility: [type],
+      rollback: {}
+    }
+  } as const;
+}
+
+function measurementCaptureSources(fixture: QueryFixture): SourceRecord[] {
+  const timestamp = "2026-05-24T00:00:00.000Z";
+  return ["primary", "corroborating"].map((variant, index) => ({
+    id: `src_measure_clear_web_${fixture.slug.replace(/-/g, "_")}_${variant}`,
+    name: `Measured ${variant} clear web fixture for ${fixture.title}`,
     type: "static_web",
-    url: "https://measure.example.test/research/index",
+    url: `https://measure.example.test/research/${fixture.slug}`,
     accessMethod: "public_http",
     status: "active",
     risk: "low",
-    trustScore: 0.9,
+    trustScore: index === 0 ? 0.9 : 0.82,
     language: "en",
     crawlFrequencySeconds: 3600,
     legalNotes: "Synthetic safe public CTI pages used to measure search usefulness without contacting external sites.",
     createdAt: timestamp,
     updatedAt: timestamp
-  };
+  }));
 }
 
 function record(value: unknown): Record<string, unknown> {

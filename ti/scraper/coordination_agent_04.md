@@ -1,18 +1,31 @@
-Status: active_task_aa
+Status: active_task_ac
 
 ## CURRENT ASSIGNMENT - READ FIRST
 
-Task AA: Public Channel Fast-Signal Augmentation
+Task AC: Public Advisory And GitHub Security Signal Connector Layer
 
-Build the public-channel layer for responsive actor search without making it a private-chat scraper. Do not wait for another prompt. Public approved Telegram/channel sources should contribute fast, low-confidence hints and source candidates while clear-web capture remains canonical. Deliver approved public channel/source pack contracts, Bot API/official-boundary behavior, query matching, poll windows, per-channel reliability, abuse controls, source activation recommendations, evidence promotion to Agent 06/07/09, and no-leak serialization. Cover APT29, APT42, Turla, Volt Typhoon, Scattered Spider, Akira, random actor, made-up actor, CVE, malware/tool, victim/ransomware, private-channel blocked state, deleted messages, media redaction, rate limits, and channel trust decay. Verify public-channel/API/full tests, typecheck, route inventory, public-channel apply-plan/status, and no private joins/accounts/raw media.
+Build the enterprise public-signal connector layer for advisory-grade CTI. This should make random actor, malware, CVE, campaign, and tool searches feel responsive from approved public sources, not only cached actor profiles.
 
-# Agent 04 Summary
+Scope:
+- Add connector contracts for public advisories and public code/security signals: CISA/known-exploited style advisories, CERT/government advisories, vendor security blogs, GitHub Security Advisories-style records, public malware/research feeds, and curated public report indexes.
+- Implement a source-family abstraction that can rank and merge signals across advisories, public repos, vendor reports, public channels, and static web captures without duplicating evidence.
+- Support actor, malware/tool, CVE, campaign, sector, country, and victim/company query classes. The result should prioritize fast initial summaries while deeper collection continues.
+- Emit provenance-rich, API-ready deltas with family, source id, title, canonical URL, published/observed time, confidence, reliability score, language, region, tags, matched entities, and dedupe keys.
+- Add policy guards: public-only, no auth bypass, no private repo access, no CAPTCHA solving, no scraping terms-bypass, no exploit payload download, no leaked data redistribution.
+- Wire connector outputs into existing public signal fusion/status DTOs so Agent 06 can persist evidence, Agent 07 can extract entities/TTPs, Agent 08 can graph eligible facts, and Agent 09 can expose stable API fields.
 
-- Implemented STIX-like export bundles from stored live captures, including extraction of evidence-backed indicators, entities, relationships, ATT&CK techniques, and reports before incidents are persisted.
-- Preserved original capture provenance in exported STIX-like objects so generated indicators/entities point back to the stored capture id, canonical URL, collection time, and content hash.
-- Added metadata-only evidence objects for redacted or non-body captures without leaking raw bodies or unavailable object-store content.
-- Wired `/v1/exports/stix` to export from run captures plus stored incidents, instead of only exporting already-materialized pipeline results.
-- Added focused export/API coverage for capture-only STIX export and metadata-only evidence representation.
-- Verified `bun test src/tests/export.test.ts`, `bun test src/tests/api.test.ts`, `bun run check`, and `bun run check:route-inventory` pass.
-- Full `bun test` still has unrelated pre-existing failures in pipeline, darknet metadata, and planner expectation drift.
-- Superseded by active Task AA above; do not request another assignment until Task AA proof is complete.
+Proof requirements:
+- Add fixtures for at least APT29, APT42, Turla, Volt Typhoon, Scattered Spider, Akira, a CVE query, a malware/tool query, and an unknown/random actor query.
+- Add tests for dedupe, ranking, unavailable sources, policy-disabled sources, stale advisories, edited records, and cross-family merge behavior.
+- Update docs with source onboarding rules and operational caveats.
+- Run `bun run check`, targeted tests, and route inventory if contracts/routes change.
+
+## QUEUED NEXT TASKS - CONTINUE AFTER CURRENT PROOF
+
+Task AD: Analyst Public Source Workbench UX Contract
+
+Design and implement the backend contract for an analyst workbench that explains why a public source was trusted, suppressed, merged, stale, duplicated, or sent to review. Include actions for approve, disable, lower trust, raise cadence, mark duplicate, and request parser repair.
+
+Task AE: Enterprise Source Coverage And Gap Radar
+
+Build a coverage radar that reports actor/source-family gaps, sector/country gaps, stale sources, missing advisory families, and query classes with poor useful-answer rate. It should produce task-ready recommendations for Agent 01 source onboarding and Agent 10 SLO monitoring.

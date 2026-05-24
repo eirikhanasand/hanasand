@@ -458,7 +458,7 @@ function stixObservedDataFromIndicator(indicator: Indicator, generatedAt: string
 
 function stixAttackPatternFromTechnique(technique: AttackTechniqueCandidate, generatedAt: string): StixObject {
   const externalReferences: StixExternalReference[] = [
-    ...(technique.attackId ? [{ source_name: "mitre-attack", external_id: technique.attackId }] : []),
+    ...(technique.attackId ? [mitreAttackReference(technique.attackId)] : []),
     ...evidenceReferences(technique.provenance)
   ];
 
@@ -554,7 +554,16 @@ function stixRefForPersistedNode(node: PersistedGraphNode): string {
 
 function attackExternalReferences(value: string): StixExternalReference[] {
   const match = value.match(/\bT\d{4}(?:\.\d{3})?\b/);
-  return match ? [{ source_name: "mitre-attack", external_id: match[0] }] : [];
+  return match ? [mitreAttackReference(match[0])] : [];
+}
+
+function mitreAttackReference(attackId: string): StixExternalReference {
+  const path = attackId.replace(".", "/");
+  return {
+    source_name: "mitre-attack",
+    external_id: attackId,
+    url: `https://attack.mitre.org/techniques/${path}/`
+  };
 }
 
 function evidenceReferences(provenance: Array<{ url: string; contentHash: string; sourceId: string; captureId: string }>): StixExternalReference[] {

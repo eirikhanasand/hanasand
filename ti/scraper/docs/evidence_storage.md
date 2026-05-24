@@ -21,6 +21,20 @@ Sensitive and leak-oriented sources are metadata-only. Any capture marked `sensi
 
 Safe excerpts belong in metadata fields such as `safeExcerpt`; raw leaked rows, credentials, private documents, and stolen datasets must never be persisted.
 
+## Analyst Loop Persistence
+`migrations/004_analyst_loop.sql` adds the durable workflow layer for the public `/ti` analyst loop. It persists collection plans, collection tasks, collection runs, metadata review tasks, source activation dry-run packets, victim notification packets, claim ledger entries, and analyst-loop snapshots.
+
+This layer is intentionally metadata-only for leak and threat-actor claims. It may store company/victim names, affected-account counts or descriptions, dataset-size claims, actor statement summaries, claimed/observed timestamps, source hashes, provenance, confidence, allowed review actions, and explicit `what_was_not_accessed` fields. It must not store raw leaked rows, credential values, downloaded datasets, private-community content, CAPTCHA/auth bypass output, or actor-interaction transcripts.
+
+The route-visible state model is:
+- `queued`: approved safe collection work is running.
+- `metadata_review`: leak or threat-actor metadata is safe enough for analyst review.
+- `blocked_unsafe_target`: raw leak/download/credential/private-access/interaction targets were blocked.
+- `needs_source_activation`: operator or legal approval is needed before collection.
+- `ready`: enough reviewed evidence exists for a usable answer.
+
+Victim notification packets are redacted drafts. They summarize what was claimed, who appears affected, dataset size, actor statement summary, timestamps, confidence, provenance, and what was not accessed. Sending still requires an explicit operator workflow outside this migration.
+
 ## Deduplication
 Duplicate suppression uses two keys:
 - `sourceId + canonicalUrl + publishedAt`;
@@ -90,6 +104,14 @@ Postgres should hold operational metadata:
 - `capture_replay_jobs`: capture_id, run_id, from/to extractor versions, status, counts, diff summary, and error metadata.
 - `retention_jobs`: retention class, action, cutoff, affected capture IDs, status, and completion/error fields.
 - `capture_audit`: event_id, capture_id, tenant_id, action, actor_id, occurred_at, metadata JSONB.
+- `collection_plans`: analyst-loop request, query, counts, state, planner explanations, and audit trail.
+- `collection_tasks`: queued/review/blocked task rows with safe target kind and planning metadata.
+- `collection_runs`: run status and counts for `/ti` polling and run summary clarity.
+- `metadata_review_tasks`: review inbox rows for leak/threat-actor claims with company/victim, affected accounts, dataset size, actor statement summary, source hash, provenance, allowed actions, confidence, and explicit unsafe-material non-access checks.
+- `source_activation_packets`: dry-run-only restore/approval packets with expected effect and rollback notes.
+- `victim_notification_packets`: safe redacted notification drafts with confidence, provenance, redactions, and what was not accessed.
+- `claim_ledger_entries`: deduplicated metadata claim ledger rows keyed by query/source hash/claim kind/company.
+- `analyst_loop_snapshots`: compact polling snapshots for queued/review/blocked/activation/ready state and next-step visibility.
 
 Object storage should hold only allowed raw bodies, HTML, screenshots, and large artifacts. Use content-addressed keys:
 

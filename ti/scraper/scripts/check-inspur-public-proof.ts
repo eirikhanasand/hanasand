@@ -28,7 +28,7 @@ const actors = (process.env.TI_PUBLIC_PROOF_ACTORS ?? "Lazarus,FIN7,Mustang Pand
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);
-const queries = ["APT29", ...actors.slice(0, 5)];
+const queries = ["APT29", ...actors];
 const publicBase = process.env.PUBLIC_TI_BASE_URL ?? "https://hanasand.com/ti";
 const apiBase = process.env.PUBLIC_TI_API_BASE_URL ?? "https://api.hanasand.com/api/ti/search";
 const skipContainers = process.env.TI_SKIP_CONTAINER_CHECKS === "true";
@@ -43,7 +43,7 @@ const ok = containers.every((item) => item.ok) && queryProofs.every((item) => it
 console.log(JSON.stringify({
   ok,
   command: "bun run check:inspur-public-proof",
-  expectedOutput: "ok=true; containers healthy/running; public /ti and API search return live partial run proof for APT29 plus five non-seeded actors",
+  expectedOutput: "ok=true; containers healthy/running; public /ti and API search return live partial run proof for APT29 plus configured non-seeded actors/CVEs",
   containers,
   queries: queryProofs
 }, null, 2));

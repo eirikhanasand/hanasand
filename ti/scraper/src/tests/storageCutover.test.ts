@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildEvidenceClaimLedgerDto } from "../api/evidenceDtos.ts";
 import {
   buildEvidenceCutoverRehearsalReport,
@@ -13,6 +16,7 @@ import {
   type PostgresEvidenceTransaction
 } from "../storage/evidenceStore.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
+import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { DEFAULT_RETENTION_POLICIES, simulateInterruptedRetentionEnforcement } from "../storage/retention.ts";
 import type { DiscoveryEvidence, EvidenceDelta, LiveSearchSnapshot, ObjectStoreRef, PipelineResult, RawCapture } from "../types.ts";
@@ -48,6 +52,55 @@ describe("evidence storage cutover", () => {
     expect(sql).toContain("extraction_results_version_idx");
     expect(sql).toContain("source_content_published");
     expect(sql).toContain("promoted_to_capture_id TEXT REFERENCES raw_captures(id) ON DELETE RESTRICT");
+  });
+
+  test("analyst loop migration persists review workflow without raw leak material", async () => {
+    const sql = await Bun.file(new URL("../../migrations/004_analyst_loop.sql", import.meta.url)).text();
+
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS collection_plans");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS collection_tasks");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS collection_runs");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS metadata_review_tasks");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS source_activation_packets");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS victim_notification_packets");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS claim_ledger_entries");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS analyst_loop_snapshots");
+
+    expect(sql).toContain("'queued'");
+    expect(sql).toContain("'metadata_review'");
+    expect(sql).toContain("'blocked_unsafe_target'");
+    expect(sql).toContain("'needs_source_activation'");
+    expect(sql).toContain("'ready'");
+    expect(sql).toContain("'notify_company'");
+    expect(sql).toContain("'mark_duplicate'");
+    expect(sql).toContain("'request_approval'");
+    expect(sql).toContain("'escalate'");
+
+    expect(sql).toContain("company TEXT");
+    expect(sql).toContain("victim TEXT");
+    expect(sql).toContain("affected_accounts_text TEXT");
+    expect(sql).toContain("dataset_size_text TEXT");
+    expect(sql).toContain("actor_statement_summary TEXT");
+    expect(sql).toContain("source_hash TEXT NOT NULL");
+    expect(sql).toContain("unsafe_material_accessed BOOLEAN NOT NULL DEFAULT FALSE CHECK (unsafe_material_accessed = FALSE)");
+    expect(sql).toContain("what_was_not_accessed TEXT[] NOT NULL DEFAULT ARRAY");
+    expect(sql).toContain("dry_run BOOLEAN NOT NULL DEFAULT TRUE CHECK (dry_run = TRUE)");
+
+    expect(sql).toContain("collection_plans_query_created_idx");
+    expect(sql).toContain("collection_tasks_plan_state_idx");
+    expect(sql).toContain("collection_runs_plan_status_idx");
+    expect(sql).toContain("metadata_review_tasks_status_idx");
+    expect(sql).toContain("metadata_review_tasks_source_hash_idx");
+    expect(sql).toContain("source_activation_packets_plan_idx");
+    expect(sql).toContain("victim_notification_packets_review_idx");
+    expect(sql).toContain("claim_ledger_entries_dedupe_idx");
+    expect(sql).toContain("analyst_loop_snapshots_query_idx");
+
+    expect(sql).not.toContain("body TEXT");
+    expect(sql).not.toContain("payload BYTEA");
+    expect(sql).not.toContain("leaked_rows");
+    expect(sql).not.toContain("credential_value");
+    expect(sql).not.toContain("download_url TEXT");
   });
 
   test("fake Postgres repository exposes transaction boundary and delta subject helpers", () => {
@@ -127,6 +180,161 @@ describe("evidence storage cutover", () => {
     expect(afterRestart.queries().getSearchDeltas("APT29", first.cursor, { tenantId: "tenant_cutover" }).map((delta) => delta.id)).toEqual([
       "delta_restart_second"
     ]);
+  });
+
+  test("file-backed store rehydrates evidence deltas and analyst claim workflow rows", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ti-file-backed-evidence-"));
+    try {
+      const snapshotPath = join(dir, "scraper-store.json");
+      const beforeRestart = new FileBackedScraperStore({ snapshotPath });
+      const replayCapture = beforeRestart.saveCapture(fixtureCapture({
+        id: "cap_file_replay",
+        tenantId: "tenant_cutover",
+        sourceId: "src_cutover",
+        body: "APT29 replayable public report text.",
+        contentHash: hashContent("APT29 replayable public report text."),
+        metadata: {
+          query: "APT29",
+          normalizedQuery: "apt29",
+          runId: "run_file_restart"
+        }
+      }));
+      const replayJob = beforeRestart.createReplayJob({
+        id: "replay_file_restart",
+        tenantId: "tenant_cutover",
+        captureId: replayCapture.id,
+        sourceId: replayCapture.sourceId,
+        fromExtractorVersion: "extractor.fixture.v1",
+        toExtractorVersion: "extractor.fixture.v2",
+        runId: "run_file_restart",
+        requestedAt: "2026-05-24T20:00:03.000Z"
+      });
+      beforeRestart.recordReplayResult(replayJob.id, {
+        capture: replayCapture,
+        indicators: [],
+        entities: []
+      });
+      beforeRestart.saveEvidenceDelta(fixtureDelta({
+        id: "delta_file_restart",
+        cursor: "2026-05-24T20:00:04.000Z#delta_file_restart"
+      }));
+      beforeRestart.saveAnalystMetadataReviewTask({
+        id: "review_file_restart",
+        tenantId: "tenant_cutover",
+        planId: "plan_file_restart",
+        sourceId: "src_restricted_hash",
+        status: "open",
+        resultState: "metadata_review",
+        company: "Fjord Energy AS",
+        affectedAccounts: "18,432 accounts",
+        affectedAccountsCount: 18_432,
+        accountSubjects: ["employees", "customers"],
+        datasetSize: "42 GB",
+        datasetSizeBytes: 42_000_000_000,
+        actorStatement: "payment within 72 hours",
+        claimedAt: "2026-05-20T00:00:00.000Z",
+        observedAt: "2026-05-24T20:00:04.000Z",
+        sourceHash: "hash_only_source",
+        provenance: { source: "metadata-only fixture" },
+        allowedActions: ["notify_company", "mark_duplicate", "request_approval", "escalate"],
+        confidence: 0.86,
+        unsafeMaterialAccessed: false,
+        whatWasNotAccessed: ["No restricted dataset was downloaded or opened."],
+        createdAt: "2026-05-24T20:00:04.000Z",
+        updatedAt: "2026-05-24T20:00:04.000Z"
+      });
+      beforeRestart.saveAnalystClaimLedgerEntry({
+        id: "claim_file_restart",
+        tenantId: "tenant_cutover",
+        normalizedQuery: "fjord energy as",
+        reviewTaskId: "review_file_restart",
+        sourceId: "src_restricted_hash",
+        claimKind: "affected_accounts_claim",
+        company: "Fjord Energy AS",
+        claimTextSummary: "18,432 affected accounts",
+        sourceHash: "hash_only_source",
+        confidence: 0.86,
+        ledgerStatus: "metadata_review",
+        observedAt: "2026-05-24T20:00:04.000Z",
+        provenance: { reviewTaskId: "review_file_restart" },
+        createdAt: "2026-05-24T20:00:04.000Z"
+      });
+      beforeRestart.saveAnalystVictimNotificationPacket({
+        id: "victim_packet_file_restart",
+        tenantId: "tenant_cutover",
+        reviewTaskId: "review_file_restart",
+        status: "draft",
+        company: "Fjord Energy AS",
+        claimSummary: "Akira metadata claim against Fjord Energy AS",
+        affectedAccounts: "18,432 accounts",
+        datasetSize: "42 GB",
+        actorStatement: "payment within 72 hours",
+        claimedAt: "2026-05-20T00:00:00.000Z",
+        observedAt: "2026-05-24T20:00:04.000Z",
+        sourceHash: "hash_only_source",
+        confidence: 0.86,
+        provenance: { reviewTaskId: "review_file_restart" },
+        redactions: ["no credentials", "no raw restricted rows"],
+        whatWasNotAccessed: ["No restricted dataset was downloaded or opened."],
+        safeToSend: false,
+        createdAt: "2026-05-24T20:00:04.000Z",
+        updatedAt: "2026-05-24T20:00:04.000Z"
+      });
+      beforeRestart.saveAnalystLoopSnapshot({
+        id: "loop_file_restart",
+        tenantId: "tenant_cutover",
+        planId: "plan_file_restart",
+        normalizedQuery: "fjord energy as",
+        resultState: "metadata_review",
+        headline: "Metadata review ready",
+        queuedTasks: 0,
+        reviewTasks: 1,
+        rejectedSources: 0,
+        blockedUnsafeTargets: 0,
+        meaningfulWorkCount: 1,
+        nextSteps: [{
+          state: "metadata_review",
+          label: "Review metadata claim",
+          detail: "Review safe metadata fields before notification.",
+          tone: "watch"
+        }],
+        reviewTaskIds: ["review_file_restart"],
+        activationPacketIds: [],
+        victimNotificationPacketId: "victim_packet_file_restart",
+        capturedAt: "2026-05-24T20:00:04.000Z"
+      });
+
+      const afterRestart = new FileBackedScraperStore({ snapshotPath });
+      expect(afterRestart.queries().getSearchDeltas("APT29", undefined, { tenantId: "tenant_cutover" }).map((delta) => delta.id)).toContain("delta_file_restart");
+      expect(afterRestart.listReplayJobs()[0]).toMatchObject({
+        id: "replay_file_restart",
+        status: "succeeded",
+        captureId: "cap_file_replay",
+        metadata: {
+          rawEvidenceMutated: false
+        }
+      });
+      expect(afterRestart.getAnalystMetadataReviewTask("review_file_restart")).toMatchObject({
+        company: "Fjord Energy AS",
+        unsafeMaterialAccessed: false,
+        sourceHash: "hash_only_source"
+      });
+      expect(afterRestart.listAnalystClaimLedgerEntries()[0]).toMatchObject({
+        claimKind: "affected_accounts_claim",
+        ledgerStatus: "metadata_review"
+      });
+      expect(afterRestart.listAnalystVictimNotificationPackets()[0]).toMatchObject({
+        safeToSend: false,
+        sourceHash: "hash_only_source"
+      });
+      expect(afterRestart.listAnalystLoopSnapshots()[0]).toMatchObject({
+        resultState: "metadata_review",
+        reviewTaskIds: ["review_file_restart"]
+      });
+      expect(JSON.stringify(afterRestart.listAnalystVictimNotificationPackets())).not.toContain("password");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("rejects partial discovery promotion when durable capture lineage is missing", () => {
