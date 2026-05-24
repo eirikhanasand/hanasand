@@ -410,7 +410,7 @@ export interface RestrictedMetadataNonBlockingSearchSemanticsDto {
   readonly maxPublicSearchAddedLatencyMs: 0;
   readonly packets: readonly RestrictedMetadataNonBlockingSearchPacketDto[];
   readonly fixtureScenarios: readonly RestrictedMetadataNonBlockingSearchScenario[];
-  readonly observedScenarios: readonly RestrictedMetadataNonBlockingSearchScenario[];
+  readonly observedScenarios: readonly string[];
   readonly agent06EvidenceGates: readonly string[];
   readonly agent07PublicAnswerStates: readonly string[];
   readonly agent09WarningCodes: readonly string[];

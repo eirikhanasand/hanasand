@@ -43,6 +43,7 @@ import {
   type ApprovedProxyBoundary,
   type DarknetMetadataSourceType,
   type DarknetNetwork,
+  type RestrictedMetadataNonBlockingSearchScenario,
   type RestrictedMetadataSourcePack
 } from "../adapters/darknetMetadata.ts";
 import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
@@ -2789,7 +2790,7 @@ describe("darknet metadata adapter", () => {
       }
     });
     expect(status.nonBlockingSearch.fixtureScenarios).toEqual(expect.arrayContaining([...NON_BLOCKING_SEARCH_SCENARIOS]));
-    for (const scenario of ["approved_metadata_canary", "kill_switch", "proxy_failure", "unsafe_target", "actor_query"]) {
+    for (const scenario of ["approved_metadata_canary", "kill_switch", "proxy_failure", "unsafe_target", "actor_query"] as const) {
       expect(status.nonBlockingSearch.observedScenarios).toContain(scenario);
     }
     expect(status.nonBlockingSearch.packets.every((packet) =>

@@ -8,6 +8,7 @@
 - Darknet collection starts metadata-only. Do not implement credential bypass, CAPTCHA solving, threat actor interaction, or leaked-data downloads.
 - Leak, victim, and threat-actor claim sources must not disappear as policy rejections when safe defensive metadata can be captured. Policy blocks for raw leaked data, downloads, credentials, auth bypass, CAPTCHA, private access, or threat-actor interaction remain hard blocks, but source-level approval/legal/status gaps should surface as metadata-only review or queue states with victim/company, claimed accounts, dataset size, actor statement/description, provenance, hashes, and allowed-field visibility.
 - Every extracted claim must preserve provenance: source id, capture id, URL/channel, collection timestamp, content hash, extractor version, and confidence.
+- Analyst-loop persistence is reserved for safe workflow metadata only: collection plans/runs/tasks, metadata review tasks, victim-notification packets, and claim ledger entries. These records may contain company/victim, affected-account counts or descriptions, dataset-size claims, actor statement summaries, hashes, provenance, and allowed actions, but must never contain raw leaked rows, credential values, private access material, downloaded datasets, or actor-interaction transcripts.
 
 ## Current Scaffold
 - `package.json`: Bun scripts.
