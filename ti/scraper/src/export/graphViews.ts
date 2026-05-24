@@ -21,6 +21,9 @@ import type {
   GraphExportCertificationScenarioDto,
   GraphExportCertificationScenarioName,
   GraphReleaseCandidateGateDto,
+  GraphLiveSearchUpdateDto,
+  GraphLiveSearchUpdateScenarioDto,
+  GraphLiveSearchUpdateScenarioName,
   GraphExportSlaBucket,
   GraphExportSlaDto,
   GraphExportSlaState,
@@ -247,6 +250,12 @@ export function buildCorrelationGraphQuery(
     reviewQueue
   };
 
+  const liveUpdate = buildGraphLiveSearchUpdateDto(snapshot, {
+    endpoint: "/v1/graph/query",
+    generatedAt,
+    relationshipIds: selectedRelationshipIds
+  });
+
   return {
     endpoint: "/v1/graph/query",
     generatedAt,
@@ -274,6 +283,7 @@ export function buildCorrelationGraphQuery(
       generatedAt,
       relationshipIds: selectedRelationshipIds
     }),
+    liveUpdate,
     provenancePanels: selected.map((relationship) => buildSourceProvenancePanel(snapshot, relationship.id))
   };
 }
@@ -1161,9 +1171,167 @@ export function buildGraphRuntimeApiDto(
       generatedAt,
       relationshipIds: relationships.map((relationship) => relationship.id)
     }),
+    liveUpdate: buildGraphLiveSearchUpdateDto(snapshot, {
+      endpoint: options.endpoint,
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
     relationships: runtimeRelationships,
     reviewQueue
   };
+}
+
+export function buildGraphLiveSearchUpdateDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    endpoint: GraphLiveSearchUpdateDto["endpoint"];
+    generatedAt?: string;
+    relationshipIds?: string[];
+  }
+): GraphLiveSearchUpdateDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const scopedSnapshot = relationshipIdSet
+    ? {
+        ...snapshot,
+        relationships: snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id)),
+        evidenceSupport: snapshot.evidenceSupport.filter((support) => relationshipIdSet.has(support.relationshipId))
+      }
+    : snapshot;
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const nodesById = new Map(scopedSnapshot.nodes.map((node) => [node.id, node]));
+  const deltas = buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const deltaByRelationship = new Map(deltas.map((delta) => [delta.relationshipId, delta]));
+  const scenarioSpecs: Array<{
+    name: GraphLiveSearchUpdateScenarioName;
+    summary: string;
+    matches: (relationship: PersistedGraphRelationship, source: PersistedGraphNode, target: PersistedGraphNode, codes: GraphIntegrityFindingCode[], support: GraphEvidenceSupportRecord[]) => boolean;
+  }> = [
+    { name: "apt29_clear_web", summary: "APT29 clear-web evidence can increment graph relationships with provenance-backed caveats or reviewed facts.", matches: (_relationship, source, target, _codes, support) => hasNodeValue(source, target, "APT29") && hasClearWebSupport(support) },
+    { name: "apt42_clear_web", summary: "APT42 clear-web evidence is represented as incremental actor graph context instead of falling back to cached defaults.", matches: (_relationship, source, target, _codes, support) => hasNodeValue(source, target, "APT42") && hasClearWebSupport(support) },
+    { name: "turla_clear_web", summary: "Turla clear-web updates preserve stale and current relationship deltas for live actor search.", matches: (_relationship, source, target, _codes, support) => hasNodeValue(source, target, "Turla") && hasClearWebSupport(support) },
+    { name: "volt_typhoon_public_channel", summary: "Volt Typhoon public-channel deltas remain hints until corroborated or analyst-reviewed.", matches: (_relationship, source, target, _codes, support) => hasNodeValue(source, target, "Volt Typhoon") && hasPublicChannelSupport(support) },
+    { name: "scattered_spider_clear_web", summary: "Scattered Spider clear-web deltas update actor, TTP, tool, and victim pivots with provenance.", matches: (_relationship, source, target, _codes, support) => hasNodeValue(source, target, "Scattered Spider") && hasClearWebSupport(support) },
+    { name: "akira_restricted_held", summary: "Akira restricted-held evidence is graph context only until public or reviewed corroboration is present.", matches: (_relationship, source, target, _codes, support) => hasNodeValue(source, target, "Akira") && hasRestrictedSupport(support) },
+    { name: "cve_exploitation", summary: "CVE exploitation deltas are tracked but require review before confident public facts or STIX export.", matches: (relationship, source, target) => relationship.type === "exploits" || source.type === "vulnerability" || target.type === "vulnerability" },
+    { name: "random_actor_weak_discovery", summary: "Random or unknown actor discovery remains low-confidence pivot material and is not exported as a fact.", matches: (_relationship, source, target, codes) => (hasNodeValue(source, target, "Random") || hasNodeValue(source, target, "Unknown")) && codes.includes("weak_discovery_only_edge") },
+    { name: "weak_co_mention", summary: "Weak co-mentions stay caveated and excluded from default STIX promotion.", matches: (_relationship, _source, _target, codes) => codes.includes("weak_discovery_only_edge") || codes.includes("unsupported_edge") },
+    { name: "public_channel_only_hint", summary: "Public-channel-only graph hints are visible for pivots but held from confident answers.", matches: (_relationship, _source, _target, _codes, support) => support.length > 0 && support.every((item) => item.sourceId.includes("public_channel") || item.sourceId.includes("telegram")) },
+    { name: "restricted_held_evidence", summary: "Restricted metadata remains held context with no public-fact promotion.", matches: (_relationship, _source, _target, codes, support) => codes.includes("restricted_only_claim") || codes.includes("unsupported_restricted_metadata") || hasRestrictedSupport(support) },
+    { name: "missing_ledger_id", summary: "Missing ledger IDs block incremental public-answer and STIX promotion.", matches: (_relationship, _source, _target, codes) => codes.includes("missing_ledger_ids") },
+    { name: "stale_relationship", summary: "Stale relationships are retained as review deltas instead of refreshed public facts.", matches: (relationship, _source, _target, codes) => relationship.properties?.stale === true || relationship.reviewState === "expired" || codes.includes("stale_accepted_edge") },
+    { name: "contradicted_relationship", summary: "Contradicted relationships fail closed for public graph facts and STIX export.", matches: (relationship, _source, _target, codes) => relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true || codes.includes("contradicted_edge") },
+    { name: "missing_provenance", summary: "Missing provenance blocks graph/STIX promotion until evidence support is repaired.", matches: (_relationship, _source, _target, codes) => codes.includes("missing_provenance") || codes.includes("orphan_relationship") },
+    { name: "accepted_promotion", summary: "Accepted or promoted deltas can become public graph facts when ledger and schema gates pass.", matches: (relationship) => relationship.reviewState === "accepted" || relationship.exportEligibility.promoted },
+    { name: "stix_export_eligible", summary: "Only reviewed or promoted relationships with complete provenance are eligible for default STIX export.", matches: (relationship) => readinessById.get(relationship.id)?.ready === true }
+  ];
+  const scenarioCoverage = scenarioSpecs.map((spec): GraphLiveSearchUpdateScenarioDto => {
+    const matched = scopedSnapshot.relationships.filter((relationship) => {
+      const source = nodesById.get(relationship.sourceRef) ?? fallbackNode(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef) ?? fallbackNode(relationship.targetRef);
+      const support = supportFor(scopedSnapshot, relationship.id);
+      const codes = uniqueFindingCodes([
+        ...((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code)),
+        ...(readinessById.get(relationship.id)?.blockers ?? [])
+      ]);
+      return spec.matches(relationship, source, target, codes, support);
+    });
+    const codes = uniqueFindingCodes(matched.flatMap((relationship) => [
+      ...((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code)),
+      ...(readinessById.get(relationship.id)?.blockers ?? [])
+    ]));
+    const relationshipIds = uniqueSorted(matched.map((relationship) => relationship.id));
+    const deltaKinds = uniqueDeltaKinds(matched.map((relationship) => deltaByRelationship.get(relationship.id)?.deltaKind).filter((kind): kind is RelationshipDeltaKind => Boolean(kind)));
+    return {
+      name: spec.name,
+      status: liveScenarioStatus(relationshipIds.length, codes, matched),
+      relationshipIds: relationshipIds.slice(0, 25),
+      deltaKinds,
+      caveatCodes: publicAnswerCaveatCodes(codes),
+      exportEligibleCount: matched.filter((relationship) => readinessById.get(relationship.id)?.ready === true).length,
+      summary: spec.summary
+    };
+  });
+
+  return {
+    endpoint: options.endpoint,
+    generatedAt,
+    mode: "incremental_live_search_graph",
+    responsePolicy: "seconds_level_polling",
+    nextPollSeconds: 3,
+    cursorField: "graph.deltas[].cursor",
+    relationshipCount: scopedSnapshot.relationships.length,
+    deltaCounts: relationshipDeltaCounts(deltas),
+    scenarioCoverage,
+    weakDiscoveryPolicy: "pivots_and_caveats_only",
+    publicChannelPolicy: "hint_until_corroborated_or_reviewed",
+    restrictedEvidencePolicy: "held_context_no_public_fact",
+    stixPolicy: "export_only_reviewed_or_promoted_relationships",
+    taxiiBoundary: "descriptor_only_no_server",
+    agentHandoffs: {
+      agent06ClaimLedger: "ledger_ids_required_for_promotion",
+      agent07AnswerCaveats: "surface_weak_public_restricted_stale_contradicted_and_missing_provenance",
+      agent09ContractIndex: "expose_graph_live_update",
+      agent10ReleaseGate: "graph_live_incremental_gate"
+    },
+    proofRoutes: ["/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/intel/search.graph", "/v1/contracts"]
+  };
+}
+
+function hasNodeValue(source: PersistedGraphNode, target: PersistedGraphNode, value: string): boolean {
+  const normalized = value.toLowerCase();
+  return source.value.toLowerCase().includes(normalized) || target.value.toLowerCase().includes(normalized);
+}
+
+function hasClearWebSupport(support: GraphEvidenceSupportRecord[]): boolean {
+  return support.some((item) =>
+    !hasPublicChannelSupport([item])
+    && !hasRestrictedSupport([item])
+    && !item.sourceId.includes("seed")
+  );
+}
+
+function hasPublicChannelSupport(support: GraphEvidenceSupportRecord[]): boolean {
+  return support.some((item) => item.sourceId.includes("public_channel") || item.sourceId.includes("telegram"));
+}
+
+function hasRestrictedSupport(support: GraphEvidenceSupportRecord[]): boolean {
+  return support.some((item) =>
+    item.sourceId.includes("restricted_metadata")
+    || item.sourceId.includes("tor_metadata")
+    || item.sourceId.includes("i2p_metadata")
+    || item.sourceId.includes("freenet_metadata")
+  );
+}
+
+function uniqueDeltaKinds(values: RelationshipDeltaKind[]): RelationshipDeltaKind[] {
+  const order: RelationshipDeltaKind[] = ["promoted", "contradicted", "downgraded", "added", "updated", "stale"];
+  const set = new Set(values);
+  return order.filter((kind) => set.has(kind));
+}
+
+function relationshipDeltaCounts(deltas: GraphCursorRelationshipDeltaDto[]): Record<RelationshipDeltaKind, number> {
+  return {
+    added: deltas.filter((delta) => delta.deltaKind === "added").length,
+    updated: deltas.filter((delta) => delta.deltaKind === "updated").length,
+    downgraded: deltas.filter((delta) => delta.deltaKind === "downgraded").length,
+    contradicted: deltas.filter((delta) => delta.deltaKind === "contradicted").length,
+    stale: deltas.filter((delta) => delta.deltaKind === "stale").length,
+    promoted: deltas.filter((delta) => delta.deltaKind === "promoted").length
+  };
+}
+
+function liveScenarioStatus(
+  matchedCount: number,
+  codes: GraphIntegrityFindingCode[],
+  relationships: PersistedGraphRelationship[]
+): GraphLiveSearchUpdateScenarioDto["status"] {
+  if (matchedCount === 0) return "missing";
+  if (codes.some((code) => code === "missing_provenance" || code === "orphan_relationship" || code === "contradicted_edge")) return "blocked";
+  if (codes.length > 0 || relationships.some((relationship) => relationship.reviewState !== "accepted" && !relationship.exportEligibility.promoted)) return "held";
+  return "covered";
 }
 
 export function buildGraphCutoverReportApiDto(

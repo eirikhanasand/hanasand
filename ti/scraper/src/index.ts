@@ -1,8 +1,10 @@
 import { startApiServer } from "./api/server.ts";
 import { loadRuntimeConfig } from "./config/runtimeConfig.ts";
 import { FocusedFrontier } from "./frontier/frontier.ts";
+import { startCanaryCollectionLoop } from "./ops/canaryCollection.ts";
 import { createLogger } from "./ops/logger.ts";
 import { InMemorySourceRegistry } from "./registry/sourceRegistry.ts";
+import { FileObjectEvidenceStore } from "./storage/fileObjectStore.ts";
 import { InMemoryScraperStore } from "./storage/memoryStore.ts";
 
 const config = loadRuntimeConfig();
@@ -10,6 +12,9 @@ const logger = createLogger(Bun.env.SCRAPER_LOG_LEVEL === "debug" ? "debug" : "i
 const store = new InMemoryScraperStore();
 const registry = new InMemorySourceRegistry();
 const frontier = new FocusedFrontier();
+const objectStore = new FileObjectEvidenceStore({
+  rootDir: Bun.env.TI_EVIDENCE_OBJECT_DIR ?? "/tmp/ti-scraper-evidence"
+});
 
 const seed = registry.upsert({
   name: "Example security RSS seed",
@@ -22,13 +27,34 @@ const seed = registry.upsert({
   crawlFrequencySeconds: 3600,
   legalNotes: "Placeholder seed. Replace with approved public security RSS sources before collection."
 });
-store.saveSource(seed);
+if (Bun.env.TI_KEEP_PLACEHOLDER_SOURCE === "true") store.saveSource(seed);
 
-const server = startApiServer({ port: config.port, store, frontier, config });
+const server = startApiServer({ port: config.port, store, frontier, config, objectStore });
+const canary = startCanaryCollectionLoop({
+  store,
+  frontier,
+  objectStore,
+  enabled: Bun.env.TI_CANARY_ENABLED !== "false",
+  intervalSeconds: Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300"),
+  maxTasks: Number(Bun.env.TI_CANARY_MAX_TASKS ?? "3"),
+  maxSources: Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "10"),
+  operatorId: Bun.env.TI_CANARY_OPERATOR_ID ?? "startup-canary",
+  onCycle: (result) => logger.info("public canary collection cycle", { event: "canary.cycle", ...result }),
+  onError: (error) => logger.warn("public canary collection failed", {
+    event: "canary.error",
+    error: error instanceof Error ? error.message : String(error)
+  })
+});
 logger.info("ti-scraper started", {
   event: "service.started",
   port: server.port,
   apiVersion: config.apiVersion,
   memoryTargetMb: config.limits.maxMemoryMbTarget,
-  memoryCeilingMb: config.limits.maxMemoryMbCeiling
+  memoryCeilingMb: config.limits.maxMemoryMbCeiling,
+  publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false"
+});
+
+process.on("SIGTERM", () => {
+  canary.stop();
+  server.stop();
 });

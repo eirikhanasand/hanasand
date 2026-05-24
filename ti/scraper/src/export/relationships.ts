@@ -7,6 +7,7 @@ import type {
   IntelligenceRelationship,
   IntelligenceRelationshipType,
   PipelineResult,
+  ProgressiveEvidenceStage,
   RelationshipGraph
 } from "../types.ts";
 import { clampScore, stableId } from "../utils.ts";
@@ -225,12 +226,16 @@ function mergeProvenance(left: ExtractedEntity, right: ExtractedEntity): Extract
 
 function applyCaptureReviewMetadata(relationship: IntelligenceRelationship, result: PipelineResult): IntelligenceRelationship {
   const reviewState = graphReviewStateOrUndefined(result.capture.metadata.graphReviewState);
-  if (!reviewState) return relationship;
   return {
     ...relationship,
     properties: {
       ...relationship.properties,
-      reviewState,
+      stage: progressiveStageForCapture(result),
+      liveEvidenceStage: result.capture.metadata.evidenceStage,
+      sourceFamily: sourceFamilyForCapture(result),
+      publicChannelOnly: result.capture.metadata.adapter === "telegram_public" || result.capture.metadata.evidenceStage === "public_channel_message",
+      restrictedHeld: result.capture.storageKind === "metadata_only" || result.capture.metadata.evidenceStage === "metadata_only_claim",
+      reviewState: reviewState ?? relationship.properties?.reviewState,
       reviewReason: typeof result.capture.metadata.graphReviewReason === "string" ? result.capture.metadata.graphReviewReason : undefined,
       promoted: relationship.properties?.promoted === true || reviewState === "accepted",
       contradicted: relationship.properties?.contradicted === true || reviewState === "contradicted"
@@ -249,4 +254,22 @@ function graphReviewStateOrUndefined(value: unknown): GraphRelationshipReviewSta
     "expired"
   ];
   return allowed.includes(value as GraphRelationshipReviewState) ? value as GraphRelationshipReviewState : undefined;
+}
+
+function progressiveStageForCapture(result: PipelineResult): ProgressiveEvidenceStage {
+  if (result.capture.metadata.graphReviewState === "accepted") return "reviewed";
+  const stage = result.capture.metadata.evidenceStage;
+  if (stage === "reviewed_promoted") return "promoted";
+  if (stage === "extracted_relationship") return "extracted";
+  if (stage === "captured_page") return "captured";
+  if (stage === "public_channel_message" || stage === "metadata_only_claim" || stage === "live_discovery" || stage === "seeded") return "discovery";
+  if (result.capture.metadata.adapter === "telegram_public") return "discovery";
+  return "captured";
+}
+
+function sourceFamilyForCapture(result: PipelineResult): "clear_web" | "public_channel" | "restricted_metadata" | "seeded" {
+  if (result.capture.metadata.adapter === "telegram_public" || result.capture.metadata.evidenceStage === "public_channel_message") return "public_channel";
+  if (result.capture.storageKind === "metadata_only" || result.capture.metadata.evidenceStage === "metadata_only_claim") return "restricted_metadata";
+  if (result.capture.metadata.evidenceStage === "seeded") return "seeded";
+  return "clear_web";
 }

@@ -648,9 +648,24 @@ export function buildLiveActorIntelligenceDto(input: FuseActorProfileInput): Liv
     .map((indicator) => indicator.value)));
   const vulnerabilities = mergeStrings(accepted.flatMap(({ profile }) => profile.cves.map(entityOrIndicatorValue)));
   const malwareTools = mergeStrings(accepted.flatMap(({ profile }) => profile.malwareAndTooling.map((entity) => entity.value)));
+  const allInfrastructure = mergeStrings(evidenceDtos.flatMap(({ evidence }) => evidence.result.indicators
+    .filter((indicator) => indicator.type !== "cve")
+    .map((indicator) => indicator.value)));
+  const allVulnerabilities = mergeStrings(evidenceDtos.flatMap(({ evidence }) => [
+    ...evidence.result.entities.filter((entity) => entity.type === "cve").map((entity) => entity.value),
+    ...evidence.result.indicators.filter((indicator) => indicator.type === "cve").map((indicator) => indicator.value)
+  ]));
+  const allMalwareTools = mergeStrings(evidenceDtos.flatMap(({ profile }) => profile.malwareAndTooling.map((entity) => entity.value)));
+  const restrictedMetadataFacts = restrictedMetadataFactBullets(evidenceDtos.map(({ evidence }) => evidence));
   const campaigns = mergeStrings(accepted.flatMap(({ evidence }) => explicitCampaignNames([
     evidence.result.capture.body ?? evidence.result.incident?.summary ?? ""
   ])));
+  const summaryBullets = enrichSearchSummary(summary?.summaryBullets ?? [`No live evidence available for ${input.query}`], {
+    malwareTools: allMalwareTools,
+    vulnerabilities: allVulnerabilities,
+    infrastructure: allInfrastructure,
+    restrictedMetadataFacts
+  });
   const provenance = evidenceDtos.map(({ evidence, dto }) => ({
     evidenceId: evidence.id,
     ledgerIds: evidenceLedgerIds(evidence),
@@ -696,7 +711,7 @@ export function buildLiveActorIntelligenceDto(input: FuseActorProfileInput): Liv
         notes: mergeStrings(recentDates.flatMap((temporal) => temporal.notes))
       },
       aliases: fused.profile.aliases,
-      summaryBullets: summary?.summaryBullets ?? [`No live evidence available for ${input.query}`]
+      summaryBullets
     },
     evidenceDtos,
     acceptedEvidenceIds: accepted.map(({ evidence }) => evidence.id)
@@ -705,7 +720,7 @@ export function buildLiveActorIntelligenceDto(input: FuseActorProfileInput): Liv
   return {
     query: input.query,
     actor: fused.profile.actor,
-    summaryBullets: summary?.summaryBullets ?? [`No live evidence available for ${input.query}`],
+    summaryBullets,
     aliases: fused.profile.aliases,
     recentActivity: {
       firstSeen: earliest(recentDates.map((temporal) => temporal.firstSeenAt)),
@@ -729,6 +744,53 @@ export function buildLiveActorIntelligenceDto(input: FuseActorProfileInput): Liv
     readiness,
     needsAnalystReview: fused.profile.needsAnalystReview || readiness.overall === "needs_review" || caveats.some((caveat) => caveat.severity !== "info")
   };
+}
+
+function enrichSearchSummary(summary: string[], input: {
+  malwareTools: string[];
+  vulnerabilities: string[];
+  infrastructure: string[];
+  restrictedMetadataFacts: string[];
+}): string[] {
+  return mergeStrings([
+    ...summary,
+    ...input.restrictedMetadataFacts,
+    ...(input.malwareTools.length ? [`Observed malware/tooling includes ${input.malwareTools.slice(0, 4).join(", ")}.`] : []),
+    ...(input.vulnerabilities.length ? [`Referenced vulnerabilities include ${input.vulnerabilities.slice(0, 4).join(", ")}.`] : []),
+    ...(input.infrastructure.length ? [`Infrastructure and indicator observations include ${input.infrastructure.slice(0, 4).join(", ")}.`] : [])
+  ]).slice(0, 6);
+}
+
+function restrictedMetadataFactBullets(evidence: StagedEvidenceInput[]): string[] {
+  return evidence.flatMap((item) => {
+    const leakSite = objectRecord(item.result.capture.metadata.leakSite);
+    if (!leakSite) return [];
+    const actor = stringValue(leakSite.actorName);
+    const victim = stringValue(leakSite.victimName);
+    const affectedAccounts = stringValue(leakSite.affectedAccounts);
+    const accountSubjects = stringValue(leakSite.accountSubjects);
+    const datasetSize = stringValue(leakSite.datasetSize);
+    const actorStatement = stringValue(leakSite.actorStatement);
+    const claimedDate = stringValue(leakSite.claimDate);
+    const dataCategory = stringValue(leakSite.claimedDataCategory) ?? stringValue(leakSite.claimedDataType);
+    const sector = stringValue(leakSite.claimedSector);
+    const country = stringValue(leakSite.claimedCountry);
+    const postStatus = stringValue(leakSite.postStatus);
+    const facts = [
+      victim ? `company ${victim}` : undefined,
+      actor ? `actor ${actor}` : undefined,
+      affectedAccounts ? `${affectedAccounts} affected accounts` : undefined,
+      accountSubjects ? `affected users ${accountSubjects}` : undefined,
+      datasetSize ? `dataset size ${datasetSize}` : undefined,
+      actorStatement ? `actor demand/statement: ${actorStatement}` : undefined,
+      dataCategory ? `data category ${dataCategory}` : undefined,
+      claimedDate ? `claimed date ${claimedDate}` : undefined,
+      sector ? `sector ${sector}` : undefined,
+      country ? `country ${country}` : undefined,
+      postStatus ? `post status ${postStatus}` : undefined
+    ].filter((value): value is string => Boolean(value));
+    return facts.length ? [`Restricted metadata claim: ${facts.slice(0, 8).join("; ")}.`] : [];
+  });
 }
 
 export function buildPublicIntelAnswerDto(
@@ -1990,6 +2052,14 @@ function flattenTargets(profile: Pick<ActorProfileSnapshot, "targets">): string[
 function extractActorNames(text: string): string[] {
   const candidates = [...text.matchAll(/\b(?:APT\d{2}|[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,2})\b/g)].map((match) => match[0]);
   return candidates.filter((candidate) => !/^(Direct|Recent|Targets|Uses|No|Evidence|Actor|Published|First|Last)$/i.test(candidate));
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function mergeStrings(values: string[]): string[] {

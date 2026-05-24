@@ -31,6 +31,7 @@ import {
   restrictedMetadataEvidenceHandoffFromCapture,
   restrictedMetadataIntelSearchPartialSemantics,
   restrictedMetadataKillSwitchDrillContract,
+  restrictedMetadataNonBlockingSearchContract,
   restrictedMetadataPolicyDelta,
   restrictedMetadataProductionAuditEvents,
   restrictedMetadataProductionBoundaryContracts,
@@ -48,6 +49,27 @@ import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
 import { InMemorySourceRegistry } from "../registry/sourceRegistry.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { CollectionTask, RawCapture, SourceRecord, SourceReviewDecision } from "../types.ts";
+
+const NON_BLOCKING_SEARCH_SCENARIOS: RestrictedMetadataNonBlockingSearchScenario[] = [
+  "approved_metadata_canary",
+  "no_approval",
+  "expired_approval",
+  "kill_switch",
+  "proxy_failure",
+  "timeout",
+  "unsafe_target",
+  "low_yield_source",
+  "retention_expiry",
+  "legal_hold",
+  "redaction_repair",
+  "actor_query",
+  "ransomware_query",
+  "victim_query",
+  "cve_query",
+  "country_query",
+  "sector_query",
+  "public_api_blocked_state"
+] as const;
 
 function source(input: Partial<SourceRecord> = {}): SourceRecord {
   return {
@@ -491,13 +513,14 @@ describe("darknet metadata adapter", () => {
       sensitive: true
     };
 
-    expect(planDarknetMetadataLiveSearch({
+    const partialPlan = planDarknetMetadataLiveSearch({
       query: "Akira",
       entityType: "actor",
       sources: [approvedTor],
       captures: [capture],
       proxyBoundaries: { tor: boundaryFor("tor") }
-    })).toMatchObject({
+    });
+    expect(partialPlan).toMatchObject({
       status: "partial_metadata",
       queuedTasks: 1,
       results: [{
@@ -506,50 +529,72 @@ describe("darknet metadata adapter", () => {
         policyAuditId: "policy_akira"
       }]
     });
+    expect(partialPlan.nonBlockingSearch).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      nonBlockingPublicSearch: true,
+      maxPublicSearchAddedLatencyMs: 0
+    });
+    expect(partialPlan.nonBlockingSearch.observedScenarios).toEqual(expect.arrayContaining(["ransomware_query"]));
 
-    expect(planDarknetMetadataLiveSearch({
+    const pendingPlan = planDarknetMetadataLiveSearch({
       query: "Fjord Energy",
       entityType: "victim",
       sources: [pending],
       proxyBoundaries: { tor: boundaryFor("tor") }
-    })).toMatchObject({
+    });
+    expect(pendingPlan).toMatchObject({
       status: "approval_required",
       queuedTasks: 0,
       blocked: [{ sourceId: "tor_pending", state: "approval_required" }]
     });
+    expect(pendingPlan.nonBlockingSearch.observedScenarios).toEqual(expect.arrayContaining(["no_approval", "victim_query"]));
 
-    expect(planDarknetMetadataLiveSearch({
+    const queuedPlan = planDarknetMetadataLiveSearch({
       query: "Akira",
       entityType: "actor",
       sources: [approvedTor],
       proxyBoundaries: { tor: boundaryFor("tor") }
-    })).toMatchObject({
+    });
+    expect(queuedPlan).toMatchObject({
       status: "queued_metadata_only",
       queuedTasks: 1
     });
+    expect(queuedPlan.nonBlockingSearch.packets.every((packet) =>
+      packet.publicSearchAction === "continue_clear_web_and_public_channel" &&
+      packet.proof.doesNotBlockPublicSearch &&
+      packet.proof.doesNotPromoteRestrictedFacts &&
+      packet.proof.noUnsafeAccess &&
+      packet.proof.noDownload &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
 
-    expect(planDarknetMetadataLiveSearch({
+    const disabledPlan = planDarknetMetadataLiveSearch({
       query: "Akira",
       entityType: "actor",
       sources: [approvedTor],
       proxyBoundaries: { tor: boundaryFor("tor") },
       disabled: true
-    })).toMatchObject({
+    });
+    expect(disabledPlan).toMatchObject({
       status: "disabled",
       queuedTasks: 0,
       blocked: [{ sourceId: "tor_ok", state: "disabled" }]
     });
+    expect(disabledPlan.nonBlockingSearch.observedScenarios).toEqual(expect.arrayContaining(["public_api_blocked_state"]));
 
-    expect(planDarknetMetadataLiveSearch({
+    const blockedPlan = planDarknetMetadataLiveSearch({
       query: "Akira",
       entityType: "actor",
       sources: [unsafe],
       proxyBoundaries: { tor: boundaryFor("tor") }
-    })).toMatchObject({
+    });
+    expect(blockedPlan).toMatchObject({
       status: "blocked",
       queuedTasks: 0,
       blocked: [{ sourceId: "tor_unsafe", state: "blocked" }]
     });
+    expect(blockedPlan.nonBlockingSearch.observedScenarios).toEqual(expect.arrayContaining(["unsafe_target"]));
   });
 
   test("builds metadata-only result DTOs without raw material", () => {
@@ -2734,12 +2779,46 @@ describe("darknet metadata adapter", () => {
     )).toBe(true);
     expect(status.agent10ReleasePacket.emergencyStopCertificationPacketIds.length).toBe(status.emergencyStopCertification.packets.length);
     expect(status.agent10ReleasePacket.emergencyStopCertificationScenarios).toEqual(expect.arrayContaining(["public_api_blocked_state", "kill_switch_propagation"]));
+    expect(status.nonBlockingSearch).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      nonBlockingPublicSearch: true,
+      maxPublicSearchAddedLatencyMs: 0,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.nonBlockingSearch.fixtureScenarios).toEqual(expect.arrayContaining([...NON_BLOCKING_SEARCH_SCENARIOS]));
+    for (const scenario of ["approved_metadata_canary", "kill_switch", "proxy_failure", "unsafe_target", "actor_query"]) {
+      expect(status.nonBlockingSearch.observedScenarios).toContain(scenario);
+    }
+    expect(status.nonBlockingSearch.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.publicSearchAction === "continue_clear_web_and_public_channel" &&
+      packet.proof.doesNotBlockPublicSearch &&
+      packet.proof.doesNotPromoteRestrictedFacts &&
+      packet.proof.noUnsafeAccess &&
+      packet.proof.noDataExposure &&
+      packet.proof.noContact &&
+      packet.proof.noDownload &&
+      packet.proof.noCredentialBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noStealth &&
+      packet.proof.noRawPayloads &&
+      packet.proof.noRawUrls &&
+      packet.proof.hashOnlyEvidence &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.agent09SearchFields).toContain("nonBlockingSearch");
+    expect(status.agent10SoakFields).toContain("nonBlockingSearch");
     expect(ready.operationalSla.metrics.approvalAgeMaxDays).toBeGreaterThanOrEqual(0);
     expect(ready.governancePacket.sourceId).toBe("src_ops_ready");
     expect(ready.auditReplay.observedScenarios).toContain("allowed_metadata_only_record");
     expect(ready.connectorCertification.observedScenarios).toContain("healthy_approved_metadata_source");
     expect(ready.killSwitchDrills.observedScenarios).toContain("healthy_metadata_only_canary");
     expect(ready.emergencyStopCertification.observedScenarios).toContain("healthy_metadata_only_canary");
+    expect(ready.nonBlockingSearch.observedScenarios).toContain("approved_metadata_canary");
     expect(ready.auditTrail.eventTypes).toEqual(expect.arrayContaining(["redaction_applied", "metadata_only_capture"]));
     expect(status.remediationPlan.map((item) => item.action)).toEqual(expect.arrayContaining([
       "quarantine_proxy",
@@ -3136,6 +3215,43 @@ describe("darknet metadata adapter", () => {
     expect(serialized).not.toContain("http://");
     expect(serialized).not.toContain(".onion");
     expect(serialized).not.toContain("user:pass");
+    expect(serialized).not.toContain("customer-dump");
+  });
+
+  test("freezes restricted non-blocking search semantics without unsafe serialization", () => {
+    const semantics = restrictedMetadataNonBlockingSearchContract();
+    expect(semantics).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      nonBlockingPublicSearch: true,
+      maxPublicSearchAddedLatencyMs: 0,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(semantics.fixtureScenarios).toEqual([...NON_BLOCKING_SEARCH_SCENARIOS]);
+    expect(semantics.packets.map((packet) => packet.scenario)).toEqual(expect.arrayContaining([...NON_BLOCKING_SEARCH_SCENARIOS]));
+    expect(semantics.packets.every((packet) =>
+      packet.publicSearchAction === "continue_clear_web_and_public_channel" &&
+      packet.proof.doesNotBlockPublicSearch &&
+      packet.proof.doesNotPromoteRestrictedFacts &&
+      packet.proof.noUnsafeAccess &&
+      packet.proof.noDataExposure &&
+      packet.proof.noContact &&
+      packet.proof.noDownload &&
+      packet.proof.noCredentialBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noStealth &&
+      packet.proof.noRawPayloads &&
+      packet.proof.noRawUrls &&
+      packet.proof.hashOnlyEvidence &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(semantics.agent07PublicAnswerStates).toEqual(expect.arrayContaining(["restricted_context_only", "policy_hold_caveat"]));
+    expect(semantics.agent10EmergencyStopDecisions).toEqual(expect.arrayContaining(["continue_public_search", "hold_restricted_context", "rollback_restricted_workers"]));
+    const serialized = JSON.stringify(semantics).toLowerCase();
+    expect(serialized).not.toContain("http://");
+    expect(serialized).not.toContain(".onion");
     expect(serialized).not.toContain("customer-dump");
   });
 });

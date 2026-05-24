@@ -1,0 +1,638 @@
+import type { FocusedFrontier } from "../frontier/frontier.ts";
+import { processCollectedItem } from "../pipeline/pipeline.ts";
+import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
+import type { ScraperStore } from "../storage/memoryStore.ts";
+import type { CollectionTask, RawCapture, SourceCatalogMetadata, SourceRecord } from "../types.ts";
+import { hashContent, normalizeWhitespace, nowIso, stableId } from "../utils.ts";
+
+export type CanaryFetch = (input: string, init?: RequestInit) => Promise<Response>;
+
+export interface CanaryCollectionOptions {
+  store: ScraperStore;
+  frontier: FocusedFrontier;
+  objectStore?: ObjectEvidenceStore;
+  fetch?: CanaryFetch;
+  tenantId?: string;
+  maxSources?: number;
+  maxTasks?: number;
+  maxBytes?: number;
+  operatorId?: string;
+  now?: () => string;
+}
+
+export interface CanaryActivationResult {
+  generatedAt: string;
+  operatorId: string;
+  activated: Array<{ sourceId: string; sourceName: string; from: SourceRecord["status"]; to: SourceRecord["status"] }>;
+  alreadyActive: string[];
+  rejected: Array<{ sourceId: string; reason: string }>;
+}
+
+export interface CanaryCollectionCycleResult {
+  generatedAt: string;
+  mode: "production_canary";
+  activatedSourceCount: number;
+  queuedTaskCount: number;
+  leasedTaskCount: number;
+  completedTaskCount: number;
+  failedTaskCount: number;
+  insertedCaptureCount: number;
+  duplicateCaptureCount: number;
+  incidentCount: number;
+  latestCaptureIds: string[];
+  errors: Array<{ taskId?: string; sourceId?: string; message: string }>;
+}
+
+export interface CanaryOperatorSummary {
+  generatedAt: string;
+  mode: "production_canary";
+  activeSources: Array<{
+    sourceId: string;
+    sourceName: string;
+    type: SourceRecord["type"];
+    url: string;
+    status: SourceRecord["status"];
+    lastCollectedAt?: string;
+    nextEligibleAt?: string;
+    trustScore: number;
+  }>;
+  queue: {
+    queued: number;
+    leased: number;
+    deadLetters: number;
+  };
+  latestCaptures: Array<{
+    captureId: string;
+    sourceId: string;
+    url: string;
+    collectedAt: string;
+    storageKind: RawCapture["storageKind"];
+    contentHash: string;
+    title?: string;
+  }>;
+  extraction: {
+    captureCount: number;
+    incidentCount: number;
+    averageIncidentConfidence: number;
+    reviewReasons: Record<string, number>;
+  };
+  publicAnswerReadiness: Array<{
+    query: string;
+    captureCount: number;
+    latestCollectedAt?: string;
+    whyPartial: string[];
+  }>;
+}
+
+const CANARY_QUERIES = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "CVE"];
+
+export const PUBLIC_CANARY_SOURCE_PORTFOLIO: SourceRecord[] = [
+  canarySource("src_canary_cisa_alerts", "CISA Cybersecurity Alerts", "rss", "https://www.cisa.gov/cybersecurity-advisories/all.xml", ["government_advisories", "vulnerability_intelligence"], ["APT29", "Volt Typhoon", "CVE"], "government"),
+  canarySource("src_canary_cisa_known_exploited", "CISA Known Exploited Vulnerabilities", "static_web", "https://www.cisa.gov/known-exploited-vulnerabilities-catalog", ["government_advisories", "vulnerability_intelligence"], ["CVE"], "government"),
+  canarySource("src_canary_microsoft_threat_intelligence", "Microsoft Threat Intelligence Blog", "rss", "https://www.microsoft.com/en-us/security/blog/topic/threat-intelligence/feed/", ["vendor_research", "actor_intelligence"], ["APT29", "APT42", "Volt Typhoon", "Scattered Spider"], "vendor"),
+  canarySource("src_canary_google_cloud_threat_intel", "Google Cloud Threat Intelligence Blog", "rss", "https://cloud.google.com/blog/products/identity-security/rss", ["vendor_research", "actor_intelligence"], ["APT42", "Turla", "Akira"], "vendor"),
+  canarySource("src_canary_mandiant", "Mandiant Threat Intelligence Blog", "rss", "https://cloud.google.com/blog/topics/threat-intelligence/rss", ["vendor_research", "actor_intelligence"], ["APT29", "APT42", "Turla"], "vendor"),
+  canarySource("src_canary_unit42", "Unit 42 Threat Research", "rss", "https://unit42.paloaltonetworks.com/feed/", ["vendor_research", "malware_reports"], ["APT42", "Akira", "Scattered Spider"], "vendor"),
+  canarySource("src_canary_recorded_future", "Recorded Future Research", "rss", "https://www.recordedfuture.com/research/feed", ["vendor_research", "actor_intelligence"], ["APT29", "Turla", "Akira"], "vendor"),
+  canarySource("src_canary_thehackernews", "The Hacker News", "rss", "https://feeds.feedburner.com/TheHackersNews", ["news", "actor_intelligence"], ["APT29", "APT42", "Akira", "CVE"], "community"),
+  canarySource("src_canary_bleepingcomputer", "BleepingComputer Security", "rss", "https://www.bleepingcomputer.com/feed/", ["news", "ransomware_victim_reporting"], ["Akira", "Scattered Spider", "CVE"], "community"),
+  canarySource("src_canary_mitre_attack", "MITRE ATT&CK Groups", "static_web", "https://attack.mitre.org/groups/", ["standards_body", "actor_intelligence"], ["APT29", "APT42", "Turla", "Volt Typhoon"], "standards_body")
+];
+
+export function activatePublicCanarySources(input: {
+  store: ScraperStore;
+  tenantId?: string;
+  operatorId?: string;
+  now?: string;
+  portfolio?: SourceRecord[];
+}): CanaryActivationResult {
+  const generatedAt = input.now ?? nowIso();
+  const operatorId = input.operatorId ?? "canary-operator";
+  const activated: CanaryActivationResult["activated"] = [];
+  const alreadyActive: string[] = [];
+  const rejected: CanaryActivationResult["rejected"] = [];
+
+  for (const source of input.portfolio ?? PUBLIC_CANARY_SOURCE_PORTFOLIO) {
+    const existing = input.store.getSource(source.id);
+    const scoped = { ...source, tenantId: input.tenantId ?? source.tenantId };
+    const candidate = existing ?? scoped;
+    const rejection = canaryRejection(candidate);
+    if (rejection) {
+      rejected.push({ sourceId: candidate.id, reason: rejection });
+      continue;
+    }
+    if (candidate.status === "active") {
+      alreadyActive.push(candidate.id);
+      continue;
+    }
+    const updated: SourceRecord = {
+      ...candidate,
+      status: "active",
+      approvedAt: candidate.approvedAt ?? generatedAt,
+      approvedBy: candidate.approvedBy ?? operatorId,
+      updatedAt: generatedAt,
+      governance: {
+        approvalState: "approved",
+        approvalRequired: false,
+        metadataOnly: false,
+        approvedAt: candidate.governance?.approvedAt ?? generatedAt,
+        approvedBy: candidate.governance?.approvedBy ?? operatorId,
+        policyVersion: "collection-policy:v1",
+        riskJustification: "Safe public canary source portfolio; no restricted protocols or private access."
+      },
+      lifecycle: [
+        ...(candidate.lifecycle ?? []),
+        {
+          at: generatedAt,
+          from: candidate.status,
+          to: "active",
+          reason: "operator_request",
+          actorId: operatorId,
+          note: "Executable public canary activation; reversible by pausing or retiring the source."
+        }
+      ]
+    };
+    input.store.saveSource(updated);
+    activated.push({ sourceId: updated.id, sourceName: updated.name, from: candidate.status, to: "active" });
+  }
+
+  return { generatedAt, operatorId, activated, alreadyActive, rejected };
+}
+
+export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
+  const generatedAt = options.now?.() ?? nowIso();
+  const fetcher = options.fetch ?? fetch;
+  const maxSources = Math.max(1, options.maxSources ?? 10);
+  const maxTasks = Math.max(1, options.maxTasks ?? 5);
+  const maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
+  const activation = activatePublicCanarySources({
+    store: options.store,
+    tenantId: options.tenantId,
+    operatorId: options.operatorId,
+    now: generatedAt
+  });
+  const sources = options.store.listSources()
+    .filter((source) => source.status === "active")
+    .filter((source) => !options.tenantId || source.tenantId === options.tenantId || source.tenantId === undefined)
+    .filter((source) => !canaryRejection(source))
+    .slice(0, maxSources);
+
+  let queuedTaskCount = 0;
+  for (const source of sources) {
+    if (!sourceDue(source, generatedAt)) continue;
+    options.frontier.enqueueTask(taskForSource(source, generatedAt, options.tenantId));
+    options.store.saveSource({
+      ...source,
+      updatedAt: generatedAt,
+      crawlState: {
+        retryCount: source.crawlState?.retryCount ?? 0,
+        ...source.crawlState,
+        lastScheduledAt: generatedAt,
+        nextEligibleAt: new Date(Date.parse(generatedAt) + source.crawlFrequencySeconds * 1000).toISOString()
+      }
+    });
+    queuedTaskCount += 1;
+  }
+
+  const errors: CanaryCollectionCycleResult["errors"] = [];
+  const latestCaptureIds: string[] = [];
+  let leasedTaskCount = 0;
+  let completedTaskCount = 0;
+  let failedTaskCount = 0;
+  let insertedCaptureCount = 0;
+  let duplicateCaptureCount = 0;
+  let incidentCount = 0;
+
+  for (let index = 0; index < maxTasks; index += 1) {
+    const leased = options.frontier.next(new Date(generatedAt));
+    if (!leased) break;
+    leasedTaskCount += 1;
+    const task = leased.task;
+    const source = options.store.getSource(task.sourceId);
+    if (!source) {
+      failedTaskCount += 1;
+      options.frontier.fail(task, new Date(generatedAt), "source missing");
+      errors.push({ taskId: task.id, sourceId: task.sourceId, message: "source missing" });
+      continue;
+    }
+
+    try {
+      const item = await fetchCanaryCollectedItem(source, task, fetcher, generatedAt, maxBytes);
+      const pipeline = processCollectedItem(item);
+      const body = pipeline.capture.body;
+      const capture = body && options.objectStore && !pipeline.capture.sensitive
+        ? externalizedCapture(pipeline.capture, options.objectStore, body)
+        : pipeline.capture;
+      const duplicateBeforeWrite = options.store.findDuplicateCapture(capture);
+      const saved = options.store.savePipelineResult({ ...pipeline, capture });
+      const wasDuplicate = Boolean(duplicateBeforeWrite && duplicateBeforeWrite.id !== capture.id) || saved.capture.id !== capture.id;
+      if (wasDuplicate) duplicateCaptureCount += 1;
+      else insertedCaptureCount += 1;
+      if (saved.incident) incidentCount += 1;
+      latestCaptureIds.push(saved.capture.id);
+      completedTaskCount += 1;
+      options.frontier.complete(task);
+      updateSourceSuccess(options.store, source, generatedAt);
+      updateRunProgress(options.store, task, generatedAt, saved.incident ? 1 : 0);
+    } catch (error) {
+      failedTaskCount += 1;
+      const message = error instanceof Error ? error.message : String(error);
+      options.frontier.fail(task, new Date(generatedAt), message);
+      errors.push({ taskId: task.id, sourceId: task.sourceId, message });
+      updateSourceFailure(options.store, source, generatedAt, message);
+    }
+  }
+
+  return {
+    generatedAt,
+    mode: "production_canary",
+    activatedSourceCount: activation.activated.length + activation.alreadyActive.length,
+    queuedTaskCount,
+    leasedTaskCount,
+    completedTaskCount,
+    failedTaskCount,
+    insertedCaptureCount,
+    duplicateCaptureCount,
+    incidentCount,
+    latestCaptureIds,
+    errors
+  };
+}
+
+export function buildCanaryOperatorSummary(input: {
+  store: ScraperStore;
+  frontier: FocusedFrontier;
+  generatedAt?: string;
+}): CanaryOperatorSummary {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const activeSources = input.store.listSources()
+    .filter((source) => source.status === "active" && source.metadata?.canaryPortfolio === true)
+    .map((source) => ({
+      sourceId: source.id,
+      sourceName: source.name,
+      type: source.type,
+      url: source.url,
+      status: source.status,
+      lastCollectedAt: source.crawlState?.lastCollectedAt,
+      nextEligibleAt: source.crawlState?.nextEligibleAt,
+      trustScore: source.trustScore
+    }));
+  const latestCaptures = input.store.listCaptures()
+    .filter((capture) => input.store.getSource(capture.sourceId)?.metadata?.canaryPortfolio === true)
+    .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt))
+    .slice(0, 20)
+    .map((capture) => ({
+      captureId: capture.id,
+      sourceId: capture.sourceId,
+      url: capture.url,
+      collectedAt: capture.collectedAt,
+      storageKind: capture.storageKind,
+      contentHash: capture.contentHash,
+      title: typeof capture.metadata.title === "string" ? capture.metadata.title : undefined
+    }));
+  const incidents = input.store.listIncidents();
+  const reviewReasons = new Map<string, number>();
+  let confidenceSum = 0;
+  for (const incident of incidents) {
+    confidenceSum += incident.confidence;
+    for (const reason of incident.reviewReasons) reviewReasons.set(reason, (reviewReasons.get(reason) ?? 0) + 1);
+  }
+
+  return {
+    generatedAt,
+    mode: "production_canary",
+    activeSources,
+    queue: {
+      queued: input.frontier.snapshot().length,
+      leased: input.frontier.leasedSnapshot().length,
+      deadLetters: input.frontier.deadLetterSnapshot().length
+    },
+    latestCaptures,
+    extraction: {
+      captureCount: latestCaptures.length,
+      incidentCount: incidents.length,
+      averageIncidentConfidence: incidents.length ? Number((confidenceSum / incidents.length).toFixed(3)) : 0,
+      reviewReasons: Object.fromEntries([...reviewReasons.entries()].sort((a, b) => a[0].localeCompare(b[0])))
+    },
+    publicAnswerReadiness: CANARY_QUERIES.map((query) => {
+      const captures = input.store.listCaptures().filter((capture) =>
+        `${capture.url} ${capture.body ?? ""} ${String(capture.metadata.safeExcerpt ?? "")} ${String(capture.metadata.title ?? "")}`.toLowerCase().includes(query.toLowerCase())
+      );
+      return {
+        query,
+        captureCount: captures.length,
+        latestCollectedAt: captures.map((capture) => capture.collectedAt).sort().at(-1),
+        whyPartial: captures.length === 0
+          ? ["no fresh canary capture matched this query yet"]
+          : incidents.length === 0
+            ? ["captures exist but extraction has not produced incident candidates yet"]
+            : ["public answer can cite canary captures but still needs corroboration before high-confidence wording"]
+      };
+    })
+  };
+}
+
+export function startCanaryCollectionLoop(options: CanaryCollectionOptions & {
+  intervalSeconds?: number;
+  enabled?: boolean;
+  onCycle?: (result: CanaryCollectionCycleResult) => void;
+  onError?: (error: unknown) => void;
+}): { stop(): void } {
+  if (options.enabled === false) return { stop() {} };
+  let running = false;
+  const intervalMs = Math.max(5, options.intervalSeconds ?? 60) * 1000;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      options.onCycle?.(await runCanaryCollectionCycle(options));
+    } catch (error) {
+      options.onError?.(error);
+    } finally {
+      running = false;
+    }
+  };
+  void tick();
+  const timer = setInterval(() => void tick(), intervalMs);
+  return { stop: () => clearInterval(timer) };
+}
+
+async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTask, fetcher: CanaryFetch, collectedAt: string, maxBytes: number) {
+  const response = await fetcher(task.targetUrl, {
+    headers: {
+      "accept": source.type === "rss" ? "application/rss+xml, application/xml, text/xml, text/html;q=0.8, text/plain;q=0.5" : "text/html, text/plain;q=0.8",
+      "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+    }
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const text = (await response.text()).slice(0, maxBytes);
+  const parsed = source.type === "rss" ? parseRssText(text) : parseHtmlText(text, task.targetUrl);
+  const rawText = normalizeWhitespace(parsed.rawText || text);
+  if (!rawText) throw new Error("empty response body");
+  return {
+    sourceId: source.id,
+    taskId: task.id,
+    url: parsed.url ?? task.targetUrl,
+    collectedAt,
+    publishedAt: parsed.publishedAt,
+    title: parsed.title ?? source.name,
+    rawText,
+    html: source.type === "rss" ? undefined : text,
+    contentHash: hashContent(`${source.id}:${task.targetUrl}:${rawText}`),
+    language: source.language ?? "en",
+    links: parsed.links,
+    metadata: {
+      adapter: "public_canary",
+      sourceType: source.type,
+      query: "public canary",
+      normalizedQuery: "public canary",
+      title: parsed.title ?? source.name,
+      evidenceStage: "captured_page",
+      canary: true,
+      sourceUrl: source.url
+    },
+    sensitive: false
+  };
+}
+
+function externalizedCapture(capture: RawCapture, objectStore: ObjectEvidenceStore, body: string): RawCapture {
+  const record = objectStore.putObject({
+    tenantId: capture.tenantId,
+    sourceId: capture.sourceId,
+    captureId: capture.id,
+    mediaType: capture.mediaType,
+    body,
+    contentHash: capture.contentHash,
+    retentionClass: "public_raw",
+    metadata: capture.metadata
+  });
+  return {
+    ...capture,
+    body: undefined,
+    objectRef: record.ref,
+    storageKind: "external_object",
+    retentionClass: "public_raw",
+    metadata: {
+      ...capture.metadata,
+      durableObjectBoundary: "file_or_object_store",
+      bodyExternalized: true,
+      safeExcerpt: normalizeWhitespace(body).slice(0, 700)
+    }
+  };
+}
+
+function taskForSource(source: SourceRecord, queuedAt: string, tenantId?: string): CollectionTask {
+  return {
+    id: stableId("canary-task", `${source.id}:${queuedAt}`),
+    tenantId: tenantId ?? source.tenantId,
+    sourceId: source.id,
+    targetUrl: source.url,
+    sourceType: source.type,
+    queuedAt,
+    priority: 75,
+    reason: "production public canary collection",
+    retryCount: 0,
+    maxRetries: 1,
+    sourceConcurrencyKey: source.id,
+    fairnessKey: "public-canary",
+    crawlBudgetKey: "public-canary",
+    maxBytes: 512_000,
+    planning: {
+      budgetClass: "background_refresh",
+      decision: "selected",
+      reason: "safe public source selected for production canary collection",
+      queryTerms: CANARY_QUERIES,
+      freshness: 1,
+      freshnessTargetSeconds: source.catalog?.collection.freshnessTargetSeconds ?? source.crawlFrequencySeconds,
+      safetyEnvelope: {
+        allowClearWeb: true,
+        allowPublicChannel: false,
+        allowRestrictedMetadata: false,
+        metadataOnlyRestricted: false,
+        forbiddenOperations: ["auth_bypass", "captcha_solving", "private_channel_join", "restricted_download"]
+      },
+      sourceTrust: source.trustScore,
+      selectedFor: "background"
+    }
+  };
+}
+
+function canaryRejection(source: SourceRecord): string | undefined {
+  if (!["rss", "static_web", "api", "pdf"].includes(source.type)) return "only clear-web public source types are allowed";
+  if (!["public_http", "official_api"].includes(source.accessMethod)) return "only public_http or official_api access is allowed";
+  if (source.risk !== "low" && source.risk !== "medium") return "restricted or high-risk sources are excluded";
+  if (!source.legalNotes.trim()) return "legal notes are required";
+  return undefined;
+}
+
+function sourceDue(source: SourceRecord, now: string): boolean {
+  const nextEligibleAt = source.crawlState?.nextEligibleAt;
+  return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(now);
+}
+
+function updateSourceSuccess(store: ScraperStore, source: SourceRecord, at: string): void {
+  store.saveSource({
+    ...source,
+    lastSeenAt: at,
+    updatedAt: at,
+    health: {
+      status: "healthy",
+      checkedAt: at,
+      lastSuccessAt: at,
+      consecutiveFailures: 0,
+      errorRate: 0
+    },
+    crawlState: {
+      retryCount: 0,
+      ...source.crawlState,
+      lastCollectedAt: at,
+      nextEligibleAt: new Date(Date.parse(at) + source.crawlFrequencySeconds * 1000).toISOString()
+    }
+  });
+}
+
+function updateSourceFailure(store: ScraperStore, source: SourceRecord, at: string, message: string): void {
+  const failures = (source.health?.consecutiveFailures ?? 0) + 1;
+  store.saveSource({
+    ...source,
+    updatedAt: at,
+    health: {
+      status: failures >= 3 ? "failing" : "degraded",
+      checkedAt: at,
+      lastSuccessAt: source.health?.lastSuccessAt,
+      lastFailureAt: at,
+      consecutiveFailures: failures,
+      errorRate: Math.min(1, (source.health?.errorRate ?? 0) + 0.1),
+      lastError: message
+    },
+    crawlState: {
+      retryCount: failures,
+      ...source.crawlState,
+      backoffUntil: new Date(Date.parse(at) + Math.min(3600, failures * 300) * 1000).toISOString()
+    }
+  });
+}
+
+function updateRunProgress(store: ScraperStore, task: CollectionTask, at: string, incidentDelta: number): void {
+  if (!task.runId) return;
+  const run = store.getRun(task.runId);
+  if (!run) return;
+  store.saveRun({
+    ...run,
+    status: "running",
+    startedAt: run.startedAt ?? at,
+    updatedAt: at,
+    captureCount: run.captureCount + 1,
+    incidentCount: run.incidentCount + incidentDelta
+  });
+}
+
+function parseRssText(text: string): { title?: string; rawText: string; publishedAt?: string; url?: string; links: string[] } {
+  const item = text.match(/<item[\s\S]*?<\/item>/i)?.[0] ?? text.match(/<entry[\s\S]*?<\/entry>/i)?.[0] ?? text;
+  const title = xmlText(item, "title");
+  const description = xmlText(item, "description") ?? xmlText(item, "summary") ?? xmlText(item, "content:encoded");
+  const link = xmlText(item, "link") ?? item.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1];
+  const publishedAt = xmlText(item, "pubDate") ?? xmlText(item, "updated") ?? xmlText(item, "published");
+  const rawText = normalizeWhitespace([title, description].filter(Boolean).join(" "));
+  return { title, rawText, publishedAt: publishedAt ? safeDate(publishedAt) : undefined, url: link, links: link ? [link] : [] };
+}
+
+function parseHtmlText(text: string, fallbackUrl: string): { title?: string; rawText: string; publishedAt?: string; url?: string; links: string[] } {
+  const title = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]*>/g, "").trim();
+  const rawText = normalizeWhitespace(text
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&"));
+  const links = [...text.matchAll(/href=["']([^"']+)["']/gi)]
+    .map((match) => {
+      try {
+        return new URL(match[1] ?? "", fallbackUrl).toString();
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 25);
+  return { title, rawText, url: fallbackUrl, links };
+}
+
+function xmlText(xml: string, tag: string): string | undefined {
+  return xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1]
+    ?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+function safeDate(value: string): string | undefined {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
+}
+
+function canarySource(
+  id: string,
+  name: string,
+  type: SourceRecord["type"],
+  url: string,
+  topics: string[],
+  actors: string[],
+  trustBasis: SourceCatalogMetadata["publisher"]["trustBasis"]
+): SourceRecord {
+  const createdAt = "2026-05-24T00:00:00.000Z";
+  return {
+    id,
+    name,
+    type,
+    url,
+    accessMethod: "public_http",
+    status: "approved",
+    risk: "low",
+    trustScore: trustBasis === "government" || trustBasis === "standards_body" ? 0.9 : 0.82,
+    language: "en",
+    crawlFrequencySeconds: 15 * 60,
+    legalNotes: "Safe public canary source: public HTTP content only; no authentication, private access, or restricted collection.",
+    createdAt,
+    updatedAt: createdAt,
+    tags: [...topics, ...actors.map((actor) => actor.toLowerCase())],
+    metadata: {
+      canaryPortfolio: true,
+      sourcePortfolio: "public_canary_10",
+      activationMode: "human_approved_executable"
+    },
+    catalog: {
+      canonicalId: id,
+      publisher: {
+        name,
+        homepage: new URL(url).origin,
+        trustBasis
+      },
+      tier: trustBasis === "government" || trustBasis === "standards_body" ? "tier_1" : "tier_2",
+      approvalScope: "safe_public_auto",
+      license: "Public website/feed terms apply; store bounded excerpts/raw public pages only.",
+      legalBasis: "Public HTTP collection for defensive cyber threat intelligence.",
+      reliability: trustBasis === "government" || trustBasis === "standards_body" ? 0.9 : 0.78,
+      intelligenceValue: 0.78,
+      retentionClass: "public_raw",
+      coverage: {
+        topics,
+        actors,
+        aliases: actors,
+        industries: [],
+        regions: [],
+        countries: [],
+        languages: ["en"],
+        queryPatterns: actors
+      },
+      collection: {
+        freshnessTargetSeconds: 1800,
+        collectionSlaSeconds: 300,
+        budgetClass: "normal",
+        crawlCadenceSeconds: 900
+      },
+      adapterCompatibility: [type]
+    }
+  };
+}

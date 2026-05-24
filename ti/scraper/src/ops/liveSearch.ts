@@ -759,6 +759,73 @@ export interface FinalRcBoardPacket {
   strayRootHandling: "advisory_no_deletion";
 }
 
+export type ProductTiReleaseBoardDecision =
+  | "no-go"
+  | "partial-public-ok"
+  | "canary-ready"
+  | "canary-with-warnings"
+  | "promote-with-warnings"
+  | "promote"
+  | "rollback"
+  | "emergency-stop";
+
+export type ProductTiPublicProofQuery = "APT29" | "APT42" | "Turla" | "Akira" | "random_actor" | "made_up_actor" | "CVE-2024-3094";
+
+export interface ProductTiReleaseBoardProof {
+  name: string;
+  status: "pass" | "warning" | "blocker";
+  proofCommand: string;
+  expectedOutput: string;
+  rollbackPath: string;
+}
+
+export interface ProductTiReleaseBoardPacket {
+  schemaVersion: "ti.product_ti.release_board.v1";
+  dryRun: true;
+  decision: ProductTiReleaseBoardDecision;
+  rcBoardDecision: FinalRcBoardDecision;
+  responsivePublicSearch: {
+    noDefaultQuery: boolean;
+    noDemoContent: boolean;
+    honestFreshness: boolean;
+    updatesWithoutRefresh: boolean;
+    policyGatedSourcesDoNotBlockPublicEvidence: boolean;
+  };
+  publicApiProofs: Array<{
+    query: ProductTiPublicProofQuery;
+    status: "pass" | "warning" | "blocker";
+    proofCommand: string;
+    expectedOutput: string;
+  }>;
+  frontendProof: {
+    emptyPageNoDefaultApt29: "pass" | "warning" | "blocker";
+    queryPageLiveMarkers: "pass" | "warning" | "blocker";
+    proofCommand: string;
+  };
+  pollingProof: {
+    targetSeconds: 3;
+    recommendedSeconds: number;
+    status: "pass" | "warning" | "blocker";
+    proofCommand: string;
+  };
+  scraperHealth: {
+    status: "pass" | "warning" | "blocker";
+    proofCommands: string[];
+  };
+  agentStatus: {
+    agent03: "active" | "pass" | "warning" | "blocker";
+    agent06: "active" | "pass" | "warning" | "blocker";
+    proofCommands: string[];
+  };
+  noLeakGuarantees: ProductTiReleaseBoardProof[];
+  resourceHeadroom: FinalRcBoardPacket["resourceHeadroom"];
+  queuePressure: FinalRcBoardPacket["queuePressure"];
+  routeTruthAudit: FinalRcBoardPacket["routeTruthAudit"];
+  proofCommands: string[];
+  rollbackCommands: string[];
+  operatorSignoff: FinalRcBoardPacket["operatorSignoff"];
+}
+
 export interface CutoverSoakTrendDeltas {
   publicQueries: number;
   runReuse: {
@@ -818,6 +885,7 @@ export interface CutoverSoakReleasePacket {
   rcGate: ReleaseCandidateGatePacket;
   canaryExecution: CanaryReleaseExecutionPacket;
   rcBoard: FinalRcBoardPacket;
+  productTiBoard: ProductTiReleaseBoardPacket;
   trends: CutoverSoakTrendDeltas;
   blockers: Array<{
     owner: string;
@@ -1806,6 +1874,7 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
   const rcGate = buildReleaseCandidateGatePacket(input, decision, releaseTrain, runtimeProofs, deploymentProofs, blockers, warnings);
   const canaryExecution = buildCanaryReleaseExecutionPacket(input, rcGate);
   const rcBoard = buildFinalRcBoardPacket(input, decision, rcGate, canaryExecution, releaseTrain, runtimeProofs, deploymentProofs, blockers, warnings);
+  const productTiBoard = buildProductTiReleaseBoardPacket(input, rcBoard, runtimeProofs, deploymentProofs, blockers, warnings);
   const nextProofCommands = uniqueStrings([
     ...blockers.map((blocker) => blocker.proofCommand),
     ...warnings.map((warning) => warning.proofCommand),
@@ -1839,11 +1908,12 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
     rcGate,
     canaryExecution,
     rcBoard,
+    productTiBoard,
     trends: input.trends,
     blockers,
     warnings,
     nextProofCommands,
-    statusReport: buildReleaseStatusReport(decision, input, blockers, warnings, nextProofCommands, rcBoard)
+    statusReport: buildReleaseStatusReport(decision, input, blockers, warnings, nextProofCommands, rcBoard, productTiBoard)
   };
 }
 
@@ -2495,6 +2565,156 @@ function worstProofStatus(statuses: Array<ReleaseCandidateProofSlot["status"] | 
   return "pass";
 }
 
+function buildProductTiReleaseBoardPacket(
+  input: CutoverSoakReleasePacketInput,
+  rcBoard: FinalRcBoardPacket,
+  runtimeProofs: CutoverRuntimeReleaseProof[],
+  deploymentProofs: CutoverDeploymentProofSlot[],
+  blockers: Array<{ owner: string; name: string; proofCommand: string; rollbackPath: string }>,
+  warnings: Array<{ owner: string; name: string; proofCommand: string }>
+): ProductTiReleaseBoardPacket {
+  const deployment = (name: CutoverDeploymentProofSlotName) => deploymentProofs.find((proof) => proof.name === name);
+  const runtime = (name: CutoverRuntimeReleaseProofName) => runtimeProofs.find((proof) => proof.name === name);
+  const publicStatus = deployment("public_post_api_proof")?.status ?? "blocker";
+  const frontendStatus = deployment("frontend_ti_query_proof")?.status ?? "blocker";
+  const routeStatus = deployment("route_inventory")?.status ?? "blocker";
+  const checkStatus = deployment("local_tests")?.status ?? "blocker";
+  const typecheckStatus = deployment("remote_typecheck")?.status ?? "blocker";
+  const recommendedSeconds = DEFAULT_LIVE_SEARCH_SLO.recommendedPollIntervalMs / 1_000;
+  const pollingStatus: ProductTiReleaseBoardPacket["pollingProof"]["status"] = recommendedSeconds <= 3 ? "pass" : recommendedSeconds <= 10 ? "warning" : "blocker";
+  const policyGatedSourcesDoNotBlockPublicEvidence = publicStatus !== "blocker" && frontendStatus !== "blocker";
+  const noLeakGuarantees: ProductTiReleaseBoardProof[] = [
+    productProof("route_truth_no_raw_payload", routeStatus, "bun run check:route-inventory", "mounted route inventory returns compact safe responses without raw proof payloads", "hold route promotion"),
+    productProof("restricted_metadata_no_leak", runtime("restricted_metadata_sla")?.status ?? "blocker", runtime("restricted_metadata_sla")?.proofCommand ?? "bun run check:restricted-metadata-status", "restricted metadata remains metadata-only without raw URLs, bodies, credentials, or object keys", "activate restricted emergency stop"),
+    productProof("public_answer_no_demo_cache", frontendStatus, "bun run check:live-search-deploy", "public /ti renders no default APT29, no local-cache/demo prose, and live markers for queried pages", "restore public frontend fallback")
+  ];
+  const agent03Status = runtime("clear_web_blocker_status")?.status === "blocker" ? "active" : runtime("clear_web_blocker_status")?.status ?? "warning";
+  const agent06Status = runtime("claim_ledger_route_proof")?.status === "blocker" ? "active" : runtime("claim_ledger_route_proof")?.status ?? "warning";
+  const decision = productTiBoardDecision(rcBoard, {
+    publicStatus,
+    frontendStatus,
+    pollingStatus,
+    blockers,
+    warnings,
+    agent03Status,
+    agent06Status,
+    policyGatedSourcesDoNotBlockPublicEvidence
+  });
+
+  const publicApiProofs: ProductTiReleaseBoardPacket["publicApiProofs"] = PRODUCT_TI_PUBLIC_PROOF_QUERIES.map((query) => ({
+    query,
+    status: publicStatus,
+    proofCommand: `TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof`,
+    expectedOutput: `${query} public POST proof returns HTTP 2xx, run id, live state, and honest partial/ready status`
+  }));
+  const proofCommands = uniqueStrings([
+    ...rcBoard.proofCommands,
+    ...publicApiProofs.map((proof) => proof.proofCommand),
+    "bun run check:live-search-deploy",
+    "bun run check:route-inventory",
+    "bun run check:remote-drift",
+    "bun run check:deploy-hygiene",
+    "bun run check:docker-contexts",
+    "bun test",
+    "bun run check"
+  ]);
+
+  return {
+    schemaVersion: "ti.product_ti.release_board.v1",
+    dryRun: true,
+    decision,
+    rcBoardDecision: rcBoard.decision,
+    responsivePublicSearch: {
+      noDefaultQuery: frontendStatus !== "blocker",
+      noDemoContent: frontendStatus !== "blocker",
+      honestFreshness: publicStatus !== "blocker",
+      updatesWithoutRefresh: pollingStatus !== "blocker",
+      policyGatedSourcesDoNotBlockPublicEvidence
+    },
+    publicApiProofs,
+    frontendProof: {
+      emptyPageNoDefaultApt29: frontendStatus,
+      queryPageLiveMarkers: frontendStatus,
+      proofCommand: "bun run check:live-search-deploy"
+    },
+    pollingProof: {
+      targetSeconds: 3,
+      recommendedSeconds,
+      status: pollingStatus,
+      proofCommand: "bun test src/tests/ops.test.ts"
+    },
+    scraperHealth: {
+      status: worstProofStatus([checkStatus, typecheckStatus, deployment("docker_image_test_enforcement")?.status ?? "blocker"]),
+      proofCommands: ["bun test", "bun run check", "bun run check:deploy-hygiene", "bun run check:docker-contexts"]
+    },
+    agentStatus: {
+      agent03: agent03Status,
+      agent06: agent06Status,
+      proofCommands: [
+        "rg '^Status:' coordination_agent_03.md",
+        "rg '^Status:' coordination_agent_06.md",
+        runtime("claim_ledger_route_proof")?.proofCommand ?? "bun test src/tests/storageCutover.test.ts src/tests/evidenceEndpoints.test.ts"
+      ]
+    },
+    noLeakGuarantees,
+    resourceHeadroom: rcBoard.resourceHeadroom,
+    queuePressure: rcBoard.queuePressure,
+    routeTruthAudit: rcBoard.routeTruthAudit,
+    proofCommands,
+    rollbackCommands: uniqueStrings([
+      ...rcBoard.rollbackProcedures,
+      input.deploymentDrift.rollbackTarget.command,
+      "restore previous api/src/utils/ti/search.ts fallback path and redeploy hanasand_api",
+      "raise public polling interval to 10 seconds and return queued-only responses while proof recovers"
+    ]),
+    operatorSignoff: rcBoard.operatorSignoff
+  };
+}
+
+const PRODUCT_TI_PUBLIC_PROOF_QUERIES: ProductTiPublicProofQuery[] = ["APT29", "APT42", "Turla", "Akira", "random_actor", "made_up_actor", "CVE-2024-3094"];
+
+function productProof(
+  name: string,
+  status: ProductTiReleaseBoardProof["status"],
+  proofCommand: string,
+  expectedOutput: string,
+  rollbackPath: string
+): ProductTiReleaseBoardProof {
+  return { name, status, proofCommand, expectedOutput, rollbackPath };
+}
+
+function productTiBoardDecision(
+  rcBoard: FinalRcBoardPacket,
+  input: {
+    publicStatus: ProductTiReleaseBoardProof["status"];
+    frontendStatus: ProductTiReleaseBoardProof["status"];
+    pollingStatus: ProductTiReleaseBoardProof["status"];
+    blockers: Array<{ name: string }>;
+    warnings: Array<{ name: string }>;
+    agent03Status: ProductTiReleaseBoardPacket["agentStatus"]["agent03"];
+    agent06Status: ProductTiReleaseBoardPacket["agentStatus"]["agent06"];
+    policyGatedSourcesDoNotBlockPublicEvidence: boolean;
+  }
+): ProductTiReleaseBoardDecision {
+  if (rcBoard.decision === "emergency-stop") return "emergency-stop";
+  if (rcBoard.decision === "rollback") return "rollback";
+  if (input.publicStatus === "blocker" || input.frontendStatus === "blocker" || input.pollingStatus === "blocker") return "no-go";
+  const onlyActiveCriticalPath = input.blockers.length > 0
+    && input.blockers.every((blocker) =>
+      blocker.name === "runtime.clear_web_blocker_status"
+      || blocker.name === "runtime.claim_ledger_route_proof"
+      || blocker.name === "release_train.evidence_graph_api_holds"
+    );
+  if (onlyActiveCriticalPath && input.policyGatedSourcesDoNotBlockPublicEvidence) return "partial-public-ok";
+  if (input.blockers.length > 0) return "no-go";
+  if (input.warnings.length > 0 || input.pollingStatus === "warning" || rcBoard.decision === "canary-with-warnings") return "canary-with-warnings";
+  if (rcBoard.decision === "promote-with-warnings") return "promote-with-warnings";
+  if (rcBoard.decision === "canary-ready") return "canary-ready";
+  if (rcBoard.decision === "canary-only") return "partial-public-ok";
+  if (rcBoard.decision === "promote") return "promote";
+  return "no-go";
+}
+
 interface ReleaseTrainStageSpec {
   name: CutoverReleaseTrainStageName;
   deploymentProofNames: CutoverDeploymentProofSlotName[];
@@ -2723,7 +2943,8 @@ function buildReleaseStatusReport(
   blockers: Array<{ owner: string; name: string }>,
   warnings: Array<{ owner: string; name: string }>,
   nextProofCommands: string[],
-  rcBoard?: FinalRcBoardPacket
+  rcBoard?: FinalRcBoardPacket,
+  productTiBoard?: ProductTiReleaseBoardPacket
 ): string {
   return [
     `Agent 10 soak release decision: ${decision}`,
@@ -2739,6 +2960,7 @@ function buildReleaseStatusReport(
     `rcGate: ${buildReleaseCandidateGatePacket(input, decision, buildReleaseTrainOrchestration(input, decision, normalizeReleaseTrainStages(input, normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs), blockers, warnings).decision}`,
     `canaryExecution: ${buildCanaryReleaseExecutionPacket(input, buildReleaseCandidateGatePacket(input, decision, buildReleaseTrainOrchestration(input, decision, normalizeReleaseTrainStages(input, normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs), blockers, warnings)).decision}`,
     `rcBoard: ${rcBoard?.decision ?? "unbuilt"}`,
+    `productTiBoard: ${productTiBoard?.decision ?? "unbuilt"}`,
     `restrictedKillSwitchActive: ${input.trends.restrictedKillSwitch.active}`,
     `rollbackTriggers: ${input.trends.rollbackTriggers.length > 0 ? input.trends.rollbackTriggers.join(", ") : "none"}`,
     `blockers: ${blockers.length > 0 ? blockers.map((blocker) => `${blocker.owner}:${blocker.name}`).join(", ") : "none"}`,

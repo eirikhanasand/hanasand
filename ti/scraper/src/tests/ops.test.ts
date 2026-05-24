@@ -1767,6 +1767,51 @@ describe("ops controls", () => {
     expect(promote.rcBoard.proofCommands).toContain("TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof");
     expect(promote.rcBoard.rollbackProcedures).toContain("docker compose up -d ti-scraper api frontend --no-build");
     expect(promote.rcBoard.strayRootHandling).toBe("advisory_no_deletion");
+    expect(promote.productTiBoard.schemaVersion).toBe("ti.product_ti.release_board.v1");
+    expect(promote.productTiBoard.dryRun).toBe(true);
+    expect(["canary-ready", "canary-with-warnings", "promote-with-warnings", "promote"]).toContain(promote.productTiBoard.decision);
+    expect(promote.productTiBoard.publicApiProofs.map((proof) => proof.query)).toEqual([
+      "APT29",
+      "APT42",
+      "Turla",
+      "Akira",
+      "random_actor",
+      "made_up_actor",
+      "CVE-2024-3094"
+    ]);
+    expect(promote.productTiBoard.publicApiProofs.every((proof) => proof.status === "pass")).toBe(true);
+    expect(promote.productTiBoard.frontendProof).toMatchObject({
+      emptyPageNoDefaultApt29: "pass",
+      queryPageLiveMarkers: "pass",
+      proofCommand: "bun run check:live-search-deploy"
+    });
+    expect(promote.productTiBoard.pollingProof).toMatchObject({
+      targetSeconds: 3,
+      recommendedSeconds: 2,
+      status: "pass"
+    });
+    expect(promote.productTiBoard.responsivePublicSearch).toEqual({
+      noDefaultQuery: true,
+      noDemoContent: true,
+      honestFreshness: true,
+      updatesWithoutRefresh: true,
+      policyGatedSourcesDoNotBlockPublicEvidence: true
+    });
+    expect(promote.productTiBoard.scraperHealth.status).toBe("pass");
+    expect(promote.productTiBoard.agentStatus.proofCommands).toContain("rg '^Status:' coordination_agent_03.md");
+    expect(promote.productTiBoard.noLeakGuarantees.map((proof) => proof.name)).toEqual([
+      "route_truth_no_raw_payload",
+      "restricted_metadata_no_leak",
+      "public_answer_no_demo_cache"
+    ]);
+    expect(promote.productTiBoard.resourceHeadroom).toMatchObject({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500
+    });
+    expect(promote.productTiBoard.routeTruthAudit.routeInventoryCount).toBe(26);
+    expect(promote.productTiBoard.proofCommands).toContain("TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof");
+    expect(promote.productTiBoard.rollbackCommands).toContain("restore previous api/src/utils/ti/search.ts fallback path and redeploy hanasand_api");
     expect(promote.runtimeProofs.find((proof) => proof.name === "graph_export_sla")?.graphExportSla).toMatchObject({
       endpoint: "agent10_release_packet",
       state: "pass",
@@ -1803,6 +1848,7 @@ describe("ops controls", () => {
     expect(promote.statusReport).toContain(`rcGate: ${promote.rcGate.decision}`);
     expect(promote.statusReport).toContain(`canaryExecution: ${promote.canaryExecution.decision}`);
     expect(promote.statusReport).toContain(`rcBoard: ${promote.rcBoard.decision}`);
+    expect(promote.statusReport).toContain(`productTiBoard: ${promote.productTiBoard.decision}`);
     expect(promote.nextProofCommands).toContain("bun run check:remote-drift");
     expect(promote.nextProofCommands).toContain("bun run check:deploy-hygiene");
     expect(promote.nextProofCommands).toContain("bun run check:docker-contexts");
@@ -1813,6 +1859,7 @@ describe("ops controls", () => {
     expect(blocker.rcGate.decision).toBe("no-go");
     expect(blocker.canaryExecution.decision).toBe("no-go");
     expect(blocker.rcBoard.decision).toBe("no-go");
+    expect(blocker.productTiBoard.decision).toBe("no-go");
     expect(blocker.blockers.map((item) => item.name)).toContain("api.public_post_proof_missing");
     expect(runtimeBlocker.decision).toBe("hold-on-blocker");
     expect(runtimeBlocker.blockers.map((item) => item.name)).toContain("runtime.claim_ledger_route_proof");
@@ -1820,6 +1867,7 @@ describe("ops controls", () => {
     expect(emergencyStop.rcGate.decision).toBe("emergency-stop");
     expect(emergencyStop.canaryExecution.decision).toBe("emergency-stop");
     expect(emergencyStop.rcBoard.decision).toBe("emergency-stop");
+    expect(emergencyStop.productTiBoard.decision).toBe("emergency-stop");
     expect(emergencyStop.canaryExecution.rollbackSteps[0]).toBe("activate restricted emergency stop and pause restricted metadata workers");
     expect(emergencyStop.ok).toBe(false);
     expect(emergencyStop.releaseTrain.currentDecision).toBe("emergency-stop");
@@ -1843,12 +1891,16 @@ describe("ops controls", () => {
     expect(defaultAgent03Blocker.rcBoard.gates.find((gate) => gate.name === "agent03_clear_web_fail_closed")).toMatchObject({
       status: "blocker"
     });
+    expect(defaultAgent03Blocker.productTiBoard.decision).toBe("partial-public-ok");
+    expect(defaultAgent03Blocker.productTiBoard.agentStatus.agent03).toBe("active");
     expect(deploymentBlocker.decision).toBe("hold-on-blocker");
     expect(deploymentBlocker.blockers.map((item) => item.name)).toContain("deployment_proof.public_post_api_proof");
+    expect(deploymentBlocker.productTiBoard.decision).toBe("no-go");
     expect(continueSoak.decision).toBe("continue-soak");
     expect(continueSoak.rcGate.decision).toBe("canary-only");
     expect(continueSoak.canaryExecution.decision).toBe("canary-with-warnings");
     expect(continueSoak.rcBoard.decision).toBe("canary-only");
+    expect(continueSoak.productTiBoard.decision).toBe("canary-with-warnings");
   });
 });
 

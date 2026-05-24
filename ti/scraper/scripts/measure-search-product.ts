@@ -1,8 +1,11 @@
 import { promoteSearchResultToCanonicalCapture } from "../src/adapters/clearWebPromotion.ts";
 import { handleApiRequest } from "../src/api/server.ts";
 import { FocusedFrontier } from "../src/frontier/frontier.ts";
+import { processCollectedItem } from "../src/pipeline/pipeline.ts";
 import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
 import type { SourceRecord } from "../src/types.ts";
+import type { SeedSourceBundle } from "../src/registry/sourceSeeds.ts";
+import { hashContent } from "../src/utils.ts";
 
 type EntityType = "actor" | "cve" | "free_text";
 
@@ -28,6 +31,7 @@ interface QueryMeasurement {
   indicatorCount: number;
   entityCount: number;
   capturedPageCount: number;
+  metadataOnlyClaimCount: number;
   summary: string[];
 }
 
@@ -103,14 +107,34 @@ const fixtures: QueryFixture[] = [
   }
 ];
 
+const restrictedMetadataFixtures: QueryFixture[] = [
+  {
+    query: "Fjord Energy AS",
+    entityType: "free_text",
+    slug: "fjord-energy-restricted-metadata",
+    title: "Akira restricted metadata claim for Fjord Energy AS",
+    expectedTerms: ["fjord energy as", "akira", "18,432", "employees and customers", "42 gb", "2026-05-20", "payment within 72 hours"],
+    disallowedTerms: ["apt29", "scattered spider", "volt typhoon", "turla"],
+    body: "metadata-only restricted claim"
+  }
+];
+
 async function main(): Promise<void> {
   const coldStore = new InMemoryScraperStore();
   const capturedStore = new InMemoryScraperStore();
+  const restrictedStore = new InMemoryScraperStore();
   await seedCapturedEvidence(capturedStore);
+  seedRestrictedMetadataEvidence(restrictedStore);
+  const sourcePacks = [measurementSourcePack()];
+  const publicClearWebFetcher = fixtureFetcher();
 
   const scenarios = [
-    await measureScenario("empty_store_cold_start", coldStore),
-    await measureScenario("captured_clear_web_evidence", capturedStore)
+    await measureScenario("empty_store_on_demand_source_pack", coldStore, { sourcePacks, publicClearWebFetcher }),
+    await measureScenario("captured_clear_web_evidence", capturedStore, { sourcePacks, publicClearWebFetcher }),
+    await measureScenario("restricted_metadata_only_leak_claims", restrictedStore, {
+      disableBundledSourcePack: true,
+      disableOnDemandClearWebCapture: true
+    }, restrictedMetadataFixtures)
   ];
 
   console.log(JSON.stringify({
@@ -118,22 +142,34 @@ async function main(): Promise<void> {
     purpose: "User-visible /v1/intel/search usefulness: expected fact recall, relevant result coverage, and latency.",
     scoring: {
       expectedFactRecall: "matched expected CTI terms in the public search response divided by expected terms for the query",
-      usefulAnswer: "expected fact recall >= 0.6, at least one captured page, and at least one extracted entity or indicator",
+      usefulAnswer: "expected fact recall >= 0.6, captured-page or metadata-only evidence, and at least one extracted entity or indicator",
       unexpectedCrossTalkTerms: "terms from other fixture actors that appear in the response"
     },
     scenarios
   }, null, 2));
 }
 
-async function measureScenario(scenario: string, store: InMemoryScraperStore): Promise<ScenarioMeasurement> {
+async function measureScenario(
+  scenario: string,
+  store: InMemoryScraperStore,
+  options: { sourcePacks?: SeedSourceBundle[]; publicClearWebFetcher?: typeof fetch; disableBundledSourcePack?: boolean; disableOnDemandClearWebCapture?: boolean } = {},
+  queryFixtures = fixtures
+): Promise<ScenarioMeasurement> {
   const frontier = new FocusedFrontier();
   const queries: QueryMeasurement[] = [];
 
-  for (const fixture of fixtures) {
+  for (const fixture of queryFixtures) {
     const started = performance.now();
     const response = await handleApiRequest(
       new Request(`http://local/v1/intel/search?q=${encodeURIComponent(fixture.query)}&entityType=${fixture.entityType}`),
-      { store, frontier }
+      {
+        store,
+        frontier,
+        sourcePacks: options.sourcePacks,
+        publicClearWebFetcher: options.publicClearWebFetcher,
+        disableBundledSourcePack: options.disableBundledSourcePack,
+        disableOnDemandClearWebCapture: options.disableOnDemandClearWebCapture
+      }
     );
     const latencyMs = round(performance.now() - started);
     const payload = await response.json() as Record<string, unknown>;
@@ -181,6 +217,7 @@ function scoreQuery(fixture: QueryFixture, payload: Record<string, unknown>, lat
   const indicatorCount = numberValue(datasets.indicatorCount);
   const entityCount = numberValue(datasets.entityCount);
   const capturedPageCount = numberValue(stageCounts.captured_page);
+  const metadataOnlyClaimCount = numberValue(stageCounts.metadata_only_claim);
   const expectedFactRecall = round(matchedExpectedTerms.length / fixture.expectedTerms.length);
   return {
     query: fixture.query,
@@ -189,11 +226,12 @@ function scoreQuery(fixture: QueryFixture, payload: Record<string, unknown>, lat
     expectedFactRecall,
     matchedExpectedTerms,
     unexpectedCrossTalkTerms,
-    usefulAnswer: expectedFactRecall >= 0.6 && capturedPageCount > 0 && indicatorCount + entityCount > 0,
+    usefulAnswer: expectedFactRecall >= 0.6 && (capturedPageCount > 0 || metadataOnlyClaimCount > 0) && indicatorCount + entityCount > 0,
     sourceCount,
     indicatorCount,
     entityCount,
     capturedPageCount,
+    metadataOnlyClaimCount,
     summary: stringArray(record(payload.actorProfile)?.summary ?? payload.summary).slice(0, 3)
   };
 }
@@ -221,9 +259,108 @@ async function seedCapturedEvidence(store: InMemoryScraperStore): Promise<void> 
   }
 }
 
+function seedRestrictedMetadataEvidence(store: InMemoryScraperStore): void {
+  const source = restrictedMetadataSource();
+  store.saveSource(source);
+  const rawText = [
+    "actor: Akira",
+    "victim: Fjord Energy AS",
+    "accounts affected: 18,432",
+    "account subjects: employees and customers",
+    "dataset size: 42 GB",
+    "actor statement: payment within 72 hours",
+    "date: 2026-05-20",
+    "sector: energy",
+    "country: Norway",
+    "data category: employee records and customer contact data",
+    "post status: listed",
+    "source timestamp: 2026-05-20T09:30:00.000Z",
+    "url hash: hash_restricted_fjord_energy",
+    "screenshot hash: hash_screen_fjord_energy"
+  ].join(" | ");
+  store.savePipelineResult(processCollectedItem({
+    sourceId: source.id,
+    taskId: "task_restricted_metadata_measurement",
+    url: "restricted-metadata://hash/hash_restricted_fjord_energy",
+    collectedAt: "2026-05-24T00:00:00.000Z",
+    publishedAt: "2026-05-20T09:30:00.000Z",
+    title: "Akira / Fjord Energy AS restricted metadata claim",
+    rawText,
+    contentHash: hashContent(rawText),
+    links: [],
+    metadata: {
+      adapter: "darknet_metadata",
+      evidenceStage: "metadata_only_claim",
+      safeExcerpt: rawText,
+      leakSite: {
+        actorName: "Akira",
+        victimName: "Fjord Energy AS",
+        affectedAccounts: "18,432",
+        accountSubjects: "employees and customers",
+        datasetSize: "42 GB",
+        actorStatement: "payment within 72 hours",
+        claimDate: "2026-05-20",
+        claimedSector: "energy",
+        claimedCountry: "Norway",
+        claimedDataType: "employee records and customer contact data",
+        claimedDataCategory: "employee records and customer contact data",
+        postStatus: "listed",
+        confidence: 0.68,
+        sourceTimestamp: "2026-05-20T09:30:00.000Z",
+        urlHash: "hash_restricted_fjord_energy",
+        screenshotHash: "hash_screen_fjord_energy"
+      },
+      policyDecision: {
+        id: "policy_restricted_metadata_measurement",
+        allowed: true,
+        metadataOnly: true
+      }
+    },
+    sensitive: true
+  }));
+}
+
+function restrictedMetadataSource(): SourceRecord {
+  const timestamp = "2026-05-24T00:00:00.000Z";
+  return {
+    id: "src_measure_restricted_metadata",
+    name: "Measured Restricted Metadata Source",
+    type: "tor_metadata",
+    url: "restricted-metadata://approved/hash-only",
+    accessMethod: "approved_proxy",
+    status: "active",
+    risk: "high",
+    trustScore: 0.72,
+    language: "en",
+    crawlFrequencySeconds: 3600,
+    legalNotes: "Synthetic restricted metadata fixture; metadata only, no raw leak data or credentials.",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    approvedAt: timestamp,
+    approvedBy: "agent-06",
+    governance: {
+      approvalRequired: true,
+      approvalState: "approved",
+      metadataOnly: true,
+      policyVersion: "collection-policy:v1"
+    }
+  };
+}
+
 function fixtureFetcher() {
   return async (input: string | URL | Request): Promise<Response> => {
     const url = typeof input === "string" || input instanceof URL ? new URL(input.toString()) : new URL(input.url);
+    if (url.pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { status: 200 });
+    const feedFixture = fixtures.find((item) => url.pathname.endsWith(`/feeds/${item.slug}.xml`));
+    if (feedFixture) {
+      return new Response(rssFor(feedFixture), {
+        status: 200,
+        headers: {
+          "content-type": "application/rss+xml; charset=utf-8",
+          "etag": `"feed-${feedFixture.slug}"`
+        }
+      });
+    }
     const fixture = fixtures.find((item) => url.pathname.endsWith(`/research/${item.slug}`));
     if (!fixture) return new Response("Not found", { status: 404 });
     const canonical = `https://measure.example.test/research/${fixture.slug}`;
@@ -246,6 +383,79 @@ function fixtureFetcher() {
         "etag": `"${fixture.slug}"`
       }
     });
+  };
+}
+
+function rssFor(fixture: QueryFixture): string {
+  const link = `https://measure.example.test/research/${fixture.slug}`;
+  return [
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    "<rss version=\"2.0\"><channel>",
+    "<title>Measured CTI Feed</title>",
+    "<item>",
+    `<title>${escapeHtml(fixture.title)}</title>`,
+    `<link>${link}</link>`,
+    `<description>${escapeHtml(fixture.body)}</description>`,
+    "<pubDate>Sun, 24 May 2026 00:00:00 GMT</pubDate>",
+    "</item>",
+    "</channel></rss>"
+  ].join("");
+}
+
+function measurementSourcePack(): SeedSourceBundle {
+  return {
+    version: 1,
+    name: "measured-safe-public-source-pack",
+    description: "Synthetic safe-public source pack for product-usefulness measurement.",
+    generatedAt: "2026-05-24T00:00:00.000Z",
+    sources: fixtures.map((fixture) => ({
+      id: `src_measure_pack_${fixture.slug.replace(/-/g, "_")}`,
+      name: `Measured ${fixture.title}`,
+      type: "rss",
+      url: `https://measure.example.test/feeds/${fixture.slug}.xml`,
+      accessMethod: "public_http",
+      risk: "low",
+      trustScore: 0.88,
+      language: "en",
+      crawlFrequencySeconds: 3600,
+      legalNotes: "Synthetic safe public CTI feed used to measure on-demand collection behavior.",
+      tags: ["public", "measurement", fixture.entityType],
+      catalog: {
+        canonicalId: `measurement:${fixture.slug}`,
+        publisher: {
+          name: "Measurement Fixture",
+          country: "US",
+          homepage: "https://measure.example.test",
+          trustBasis: "research"
+        },
+        tier: "tier_1",
+        approvalScope: "safe_public_auto",
+        license: "Synthetic measurement content.",
+        legalBasis: "Synthetic public defensive CTI measurement fixture.",
+        reliability: 0.88,
+        intelligenceValue: 0.88,
+        retentionClass: "standard",
+        analystOwner: "agent-06",
+        coverage: {
+          topics: fixture.entityType === "cve" ? ["CVE", "vulnerability", "exploitation"] : ["actor", "threat-report", "TTP"],
+          actors: fixture.entityType === "actor" ? [fixture.query] : [],
+          aliases: [],
+          industries: ["government", "telecommunications", "energy", "manufacturing"],
+          regions: ["global"],
+          countries: ["United States"],
+          languages: ["en"],
+          queryPatterns: [fixture.query]
+        },
+        collection: {
+          freshnessTargetSeconds: 3600,
+          collectionSlaSeconds: 3600,
+          budgetClass: "low",
+          crawlCadenceSeconds: 3600
+        },
+        adapterCompatibility: ["rss"],
+        rollback: {}
+      }
+    }))
   };
 }
 

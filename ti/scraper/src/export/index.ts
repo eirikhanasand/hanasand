@@ -15,6 +15,7 @@ export {
   buildGraphReviewPlanApiDto,
   buildGraphExportCertificationDto,
   buildGraphExportEnforcementDto,
+  buildGraphLiveSearchUpdateDto,
   buildGraphExportSlaDto,
   buildGraphRuntimeApiDto,
   buildIncidentTimelineView,

@@ -4,7 +4,7 @@ export interface TiSearchResponse {
     query: string
     generatedAt: string
     mode: 'scraper' | 'seeded' | 'live_search'
-    status?: 'queued' | 'searching' | 'partial' | 'ready'
+    status?: TiResultState
     runId?: string
     refreshAfterSeconds?: number
     summary: string
@@ -48,10 +48,13 @@ export interface TiSearchResponse {
     }>
     notes: string[]
     operationalStatus?: TiOperationalStatus
+    analystLoop?: TiAnalystLoop
 }
 
+export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'
+
 export interface TiOperationalStatus {
-    state: 'idle' | 'queued' | 'searching' | 'partial' | 'ready' | 'blocked' | 'degraded'
+    state: 'idle' | 'queued' | 'searching' | 'partial' | 'ready' | 'blocked' | 'degraded' | 'metadata_review' | 'needs_source_activation'
     headline: string
     queue: {
         selectedTasks: number
@@ -101,6 +104,65 @@ export interface TiOperationalStatus {
         rollback: string
     }>
     notes: string[]
+}
+
+export interface TiAnalystLoop {
+    resultState: TiResultState
+    headline: string
+    nextSteps: Array<{
+        state: 'queued' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation' | 'ready'
+        label: string
+        detail: string
+        tone: 'ok' | 'watch' | 'bad'
+    }>
+    runStatusClarity: {
+        queuedTasks: number
+        reviewTasks: number
+        rejectedSources: number
+        blockedUnsafeTargets: number
+        meaningfulWorkCount: number
+        summary: string
+    }
+    metadataReviewInbox: TiMetadataReviewItem[]
+    sourceActivationWorkflow: {
+        required: boolean
+        dryRunOnly: boolean
+        actions: Array<{
+            action: 'request_approval' | 'restore_source' | 'enable_metadata_only_queue' | 'keep_blocked'
+            sourceId?: string
+            reason: string
+            execution: 'dry_run' | 'human_approval_required' | 'blocked'
+        }>
+    }
+    victimNotificationPacket?: TiVictimNotificationPacket
+}
+
+export interface TiMetadataReviewItem {
+    id: string
+    company?: string
+    victim?: string
+    affectedAccounts?: string
+    accountSubjects?: string
+    datasetSize?: string
+    actorStatement?: string
+    claimedDate?: string
+    sourceHash?: string
+    provenance: string
+    confidence: number
+    status: 'needs_review' | 'queued_metadata_only' | 'duplicate' | 'escalated'
+    allowedActions: Array<'notify_company' | 'mark_duplicate' | 'request_approval' | 'escalate'>
+}
+
+export interface TiVictimNotificationPacket {
+    company?: string
+    claimSummary: string
+    affectedAccounts?: string
+    datasetSize?: string
+    actorStatement?: string
+    sourceHash?: string
+    confidence: number
+    whatWasNotAccessed: string[]
+    recommendedAction: string
 }
 
 export default async function searchThreatIntel(query: string): Promise<TiSearchResponse | null> {

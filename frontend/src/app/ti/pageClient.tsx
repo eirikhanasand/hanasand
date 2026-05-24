@@ -108,6 +108,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                 </div>
             </section>
 
+            <AnalystLoopPanel result={result} />
+
             <OperationalStatusPanel result={result} />
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
@@ -191,7 +193,7 @@ function EvidenceBox({ href, children }: { href?: string; children: React.ReactN
     const className = `grid gap-1 border-b border-white/8 py-3 last:border-b-0 ${href ? 'rounded-md px-2 transition hover:border-[#6bc9d8]/20 hover:bg-[#6bc9d8]/5 focus:outline-none focus:ring-1 focus:ring-[#6bc9d8]/35' : ''}`
     if (!href) return <div className={className}>{children}</div>
     return (
-        <a href={href} target='_blank' rel='noreferrer' className={className} title={href}>
+        <a href={href} target='_blank' rel='noopener noreferrer' className={className} title={href}>
             {children}
         </a>
     )
@@ -227,6 +229,27 @@ function searchingResult(query: string): TiSearchResponse {
         datasets: [],
         sources: [],
         notes: [],
+        analystLoop: {
+            resultState: 'queued',
+            headline: 'Submitting this search to the live TI scheduler.',
+            nextSteps: [
+                { state: 'queued', label: 'Queued', detail: 'Waiting for scraper scheduler telemetry.', tone: 'watch' }
+            ],
+            runStatusClarity: {
+                queuedTasks: 0,
+                reviewTasks: 0,
+                rejectedSources: 0,
+                blockedUnsafeTargets: 0,
+                meaningfulWorkCount: 0,
+                summary: 'Submitting search'
+            },
+            metadataReviewInbox: [],
+            sourceActivationWorkflow: {
+                required: false,
+                dryRunOnly: true,
+                actions: []
+            }
+        },
         operationalStatus: {
             state: 'searching',
             headline: 'Submitting this search to the live TI scheduler.',
@@ -281,6 +304,110 @@ function Panel({ title, icon, children }: { title: string; icon: React.ReactNode
                 {title}
             </div>
             {children}
+        </section>
+    )
+}
+
+function AnalystLoopPanel({ result }: { result: TiSearchResponse }) {
+    const loop = result.analystLoop
+    if (!loop) return null
+    const packet = loop.victimNotificationPacket
+
+    return (
+        <section className='grid gap-4 border border-white/10 bg-white/[0.025] p-4'>
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
+                <div className='grid gap-2'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <span className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold uppercase outline ${resultStateClass(loop.resultState)}`}>
+                            {loop.resultState === 'blocked_unsafe_target' || loop.resultState === 'needs_source_activation' ? <AlertTriangle className='h-3.5 w-3.5' /> : <ListChecks className='h-3.5 w-3.5' />}
+                            {formatLabel(loop.resultState)}
+                        </span>
+                        <h2 className='text-base font-semibold text-bright/88'>Analyst loop</h2>
+                    </div>
+                    <p className='max-w-4xl text-sm leading-6 text-bright/58'>{loop.headline}</p>
+                </div>
+                <div className='grid gap-1 text-xs text-bright/45 lg:text-right'>
+                    <span>{loop.runStatusClarity.queuedTasks} queued · {loop.runStatusClarity.reviewTasks} review</span>
+                    <span>{loop.runStatusClarity.blockedUnsafeTargets} unsafe blocked · {loop.runStatusClarity.rejectedSources} rejected</span>
+                </div>
+            </div>
+
+            <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-5'>
+                {loop.nextSteps.map(step => (
+                    <div key={`${step.state}-${step.label}`} className='rounded-md border border-white/8 bg-black/15 p-3'>
+                        <p className={`text-xs font-semibold uppercase ${stepToneText(step.tone)}`}>{formatLabel(step.state)}</p>
+                        <h3 className='mt-2 text-sm font-semibold text-bright/84'>{step.label}</h3>
+                        <p className='mt-1 text-xs leading-5 text-bright/45'>{step.detail}</p>
+                    </div>
+                ))}
+            </div>
+
+            {loop.metadataReviewInbox.length ? (
+                <div className='grid gap-3'>
+                    <h3 className='text-sm font-semibold text-bright/78'>Metadata review inbox</h3>
+                    <div className='grid gap-3 lg:grid-cols-2'>
+                        {loop.metadataReviewInbox.map(item => (
+                            <div key={item.id} className='grid gap-3 rounded-md border border-amber-200/15 bg-amber-200/[0.045] p-3'>
+                                <div className='flex flex-wrap items-center justify-between gap-2'>
+                                    <h4 className='text-sm font-semibold text-bright/88'>{item.company || item.victim || 'Unattributed leak claim'}</h4>
+                                    <span className='rounded-md bg-amber-200/10 px-2 py-1 text-xs text-amber-100/75'>{formatLabel(item.status)}</span>
+                                </div>
+                                <div className='grid gap-2 text-sm text-bright/58'>
+                                    {item.affectedAccounts ? <p><strong className='text-bright/80'>{item.affectedAccounts}</strong> claimed affected</p> : null}
+                                    {item.datasetSize ? <p><strong className='text-bright/80'>{item.datasetSize}</strong> claimed dataset size</p> : null}
+                                    {item.accountSubjects ? <p>{item.accountSubjects}</p> : null}
+                                    {item.actorStatement ? <p className='leading-6'>{item.actorStatement}</p> : null}
+                                </div>
+                                <div className='flex flex-wrap gap-2 text-xs text-bright/42'>
+                                    {item.claimedDate ? <span>{item.claimedDate}</span> : null}
+                                    {item.sourceHash ? <span>hash {item.sourceHash}</span> : null}
+                                    <span>{Math.round(item.confidence * 100)}% metadata confidence</span>
+                                </div>
+                                <div className='flex flex-wrap gap-2'>
+                                    {item.allowedActions.map(action => (
+                                        <span key={action} className='rounded-md border border-white/10 px-2 py-1 text-xs text-bright/55'>{formatLabel(action)}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+
+            {packet ? (
+                <div className='grid gap-3 rounded-md border border-[#6bc9d8]/15 bg-[#6bc9d8]/[0.045] p-3'>
+                    <h3 className='text-sm font-semibold text-bright/78'>Victim notification packet</h3>
+                    <p className='text-sm leading-6 text-bright/58'>{packet.claimSummary}</p>
+                    <div className='grid gap-2 text-xs text-bright/45 md:grid-cols-2'>
+                        {packet.affectedAccounts ? <span>Accounts: {packet.affectedAccounts}</span> : null}
+                        {packet.datasetSize ? <span>Dataset: {packet.datasetSize}</span> : null}
+                        {packet.sourceHash ? <span>Source hash: {packet.sourceHash}</span> : null}
+                        <span>Confidence: {Math.round(packet.confidence * 100)}%</span>
+                    </div>
+                    {packet.actorStatement ? <p className='text-sm leading-6 text-bright/55'>{packet.actorStatement}</p> : null}
+                    <div className='grid gap-1'>
+                        {packet.whatWasNotAccessed.map(item => (
+                            <p key={item} className='text-xs leading-5 text-bright/42'>{item}</p>
+                        ))}
+                    </div>
+                    <p className='text-xs leading-5 text-bright/50'>{packet.recommendedAction}</p>
+                </div>
+            ) : null}
+
+            {loop.sourceActivationWorkflow.actions.length ? (
+                <div className='grid gap-2'>
+                    <h3 className='text-sm font-semibold text-bright/78'>Source activation workflow</h3>
+                    {loop.sourceActivationWorkflow.actions.map(action => (
+                        <div key={`${action.action}-${action.reason}`} className='rounded-md border border-white/8 bg-black/15 p-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <p className='text-sm font-semibold text-bright/82'>{formatLabel(action.action)}</p>
+                                <span className='rounded-md bg-white/[0.055] px-2 py-1 text-xs text-bright/50'>{formatLabel(action.execution)}</span>
+                            </div>
+                            <p className='mt-1 text-xs leading-5 text-bright/45'>{action.reason}</p>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
         </section>
     )
 }
@@ -433,8 +560,22 @@ function EmptyLine({ text }: { text: string }) {
 function statusToneClass(state: TiOperationalStatus['state']) {
     if (state === 'blocked') return 'bg-red-400/10 text-red-100/80 outline-red-300/20'
     if (state === 'degraded') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
+    if (state === 'metadata_review' || state === 'needs_source_activation') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
     if (state === 'queued' || state === 'searching') return 'bg-[#6bc9d8]/10 text-[#9fe8f1] outline-[#6bc9d8]/25'
     return 'bg-emerald-300/10 text-emerald-100/80 outline-emerald-200/20'
+}
+
+function resultStateClass(state: NonNullable<TiSearchResponse['status']>) {
+    if (state === 'blocked_unsafe_target') return 'bg-red-400/10 text-red-100/80 outline-red-300/20'
+    if (state === 'metadata_review' || state === 'needs_source_activation') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
+    if (state === 'queued' || state === 'searching' || state === 'partial') return 'bg-[#6bc9d8]/10 text-[#9fe8f1] outline-[#6bc9d8]/25'
+    return 'bg-emerald-300/10 text-emerald-100/80 outline-emerald-200/20'
+}
+
+function stepToneText(tone: 'ok' | 'watch' | 'bad') {
+    if (tone === 'bad') return 'text-red-100/75'
+    if (tone === 'watch') return 'text-amber-100/75'
+    return 'text-emerald-100/75'
 }
 
 function rowToneClass(tone: 'ok' | 'watch' | 'bad') {

@@ -63,6 +63,26 @@ export type RestrictedMetadataIntelSearchPartialState =
   | "retention_expiring"
   | "blocked_unsafe_target";
 
+export type RestrictedMetadataNonBlockingSearchScenario =
+  | "approved_metadata_canary"
+  | "no_approval"
+  | "expired_approval"
+  | "kill_switch"
+  | "proxy_failure"
+  | "timeout"
+  | "unsafe_target"
+  | "low_yield_source"
+  | "retention_expiry"
+  | "legal_hold"
+  | "redaction_repair"
+  | "actor_query"
+  | "ransomware_query"
+  | "victim_query"
+  | "cve_query"
+  | "country_query"
+  | "sector_query"
+  | "public_api_blocked_state";
+
 export type RestrictedMetadataRuntimeIsolationState =
   | "disabled"
   | "pending_approval"
@@ -254,6 +274,7 @@ export interface DarknetMetadataLiveSearchPlan {
   readonly allowedFields: readonly RestrictedMetadataField[];
   readonly forbiddenOperations: readonly BlockedDarknetOperation[];
   readonly queryTerms: string[];
+  readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly notes: string[];
 }
 
@@ -339,6 +360,62 @@ export interface RestrictedMetadataIntelSearchPartialSemantics {
   readonly policyAuditId?: string;
   readonly urlHash?: string;
   readonly retentionExpiresAt?: string;
+}
+
+export interface RestrictedMetadataNonBlockingSearchPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataNonBlockingSearchScenario;
+  readonly sourceId?: string;
+  readonly queryClass?: string;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly publicSearchAction: "continue_clear_web_and_public_channel";
+  readonly restrictedContext: "queued_metadata_only_context" | "held_policy_gated_context" | "blocked_context";
+  readonly publicAnswerInfluence: "none" | "caveat_only";
+  readonly canQueueMetadataOnly: boolean;
+  readonly policyGate: DarknetMetadataRestrictedState | DarknetMetadataLiveSearchStatus | RestrictedMetadataRuntimeProofKind | "query_class";
+  readonly reason: string;
+  readonly agent06EvidenceGate: "metadata_only_handoff" | "hold_redaction" | "hold_retention";
+  readonly agent07PublicAnswerState: "do_not_wait" | "restricted_context_only" | "policy_hold_caveat";
+  readonly agent09WarningCodes: readonly string[];
+  readonly agent10EmergencyStopBoard: {
+    readonly decision: "continue_public_search" | "hold_restricted_context" | "rollback_restricted_workers";
+    readonly publicApiImpact: "none" | "warn" | "hold_restricted_only";
+  };
+  readonly proof: {
+    readonly doesNotBlockPublicSearch: true;
+    readonly doesNotPromoteRestrictedFacts: true;
+    readonly noUnsafeAccess: true;
+    readonly noDataExposure: true;
+    readonly noContact: true;
+    readonly noDownload: true;
+    readonly noCredentialBypass: true;
+    readonly noCaptchaSolving: true;
+    readonly noStealth: true;
+    readonly noRawPayloads: true;
+    readonly noRawUrls: true;
+    readonly hashOnlyEvidence: true;
+  };
+  readonly allowedFields: readonly RestrictedMetadataField[];
+  readonly forbiddenOperations: readonly BlockedDarknetOperation[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataNonBlockingSearchSemanticsDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly nonBlockingPublicSearch: true;
+  readonly publicSearchBehavior: "clear_web_and_public_channel_continue_immediately";
+  readonly publicAnswerRule: "restricted_metadata_context_never_promotes_public_answer_without_review";
+  readonly maxPublicSearchAddedLatencyMs: 0;
+  readonly packets: readonly RestrictedMetadataNonBlockingSearchPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataNonBlockingSearchScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataNonBlockingSearchScenario[];
+  readonly agent06EvidenceGates: readonly string[];
+  readonly agent07PublicAnswerStates: readonly string[];
+  readonly agent09WarningCodes: readonly string[];
+  readonly agent10EmergencyStopDecisions: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
 }
 
 export interface RestrictedMetadataEvidenceHandoffDto {
@@ -1139,6 +1216,7 @@ export interface RestrictedMetadataOperationsReadinessDto {
   readonly connectorCertification: RestrictedMetadataConnectorCertificationDto;
   readonly killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto;
   readonly emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto;
+  readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly compliance: RestrictedMetadataComplianceSummaryDto;
   readonly agent09SearchSummary: RestrictedMetadataComplianceSummaryDto;
@@ -1198,6 +1276,7 @@ export interface RestrictedMetadataOperationsStatusDto {
   readonly connectorCertification: RestrictedMetadataConnectorCertificationDto;
   readonly killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto;
   readonly emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto;
+  readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly remediationPlan: readonly RestrictedMetadataOperationsRemediationPlanItem[];
   readonly connectorFixtures: readonly RestrictedMetadataConnectorFixture[];
@@ -1646,6 +1725,7 @@ export interface RestrictedMetadataApplyPlan {
   readonly connectorCertifications: readonly RestrictedMetadataConnectorCertificationPacketDto[];
   readonly killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto;
   readonly emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto;
+  readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
   readonly summary: Record<RestrictedMetadataApplySafety, number>;
   readonly agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket";
@@ -2424,6 +2504,12 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
     state,
     actions.filter((action) => action.safety === state).length
   ])) as Record<RestrictedMetadataApplySafety, number>;
+  const connectorCertifications = restrictedMetadataConnectorCertificationPacketsForApplyPlan(cutover, generatedAt);
+  const killSwitchDrills = restrictedMetadataKillSwitchDrillsFromCertification(
+    restrictedMetadataConnectorCertificationSummary(connectorCertifications),
+    restrictedMetadataEnforcementFromSla(emptyRestrictedMetadataOperationalSla())
+  );
+  const emergencyStopCertification = restrictedMetadataEmergencyStopCertificationFromDrills(killSwitchDrills);
 
   return {
     generatedAt,
@@ -2432,15 +2518,10 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
     metadataOnly: true,
     cutoverDecision: cutover.decision,
     actions,
-    connectorCertifications: restrictedMetadataConnectorCertificationPacketsForApplyPlan(cutover, generatedAt),
-    killSwitchDrills: restrictedMetadataKillSwitchDrillsFromCertification(
-      restrictedMetadataConnectorCertificationSummary(restrictedMetadataConnectorCertificationPacketsForApplyPlan(cutover, generatedAt)),
-      restrictedMetadataEnforcementFromSla(emptyRestrictedMetadataOperationalSla())
-    ),
-    emergencyStopCertification: restrictedMetadataEmergencyStopCertificationFromDrills(restrictedMetadataKillSwitchDrillsFromCertification(
-      restrictedMetadataConnectorCertificationSummary(restrictedMetadataConnectorCertificationPacketsForApplyPlan(cutover, generatedAt)),
-      restrictedMetadataEnforcementFromSla(emptyRestrictedMetadataOperationalSla())
-    )),
+    connectorCertifications,
+    killSwitchDrills,
+    emergencyStopCertification,
+    nonBlockingSearch: restrictedMetadataNonBlockingSearchSemanticsForApplyPlan(connectorCertifications, killSwitchDrills, emergencyStopCertification),
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck(),
     summary,
     agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket",
@@ -2645,6 +2726,14 @@ export function planDarknetMetadataLiveSearch(input: {
       allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
       forbiddenOperations: BLOCKED_OPERATIONS,
       queryTerms,
+      nonBlockingSearch: restrictedMetadataNonBlockingSearchSemanticsFromInputs({
+        status: "disabled",
+        results,
+        queuedTasks: 0,
+        sourceStates,
+        query: input.query,
+        entityType: input.entityType
+      }),
       notes: ["Darknet metadata workers are disabled; live search can only return already-stored metadata results."]
     };
   }
@@ -2704,6 +2793,14 @@ export function planDarknetMetadataLiveSearch(input: {
     allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
     forbiddenOperations: BLOCKED_OPERATIONS,
     queryTerms,
+    nonBlockingSearch: restrictedMetadataNonBlockingSearchSemanticsFromInputs({
+      status,
+      results,
+      queuedTasks: plan.tasks.length,
+      sourceStates,
+      query: input.query,
+      entityType: input.entityType
+    }),
     notes: searchNotes(status)
   };
 }
@@ -3330,6 +3427,11 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
   });
   const killSwitchDrills = restrictedMetadataKillSwitchDrillsFromCertification(connectorCertification, enforcement);
   const emergencyStopCertification = restrictedMetadataEmergencyStopCertificationFromDrills(killSwitchDrills);
+  const nonBlockingSearch = restrictedMetadataNonBlockingSearchSemanticsForReadiness(
+    input.source.id,
+    restrictedMetadataRuntimeProofsForReadiness(input.source, runtime, packet),
+    enforcement
+  );
 
   return {
     sourceId: input.source.id,
@@ -3391,6 +3493,7 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     connectorCertification,
     killSwitchDrills,
     emergencyStopCertification,
+    nonBlockingSearch,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, [governancePacket], auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     compliance: searchSummary,
     agent09SearchSummary: searchSummary,
@@ -3446,6 +3549,20 @@ export function buildRestrictedMetadataOperationsStatus(input: {
   const connectorCertifications = connectorCertification.packets;
   const killSwitchDrills = restrictedMetadataKillSwitchDrillsFromCertification(connectorCertification, enforcement);
   const emergencyStopCertification = restrictedMetadataEmergencyStopCertificationFromDrills(killSwitchDrills);
+  const nonBlockingSearch = restrictedMetadataNonBlockingSearchSemanticsForStatus(sources, {
+    query: input.query,
+    entityType: input.entityType,
+    matchingResultCount: matchingResults.length,
+    partialState: matchingResults.length > 0
+      ? "partial_metadata"
+      : sources.some((source) => source.readiness === "ready")
+        ? "queued_metadata_only"
+        : sources.some((source) => source.readiness === "hold")
+          ? "approval_required"
+          : sources.length > 0
+            ? "blocked"
+            : "disabled"
+  });
   const partialState = matchingResults.length > 0
     ? "partial_metadata"
     : sources.some((source) => source.readiness === "ready")
@@ -3482,12 +3599,13 @@ export function buildRestrictedMetadataOperationsStatus(input: {
     connectorCertification,
     killSwitchDrills,
     emergencyStopCertification,
+    nonBlockingSearch,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, governancePackets, auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     remediationPlan: dedupeOperationsRemediationItems(sources.flatMap((source) => source.remediationPlan)),
     connectorFixtures: restrictedMetadataConnectorFixtures(),
     agent06EvidenceHandoffProof: restrictedMetadataEvidenceHandoffSafetyProof(handoffs),
-    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification"],
-    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios"]
+    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch"],
+    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch"]
   };
 }
 
@@ -4611,6 +4729,207 @@ function dedupePartialSemantics(
   });
 }
 
+function restrictedMetadataNonBlockingSearchSemanticsFromInputs(input: {
+  readonly status: DarknetMetadataLiveSearchStatus;
+  readonly results: readonly DarknetMetadataResultDto[];
+  readonly queuedTasks: number;
+  readonly sourceStates: readonly DarknetMetadataApprovalBridge[];
+  readonly query: string;
+  readonly entityType?: string;
+}): RestrictedMetadataNonBlockingSearchSemanticsDto {
+  const queryClass = restrictedMetadataQueryClass(input.query, input.entityType);
+  const packets = [
+    ...input.sourceStates.map((state) => restrictedMetadataNonBlockingSearchPacket({
+      scenario: restrictedMetadataScenarioForBridge(state, queryClass),
+      sourceId: state.sourceId,
+      queryClass,
+      canQueueMetadataOnly: state.canQueueMetadataOnly,
+      policyGate: state.state,
+      reason: state.reason,
+      restrictedContext: state.canQueueMetadataOnly || input.queuedTasks > 0 ? "queued_metadata_only_context" : state.liveSearchState === "blocked" ? "blocked_context" : "held_policy_gated_context",
+      agent09WarningCodes: state.canQueueMetadataOnly ? ["restricted_metadata_context_held"] : [`restricted_metadata_${state.liveSearchState}`]
+    })),
+    restrictedMetadataNonBlockingSearchPacket({
+      scenario: queryClass,
+      queryClass,
+      canQueueMetadataOnly: input.status === "partial_metadata" || input.status === "queued_metadata_only",
+      policyGate: "query_class",
+      reason: input.results.length > 0 ? "metadata-only context is available without blocking public search" : "restricted metadata does not block clear-web or public-channel search",
+      restrictedContext: input.status === "blocked" || input.status === "disabled" ? "blocked_context" : input.queuedTasks > 0 || input.results.length > 0 ? "queued_metadata_only_context" : "held_policy_gated_context",
+      agent09WarningCodes: input.status === "partial_metadata" || input.status === "queued_metadata_only" ? ["restricted_metadata_context_held"] : [`restricted_metadata_${input.status}`]
+    }),
+    ...(input.status === "disabled" || input.sourceStates.some((state) => state.state === "disabled_kill_switch")
+      ? [restrictedMetadataNonBlockingSearchPacket({
+        scenario: "public_api_blocked_state",
+        queryClass,
+        canQueueMetadataOnly: false,
+        policyGate: input.status,
+        reason: "restricted metadata public API state is blocked while public search continues",
+        restrictedContext: "blocked_context",
+        agent09WarningCodes: ["restricted_metadata_public_api_blocked"]
+      })]
+      : [])
+  ];
+  return restrictedMetadataNonBlockingSearchSemanticsSummary(packets);
+}
+
+function restrictedMetadataNonBlockingSearchSemanticsForReadiness(
+  sourceId: string,
+  runtimeProofs: readonly RestrictedMetadataRuntimeProofDto[],
+  enforcement: RestrictedMetadataEnforcementDto
+): RestrictedMetadataNonBlockingSearchSemanticsDto {
+  const packets = runtimeProofs.length > 0
+    ? runtimeProofs.map((proof) => restrictedMetadataNonBlockingSearchPacket({
+      scenario: restrictedMetadataScenarioForRuntimeProof(proof),
+      sourceId,
+      canQueueMetadataOnly: proof.releaseEffect === "none" || proof.releaseEffect === "downgrade",
+      policyGate: proof.kind,
+      reason: proof.reason,
+      restrictedContext: proof.releaseEffect === "rollback" ? "blocked_context" : proof.releaseEffect === "block" ? "held_policy_gated_context" : "queued_metadata_only_context",
+      agent09WarningCodes: proof.releaseEffect === "none" ? ["restricted_metadata_context_held"] : [`restricted_metadata_${proof.kind}`]
+    }))
+    : [restrictedMetadataNonBlockingSearchPacket({
+      scenario: enforcement.level === "emergency_stop" ? "kill_switch" : "approved_metadata_canary",
+      sourceId,
+      canQueueMetadataOnly: enforcement.level === "pass" || enforcement.level === "warning",
+      policyGate: "query_class",
+      reason: "restricted metadata readiness does not block clear-web or public-channel search",
+      restrictedContext: enforcement.level === "emergency_stop" ? "blocked_context" : enforcement.level === "hold" ? "held_policy_gated_context" : "queued_metadata_only_context",
+      agent09WarningCodes: enforcement.agent09WarningCodes.length > 0 ? enforcement.agent09WarningCodes : ["restricted_metadata_context_held"]
+    })];
+  return restrictedMetadataNonBlockingSearchSemanticsSummary(packets);
+}
+
+function restrictedMetadataNonBlockingSearchSemanticsForStatus(
+  sources: readonly RestrictedMetadataOperationsReadinessDto[],
+  input: {
+    readonly query?: string;
+    readonly entityType?: string;
+    readonly matchingResultCount: number;
+    readonly partialState: DarknetMetadataLiveSearchStatus;
+  }
+): RestrictedMetadataNonBlockingSearchSemanticsDto {
+  const queryClass = input.query ? restrictedMetadataQueryClass(input.query, input.entityType) : "actor_query";
+  const queryPacket = restrictedMetadataNonBlockingSearchPacket({
+    scenario: queryClass,
+    queryClass,
+    canQueueMetadataOnly: input.partialState === "partial_metadata" || input.partialState === "queued_metadata_only",
+    policyGate: "query_class",
+    reason: input.matchingResultCount > 0 ? "restricted metadata context is partial and non-blocking" : "clear-web and public-channel search continue while restricted context is gated",
+    restrictedContext: input.partialState === "blocked" || input.partialState === "disabled" ? "blocked_context" : input.partialState === "queued_metadata_only" || input.partialState === "partial_metadata" ? "queued_metadata_only_context" : "held_policy_gated_context",
+    agent09WarningCodes: ["restricted_metadata_context_held"]
+  });
+  return restrictedMetadataNonBlockingSearchSemanticsSummary([...sources.flatMap((source) => source.nonBlockingSearch.packets), queryPacket]);
+}
+
+function restrictedMetadataNonBlockingSearchSemanticsForApplyPlan(
+  connectorCertifications: readonly RestrictedMetadataConnectorCertificationPacketDto[],
+  killSwitchDrills: RestrictedMetadataKillSwitchDrillsDto,
+  emergencyStopCertification: RestrictedMetadataEmergencyStopCertificationDto
+): RestrictedMetadataNonBlockingSearchSemanticsDto {
+  const scenarios = restrictedMetadataUniqueStrings([
+    ...connectorCertifications.map((packet) => restrictedMetadataScenarioForCertification(packet.scenario)),
+    ...killSwitchDrills.observedScenarios.map(restrictedMetadataScenarioForDrill),
+    ...emergencyStopCertification.observedScenarios.map(restrictedMetadataScenarioForEmergencyStop)
+  ]);
+  return restrictedMetadataNonBlockingSearchSemanticsSummary(scenarios.map((scenario) => restrictedMetadataNonBlockingSearchPacket({
+    scenario,
+    canQueueMetadataOnly: scenario === "approved_metadata_canary",
+    policyGate: "query_class",
+    reason: "apply-plan certification keeps restricted context non-blocking for public search",
+    restrictedContext: scenario === "approved_metadata_canary" ? "queued_metadata_only_context" : scenario === "kill_switch" || scenario === "unsafe_target" || scenario === "public_api_blocked_state" ? "blocked_context" : "held_policy_gated_context",
+    agent09WarningCodes: restrictedMetadataWarningsForNonBlockingScenario(scenario)
+  })));
+}
+
+function restrictedMetadataNonBlockingSearchPacket(input: {
+  readonly scenario: RestrictedMetadataNonBlockingSearchScenario;
+  readonly sourceId?: string;
+  readonly queryClass?: string;
+  readonly canQueueMetadataOnly: boolean;
+  readonly policyGate: RestrictedMetadataNonBlockingSearchPacketDto["policyGate"];
+  readonly reason: string;
+  readonly restrictedContext: RestrictedMetadataNonBlockingSearchPacketDto["restrictedContext"];
+  readonly agent09WarningCodes: readonly string[];
+}): RestrictedMetadataNonBlockingSearchPacketDto {
+  const blocked = input.restrictedContext === "blocked_context";
+  const held = input.restrictedContext === "held_policy_gated_context";
+  return {
+    packetId: stableId("restricted-non-blocking-search", `${input.scenario}:${input.sourceId ?? input.queryClass ?? "global"}:${input.policyGate}`),
+    scenario: input.scenario,
+    sourceId: input.sourceId,
+    queryClass: input.queryClass,
+    metadataOnly: true,
+    safeForApi: true,
+    publicSearchAction: "continue_clear_web_and_public_channel",
+    restrictedContext: input.restrictedContext,
+    publicAnswerInfluence: input.restrictedContext === "queued_metadata_only_context" ? "caveat_only" : "none",
+    canQueueMetadataOnly: input.canQueueMetadataOnly,
+    policyGate: input.policyGate,
+    reason: input.reason,
+    agent06EvidenceGate: input.scenario === "retention_expiry" || input.scenario === "legal_hold" ? "hold_retention" : blocked || input.scenario === "redaction_repair" ? "hold_redaction" : "metadata_only_handoff",
+    agent07PublicAnswerState: held || blocked ? "policy_hold_caveat" : "restricted_context_only",
+    agent09WarningCodes: restrictedMetadataUniqueStrings(input.agent09WarningCodes),
+    agent10EmergencyStopBoard: {
+      decision: blocked ? "rollback_restricted_workers" : held ? "hold_restricted_context" : "continue_public_search",
+      publicApiImpact: blocked ? "hold_restricted_only" : held ? "warn" : "none"
+    },
+    proof: {
+      doesNotBlockPublicSearch: true,
+      doesNotPromoteRestrictedFacts: true,
+      noUnsafeAccess: true,
+      noDataExposure: true,
+      noContact: true,
+      noDownload: true,
+      noCredentialBypass: true,
+      noCaptchaSolving: true,
+      noStealth: true,
+      noRawPayloads: true,
+      noRawUrls: true,
+      hashOnlyEvidence: true
+    },
+    allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+    forbiddenOperations: BLOCKED_OPERATIONS,
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataNonBlockingSearchSemanticsSummary(
+  packets: readonly RestrictedMetadataNonBlockingSearchPacketDto[]
+): RestrictedMetadataNonBlockingSearchSemanticsDto {
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    nonBlockingPublicSearch: true,
+    publicSearchBehavior: "clear_web_and_public_channel_continue_immediately",
+    publicAnswerRule: "restricted_metadata_context_never_promotes_public_answer_without_review",
+    maxPublicSearchAddedLatencyMs: 0,
+    packets: restrictedMetadataDedupeNonBlockingSearchPackets(packets),
+    fixtureScenarios: restrictedMetadataNonBlockingSearchScenarioOrder(),
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...packets.map((packet) => packet.scenario),
+      ...restrictedMetadataNonBlockingSearchScenarioOrder()
+    ]),
+    agent06EvidenceGates: restrictedMetadataUniqueStrings(packets.map((packet) => packet.agent06EvidenceGate)),
+    agent07PublicAnswerStates: restrictedMetadataUniqueStrings(packets.map((packet) => packet.agent07PublicAnswerState)),
+    agent09WarningCodes: restrictedMetadataUniqueStrings(packets.flatMap((packet) => packet.agent09WarningCodes)),
+    agent10EmergencyStopDecisions: restrictedMetadataUniqueStrings(packets.map((packet) => packet.agent10EmergencyStopBoard.decision)),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataDedupeNonBlockingSearchPackets(
+  packets: readonly RestrictedMetadataNonBlockingSearchPacketDto[]
+): RestrictedMetadataNonBlockingSearchPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    const key = `${packet.scenario}:${packet.sourceId ?? ""}:${packet.queryClass ?? ""}:${packet.policyGate}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function dedupeProductionAuditEvents(
   events: readonly RestrictedMetadataProductionAuditEventDto[]
 ): RestrictedMetadataProductionAuditEventDto[] {
@@ -5445,6 +5764,7 @@ function proxyTypeForDarknetNetwork(network: DarknetNetwork): DarknetProxyType {
   return "tor_socks";
 }
 
+
 function restrictedMetadataNoLeakSerializationCheck(): RestrictedMetadataNoLeakSerializationCheckDto {
   return {
     passed: true,
@@ -5459,6 +5779,126 @@ function restrictedMetadataNoLeakSerializationCheck(): RestrictedMetadataNoLeakS
       noFileNames: true
     }
   };
+}
+
+function restrictedMetadataNonBlockingSearchScenarioOrder(): RestrictedMetadataNonBlockingSearchScenario[] {
+  return ["approved_metadata_canary", "no_approval", "expired_approval", "kill_switch", "proxy_failure", "timeout", "unsafe_target", "low_yield_source", "retention_expiry", "legal_hold", "redaction_repair", "actor_query", "ransomware_query", "victim_query", "cve_query", "country_query", "sector_query", "public_api_blocked_state"];
+}
+
+function restrictedMetadataQueryClass(query: string, entityType?: string): RestrictedMetadataNonBlockingSearchScenario {
+  const normalized = query.toLowerCase();
+  const normalizedType = (entityType ?? "").toLowerCase();
+  if (normalizedType === "vulnerability" || normalizedType === "cve" || normalized.startsWith("cve-")) return "cve_query";
+  if (normalizedType === "victim" || normalizedType === "organization" || normalized.includes("victim")) return "victim_query";
+  if (normalized.includes("ransom") || normalized.includes("akira") || normalizedType === "ransomware") return "ransomware_query";
+  if (normalizedType === "sector") return "sector_query";
+  if (normalizedType === "region" || normalizedType === "country") return "country_query";
+  return "actor_query";
+}
+
+function restrictedMetadataScenarioForBridge(
+  state: DarknetMetadataApprovalBridge,
+  queryClass: RestrictedMetadataNonBlockingSearchScenario
+): RestrictedMetadataNonBlockingSearchScenario {
+  if (state.state === "disabled_kill_switch") return "kill_switch";
+  if (state.state === "retention_expiry") return "retention_expiry";
+  if (state.state === "missing_proxy_approval") return "proxy_failure";
+  if (state.state === "blocked_unsafe_target") return "unsafe_target";
+  if (state.state === "pending_metadata_only_approval" || state.state === "missing_legal_notes") return "no_approval";
+  return queryClass;
+}
+
+function restrictedMetadataScenarioForRuntimeProof(proof: RestrictedMetadataRuntimeProofDto): RestrictedMetadataNonBlockingSearchScenario {
+  if (proof.kind === "kill_switch_transition") return "kill_switch";
+  if (proof.kind === "approval_expiry") return proof.evidence.approvalExpired ? "expired_approval" : "no_approval";
+  if (proof.kind === "proxy_failure" || proof.kind === "timeout") return proof.kind;
+  if (proof.kind === "retention_expiry") return proof.evidence.legalHold ? "legal_hold" : "retention_expiry";
+  if (proof.kind === "redaction_repair") return "redaction_repair";
+  if (proof.kind === "unsafe_target_rejection") return "unsafe_target";
+  if (proof.kind === "disabled_source_rollback") return "kill_switch";
+  return "approved_metadata_canary";
+}
+
+function restrictedMetadataScenarioForCertification(
+  scenario: RestrictedMetadataConnectorCertificationScenario
+): RestrictedMetadataNonBlockingSearchScenario {
+  const mapping: Record<RestrictedMetadataConnectorCertificationScenario, RestrictedMetadataNonBlockingSearchScenario> = {
+    healthy_approved_metadata_source: "approved_metadata_canary",
+    expired_approval: "expired_approval",
+    kill_switch: "kill_switch",
+    proxy_isolation_failure: "proxy_failure",
+    high_timeout: "timeout",
+    unsafe_link_form_download: "unsafe_target",
+    redaction_repair: "redaction_repair",
+    legal_hold: "legal_hold",
+    retention_expiry: "retention_expiry",
+    low_yield_source: "low_yield_source"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataScenarioForDrill(
+  scenario: RestrictedMetadataKillSwitchDrillScenario
+): RestrictedMetadataNonBlockingSearchScenario {
+  const mapping: Record<RestrictedMetadataKillSwitchDrillScenario, RestrictedMetadataNonBlockingSearchScenario> = {
+    healthy_metadata_only_canary: "approved_metadata_canary",
+    kill_switch_activation_mid_run: "kill_switch",
+    expired_approval: "expired_approval",
+    proxy_failure: "proxy_failure",
+    redaction_repair: "redaction_repair",
+    legal_hold: "legal_hold",
+    retention_expiry: "retention_expiry",
+    low_yield_source: "low_yield_source",
+    unsafe_download_form_contact_link: "unsafe_target",
+    public_api_blocked_state: "public_api_blocked_state"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataScenarioForEmergencyStop(
+  scenario: RestrictedMetadataEmergencyStopCertificationScenario
+): RestrictedMetadataNonBlockingSearchScenario {
+  const mapping: Record<RestrictedMetadataEmergencyStopCertificationScenario, RestrictedMetadataNonBlockingSearchScenario> = {
+    healthy_metadata_only_canary: "approved_metadata_canary",
+    expired_approval: "expired_approval",
+    kill_switch_propagation: "kill_switch",
+    proxy_isolation_failure: "proxy_failure",
+    timeout_spike: "timeout",
+    unsafe_download_form_contact_target: "unsafe_target",
+    redaction_repair: "redaction_repair",
+    retention_expiry: "retention_expiry",
+    legal_hold: "legal_hold",
+    low_yield_source: "low_yield_source",
+    public_api_blocked_state: "public_api_blocked_state"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataWarningsForNonBlockingScenario(
+  scenario: RestrictedMetadataNonBlockingSearchScenario
+): string[] {
+  if (scenario === "approved_metadata_canary" || scenario.endsWith("_query")) return ["restricted_metadata_context_held"];
+  if (scenario === "kill_switch" || scenario === "public_api_blocked_state") return ["restricted_metadata_kill_switch"];
+  if (scenario === "unsafe_target") return ["restricted_metadata_forbidden_action"];
+  if (scenario === "retention_expiry") return ["restricted_metadata_retention_expiry"];
+  if (scenario === "proxy_failure" || scenario === "timeout") return ["restricted_metadata_proxy_failure"];
+  if (scenario === "low_yield_source") return ["restricted_metadata_low_yield"];
+  return ["restricted_metadata_approval_required"];
+}
+
+export function restrictedMetadataNonBlockingSearchContract(): RestrictedMetadataNonBlockingSearchSemanticsDto {
+  return restrictedMetadataNonBlockingSearchSemanticsSummary(restrictedMetadataNonBlockingSearchScenarioOrder().map((scenario) => restrictedMetadataNonBlockingSearchPacket({
+    scenario,
+    canQueueMetadataOnly: scenario === "approved_metadata_canary",
+    policyGate: "query_class",
+    reason: "frozen restricted metadata non-blocking search fixture",
+    restrictedContext: scenario === "approved_metadata_canary"
+      ? "queued_metadata_only_context"
+      : scenario === "unsafe_target" || scenario === "kill_switch" || scenario === "public_api_blocked_state"
+        ? "blocked_context"
+        : "held_policy_gated_context",
+    agent09WarningCodes: restrictedMetadataWarningsForNonBlockingScenario(scenario)
+  })));
 }
 
 export function restrictedMetadataConnectorCertificationContract(): RestrictedMetadataConnectorCertificationDto {

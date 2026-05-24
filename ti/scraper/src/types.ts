@@ -1262,6 +1262,59 @@ export interface GraphReleaseCandidateGateDto {
   };
 }
 
+export type GraphLiveSearchUpdateScenarioName =
+  | "apt29_clear_web"
+  | "apt42_clear_web"
+  | "turla_clear_web"
+  | "volt_typhoon_public_channel"
+  | "scattered_spider_clear_web"
+  | "akira_restricted_held"
+  | "cve_exploitation"
+  | "random_actor_weak_discovery"
+  | "weak_co_mention"
+  | "public_channel_only_hint"
+  | "restricted_held_evidence"
+  | "missing_ledger_id"
+  | "stale_relationship"
+  | "contradicted_relationship"
+  | "missing_provenance"
+  | "accepted_promotion"
+  | "stix_export_eligible";
+
+export interface GraphLiveSearchUpdateScenarioDto {
+  name: GraphLiveSearchUpdateScenarioName;
+  status: "covered" | "missing" | "held" | "blocked";
+  relationshipIds: string[];
+  deltaKinds: RelationshipDeltaKind[];
+  caveatCodes: GraphIntegrityFindingCode[];
+  exportEligibleCount: number;
+  summary: string;
+}
+
+export interface GraphLiveSearchUpdateDto {
+  endpoint: "/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts";
+  generatedAt: string;
+  mode: "incremental_live_search_graph";
+  responsePolicy: "seconds_level_polling";
+  nextPollSeconds: 3;
+  cursorField: "graph.deltas[].cursor";
+  relationshipCount: number;
+  deltaCounts: Record<RelationshipDeltaKind, number>;
+  scenarioCoverage: GraphLiveSearchUpdateScenarioDto[];
+  weakDiscoveryPolicy: "pivots_and_caveats_only";
+  publicChannelPolicy: "hint_until_corroborated_or_reviewed";
+  restrictedEvidencePolicy: "held_context_no_public_fact";
+  stixPolicy: "export_only_reviewed_or_promoted_relationships";
+  taxiiBoundary: "descriptor_only_no_server";
+  agentHandoffs: {
+    agent06ClaimLedger: "ledger_ids_required_for_promotion";
+    agent07AnswerCaveats: "surface_weak_public_restricted_stale_contradicted_and_missing_provenance";
+    agent09ContractIndex: "expose_graph_live_update";
+    agent10ReleaseGate: "graph_live_incremental_gate";
+  };
+  proofRoutes: Array<"/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/intel/search.graph" | "/v1/contracts">;
+}
+
 export interface GraphExportCertificationDto {
   endpoint: "/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts" | "agent10_release_packet";
   generatedAt: string;
@@ -1300,6 +1353,7 @@ export interface CorrelationGraphQueryDto {
   reviewQueue: GraphReviewQueueSummaryDto;
   runtime: GraphRuntimeApiDto;
   certification: GraphExportCertificationDto;
+  liveUpdate: GraphLiveSearchUpdateDto;
   provenancePanels: SourceProvenancePanelDto[];
 }
 
@@ -1443,6 +1497,7 @@ export interface GraphRuntimeApiDto {
   exportSla: GraphExportSlaDto;
   enforcement: GraphExportEnforcementDto;
   certification: GraphExportCertificationDto;
+  liveUpdate: GraphLiveSearchUpdateDto;
   relationships: GraphRuntimeRelationshipDto[];
   reviewQueue: GraphReviewQueueSummaryDto;
 }

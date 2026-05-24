@@ -6,6 +6,7 @@ import {
   buildCorrelationGraphQuery,
   buildCorrelationTimeline,
   buildGraphExportEnforcementDto,
+  buildGraphLiveSearchUpdateDto,
   buildGraphExportSlaDto,
   buildGraphNeighborhoodView,
   buildGraphIntegrityReport,
@@ -26,8 +27,10 @@ import { buildProgressiveGraphUpdate } from "../export/progressiveGraph.ts";
 import type { RelationshipGraph, ProgressiveGraphEvidence } from "../types.ts";
 
 const apt29 = { type: "actor" as const, value: "APT29", confidence: 0.86, aliases: ["Cozy Bear", "Nobelium"] };
+const apt42 = { type: "actor" as const, value: "APT42", confidence: 0.8, aliases: ["Charming Kitten"] };
 const scatteredSpider = { type: "actor" as const, value: "Scattered Spider", confidence: 0.82, aliases: ["UNC3944", "Octo Tempest"] };
 const akira = { type: "actor" as const, value: "Akira", confidence: 0.76, aliases: ["Akira ransomware"] };
+const turla = { type: "actor" as const, value: "Turla", confidence: 0.82, aliases: ["Snake"] };
 const voltTyphoon = { type: "actor" as const, value: "Volt Typhoon", confidence: 0.8, aliases: ["Vanguard Panda"] };
 const randomActor = { type: "actor" as const, value: "Random Panda", confidence: 0.28 };
 const phishing = { type: "attack-pattern" as const, value: "T1566 Phishing", confidence: 0.78, properties: { tactic: "initial-access" } };
@@ -265,6 +268,171 @@ describe("CTI graph persistence and query views", () => {
     expect(deltas.every((delta) => delta.confidenceAfter < 0.2)).toBe(true);
     expect(preview.includedCount).toBe(0);
     expect(preview.items.every((item) => item.reason.includes("Excluded"))).toBe(true);
+  });
+
+  test("builds incremental live-search graph update contracts across responsive actor scenarios", () => {
+    const dto = buildProgressiveGraphUpdate([
+      evidence({
+        id: "aa_apt29_clear_web",
+        stage: "promoted",
+        sourceId: "clear_web_vendor_apt29",
+        observedAt: "2026-05-24T00:00:00.000Z",
+        relationships: [
+          { source: apt29, target: phishing, type: "uses", confidence: 0.88 },
+          { source: apt29, target: embassy, type: "targets", confidence: 0.82 }
+        ]
+      }),
+      evidence({
+        id: "aa_apt42_clear_web",
+        stage: "captured",
+        sourceId: "clear_web_vendor_apt42",
+        observedAt: "2026-05-24T00:01:00.000Z",
+        relationships: [
+          { source: apt42, target: { type: "attack-pattern", value: "Spearphishing attachment", confidence: 0.72, properties: { tactic: "initial-access" } }, type: "uses", confidence: 0.72 }
+        ]
+      }),
+      evidence({
+        id: "aa_turla_clear_web",
+        stage: "reviewed",
+        sourceId: "clear_web_vendor_turla",
+        observedAt: "2025-01-01T00:00:00.000Z",
+        relationships: [{ source: turla, target: { type: "malware", value: "Snake malware", confidence: 0.76 }, type: "uses", confidence: 0.78 }]
+      }),
+      evidence({
+        id: "aa_volt_public_channel",
+        stage: "discovery",
+        sourceId: "public_channel_volt",
+        observedAt: "2026-05-24T00:02:00.000Z",
+        relationships: [{ source: voltTyphoon, target: livingOffLand, type: "uses", confidence: 0.62 }]
+      }),
+      evidence({
+        id: "aa_scattered_clear_web",
+        stage: "promoted",
+        sourceId: "clear_web_vendor_scattered",
+        observedAt: "2026-05-24T00:03:00.000Z",
+        relationships: [{ source: scatteredSpider, target: helpDeskSocial, type: "uses", confidence: 0.84 }]
+      }),
+      evidence({
+        id: "aa_akira_restricted",
+        stage: "discovery",
+        sourceId: "restricted_metadata_akira",
+        observedAt: "2026-05-24T00:04:00.000Z",
+        relationships: [{ source: akira, target: { type: "victim", value: "Fjord Energy AS", confidence: 0.68 }, type: "targets", confidence: 0.62 }]
+      }),
+      evidence({
+        id: "aa_cve_missing_ledger",
+        stage: "extracted",
+        sourceId: "missing_ledger_cve",
+        observedAt: "2026-05-24T00:05:00.000Z",
+        relationships: [{ source: apt42, target: exploitedCve, type: "exploits", confidence: 0.7 }]
+      }),
+      evidence({
+        id: "aa_random_weak",
+        stage: "discovery",
+        sourceId: "live_search_random_actor",
+        observedAt: "2026-05-24T00:06:00.000Z",
+        relationships: [{ source: randomActor, target: { type: "source", value: "Search result snippet", confidence: 0.38 }, type: "mentions", confidence: 0.24 }]
+      }),
+      evidence({
+        id: "aa_weak_comention",
+        stage: "discovery",
+        sourceId: "live_search_comention",
+        observedAt: "2026-05-24T00:07:00.000Z",
+        relationships: [{ source: apt29, target: scatteredSpider, type: "related-to", confidence: 0.25 }]
+      }),
+      evidence({
+        id: "aa_contradicted",
+        stage: "extracted",
+        sourceId: "clear_web_contradiction",
+        observedAt: "2026-05-24T00:08:00.000Z",
+        relationships: [{ source: voltTyphoon, target: energyOperator, type: "targets", confidence: 0.58, contradicted: true }]
+      })
+    ], { generatedAt: "2026-05-24T00:09:00.000Z" });
+    const staleGraph = downgradeAndExpireStaleRelationships(dto.graph, {
+      generatedAt: "2026-05-24T00:10:00.000Z",
+      staleAfterDays: 30,
+      expireAfterDays: 900
+    });
+    const snapshot = buildPersistedGraphSnapshot(staleGraph, { generatedAt: "2026-05-24T00:11:00.000Z" });
+    const apt29Node = snapshot.nodes.find((node) => node.value === "APT29")!;
+    const randomNode = snapshot.nodes.find((node) => node.value === "Random Panda")!;
+    snapshot.relationships.push({
+      id: "rel_missing_provenance_live",
+      sourceRef: apt29Node.id,
+      targetRef: randomNode.id,
+      type: "related-to",
+      confidence: 0.31,
+      firstSeenAt: "2026-05-24T00:12:00.000Z",
+      lastSeenAt: "2026-05-24T00:12:00.000Z",
+      reviewState: "needs_review",
+      evidenceSupportIds: [],
+      reviewAudit: [],
+      confidenceHistory: [],
+      exportEligibility: {
+        discoveryOnly: true,
+        captureBacked: false,
+        extracted: false,
+        reviewed: false,
+        promoted: false,
+        accepted: false,
+        includedByDefault: false
+      }
+    });
+    for (const support of snapshot.evidenceSupport) {
+      if (support.sourceId === "missing_ledger_cve") support.ledgerIds = [];
+    }
+
+    const liveUpdate = buildGraphLiveSearchUpdateDto(snapshot, { endpoint: "/v1/intel/search.graph", generatedAt: "2026-05-24T00:13:00.000Z" });
+    const query = buildCorrelationGraphQuery(snapshot, { query: "APT42", generatedAt: "2026-05-24T00:13:00.000Z", maxRelationships: 100 });
+    const coverage = new Map(liveUpdate.scenarioCoverage.map((scenario) => [scenario.name, scenario]));
+
+    expect(liveUpdate).toMatchObject({
+      mode: "incremental_live_search_graph",
+      responsePolicy: "seconds_level_polling",
+      nextPollSeconds: 3,
+      weakDiscoveryPolicy: "pivots_and_caveats_only",
+      publicChannelPolicy: "hint_until_corroborated_or_reviewed",
+      restrictedEvidencePolicy: "held_context_no_public_fact",
+      stixPolicy: "export_only_reviewed_or_promoted_relationships",
+      taxiiBoundary: "descriptor_only_no_server",
+      agentHandoffs: {
+        agent06ClaimLedger: "ledger_ids_required_for_promotion",
+        agent07AnswerCaveats: "surface_weak_public_restricted_stale_contradicted_and_missing_provenance",
+        agent09ContractIndex: "expose_graph_live_update",
+        agent10ReleaseGate: "graph_live_incremental_gate"
+      }
+    });
+    for (const name of [
+      "apt29_clear_web",
+      "apt42_clear_web",
+      "turla_clear_web",
+      "volt_typhoon_public_channel",
+      "scattered_spider_clear_web",
+      "akira_restricted_held",
+      "cve_exploitation",
+      "random_actor_weak_discovery",
+      "weak_co_mention",
+      "public_channel_only_hint",
+      "restricted_held_evidence",
+      "missing_ledger_id",
+      "stale_relationship",
+      "contradicted_relationship",
+      "missing_provenance",
+      "accepted_promotion",
+      "stix_export_eligible"
+    ]) {
+      expect(coverage.get(name as never)?.relationshipIds.length).toBeGreaterThan(0);
+    }
+    expect(coverage.get("volt_typhoon_public_channel")?.status).toBe("held");
+    expect(coverage.get("public_channel_only_hint")?.status).toBe("held");
+    expect(coverage.get("restricted_held_evidence")?.status).toBe("held");
+    expect(coverage.get("contradicted_relationship")?.status).toBe("blocked");
+    expect(coverage.get("missing_provenance")?.status).toBe("blocked");
+    expect(coverage.get("accepted_promotion")?.exportEligibleCount).toBeGreaterThan(0);
+    expect(coverage.get("stix_export_eligible")?.exportEligibleCount).toBeGreaterThan(0);
+    expect(liveUpdate.deltaCounts.added + liveUpdate.deltaCounts.contradicted + liveUpdate.deltaCounts.stale).toBeGreaterThan(0);
+    expect(query.liveUpdate.scenarioCoverage.map((scenario) => scenario.name)).toContain("apt42_clear_web");
+    expect(query.runtime.liveUpdate.agentHandoffs.agent10ReleaseGate).toBe("graph_live_incremental_gate");
   });
 
   test("reports noisy co-mentions and actor alias collisions as integrity and export blockers", () => {

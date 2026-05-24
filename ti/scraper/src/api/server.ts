@@ -15,6 +15,12 @@ import {
   schedulerBackpressureSummaryForTasks,
   SCHEDULER_CUTOVER_DESIGN
 } from "../frontier/schedulerProduction.ts";
+import {
+  activatePublicCanarySources,
+  buildCanaryOperatorSummary,
+  runCanaryCollectionCycle,
+  type CanaryFetch
+} from "../ops/canaryCollection.ts";
 import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
 import type { WorkerSupervisor } from "../ops/supervisor.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto } from "../pipeline/actorProfileFusion.ts";
@@ -28,12 +34,14 @@ import {
   type SearchQualityApiDto
 } from "../pipeline/searchQualityGate.ts";
 import { createCollectionPlan, createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
-import { buildRestrictedMetadataOperationsStatus, planDarknetMetadataLiveSearch, restrictedMetadataConnectorCertificationContract, restrictedMetadataEmergencyStopCertificationContract, restrictedMetadataKillSwitchDrillContract } from "../adapters/darknetMetadata.ts";
+import { RssAdapter } from "../adapters/rss.ts";
+import { StaticWebAdapter, type StaticWebAdapterOptions } from "../adapters/staticWeb.ts";
+import { buildRestrictedMetadataOperationsStatus, planDarknetMetadataLiveSearch, restrictedMetadataConnectorCertificationContract, restrictedMetadataEmergencyStopCertificationContract, restrictedMetadataKillSwitchDrillContract, restrictedMetadataNonBlockingSearchContract } from "../adapters/darknetMetadata.ts";
 import { buildTelegramPublicActorReadinessDto, buildTelegramPublicCanaryRollout, buildTelegramPublicCompactSearchSummary, buildTelegramPublicCutoverReport, buildTelegramPublicOperatorControlEffects, buildTelegramPublicOperatorStates, buildTelegramPublicPromotionCanaryProof, buildTelegramPublicPromotionCertification, buildTelegramPublicReliabilityReport, buildTelegramPublicSlaReport, buildTelegramPublicSourcePackCompatibility, buildTelegramPublicSourcePackReadiness, planTelegramPublicSearchBackfill, publicChannelEvidenceFromCapture, type TelegramPublicSourcePack } from "../adapters/telegramPublic.ts";
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
-import { buildSourceActivationBatchApiResponse, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse } from "../registry/sourceSeeds.ts";
+import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
 import type {
   CollectionPlan,
   CollectionRun,
@@ -92,6 +100,10 @@ export interface ApiServerOptions {
   publicTelegramSourcePacks?: TelegramPublicSourcePack[];
   sourcePacks?: SeedSourceBundle[];
   objectStore?: ObjectEvidenceStore;
+  publicClearWebFetcher?: StaticWebAdapterOptions["fetcher"];
+  canaryFetch?: CanaryFetch;
+  disableBundledSourcePack?: boolean;
+  disableOnDemandClearWebCapture?: boolean;
 }
 
 export interface ApiServerHandle {
@@ -132,6 +144,16 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 
   if (request.method === "GET" && url.pathname === "/v1/ops/resource-snapshot") {
     return json(buildOpsResourceSnapshot(options));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/ops/canary") {
+    return json({
+      operatorView: buildCanaryOperatorSummary({
+        store: options.store,
+        frontier: options.frontier,
+        generatedAt: url.searchParams.get("generatedAt") ?? undefined
+      })
+    });
   }
 
   if (request.method === "GET" && url.pathname === "/v1/auth/integration-notes") {
@@ -251,6 +273,29 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     return json(result.body, result.status);
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/sources/canary-activation") {
+    const input = await readJson<Record<string, unknown>>(request);
+    if (input.operatorApproval !== true) {
+      return apiError("approval_required", "operatorApproval=true is required for executable canary source activation", 409, {
+        mode: "human_approved_clear_web_canary_only"
+      });
+    }
+    const activation = activatePublicCanarySources({
+      store: options.store,
+      tenantId: typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined,
+      operatorId: typeof input.approvedBy === "string" ? input.approvedBy : request.headers.get("x-actor-id") ?? "operator",
+      now: typeof input.generatedAt === "string" ? input.generatedAt : nowIso()
+    });
+    return json({
+      activation,
+      guarantees: [
+        "only bundled safe public clear-web sources are activated",
+        "no restricted metadata, private channels, authentication, CAPTCHA solving, or raw leak collection is enabled",
+        "activation is audited on source lifecycle and can be reversed with existing pause or retire source controls"
+      ]
+    });
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/sources/coverage-plan") {
     const input = await readJson<Record<string, unknown>>(request);
     const tenantId = typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined;
@@ -342,6 +387,35 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     return json(paged("captures", options.store.listCaptures().map((capture) => captureDto(capture, includeCaptureBody(url))), url));
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/ops/canary/run") {
+    const input = await readJson<Record<string, unknown>>(request);
+    if (input.operatorApproval !== true) {
+      return apiError("approval_required", "operatorApproval=true is required to run the public canary collector", 409, {
+        mode: "bounded_public_http_canary"
+      });
+    }
+    const canaryRun = await runCanaryCollectionCycle({
+      store: options.store,
+      frontier: options.frontier,
+      objectStore: options.objectStore,
+      fetch: options.canaryFetch,
+      tenantId: typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined,
+      operatorId: typeof input.approvedBy === "string" ? input.approvedBy : request.headers.get("x-actor-id") ?? "operator",
+      maxSources: typeof input.maxSources === "number" ? input.maxSources : undefined,
+      maxTasks: typeof input.maxTasks === "number" ? input.maxTasks : undefined,
+      maxBytes: typeof input.maxBytes === "number" ? input.maxBytes : undefined,
+      now: typeof input.generatedAt === "string" ? () => String(input.generatedAt) : undefined
+    });
+    return json({
+      canaryRun,
+      operatorView: buildCanaryOperatorSummary({
+        store: options.store,
+        frontier: options.frontier,
+        generatedAt: canaryRun.generatedAt
+      })
+    });
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/evidence/replay-plan") {
     const query = url.searchParams.get("q") ?? url.searchParams.get("query") ?? "";
     if (!query.trim()) return apiError("bad_request", "query is required", 400);
@@ -420,7 +494,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     const query = url.searchParams.get("q") ?? url.searchParams.get("query") ?? "";
     if (!query.trim()) return apiError("bad_request", "query is required", 400);
     const entityType = url.searchParams.get("entityType") ?? "free_text";
-    return json(publicIntelSearchResponse({
+    return json(await publicIntelSearchResponse({
       query,
       entityType,
       tenantId: request.headers.get("x-tenant-id") ?? undefined,
@@ -432,7 +506,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   if (request.method === "GET" && url.pathname === "/v1/quality/evaluate") {
     const query = url.searchParams.get("q") ?? url.searchParams.get("query") ?? "";
     if (!query.trim()) return apiError("bad_request", "query is required", 400);
-    const search = publicIntelSearchResponse({
+    const search = await publicIntelSearchResponse({
       query,
       entityType: "free_text",
       tenantId: request.headers.get("x-tenant-id") ?? undefined,
@@ -729,13 +803,172 @@ function runResultsResponse(run: CollectionRun, options: ApiServerOptions, url: 
   return { run, results };
 }
 
-function publicIntelSearchResponse(input: {
+let bundledStarterPack: SeedSourceBundle | undefined;
+
+async function sourcePacksForSearch(options: ApiServerOptions): Promise<SeedSourceBundle[]> {
+  if (options.sourcePacks?.length || options.disableBundledSourcePack) return options.sourcePacks ?? [];
+  bundledStarterPack ??= await Bun.file(new URL("../../seeds/public_cti_starter_pack.json", import.meta.url)).json() as SeedSourceBundle;
+  return [bundledStarterPack];
+}
+
+function ensureSafePublicStarterSources(options: ApiServerOptions, sourcePacks: SeedSourceBundle[], tenantId?: string): void {
+  if (sourcePacks.length === 0) return;
+  const existing = options.store.listSources();
+  const existingIds = new Set(existing.map((source) => source.id));
+  for (const pack of sourcePacks) {
+    const imported = importSeedBundle(pack, { existingSources: existing, importedAt: nowIso() });
+    for (const source of imported.accepted) {
+      if (existingIds.has(source.id)) continue;
+      if (!isSafePublicAutoSource(source)) continue;
+      if (tenantId && source.tenantId && source.tenantId !== tenantId) continue;
+      options.store.saveSource({
+        ...source,
+        tenantId: source.tenantId ?? tenantId,
+        status: "active",
+        approvedAt: source.approvedAt ?? nowIso(),
+        approvedBy: source.approvedBy ?? "safe-public-starter-pack"
+      });
+      existingIds.add(source.id);
+    }
+  }
+}
+
+async function collectOnDemandClearWebEvidence(input: {
+  query: string;
+  tenantId?: string;
+  options: ApiServerOptions;
+}): Promise<void> {
+  const sources = input.options.store.listSources()
+    .filter((source) => !input.tenantId || !source.tenantId || source.tenantId === input.tenantId)
+    .filter(isSafePublicAutoSource)
+    .filter((source) => source.status === "active")
+    .filter((source) => source.type === "rss" || source.type === "static_web");
+  const ranked = buildSourceActivationReport(input.query, sources).sources
+    .filter((source) => source.score > 0)
+    .map((summary) => sources.find((source) => source.id === summary.sourceId))
+    .filter((source): source is SourceRecord => Boolean(source))
+    .slice(0, 3);
+
+  for (const source of ranked) {
+    const before = searchQualityEvidence({ query: input.query, tenantId: input.tenantId, options: input.options }).length;
+    if (before > 0) return;
+    await collectSourceForInteractiveSearch(source, input.query, input.tenantId, input.options);
+  }
+}
+
+async function collectSourceForInteractiveSearch(
+  source: SourceRecord,
+  query: string,
+  tenantId: string | undefined,
+  options: ApiServerOptions
+): Promise<void> {
+  const queuedAt = nowIso();
+  const task: CollectionTask = {
+    id: stableId("task", `interactive:${tenantId ?? "global"}:${source.id}:${query}`),
+    tenantId,
+    sourceId: source.id,
+    targetUrl: source.url,
+    sourceType: source.type,
+    queuedAt,
+    priority: 0.9,
+    reason: `on-demand safe-public capture for ${query}`,
+    retryCount: 0,
+    maxRetries: 1,
+    maxBytes: 1_000_000,
+    sourceConcurrencyKey: source.id,
+    fairnessKey: `${tenantId ?? "global"}:${query}:safe_public_on_demand`,
+    planning: {
+      budgetClass: "interactive_live_search",
+      decision: "selected",
+      reason: "cold search has no durable evidence; bounded safe-public source capture selected",
+      queryTerms: [query],
+      freshness: 1,
+      freshnessTargetSeconds: source.crawlFrequencySeconds,
+      maxCost: { tasks: 1, bytes: 1_000_000 },
+      safetyEnvelope: {
+        allowClearWeb: true,
+        allowPublicChannel: false,
+        allowRestrictedMetadata: false,
+        metadataOnlyRestricted: false,
+        forbiddenOperations: ["credential_bypass", "captcha_solving", "private_community_access", "leak_download"]
+      },
+      sourceTrust: source.trustScore,
+      selectedFor: "interactive"
+    }
+  };
+
+  try {
+    const adapter = source.type === "rss"
+      ? new RssAdapter({ fetcher: options.publicClearWebFetcher })
+      : new StaticWebAdapter({ fetcher: options.publicClearWebFetcher });
+    const collected = await adapter.collect(source, task);
+    const queryTerms = searchTermsForQuery(query);
+    for (const item of collected.items
+      .filter((collectedItem) => itemMatchesQuery(collectedItem.title, collectedItem.rawText, collectedItem.url, queryTerms))
+      .slice(0, 5)) {
+      options.store.savePipelineResult(processCollectedItem({
+        ...item,
+        metadata: {
+          ...item.metadata,
+          query,
+          normalizedQuery: normalizeSearchQuery(query),
+          evidenceStage: "captured_page",
+          collectionMode: "on_demand_safe_public",
+          sourceActivation: "safe_public_auto",
+          retentionClass: "standard"
+        }
+      }));
+    }
+  } catch {
+    return;
+  }
+}
+
+function isSafePublicAutoSource(source: SourceRecord): boolean {
+  return (source.type === "rss" || source.type === "static_web" || source.type === "api" || source.type === "pdf")
+    && (source.accessMethod === "public_http" || source.accessMethod === "official_api")
+    && source.risk === "low"
+    && source.catalog?.approvalScope === "safe_public_auto";
+}
+
+function searchTermsForQuery(query: string): string[] {
+  const normalized = normalizeSearchQuery(query);
+  return uniqueStrings([
+    normalized,
+    ...normalized.split(/\s+/).filter((term) => term.length >= 4)
+  ]);
+}
+
+function itemMatchesQuery(title: string | undefined, body: string | undefined, url: string, terms: string[]): boolean {
+  const haystack = `${title ?? ""} ${body ?? ""} ${url}`.toLowerCase();
+  return terms.some((term) => haystack.includes(term));
+}
+
+function normalizeSearchQuery(query: string): string {
+  return query.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+async function publicIntelSearchResponse(input: {
   query: string;
   entityType: string;
   tenantId?: string;
   sinceCursor?: string;
   options: ApiServerOptions;
 }) {
+  const sourcePacks = await sourcePacksForSearch(input.options);
+  ensureSafePublicStarterSources(input.options, sourcePacks, input.tenantId);
+  const onDemandClearWebEnabled = input.options.publicClearWebFetcher !== undefined || Bun.env.TI_ON_DEMAND_CLEAR_WEB === "true";
+  if (onDemandClearWebEnabled && !input.options.disableOnDemandClearWebCapture && searchQualityEvidence({
+    query: input.query,
+    tenantId: input.tenantId,
+    options: input.options
+  }).length === 0) {
+    await collectOnDemandClearWebEvidence({
+      query: input.query,
+      tenantId: input.tenantId,
+      options: input.options
+    });
+  }
   const sources = input.options.store.listSources();
   const live = createLiveSearchPlan({
     request: {
@@ -778,7 +1011,7 @@ function publicIntelSearchResponse(input: {
     .filter((capture) => !input.tenantId || capture.tenantId === input.tenantId)
     .filter((capture) => sourceTypeById.get(capture.sourceId) !== "telegram_public" && capture.metadata?.sourceType !== "telegram_public")
     .filter((capture) => queryTerms.some((term) =>
-      `${capture.url} ${capture.body ?? ""}`.toLowerCase().includes(term)
+      `${capture.url} ${capture.body ?? ""} ${String(capture.metadata.safeExcerpt ?? "")}`.toLowerCase().includes(term)
     ))
     .length;
   const publicChannelCutoverReport = buildTelegramPublicCutoverReport({
@@ -902,13 +1135,13 @@ function publicIntelSearchResponse(input: {
   const sourceActivation = buildSourceActivationBatchApiResponse({
     queries: [input.query],
     sources,
-    sourcePacks: input.options.sourcePacks,
+    sourcePacks,
     tenantId: input.tenantId
   }).queries[0];
   const sourceCoverage = buildSourceCoveragePlanApiResponse({
     queries: [input.query],
     sources,
-    sourcePacks: input.options.sourcePacks,
+    sourcePacks,
     tenantId: input.tenantId
   }).queries[0];
   const evidenceCutover = buildEvidenceCutoverReportDto(input.options.store, input.options.objectStore ?? EMPTY_OBJECT_STORE, input.query, {
@@ -1453,6 +1686,7 @@ function graphReviewSummaryForQuery(input: {
     exportSla: runtime.exportSla,
     enforcement: runtime.enforcement,
     certification: runtime.certification,
+    liveUpdate: runtime.liveUpdate,
     reviewQueue,
     publicFactPolicy: reviewQueue.publicFactPolicy,
     exportGate,
@@ -1570,8 +1804,16 @@ function publicTiAnswerForSearch(input: {
     scheduler: input.scheduler,
     sourceCoverageGaps: sourceGaps
   });
+  const uxRecord = record(ux) ?? {};
+  const compactAnswerCopy = record(uxRecord.compactAnswerCopy) ?? {};
+  const responsiveSafeSummary = stringArray(compactAnswerCopy.summary).length > 0
+    ? stringArray(compactAnswerCopy.summary)
+    : stringArray(contract.safeSummary);
+  const searchingOnly = responsiveSafeSummary.length === 1 && responsiveSafeSummary[0] === "Searching";
   return {
     ...contract,
+    safeSummary: responsiveSafeSummary,
+    evidenceLedgerReferences: searchingOnly ? [] : contract.evidenceLedgerReferences,
     stateMachine,
     releaseCandidate,
     ux,
@@ -1648,7 +1890,8 @@ const publicTiAnswerUxSemantics = (input: {
 }) => {
   const evidenceRefs = arrayRecords(input.contract.evidenceLedgerReferences);
   const evidenceStageCounts = record(record(input.contract.sources)?.evidenceStageCounts) ?? record(input.actorProfile.datasets?.evidenceStageCounts) ?? {};
-  const sourceSupported = evidenceRefs.length > 0 || Object.values(evidenceStageCounts).some((value) => typeof value === "number" && value > 0);
+  const sourceSupported = evidenceRefs.length > 0 || Object.entries(evidenceStageCounts)
+    .some(([stage, value]) => stage !== "seeded" && typeof value === "number" && value > 0);
   const isSearchingOnly = !sourceSupported && input.stateMachine.safeNoResult.noResult && !["blocked", "error"].includes(input.stateMachine.state);
   const state = isSearchingOnly
     ? "searching"
@@ -2086,9 +2329,7 @@ function publicTiAnswerPollingStateMachine(input: {
     waitReasons,
     safeNoResult: {
       noResult,
-      wording: noResult
-        ? `No durable evidence is available yet for ${String(input.contract.query ?? input.answer.actor ?? "this query")}; live collection may still be queued.`
-        : "",
+      wording: noResult ? "Searching" : "",
       overstatesAbsence: false
     },
     progress: {
@@ -2343,6 +2584,17 @@ function schedulerSummaryForPlan(input: {
     workerSoakMigration,
     now
   });
+  const analystLoop = buildTiAnalystLoopSummary({
+    plan: input.plan,
+    run: input.run,
+    queuedTaskCount: queryTasks.filter((task) => !leasedSet.has(task.id)).length,
+    reviewTaskCount: input.plan.reviewRequired.length,
+    rejectedSourceCount: input.run?.rejectedSourceCount ?? input.plan.rejected.length,
+    blockedReasons: blocked,
+    deferredReasons: deferred,
+    skippedReasons: skipped,
+    captures: input.options?.store.listCaptures() ?? []
+  });
   const poll = pollingSummaryForPlan({
     plan: input.plan,
     run: input.run,
@@ -2398,8 +2650,265 @@ function schedulerSummaryForPlan(input: {
     workerSoakMigration,
     productionAdapterTelemetry,
     canaryControlPlane,
+    analystLoop,
     emergencyBrakeState: input.frontier.groupedSnapshot().queued >= 1_000 ? "armed" : "clear"
   };
+}
+
+type TiAnalystLoopState = "queued" | "metadata_review" | "blocked_unsafe_target" | "needs_source_activation" | "ready";
+type TiAnalystLoopNextStep = {
+  state: TiAnalystLoopState;
+  label: string;
+  detail: string;
+  tone: "ok" | "watch" | "bad";
+};
+type TiAnalystReviewItem =
+  | ReturnType<typeof metadataReviewItemFromTask>
+  | NonNullable<ReturnType<typeof metadataReviewItemFromCapture>>;
+
+function buildTiAnalystLoopSummary(input: {
+  plan: CollectionPlan;
+  run?: CollectionRun;
+  queuedTaskCount: number;
+  reviewTaskCount: number;
+  rejectedSourceCount: number;
+  blockedReasons: string[];
+  deferredReasons: string[];
+  skippedReasons: string[];
+  captures: RawCapture[];
+}) {
+  const allReasons = uniqueStrings([...input.blockedReasons, ...input.deferredReasons, ...input.skippedReasons]);
+  const blockedUnsafeTargets = allReasons.filter((reason) => /payload|download|credential|private|captcha|interaction|unsafe/i.test(reason)).length;
+  const captureReviewItems = input.captures
+    .filter((capture) => capture.tenantId === input.plan.tenantId || !input.plan.tenantId)
+    .map((capture) => metadataReviewItemFromCapture(capture, input.plan.request.query, input.run?.id))
+    .filter((item): item is NonNullable<ReturnType<typeof metadataReviewItemFromCapture>> => Boolean(item));
+  const taskReviewItems = input.plan.reviewRequired.map((task) => metadataReviewItemFromTask(task, input.plan.request.query, input.run?.id));
+  const metadataReviewInbox = dedupeAnalystReviewItems([...captureReviewItems, ...taskReviewItems]).slice(0, 10);
+  const needsActivation = allReasons.some((reason) => /activation|approval|legal|operator|restore|metadata-only review/i.test(reason))
+    || input.plan.reviewRequired.some((task) => /approval|legal|operator|restore|metadata-only review/i.test(task.reason));
+  const resultState: TiAnalystLoopState = metadataReviewInbox.length > 0
+    ? "metadata_review"
+    : blockedUnsafeTargets > 0
+      ? "blocked_unsafe_target"
+      : needsActivation
+        ? "needs_source_activation"
+        : input.queuedTaskCount > 0
+          ? "queued"
+          : "ready";
+  const reviewTaskCount = Math.max(input.reviewTaskCount, metadataReviewInbox.length);
+  const meaningfulWorkCount = input.queuedTaskCount + reviewTaskCount;
+  const nextSteps: TiAnalystLoopNextStep[] = [
+    ...(input.queuedTaskCount > 0 ? [{
+      state: "queued" as const,
+      label: "Approved collection running",
+      detail: `${input.queuedTaskCount} approved safe collection task${input.queuedTaskCount === 1 ? "" : "s"} visible for this run.`,
+      tone: "ok" as const
+    }] : []),
+    ...(metadataReviewInbox.length > 0 ? [{
+      state: "metadata_review" as const,
+      label: "Review leak metadata",
+      detail: "Review actor/victim/account/dataset metadata and prepare notification without opening leaked payloads.",
+      tone: "watch" as const
+    }] : []),
+    ...(blockedUnsafeTargets > 0 ? [{
+      state: "blocked_unsafe_target" as const,
+      label: "Unsafe target blocked",
+      detail: "Raw leak downloads, credentials, private access, or interaction targets stayed blocked.",
+      tone: "bad" as const
+    }] : []),
+    ...(needsActivation ? [{
+      state: "needs_source_activation" as const,
+      label: "Approval needed",
+      detail: "Use dry-run source approval or restore packets before metadata-only queueing.",
+      tone: "watch" as const
+    }] : [])
+  ];
+  if (!nextSteps.length) {
+    nextSteps.push({
+      state: "ready" as const,
+      label: "Ready",
+      detail: "No review or collection work is pending for this plan.",
+      tone: "ok" as const
+    });
+  }
+  const firstReviewItem = metadataReviewInbox[0];
+
+  return {
+    resultState,
+    headline: analystLoopHeadline(resultState, reviewTaskCount || meaningfulWorkCount || 1),
+    nextSteps,
+    runStatusClarity: {
+      queuedTasks: input.queuedTaskCount,
+      reviewTasks: reviewTaskCount,
+      rejectedSources: input.rejectedSourceCount,
+      blockedUnsafeTargets,
+      meaningfulWorkCount,
+      summary: `${input.queuedTaskCount} queued collection task${input.queuedTaskCount === 1 ? "" : "s"}, ${reviewTaskCount} metadata review task${reviewTaskCount === 1 ? "" : "s"}, ${blockedUnsafeTargets} unsafe target block${blockedUnsafeTargets === 1 ? "" : "s"}, ${input.rejectedSourceCount} rejected source${input.rejectedSourceCount === 1 ? "" : "s"}`
+    },
+    metadataReviewInbox,
+    sourceActivationWorkflow: {
+      required: needsActivation,
+      dryRunOnly: true,
+      actions: sourceActivationActionsForAnalystLoop(input.plan.reviewRequired, allReasons, input.run?.id, needsActivation, blockedUnsafeTargets)
+    },
+    victimNotificationPacket: firstReviewItem ? victimNotificationPacketFromReviewItem(firstReviewItem) : undefined,
+    persistence: {
+      currentBackend: "in_memory",
+      targetBackend: "postgres",
+      durable: false,
+      missingTables: ["ti_source_registry", "ti_collection_plans", "ti_collection_runs", "ti_review_tasks", "ti_captures", "ti_claim_ledger"],
+      migrationPlan: "Persist source registry, plans, runs, review tasks, captures, and claim ledger before production promotion."
+    }
+  };
+}
+
+function metadataReviewItemFromTask(task: CollectionTask, query: string, runId: string | undefined) {
+  const parsed = parseLeakClaimText(`${query} ${task.reason}`);
+  return {
+    id: stableId("metadata-review", `${runId ?? task.intelRequestId ?? "plan"}:${task.id}`),
+    sourceId: task.sourceId,
+    taskId: task.id,
+    company: parsed.company,
+    victim: parsed.company,
+    affectedAccounts: parsed.affectedAccounts,
+    accountSubjects: parsed.accountSubjects,
+    datasetSize: parsed.datasetSize,
+    actorStatement: parsed.actorStatement ?? task.reason,
+    claimedDate: parsed.claimedDate,
+    sourceHash: hashContent(`${task.sourceId}:${task.targetUrl}`),
+    provenance: `review task ${task.id}; source ${task.sourceId}; run ${runId ?? "not-started"}`,
+    confidence: parsed.company || parsed.affectedAccounts || parsed.datasetSize ? 0.68 : 0.5,
+    status: "needs_review" as const,
+    allowedActions: ["notify_company", "mark_duplicate", "request_approval", "escalate"] as const
+  };
+}
+
+function metadataReviewItemFromCapture(capture: RawCapture, query: string, runId: string | undefined) {
+  if (capture.storageKind !== "metadata_only") return undefined;
+  const leakSite = record(capture.metadata.leakSite);
+  if (!leakSite) return undefined;
+  const actorStatement = String(leakSite.actorStatement ?? leakSite.description ?? capture.body ?? "").trim();
+  const company = stringValue(leakSite.victimName) ?? parseLeakClaimText(`${query} ${actorStatement}`).company;
+  const affectedAccounts = stringValue(leakSite.affectedAccounts);
+  const datasetSize = stringValue(leakSite.datasetSize);
+  if (!company && !affectedAccounts && !datasetSize && !actorStatement) return undefined;
+
+  return {
+    id: stableId("metadata-review", `${runId ?? "capture"}:${capture.id}`),
+    sourceId: capture.sourceId,
+    taskId: capture.taskId ?? "",
+    captureId: capture.id,
+    company,
+    victim: company,
+    affectedAccounts,
+    accountSubjects: stringValue(leakSite.accountSubjects),
+    datasetSize,
+    actorStatement: actorStatement || undefined,
+    claimedDate: stringValue(leakSite.claimDate),
+    sourceHash: stringValue(leakSite.urlHash) ?? capture.contentHash,
+    provenance: `metadata-only capture ${capture.id}; source ${capture.sourceId}; run ${runId ?? "not-started"}`,
+    confidence: clampScore(Number(leakSite.confidence ?? 0.6)),
+    status: "needs_review" as const,
+    allowedActions: ["notify_company", "mark_duplicate", "request_approval", "escalate"] as const
+  };
+}
+
+function dedupeAnalystReviewItems<T extends { sourceId: string; company?: string; sourceHash?: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.sourceId}:${item.company ?? ""}:${item.sourceHash ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function victimNotificationPacketFromReviewItem(item: TiAnalystReviewItem) {
+  return {
+    company: item.company,
+    claimSummary: [
+      item.company ? `${item.company} was named in a leak claim` : "A leak claim requires review",
+      item.affectedAccounts ? `${item.affectedAccounts} were claimed affected` : undefined,
+      item.datasetSize ? `${item.datasetSize} was claimed` : undefined
+    ].filter(Boolean).join("; "),
+    affectedAccounts: item.affectedAccounts,
+    accountSubjects: item.accountSubjects,
+    datasetSize: item.datasetSize,
+    actorStatement: item.actorStatement,
+    claimedDate: item.claimedDate,
+    sourceHash: item.sourceHash,
+    confidence: item.confidence,
+    whatWasNotAccessed: [
+      "No raw leaked dataset was downloaded or opened.",
+      "No credentials, cookies, private channels, or invite-only areas were accessed.",
+      "No CAPTCHA, authentication, or access-control bypass was attempted.",
+      "No threat actor interaction was performed."
+    ],
+    recommendedAction: "Validate metadata, dedupe against existing claims, and notify the named organization through approved contact channels."
+  };
+}
+
+function sourceActivationActionsForAnalystLoop(
+  reviewTasks: CollectionTask[],
+  reasons: string[],
+  runId: string | undefined,
+  needsActivation: boolean,
+  blockedUnsafeTargets: number
+) {
+  return [
+    ...(needsActivation ? [{
+      action: "request_approval" as const,
+      sourceId: reviewTasks[0]?.sourceId ?? runId,
+      reason: reasons.find((reason) => /approval|legal|operator/i.test(reason)) ?? reviewTasks[0]?.reason ?? "Metadata-only source requires operator/legal approval.",
+      execution: "human_approval_required" as const
+    }, {
+      action: "enable_metadata_only_queue" as const,
+      sourceId: reviewTasks[0]?.sourceId ?? runId,
+      reason: "After approval, queue metadata-only work with raw downloads and interactions disabled.",
+      execution: "dry_run" as const
+    }] : []),
+    ...(blockedUnsafeTargets > 0 ? [{
+      action: "keep_blocked" as const,
+      sourceId: runId,
+      reason: "Unsafe raw payload, credential, private access, or interaction target must remain blocked.",
+      execution: "blocked" as const
+    }] : [])
+  ];
+}
+
+function analystLoopHeadline(state: TiAnalystLoopState, count: number): string {
+  if (state === "metadata_review") return `${count} metadata review item${count === 1 ? "" : "s"} need analyst action.`;
+  if (state === "blocked_unsafe_target") return "Unsafe raw target blocked; safe metadata remains the only permitted path.";
+  if (state === "needs_source_activation") return "Operator or legal approval is needed before metadata-only collection can continue.";
+  if (state === "queued") return "Approved safe collection is queued and waiting for worker progress.";
+  return "Enough reviewed evidence exists for the public answer.";
+}
+
+function parseLeakClaimText(text: string): {
+  company?: string;
+  affectedAccounts?: string;
+  accountSubjects?: string;
+  datasetSize?: string;
+  actorStatement?: string;
+  claimedDate?: string;
+} {
+  if (!/\b(leak(?:ed)?|breach(?:ed)?|compromis(?:ed|e)|dump(?:ed)?|stolen|exfiltrat(?:ed|ion))\b/i.test(text)) {
+    return { actorStatement: text.slice(0, 500) };
+  }
+  return {
+    company: text.match(/^\s*["“]?([^"|,;]+?)["”]?\s+(?:was\s+)?(?:leak(?:ed)?|breach(?:ed)?|compromis(?:ed|e)|hit|named)\b/i)?.[1]?.trim()
+      ?? text.match(/\b(?:victim|company|organization)\s*:\s*([^|;\n]+)/i)?.[1]?.trim(),
+    affectedAccounts: text.match(/\b([\d,.]+\s*(?:k|m|million|thousand)?\s+accounts?)\b/i)?.[1],
+    accountSubjects: text.match(/\b(?:who|account subjects|account owners)\s*:\s*([^|;\n]+)/i)?.[1]?.trim(),
+    datasetSize: text.match(/\b(\d+(?:\.\d+)?\s*(?:GB|MB|TB|PB|records?|files?|rows?))\b/i)?.[1],
+    actorStatement: text.replace(/\s+/g, " ").trim().slice(0, 500),
+    claimedDate: text.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1]
+  };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function frontierStatusResponse(input: {
@@ -2630,13 +3139,13 @@ function searchQualityEvidence(input: {
   const terms = input.query.toLowerCase().split(/\s+/).filter(Boolean);
   return input.options.store.listCaptures()
     .filter((capture) => !input.tenantId || capture.tenantId === input.tenantId)
-    .filter((capture) => terms.some((term) => `${capture.url} ${capture.body ?? ""} ${String(capture.metadata.title ?? "")}`.toLowerCase().includes(term)))
+    .filter((capture) => terms.some((term) => searchableCaptureText(capture).includes(term)))
     .slice(0, 12)
     .map((capture) => captureToSearchQualityEvidence(capture));
 }
 
 function captureToSearchQualityEvidence(capture: RawCapture) {
-  const rawText = capture.body ?? String(capture.metadata.safeExcerpt ?? capture.metadata.title ?? capture.url);
+  const rawText = capture.body ?? metadataOnlyEvidenceText(capture) ?? String(capture.metadata.safeExcerpt ?? capture.metadata.title ?? capture.url);
   const stage = evidenceStageFromCapture(capture);
   return {
     id: String(capture.metadata.evidenceId ?? capture.id),
@@ -2665,6 +3174,44 @@ function captureToSearchQualityEvidence(capture: RawCapture) {
       }
     }
   };
+}
+
+function searchableCaptureText(capture: RawCapture): string {
+  return [
+    capture.url,
+    capture.body,
+    capture.metadata.safeExcerpt,
+    capture.metadata.title,
+    metadataOnlyEvidenceText(capture)
+  ].filter((value): value is string => typeof value === "string" && value.length > 0).join(" ").toLowerCase();
+}
+
+function metadataOnlyEvidenceText(capture: RawCapture): string | undefined {
+  if (capture.metadata.adapter !== "darknet_metadata") return undefined;
+  const leakSite = record(capture.metadata.leakSite);
+  if (!leakSite) return undefined;
+  const parts = [
+    metadataField("actor", leakSite.actorName),
+    metadataField("victim", leakSite.victimName),
+    metadataField("company", leakSite.victimName),
+    metadataField("accounts affected", leakSite.affectedAccounts),
+    metadataField("account subjects", leakSite.accountSubjects),
+    metadataField("dataset size", leakSite.datasetSize),
+    metadataField("actor demand or statement", leakSite.actorStatement),
+    metadataField("claimed date", leakSite.claimDate),
+    metadataField("sector", leakSite.claimedSector),
+    metadataField("country", leakSite.claimedCountry),
+    metadataField("data category", leakSite.claimedDataCategory ?? leakSite.claimedDataType),
+    metadataField("post status", leakSite.postStatus),
+    metadataField("source timestamp", leakSite.sourceTimestamp),
+    metadataField("url hash", leakSite.urlHash),
+    metadataField("screenshot hash", leakSite.screenshotHash)
+  ].filter((value): value is string => Boolean(value));
+  return parts.length ? parts.join(" | ") : undefined;
+}
+
+function metadataField(label: string, value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? `${label}: ${value.trim()}` : undefined;
 }
 
 function evidenceStageFromCapture(capture: RawCapture): EvidenceStage {
@@ -3149,16 +3696,19 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
+    { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/auth/integration-notes", surface: "auth", owner: "Agent 09", responseKeys: ["version", "notes"] },
-    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "surfaces", "publicCompatibility", "semantics"] },
+    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "surfaces", "publicCompatibility", "semantics"] },
     { method: "GET", path: "/v1/sources", surface: "sources", owner: "Agent 01/09", responseKeys: ["sources", "nextCursor"] },
     { method: "POST", path: "/v1/sources", surface: "sources", owner: "Agent 01/09", responseKeys: ["source"] },
     { method: "POST", path: "/v1/sources/apply-plan", surface: "sources", owner: "Agent 01/09", responseKeys: ["contract", "applyPlan"] },
+    { method: "POST", path: "/v1/sources/canary-activation", surface: "sources", owner: "Agent 01/09", responseKeys: ["activation", "guarantees"] },
     { method: "POST", path: "/v1/sources/coverage-plan", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries"] },
     { method: "POST", path: "/v1/sources/portfolio", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "portfolio"] },
     { method: "POST", path: "/v1/sources/activation-batches", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "coordination", "executionReadiness.rolloutPromotion"] },
     { method: "POST", path: "/v1/sources/runtime-sla", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "releasePacket"] },
     { method: "POST", path: "/v1/sources/coverage-closeout", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "activationWaves", "releasePacket"] },
+    { method: "POST", path: "/v1/ops/canary/run", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["canaryRun", "operatorView"] },
     { method: "GET", path: "/v1/frontier", surface: "frontier", owner: "Agent 02/09", responseKeys: ["queue", "summary", "scheduler"] },
     { method: "GET", path: "/v1/frontier/status", surface: "frontier", owner: "Agent 02/09", responseKeys: ["endpoint", "summary", "scheduler"] },
     { method: "POST", path: "/v1/frontier/apply-plan", surface: "frontier", owner: "Agent 02/09", responseKeys: ["contract", "applyPlan"] },
@@ -3342,6 +3892,61 @@ function buildEnterpriseApiContractIndex() {
     { code: "policy_blocked", state: "blocked", warningCode: "policy_blocked", publicBehavior: "return policy-safe blocker without raw restricted details" },
     { code: "duplicate_run_reuse", state: "partial", warningCode: "duplicate_run_reuse", publicBehavior: "attach to existing run and preserve cursor continuity" }
   ];
+  const publicWrapperResponsiveAudit = {
+    schemaVersion: "ti.public_wrapper_responsive_search.v1",
+    owner: "Agent 09",
+    route: "GET /v1/intel/search",
+    publicWrapper: {
+      canonicalMethod: "POST",
+      canonicalPath: "/api/ti/search",
+      mapsTo: "/v1/intel/search",
+      noDefaultQuery: true,
+      stableRunIds: true,
+      pollingSeconds: 3,
+      unknownCopy: "Searching",
+      updatedSemantics: "updated is response generation time; lastSeen is shown only when evidence supplies an observed timestamp",
+      stableFields: ["query", "mode", "status", "runId", "cursor", "nextCursor", "refreshAfterSeconds", "publicTiAnswer"]
+    },
+    fixtures: [
+      publicWrapperResponsiveFixture("apt29_actor", "APT29", "actor", "ready", "ready", []),
+      publicWrapperResponsiveFixture("apt42_actor", "APT42", "actor", "partial", "partial", []),
+      publicWrapperResponsiveFixture("turla_actor", "Turla", "actor", "stale", "review_required", ["stale_evidence"]),
+      publicWrapperResponsiveFixture("volt_typhoon_actor", "Volt Typhoon", "actor", "contradicted", "review_required", ["contradicted_reporting"]),
+      publicWrapperResponsiveFixture("scattered_spider_actor", "Scattered Spider", "actor", "source_biased", "partial", ["source_coverage_needs_review"]),
+      publicWrapperResponsiveFixture("akira_ransomware", "Akira", "ransomware", "restricted_held", "blocked", ["metadata_only_leak_claim"]),
+      publicWrapperResponsiveFixture("random_actor", "Random Actor", "random_actor", "searching", "partial", []),
+      publicWrapperResponsiveFixture("made_up_actor", "Made Up Actor", "random_actor", "searching", "partial", []),
+      publicWrapperResponsiveFixture("cve", "CVE-2026-11111", "cve", "partial", "partial", []),
+      publicWrapperResponsiveFixture("malware_tool", "Snake", "malware_tool", "partial", "partial", []),
+      publicWrapperResponsiveFixture("country", "Norway", "country", "partial", "partial", []),
+      publicWrapperResponsiveFixture("sector", "energy", "sector", "partial", "partial", []),
+      publicWrapperResponsiveFixture("victim", "Fjord Energy AS", "victim", "partial", "partial", []),
+      publicWrapperResponsiveFixture("provider_unavailable", "APT29", "provider_unavailable", "provider_unavailable", "partial", ["provider_unavailable"]),
+      publicWrapperResponsiveFixture("scraper_unavailable", "APT29", "scraper_unavailable", "scraper_unavailable", "partial", ["scraper_unavailable"]),
+      publicWrapperResponsiveFixture("queue_pressure", "APT42", "queue_pressure", "queue_pressure", "partial", ["queue_pressure"]),
+      publicWrapperResponsiveFixture("duplicate_run_reuse", "APT42", "duplicate_run_reuse", "partial", "partial", ["duplicate_run_reuse"]),
+      publicWrapperResponsiveFixture("policy_block", "restricted leak metadata", "policy_block", "policy_blocked", "blocked", ["policy_blocked"]),
+      publicWrapperResponsiveFixture("restricted_hold", "Akira victim claim", "restricted_hold", "restricted_held", "blocked", ["metadata_only_leak_claim"]),
+      publicWrapperResponsiveFixture("public_channel_partial", "Scattered Spider Telegram", "public_channel_partial", "partial", "partial", ["public_channel_partial"]),
+      publicWrapperResponsiveFixture("graph_evidence_promotion", "APT29 graph promotion", "graph_evidence_promotion", "ready", "ready", [])
+    ],
+    noLeakExamples: [
+      { scenario: "restricted_hold", allowed: ["actor", "victim", "claimedDataType", "contentHash", "ledgerIds"], forbidden: ["raw leaked files", "credentials", "private invite links", "restricted URLs"] },
+      { scenario: "public_channel_partial", allowed: ["messageUrl", "contentHash", "compactClaim", "sourceId"], forbidden: ["raw message body", "media payload", "session material"] }
+    ],
+    proofCommands: [
+      "bun test src/tests/api.test.ts src/tests/ops.test.ts",
+      "bun run check",
+      "bun test",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    guarantee: "public wrapper search is compact, no-default-query, no-leak, stable-run-id, 3-second-polling, and uses updated response time instead of fictional lastSeen values"
+  };
   const routeTruthAudit = {
     schemaVersion: "ti.route_truth_audit.v1",
     owner: "Agent 09",
@@ -3376,7 +3981,9 @@ function buildEnterpriseApiContractIndex() {
       "bun test",
       "bun run check",
       "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
-      "TI_SEARCH_READINESS_QUERY='Akira ransomware' bun run check:scraper-native-search"
+      "TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
     ],
     guarantee: "route truth audit is dry-run, route-visible, no-leak, public POST compatible, and fail-closed for route drift, missing examples, provider/scraper failures, queue pressure, stale evidence, no approved sources, policy blocks, duplicate reuse, restricted emergency stop, and canary RC holds"
   };
@@ -3396,6 +4003,7 @@ function buildEnterpriseApiContractIndex() {
       }))
     },
     routeTruthAudit,
+    publicWrapperResponsiveAudit,
     publicCompatibility: {
       canonicalPublicPath: "/api/ti/search",
       canonicalMethod: "POST",
@@ -3442,6 +4050,7 @@ function buildEnterpriseApiContractIndex() {
       stateMachine,
       publicAnswerReleaseCandidate,
       publicAnswerUxSemantics,
+      publicWrapperResponsiveAudit,
       cutoverScenarios,
       cursorPolling: {
         requestFields: ["cursor"],
@@ -3498,6 +4107,13 @@ function buildEnterpriseApiContractIndex() {
         packetFields: ["packetId", "scenario", "rcGate", "controls", "approvalProof", "proxyIsolation", "timeoutAttribution", "redaction", "retention", "unsafeTargetRejection", "proof", "evidence", "agent06EvidenceRedactionCertification", "agent09WarningCodes", "agent10EmergencyStopGate", "noLeakSerialization"],
         guarantee: "final dry-run release-candidate emergency-stop certification; proves hold, pause, rollback, and emergency-stop controls without unsafe access, data exposure, contact, downloads, credential bypass, CAPTCHA solving, or stealth"
       },
+      restrictedMetadataNonBlockingSearch: {
+        field: "restrictedMetadata.nonBlockingSearch",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataNonBlockingSearchContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "publicSearchAction", "restrictedContext", "publicAnswerInfluence", "policyGate", "agent06EvidenceGate", "agent07PublicAnswerState", "agent09WarningCodes", "agent10EmergencyStopBoard", "proof", "noLeakSerialization"],
+        guarantee: "restricted Tor/I2P/Freenet/leak-site metadata never blocks clear-web or public-channel search; it remains held metadata-only policy-gated context with no unsafe access, no data exposure, no public-answer promotion, and no-leak serialization"
+      },
       graphExportCertification: {
         field: "graph.certification | readiness.certification | runtime.certification",
         routes: ["/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/intel/search", "/v1/contracts"],
@@ -3518,6 +4134,31 @@ function buildEnterpriseApiContractIndex() {
         ],
         packetFields: ["endpoint", "generatedAt", "status", "scenarioCount", "passCount", "holdCount", "rollbackCount", "scenarios", "rcGate", "noUnsupportedTaxiiServerClaims", "releasePacket"],
         guarantee: "final dry-run graph/STIX release-candidate gate; TAXII output is descriptor metadata and no full TAXII server is claimed"
+      },
+      graphLiveSearchUpdate: {
+        field: "graph.liveUpdate | graph.runtime.liveUpdate | readiness.runtime.liveUpdate",
+        routes: ["/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/intel/search.graph", "/v1/contracts"],
+        scenarios: [
+          "apt29_clear_web",
+          "apt42_clear_web",
+          "turla_clear_web",
+          "volt_typhoon_public_channel",
+          "scattered_spider_clear_web",
+          "akira_restricted_held",
+          "cve_exploitation",
+          "random_actor_weak_discovery",
+          "weak_co_mention",
+          "public_channel_only_hint",
+          "restricted_held_evidence",
+          "missing_ledger_id",
+          "stale_relationship",
+          "contradicted_relationship",
+          "missing_provenance",
+          "accepted_promotion",
+          "stix_export_eligible"
+        ],
+        packetFields: ["mode", "responsePolicy", "nextPollSeconds", "cursorField", "deltaCounts", "scenarioCoverage", "weakDiscoveryPolicy", "publicChannelPolicy", "restrictedEvidencePolicy", "stixPolicy", "agentHandoffs", "taxiiBoundary"],
+        guarantee: "incremental live-search graph updates use seconds-level polling; weak discovery, public-channel-only, and restricted-held evidence remain caveated pivots until ledger, review, and STIX gates pass"
       },
       publicChannelCanary: {
         routes: ["/v1/public-channels/status", "/v1/public-channels/apply-plan", "/v1/intel/search"],
@@ -3582,11 +4223,11 @@ function buildEnterpriseApiContractIndex() {
       contractSurface("sources", "GET/POST/PATCH", "/v1/sources/*", "Agent 01/09", ["sources", "applyPlan", "queries", "activationWaves", "executionReadiness", "rolloutPromotion", "releasePacket"], ["source_governance", "coverage_closeout", "source_activation_execution_readiness", "source_rollout_promotion_packet", "dry_run_apply_plans"]),
       contractSurface("frontier", "GET/POST", "/v1/frontier/*", "Agent 02/09", ["queue", "summary", "scheduler", "applyPlan"], ["queue_pressure", "worker_queue_cutover", "worker_soak_migration", "scheduler_adapter_telemetry", "scheduler_canary_control_plane", "dry_run_scheduler_repairs"]),
       contractSurface("public_channels", "GET/POST", "/v1/public-channels/*", "Agent 04/09", ["status", "sla", "promotion", "applyPlan", "canaryRollout"], ["public_channel_sla", "source_pack_readiness", "canary_rollout", "no_raw_payload"]),
-      contractSurface("restricted_metadata", "GET/POST", "/v1/restricted-metadata/*", "Agent 05/09", ["status", "applyPlan", "connectorCertification", "killSwitchDrills", "emergencyStopCertification"], ["metadata_only", "kill_switch", "safe_hashes", "dry_run_connector_certification", "kill_switch_drills", "emergency_stop_certification", "no_leak_serialization"]),
+      contractSurface("restricted_metadata", "GET/POST", "/v1/restricted-metadata/*", "Agent 05/09", ["status", "applyPlan", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch"], ["metadata_only", "kill_switch", "safe_hashes", "dry_run_connector_certification", "kill_switch_drills", "emergency_stop_certification", "non_blocking_public_search", "no_leak_serialization"]),
       contractSurface("evidence", "GET", "/v1/evidence/*", "Agent 06/09", ["contract", "replayPlan", "cutoverReport", "trustLedger", "certification"], ["claim_ledger", "cursor_replay", "persistence_certification", "no_object_key_leak"]),
       contractSurface("quality", "GET", "/v1/quality/evaluate", "Agent 07/09", ["query", "quality", "publicTiAnswer", "examples"], ["answer_readiness", "public_answer_contract", "review_required_states"]),
-      contractSurface("graph", "GET", "/v1/graph/*", "Agent 08/09", ["contract", "graph", "timeline", "reviewPlan", "cutoverReport"], ["graph_enforcement", "graph_export_certification", "graph_stix_rc_gate", "stix_mapping", "review_workflow"]),
-      contractSurface("stix", "GET/POST", "/v1/exports/stix", "Agent 08/09", ["readiness", "bundle"], ["stix_readiness", "schema_safe", "ledger_complete", "graph_stix_rc_gate", "taxii_descriptor_only"]),
+      contractSurface("graph", "GET", "/v1/graph/*", "Agent 08/09", ["contract", "graph", "timeline", "reviewPlan", "cutoverReport", "liveUpdate"], ["graph_enforcement", "graph_export_certification", "graph_live_update", "graph_stix_rc_gate", "stix_mapping", "review_workflow"]),
+      contractSurface("stix", "GET/POST", "/v1/exports/stix", "Agent 08/09", ["readiness", "bundle", "liveUpdate"], ["stix_readiness", "schema_safe", "ledger_complete", "graph_live_update", "graph_stix_rc_gate", "taxii_descriptor_only"]),
       contractSurface("ops", "GET", "/v1/ops/resource-snapshot", "Agent 10/09", ["resources", "capacity", "workerPools", "queue"], ["resource_budget", "worker_supervision"])
     ],
     examples: {
@@ -3633,7 +4274,9 @@ function buildEnterpriseApiContractIndex() {
       fullTests: "bun test",
       publicProofs: [
         "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
-        "TI_SEARCH_READINESS_QUERY='Akira ransomware' bun run check:scraper-native-search"
+        "TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search",
+        "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+        "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
       ],
       contractIndexProof: "GET /v1/contracts; assert routeInventory.count covers every active /v1 handler and examples pass no-leak serialization",
       schemaExampleRule: "examples must not contain forbidden raw payload, credentials, cookies, authorization headers, object keys, or restricted raw URLs"
@@ -3678,6 +4321,36 @@ function routeTruthAuditFixture(
     publicPostCompatible: true,
     noLeakRequired: true,
     rollbackPath
+  };
+}
+
+function publicWrapperResponsiveFixture(
+  name: string,
+  query: string,
+  queryClass: string,
+  expectedUxState: string,
+  expectedDisplayState: string,
+  warningCodes: string[]
+) {
+  return {
+    name,
+    query,
+    queryClass,
+    route: "GET /v1/intel/search",
+    publicWrapperRoute: "POST /api/ti/search",
+    expectedUxState,
+    expectedDisplayState,
+    warningCodes,
+    pollSeconds: 3,
+    stableRunId: true,
+    publicPostCompatible: true,
+    noDefaultActor: true,
+    noLeakRequired: true,
+    noStaleCacheCopy: true,
+    compactUnknownCopy: expectedUxState === "searching" ? "Searching" : undefined,
+    updatedSemantics: "updated is response generation time; lastSeen only appears with evidence timestamps",
+    stableFields: ["query", "mode", "status", "runId", "cursor", "nextCursor", "refreshAfterSeconds", "publicTiAnswer"],
+    proofCommand: "bun run check:scraper-native-search"
   };
 }
 

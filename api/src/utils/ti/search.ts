@@ -6,7 +6,7 @@ export interface TiSearchResponse {
     query: string
     generatedAt: string
     mode: 'scraper' | 'seeded' | 'live_search'
-    status?: 'queued' | 'searching' | 'partial' | 'ready'
+    status?: TiResultState
     runId?: string
     refreshAfterSeconds?: number
     summary: string
@@ -20,10 +20,13 @@ export interface TiSearchResponse {
     sources: TiSource[]
     notes: string[]
     operationalStatus?: TiOperationalStatus
+    analystLoop?: TiAnalystLoop
 }
 
+export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'
+
 export interface TiOperationalStatus {
-    state: 'idle' | 'queued' | 'searching' | 'partial' | 'ready' | 'blocked' | 'degraded'
+    state: 'idle' | 'queued' | 'searching' | 'partial' | 'ready' | 'blocked' | 'degraded' | 'metadata_review' | 'needs_source_activation'
     headline: string
     queue: {
         selectedTasks: number
@@ -117,6 +120,65 @@ export interface TiSource {
     url?: string
 }
 
+export interface TiAnalystLoop {
+    resultState: TiResultState
+    headline: string
+    nextSteps: Array<{
+        state: 'queued' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation' | 'ready'
+        label: string
+        detail: string
+        tone: 'ok' | 'watch' | 'bad'
+    }>
+    runStatusClarity: {
+        queuedTasks: number
+        reviewTasks: number
+        rejectedSources: number
+        blockedUnsafeTargets: number
+        meaningfulWorkCount: number
+        summary: string
+    }
+    metadataReviewInbox: TiMetadataReviewItem[]
+    sourceActivationWorkflow: {
+        required: boolean
+        dryRunOnly: boolean
+        actions: Array<{
+            action: 'request_approval' | 'restore_source' | 'enable_metadata_only_queue' | 'keep_blocked'
+            sourceId?: string
+            reason: string
+            execution: 'dry_run' | 'human_approval_required' | 'blocked'
+        }>
+    }
+    victimNotificationPacket?: TiVictimNotificationPacket
+}
+
+export interface TiMetadataReviewItem {
+    id: string
+    company?: string
+    victim?: string
+    affectedAccounts?: string
+    accountSubjects?: string
+    datasetSize?: string
+    actorStatement?: string
+    claimedDate?: string
+    sourceHash?: string
+    provenance: string
+    confidence: number
+    status: 'needs_review' | 'queued_metadata_only' | 'duplicate' | 'escalated'
+    allowedActions: Array<'notify_company' | 'mark_duplicate' | 'request_approval' | 'escalate'>
+}
+
+export interface TiVictimNotificationPacket {
+    company?: string
+    claimSummary: string
+    affectedAccounts?: string
+    datasetSize?: string
+    actorStatement?: string
+    sourceHash?: string
+    confidence: number
+    whatWasNotAccessed: string[]
+    recommendedAction: string
+}
+
 interface KnownActorContext extends Pick<TiSearchResponse, 'aliases' | 'targets' | 'ttps'> {
     summary: string
 }
@@ -180,24 +242,40 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
             taskCount: run.taskCount ?? 0,
             reviewTaskCount: run.reviewTaskCount ?? 0
         })
+        const analystLoop = buildAnalystLoop({
+            query,
+            scheduler: body.scheduler,
+            run: {
+                id: run.id,
+                taskCount: run.taskCount ?? 0,
+                reviewTaskCount: run.reviewTaskCount ?? 0,
+                rejectedSourceCount: run.rejectedSourceCount ?? 0
+            },
+            operationalStatus,
+            seeded
+        })
         return {
             ...seeded,
             mode: seeded.mode === 'live_search' ? 'live_search' : 'scraper',
-            status: seeded.status ?? (seeded.recentActivity.length ? 'partial' : 'queued'),
+            status: analystLoop.resultState,
             runId: run.id,
             refreshAfterSeconds: 3,
-            summary: seeded.summary,
+            summary: analystLoop.metadataReviewInbox[0]?.company
+                ? metadataReviewSummary(analystLoop.metadataReviewInbox[0])
+                : seeded.summary,
             operationalStatus,
+            analystLoop,
             sources: [
                 {
                     id: run.id,
                     name: 'TI scraper run',
                     type: 'scraper_run',
-                    provenance: `${run.taskCount ?? 0} tasks queued, ${run.reviewTaskCount ?? 0} review tasks, ${run.rejectedSourceCount ?? 0} sources rejected by policy`
+                    provenance: analystLoop.runStatusClarity.summary
                 },
                 ...seeded.sources
             ],
             notes: [
+                analystLoop.headline,
                 operationalStatus.headline,
                 `Run ${run.id}`,
                 ...seeded.notes
@@ -246,15 +324,17 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
                 'Live results are discovery evidence until capture and extraction finish.',
                 'Restricted sources remain metadata-only and policy-gated.'
             ],
-            operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length })
+            operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }),
+            analystLoop: buildAnalystLoop({ query, seeded: { recentActivity: activity }, operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }) })
         }
     }
 
+    const operationalStatus = buildOperationalStatus(null, { query, mode: 'live_search' })
     return {
         query,
         generatedAt: new Date().toISOString(),
         mode: 'live_search',
-        status: known ? 'partial' : 'searching',
+        status: buildAnalystLoop({ query, operationalStatus }).resultState,
         refreshAfterSeconds: 3,
         summary: known?.summary ?? 'Searching',
         confidence: known ? 0.46 : 0.2,
@@ -266,20 +346,25 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         datasets: liveDatasets(),
         sources: [{ id: 'live:search:pending', name: 'Searching', type: 'live_search', provenance: 'Live discovery is in progress' }],
         notes: [],
-        operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search' })
+        operationalStatus,
+        analystLoop: buildAnalystLoop({ query, operationalStatus })
     }
 }
 
 function seededSearch(query: string): TiSearchResponse {
     const known = knownActorProfile(query)
+    const operationalStatus = buildOperationalStatus(null, { query, mode: 'live_search' })
+    const analystLoop = buildAnalystLoop({ query, operationalStatus })
 
     return {
         query,
         generatedAt: new Date().toISOString(),
         mode: 'live_search',
-        status: known ? 'partial' : 'searching',
+        status: analystLoop.resultState === 'searching' && known ? 'partial' : analystLoop.resultState,
         refreshAfterSeconds: 3,
-        summary: known?.summary ?? 'Searching',
+        summary: analystLoop.metadataReviewInbox[0]?.company
+            ? metadataReviewSummary(analystLoop.metadataReviewInbox[0])
+            : known?.summary ?? 'Searching',
         confidence: known ? 0.46 : 0.2,
         lastSeen: new Date().toISOString(),
         aliases: known?.aliases ?? [],
@@ -289,7 +374,292 @@ function seededSearch(query: string): TiSearchResponse {
         datasets: liveDatasets(),
         sources: [{ id: 'live:search:unavailable', name: 'Searching', type: 'system', provenance: 'Live source discovery is not available from this API process' }],
         notes: [],
-        operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search' })
+        operationalStatus,
+        analystLoop
+    }
+}
+
+function buildAnalystLoop(input: {
+    query: string
+    scheduler?: unknown
+    run?: { id: string; taskCount: number; reviewTaskCount: number; rejectedSourceCount: number }
+    operationalStatus?: TiOperationalStatus
+    seeded?: Partial<Pick<TiSearchResponse, 'recentActivity'>>
+}): TiAnalystLoop {
+    const scheduler = record(input.scheduler)
+    const scraperLoop = record(scheduler?.analystLoop)
+    if (scraperLoop) return analystLoopFromScraper(scraperLoop, input.query)
+
+    const queuedTasks = numberValue(scheduler?.queuedTaskCount, input.run?.taskCount, 0)
+    const reviewTasks = numberValue(scheduler?.reviewTaskCount, input.run?.reviewTaskCount, 0)
+    const rejectedSources = numberValue(input.run?.rejectedSourceCount, 0)
+    const blockedReasons = stringArray(scheduler?.blockedReasons)
+    const skippedReasons = stringArray(scheduler?.skippedReasons)
+    const deferredReasons = stringArray(scheduler?.deferredReasons)
+    const allReasons = [...blockedReasons, ...skippedReasons, ...deferredReasons]
+    const blockedUnsafeTargets = allReasons.filter((reason) => /payload|download|credential|private|captcha|interaction|unsafe/i.test(reason)).length
+    const leakClaim = parseLeakClaim(input.query, input.seeded?.recentActivity ?? [])
+    const hasMetadataReview = reviewTasks > 0 || Boolean(leakClaim)
+    const needsActivation = /activation|approval|legal|operator|restore|metadata-only review|needs_source_activation/i.test(`${scheduler?.backpressureState ?? ''} ${allReasons.join(' ')}`)
+    const resultState: TiResultState = blockedUnsafeTargets > 0 && !hasMetadataReview
+        ? 'blocked_unsafe_target'
+        : hasMetadataReview
+            ? 'metadata_review'
+            : needsActivation
+                ? 'needs_source_activation'
+                : queuedTasks > 0
+                    ? 'queued'
+                    : input.operationalStatus?.state === 'ready'
+                        ? 'ready'
+                        : input.operationalStatus?.state === 'partial'
+                            ? 'partial'
+                            : 'searching'
+
+    const inbox = hasMetadataReview ? [metadataReviewItemFor(input.query, leakClaim, input.run?.id, allReasons)] : []
+    const notification = inbox[0] ? notificationPacketFor(inbox[0]) : undefined
+    const visibleReviewTasks = Math.max(reviewTasks, inbox.length)
+    const meaningfulWorkCount = queuedTasks + visibleReviewTasks
+    const nextSteps: TiAnalystLoop['nextSteps'] = []
+    if (queuedTasks > 0) {
+        nextSteps.push({ state: 'queued', label: 'Approved collection running', detail: `${queuedTasks} approved safe task${queuedTasks === 1 ? '' : 's'} queued or visible to workers.`, tone: 'ok' })
+    }
+    if (hasMetadataReview) {
+        nextSteps.push({ state: 'metadata_review', label: 'Metadata review', detail: 'Review the leak claim metadata and prepare victim notification without opening leaked files.', tone: 'watch' })
+    }
+    if (blockedUnsafeTargets > 0) {
+        nextSteps.push({ state: 'blocked_unsafe_target', label: 'Unsafe target blocked', detail: 'Raw downloads, credentials, private access, or interaction targets were blocked and should stay blocked.', tone: 'bad' })
+    }
+    if (needsActivation) {
+        nextSteps.push({ state: 'needs_source_activation', label: 'Approval needed', detail: 'Use dry-run source approval or restore packets before metadata-only queueing.', tone: 'watch' })
+    }
+    if (!nextSteps.length) {
+        nextSteps.push({ state: resultState === 'ready' ? 'ready' : 'queued', label: resultState === 'ready' ? 'Ready' : 'Waiting', detail: resultState === 'ready' ? 'Reviewed evidence is ready for display.' : 'Waiting for live discovery or scheduler telemetry.', tone: resultState === 'ready' ? 'ok' : 'watch' })
+    }
+
+    return {
+        resultState,
+        headline: analystHeadline(resultState, meaningfulWorkCount, reviewTasks),
+        nextSteps,
+        runStatusClarity: {
+            queuedTasks,
+            reviewTasks: visibleReviewTasks,
+            rejectedSources,
+            blockedUnsafeTargets,
+            meaningfulWorkCount,
+            summary: `${queuedTasks} queued collection task${queuedTasks === 1 ? '' : 's'}, ${visibleReviewTasks} metadata review task${visibleReviewTasks === 1 ? '' : 's'}, ${blockedUnsafeTargets} unsafe target block${blockedUnsafeTargets === 1 ? '' : 's'}, ${rejectedSources} rejected source${rejectedSources === 1 ? '' : 's'}`
+        },
+        metadataReviewInbox: inbox,
+        sourceActivationWorkflow: {
+            required: needsActivation,
+            dryRunOnly: true,
+            actions: sourceActivationActions(allReasons, input.run?.id, needsActivation, blockedUnsafeTargets)
+        },
+        victimNotificationPacket: notification
+    }
+}
+
+function analystLoopFromScraper(loop: Record<string, unknown>, query: string): TiAnalystLoop {
+    const runStatus = record(loop.runStatusClarity)
+    const sourceActivation = record(loop.sourceActivationWorkflow)
+    const inbox = arrayValue(loop.metadataReviewInbox)
+        .map((item) => metadataReviewItemFromRecord(record(item)))
+        .filter((item): item is TiMetadataReviewItem => Boolean(item))
+    const packet = victimNotificationPacketFromRecord(record(loop.victimNotificationPacket))
+    const resultState = tiResultState(stringValue(loop.resultState), inbox.length > 0 ? 'metadata_review' : 'searching')
+    const reviewTasks = numberValue(runStatus?.reviewTasks, inbox.length, 0)
+    return {
+        resultState,
+        headline: stringValue(loop.headline) ?? analystHeadline(resultState, reviewTasks || 1, reviewTasks),
+        nextSteps: arrayValue(loop.nextSteps)
+            .map((item) => nextStepFromRecord(record(item)))
+            .filter((item): item is TiAnalystLoop['nextSteps'][number] => Boolean(item)),
+        runStatusClarity: {
+            queuedTasks: numberValue(runStatus?.queuedTasks, 0),
+            reviewTasks,
+            rejectedSources: numberValue(runStatus?.rejectedSources, 0),
+            blockedUnsafeTargets: numberValue(runStatus?.blockedUnsafeTargets, 0),
+            meaningfulWorkCount: numberValue(runStatus?.meaningfulWorkCount, reviewTasks),
+            summary: stringValue(runStatus?.summary) ?? `${reviewTasks} metadata review task${reviewTasks === 1 ? '' : 's'} for ${query}`
+        },
+        metadataReviewInbox: inbox,
+        sourceActivationWorkflow: {
+            required: Boolean(sourceActivation?.required),
+            dryRunOnly: sourceActivation?.dryRunOnly !== false,
+            actions: arrayValue(sourceActivation?.actions)
+                .map((item) => sourceActivationActionFromRecord(record(item)))
+                .filter((item): item is TiAnalystLoop['sourceActivationWorkflow']['actions'][number] => Boolean(item))
+        },
+        victimNotificationPacket: packet
+    }
+}
+
+function metadataReviewItemFromRecord(item: Record<string, unknown> | null): TiMetadataReviewItem | null {
+    if (!item) return null
+    return {
+        id: stringValue(item.id) ?? `metadata-review:${hashString(JSON.stringify(item))}`,
+        company: stringValue(item.company),
+        victim: stringValue(item.victim),
+        affectedAccounts: stringValue(item.affectedAccounts),
+        accountSubjects: stringValue(item.accountSubjects),
+        datasetSize: stringValue(item.datasetSize),
+        actorStatement: stringValue(item.actorStatement),
+        claimedDate: stringValue(item.claimedDate),
+        sourceHash: stringValue(item.sourceHash),
+        provenance: stringValue(item.provenance) ?? 'scraper metadata-only review item',
+        confidence: Math.max(0, Math.min(1, numberValue(item.confidence, 0.5))),
+        status: metadataReviewStatus(stringValue(item.status)),
+        allowedActions: stringArray(item.allowedActions).map(metadataReviewAction).filter((action): action is TiMetadataReviewItem['allowedActions'][number] => Boolean(action))
+    }
+}
+
+function victimNotificationPacketFromRecord(packet: Record<string, unknown> | null): TiVictimNotificationPacket | undefined {
+    if (!packet) return undefined
+    return {
+        company: stringValue(packet.company),
+        claimSummary: stringValue(packet.claimSummary) ?? 'Metadata-only leak claim requires review.',
+        affectedAccounts: stringValue(packet.affectedAccounts),
+        datasetSize: stringValue(packet.datasetSize),
+        actorStatement: stringValue(packet.actorStatement),
+        sourceHash: stringValue(packet.sourceHash),
+        confidence: Math.max(0, Math.min(1, numberValue(packet.confidence, 0.5))),
+        whatWasNotAccessed: stringArray(packet.whatWasNotAccessed),
+        recommendedAction: stringValue(packet.recommendedAction) ?? 'Review metadata and notify through approved channels.'
+    }
+}
+
+function nextStepFromRecord(item: Record<string, unknown> | null): TiAnalystLoop['nextSteps'][number] | null {
+    if (!item) return null
+    return {
+        state: analystStepState(stringValue(item.state)),
+        label: stringValue(item.label) ?? 'Review',
+        detail: stringValue(item.detail) ?? 'Review the analyst-loop state.',
+        tone: analystTone(stringValue(item.tone))
+    }
+}
+
+function sourceActivationActionFromRecord(item: Record<string, unknown> | null): TiAnalystLoop['sourceActivationWorkflow']['actions'][number] | null {
+    if (!item) return null
+    const action = sourceActivationAction(stringValue(item.action))
+    if (!action) return null
+    return {
+        action,
+        sourceId: stringValue(item.sourceId),
+        reason: stringValue(item.reason) ?? 'Source activation action requires review.',
+        execution: sourceActivationExecution(stringValue(item.execution))
+    }
+}
+
+function metadataReviewItemFor(query: string, claim: ParsedLeakClaim | null, runId: string | undefined, reasons: string[]): TiMetadataReviewItem {
+    return {
+        id: `metadata-review:${hashString(`${runId ?? 'live'}:${query}`).slice(0, 12)}`,
+        company: claim?.company,
+        victim: claim?.company,
+        affectedAccounts: claim?.affectedAccounts,
+        accountSubjects: claim?.accountSubjects,
+        datasetSize: claim?.datasetSize,
+        actorStatement: claim?.actorStatement ?? truncateSentence(query, 360),
+        claimedDate: claim?.claimedDate,
+        sourceHash: hashString(`${query}:${reasons.join('|')}`).slice(0, 16),
+        provenance: runId ? `Scraper run ${runId}; metadata-only review task` : 'Live query text; metadata-only review candidate',
+        confidence: claim ? 0.74 : 0.52,
+        status: 'needs_review',
+        allowedActions: ['notify_company', 'mark_duplicate', 'request_approval', 'escalate']
+    }
+}
+
+function notificationPacketFor(item: TiMetadataReviewItem): TiVictimNotificationPacket {
+    const parts = [
+        item.company ? `${item.company} was named in a leak claim` : 'A leak claim requires review',
+        item.affectedAccounts ? `${item.affectedAccounts} were claimed affected` : undefined,
+        item.datasetSize ? `${item.datasetSize} was claimed` : undefined
+    ].filter(Boolean)
+    return {
+        company: item.company,
+        claimSummary: parts.join('; '),
+        affectedAccounts: item.affectedAccounts,
+        datasetSize: item.datasetSize,
+        actorStatement: item.actorStatement,
+        sourceHash: item.sourceHash,
+        confidence: item.confidence,
+        whatWasNotAccessed: [
+            'No raw leaked dataset was downloaded or opened.',
+            'No credentials, cookies, private channels, or invite-only areas were accessed.',
+            'No CAPTCHA, authentication, or access-control bypass was attempted.',
+            'No threat actor interaction was performed.'
+        ],
+        recommendedAction: 'Validate the claim metadata, mark duplicates, and notify the named organization through approved contact channels.'
+    }
+}
+
+function metadataReviewSummary(item: TiMetadataReviewItem) {
+    return [
+        `${item.company ?? 'Leak claim'} is queued for metadata review.`,
+        item.affectedAccounts ? `${item.affectedAccounts}.` : undefined,
+        item.datasetSize ? `${item.datasetSize}.` : undefined
+    ].filter(Boolean).join(' ')
+}
+
+function sourceActivationActions(reasons: string[], runId: string | undefined, needsActivation: boolean, blockedUnsafeTargets: number): TiAnalystLoop['sourceActivationWorkflow']['actions'] {
+    const actions: TiAnalystLoop['sourceActivationWorkflow']['actions'] = []
+    if (needsActivation) {
+        actions.push({
+            action: 'request_approval',
+            sourceId: runId,
+            reason: reasons.find((reason) => /approval|legal|operator/i.test(reason)) ?? 'Metadata-only source requires operator/legal approval before queueing.',
+            execution: 'human_approval_required'
+        })
+        actions.push({
+            action: 'enable_metadata_only_queue',
+            sourceId: runId,
+            reason: 'After approval, queue metadata-only work with raw downloads and interactions disabled.',
+            execution: 'dry_run'
+        })
+    }
+    if (blockedUnsafeTargets > 0) {
+        actions.push({
+            action: 'keep_blocked',
+            sourceId: runId,
+            reason: 'Unsafe raw payload, credential, private access, or interaction target must remain blocked.',
+            execution: 'blocked'
+        })
+    }
+    return actions
+}
+
+function analystHeadline(state: TiResultState, meaningfulWorkCount: number, reviewTasks: number) {
+    if (state === 'metadata_review') return `${reviewTasks || meaningfulWorkCount || 1} metadata review item${(reviewTasks || meaningfulWorkCount || 1) === 1 ? '' : 's'} need analyst action.`
+    if (state === 'blocked_unsafe_target') return 'Unsafe raw target blocked; safe metadata remains the only permitted path.'
+    if (state === 'needs_source_activation') return 'Operator or legal approval is needed before metadata-only collection can continue.'
+    if (state === 'queued') return 'Approved safe collection is queued and waiting for worker progress.'
+    if (state === 'ready') return 'Reviewed evidence is ready for the public answer.'
+    return 'Live discovery is still building an evidence-backed answer.'
+}
+
+interface ParsedLeakClaim {
+    company?: string
+    affectedAccounts?: string
+    accountSubjects?: string
+    datasetSize?: string
+    actorStatement?: string
+    claimedDate?: string
+}
+
+function parseLeakClaim(query: string, activity: TiActivity[]): ParsedLeakClaim | null {
+    const text = [query, ...activity.flatMap((item) => [item.title, item.detail])].join(' | ')
+    if (!/\b(leak(?:ed)?|breach(?:ed)?|compromis(?:ed|e)|dump(?:ed)?|stolen|exfiltrat(?:ed|ion))\b/i.test(text)) return null
+    const company = text.match(/^\s*["“]?([^"|,;]+?)["”]?\s+(?:was\s+)?(?:leak(?:ed)?|breach(?:ed)?|compromis(?:ed|e)|hit|named)\b/i)?.[1]?.trim()
+        ?? text.match(/\b(?:victim|company|organization)\s*:\s*([^|;\n]+)/i)?.[1]?.trim()
+    const affectedAccounts = text.match(/\b([\d,.]+\s*(?:k|m|million|thousand)?\s+accounts?)\b/i)?.[1]
+    const accountSubjects = text.match(/\b(?:who|account subjects|account owners)\s*:\s*([^|;\n]+)/i)?.[1]?.trim()
+    const datasetSize = text.match(/\b(\d+(?:\.\d+)?\s*(?:GB|MB|TB|PB|records?|files?|rows?))\b/i)?.[1]
+    const claimedDate = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1]
+    return {
+        company,
+        affectedAccounts,
+        accountSubjects,
+        datasetSize,
+        actorStatement: truncateSentence(text, 420),
+        claimedDate
     }
 }
 
@@ -321,6 +691,7 @@ function buildOperationalStatus(schedulerInput: unknown, fallback: {
     const state = operationalState({
         queuedTasks,
         leasedTasks,
+        reviewTasks,
         retryDebt,
         deadLetters,
         backpressureState,
@@ -413,6 +784,7 @@ function buildOperationalStatus(schedulerInput: unknown, fallback: {
 function operationalState(input: {
     queuedTasks: number
     leasedTasks: number
+    reviewTasks: number
     retryDebt: number
     deadLetters: number
     backpressureState?: string
@@ -423,6 +795,7 @@ function operationalState(input: {
 }): TiOperationalStatus['state'] {
     if (input.deadLetters > 0 || input.runtimeState === 'breach') return 'blocked'
     if (input.retryDebt > 0 || input.backpressureState?.includes('pressure')) return 'degraded'
+    if (input.reviewTasks > 0) return 'metadata_review'
     if (input.leasedTasks > 0) return 'searching'
     if (input.queuedTasks > 0) return 'queued'
     if (!input.hasScheduler && input.fallbackTaskCount > 0) return 'partial'
@@ -433,6 +806,8 @@ function operationalState(input: {
 function operationalHeadline(state: TiOperationalStatus['state'], queued: number, leased: number, retryDebt: number, deadLetters: number) {
     if (state === 'blocked') return `${deadLetters} dead-lettered task${deadLetters === 1 ? '' : 's'} need attention before this run is healthy.`
     if (state === 'degraded') return `Scheduler is working with ${retryDebt} retry/backoff item${retryDebt === 1 ? '' : 's'}.`
+    if (state === 'metadata_review') return 'Metadata-only review is waiting for analyst action.'
+    if (state === 'needs_source_activation') return 'Source approval or restore action is required before collection can continue.'
     if (state === 'partial') return 'Live public discovery returned partial evidence; scraper scheduler telemetry is not attached.'
     if (state === 'searching') return leased > 0 ? `${leased} task${leased === 1 ? ' is' : 's are'} leased to scraper workers.` : 'Live discovery is running.'
     if (state === 'queued') return `${queued} task${queued === 1 ? ' is' : 's are'} queued and waiting for worker capacity.`
@@ -766,6 +1141,46 @@ function hashString(value: string) {
         hash = ((hash << 5) + hash) ^ value.charCodeAt(index)
     }
     return Math.abs(hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function tiResultState(value: string | undefined, fallback: TiResultState): TiResultState {
+    return value === 'queued' || value === 'searching' || value === 'partial' || value === 'ready' || value === 'metadata_review' || value === 'blocked_unsafe_target' || value === 'needs_source_activation'
+        ? value
+        : fallback
+}
+
+function analystStepState(value: string | undefined): TiAnalystLoop['nextSteps'][number]['state'] {
+    return value === 'queued' || value === 'metadata_review' || value === 'blocked_unsafe_target' || value === 'needs_source_activation' || value === 'ready'
+        ? value
+        : 'metadata_review'
+}
+
+function analystTone(value: string | undefined): 'ok' | 'watch' | 'bad' {
+    return value === 'ok' || value === 'watch' || value === 'bad' ? value : 'watch'
+}
+
+function metadataReviewStatus(value: string | undefined): TiMetadataReviewItem['status'] {
+    return value === 'needs_review' || value === 'queued_metadata_only' || value === 'duplicate' || value === 'escalated'
+        ? value
+        : 'needs_review'
+}
+
+function metadataReviewAction(value: string): TiMetadataReviewItem['allowedActions'][number] | undefined {
+    return value === 'notify_company' || value === 'mark_duplicate' || value === 'request_approval' || value === 'escalate'
+        ? value
+        : undefined
+}
+
+function sourceActivationAction(value: string | undefined): TiAnalystLoop['sourceActivationWorkflow']['actions'][number]['action'] | undefined {
+    return value === 'request_approval' || value === 'restore_source' || value === 'enable_metadata_only_queue' || value === 'keep_blocked'
+        ? value
+        : undefined
+}
+
+function sourceActivationExecution(value: string | undefined): TiAnalystLoop['sourceActivationWorkflow']['actions'][number]['execution'] {
+    return value === 'dry_run' || value === 'human_approval_required' || value === 'blocked'
+        ? value
+        : 'dry_run'
 }
 
 function liveDatasets(): TiDataset[] {

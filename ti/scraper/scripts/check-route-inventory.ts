@@ -58,7 +58,7 @@ function routeChecks(): RouteCheck[] {
   return [
     { owner: "Agent 09", name: "health", method: "GET", path: "/v1/health", expectKeys: ["ok", "service"] },
     { owner: "Agent 09", name: "metrics", method: "GET", path: "/v1/metrics", expectKeys: ["runs", "sources", "frontier"] },
-    { owner: "Agent 09", name: "contracts", method: "GET", path: "/v1/contracts", expectKeys: ["endpoint", "routeInventory", "routeTruthAudit", "surfaces", "publicCompatibility", "semantics"] },
+    { owner: "Agent 09", name: "contracts", method: "GET", path: "/v1/contracts", expectKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "surfaces", "publicCompatibility", "semantics"] },
     { owner: "Agent 01", name: "sources_list", method: "GET", path: "/v1/sources?limit=2", expectKeys: ["sources"] },
     { owner: "Agent 01", name: "sources_apply_plan", method: "POST", path: "/v1/sources/apply-plan", body: { queryScope: { queries: ["APT29"], entityTypes: ["actor"] }, selectedActions: ["approve", "quarantine", "retire", "request_legal_notes", "leave_unchanged"], includeExecutionPreview: true }, expectKeys: ["applyPlan"] },
     { owner: "Agent 01", name: "sources_coverage_plan", method: "POST", path: "/v1/sources/coverage-plan", body: { queries: ["APT29", "Scattered Spider"], entityTypes: ["actor"] }, expectKeys: ["endpoint", "queries"] },

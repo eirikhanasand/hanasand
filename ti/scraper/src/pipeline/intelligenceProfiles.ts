@@ -467,8 +467,8 @@ function extractCampaignNames(text: string): string[] {
   return [...text.matchAll(CAMPAIGN_RE)].map((match) => match[1].trim()).filter(Boolean);
 }
 
-function uniqueValues(entities: ExtractedEntity[]): string[] {
-  return [...new Set(entities.map((entity) => entity.value))];
+function uniqueValues(values: Array<ExtractedEntity | string>): string[] {
+  return [...new Set(values.map((value) => typeof value === "string" ? value : value.value))];
 }
 
 function stagedConfidence(confidence: number, stage: EvidenceStage, signal: AttributionSignal): number {
@@ -671,10 +671,12 @@ function liveSummaryBullets(query: string, dtos: TiSearchResultDto[], deltas: Ev
   const victims = mergeStrings(dtos.flatMap((dto) => dto.targets.victims));
   const ttps = mergeStrings(dtos.flatMap((dto) => dto.ttps));
   const indicatorCount = sum(dtos.map((dto) => dto.datasets.indicatorCount));
+  const vulnerabilityNotes = mergeStrings(dtos.flatMap((dto) => dto.summaryBullets.filter((bullet) => bullet.startsWith("Referenced vulnerabilities include "))));
   return [
     `${query} has ${dtos.length} staged evidence items (${deltas.added} added, ${deltas.promoted} promoted, ${deltas.downgraded} downgraded, ${deltas.blocked} blocked).`,
     ...(victims.length ? [`Current target observations include ${victims.slice(0, 4).join(", ")}.`] : []),
     ...(ttps.length ? [`Grounded TTP observations include ${ttps.slice(0, 4).join(", ")}.`] : []),
+    ...vulnerabilityNotes.slice(0, 2),
     ...(indicatorCount > 0 ? [`Extracted indicator observations include ${indicatorCount} IOC values.`] : []),
     ...mergeStrings(dtos.flatMap((dto) => dto.confidenceCaveats)).slice(0, 2)
   ];
@@ -687,7 +689,12 @@ function summaryBullets(profile: ActorQueryExtractionProfile): string[] {
     bullets.push(`Targets include ${[...uniqueValues(profile.victimOrganizations), ...uniqueValues(profile.targetSectors)].slice(0, 4).join(", ")}.`);
   }
   if (profile.attackTechniques.length) bullets.push(`Grounded TTP hints include ${uniqueValues(profile.attackTechniques).join(", ")}.`);
+  if (profile.cves.length) bullets.push(`Referenced vulnerabilities include ${mergeStrings(profile.cves.map(entityOrIndicatorValue)).join(", ")}.`);
   if (profile.infrastructureIndicators.length) bullets.push(`${profile.infrastructureIndicators.length} infrastructure/IOC values extracted with provenance.`);
   bullets.push(`Attribution signal: ${profile.attribution.signal} (${Math.round(profile.attribution.confidence * 100)}%).`);
   return bullets;
+}
+
+function entityOrIndicatorValue(item: ExtractedEntity | Indicator): string {
+  return item.value;
 }

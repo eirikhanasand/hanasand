@@ -26,11 +26,22 @@ const routes = isRecord(record.routeInventory) && Array.isArray(record.routeInve
   : [];
 const routeTruthAudit = isRecord(record.routeTruthAudit) ? record.routeTruthAudit : {};
 const auditFixtures = Array.isArray(routeTruthAudit.fixtures) ? routeTruthAudit.fixtures.filter(isRecord) : [];
+const responsiveAudit = isRecord(record.publicWrapperResponsiveAudit) ? record.publicWrapperResponsiveAudit : {};
+const responsiveFixtures = Array.isArray(responsiveAudit.fixtures) ? responsiveAudit.fixtures.filter(isRecord) : [];
+const responsivePublicWrapper = isRecord(responsiveAudit.publicWrapper) ? responsiveAudit.publicWrapper : {};
+const responsiveProofCommands = stringArray(responsiveAudit.proofCommands);
+const responsiveFixtureNames = responsiveFixtures.map((fixture) => String(fixture.name ?? ""));
 
 const checks = [
   response.status === 200,
   record.endpoint === "/v1/contracts",
   routeTruthAudit.schemaVersion === "ti.route_truth_audit.v1",
+  responsiveAudit.schemaVersion === "ti.public_wrapper_responsive_search.v1",
+  isRecord(semantics.publicWrapperResponsiveAudit) && semantics.publicWrapperResponsiveAudit.schemaVersion === "ti.public_wrapper_responsive_search.v1",
+  responsivePublicWrapper.canonicalMethod === "POST",
+  responsivePublicWrapper.canonicalPath === "/api/ti/search",
+  responsivePublicWrapper.noDefaultQuery === true,
+  responsivePublicWrapper.pollingSeconds === 3,
   routeTruthAudit.expectedRouteInventoryCount === routes.length,
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/coverage-closeout"),
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/activation-batches"),
@@ -40,6 +51,40 @@ const checks = [
   auditFixtures.some((fixture) => fixture.name === "restricted_emergency_stop"),
   auditFixtures.some((fixture) => fixture.name === "canary_rc_decision"),
   auditFixtures.every((fixture) => fixture.publicPostCompatible === true && fixture.noLeakRequired === true),
+  [
+    "apt29_actor",
+    "apt42_actor",
+    "turla_actor",
+    "volt_typhoon_actor",
+    "scattered_spider_actor",
+    "akira_ransomware",
+    "random_actor",
+    "made_up_actor",
+    "cve",
+    "malware_tool",
+    "country",
+    "sector",
+    "victim",
+    "provider_unavailable",
+    "scraper_unavailable",
+    "queue_pressure",
+    "duplicate_run_reuse",
+    "policy_block",
+    "restricted_hold",
+    "public_channel_partial",
+    "graph_evidence_promotion"
+  ].every((name) => responsiveFixtureNames.includes(name)),
+  responsiveFixtures.every((fixture) =>
+    fixture.pollSeconds === 3
+    && fixture.stableRunId === true
+    && fixture.publicPostCompatible === true
+    && fixture.noDefaultActor === true
+    && fixture.noLeakRequired === true
+    && fixture.noStaleCacheCopy === true
+  ),
+  responsiveProofCommands.includes("TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search"),
+  responsiveProofCommands.includes("TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search"),
+  responsiveProofCommands.includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
   stringArray(sourceExecution.routes).includes("/v1/intel/search"),
   stringArray(sourceExecution.fields).includes("first10Canary"),
   stringArray(sourceExecution.fields).includes("publicRollout50"),
@@ -69,6 +114,12 @@ console.log(JSON.stringify({
     expectedRouteInventoryCount: Number(routeTruthAudit.expectedRouteInventoryCount ?? 0),
     fixtureNames: auditFixtures.map((fixture) => String(fixture.name ?? ""))
   },
+  publicWrapperResponsiveAudit: {
+    schemaVersion: String(responsiveAudit.schemaVersion ?? ""),
+    pollingSeconds: Number(responsivePublicWrapper.pollingSeconds ?? 0),
+    fixtureNames: responsiveFixtureNames,
+    proofCommands: responsiveProofCommands
+  },
   sourceActivationExecutionReadiness: {
     routes: stringArray(sourceExecution.routes),
     fields: stringArray(sourceExecution.fields)
@@ -81,7 +132,7 @@ console.log(JSON.stringify({
     routes: stringArray(evidenceCertification.routes),
     scenarios: stringArray(evidenceCertification.scenarios)
   },
-  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, source activation, and evidence persistence certification without unsafe leaks"
+  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive public wrapper fixtures, source activation, and evidence persistence certification without unsafe leaks"
 }, null, 2));
 
 if (!ok) process.exit(1);
