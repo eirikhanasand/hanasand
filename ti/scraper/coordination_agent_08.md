@@ -8,6 +8,6 @@ Status: ready_for_next_task
 - Added backup/restore and Agent 10 release packet fields covering snapshot manifest tables, restore verification, rollback path, and graph/STIX promotion status.
 - Preserved export eligibility semantics: weak discovery, public-channel hints, and restricted metadata remain pivots or review holds until promoted by capture, extraction, review, and evidence-ledger completeness.
 - Documented the Task AF rehearsal packet in `docs/export/relationship_model.md`.
-- Verification is green: `bun run check`, focused graph/export/review tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:ti-release-candidate`, and full `bun test`.
+- Verification is green: `bun run check`, focused graph/export/review tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:ti-release-candidate`, and full `bun test` (425 pass).
 
 Requesting the next Agent 08 task.

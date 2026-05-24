@@ -508,7 +508,7 @@ export function buildCanaryOperatorSummary(input: {
       reviewReasons: Object.fromEntries([...reviewReasons.entries()].sort((a, b) => a[0].localeCompare(b[0])))
     },
     publicAnswerReadiness: CANARY_QUERIES.map((query) => {
-      const captures = input.store.listCaptures().filter((capture) =>
+      const captures = canaryCaptures.filter((capture) =>
         `${capture.url} ${capture.body ?? ""} ${String(capture.metadata.safeExcerpt ?? "")} ${String(capture.metadata.title ?? "")}`.toLowerCase().includes(query.toLowerCase())
       );
       return {

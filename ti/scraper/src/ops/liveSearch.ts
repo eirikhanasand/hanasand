@@ -943,6 +943,48 @@ export interface ProductionObservabilityMetric {
   runbookAction: string;
 }
 
+export type EnterpriseObservabilityLaneName =
+  | "queue_health"
+  | "source_health"
+  | "evidence_yield"
+  | "extraction_quality"
+  | "graph_review_holds"
+  | "api_latency"
+  | "public_polling_latency"
+  | "memory_disk_usage"
+  | "worker_saturation"
+  | "error_budget"
+  | "freshness_slo"
+  | "deployment_drift"
+  | "release_train_state";
+
+export interface EnterpriseObservabilityLane {
+  name: EnterpriseObservabilityLaneName;
+  owner: string;
+  status: "pass" | "warning" | "blocker";
+  metricValue: number;
+  warnAt: number;
+  criticalAt: number;
+  unit: ProductionObservabilityMetric["unit"];
+  alertName:
+    | "source_outage_wave"
+    | "parser_failure_spike"
+    | "queue_pressure"
+    | "public_wrapper_regression"
+    | "evidence_store_degradation"
+    | "graph_export_hold"
+    | "restricted_metadata_emergency_stop"
+    | "api_client_compatibility_drift"
+    | "memory_or_disk_pressure"
+    | "freshness_slo_breach"
+    | "release_train_hold";
+  failureClassification: string;
+  releaseImpact: "none" | "watch" | "hold" | "rollback" | "emergency-stop";
+  proofCommand: string;
+  rollbackRecommendation: string;
+  noLeakExample: string;
+}
+
 export interface ProductionFailureClassification {
   name:
     | "latency"
@@ -997,6 +1039,30 @@ export interface ProductionObservabilityDashboardPacket {
     apiStatus?: number;
     status: "pass" | "warning" | "blocker";
   }>;
+  enterpriseViews: {
+    lanes: EnterpriseObservabilityLane[];
+    integrations: {
+      agent01SourceGovernance: "pass" | "warning" | "blocker";
+      agent02Scheduler: "pass" | "warning" | "blocker";
+      agent03AdapterObservatory: "pass" | "warning" | "blocker";
+      agent04CoverageRadar: "pass" | "warning" | "blocker";
+      agent05RestrictedPlaybooks: "pass" | "warning" | "blocker";
+      agent06EvidenceLedger: "pass" | "warning" | "blocker";
+      agent07QualityGates: "pass" | "warning" | "blocker";
+      agent08GraphBackend: "pass" | "warning" | "blocker";
+      agent09ApiContracts: "pass" | "warning" | "blocker";
+      agent10ReleaseTrain: "pass" | "warning" | "blocker";
+    };
+    resourceBudget: {
+      scraperTargetGb: 96;
+      scraperCeilingGb: 160;
+      preserveCtiReserveGb: 500;
+      browserPoolDisabled: true;
+      boundedCaches: true;
+      diskFirstEvidence: true;
+      assumesGpu: false;
+    };
+  };
   failureClassification: ProductionFailureClassification[];
   rollbackDecisionPacket: {
     decision: ProductionObservabilityDecision;
@@ -2333,6 +2399,7 @@ function buildProductionObservabilityDashboardPacket(
     booleanProof("public_proof_matrix", publicProofOk, "ti_public_proof_matrix_failed", "restore public API fallback and rerun Inspur public proof", "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof")
   ];
   const metricStatus = worstProofStatus(metrics.map((metric) => metric.status));
+  const enterpriseViews = buildEnterpriseObservabilityViews(input, metrics, realTimeSearchBoard, productTiBoard);
   const failureClassification = buildProductionFailureClassification(metrics, input, realTimeSearchBoard);
   const blockerNames = metrics.filter((metric) => metric.status === "blocker").map((metric) => metric.name);
   const warningNames = metrics.filter((metric) => metric.status === "warning").map((metric) => metric.name);
@@ -2386,6 +2453,7 @@ function buildProductionObservabilityDashboardPacket(
       }
     },
     publicProofMatrix,
+    enterpriseViews,
     failureClassification,
     rollbackDecisionPacket: {
       decision,
@@ -2610,6 +2678,103 @@ function buildObservabilityPublicProofMatrix(
       status: publicOk && apiOk ? "pass" : "blocker"
     };
   });
+}
+
+function buildEnterpriseObservabilityViews(
+  input: CutoverSoakReleasePacketInput,
+  metrics: ProductionObservabilityMetric[],
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket,
+  productTiBoard: ProductTiReleaseBoardPacket
+): ProductionObservabilityDashboardPacket["enterpriseViews"] {
+  const metric = (name: ProductionObservabilityMetricName) => metrics.find((item) => item.name === name);
+  const lane = (
+    name: EnterpriseObservabilityLaneName,
+    owner: string,
+    status: EnterpriseObservabilityLane["status"],
+    metricValue: number,
+    warnAt: number,
+    criticalAt: number,
+    unit: EnterpriseObservabilityLane["unit"],
+    alertName: EnterpriseObservabilityLane["alertName"],
+    failureClassification: string,
+    releaseImpact: EnterpriseObservabilityLane["releaseImpact"],
+    proofCommand: string,
+    rollbackRecommendation: string,
+    noLeakExample: string
+  ): EnterpriseObservabilityLane => ({
+    name,
+    owner,
+    status,
+    metricValue,
+    warnAt,
+    criticalAt,
+    unit,
+    alertName,
+    failureClassification,
+    releaseImpact,
+    proofCommand,
+    rollbackRecommendation,
+    noLeakExample
+  });
+  const releaseImpact = (status: "pass" | "warning" | "blocker"): EnterpriseObservabilityLane["releaseImpact"] => status === "blocker" ? "hold" : status === "warning" ? "watch" : "none";
+  const memoryStatus = metric("memory_rss_max_gb")?.status ?? "blocker";
+  const queueStatus = metric("queue_age_p95_seconds")?.status ?? "blocker";
+  const sourceStatus = worstProofStatus([metric("source_unavailable_rate_percent")?.status ?? "blocker", metric("adapter_failure_rate_percent")?.status ?? "blocker"]);
+  const evidenceStatus = metric("evidence_write_read_proof")?.status ?? "blocker";
+  const graphStatus = metric("graph_export_readiness")?.status ?? "blocker";
+  const publicProofStatus = metric("public_proof_matrix")?.status ?? "blocker";
+  const apiLatencyStatus = metric("initial_latency_p95_ms")?.status ?? "blocker";
+  const pollingStatus = metric("partial_latency_p95_ms")?.status ?? "blocker";
+  const parserStatus = metric("adapter_failure_rate_percent")?.status ?? "blocker";
+  const workerStatus = metric("worker_saturation_percent")?.status ?? "blocker";
+  const policyStatus = metric("policy_block_rate_percent")?.status ?? "blocker";
+  const restrictedStatus: "pass" | "warning" | "blocker" = input.trends.restrictedKillSwitch.active ? "blocker" : policyStatus;
+  const releaseTrainStatus = realTimeSearchBoard.decision === "emergency-stop" || input.trends.restrictedKillSwitch.active
+    ? "blocker"
+    : realTimeSearchBoard.decision === "no-go" || realTimeSearchBoard.decision === "rollback"
+      ? "blocker"
+      : realTimeSearchBoard.decision === "canary-with-warnings" || realTimeSearchBoard.decision === "promote-with-warnings" || productTiBoard.decision === "partial-public-ok"
+        ? "warning"
+        : "pass";
+  const lanes: EnterpriseObservabilityLane[] = [
+    lane("queue_health", "Agent 02/10", queueStatus, input.soak.summary.queueAgeP95Seconds, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxQueueAgeP95Seconds, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxQueueAgeP95Seconds * 2, "seconds", "queue_pressure", "queue pressure", releaseImpact(queueStatus), "bun test src/tests/schedulerProduction.test.ts", "drain low-priority queues and reuse active runs", "queue ids, run ids, cursors, and age buckets only"),
+    lane("source_health", "Agent 01/03/04/10", sourceStatus, input.soak.summary.sourceUnavailableRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxSourceUnavailableRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxSourceUnavailableRatePercent * 2, "percent", "source_outage_wave", "source outage wave", releaseImpact(sourceStatus), "bun test src/tests/sourceSeeds.test.ts src/tests/adapterContracts.test.ts src/tests/publicSignalFusion.test.ts", "pause failing sources and keep public answers caveated", "source ids, source families, health buckets, and URL hashes only"),
+    lane("evidence_yield", "Agent 06/10", evidenceStatus, metric("evidence_write_read_proof")?.value ?? 0, 1, 0, "boolean", "evidence_store_degradation", "evidence-store degradation", releaseImpact(evidenceStatus), "bun test src/tests/storageCutover.test.ts src/tests/evidenceEndpoints.test.ts", "hold evidence promotion and run backup/restore proof", "capture ids, ledger ids, content hashes, and redacted summaries only"),
+    lane("extraction_quality", "Agent 07/10", parserStatus, input.soak.summary.errorRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxErrorRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxErrorRatePercent * 2, "percent", "parser_failure_spike", "parser failure spike", releaseImpact(parserStatus), "bun test src/tests/pipeline.test.ts src/tests/parserProfiles.test.ts", "hold ready wording and route parser gaps to Agent 03/07", "extractor versions, parser warnings, evidence ids, and confidence buckets only"),
+    lane("graph_review_holds", "Agent 08/10", graphStatus, metric("graph_export_readiness")?.value ?? 0, 1, 0, "boolean", "graph_export_hold", "graph export hold", releaseImpact(graphStatus), "bun run check:graph-review-mounted", "hold STIX/export promotion until graph review clears", "relationship ids, review states, and STIX-safe descriptors only"),
+    lane("api_latency", "Agent 09/10", apiLatencyStatus, input.soak.summary.initialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.initialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.initialLatencyP95Ms * 2, "ms", "api_client_compatibility_drift", "API latency or compatibility drift", releaseImpact(apiLatencyStatus), "bun test src/tests/api.test.ts", "restore wrapper fallback or return queued/searching response", "status, run ids, cursors, and warning codes only"),
+    lane("public_polling_latency", "Agent 07/09/10", pollingStatus, input.soak.summary.partialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.partialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.partialLatencyP95Ms * 2, "ms", "public_wrapper_regression", "public wrapper regression", releaseImpact(pollingStatus), "bun run check:live-search-deploy", "raise poll interval and serve partial/searching responses", "poll cursors, delta cursors, status, and summary only"),
+    lane("memory_disk_usage", "Agent 10", memoryStatus, input.soak.summary.memoryRssMaxGb, 96, 160, "gb", "memory_or_disk_pressure", "memory or disk pressure", memoryStatus === "blocker" ? "rollback" : releaseImpact(memoryStatus), "docker exec hanasand_ti_scraper wget -qO- http://localhost:8097/v1/ops/resource-snapshot", "stop browser workers, reduce concurrency, and preserve disk-first evidence", "RSS, disk class, object counts, and cache sizes only"),
+    lane("worker_saturation", "Agent 02/10", workerStatus, input.soak.summary.workerSaturationPercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxWorkerSaturationPercent, 95, "percent", "queue_pressure", "worker saturation", releaseImpact(workerStatus), "bun test src/tests/schedulerProduction.test.ts", "reduce worker concurrency before increasing resources", "worker pool names, counts, and saturation ratios only"),
+    lane("error_budget", "Agent 03/04/07/10", sourceStatus, input.soak.summary.errorRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxErrorRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxErrorRatePercent * 2, "percent", "parser_failure_spike", "adapter/parser error budget", releaseImpact(sourceStatus), "bun test src/tests/adapterRegressionContracts.test.ts src/tests/pipeline.test.ts", "pause noisy adapters and require fixture repair", "adapter ids, failure categories, and source hashes only"),
+    lane("freshness_slo", "Agent 01/07/10", input.soak.summary.staleCacheRatePercent > DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxStaleCacheRatePercent ? "blocker" : input.soak.summary.staleCacheRatePercent > 0 ? "warning" : "pass", input.soak.summary.staleCacheRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxStaleCacheRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxStaleCacheRatePercent * 2, "percent", "freshness_slo_breach", "freshness SLO breach", input.soak.summary.staleCacheRatePercent > DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxStaleCacheRatePercent ? "hold" : input.soak.summary.staleCacheRatePercent > 0 ? "watch" : "none", "bun test src/tests/sourceSeeds.test.ts src/tests/pipeline.test.ts", "keep stale caveats and schedule source freshness repair", "source ids, last-success timestamps, and caveat codes only"),
+    lane("deployment_drift", "Agent 09/10", input.deploymentDrift.state === "rollback" ? "blocker" : input.deploymentDrift.state === "drift" ? "warning" : "pass", input.deploymentDrift.blockedPromotionReasons.length, 1, 2, "count", "api_client_compatibility_drift", "deployment drift", input.deploymentDrift.state === "rollback" ? "rollback" : input.deploymentDrift.state === "drift" ? "watch" : "none", "bun run check:remote-drift", "use last-known-good source/image/compose rollback target", "source hashes, image ids, compose hashes, and health states only"),
+    lane("release_train_state", "Agent 10", releaseTrainStatus, input.trends.rollbackTriggers.length, 1, 2, "count", input.trends.restrictedKillSwitch.active ? "restricted_metadata_emergency_stop" : "release_train_hold", "release train state", releaseTrainStatus === "blocker" && input.trends.restrictedKillSwitch.active ? "emergency-stop" : releaseImpact(releaseTrainStatus), "bun run plan:cutover examples/cutover-rehearsal-pass.json", "hold release train or execute emergency stop according to rollback packet", "decision names, proof commands, and rollback paths only")
+  ];
+  return {
+    lanes,
+    integrations: {
+      agent01SourceGovernance: lanes.find((item) => item.name === "source_health")?.status ?? "blocker",
+      agent02Scheduler: lanes.find((item) => item.name === "queue_health")?.status ?? "blocker",
+      agent03AdapterObservatory: lanes.find((item) => item.name === "error_budget")?.status ?? "blocker",
+      agent04CoverageRadar: lanes.find((item) => item.name === "source_health")?.status ?? "blocker",
+      agent05RestrictedPlaybooks: restrictedStatus,
+      agent06EvidenceLedger: evidenceStatus,
+      agent07QualityGates: lanes.find((item) => item.name === "extraction_quality")?.status ?? "blocker",
+      agent08GraphBackend: graphStatus,
+      agent09ApiContracts: publicProofStatus,
+      agent10ReleaseTrain: releaseTrainStatus
+    },
+    resourceBudget: {
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    }
+  };
 }
 
 function buildProductionFailureClassification(

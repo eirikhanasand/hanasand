@@ -136,7 +136,9 @@ describe("api v1", () => {
       incidentCount: 1
     });
 
-    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options));
+    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options)) as {
+      operatorView: { publicAnswerReadiness: Array<{ query: string; captureCount: number; whyPartial: string[] }> };
+    };
     const operatorView = operator.operatorView as {
       activeSources: unknown[];
       latestRun?: { runId: string; status: string; taskCount: number; captureCount: number; incidentCount: number };
@@ -167,6 +169,92 @@ describe("api v1", () => {
     }), options));
     expect((pause.pause as { paused: unknown[] }).paused.length).toBeGreaterThanOrEqual(8);
     expect(store.listSources().filter((item) => item.metadata?.canaryPortfolio === true).every((item) => item.status === "paused")).toBe(true);
+  });
+
+  test("promotes fresh multi-actor canary captures into public intel answers", async () => {
+    const store = new InMemoryScraperStore();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const frontier = new FocusedFrontier();
+    const canaryFetch = async (url: string) => {
+      if (url.includes("microsoft.com")) {
+        return new Response(`
+          <rss><channel><item>
+            <title>APT42 credential theft infrastructure observed in 2026</title>
+            <link>https://example.test/microsoft/apt42</link>
+            <description>APT42 targeted government and energy sector victims with phishing infrastructure, malware delivery, and indicator 203.0.113.42.</description>
+            <pubDate>Sun, 24 May 2026 10:05:00 GMT</pubDate>
+          </item></channel></rss>
+        `, { status: 200, headers: { "content-type": "application/rss+xml" } });
+      }
+      if (url.includes("cloud.google.com")) {
+        return new Response(`
+          <rss><channel><item>
+            <title>Turla activity uses Snake malware and command infrastructure</title>
+            <link>https://example.test/google/turla</link>
+            <description>Turla operators used Snake malware against government victims and maintained command and control infrastructure at 198.51.100.77.</description>
+            <pubDate>Sun, 24 May 2026 10:06:00 GMT</pubDate>
+          </item></channel></rss>
+        `, { status: 200, headers: { "content-type": "application/rss+xml" } });
+      }
+      return new Response(`
+        <rss><channel><item>
+          <title>CVE-2026-11111 public advisory</title>
+          <link>https://example.test/cve-2026-11111</link>
+          <description>Public advisory references CVE-2026-11111 exploitation and indicator 192.0.2.15.</description>
+          <pubDate>Sun, 24 May 2026 10:04:00 GMT</pubDate>
+        </item></channel></rss>
+      `, { status: 200, headers: { "content-type": "application/rss+xml" } });
+    };
+    const options = { store, frontier, objectStore, canaryFetch };
+
+    await body(await handleApiRequest(api("/v1/sources/canary-activation", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", generatedAt: "2026-05-24T10:00:00.000Z" })
+    }), options));
+    const run = await body(await handleApiRequest(api("/v1/ops/canary/run", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", maxSources: 4, maxTasks: 4, generatedAt: "2026-05-24T10:07:00.000Z" })
+    }), options));
+    expect(run.canaryRun).toMatchObject({
+      completedTaskCount: 4,
+      failedTaskCount: 0,
+      insertedCaptureCount: 4,
+      incidentCount: 4,
+      remainingQueuedTaskCount: 0
+    });
+
+    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options));
+    const readiness = operator.operatorView.publicAnswerReadiness as Array<{ query: string; captureCount: number; whyPartial: string[] }>;
+    expect(readiness.find((item) => item.query === "APT42")).toMatchObject({
+      captureCount: 1,
+      whyPartial: expect.arrayContaining([expect.stringContaining("can cite canary captures")])
+    });
+    expect(readiness.find((item) => item.query === "Turla")).toMatchObject({
+      captureCount: 1,
+      whyPartial: expect.arrayContaining([expect.stringContaining("can cite canary captures")])
+    });
+
+    for (const query of ["APT42", "Turla"]) {
+      const search = await body(await handleApiRequest(api(`/v1/intel/search?q=${encodeURIComponent(query)}`), options)) as {
+        status: string;
+        publicTiAnswer: {
+          safeSummary: string[];
+          evidenceLedgerReferences: unknown[];
+          ux: { evidenceStageLabels: { captured_page: { count: number } } };
+        };
+        actorProfile: {
+          datasets: { evidenceStageCounts: { captured_page: number } };
+          provenance: Array<{ evidenceStage: string }>;
+        };
+      };
+      expect(search.status).toMatch(/ready|partial/);
+      expect(search.publicTiAnswer.safeSummary).not.toEqual(["Searching"]);
+      expect(search.actorProfile.datasets.evidenceStageCounts.captured_page).toBeGreaterThan(0);
+      expect(search.publicTiAnswer.evidenceLedgerReferences.length).toBeGreaterThan(0);
+      expect(search.publicTiAnswer.ux.evidenceStageLabels.captured_page.count).toBeGreaterThan(0);
+      expect(search.actorProfile.provenance.every((item: { evidenceStage: string }) => item.evidenceStage === "captured_page")).toBe(true);
+      expect(JSON.stringify(search.publicTiAnswer)).toContain(query);
+    }
   });
 
   test("persists canary metadata through the file-backed scraper store boundary", async () => {
@@ -4520,6 +4608,42 @@ describe("api v1", () => {
         status: "approved"
       }
     });
+    const notificationExport = await body(await handleApiRequest(api(`/v1/analyst/victim-notification-packets/${encodeURIComponent(notificationPacketId)}/export`), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(notificationExport).toMatchObject({
+      contract: {
+        endpoint: "/v1/analyst/victim-notification-packets/{packetId}/export",
+        metadataOnly: true,
+        safeForApi: true,
+        externalDeliveryPerformed: false,
+        rawLeakMaterialAccessed: false,
+        transportCredentialsIncluded: false,
+        doesNotVerifyLeakedDatasetContents: true
+      },
+      readiness: {
+        safeToHandOff: true,
+        status: "approved",
+        approvedBy: "analyst-2"
+      },
+      packet: {
+        company: "Fjord Energy AS",
+        affectedAccounts: "50k accounts",
+        datasetSize: "20 GB",
+        sourceHash: "urlhash",
+        claimLedger: expect.arrayContaining([
+          expect.objectContaining({ claimKind: "victim_claim", ledgerStatus: "notified" }),
+          expect.objectContaining({ claimKind: "dataset_size_claim", ledgerStatus: "notified" })
+        ]),
+        whatWasNotAccessed: expect.arrayContaining(["No restricted dataset was downloaded or opened."])
+      },
+      delivery: {
+        externalDeliveryPerformed: false,
+        deliveryMustHappenOutsideScraper: true,
+        forbiddenActions: expect.arrayContaining(["include_raw_leaked_rows", "contact_threat_actor"])
+      }
+    });
     const sentRecord = await body(await handleApiRequest(api(`/v1/analyst/victim-notification-packets/${encodeURIComponent(notificationPacketId)}/actions`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-actor-id": "analyst-2" },
@@ -4540,6 +4664,8 @@ describe("api v1", () => {
     });
     expect(store.listAnalystClaimLedgerEntries().filter((entry) => entry.reviewTaskId === reviewTaskId).map((entry) => entry.ledgerStatus)).toEqual(expect.arrayContaining(["notified"]));
     expect(JSON.stringify(notificationQueue)).not.toContain("customer-dump");
+    expect(JSON.stringify(notificationExport)).not.toContain("customer-dump");
+    expect(JSON.stringify(notificationExport)).not.toContain("password");
     expect(JSON.stringify(sentRecord)).not.toContain("password");
     expect(JSON.stringify(store.listAnalystMetadataReviewTasks())).not.toContain("password");
     const restricted = response.restrictedMetadata as {

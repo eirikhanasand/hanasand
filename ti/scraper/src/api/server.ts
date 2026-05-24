@@ -224,6 +224,14 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }));
   }
 
+  const victimNotificationExportMatch = url.pathname.match(/^\/v1\/analyst\/victim-notification-packets\/([^/]+)\/export$/);
+  if (request.method === "GET" && victimNotificationExportMatch) {
+    const packetId = victimNotificationExportMatch[1];
+    if (!packetId) return apiError("bad_request", "Victim notification packet id is required", 400);
+    const result = buildAnalystVictimNotificationPacketExportResponse(options.store, packetId);
+    return result.ok ? json(result.body) : apiError(result.code, result.message, result.status, result.details);
+  }
+
   const victimNotificationActionMatch = url.pathname.match(/^\/v1\/analyst\/victim-notification-packets\/([^/]+)\/actions$/);
   if (request.method === "POST" && victimNotificationActionMatch) {
     const packetId = victimNotificationActionMatch[1];
@@ -3964,6 +3972,92 @@ function buildAnalystVictimNotificationPacketsResponse(store: ScraperStore, inpu
   };
 }
 
+type AnalystVictimNotificationPacketExportResult =
+  | { ok: true; body: Record<string, unknown> }
+  | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> };
+
+function buildAnalystVictimNotificationPacketExportResponse(store: ScraperStore, packetId: string): AnalystVictimNotificationPacketExportResult {
+  const packet = store.listAnalystVictimNotificationPackets().find((item) => item.id === packetId);
+  if (!packet) return { ok: false, status: 404, code: "not_found", message: "Victim notification packet not found" };
+  const task = store.getAnalystMetadataReviewTask(packet.reviewTaskId);
+  const claimLedger = store.listAnalystClaimLedgerEntries()
+    .filter((entry) => entry.reviewTaskId === packet.reviewTaskId)
+    .map(safeAnalystClaimLedgerEntryDto);
+  const approved = packet.status === "approved" || packet.status === "sent";
+  const safeToHandOff = approved && packet.safeToSend;
+
+  return {
+    ok: true,
+    body: {
+      contract: {
+        endpoint: "/v1/analyst/victim-notification-packets/{packetId}/export",
+        method: "GET",
+        schemaVersion: "ti.analyst_victim_notification_export.v1",
+        metadataOnly: true,
+        safeForApi: true,
+        externalDeliveryPerformed: false,
+        rawLeakMaterialAccessed: false,
+        transportCredentialsIncluded: false,
+        doesNotVerifyLeakedDatasetContents: true
+      },
+      readiness: {
+        safeToHandOff,
+        status: packet.status,
+        approvalRequired: !approved,
+        approvedBy: packet.approvedBy,
+        sentAt: packet.sentAt,
+        requiredBeforeSend: safeToHandOff
+          ? []
+          : ["approve_packet through /v1/analyst/victim-notification-packets/{packetId}/actions"]
+      },
+      packet: {
+        id: packet.id,
+        reviewTaskId: packet.reviewTaskId,
+        company: packet.company,
+        victim: packet.victim,
+        claimSummary: packet.claimSummary,
+        affectedAccounts: packet.affectedAccounts,
+        datasetSize: packet.datasetSize,
+        actorStatementSummary: packet.actorStatement,
+        claimedAt: packet.claimedAt,
+        observedAt: packet.observedAt,
+        confidence: packet.confidence,
+        sourceHash: packet.sourceHash,
+        provenance: packet.provenance,
+        claimLedger,
+        redactions: packet.redactions,
+        whatWasNotAccessed: packet.whatWasNotAccessed
+      },
+      sourceReview: task ? {
+        taskId: task.id,
+        resultState: task.resultState,
+        status: task.status,
+        allowedActions: task.allowedActions,
+        unsafeMaterialAccessed: task.unsafeMaterialAccessed
+      } : undefined,
+      delivery: {
+        externalDeliveryPerformed: false,
+        deliveryMustHappenOutsideScraper: true,
+        allowedExternalActions: ["notify_company", "open_case", "attach_redacted_packet"],
+        forbiddenActions: [
+          "send_from_scraper",
+          "include_raw_leaked_rows",
+          "include_credentials",
+          "include_unsafe_download_urls",
+          "include_private_access_material",
+          "contact_threat_actor"
+        ]
+      },
+      guarantees: [
+        "export packet contains redacted claim metadata and provenance only",
+        "the scraper did not send a notification or open an external ticket",
+        "raw leaked data, credentials, unsafe URLs, private access material, and actor-interaction transcripts are not present",
+        "dataset contents are not verified or accessed by this packet"
+      ]
+    }
+  };
+}
+
 type AnalystVictimNotificationPacketActionResult =
   | { ok: true; status: number; body: Record<string, unknown> }
   | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> };
@@ -5555,6 +5649,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/analyst/source-activation-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
     { method: "POST", path: "/v1/analyst/source-activation-packets/{id}/actions", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "dryRun", "action", "packet", "result"] },
     { method: "GET", path: "/v1/analyst/victim-notification-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
+    { method: "GET", path: "/v1/analyst/victim-notification-packets/{id}/export", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "readiness", "packet", "delivery"] },
     { method: "POST", path: "/v1/analyst/victim-notification-packets/{id}/actions", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "dryRun", "action", "packet", "result"] },
     { method: "POST", path: "/v1/analyst/metadata-review-tasks/{id}/actions", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "dryRun", "action", "task", "notificationPacket", "result"] },
     { method: "GET", path: "/v1/sources", surface: "sources", owner: "Agent 01/09", responseKeys: ["sources", "nextCursor"] },
