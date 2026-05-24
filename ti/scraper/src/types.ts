@@ -1638,6 +1638,87 @@ export interface GraphInvestigationWorkspaceDto {
   };
 }
 
+export interface GraphAttackTechniqueTimelineEventDto {
+  techniqueNodeId: string;
+  attackId?: string;
+  techniqueName: string;
+  tactic: AttackTactic;
+  relationshipIds: string[];
+  campaignIds: string[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+  confidence: number;
+  confidenceTrend: "new" | "rising" | "stable" | "falling" | "stale" | "contradicted";
+  reviewState: GraphRelationshipReviewState;
+  workflowState: AnalystGraphWorkflowState;
+  sourceIds: string[];
+  evidenceIds: string[];
+  ledgerIds: string[];
+  exportEligible: boolean;
+  exportBlockers: GraphIntegrityFindingCode[];
+}
+
+export interface GraphCampaignGraphNodeDto {
+  nodeId: string;
+  type: Extract<IntelligenceNodeType, "actor" | "campaign" | "attack-pattern" | "malware" | "tool" | "victim" | "infrastructure" | "vulnerability">;
+  value: string;
+  confidence: number;
+  relationshipIds: string[];
+  reviewStates: GraphRelationshipReviewState[];
+  exportReadyRelationshipCount: number;
+  heldRelationshipCount: number;
+}
+
+export interface GraphCampaignGraphEdgeDto {
+  relationshipId: string;
+  type: IntelligenceRelationshipType;
+  sourceRef: string;
+  targetRef: string;
+  confidence: number;
+  reviewState: GraphRelationshipReviewState;
+  workflowState: AnalystGraphWorkflowState;
+  sourceIds: string[];
+  ledgerIds: string[];
+  exportEligible: boolean;
+  exportBlockers: GraphIntegrityFindingCode[];
+}
+
+export interface GraphAttackCampaignWorkspaceDto {
+  endpoint: "/v1/graph/query";
+  mode: "attack_technique_timeline_campaign_graph";
+  generatedAt: string;
+  query: string;
+  focusNodeId?: string;
+  techniqueTimeline: GraphAttackTechniqueTimelineEventDto[];
+  campaignGraph: {
+    nodes: GraphCampaignGraphNodeDto[];
+    edges: GraphCampaignGraphEdgeDto[];
+    campaignNodeIds: string[];
+    actorNodeIds: string[];
+    techniqueNodeIds: string[];
+  };
+  reviewHolds: Array<{
+    relationshipId: string;
+    reasonCodes: GraphIntegrityFindingCode[];
+    allowedActions: GraphInvestigationWorkspaceReviewAction[];
+  }>;
+  exportEligibility: {
+    readyRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    policy: "reviewed_or_promoted_ttp_campaign_edges_only";
+  };
+  deltaPolling: {
+    cursorField: "graph.deltas[].cursor";
+    nextPollSeconds: 3;
+    relationshipDeltaCount: number;
+  };
+  safety: {
+    restrictedMaterialPolicy: "metadata_only_review_hold";
+    rawRestrictedMaterialIncluded: false;
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+}
+
 export interface CorrelationGraphQueryDto {
   endpoint: "/v1/graph/query";
   generatedAt: string;
@@ -1646,6 +1727,7 @@ export interface CorrelationGraphQueryDto {
   nodes: CorrelationGraphNodeDto[];
   relationships: CorrelationGraphRelationshipDto[];
   investigationWorkspace: GraphInvestigationWorkspaceDto;
+  attackCampaignWorkspace: GraphAttackCampaignWorkspaceDto;
   neighborhoods: CorrelationGraphNeighborhoodDto[];
   readinessFacets: GraphQueryReadinessFacetDto[];
   attackMatrix: AttackMatrixCellDto[];

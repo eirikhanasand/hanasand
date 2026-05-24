@@ -26,6 +26,30 @@ import {
   telegramCapture
 } from "./helpers/apiFixtures.ts";
 
+type CanaryOperatorViewForTest = {
+  activeSources: unknown[];
+  latestRun?: { runId: string; status: string; taskCount: number; captureCount: number; incidentCount: number };
+  latestCaptures: unknown[];
+  schedulerHealth: {
+    errorRate: number;
+    promotionYield: number;
+    duplicateRate: number;
+    retryScheduledCount: number;
+    retryExhaustedCount: number;
+  };
+  evidenceStorage: {
+    externalObjectCaptureCount: number;
+    inlineCaptureCount: number;
+    missingObjectReferenceCount: number;
+  };
+  blockedOrHeldItems: unknown[];
+  publicAnswerReadiness: Array<{ query: string; captureCount: number; whyPartial?: string[] }>;
+};
+
+type CanaryOperatorResponseForTest = {
+  operatorView: CanaryOperatorViewForTest;
+};
+
 describe("api v1", () => {
   test("returns typed health and paginated sources", async () => {
     const store = new InMemoryScraperStore();
@@ -136,18 +160,8 @@ describe("api v1", () => {
       incidentCount: 1
     });
 
-    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options)) as {
-      operatorView: { publicAnswerReadiness: Array<{ query: string; captureCount: number; whyPartial: string[] }> };
-    };
-    const operatorView = operator.operatorView as {
-      activeSources: unknown[];
-      latestRun?: { runId: string; status: string; taskCount: number; captureCount: number; incidentCount: number };
-      latestCaptures: unknown[];
-      schedulerHealth: { errorRate: number; promotionYield: number; duplicateRate: number; retryScheduledCount: number; retryExhaustedCount: number };
-      evidenceStorage: { externalObjectCaptureCount: number; inlineCaptureCount: number; missingObjectReferenceCount: number };
-      blockedOrHeldItems: unknown[];
-      publicAnswerReadiness: Array<{ query: string; captureCount: number }>;
-    };
+    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options)) as CanaryOperatorResponseForTest;
+    const operatorView = operator.operatorView;
     expect(operatorView.activeSources.length).toBeGreaterThanOrEqual(8);
     expect(operatorView.latestRun).toMatchObject({ runId: canaryRunRecord?.id, status: "running", taskCount: 2, captureCount: 1, incidentCount: 1 });
     expect(operatorView.latestCaptures).toHaveLength(1);
@@ -223,8 +237,8 @@ describe("api v1", () => {
       remainingQueuedTaskCount: 0
     });
 
-    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options));
-    const readiness = operator.operatorView.publicAnswerReadiness as Array<{ query: string; captureCount: number; whyPartial: string[] }>;
+    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options)) as CanaryOperatorResponseForTest;
+    const readiness = operator.operatorView.publicAnswerReadiness;
     expect(readiness.find((item) => item.query === "APT42")).toMatchObject({
       captureCount: 1,
       whyPartial: expect.arrayContaining([expect.stringContaining("can cite canary captures")])
@@ -235,7 +249,7 @@ describe("api v1", () => {
     });
 
     for (const query of ["APT42", "Turla"]) {
-      const search = await body(await handleApiRequest(api(`/v1/intel/search?q=${encodeURIComponent(query)}`), options)) as {
+      const search = await body(await handleApiRequest(api(`/v1/intel/search?q=${encodeURIComponent(query)}`), options)) as unknown as {
         status: string;
         publicTiAnswer: {
           safeSummary: string[];
@@ -4561,8 +4575,47 @@ describe("api v1", () => {
     expect(store.listAnalystSourceActivationPackets()[0]).toMatchObject({
       approvedBy: "operator-1"
     });
+    const activationExecutionPreview = await body(await handleApiRequest(api(`/v1/analyst/source-activation-packets/${encodeURIComponent(activationPacketId)}/execution-preview`), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(activationExecutionPreview).toMatchObject({
+      contract: {
+        endpoint: "/v1/analyst/source-activation-packets/{packetId}/execution-preview",
+        metadataOnly: true,
+        safeForApi: true,
+        dryRun: true,
+        sourceMutationPerformed: false,
+        crawlingStarted: false,
+        restrictedFetchEnabled: false,
+        unsafeTargetConvertedToRunnableWork: false
+      },
+      readiness: {
+        safeToExecuteMetadataOnly: true,
+        approved: true,
+        blocked: false,
+        approvedBy: "operator-1"
+      },
+      packet: {
+        id: activationPacketId,
+        dryRun: true,
+        approvedBy: "operator-1"
+      },
+      executionPreview: {
+        expectedEffect: "Queue safe metadata only after explicit approval.",
+        rollback: "Keep source disabled.",
+        willMutateSource: false,
+        willStartCrawling: false,
+        willEnableRestrictedFetch: false,
+        willDownloadLeakMaterial: false,
+        operatorHandoffRequired: true
+      },
+      forbiddenOperations: expect.arrayContaining(["automatic_source_activation", "raw_leak_download", "threat_actor_contact"])
+    });
     expect(JSON.stringify(sourceActivationPackets)).not.toContain("customer-dump");
     expect(JSON.stringify(activationAction)).not.toContain("password");
+    expect(JSON.stringify(activationExecutionPreview)).not.toContain("customer-dump");
+    expect(JSON.stringify(activationExecutionPreview)).not.toContain("password");
     const notificationQueue = await body(await handleApiRequest(api("/v1/analyst/victim-notification-packets"), {
       store,
       frontier: new FocusedFrontier()

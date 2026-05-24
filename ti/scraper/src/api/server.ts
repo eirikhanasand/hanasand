@@ -215,6 +215,14 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     }));
   }
 
+  const sourceActivationExecutionPreviewMatch = url.pathname.match(/^\/v1\/analyst\/source-activation-packets\/([^/]+)\/execution-preview$/);
+  if (request.method === "GET" && sourceActivationExecutionPreviewMatch) {
+    const packetId = sourceActivationExecutionPreviewMatch[1];
+    if (!packetId) return apiError("bad_request", "Source activation packet id is required", 400);
+    const result = buildAnalystSourceActivationExecutionPreviewResponse(options.store, packetId);
+    return result.ok ? json(result.body) : apiError(result.code, result.message, result.status, result.details);
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/analyst/victim-notification-packets") {
     return json(buildAnalystVictimNotificationPacketsResponse(options.store, {
       tenantId: url.searchParams.get("tenantId") ?? request.headers.get("x-tenant-id") ?? undefined,
@@ -3850,6 +3858,102 @@ type AnalystSourceActivationPacketActionResult =
   | { ok: true; status: number; body: Record<string, unknown> }
   | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> };
 
+type AnalystSourceActivationExecutionPreviewResult =
+  | { ok: true; body: Record<string, unknown> }
+  | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> };
+
+function buildAnalystSourceActivationExecutionPreviewResponse(store: ScraperStore, packetId: string): AnalystSourceActivationExecutionPreviewResult {
+  const packet = store.listAnalystSourceActivationPackets().find((item) => item.id === packetId);
+  if (!packet) return { ok: false, status: 404, code: "not_found", message: "Source activation packet not found" };
+  const source = packet.sourceId ? store.getSource(packet.sourceId) : undefined;
+  const blocked = packet.execution === "blocked";
+  const approved = Boolean(packet.approvedAt && packet.approvedBy);
+  const safeToExecuteMetadataOnly = approved && !blocked;
+
+  return {
+    ok: true,
+    body: {
+      contract: {
+        endpoint: "/v1/analyst/source-activation-packets/{packetId}/execution-preview",
+        method: "GET",
+        schemaVersion: "ti.analyst_source_activation_execution_preview.v1",
+        metadataOnly: true,
+        safeForApi: true,
+        dryRun: true,
+        sourceMutationPerformed: false,
+        crawlingStarted: false,
+        restrictedFetchEnabled: false,
+        unsafeTargetConvertedToRunnableWork: false
+      },
+      readiness: {
+        safeToExecuteMetadataOnly,
+        approved,
+        blocked,
+        execution: packet.execution,
+        approvedBy: packet.approvedBy,
+        approvedAt: packet.approvedAt,
+        requiredBeforeExecution: safeToExecuteMetadataOnly
+          ? []
+          : blocked
+            ? ["repair or replace blocked unsafe target with a metadata listing before any activation"]
+            : ["approve_metadata_only through /v1/analyst/source-activation-packets/{packetId}/actions"]
+      },
+      packet: safeAnalystSourceActivationPacketDto(packet),
+      source: source ? {
+        id: source.id,
+        name: source.name,
+        type: source.type,
+        status: source.status,
+        tenantId: source.tenantId,
+        trustScore: source.trustScore,
+        governance: {
+          approvalState: source.governance?.approvalState ?? "pending",
+          legalBasis: source.catalog?.legalBasis,
+          hasLegalNotes: Boolean(source.legalNotes.trim()),
+          metadataOnly: source.governance?.metadataOnly ?? false
+        },
+        health: source.health ? {
+          status: source.health.status,
+          errorRate: source.health.errorRate,
+          consecutiveFailures: source.health.consecutiveFailures,
+          lastSuccessAt: source.health.lastSuccessAt,
+          lastFailureAt: source.health.lastFailureAt
+        } : undefined
+      } : undefined,
+      executionPreview: {
+        expectedEffect: packet.expectedEffect,
+        rollback: packet.rollback,
+        willMutateSource: false,
+        willStartCrawling: false,
+        willEnableRestrictedFetch: false,
+        willBypassAuthOrCaptcha: false,
+        willContactThreatActor: false,
+        willDownloadLeakMaterial: false,
+        operatorHandoffRequired: true,
+        nextOperatorStep: safeToExecuteMetadataOnly
+          ? "Use a separate source-governance workflow to restore metadata-only source state, then schedule safe metadata collection."
+          : "Resolve requiredBeforeExecution before any source-governance workflow can proceed."
+      },
+      forbiddenOperations: [
+        "automatic_source_activation",
+        "restricted_fetch_enablement",
+        "raw_leak_download",
+        "credential_collection",
+        "private_access",
+        "authentication_or_captcha_bypass",
+        "threat_actor_contact",
+        "unsafe_url_execution"
+      ],
+      guarantees: [
+        "execution preview is a handoff packet only and never mutates source registry state",
+        "approved packets remain metadata-only and dry-run until an explicit external governance workflow acts",
+        "blocked unsafe targets cannot be converted into runnable work by approval",
+        "raw leaked data, credentials, private access, CAPTCHA/auth bypass, and threat-actor interaction remain blocked"
+      ]
+    }
+  };
+}
+
 function applyAnalystSourceActivationPacketAction(store: ScraperStore, packetId: string, input: {
   action: string;
   dryRun: boolean;
@@ -5647,6 +5751,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/analyst/metadata-review-tasks", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "tasks", "notificationPackets", "claimLedger"] },
     { method: "GET", path: "/v1/analyst/loop", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "state", "runStatusClarity", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger"] },
     { method: "GET", path: "/v1/analyst/source-activation-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
+    { method: "GET", path: "/v1/analyst/source-activation-packets/{id}/execution-preview", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "readiness", "packet", "executionPreview", "forbiddenOperations"] },
     { method: "POST", path: "/v1/analyst/source-activation-packets/{id}/actions", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "dryRun", "action", "packet", "result"] },
     { method: "GET", path: "/v1/analyst/victim-notification-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
     { method: "GET", path: "/v1/analyst/victim-notification-packets/{id}/export", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "readiness", "packet", "delivery"] },

@@ -4,6 +4,7 @@ import {
   buildGraphCutoverReportApiDto,
   buildGraphCutoverReport,
   buildGraphBackendCutoverRehearsalDto,
+  buildGraphAttackCampaignWorkspaceDto,
   buildGraphBackendRepositoryContractDto,
   buildCorrelationGraphQuery,
   buildCorrelationTimeline,
@@ -45,6 +46,7 @@ const embassy = { type: "victim" as const, value: "Example Embassy", confidence:
 const telecom = { type: "victim" as const, value: "Contoso Telecom", confidence: 0.68 };
 const energyOperator = { type: "victim" as const, value: "Pacific Energy Operator", confidence: 0.72 };
 const commandServer = { type: "infrastructure" as const, value: "c2.volt.example", confidence: 0.74 };
+const embassySpearphish = { type: "campaign" as const, value: "Embassy spearphish wave", confidence: 0.78 };
 const healthcare = { type: "sector" as const, value: "Healthcare", confidence: 0.74 };
 const energy = { type: "sector" as const, value: "Energy", confidence: 0.76 };
 const norway = { type: "country" as const, value: "Norway", confidence: 0.76 };
@@ -200,6 +202,59 @@ describe("CTI graph persistence and query views", () => {
     expect(deltas.some((delta) => delta.targetLabel === "T1566 Phishing" && delta.workflowState === "accepted")).toBe(true);
     expect(preview.items.some((item) => item.targetLabel === "T1566 Phishing" && item.included)).toBe(true);
     expect(preview.items.some((item) => item.targetLabel === "T1003 OS Credential Dumping" && !item.included)).toBe(true);
+  });
+
+  test("builds an ATT&CK technique timeline and campaign graph workspace for actor queries", () => {
+    const dto = buildProgressiveGraphUpdate([
+      evidence({
+        id: "apt29_campaign_ttp",
+        stage: "reviewed",
+        sourceId: "vendor_campaign_report",
+        observedAt: "2026-05-20T00:00:00.000Z",
+        ledgerIds: ["ledger_campaign_ttp"],
+        relationships: [
+          { source: apt29, target: phishing, type: "uses", confidence: 0.86 },
+          { source: embassySpearphish, target: apt29, type: "attributed-to", confidence: 0.8 },
+          { source: embassySpearphish, target: phishing, type: "uses", confidence: 0.79 },
+          { source: embassySpearphish, target: embassy, type: "targets", confidence: 0.77 }
+        ]
+      }),
+      evidence({
+        id: "apt29_stale_ttp",
+        stage: "reviewed",
+        sourceId: "archive_campaign_report",
+        observedAt: "2025-01-01T00:00:00.000Z",
+        ledgerIds: ["ledger_stale_ttp"],
+        relationships: [{ source: apt29, target: credentialDumping, type: "uses", confidence: 0.82 }]
+      })
+    ], { generatedAt: "2026-05-21T00:00:00.000Z" });
+    const graph = downgradeAndExpireStaleRelationships(dto.graph, {
+      generatedAt: "2026-05-24T00:00:00.000Z",
+      staleAfterDays: 180,
+      expireAfterDays: 900
+    });
+    const snapshot = buildPersistedGraphSnapshot(graph, { generatedAt: "2026-05-24T00:01:00.000Z" });
+    const actorNode = snapshot.nodes.find((node) => node.value === "APT29")!;
+    const query = buildCorrelationGraphQuery(snapshot, {
+      query: "APT29",
+      focusNodeId: actorNode.id,
+      generatedAt: "2026-05-24T00:02:00.000Z"
+    });
+    const workspace = buildGraphAttackCampaignWorkspaceDto(snapshot, {
+      query: "APT29",
+      focusNodeId: actorNode.id,
+      generatedAt: "2026-05-24T00:02:00.000Z",
+      relationshipIds: query.relationships.map((relationship) => relationship.relationshipId),
+      deltas: query.deltas
+    });
+
+    expect(query.attackCampaignWorkspace.mode).toBe("attack_technique_timeline_campaign_graph");
+    expect(workspace.techniqueTimeline.some((event) => event.attackId === "T1566" && event.tactic === "initial-access")).toBe(true);
+    expect(workspace.techniqueTimeline.some((event) => event.techniqueName === "T1003 OS Credential Dumping" && event.confidenceTrend === "stale")).toBe(true);
+    expect(workspace.campaignGraph.campaignNodeIds).toContain(snapshot.nodes.find((node) => node.value === "Embassy spearphish wave")!.id);
+    expect(workspace.campaignGraph.techniqueNodeIds.length).toBeGreaterThanOrEqual(1);
+    expect(workspace.exportEligibility.heldRelationshipIds.length).toBeGreaterThanOrEqual(1);
+    expect(workspace.safety.taxiiBoundary).toBe("descriptor_only_no_server");
   });
 
   test("groups Scattered Spider social-engineering clusters as actor TTP and tool cursor deltas", () => {

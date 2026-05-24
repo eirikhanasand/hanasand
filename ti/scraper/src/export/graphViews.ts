@@ -18,6 +18,8 @@ import type {
   GraphDeltaStreamFixtureName,
   GraphDeltaStreamQueryKind,
   GraphEvidenceSupportRecord,
+  GraphAttackCampaignWorkspaceDto,
+  GraphAttackTechniqueTimelineEventDto,
   GraphBackendRepositoryContractDto,
   GraphBackendMigrationSchemaDto,
   GraphBackendCutoverRecordKind,
@@ -285,6 +287,13 @@ export function buildCorrelationGraphQuery(
       relationshipIds: selectedRelationshipIds,
       deltas
     }),
+    attackCampaignWorkspace: buildGraphAttackCampaignWorkspaceDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds,
+      deltas
+    }),
     neighborhoods: buildCorrelationGraphNeighborhoods(snapshot, selected, readinessById),
     readinessFacets: buildGraphQueryReadinessFacets(snapshot, selected, readinessById, generatedAt),
     attackMatrix: buildAttackMatrixView(snapshot, focusNode?.type === "actor" ? focusNode.id : undefined),
@@ -322,6 +331,38 @@ export function buildGraphInvestigationWorkspaceDto(
     ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
     : snapshot.relationships;
   const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const graphNodeTypes = new Set<IntelligenceNodeType>(["actor", "campaign", "attack-pattern", "malware", "tool", "victim", "infrastructure", "vulnerability"]);
+  const isGraphNodeType = (
+    type: IntelligenceNodeType
+  ): type is GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number]["type"] => graphNodeTypes.has(type);
+  const attackIdForNode = (node: PersistedGraphNode): string | undefined => {
+    const explicit = node.properties?.attackId ?? node.properties?.externalId ?? node.properties?.mitreAttackId;
+    if (typeof explicit === "string" && /^T\d{4}(?:\.\d{3})?$/.test(explicit)) return explicit;
+    return node.value.match(/\bT\d{4}(?:\.\d{3})?\b/)?.[0];
+  };
+  const campaignIdsFor = (techniqueRelationship: PersistedGraphRelationship): string[] => {
+    const linkedNodeIds = new Set([techniqueRelationship.sourceRef, techniqueRelationship.targetRef]);
+    return uniqueSorted(relationships
+      .filter((relationship) => relationship.id !== techniqueRelationship.id)
+      .flatMap((relationship) => {
+        const source = nodesById.get(relationship.sourceRef);
+        const target = nodesById.get(relationship.targetRef);
+        if (!source || !target) return [];
+        if (source.type === "campaign" && (linkedNodeIds.has(relationship.targetRef) || relationship.targetRef === techniqueRelationship.targetRef)) return [source.id];
+        if (target.type === "campaign" && (linkedNodeIds.has(relationship.sourceRef) || relationship.sourceRef === techniqueRelationship.targetRef)) return [target.id];
+        return [];
+      }));
+  };
+  const confidenceTrendFor = (relationship: PersistedGraphRelationship): GraphAttackTechniqueTimelineEventDto["confidenceTrend"] => {
+    if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true) return "contradicted";
+    if (relationship.reviewState === "expired" || relationship.properties?.stale === true || ageInDays(relationship.lastSeenAt, generatedAt) > 180) return "stale";
+    const first = relationship.confidenceHistory[0]?.confidence;
+    const last = relationship.confidenceHistory.at(-1)?.confidence ?? relationship.confidence;
+    if (first === undefined || relationship.confidenceHistory.length <= 1) return "new";
+    if (last - first >= 0.08) return "rising";
+    if (first - last >= 0.08) return "falling";
+    return "stable";
+  };
   const readiness = checkStixExportReadiness(snapshot);
   const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
   const findingsByRelationship = graphFindingsByRelationship(snapshot, generatedAt);
@@ -372,6 +413,169 @@ export function buildGraphInvestigationWorkspaceDto(
       cursorField: "graph.deltas[].cursor",
       nextPollSeconds: 3,
       relationshipDeltaCount: options.deltas?.length ?? buildRelationshipCursorDeltas(snapshot, { generatedAt }).filter((delta) => relationships.some((relationship) => relationship.id === delta.relationshipId)).length
+    },
+    safety: {
+      restrictedMaterialPolicy: "metadata_only_review_hold",
+      rawRestrictedMaterialIncluded: false,
+      taxiiBoundary: "descriptor_only_no_server"
+    }
+  };
+}
+
+export function buildGraphAttackCampaignWorkspaceDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+    deltas?: GraphCursorRelationshipDeltaDto[];
+  }
+): GraphAttackCampaignWorkspaceDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const readiness = checkStixExportReadiness(snapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const findingsByRelationship = graphFindingsByRelationship(snapshot, generatedAt);
+  const supportByRelationship = new Map(relationships.map((relationship) => [relationship.id, supportFor(snapshot, relationship.id)]));
+  const campaignNodeIds = uniqueSorted(snapshot.nodes.filter((node) => node.type === "campaign").map((node) => node.id));
+  const actorNodeIds = uniqueSorted(snapshot.nodes.filter((node) => node.type === "actor").map((node) => node.id));
+  const techniqueNodeIds = uniqueSorted(snapshot.nodes.filter((node) => node.type === "attack-pattern").map((node) => node.id));
+
+  const techniqueTimeline = relationships
+    .filter((relationship) => relationship.type === "uses")
+    .map((relationship): GraphAttackTechniqueTimelineEventDto | undefined => {
+      const source = nodesById.get(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef);
+      if (source?.type !== "actor" || target?.type !== "attack-pattern") return undefined;
+      const support = supportByRelationship.get(relationship.id) ?? [];
+      const findings = uniqueFindingCodes((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code));
+      const exportBlockers = readinessById.get(relationship.id)?.blockers ?? ["missing_provenance"];
+      const attackId = attackIdForNode(target);
+      const event: GraphAttackTechniqueTimelineEventDto = {
+        techniqueNodeId: target.id,
+        techniqueName: target.value,
+        tactic: attackTactic(target),
+        relationshipIds: [relationship.id],
+        campaignIds: campaignIdsFor(relationship),
+        firstSeenAt: relationship.firstSeenAt,
+        lastSeenAt: relationship.lastSeenAt,
+        confidence: relationship.confidence,
+        confidenceTrend: confidenceTrendFor(relationship),
+        reviewState: relationship.reviewState,
+        workflowState: analystWorkflowState(relationship),
+        sourceIds: uniqueSorted(support.map((item) => item.sourceId)),
+        evidenceIds: uniqueSorted(relationship.evidenceSupportIds),
+        ledgerIds: uniqueSorted(support.flatMap((item) => item.ledgerIds)),
+        exportEligible: readinessById.get(relationship.id)?.ready ?? false,
+        exportBlockers: uniqueFindingCodes([...findings, ...exportBlockers])
+      };
+      if (attackId) event.attackId = attackId;
+      return event;
+    })
+    .filter((event): event is GraphAttackTechniqueTimelineEventDto => Boolean(event))
+    .sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt) || right.confidence - left.confidence || left.techniqueName.localeCompare(right.techniqueName));
+
+  const campaignRelationshipIds = new Set(relationships
+    .filter((relationship) => {
+      const source = nodesById.get(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef);
+      return Boolean(source && target && (isGraphNodeType(source.type) || isGraphNodeType(target.type)) && (
+        source.type === "campaign" ||
+        target.type === "campaign" ||
+        source.type === "actor" ||
+        target.type === "actor" ||
+        source.type === "attack-pattern" ||
+        target.type === "attack-pattern"
+      ));
+    })
+    .map((relationship) => relationship.id));
+  const timelineRelationshipIds = new Set(techniqueTimeline.flatMap((event) => event.relationshipIds));
+  const campaignRelationships = relationships.filter((relationship) => campaignRelationshipIds.has(relationship.id) || timelineRelationshipIds.has(relationship.id));
+  const graphNodeIds = uniqueSorted(campaignRelationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]));
+  const graphNodes = graphNodeIds
+    .map((nodeId) => nodesById.get(nodeId))
+    .filter((node): node is PersistedGraphNode & { type: GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number]["type"] } => node !== undefined && isGraphNodeType(node.type))
+    .map((node) => {
+      const nodeRelationships = campaignRelationships.filter((relationship) => relationship.sourceRef === node.id || relationship.targetRef === node.id);
+      return {
+        nodeId: node.id,
+        type: node.type,
+        value: node.value,
+        confidence: node.confidence,
+        relationshipIds: uniqueSorted(nodeRelationships.map((relationship) => relationship.id)),
+        reviewStates: uniqueReviewStates(nodeRelationships.map((relationship) => relationship.reviewState)),
+        exportReadyRelationshipCount: nodeRelationships.filter((relationship) => readinessById.get(relationship.id)?.ready ?? false).length,
+        heldRelationshipCount: nodeRelationships.filter((relationship) => !(readinessById.get(relationship.id)?.ready ?? false)).length
+      };
+    })
+    .sort((left, right) => right.relationshipIds.length - left.relationshipIds.length || left.value.localeCompare(right.value));
+  const graphEdges = campaignRelationships
+    .map((relationship) => {
+      const source = nodesById.get(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef);
+      if (!source || !target || !isGraphNodeType(source.type) || !isGraphNodeType(target.type)) return undefined;
+      const support = supportByRelationship.get(relationship.id) ?? [];
+      const findings = uniqueFindingCodes((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code));
+      const exportBlockers = readinessById.get(relationship.id)?.blockers ?? ["missing_provenance"];
+      return {
+        relationshipId: relationship.id,
+        type: relationship.type,
+        sourceRef: relationship.sourceRef,
+        targetRef: relationship.targetRef,
+        confidence: relationship.confidence,
+        reviewState: relationship.reviewState,
+        workflowState: analystWorkflowState(relationship),
+        sourceIds: uniqueSorted(support.map((item) => item.sourceId)),
+        ledgerIds: uniqueSorted(support.flatMap((item) => item.ledgerIds)),
+        exportEligible: readinessById.get(relationship.id)?.ready ?? false,
+        exportBlockers: uniqueFindingCodes([...findings, ...exportBlockers])
+      };
+    })
+    .filter((edge): edge is GraphAttackCampaignWorkspaceDto["campaignGraph"]["edges"][number] => Boolean(edge))
+    .sort((left, right) => Number(right.exportEligible) - Number(left.exportEligible) || right.confidence - left.confidence || left.relationshipId.localeCompare(right.relationshipId));
+  const reviewHolds = graphEdges
+    .filter((edge) => !edge.exportEligible || edge.reviewState !== "accepted")
+    .map((edge) => {
+      const relationship = campaignRelationships.find((item) => item.id === edge.relationshipId)!;
+      const support = supportByRelationship.get(edge.relationshipId) ?? [];
+      const provenanceComplete = support.length > 0 && support.every((item) => item.captureId && item.contentHash && item.ledgerIds.length > 0);
+      return {
+        relationshipId: edge.relationshipId,
+        reasonCodes: edge.exportBlockers,
+        allowedActions: investigationAllowedActions(relationship, edge.exportEligible, edge.exportBlockers, provenanceComplete)
+      };
+    });
+
+  return {
+    endpoint: "/v1/graph/query",
+    mode: "attack_technique_timeline_campaign_graph",
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    techniqueTimeline,
+    campaignGraph: {
+      nodes: graphNodes,
+      edges: graphEdges,
+      campaignNodeIds: uniqueSorted(graphNodes.filter((node) => node.type === "campaign").map((node) => node.nodeId)),
+      actorNodeIds: uniqueSorted(graphNodes.filter((node) => node.type === "actor").map((node) => node.nodeId)),
+      techniqueNodeIds: uniqueSorted(graphNodes.filter((node) => node.type === "attack-pattern").map((node) => node.nodeId))
+    },
+    reviewHolds,
+    exportEligibility: {
+      readyRelationshipIds: uniqueSorted(graphEdges.filter((edge) => edge.exportEligible).map((edge) => edge.relationshipId)),
+      heldRelationshipIds: uniqueSorted(graphEdges.filter((edge) => !edge.exportEligible).map((edge) => edge.relationshipId)),
+      policy: "reviewed_or_promoted_ttp_campaign_edges_only"
+    },
+    deltaPolling: {
+      cursorField: "graph.deltas[].cursor",
+      nextPollSeconds: 3,
+      relationshipDeltaCount: options.deltas?.filter((delta) => graphEdges.some((edge) => edge.relationshipId === delta.relationshipId)).length
+        ?? buildRelationshipCursorDeltas(snapshot, { generatedAt }).filter((delta) => graphEdges.some((edge) => edge.relationshipId === delta.relationshipId)).length
     },
     safety: {
       restrictedMaterialPolicy: "metadata_only_review_hold",
@@ -3392,6 +3596,51 @@ function reviewRank(state: GraphRelationshipReviewState): number {
 function attackTactic(node: PersistedGraphNode): AttackTactic {
   const tactic = node.properties?.tactic;
   return typeof tactic === "string" && isAttackTactic(tactic) ? tactic : "unknown";
+}
+
+function attackExternalId(node: PersistedGraphNode): string | undefined {
+  const explicit = node.properties?.attackId ?? node.properties?.externalId ?? node.properties?.mitreAttackId;
+  if (typeof explicit === "string" && /^T\d{4}(?:\.\d{3})?$/.test(explicit)) return explicit;
+  const match = node.value.match(/\bT\d{4}(?:\.\d{3})?\b/);
+  return match?.[0];
+}
+
+function campaignIdsForTechnique(
+  relationships: PersistedGraphRelationship[],
+  nodesById: Map<string, PersistedGraphNode>,
+  techniqueRelationship: PersistedGraphRelationship
+): string[] {
+  const linkedNodeIds = new Set([techniqueRelationship.sourceRef, techniqueRelationship.targetRef]);
+  return uniqueSorted(relationships
+    .filter((relationship) => relationship.id !== techniqueRelationship.id)
+    .flatMap((relationship) => {
+      const source = nodesById.get(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef);
+      if (!source || !target) return [];
+      if (source.type === "campaign" && (linkedNodeIds.has(relationship.targetRef) || relationship.targetRef === techniqueRelationship.targetRef)) return [source.id];
+      if (target.type === "campaign" && (linkedNodeIds.has(relationship.sourceRef) || relationship.sourceRef === techniqueRelationship.targetRef)) return [target.id];
+      return [];
+    }));
+}
+
+function attackTechniqueConfidenceTrend(
+  relationship: PersistedGraphRelationship,
+  generatedAt: string
+): GraphAttackTechniqueTimelineEventDto["confidenceTrend"] {
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true) return "contradicted";
+  if (relationship.reviewState === "expired" || relationship.properties?.stale === true || ageInDays(relationship.lastSeenAt, generatedAt) > 180) return "stale";
+  const first = relationship.confidenceHistory[0]?.confidence;
+  const last = relationship.confidenceHistory.at(-1)?.confidence ?? relationship.confidence;
+  if (first === undefined || relationship.confidenceHistory.length <= 1) return "new";
+  if (last - first >= 0.08) return "rising";
+  if (first - last >= 0.08) return "falling";
+  return "stable";
+}
+
+function isCampaignGraphNodeType(
+  type: IntelligenceNodeType
+): type is GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number]["type"] {
+  return ["actor", "campaign", "attack-pattern", "malware", "tool", "victim", "infrastructure", "vulnerability"].includes(type);
 }
 
 function isAttackTactic(value: string): value is AttackTactic {

@@ -1944,6 +1944,65 @@ describe("ops controls", () => {
     expect(promote.observabilityDashboard.soakAutomation.command).toContain("TI_SOAK_DURATION_MINUTES=1440");
     expect(promote.observabilityDashboard.publicProofMatrix.map((proof) => proof.query)).toEqual(queries);
     expect(promote.observabilityDashboard.publicProofMatrix.every((proof) => proof.status === "pass")).toBe(true);
+    expect(promote.observabilityDashboard.enterpriseViews.lanes.map((lane) => lane.name)).toEqual([
+      "queue_health",
+      "source_health",
+      "evidence_yield",
+      "extraction_quality",
+      "graph_review_holds",
+      "api_latency",
+      "public_polling_latency",
+      "memory_disk_usage",
+      "worker_saturation",
+      "error_budget",
+      "freshness_slo",
+      "deployment_drift",
+      "release_train_state"
+    ]);
+    expect(promote.observabilityDashboard.enterpriseViews.lanes.map((lane) => lane.alertName)).toEqual(expect.arrayContaining([
+      "source_outage_wave",
+      "parser_failure_spike",
+      "queue_pressure",
+      "public_wrapper_regression",
+      "evidence_store_degradation",
+      "graph_export_hold",
+      "api_client_compatibility_drift",
+      "memory_or_disk_pressure",
+      "freshness_slo_breach",
+      "release_train_hold"
+    ]));
+    expect(promote.observabilityDashboard.enterpriseViews.resourceBudget).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.observabilityDashboard.enterpriseViews.integrations).toMatchObject({
+      agent01SourceGovernance: "pass",
+      agent02Scheduler: "pass",
+      agent03AdapterObservatory: "pass",
+      agent04CoverageRadar: "pass",
+      agent05RestrictedPlaybooks: "pass",
+      agent06EvidenceLedger: "pass",
+      agent07QualityGates: "pass",
+      agent08GraphBackend: "pass",
+      agent09ApiContracts: "pass"
+    });
+    expect(promote.observabilityDashboard.enterpriseViews.lanes.find((lane) => lane.name === "memory_disk_usage")).toMatchObject({
+      warnAt: 96,
+      criticalAt: 160,
+      releaseImpact: "none",
+      rollbackRecommendation: "stop browser workers, reduce concurrency, and preserve disk-first evidence"
+    });
+    expect(promote.observabilityDashboard.enterpriseViews.lanes.find((lane) => lane.name === "freshness_slo")).toMatchObject({
+      status: "warning",
+      releaseImpact: "watch",
+      failureClassification: "freshness SLO breach"
+    });
+    expect(promote.observabilityDashboard.enterpriseViews.lanes.every((lane) => lane.noLeakExample.endsWith("only"))).toBe(true);
     expect(promote.observabilityDashboard.failureClassification.map((item) => item.name)).toEqual([
       "latency",
       "queue",
@@ -2084,6 +2143,12 @@ describe("ops controls", () => {
     expect(emergencyStop.rcBoard.decision).toBe("emergency-stop");
     expect(emergencyStop.productTiBoard.decision).toBe("emergency-stop");
     expect(emergencyStop.realTimeSearchBoard.decision).toBe("emergency-stop");
+    expect(emergencyStop.observabilityDashboard.enterpriseViews.lanes.find((lane) => lane.name === "release_train_state")).toMatchObject({
+      status: "blocker",
+      alertName: "restricted_metadata_emergency_stop",
+      releaseImpact: "emergency-stop"
+    });
+    expect(emergencyStop.observabilityDashboard.enterpriseViews.integrations.agent05RestrictedPlaybooks).toBe("blocker");
     expect(emergencyStop.canaryExecution.rollbackSteps[0]).toBe("activate restricted emergency stop and pause restricted metadata workers");
     expect(emergencyStop.ok).toBe(false);
     expect(emergencyStop.releaseTrain.currentDecision).toBe("emergency-stop");
