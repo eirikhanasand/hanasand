@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Fixture Security Feed</title>
+    <item>
+      <title>APT29 campaign indicators</title>
+      <link>https://example.test/research/apt29-campaign?ref=rss#top</link>
+      <description><![CDATA[APT29 malware campaign exploiting CVE-2025-12345.]]></description>
+      <pubDate>Sat, 01 Feb 2025 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Ransomware weekly</title>
+      <link>/research/ransomware-weekly</link>
+      <description>Victim disclosure and ransomware leak monitoring.</description>
+      <pubDate>Sun, 02 Feb 2025 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

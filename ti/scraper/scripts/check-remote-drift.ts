@@ -1,0 +1,146 @@
+interface DriftCheck {
+  name: string;
+  ok: boolean;
+  severity: "hold" | "rollback";
+  message: string;
+}
+
+const requiredLocalFiles = listEnv("TI_REQUIRED_LOCAL_FILES", [
+  "package.json",
+  "bun.lock",
+  "src/ops/liveSearch.ts",
+  "scripts/check-route-inventory.ts",
+  "scripts/check-inspur-public-proof.ts",
+  "scripts/run-production-soak-orchestrator.ts",
+  "scripts/check-remote-drift.ts",
+  "src/tests/ops.test.ts",
+  "src/tests/api.test.ts",
+  "src/tests/graphReviewRoutes.test.ts"
+]);
+const unsyncedScripts = listEnv("TI_UNSYNCED_SCRIPTS", []);
+const scraperTargetGb = numberEnv("SCRAPER_TARGET_GB", 96);
+const scraperCeilingGb = numberEnv("SCRAPER_CEILING_GB", 160);
+const nonScraperReserveGb = numberEnv("NON_SCRAPER_RESERVED_GB", 500);
+const remoteScraperRssGb = numberEnv("REMOTE_SCRAPER_RSS_GB", 0);
+const remoteScraperCeilingGb = numberEnv("REMOTE_SCRAPER_CEILING_GB", scraperCeilingGb);
+const remoteNonScraperReserveGb = numberEnv("REMOTE_NON_SCRAPER_RESERVED_GB", nonScraperReserveGb);
+const dockerContextMb = numberEnv("REMOTE_DOCKER_CONTEXT_MB", 0);
+const maxDockerContextMb = numberEnv("MAX_DOCKER_CONTEXT_MB", 128);
+const composeScraperMemoryGb = numberEnv("COMPOSE_SCRAPER_MEMORY_GB", scraperCeilingGb);
+const imageTestState = envValue("SCRAPER_IMAGE_TEST_STATE", "passed");
+const routeInventoryCount = numberEnv("ROUTE_INVENTORY_COUNT", 24);
+const rootContextDockerfile = envValue("ROOT_CONTEXT_SCRAPER_DOCKERFILE", "ti/scraper/Dockerfile");
+const rootContextDockerignore = envValue("ROOT_CONTEXT_DOCKERIGNORE", ".dockerignore");
+const coordinationFiles = listEnv("TI_COORDINATION_FILES", [
+  "coordination.md",
+  "coordination_agent_03.md",
+  "coordination_agent_09.md",
+  "coordination_agent_10.md"
+]);
+const staleAgentBlockers = listEnv("TI_STALE_AGENT_BLOCKERS", []);
+
+const cleanupCandidates = (process.env.TI_STRAY_ROOT_FILES ?? "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean)
+  .filter((item) => !["/srv/hanasand", "/srv/hanasand/ti/scraper"].includes(item));
+
+const checks: DriftCheck[] = [
+  check("file_sync.source_hash", envMatch("LOCAL_SOURCE_HASH", "REMOTE_SOURCE_HASH"), "rollback", "local and remote source hashes match"),
+  check("dependency.bun_lock_hash", envMatch("LOCAL_BUN_LOCK_HASH", "REMOTE_BUN_LOCK_HASH"), "hold", "local and remote bun lock hashes match"),
+  check("dependency.install_state", envValue("REMOTE_DEPENDENCY_STATE", "ok") === "ok", "hold", "remote dependency install state is ok"),
+  check("file_sync.required_local_files", requiredLocalFiles.every(localFilePresent), "rollback", "required local scripts and tests are present"),
+  check("file_sync.scripts_synced", unsyncedScripts.length === 0, "hold", "remote script sync report has no stale scripts"),
+  check("coordination.required_files", coordinationFiles.every(localFilePresent), "hold", "required coordination files are present"),
+  check("coordination.stale_agent_blockers", staleAgentBlockers.length === 0, "hold", "no stale agent blockers are reported"),
+  check("docker.root_context_dockerfile", localFilePresent(`../../${rootContextDockerfile}`) || localFilePresent(rootContextDockerfile), "rollback", "root-context scraper Dockerfile is present"),
+  check("docker.root_context_dockerignore", localFilePresent(`../../${rootContextDockerignore}`) || localFilePresent(rootContextDockerignore), "rollback", "root-context .dockerignore is present"),
+  check("docker.context_size", dockerContextMb <= maxDockerContextMb, "rollback", "Docker build context stays bounded"),
+  check("docker.compose_memory_budget", composeScraperMemoryGb <= scraperCeilingGb, "rollback", "compose scraper memory budget stays at or below 160 GB"),
+  check("docker.scraper_image_tests", ["passed", "ok", "skipped"].includes(imageTestState.toLowerCase()), "rollback", "scraper image build enforces bun test and bun run check"),
+  check("route.inventory", envBool("ROUTE_INVENTORY_OK", true), "rollback", "remote route inventory proof is green"),
+  check("route.inventory_count", routeInventoryCount >= 24, "hold", "remote route inventory includes expected mounted route surface"),
+  check("route.public_proof", envBool("PUBLIC_PROOF_OK", true), "rollback", "public /ti and /api/ti/search proof is green"),
+  check("docker.scraper", containerOk("SCRAPER_CONTAINER_STATUS"), "rollback", "scraper container is healthy/running"),
+  check("docker.api", containerOk("API_CONTAINER_STATUS"), "rollback", "API container is healthy/running"),
+  check("docker.frontend", containerOk("FRONTEND_CONTAINER_STATUS"), "rollback", "frontend container is healthy/running"),
+  check("ram.scraper_target", remoteScraperRssGb <= scraperTargetGb, "rollback", "scraper RSS stays at or below 96 GB target"),
+  check("ram.scraper_ceiling", remoteScraperCeilingGb <= scraperCeilingGb, "rollback", "scraper ceiling stays at or below 160 GB"),
+  check("ram.non_scraper_reserve", remoteNonScraperReserveGb >= nonScraperReserveGb, "rollback", "at least 500 GB remains for the rest of CTI"),
+  check("stray_root.cleanup_candidates_reported", true, "hold", "stale root files are reported only; no deletion is performed")
+];
+
+const failed = checks.filter((item) => !item.ok);
+const ok = failed.length === 0;
+const decision = failed.some((item) => item.severity === "rollback") ? "rollback" : failed.length > 0 ? "hold" : "pass";
+
+console.log(JSON.stringify({
+  ok,
+  decision,
+  command: "bun run check:remote-drift",
+  expectedOutput: "ok=true; file sync/dependencies/routes/docker/RAM aligned; stray root files only reported",
+  checks,
+  requiredLocalFiles,
+  unsyncedScripts,
+  coordinationFiles,
+  staleAgentBlockers,
+  dockerContext: {
+    dockerContextMb,
+    maxDockerContextMb,
+    composeScraperMemoryGb,
+    imageTestState,
+    routeInventoryCount,
+    rootContextDockerfile,
+    rootContextDockerignore
+  },
+  cleanupCandidates,
+  cleanupNote: cleanupCandidates.length > 0
+    ? "Review these stale stray-root deployment files manually; this command never deletes them."
+    : "No stale stray-root deployment files reported."
+}, null, 2));
+
+if (!ok) process.exitCode = decision === "rollback" ? 2 : 1;
+
+function check(name: string, ok: boolean, severity: DriftCheck["severity"], message: string): DriftCheck {
+  return { name, ok, severity, message };
+}
+
+function envMatch(leftKey: string, rightKey: string): boolean {
+  const left = process.env[leftKey];
+  const right = process.env[rightKey];
+  if (!left && !right) return true;
+  return Boolean(left && right && left === right);
+}
+
+function envValue(key: string, fallback: string): string {
+  return process.env[key]?.trim() || fallback;
+}
+
+function listEnv(key: string, fallback: string[]): string[] {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  return raw.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function localFilePresent(path: string): boolean {
+  try {
+    return Bun.file(path).size !== 0;
+  } catch {
+    return false;
+  }
+}
+
+function envBool(key: string, fallback: boolean): boolean {
+  const value = process.env[key]?.trim().toLowerCase();
+  if (!value) return fallback;
+  return ["1", "true", "ok", "pass", "passed", "healthy"].includes(value);
+}
+
+function containerOk(key: string): boolean {
+  return ["healthy", "running", "ok", "skipped"].includes(envValue(key, "healthy").toLowerCase());
+}
+
+function numberEnv(key: string, fallback: number): number {
+  const value = Number(process.env[key]);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}

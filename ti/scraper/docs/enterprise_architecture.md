@@ -1,0 +1,65 @@
+# Enterprise Architecture
+
+## Role In The CTI Platform
+The scraper is the collection and evidence-ingestion subsystem for a broader CTI application. It does not own analyst UX, identity, billing, or long-term graph analytics, but it must expose clean contracts for all of them.
+
+## Runtime Topology
+```text
+CTI API / analyst workflow
+  -> scraper API v1
+  -> intelligence request planner
+  -> policy and source governance
+  -> frontier/scheduler
+  -> adapter worker pools
+  -> raw evidence store
+  -> extraction pipeline
+  -> incident/entity/IOC output topics
+  -> CTI knowledge layer
+```
+
+## Hard Boundaries
+- API server: request validation, auth context, plan/run/status/results, metrics.
+- Planner: turns analyst/API intent into source-scoped work.
+- Policy: blocks unsafe work before collection.
+- Scheduler/frontier: prioritizes and rate-limits.
+- Adapters: fetch from one source class only.
+- Evidence store: immutable raw/metadata captures.
+- Pipeline: deterministic extraction and confidence scoring.
+- Export layer: CTI-app-facing normalized results.
+
+## Enterprise Requirements
+- API versioning: all external routes under `/v1`.
+- Tenant awareness: every request, task, capture, and incident can carry `tenantId`.
+- Auditability: every plan/run/policy decision is reconstructable.
+- Idempotency: request and task IDs must be stable or explicitly idempotent.
+- Backpressure: every queue and worker pool has limits.
+- Isolation: high-risk adapters run in separate processes/containers.
+- Replayability: raw captures can be reprocessed by pipeline version.
+- Data minimization: sensitive sources store only approved metadata.
+- Observability: metrics and structured logs are first-class outputs.
+
+## Production Backends
+Start with interfaces, then back them with:
+- Postgres: sources, tasks, runs, captures metadata, incidents, audit log.
+- Object storage: raw HTML/text/screenshots where allowed.
+- Queue: Postgres-backed MVP, then Redis/NATS/Temporal if workload demands it.
+- Search: OpenSearch for full-text over allowed extracted text.
+- Vector: pgvector or external vector DB for semantic source/result retrieval.
+- Graph: Postgres relationship tables first, then Neo4j or compatible graph service if needed.
+
+## Security Model
+- Treat fetched content as hostile.
+- Never execute fetched scripts except inside isolated browser workers.
+- Sanitize logs so raw sensitive content is not emitted.
+- Use per-source rate limits and egress controls.
+- Store secrets outside source records.
+- Require approval flags for high-risk sources.
+- Keep darknet metadata collection separate from normal web collection.
+
+## SLO Draft
+- API health endpoint: 99.9% over local platform uptime.
+- Queue age for normal web high-priority requests: target under 15 minutes.
+- Source freshness: source-specific; high-value feeds under 30 minutes.
+- Adapter error budget: alert over 5% sustained failures per source.
+- Duplicate rate: monitor over 60%, investigate over 80% for new sources.
+- Extraction confidence: route low-confidence important claims to review.

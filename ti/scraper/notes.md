@@ -1,0 +1,168 @@
+**Paper Summary**
+
+The paper is [“Hybrid focused crawling on the Surface and the Dark Web”](https://link.springer.com/article/10.1186/s13635-017-0064-5), by Iliou et al., published July 4, 2017. It proposes a focused crawler that can move across the surface web and several darknets, specifically Tor, I2P, and Freenet, in a single crawl. Its goal is not to crawl everything, but to discover pages relevant to a chosen topic by scoring links before deciding whether to follow them.
+
+The key idea is a hybrid link-selection system using three classifiers:
+
+1. **Link classifier**: scores a candidate link using anchor text, nearby text, and URL terms.
+2. **Parent-page classifier**: scores the page where the link was found.
+3. **Destination-page classifier**: scores the page after fetching it, which is more accurate but slower.
+
+The crawler tested 11 hyperlink-selection strategies. The big finding is that **the best crawling strategy depends on whether you want precision, recall, or efficiency**. If you want broad discovery, fetching and classifying destination pages works best, but it is expensive. If you want a balanced crawl, using the parent-page classifier as a cheap second signal performed well. If you want high precision, dynamic score-combination methods helped, but at the cost of missing more relevant pages. The paper explicitly says the framework can be reused for other topics by training new classifiers. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5)) ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+
+**Important Findings For Your TI Project**
+
+For your APT/public-intelligence system, the paper is most useful as a scraper design paper. The important takeaway is: do not build a dumb crawler that follows every link. Build a **focused crawler with a frontier**, where every discovered URL gets scored, prioritized, and revisited based on likely intelligence value.
+
+The crawler should treat sources differently. RSS feeds, vendor blogs, Telegram channels, ransomware leak sites, forums, paste sites, and Tor pages have different latency, access, structure, reliability, and legal risk. The paper’s modular fetcher design maps cleanly to your project: one fetcher for normal web/RSS, one for Telegram, one for Tor onion sites, one for APIs, and later one for forums. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+
+The biggest thesis-useful idea is **adaptive crawling**. If a link has good local context, score it cheaply. If the local context is weak but the parent page is relevant, still consider following it. If the source is high-value but ambiguous, fetch the destination and classify it. This gives you a principled way to avoid babysitting the scraper.
+
+Ethically, I would avoid building stealth or countermeasure-evasion behavior. The paper mentions this as future work, but for your thesis you should instead emphasize legality, source allowlists, rate limits, no credential theft, no redistribution of stolen data, and storage of metadata/summaries rather than leaked contents. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+
+**10 Products To Study**
+
+1. **Google Threat Intelligence / Mandiant / VirusTotal**  
+   Study this as the north star: entity search, actor profiles, IoC enrichment, malware graphing, Gemini-assisted summarization, and integration with VirusTotal. Google describes Gemini in Threat Intel as an AI collaborator over Mandiant’s threat corpus. ([cloud.google.com](https://cloud.google.com/security/products/mandiant-threat-intelligence?hl=en&utm_source=openai))
+
+2. **Recorded Future**  
+   Strong inspiration for large-scale source collection, entity cards, risk scoring, AI summaries, and APIs. Their public messaging emphasizes an Intelligence Graph, 1M+ sources, and integrations. ([recordedfuture.com](https://www.recordedfuture.com/?utm_source=openai))
+
+3. **Intel 471**  
+   Best inspiration for criminal-underground intelligence: actor tracking, marketplaces, breach logs, messaging platforms, ransomware, and mapping intelligence needs to frameworks like MITRE ATT&CK. ([intel471.com](https://www.intel471.com/platform/cyber-threat-intelligence?utm_source=openai))
+
+4. **Flashpoint**  
+   Strong model for ransomware, dark web, illicit communities, vulnerability context, and analyst-curated intelligence. Useful for understanding how to combine automated collection with human confidence. ([flashpoint.io](https://flashpoint.io/?utm_source=openai))
+
+5. **OpenCTI**  
+   Probably the most important open-source inspiration. It is graph-first and based on STIX 2.1. Study its data model before inventing your own. ([docs.opencti.io](https://docs.opencti.io/latest/usage/data-model/?utm_source=openai))
+
+6. **MISP**  
+   Best open-source inspiration for sharing, correlating, and storing indicators/events. MISP is especially useful if your system needs import/export and community sharing later. ([misp-project.org](https://www.misp-project.org/index.html?utm_source=openai))
+
+7. **ThreatConnect**  
+   Study for threat intelligence operations, prioritization, risk quantification, and connecting CTI to security operations. ([threatconnect.com](https://threatconnect.com/?utm_source=openai))
+
+8. **Anomali ThreatStream / Anomali Platform**  
+   Useful for understanding enrichment, intelligence graphs, correlation with internal telemetry, and SOC workflow integration. ([anomali.com](https://www.anomali.com/?utm_source=openai))
+
+9. **SOCRadar**  
+   Relevant because it combines dark web monitoring, cyber threat intelligence, brand protection, attack surface management, and public dashboards/free tools. ([socradar.io](https://socradar.io/?utm_source=openai))
+
+10. **GreyNoise**  
+   Not an APT tracker, but very useful as a model for focused, high-signal telemetry. It shows how to filter noise, label internet scanning activity, and make raw collection operationally useful. ([greynoise.io](https://www.greynoise.io/?utm_source=openai))
+
+**Papers To Read**
+
+Start with these 15:
+
+1. Iliou et al., **Hybrid focused crawling on the Surface and the Dark Web**. Core scraper architecture paper.
+2. Olston & Najork, **Web Crawling**. General crawling foundations. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+3. Pant & Srinivasan, **Link Contexts in Classifier-Guided Topical Crawlers**. Directly relevant to focused crawling. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+4. Pant & Srinivasan, **Learning to Crawl: Comparing Classification Schemes**. Good for classifier-guided crawler design. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+5. Fu, Abbasi & Chen, **A Focused Crawler for Dark Web Forums**. Very relevant to forum crawling. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+6. Chen et al., **Uncovering the Dark Web: A Case Study of Jihad on the Web**. Classic dark-web mining work. ([link.springer.com](https://link.springer.com/article/10.1186/s13635-017-0064-5))
+7. **NLP-based techniques for Cyber Threat Intelligence**. Recent survey of CTI crawling, extraction, relation extraction, sharing, and LLMs. ([sciencedirect.com](https://www.sciencedirect.com/science/article/pii/S1574013725000413?utm_source=openai))
+8. **TINKER: A Framework for Open Source Cyberthreat Intelligence**. Semi-supervised knowledge graph approach for OSCTI. ([research.ibm.com](https://research.ibm.com/publications/tinker-a-framework-for-open-source-cyberthreat-intelligence?utm_source=openai))
+9. **Open-CyKG: An Open Cyber Threat Intelligence Knowledge Graph**. APT-report extraction into a CTI graph. ([sciencedirect.com](https://www.sciencedirect.com/science/article/pii/S0950705121007863?utm_source=openai))
+10. **ThreatKG: An AI-Powered System for Automated Open-Source CTI Gathering and Management**. Directly aligned with your thesis. ([arxiv.org](https://arxiv.org/abs/2212.10388?utm_source=openai))
+11. **STIXnet: A Novel and Modular Solution for Extracting All STIX Objects in CTI Reports**. Good for STIX extraction. ([arxiv.org](https://arxiv.org/abs/2303.09999?utm_source=openai))
+12. **ALERT: Efficient Extraction of Attack Techniques from CTI Reports Using Active Learning**. Good for human-in-the-loop labeling. ([nist.gov](https://www.nist.gov/publications/alert-framework-efficient-extraction-attack-techniques-cyber-threat-intelligence?utm_source=openai))
+13. **Threat intelligence ATT&CK extraction based on attention transformer hierarchical recurrent neural network**. TTP extraction from reports. ([sciencedirect.com](https://www.sciencedirect.com/science/article/pii/S1568494622002289?utm_source=openai))
+14. **The Dark Side of the Web: Towards Understanding Various Data Sources in CTI**. Useful for source taxonomy. ([arxiv.org](https://arxiv.org/abs/2504.14235?utm_source=openai))
+15. **SoK: Automated TTP Extraction from CTI Reports - Are We There Yet?**. Read this before overclaiming LLM/TTP extraction accuracy. ([usenix.org](https://www.usenix.org/system/files/usenixsecurity25-buechel.pdf?utm_source=openai))
+
+Also study the standards: **STIX 2.1**, **TAXII 2.1**, and **MITRE ATT&CK**. STIX gives you the exchange model, TAXII gives you the API-sharing pattern, and ATT&CK gives you the adversary-behavior taxonomy. ([docs.oasis-open.org](https://docs.oasis-open.org/cti/stix/v2.1/stix-v2.1.html?utm_source=openai)) ([docs.oasis-open.org](https://docs.oasis-open.org/cti/taxii/v2.1/os/taxii-v2.1-os.html?utm_source=openai)) ([attack.mitre.org](https://attack.mitre.org/?utm_source=openai))
+
+**Necessary Components**
+
+You need these core pieces:
+
+1. **Source registry**  
+   Stores each source: type, URL/channel, language, access method, crawl frequency, reliability score, last seen, legal notes.
+
+2. **Collector engine**  
+   Modular fetchers for RSS/news/blogs, web pages, Telegram, Tor onion sites, APIs, GitHub, paste-like sources, and later forums.
+
+3. **Focused crawler frontier**  
+   Queue of candidate URLs/messages/sources with scores. This is where the Springer paper matters most.
+
+4. **Raw evidence store**  
+   Keep original HTML/text/screenshots/metadata where legally allowed. For stolen data, store only metadata and safe excerpts/hashes.
+
+5. **Processing pipeline**  
+   Normalize text, deduplicate, language-detect, translate if needed, extract entities, classify incident type, extract IoCs, map TTPs.
+
+6. **Entity resolution layer**  
+   Merge “LockBit”, “Lockbit 3.0”, “LockBitSupp”, etc. Same for victims, sectors, countries, malware, CVEs, aliases.
+
+7. **Knowledge graph / relational DB hybrid**  
+   Use Postgres for operational data and either Neo4j, TypeDB, or OpenSearch-style graph indexing for relationships. Or start simple with Postgres plus JSONB and add graph later.
+
+8. **Scoring system**  
+   Score source reliability, claim confidence, severity, novelty, actor confidence, victim confidence, and whether the event is corroborated.
+
+9. **API**  
+   JSON API exposing actors, incidents, victims, sources, reports, IoCs, TTPs, timelines, and confidence.
+
+10. **Frontend**  
+   Actor pages, victim timelines, source explorer, incident feed, map, ATT&CK matrix, confidence explanations, and “why this matters” summaries for non-technical users.
+
+11. **Evaluation harness**  
+   Measure timeliness, precision, recall, deduplication quality, entity extraction accuracy, source coverage, and corroboration rate.
+
+**How To Start The Scraper**
+
+Start with a boring, reliable MVP:
+
+1. Pick 3 source types: RSS/security blogs, one Telegram channel, and one ransomware leak site or public mirror.
+2. Build one normalized `CollectedItem` schema: `source_id`, `url`, `published_at`, `collected_at`, `raw_text`, `html`, `language`, `hash`, `parent_url`.
+3. Add deduplication by canonical URL plus content hash.
+4. Add a classifier that labels: `incident`, `actor_claim`, `victim_disclosure`, `research_report`, `vulnerability`, `noise`.
+5. Add entity extraction for actor, victim org, country, sector, CVE, malware, ransomware family, IoCs, and claimed data type.
+6. Add a frontier queue: every discovered link gets a relevance score before being crawled.
+7. Add human review for low-confidence extractions. This becomes your gold dataset.
+
+For the crawler logic, implement the paper’s idea like this:
+
+```text
+score(candidate) =
+  0.45 * local_context_score
++ 0.35 * parent_page_score
++ 0.20 * source_reputation_score
+
+If local context is weak:
+  use parent page score more heavily.
+
+If source is high-value but ambiguous:
+  fetch destination and classify the destination content.
+
+If confidence is low but novelty is high:
+  queue for human review.
+```
+
+**Self-Improving System**
+
+Yes, you can make it explore and improve without babysitting, but keep it bounded.
+
+Give it these loops:
+
+1. **Coverage gap detector**  
+   “We have many LockBit reports but little Akira coverage” or “we lack Telegram sources for this actor.”
+
+2. **Source discovery agent**  
+   Searches public web, GitHub lists, RSS directories, vendor reports, ATT&CK references, and news citations for candidate sources.
+
+3. **Candidate source evaluator**  
+   Scores sources by freshness, relevance, uniqueness, parseability, legality, language, historical accuracy, and overlap with existing sources.
+
+4. **Crawler policy learner**  
+   Learns which source/link patterns produced confirmed incidents, then boosts similar candidates.
+
+5. **Research recommender**  
+   Finds papers/news based on system limitations: “TTP extraction confidence is low, find papers on ATT&CK mapping from CTI text.”
+
+6. **Human approval gate**  
+   The system may suggest new sources and parser changes, but a human should approve source onboarding, especially dark web/forum sources.
+
+The thesis angle is strong: you are not just building a scraper. You are building an **adaptive OSINT collection and structuring pipeline** that can show, with metrics, whether public intelligence can monitor actor activity faster and more understandably than static knowledge bases.

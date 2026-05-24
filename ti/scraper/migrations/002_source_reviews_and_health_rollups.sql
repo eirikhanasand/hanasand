@@ -1,0 +1,77 @@
+BEGIN;
+
+CREATE TYPE source_review_action AS ENUM (
+  'approve',
+  'reject',
+  'expire',
+  'quarantine',
+  'restore'
+);
+
+CREATE TABLE source_review_events (
+  id text PRIMARY KEY,
+  source_id text NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  tenant_id text,
+  action source_review_action NOT NULL,
+  decided_at timestamptz NOT NULL,
+  decided_by text NOT NULL CHECK (length(btrim(decided_by)) > 0),
+  reason text NOT NULL CHECK (length(btrim(reason)) > 0),
+  review_ticket text,
+  approval_expires_at timestamptz,
+  restore_status source_status,
+  risk_justification text,
+  legal_contact text,
+  metadata_only boolean,
+  policy_version text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (
+    restore_status IS NULL
+    OR restore_status IN ('active', 'probation', 'degraded', 'needs_review')
+  )
+);
+
+CREATE TABLE source_health_rollups (
+  source_id text NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  tenant_id text,
+  window_start timestamptz NOT NULL,
+  window_end timestamptz NOT NULL,
+  checks_total integer NOT NULL DEFAULT 0 CHECK (checks_total >= 0),
+  successes integer NOT NULL DEFAULT 0 CHECK (successes >= 0),
+  failures integer NOT NULL DEFAULT 0 CHECK (failures >= 0),
+  error_rate double precision NOT NULL DEFAULT 0 CHECK (error_rate >= 0 AND error_rate <= 1),
+  median_latency_ms integer CHECK (median_latency_ms IS NULL OR median_latency_ms >= 0),
+  p95_latency_ms integer CHECK (p95_latency_ms IS NULL OR p95_latency_ms >= 0),
+  duplicate_rate double precision CHECK (duplicate_rate IS NULL OR (duplicate_rate >= 0 AND duplicate_rate <= 1)),
+  freshness_lag_seconds integer CHECK (freshness_lag_seconds IS NULL OR freshness_lag_seconds >= 0),
+  parser_confidence double precision CHECK (parser_confidence IS NULL OR (parser_confidence >= 0 AND parser_confidence <= 1)),
+  adapter_failure_category text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (source_id, window_start, window_end),
+  CHECK (window_end > window_start),
+  CHECK (successes + failures <= checks_total)
+);
+
+CREATE TABLE source_score_history (
+  id bigserial PRIMARY KEY,
+  source_id text NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  tenant_id text,
+  calculated_at timestamptz NOT NULL DEFAULT now(),
+  reliability double precision NOT NULL CHECK (reliability >= 0 AND reliability <= 1),
+  freshness double precision NOT NULL CHECK (freshness >= 0 AND freshness <= 1),
+  relevance double precision NOT NULL CHECK (relevance >= 0 AND relevance <= 1),
+  uniqueness double precision NOT NULL CHECK (uniqueness >= 0 AND uniqueness <= 1),
+  parseability double precision NOT NULL CHECK (parseability >= 0 AND parseability <= 1),
+  policy_risk_penalty double precision NOT NULL CHECK (policy_risk_penalty >= 0 AND policy_risk_penalty <= 1),
+  operator_boost double precision NOT NULL CHECK (operator_boost >= 0 AND operator_boost <= 1),
+  health_penalty double precision NOT NULL DEFAULT 0 CHECK (health_penalty >= 0 AND health_penalty <= 1),
+  effective_score double precision NOT NULL CHECK (effective_score >= 0 AND effective_score <= 1),
+  reason text NOT NULL,
+  inputs jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX source_review_events_source_time_idx ON source_review_events (source_id, decided_at DESC);
+CREATE INDEX source_review_events_tenant_action_idx ON source_review_events (tenant_id, action, decided_at DESC);
+CREATE INDEX source_health_rollups_tenant_window_idx ON source_health_rollups (tenant_id, window_start DESC, window_end DESC);
+CREATE INDEX source_score_history_source_time_idx ON source_score_history (source_id, calculated_at DESC);
+
+COMMIT;

@@ -1,0 +1,158 @@
+import { startApiServer } from "../src/api/server.ts";
+import { FocusedFrontier } from "../src/frontier/frontier.ts";
+import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
+import type { RawCapture } from "../src/types.ts";
+import { hashContent } from "../src/utils.ts";
+
+type QualityProofCase = {
+  name: string;
+  query: string;
+  body: string;
+  metadata: Record<string, unknown>;
+  expectedStatus?: string;
+  expectedWarning?: string;
+};
+
+const cases: QualityProofCase[] = [
+  {
+    name: "ready",
+    query: "APT29",
+    body: "Mandiant linked APT29 to phishing and credential dumping against Northwind Health in healthcare. First seen 2026-05-22.",
+    metadata: { title: "APT29 ready proof", evidenceStage: "reviewed_promoted", graphReviewState: "accepted" },
+    expectedStatus: "ready"
+  },
+  {
+    name: "partial",
+    query: "Partial Nimbus",
+    body: "Live discovery snippet: Partial Nimbus may be phishing against Northwind Health.",
+    metadata: { title: "Partial proof", evidenceStage: "live_discovery" },
+    expectedStatus: "partial"
+  },
+  {
+    name: "weak_evidence",
+    query: "Crimson Pineapple",
+    body: "Crimson Pineapple appeared in a copied threat actor list.",
+    metadata: { title: "Weak evidence proof", evidenceStage: "live_discovery" },
+    expectedWarning: "weak-evidence"
+  },
+  {
+    name: "alias_collision",
+    query: "Akira",
+    body: "Cyber gang list: Akira, ALPHV, BlackCat, and LockBit were named historically in a ransomware rebrand roundup.",
+    metadata: { title: "Akira alias proof", evidenceStage: "captured_page" },
+    expectedWarning: "alias_collision_warning"
+  },
+  {
+    name: "contradicted",
+    query: "Volt Typhoon",
+    body: "Vendors disputed attribution to Volt Typhoon but mentioned living off the land.",
+    metadata: { title: "Contradicted proof", evidenceStage: "captured_page", graphReviewState: "contradiction" },
+    expectedStatus: "contradicted"
+  },
+  {
+    name: "stale",
+    query: "Turla",
+    body: "Researchers linked Turla to Snake malware against Example Embassy.",
+    metadata: { title: "Stale proof", evidenceStage: "captured_page", graphReviewState: "stale" },
+    expectedStatus: "stale"
+  },
+  {
+    name: "insufficient_capture",
+    query: "Insufficient Nimbus",
+    body: "Live discovery snippet: Insufficient Nimbus may be active.",
+    metadata: { title: "Insufficient capture proof", evidenceStage: "live_discovery" },
+    expectedWarning: "insufficient-capture"
+  },
+  {
+    name: "needs_review",
+    query: "Needs Review",
+    body: "Researchers linked Needs Review to credential theft against Example Telecom in 2026.",
+    metadata: { title: "Needs review proof", evidenceStage: "captured_page", graphReviewState: "needs-human-review" },
+    expectedWarning: "needs-review"
+  }
+];
+
+const store = new InMemoryScraperStore();
+for (const item of cases) {
+  store.saveCapture(captureFor(item));
+}
+
+const server = startApiServer({ port: 0, store, frontier: new FocusedFrontier() });
+const baseUrl = `http://127.0.0.1:${server.port}`;
+
+try {
+  for (const item of cases) {
+    const search = await json(`${baseUrl}/v1/intel/search?q=${encodeURIComponent(item.query)}&entityType=actor`);
+    const evaluate = await json(`${baseUrl}/v1/quality/evaluate?q=${encodeURIComponent(item.query)}`);
+    const searchQuality = quality(search);
+    const evaluateQuality = quality(evaluate);
+    assertQuality(item, searchQuality, "intel_search");
+    assertQuality(item, evaluateQuality, "quality_evaluate");
+    assertNoLeak(item, searchQuality);
+    assertNoLeak(item, evaluateQuality);
+    const line = {
+      ok: true,
+      case: item.name,
+      intelSearch: compact(searchQuality),
+      qualityEvaluate: compact(evaluateQuality)
+    };
+    console.log(JSON.stringify(line));
+  }
+} finally {
+  server.stop();
+}
+
+function captureFor(item: QualityProofCase): RawCapture {
+  return {
+    id: `cap_quality_proof_${item.name}`,
+    sourceId: `src_quality_proof_${item.name}`,
+    url: `https://quality-proof.example.test/${item.name}`,
+    collectedAt: "2026-05-24T04:00:00.000Z",
+    contentHash: hashContent(item.body),
+    mediaType: "text/plain",
+    storageKind: "inline_text",
+    body: item.body,
+    metadata: item.metadata,
+    sensitive: false
+  };
+}
+
+async function json(url: string): Promise<Record<string, unknown>> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Proof request failed: ${url} -> ${response.status}`);
+  return await response.json() as Record<string, unknown>;
+}
+
+function quality(payload: Record<string, unknown>): Record<string, unknown> {
+  const item = payload.quality;
+  if (!item || typeof item !== "object") throw new Error("Missing quality payload");
+  return item as Record<string, unknown>;
+}
+
+function assertQuality(item: QualityProofCase, quality: Record<string, unknown>, endpoint: string): void {
+  const warnings = Array.isArray(quality.publicWarningCodes) ? quality.publicWarningCodes.map(String) : [];
+  if (item.expectedStatus && quality.status !== item.expectedStatus) {
+    throw new Error(`${endpoint}:${item.name} expected status ${item.expectedStatus}, got ${String(quality.status)}`);
+  }
+  if (item.expectedWarning && !warnings.includes(item.expectedWarning)) {
+    throw new Error(`${endpoint}:${item.name} missing warning ${item.expectedWarning}`);
+  }
+}
+
+function assertNoLeak(item: QualityProofCase, quality: Record<string, unknown>): void {
+  const serialized = JSON.stringify(quality);
+  if (serialized.includes(item.body) || serialized.includes("quality-proof.example.test")) {
+    throw new Error(`${item.name} leaked raw evidence text or source URL`);
+  }
+}
+
+function compact(quality: Record<string, unknown>): Record<string, unknown> {
+  return {
+    status: quality.status,
+    canPromoteToReady: quality.canPromoteToReady,
+    warningCodes: quality.publicWarningCodes,
+    actionKinds: Array.isArray(quality.analystActions)
+      ? quality.analystActions.map((action) => typeof action === "object" && action ? String((action as { kind?: unknown }).kind) : "unknown")
+      : []
+  };
+}

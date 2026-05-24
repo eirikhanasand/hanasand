@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "restricted-metadata-safe-fixtures",
+  "name": "Restricted Metadata Safe Review Fixtures",
+  "disabledByDefault": true,
+  "network": "tor",
+  "proxyBoundaryId": "tor-approved-metadata-proxy",
+  "killSwitchGroup": "restricted-metadata-tor-review",
+  "legalNotes": "Dry-run fixtures for metadata-only restricted source review. No live access or raw leaked data collection is permitted.",
+  "approvalScope": "metadata_only",
+  "retentionClass": "restricted_metadata",
+  "forbiddenOperations": [
+    "credential_bypass",
+    "captcha_solving",
+    "threat_actor_interaction",
+    "stolen_file_download",
+    "stealth_or_evasion",
+    "unapproved_proxy",
+    "non_metadata_capture"
+  ],
+  "sources": [
+    {
+      "id": "restricted_pack_metadata_listing",
+      "name": "Metadata-only leak listing fixture",
+      "type": "tor_metadata",
+      "url": "http://metadata-listing.onion/posts",
+      "legalNotes": "Reviewer may inspect parser fixtures for actor, victim, date, sector, country, and hash fields only.",
+      "approvalScope": "metadata_only",
+      "topicTags": ["ransomware", "metadata-only"],
+      "actors": ["Akira"],
+      "victims": ["Fjord Energy AS"],
+      "ransomwareFamilies": ["Akira"]
+    }
+  ]
+}

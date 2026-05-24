@@ -1,0 +1,41 @@
+{
+  "name": "ti-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "SCRAPER_LOG_LEVEL=debug bun --watch src/index.ts",
+    "test": "bun test",
+    "check": "bunx tsc --noEmit",
+    "check:docker-contexts": "bun run scripts/check-docker-contexts.ts",
+    "check:deploy-hygiene": "bun run scripts/check-deploy-hygiene.ts",
+    "check:deployment-drift": "bun run scripts/check-deployment-drift.ts",
+    "check:contract-index": "bun run scripts/check-contract-index.ts",
+    "check:frontier-apply-plan": "bun run scripts/check-frontier-apply-plan.ts",
+    "check:graph-review-mounted": "bun run scripts/check-graph-review-mounted.ts",
+    "check:inspur-public-proof": "bun run scripts/check-inspur-public-proof.ts",
+    "check:live-search-deploy": "bun run scripts/check-live-search-deploy.ts",
+    "check:restricted-metadata-apply-plan": "bun run scripts/check-restricted-metadata-apply-plan.ts",
+    "check:restricted-metadata-status": "bun run scripts/check-restricted-metadata-status.ts",
+    "check:remote-drift": "bun run scripts/check-remote-drift.ts",
+    "check:route-inventory": "bun run scripts/check-route-inventory.ts",
+    "check:search-quality-mounted": "bun run scripts/check-search-quality-mounted.ts",
+    "check:source-apply-plan": "bun run scripts/check-source-apply-plan.ts",
+    "check:scraper-native-search": "bun run scripts/check-scraper-native-search-readiness.ts",
+    "measure:search-product": "bun run scripts/measure-search-product.ts",
+    "plan:cutover": "bun run scripts/run-cutover-apply-plan.ts",
+    "rehearse:cutover": "bun run scripts/run-cutover-rehearsal.ts",
+    "soak:live-search": "bun run scripts/run-live-search-soak.ts",
+    "soak:production": "bun run scripts/run-production-soak-orchestrator.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  },
+  "imports": {
+    "#/*": "./src/*"
+  }
+}
