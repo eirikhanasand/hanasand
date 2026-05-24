@@ -19,6 +19,9 @@ import type {
   GraphDeltaStreamQueryKind,
   GraphEvidenceSupportRecord,
   GraphBackendRepositoryContractDto,
+  GraphBackendMigrationSchemaDto,
+  GraphBackendCutoverRecordKind,
+  GraphBackendCutoverRehearsalDto,
   GraphExportEnforcementDto,
   GraphExportEnforcementItemDto,
   GraphExportEnforcementState,
@@ -37,6 +40,8 @@ import type {
   GraphIntegrityFindingCode,
   GraphIntegrityFindingDto,
   GraphIntegrityReportDto,
+  GraphInvestigationWorkspaceDto,
+  GraphInvestigationWorkspaceReviewAction,
   GraphNeighborhoodViewDto,
   GraphNodeViewDto,
   GraphRelationshipReviewState,
@@ -260,6 +265,7 @@ export function buildCorrelationGraphQuery(
     generatedAt,
     relationshipIds: selectedRelationshipIds
   });
+  const deltas = buildRelationshipCursorDeltas(snapshot, { generatedAt }).filter((delta) => selected.some((relationship) => relationship.id === delta.relationshipId));
 
   return {
     endpoint: "/v1/graph/query",
@@ -272,10 +278,17 @@ export function buildCorrelationGraphQuery(
       .map((node) => correlationNode(node, degree.get(node.id) ?? 0))
       .sort((left, right) => right.degree - left.degree || left.value.localeCompare(right.value)),
     relationships: selected.map((relationship) => correlationRelationship(snapshot, relationship, readinessById, findingsByRelationship)),
+    investigationWorkspace: buildGraphInvestigationWorkspaceDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds,
+      deltas
+    }),
     neighborhoods: buildCorrelationGraphNeighborhoods(snapshot, selected, readinessById),
     readinessFacets: buildGraphQueryReadinessFacets(snapshot, selected, readinessById, generatedAt),
     attackMatrix: buildAttackMatrixView(snapshot, focusNode?.type === "actor" ? focusNode.id : undefined),
-    deltas: buildRelationshipCursorDeltas(snapshot, { generatedAt }).filter((delta) => selected.some((relationship) => relationship.id === delta.relationshipId)),
+    deltas,
     exportReadiness: selectedReadiness,
     reviewQueue,
     runtime: buildGraphRuntimeApiDto(snapshot, {
@@ -290,6 +303,81 @@ export function buildCorrelationGraphQuery(
     }),
     liveUpdate,
     provenancePanels: selected.map((relationship) => buildSourceProvenancePanel(snapshot, relationship.id))
+  };
+}
+
+export function buildGraphInvestigationWorkspaceDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+    deltas?: GraphCursorRelationshipDeltaDto[];
+  }
+): GraphInvestigationWorkspaceDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const readiness = checkStixExportReadiness(snapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const findingsByRelationship = graphFindingsByRelationship(snapshot, generatedAt);
+  const relationshipIdsByNode = new Map<string, Set<string>>();
+  for (const relationship of relationships) {
+    relationshipIdsByNode.set(relationship.sourceRef, (relationshipIdsByNode.get(relationship.sourceRef) ?? new Set()).add(relationship.id));
+    relationshipIdsByNode.set(relationship.targetRef, (relationshipIdsByNode.get(relationship.targetRef) ?? new Set()).add(relationship.id));
+  }
+
+  const nodes = [...new Set(relationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]))]
+    .map((nodeId) => nodesById.get(nodeId) ?? fallbackNode(nodeId))
+    .map((node) => {
+      const nodeRelationshipIds = [...(relationshipIdsByNode.get(node.id) ?? new Set<string>())].sort();
+      const nodeRelationships = relationships.filter((relationship) => nodeRelationshipIds.includes(relationship.id));
+      const support = nodeRelationships.flatMap((relationship) => supportFor(snapshot, relationship.id));
+      return {
+        nodeId: node.id,
+        type: node.type,
+        value: node.value,
+        confidence: node.confidence,
+        relationshipIds: nodeRelationshipIds,
+        evidenceIds: uniqueSorted(nodeRelationships.flatMap((relationship) => relationship.evidenceSupportIds)),
+        ledgerIds: uniqueSorted(support.flatMap((item) => item.ledgerIds)),
+        reviewStates: uniqueReviewStates(nodeRelationships.map((relationship) => relationship.reviewState)),
+        exportReadyRelationshipCount: nodeRelationships.filter((relationship) => readinessById.get(relationship.id)?.ready ?? false).length,
+        heldRelationshipCount: nodeRelationships.filter((relationship) => !(readinessById.get(relationship.id)?.ready ?? false)).length
+      };
+    })
+    .sort((left, right) => right.relationshipIds.length - left.relationshipIds.length || left.value.localeCompare(right.value));
+
+  const ledger = relationships
+    .map((relationship) => relationshipConfidenceLedgerEntry(snapshot, relationship, readinessById, findingsByRelationship, nodesById, generatedAt))
+    .sort((left, right) => Number(right.reviewBlocked) - Number(left.reviewBlocked) || right.confidence - left.confidence || left.relationshipId.localeCompare(right.relationshipId));
+
+  const nodeGroups = buildInvestigationNodeGroups(nodes, ledger);
+
+  return {
+    endpoint: "/v1/graph/query",
+    mode: "read_only_investigation_workspace",
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    nodeGroups,
+    nodes,
+    relationshipConfidenceLedger: ledger,
+    reviewActions: buildInvestigationReviewActions(ledger),
+    deltaPolling: {
+      cursorField: "graph.deltas[].cursor",
+      nextPollSeconds: 3,
+      relationshipDeltaCount: options.deltas?.length ?? buildRelationshipCursorDeltas(snapshot, { generatedAt }).filter((delta) => relationships.some((relationship) => relationship.id === delta.relationshipId)).length
+    },
+    safety: {
+      restrictedMaterialPolicy: "metadata_only_review_hold",
+      rawRestrictedMaterialIncluded: false,
+      taxiiBoundary: "descriptor_only_no_server"
+    }
   };
 }
 
@@ -1185,6 +1273,10 @@ export function buildGraphRuntimeApiDto(
       generatedAt,
       relationshipIds: relationships.map((relationship) => relationship.id)
     }),
+    backendCutover: buildGraphBackendCutoverRehearsalDto(snapshot, {
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
     relationships: runtimeRelationships,
     reviewQueue
   };
@@ -1259,6 +1351,174 @@ export function buildGraphBackendRepositoryContractDto(
       agent10DeploymentGate: "verify_repository_replay_before_graph_export_promotion"
     }
   };
+}
+
+export function buildGraphBackendCutoverRehearsalDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+  } = {}
+): GraphBackendCutoverRehearsalDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const support = snapshot.evidenceSupport.filter((item) => relationshipIds.has(item.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: support };
+  const repositoryContract = buildGraphBackendRepositoryContractDto(scopedSnapshot, { generatedAt });
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const deltas = buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const missingLedgerRelationshipIds = uniqueSorted(support
+    .filter((item) => item.ledgerIds.length === 0)
+    .map((item) => item.relationshipId));
+  const weakDiscoveryHeldIds = relationshipIdsByCodes(findingsByRelationship, ["weak_discovery_only_edge"]);
+  const restrictedHeldIds = relationshipIdsByCodes(findingsByRelationship, ["restricted_only_claim", "unsupported_restricted_metadata"]);
+  const publicChannelHintHeldIds = uniqueSorted(support
+    .filter((item) => item.sourceId.includes("telegram") || item.sourceId.includes("public_channel") || item.sourceId.includes("public-signal"))
+    .map((item) => item.relationshipId)
+    .filter((relationshipId) => readiness.relationships.some((relationship) => relationship.relationshipId === relationshipId && !relationship.ready)));
+  const rollbackCodes: GraphIntegrityFindingCode[] = ["missing_provenance", "orphan_relationship", "export_schema_risk", "unsupported_edge"];
+  const hasRollbackRisk = [...findingsByRelationship.values()].some((findings) => findings.some((finding) => rollbackCodes.includes(finding.code) && finding.severity === "critical"));
+  const status: GraphBackendCutoverRehearsalDto["releasePacket"]["status"] = hasRollbackRisk
+    ? "rollback"
+    : missingLedgerRelationshipIds.length > 0 || readiness.blockedCount > 0
+      ? "hold"
+      : "pass";
+
+  return {
+    mode: "graph_backend_cutover_rehearsal",
+    generatedAt,
+    targetBackends: repositoryContract.backendCandidates,
+    repositoryContract,
+    migrationSchemas: buildGraphBackendMigrationSchemas(scopedSnapshot),
+    replayImport: {
+      source: "agent06_evidence_claim_ledger",
+      importOrder: ["nodes", "relationships", "evidence_support", "review_audit", "confidence_history", "cursor_deltas", "export_eligibility"],
+      replayableRelationshipIds: uniqueSorted(relationships.filter((relationship) => support.some((item) => item.relationshipId === relationship.id)).map((relationship) => relationship.id)).slice(0, 25),
+      staleRelationshipIds: repositoryContract.reviewWorkflow.staleRelationshipIds,
+      contradictedRelationshipIds: repositoryContract.reviewWorkflow.contradictedRelationshipIds,
+      reviewHeldRelationshipIds: uniqueSorted([
+        ...repositoryContract.reviewWorkflow.pendingReviewRelationshipIds,
+        ...repositoryContract.reviewWorkflow.staleRelationshipIds,
+        ...repositoryContract.reviewWorkflow.contradictedRelationshipIds,
+        ...readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId)
+      ]).slice(0, 25),
+      missingLedgerRelationshipIds: missingLedgerRelationshipIds.slice(0, 25),
+      cursorField: "graph.deltas[].cursor",
+      cursorDeltaCount: deltas.length,
+      latestCursor: deltas[0]?.cursor,
+      ledgerCompleteness: missingLedgerRelationshipIds.length === 0 ? "complete" : "hold_missing_ledger_ids",
+      restrictedMaterialPolicy: "metadata_only_review_hold"
+    },
+    verification: {
+      tenantScopedRows: repositoryContract.operations.every((operation) => operation.tenantScoped),
+      cursorContinuity: deltas.every((delta) => delta.cursor.length > 0),
+      provenanceComplete: support.every((item) => item.sourceId.length > 0 && item.captureId.length > 0 && item.contentHash.length > 0),
+      reviewAuditAppendOnly: repositoryContract.operations.some((operation) => operation.kind === "append_review_decision" && operation.appendOnly),
+      confidenceHistoryAppendOnly: repositoryContract.operations.some((operation) => operation.kind === "append_confidence_history" && operation.appendOnly),
+      exportEligibilityRecomputed: repositoryContract.operations.some((operation) => operation.kind === "update_export_eligibility"),
+      noRawRestrictedMaterialSerialized: true
+    },
+    backupRestore: {
+      snapshotId: stableId("graph-backend-cutover", [generatedAt, ...uniqueSorted(relationships.map((relationship) => relationship.id))].join("|")),
+      backupManifestTables: uniqueSorted(repositoryContract.operations.map((operation) => operation.tableOrLabel)),
+      restoreVerification: "replay_snapshot_then_compare_counts_cursors_and_export_eligibility",
+      rollbackPath: "restore_last_verified_snapshot_and_hold_graph_exports"
+    },
+    exportEligibility: {
+      readyRelationshipIds: uniqueSorted(readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId)).slice(0, 25),
+      heldRelationshipIds: uniqueSorted(readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId)).slice(0, 25),
+      weakDiscoveryHeldIds: weakDiscoveryHeldIds.slice(0, 25),
+      restrictedHeldIds: restrictedHeldIds.slice(0, 25),
+      publicChannelHintHeldIds: publicChannelHintHeldIds.slice(0, 25),
+      policy: "weak_public_channel_and_restricted_edges_remain_pivots_or_review_holds_until_promoted"
+    },
+    releasePacket: {
+      owner: "Agent 08",
+      status,
+      proofCommand: "bun test src/tests/graphViews.test.ts",
+      agent10Field: "graphBackendCutoverRehearsal",
+      rollbackPath: status === "pass"
+        ? "no rollback needed after verified replay; keep last verified snapshot for restore"
+        : "keep in-memory graph DTOs authoritative and hold graph/STIX promotion until replay/import verification passes"
+    }
+  };
+}
+
+function buildGraphBackendMigrationSchemas(snapshot: PersistedGraphSnapshot): GraphBackendMigrationSchemaDto[] {
+  const nodeKinds = uniqueSorted(snapshot.nodes.map((node) => node.type)) as IntelligenceNodeType[];
+  const recordKinds: GraphBackendCutoverRecordKind[] = [
+    ...nodeKinds,
+    "relationship",
+    "evidence_support",
+    "review_decision",
+    "confidence_history",
+    "cursor_delta",
+    "export_eligibility"
+  ];
+  return [
+    {
+      backend: "postgres_graph_tables",
+      schemaName: "ti_graph",
+      recordKinds,
+      tablesOrLabels: [
+        "graph_nodes",
+        "graph_relationships",
+        "graph_evidence_support",
+        "graph_review_audit",
+        "graph_confidence_history",
+        "graph_cursor_deltas",
+        "graph_export_eligibility"
+      ],
+      requiredIndexes: [
+        "tenant_id,node_id",
+        "tenant_id,relationship_id",
+        "tenant_id,source_ref,target_ref,type",
+        "tenant_id,cursor",
+        "tenant_id,review_state,last_seen_at"
+      ],
+      tenantIsolation: "tenant_id_partition_or_label_property_required",
+      rollbackUnit: "snapshot_generation",
+      summary: "Postgres graph tables keep append-only provenance, review audit, confidence history, and cursor rows while preserving API DTO ids."
+    },
+    {
+      backend: "neo4j",
+      schemaName: "ti_graph_labels",
+      recordKinds,
+      tablesOrLabels: [
+        "GraphNode",
+        "GraphRelationship",
+        "EvidenceSupport",
+        "ReviewDecision",
+        "ConfidenceHistory",
+        "CursorDelta",
+        "ExportEligibility"
+      ],
+      requiredIndexes: [
+        "GraphNode(tenant_id,node_id)",
+        "GraphRelationship(tenant_id,relationship_id)",
+        "CursorDelta(tenant_id,cursor)",
+        "ReviewDecision(tenant_id,relationship_id,decided_at)",
+        "ExportEligibility(tenant_id,relationship_id)"
+      ],
+      tenantIsolation: "tenant_id_partition_or_label_property_required",
+      rollbackUnit: "snapshot_generation",
+      summary: "Neo4j-compatible labels are an alternate storage target; the same tenant id, relationship id, cursor, and audit semantics stay mandatory."
+    }
+  ];
+}
+
+function relationshipIdsByCodes(
+  findingsByRelationship: Map<string, GraphIntegrityFindingDto[]>,
+  codes: GraphIntegrityFindingCode[]
+): string[] {
+  return uniqueSorted([...findingsByRelationship.entries()]
+    .filter(([_relationshipId, findings]) => findings.some((finding) => codes.includes(finding.code)))
+    .map(([relationshipId]) => relationshipId));
 }
 
 function graphRepositoryOperation(
@@ -2181,6 +2441,165 @@ function correlationRelationship(
   };
 }
 
+function relationshipConfidenceLedgerEntry(
+  snapshot: PersistedGraphSnapshot,
+  relationship: PersistedGraphRelationship,
+  readinessById: Map<string, StixExportReadinessReportDto["relationships"][number]>,
+  findingsByRelationship: Map<string, GraphIntegrityFindingDto[]>,
+  nodesById: Map<string, PersistedGraphNode>,
+  generatedAt: string
+): GraphInvestigationWorkspaceDto["relationshipConfidenceLedger"][number] {
+  const source = nodesById.get(relationship.sourceRef) ?? fallbackNode(relationship.sourceRef);
+  const target = nodesById.get(relationship.targetRef) ?? fallbackNode(relationship.targetRef);
+  const support = supportFor(snapshot, relationship.id);
+  const findingCodes = uniqueFindingCodes((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code));
+  const readiness = readinessById.get(relationship.id);
+  const exportBlockers = readiness?.blockers ?? ["missing_provenance"];
+  const contradiction = relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true || findingCodes.includes("contradicted_edge");
+  const stale = relationship.reviewState === "expired" || relationship.properties?.stale === true || findingCodes.includes("stale_accepted_edge");
+  const restrictedHeld = exportBlockers.includes("restricted_only_claim") || exportBlockers.includes("unsupported_restricted_metadata");
+  const provenanceComplete = support.length > 0 && support.every((item) => item.captureId && item.contentHash && item.ledgerIds.length > 0);
+  const reviewBlocked = !readiness?.ready || contradiction || stale || restrictedHeld || relationship.reviewState !== "accepted";
+
+  return {
+    relationshipId: relationship.id,
+    relationshipKind: relationshipKind(relationship, source, target),
+    type: relationship.type,
+    source: { nodeId: source.id, type: source.type, value: source.value },
+    target: { nodeId: target.id, type: target.type, value: target.value },
+    confidence: relationship.confidence,
+    confidenceBand: relationship.confidence >= 0.75 ? "high" : relationship.confidence >= 0.45 ? "medium" : "low",
+    whyExists: relationshipConfidenceReasons(relationship, support, findingCodes, generatedAt),
+    supportingEvidenceIds: relationship.evidenceSupportIds,
+    supportingLedgerIds: uniqueSorted(support.flatMap((item) => item.ledgerIds)),
+    supportingCaptureIds: uniqueSorted(support.map((item) => item.captureId)),
+    supportingSourceIds: uniqueSorted(support.map((item) => item.sourceId)),
+    disagreeingSourceIds: disagreeingSourceIds(support, relationship, findingCodes),
+    stale,
+    contradiction,
+    reviewBlocked,
+    reviewState: relationship.reviewState,
+    workflowState: analystWorkflowState(relationship),
+    allowedActions: investigationAllowedActions(relationship, readiness?.ready ?? false, findingCodes, provenanceComplete),
+    exportEligible: readiness?.ready ?? false,
+    exportBlockers,
+    provenanceComplete
+  };
+}
+
+function relationshipConfidenceReasons(
+  relationship: PersistedGraphRelationship,
+  support: GraphEvidenceSupportRecord[],
+  findingCodes: GraphIntegrityFindingCode[],
+  generatedAt: string
+): string[] {
+  const reasons = [
+    `${relationship.type} edge observed between ${relationship.sourceRef} and ${relationship.targetRef}`,
+    `${support.length} provenance support record${support.length === 1 ? "" : "s"} linked`,
+    `${relationship.reviewState} review state with ${confidenceBandLabel(relationship.confidence)} confidence`
+  ];
+  if (relationship.exportEligibility.reviewed || relationship.exportEligibility.promoted || relationship.exportEligibility.accepted) reasons.push("reviewed/promoted evidence contributes to export eligibility");
+  if (relationship.exportEligibility.discoveryOnly) reasons.push("discovery-only support keeps the edge as a pivot until capture or review");
+  if (findingCodes.includes("source_bias_cluster")) reasons.push("single-source or source-family bias requires corroboration");
+  if (findingCodes.includes("contradicted_edge")) reasons.push("contradictory support is present and must be resolved by review");
+  if (findingCodes.includes("stale_accepted_edge") || relationship.properties?.stale === true) reasons.push(`stale edge as of ${generatedAt}`);
+  if (findingCodes.includes("missing_ledger_ids") || findingCodes.includes("missing_provenance")) reasons.push("evidence ledger or provenance gap blocks promotion");
+  return uniqueStrings(reasons);
+}
+
+function confidenceBandLabel(confidence: number): "high" | "medium" | "low" {
+  if (confidence >= 0.75) return "high";
+  if (confidence >= 0.45) return "medium";
+  return "low";
+}
+
+function disagreeingSourceIds(
+  support: GraphEvidenceSupportRecord[],
+  relationship: PersistedGraphRelationship,
+  findingCodes: GraphIntegrityFindingCode[]
+): string[] {
+  if (relationship.reviewState !== "contradicted" && relationship.properties?.contradicted !== true && !findingCodes.includes("contradicted_edge")) return [];
+  const explicit = relationship.properties?.disagreeingSourceIds;
+  if (Array.isArray(explicit) && explicit.every((item) => typeof item === "string")) return uniqueSorted(explicit);
+  return uniqueSorted(support.map((item) => item.sourceId).filter((sourceId) => /contradict|dispute|rebut|counter/i.test(sourceId)));
+}
+
+function investigationAllowedActions(
+  relationship: PersistedGraphRelationship,
+  exportReady: boolean,
+  findingCodes: GraphIntegrityFindingCode[],
+  provenanceComplete: boolean
+): GraphInvestigationWorkspaceReviewAction[] {
+  const actions = new Set<GraphInvestigationWorkspaceReviewAction>();
+  if (relationship.reviewState === "accepted" && exportReady) actions.add("mark_export_ready");
+  if (relationship.reviewState !== "accepted" && provenanceComplete && relationship.confidence >= 0.75 && findingCodes.length === 0) actions.add("promote");
+  if (relationship.reviewState !== "rejected") actions.add("hold");
+  if (relationship.confidence < 0.45 || relationship.exportEligibility.discoveryOnly) actions.add("reject");
+  if (relationship.reviewState === "expired" || relationship.properties?.stale === true || findingCodes.includes("stale_accepted_edge")) actions.add("mark_stale");
+  if (relationship.type === "alias-of") actions.add("merge_duplicate");
+  if (relationship.type === "alias-of" && (findingCodes.includes("source_bias_cluster") || relationship.reviewState === "contradicted")) actions.add("split_alias_collision");
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true || findingCodes.includes("contradicted_edge")) actions.add("attach_contradiction");
+  if (!actions.size) actions.add("hold");
+  return [...actions].sort();
+}
+
+function buildInvestigationNodeGroups(
+  nodes: GraphInvestigationWorkspaceDto["nodes"],
+  ledger: GraphInvestigationWorkspaceDto["relationshipConfidenceLedger"]
+): GraphInvestigationWorkspaceDto["nodeGroups"] {
+  const groups = new Map<IntelligenceNodeType, GraphInvestigationWorkspaceDto["nodeGroups"][number]>();
+  for (const node of nodes) {
+    const existing = groups.get(node.type) ?? {
+      type: node.type,
+      nodeIds: [],
+      relationshipIds: [],
+      exportReadyRelationshipCount: 0,
+      heldRelationshipCount: 0
+    };
+    existing.nodeIds.push(node.nodeId);
+    existing.relationshipIds.push(...node.relationshipIds);
+    groups.set(node.type, existing);
+  }
+  return [...groups.values()].map((group) => {
+    const relationshipIds = uniqueSorted(group.relationshipIds);
+    return {
+      ...group,
+      nodeIds: uniqueSorted(group.nodeIds),
+      relationshipIds,
+      exportReadyRelationshipCount: relationshipIds.filter((relationshipId) => ledger.find((entry) => entry.relationshipId === relationshipId)?.exportEligible).length,
+      heldRelationshipCount: relationshipIds.filter((relationshipId) => !(ledger.find((entry) => entry.relationshipId === relationshipId)?.exportEligible)).length
+    };
+  }).sort((left, right) => right.relationshipIds.length - left.relationshipIds.length || left.type.localeCompare(right.type));
+}
+
+function buildInvestigationReviewActions(
+  ledger: GraphInvestigationWorkspaceDto["relationshipConfidenceLedger"]
+): GraphInvestigationWorkspaceDto["reviewActions"] {
+  const actionReasons: Record<GraphInvestigationWorkspaceReviewAction, string> = {
+    promote: "high-confidence complete-provenance edges can be promoted by analyst review",
+    hold: "review-held edges stay visible as pivots without public/STIX fact promotion",
+    reject: "weak or discovery-only relationships can be rejected from graph facts",
+    mark_stale: "stale relationships should be marked stale before current-answer use",
+    merge_duplicate: "alias or duplicate entities can be merged through review audit",
+    split_alias_collision: "alias collisions can be split when evidence disagrees",
+    attach_contradiction: "contradictory evidence must be attached before resolution",
+    mark_export_ready: "accepted export-safe relationships can be marked ready for STIX output"
+  };
+  const humanActions = new Set<GraphInvestigationWorkspaceReviewAction>(["promote", "reject", "merge_duplicate", "split_alias_collision", "attach_contradiction", "mark_export_ready"]);
+  const grouped = new Map<GraphInvestigationWorkspaceReviewAction, string[]>();
+  for (const entry of ledger) {
+    for (const action of entry.allowedActions) grouped.set(action, [...(grouped.get(action) ?? []), entry.relationshipId]);
+  }
+  return [...grouped.entries()]
+    .map(([action, relationshipIds]) => ({
+      action,
+      relationshipIds: uniqueSorted(relationshipIds),
+      requiresHumanApproval: humanActions.has(action),
+      reason: actionReasons[action]
+    }))
+    .sort((left, right) => left.action.localeCompare(right.action));
+}
+
 function graphFindingsByRelationship(snapshot: PersistedGraphSnapshot, generatedAt = snapshot.generatedAt): Map<string, GraphIntegrityFindingDto[]> {
   const findingsByRelationship = new Map<string, GraphIntegrityFindingDto[]>();
   for (const finding of buildGraphIntegrityReport(snapshot, generatedAt).findings) {
@@ -2832,6 +3251,10 @@ function uniqueExportBlockers(codes: GraphCutoverPromotionBlockerDto["code"][]):
 
 function uniqueFindingCodes(codes: GraphIntegrityFindingCode[]): GraphIntegrityFindingCode[] {
   return [...new Set(codes)];
+}
+
+function uniqueReviewStates(states: GraphRelationshipReviewState[]): GraphRelationshipReviewState[] {
+  return [...new Set(states)].sort();
 }
 
 function enforcementStateForCode(

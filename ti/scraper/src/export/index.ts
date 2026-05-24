@@ -10,6 +10,7 @@ export {
   buildGraphQueryApiContract,
   buildGraphNeighborhoodView,
   buildGraphIntegrityReport,
+  buildGraphInvestigationWorkspaceDto,
   buildGraphReviewBatch,
   buildGraphReviewApplyPlan,
   buildGraphReviewPlanApiDto,

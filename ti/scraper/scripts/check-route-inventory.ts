@@ -2,7 +2,7 @@ import { startApiServer } from "../src/api/server.ts";
 import { FocusedFrontier } from "../src/frontier/frontier.ts";
 import { processCollectedItem } from "../src/pipeline/pipeline.ts";
 import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
-import type { CollectionRun, RawCapture, SourceRecord } from "../src/types.ts";
+import type { AnalystClaimLedgerEntry, AnalystLoopSnapshot, AnalystMetadataReviewTask, AnalystSourceActivationPacket, AnalystVictimNotificationPacket, CollectionRun, RawCapture, SourceRecord } from "../src/types.ts";
 import { hashContent } from "../src/utils.ts";
 
 type RouteOwner = "Agent 01" | "Agent 02" | "Agent 04" | "Agent 05" | "Agent 06" | "Agent 07" | "Agent 08" | "Agent 09";
@@ -58,7 +58,13 @@ function routeChecks(): RouteCheck[] {
   return [
     { owner: "Agent 09", name: "health", method: "GET", path: "/v1/health", expectKeys: ["ok", "service"] },
     { owner: "Agent 09", name: "metrics", method: "GET", path: "/v1/metrics", expectKeys: ["runs", "sources", "frontier"] },
-    { owner: "Agent 09", name: "contracts", method: "GET", path: "/v1/contracts", expectKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "surfaces", "publicCompatibility", "semantics"] },
+    { owner: "Agent 09", name: "contracts", method: "GET", path: "/v1/contracts", expectKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "openapi", "surfaces", "publicCompatibility", "semantics"] },
+    { owner: "Agent 01", name: "analyst_loop", method: "GET", path: "/v1/analyst/loop?q=Fjord%20Energy%20AS", expectKeys: ["contract", "state", "runStatusClarity", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger"] },
+    { owner: "Agent 01", name: "analyst_metadata_review_tasks", method: "GET", path: "/v1/analyst/metadata-review-tasks", expectKeys: ["contract", "runStatusClarity", "tasks", "notificationPackets", "claimLedger"] },
+    { owner: "Agent 01", name: "analyst_source_activation_packets", method: "GET", path: "/v1/analyst/source-activation-packets", expectKeys: ["contract", "runStatusClarity", "packets"] },
+    { owner: "Agent 01", name: "analyst_source_activation_packet_action", method: "POST", path: "/v1/analyst/source-activation-packets/activation_inventory_fjord/actions", body: { action: "approve_metadata_only", dryRun: true, reason: "route inventory proof" }, expectKeys: ["contract", "dryRun", "action", "packet", "result"] },
+    { owner: "Agent 01", name: "analyst_victim_notification_packets", method: "GET", path: "/v1/analyst/victim-notification-packets", expectKeys: ["contract", "runStatusClarity", "packets"] },
+    { owner: "Agent 01", name: "analyst_victim_notification_packet_action", method: "POST", path: "/v1/analyst/victim-notification-packets/notification_inventory_fjord/actions", body: { action: "approve_packet", dryRun: true, reason: "route inventory proof" }, expectKeys: ["contract", "dryRun", "action", "packet", "result"] },
     { owner: "Agent 01", name: "sources_list", method: "GET", path: "/v1/sources?limit=2", expectKeys: ["sources"] },
     { owner: "Agent 01", name: "sources_apply_plan", method: "POST", path: "/v1/sources/apply-plan", body: { queryScope: { queries: ["APT29"], entityTypes: ["actor"] }, selectedActions: ["approve", "quarantine", "retire", "request_legal_notes", "leave_unchanged"], includeExecutionPreview: true }, expectKeys: ["applyPlan"] },
     { owner: "Agent 01", name: "sources_coverage_plan", method: "POST", path: "/v1/sources/coverage-plan", body: { queries: ["APT29", "Scattered Spider"], entityTypes: ["actor"] }, expectKeys: ["endpoint", "queries"] },
@@ -75,7 +81,7 @@ function routeChecks(): RouteCheck[] {
     { owner: "Agent 06", name: "evidence_replay_plan", method: "GET", path: "/v1/evidence/replay-plan?q=APT29&runId=run_inventory", expectKeys: ["contract", "replayPlan"] },
     { owner: "Agent 06", name: "evidence_cutover_report", method: "GET", path: "/v1/evidence/cutover-report?q=APT29&runId=run_inventory", expectKeys: ["contract", "cutoverReport"] },
     { owner: "Agent 07", name: "intel_search_quality", method: "GET", path: "/v1/intel/search?q=APT29&entityType=actor", expectKeys: ["query", "quality", "actorProfile", "sla"] },
-    { owner: "Agent 07", name: "quality_evaluate", method: "GET", path: "/v1/quality/evaluate?q=APT29", expectKeys: ["query", "quality", "examples"] },
+    { owner: "Agent 07", name: "quality_evaluate", method: "GET", path: "/v1/quality/evaluate?q=APT29", expectKeys: ["query", "quality", "dashboard", "entityResolutionWorkbench", "timelinessGroundTruth", "attackMappingQuality", "analystFeedbackLoop", "examples"] },
     { owner: "Agent 08", name: "graph_review_plan", method: "GET", path: "/v1/graph/review-plan?runId=run_inventory&dryRun=true&includeExamples=true", expectKeys: ["contract", "reviewPlan"] },
     { owner: "Agent 08", name: "graph_cutover_report", method: "GET", path: "/v1/graph/cutover-report?runId=run_inventory&dryRun=true", expectKeys: ["contract", "cutoverReport"] },
     { owner: "Agent 08", name: "stix_readiness", method: "GET", path: "/v1/exports/stix?runId=run_inventory&dryRun=true", expectKeys: ["contract", "readiness"] },
@@ -105,7 +111,7 @@ async function runRouteCheck(base: string, check: RouteCheck): Promise<RouteResu
     status: response.status,
     ok: response.status === expectedStatus && missingKeys.length === 0 && !unsafeLeak,
     keys,
-    expectedOutput: `HTTP ${expectedStatus}; keys=${check.expectKeys.join(",")}; no raw proof payload`,
+    expectedOutput: `HTTP ${expectedStatus}; keys=${check.expectKeys.join(",")}; compact safe response`,
     errorCode: isRecord(json) && isRecord(json.error) ? String(json.error.code ?? "") : undefined
   };
 }
@@ -164,6 +170,7 @@ function seedStore(store: InMemoryScraperStore, frontier: FocusedFrontier): void
     incidentCount: 1
   };
   store.saveRun(run);
+  seedAnalystLoop(store);
   frontier.add({
     source: publicSource,
     tenantId: "tenant_inventory",
@@ -175,6 +182,129 @@ function seedStore(store: InMemoryScraperStore, frontier: FocusedFrontier): void
     novelty: 0.8,
     freshness: 0.8
   });
+}
+
+function seedAnalystLoop(store: InMemoryScraperStore): void {
+  const reviewTask: AnalystMetadataReviewTask = {
+    id: "review_inventory_fjord",
+    tenantId: "tenant_inventory",
+    planId: "plan_inventory",
+    runId: "run_inventory",
+    taskId: "task_inventory_restricted",
+    sourceId: "src_restricted",
+    captureId: "cap_inventory_restricted_metadata",
+    status: "open",
+    resultState: "metadata_review",
+    company: "Fjord Energy AS",
+    victim: "Fjord Energy AS",
+    affectedAccounts: "50k accounts",
+    affectedAccountsCount: 50_000,
+    accountSubjects: ["employees"],
+    datasetSize: "20 GB",
+    datasetSizeBytes: 20_000_000_000,
+    actorStatement: "Actor claims Fjord Energy AS leaked, 50k accounts, 20 GB.",
+    claimedAt: "2026-05-20T00:00:00.000Z",
+    observedAt: "2026-05-24T04:44:32.036Z",
+    sourceHash: "hash_inventory_fjord",
+    provenance: {
+      sourceId: "src_restricted",
+      captureId: "cap_inventory_restricted_metadata",
+      unsafeMaterialAccessed: false
+    },
+    allowedActions: ["notify_company", "mark_duplicate", "request_approval", "escalate"],
+    confidence: 0.82,
+    unsafeMaterialAccessed: false,
+    whatWasNotAccessed: [
+      "No restricted dataset was downloaded or opened.",
+      "No credentials, cookies, private channels, or invite-only areas were accessed.",
+      "No threat actor interaction was performed."
+    ],
+    createdAt: "2026-05-24T04:44:32.036Z",
+    updatedAt: "2026-05-24T04:44:32.036Z"
+  };
+  const activationPacket: AnalystSourceActivationPacket = {
+    id: "activation_inventory_fjord",
+    tenantId: "tenant_inventory",
+    planId: "plan_inventory",
+    runId: "run_inventory",
+    sourceId: "src_restricted",
+    action: "request_operator_approval",
+    execution: "approval_required",
+    reason: "Operator approval required before metadata-only source restoration.",
+    expectedEffect: "Queue safe metadata only.",
+    rollback: "Keep source disabled.",
+    dryRun: true,
+    createdAt: "2026-05-24T04:44:32.036Z"
+  };
+  const notificationPacket: AnalystVictimNotificationPacket = {
+    id: "notification_inventory_fjord",
+    tenantId: "tenant_inventory",
+    reviewTaskId: reviewTask.id,
+    status: "draft",
+    company: "Fjord Energy AS",
+    victim: "Fjord Energy AS",
+    claimSummary: "Fjord Energy AS was named in a metadata-only leak claim; 50k accounts and 20 GB were claimed.",
+    affectedAccounts: "50k accounts",
+    datasetSize: "20 GB",
+    actorStatement: reviewTask.actorStatement,
+    claimedAt: reviewTask.claimedAt,
+    observedAt: reviewTask.observedAt,
+    sourceHash: reviewTask.sourceHash,
+    confidence: 0.82,
+    provenance: reviewTask.provenance,
+    redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"],
+    whatWasNotAccessed: reviewTask.whatWasNotAccessed,
+    safeToSend: false,
+    createdAt: "2026-05-24T04:44:32.036Z",
+    updatedAt: "2026-05-24T04:44:32.036Z"
+  };
+  const claimLedgerEntry: AnalystClaimLedgerEntry = {
+    id: "claim_inventory_fjord_dataset",
+    tenantId: "tenant_inventory",
+    normalizedQuery: "fjord energy as",
+    reviewTaskId: reviewTask.id,
+    captureId: reviewTask.captureId,
+    sourceId: reviewTask.sourceId,
+    claimKind: "dataset_size_claim",
+    company: "Fjord Energy AS",
+    victim: "Fjord Energy AS",
+    claimTextSummary: "20 GB was claimed as dataset size or volume.",
+    sourceHash: reviewTask.sourceHash,
+    confidence: 0.82,
+    ledgerStatus: "metadata_review",
+    observedAt: reviewTask.observedAt,
+    provenance: reviewTask.provenance,
+    createdAt: "2026-05-24T04:44:32.036Z"
+  };
+  const snapshot: AnalystLoopSnapshot = {
+    id: "snapshot_inventory_fjord",
+    tenantId: "tenant_inventory",
+    planId: "plan_inventory",
+    runId: "run_inventory",
+    normalizedQuery: "fjord energy as",
+    resultState: "metadata_review",
+    headline: "1 metadata review item needs analyst action.",
+    queuedTasks: 0,
+    reviewTasks: 1,
+    rejectedSources: 0,
+    blockedUnsafeTargets: 0,
+    meaningfulWorkCount: 1,
+    nextSteps: [{
+      state: "metadata_review",
+      label: "Review leak metadata",
+      detail: "Review actor/victim/account/dataset metadata and prepare notification without opening leaked payloads.",
+      tone: "watch"
+    }],
+    reviewTaskIds: [reviewTask.id],
+    activationPacketIds: [activationPacket.id],
+    victimNotificationPacketId: notificationPacket.id,
+    capturedAt: "2026-05-24T04:44:32.036Z"
+  };
+  store.saveAnalystMetadataReviewTask(reviewTask);
+  store.saveAnalystSourceActivationPacket(activationPacket);
+  store.saveAnalystVictimNotificationPacket(notificationPacket);
+  store.saveAnalystClaimLedgerEntry(claimLedgerEntry);
+  store.saveAnalystLoopSnapshot(snapshot);
 }
 
 function source(

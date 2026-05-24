@@ -104,6 +104,15 @@ export class InMemoryScraperStore implements ScraperStore {
     return this.saveCaptureWithDedupe(capture).capture;
   }
 
+  protected hydrateCaptureSnapshot(capture: RawCapture): RawCapture {
+    const prepared = prepareCapture(capture);
+    this.captures.set(prepared.id, prepared);
+    for (const key of dedupeIndexKeys(prepared)) {
+      this.captureDedupeIndex.set(key, prepared.id);
+    }
+    return prepared;
+  }
+
   saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult {
     const prepared = prepareCapture(capture);
     enforceSensitiveMetadataOnly(prepared);
@@ -273,6 +282,11 @@ export class InMemoryScraperStore implements ScraperStore {
     return evidence;
   }
 
+  protected hydrateDiscoveryEvidenceSnapshot(evidence: DiscoveryEvidence): DiscoveryEvidence {
+    this.discoveryEvidence.set(evidence.id, evidence);
+    return evidence;
+  }
+
   getDiscoveryEvidence(id: string): DiscoveryEvidence | undefined {
     return this.discoveryEvidence.get(id);
   }
@@ -319,6 +333,11 @@ export class InMemoryScraperStore implements ScraperStore {
     return stored;
   }
 
+  protected hydrateLiveSearchSnapshotSnapshot(snapshot: LiveSearchSnapshot): LiveSearchSnapshot {
+    this.liveSearchSnapshots.set(snapshot.id, snapshot);
+    return snapshot;
+  }
+
   listLiveSearchSnapshots(): LiveSearchSnapshot[] {
     return [...this.liveSearchSnapshots.values()];
   }
@@ -332,6 +351,20 @@ export class InMemoryScraperStore implements ScraperStore {
     if (previous && JSON.stringify(previous) !== JSON.stringify(prepared)) {
       throw new Error(`Evidence delta is immutable: ${prepared.id}`);
     }
+    const cursorOwner = this.evidenceDeltaCursorIndex.get(prepared.cursor);
+    if (cursorOwner && cursorOwner !== prepared.id) {
+      throw new Error(`Evidence delta cursor must be unique: ${prepared.cursor}`);
+    }
+    this.evidenceDeltas.set(prepared.id, prepared);
+    this.evidenceDeltaCursorIndex.set(prepared.cursor, prepared.id);
+    return prepared;
+  }
+
+  protected hydrateEvidenceDeltaSnapshot(delta: EvidenceDelta): EvidenceDelta {
+    const prepared = {
+      ...delta,
+      cursor: delta.cursor || evidenceCursor(delta.observedAt, ++this.evidenceDeltaSequence, delta.id)
+    };
     const cursorOwner = this.evidenceDeltaCursorIndex.get(prepared.cursor);
     if (cursorOwner && cursorOwner !== prepared.id) {
       throw new Error(`Evidence delta cursor must be unique: ${prepared.cursor}`);

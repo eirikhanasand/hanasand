@@ -1557,6 +1557,87 @@ export interface GraphExportCertificationDto {
   };
 }
 
+export type GraphInvestigationWorkspaceReviewAction =
+  | "promote"
+  | "hold"
+  | "reject"
+  | "mark_stale"
+  | "merge_duplicate"
+  | "split_alias_collision"
+  | "attach_contradiction"
+  | "mark_export_ready";
+
+export interface GraphInvestigationWorkspaceNodeDto {
+  nodeId: string;
+  type: IntelligenceNodeType;
+  value: string;
+  confidence: number;
+  relationshipIds: string[];
+  evidenceIds: string[];
+  ledgerIds: string[];
+  reviewStates: GraphRelationshipReviewState[];
+  exportReadyRelationshipCount: number;
+  heldRelationshipCount: number;
+}
+
+export interface RelationshipConfidenceLedgerEntryDto {
+  relationshipId: string;
+  relationshipKind: GraphCursorRelationshipKind;
+  type: IntelligenceRelationshipType;
+  source: Pick<CorrelationGraphNodeDto, "nodeId" | "type" | "value">;
+  target: Pick<CorrelationGraphNodeDto, "nodeId" | "type" | "value">;
+  confidence: number;
+  confidenceBand: "high" | "medium" | "low";
+  whyExists: string[];
+  supportingEvidenceIds: string[];
+  supportingLedgerIds: string[];
+  supportingCaptureIds: string[];
+  supportingSourceIds: string[];
+  disagreeingSourceIds: string[];
+  stale: boolean;
+  contradiction: boolean;
+  reviewBlocked: boolean;
+  reviewState: GraphRelationshipReviewState;
+  workflowState: AnalystGraphWorkflowState;
+  allowedActions: GraphInvestigationWorkspaceReviewAction[];
+  exportEligible: boolean;
+  exportBlockers: GraphIntegrityFindingCode[];
+  provenanceComplete: boolean;
+}
+
+export interface GraphInvestigationWorkspaceDto {
+  endpoint: "/v1/graph/query";
+  mode: "read_only_investigation_workspace";
+  generatedAt: string;
+  query: string;
+  focusNodeId?: string;
+  nodeGroups: Array<{
+    type: IntelligenceNodeType;
+    nodeIds: string[];
+    relationshipIds: string[];
+    exportReadyRelationshipCount: number;
+    heldRelationshipCount: number;
+  }>;
+  nodes: GraphInvestigationWorkspaceNodeDto[];
+  relationshipConfidenceLedger: RelationshipConfidenceLedgerEntryDto[];
+  reviewActions: Array<{
+    action: GraphInvestigationWorkspaceReviewAction;
+    relationshipIds: string[];
+    requiresHumanApproval: boolean;
+    reason: string;
+  }>;
+  deltaPolling: {
+    cursorField: "graph.deltas[].cursor";
+    nextPollSeconds: 3;
+    relationshipDeltaCount: number;
+  };
+  safety: {
+    restrictedMaterialPolicy: "metadata_only_review_hold";
+    rawRestrictedMaterialIncluded: false;
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+}
+
 export interface CorrelationGraphQueryDto {
   endpoint: "/v1/graph/query";
   generatedAt: string;
@@ -1564,6 +1645,7 @@ export interface CorrelationGraphQueryDto {
   focusNodeId?: string;
   nodes: CorrelationGraphNodeDto[];
   relationships: CorrelationGraphRelationshipDto[];
+  investigationWorkspace: GraphInvestigationWorkspaceDto;
   neighborhoods: CorrelationGraphNeighborhoodDto[];
   readinessFacets: GraphQueryReadinessFacetDto[];
   attackMatrix: AttackMatrixCellDto[];
@@ -1689,6 +1771,80 @@ export interface GraphBackendRepositoryContractDto {
   };
 }
 
+export type GraphBackendCutoverRecordKind =
+  | IntelligenceNodeType
+  | "relationship"
+  | "evidence_support"
+  | "review_decision"
+  | "confidence_history"
+  | "cursor_delta"
+  | "export_eligibility";
+
+export interface GraphBackendMigrationSchemaDto {
+  backend: GraphRepositoryBackendKind;
+  schemaName: string;
+  recordKinds: GraphBackendCutoverRecordKind[];
+  tablesOrLabels: string[];
+  requiredIndexes: string[];
+  tenantIsolation: "tenant_id_partition_or_label_property_required";
+  rollbackUnit: "snapshot_generation";
+  summary: string;
+}
+
+export interface GraphBackendReplayImportDto {
+  source: "agent06_evidence_claim_ledger";
+  importOrder: Array<"nodes" | "relationships" | "evidence_support" | "review_audit" | "confidence_history" | "cursor_deltas" | "export_eligibility">;
+  replayableRelationshipIds: string[];
+  staleRelationshipIds: string[];
+  contradictedRelationshipIds: string[];
+  reviewHeldRelationshipIds: string[];
+  missingLedgerRelationshipIds: string[];
+  cursorField: "graph.deltas[].cursor";
+  cursorDeltaCount: number;
+  latestCursor?: string;
+  ledgerCompleteness: "complete" | "hold_missing_ledger_ids";
+  restrictedMaterialPolicy: "metadata_only_review_hold";
+}
+
+export interface GraphBackendCutoverRehearsalDto {
+  mode: "graph_backend_cutover_rehearsal";
+  generatedAt: string;
+  targetBackends: GraphRepositoryBackendKind[];
+  repositoryContract: GraphBackendRepositoryContractDto;
+  migrationSchemas: GraphBackendMigrationSchemaDto[];
+  replayImport: GraphBackendReplayImportDto;
+  verification: {
+    tenantScopedRows: boolean;
+    cursorContinuity: boolean;
+    provenanceComplete: boolean;
+    reviewAuditAppendOnly: boolean;
+    confidenceHistoryAppendOnly: boolean;
+    exportEligibilityRecomputed: boolean;
+    noRawRestrictedMaterialSerialized: boolean;
+  };
+  backupRestore: {
+    snapshotId: string;
+    backupManifestTables: string[];
+    restoreVerification: "replay_snapshot_then_compare_counts_cursors_and_export_eligibility";
+    rollbackPath: "restore_last_verified_snapshot_and_hold_graph_exports";
+  };
+  exportEligibility: {
+    readyRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    weakDiscoveryHeldIds: string[];
+    restrictedHeldIds: string[];
+    publicChannelHintHeldIds: string[];
+    policy: "weak_public_channel_and_restricted_edges_remain_pivots_or_review_holds_until_promoted";
+  };
+  releasePacket: {
+    owner: "Agent 08";
+    status: "pass" | "hold" | "rollback";
+    proofCommand: "bun test src/tests/graphViews.test.ts";
+    agent10Field: "graphBackendCutoverRehearsal";
+    rollbackPath: string;
+  };
+}
+
 export type GraphExportSlaState = "pass" | "warning" | "hold" | "rollback";
 
 export type GraphExportSlaBucket =
@@ -1778,6 +1934,7 @@ export interface GraphRuntimeApiDto {
   certification: GraphExportCertificationDto;
   liveUpdate: GraphLiveSearchUpdateDto;
   backendContract: GraphBackendRepositoryContractDto;
+  backendCutover: GraphBackendCutoverRehearsalDto;
   relationships: GraphRuntimeRelationshipDto[];
   reviewQueue: GraphReviewQueueSummaryDto;
 }

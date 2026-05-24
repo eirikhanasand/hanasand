@@ -24,6 +24,7 @@
     "check:search-quality-mounted": "bun run scripts/check-search-quality-mounted.ts",
     "check:source-apply-plan": "bun run scripts/check-source-apply-plan.ts",
     "check:scraper-native-search": "bun run scripts/check-scraper-native-search-readiness.ts",
+    "check:ti-release-candidate": "bun run scripts/check-ti-release-candidate.ts",
     "measure:search-product": "bun run scripts/measure-search-product.ts",
     "plan:cutover": "bun run scripts/run-cutover-apply-plan.ts",
     "rehearse:cutover": "bun run scripts/run-cutover-rehearsal.ts",

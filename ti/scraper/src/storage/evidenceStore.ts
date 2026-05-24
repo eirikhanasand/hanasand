@@ -81,6 +81,95 @@ export interface EvidenceRepositorySet {
   objects: ObjectEvidenceStore;
 }
 
+export interface ObjectEvidenceManifestEntry {
+  captureId: string;
+  tenantId?: string;
+  sourceId: string;
+  mediaType: string;
+  retentionClass: RetentionClass;
+  contentHash: string;
+  objectRefHash: string;
+  sizeBytes: number;
+  sha256: string;
+  present: boolean;
+  hashMatches: boolean;
+}
+
+export interface ObjectEvidenceManifest {
+  schemaVersion: "ti.object_evidence_manifest.v1";
+  generatedAt: string;
+  tenantId?: string;
+  entryCount: number;
+  presentCount: number;
+  missingCount: number;
+  hashMismatchCount: number;
+  entries: ObjectEvidenceManifestEntry[];
+  safeOutput: {
+    objectKeysExposed: false;
+    rawBodiesExposed: false;
+    unsafeRestrictedMetadataExposed: false;
+  };
+}
+
+export interface ObjectEvidenceManifestVerification {
+  schemaVersion: "ti.object_evidence_manifest_verification.v1";
+  generatedAt: string;
+  tenantId?: string;
+  expectedCount: number;
+  verifiedCount: number;
+  missingObjectCaptureIds: string[];
+  hashMismatchCaptureIds: string[];
+  unexpectedObjectCaptureIds: string[];
+  safeToRestore: boolean;
+  safeOutput: ObjectEvidenceManifest["safeOutput"];
+}
+
+export interface EvidenceBackendParityInput {
+  name: string;
+  store: CaptureMetadataStore;
+  objects?: ObjectEvidenceStore;
+}
+
+export interface EvidenceBackendReadModelSnapshot {
+  name: string;
+  captureIds: string[];
+  discoveryEvidenceIds: string[];
+  deltaCursors: string[];
+  liveSnapshotIds: string[];
+  replayable: boolean;
+  nextCursor?: string;
+  objectManifestEntryCount: number;
+  objectManifestSafeToRestore: boolean;
+  unsafeRestrictedBodyCount: number;
+}
+
+export interface EvidenceBackendParityReport {
+  schemaVersion: "ti.evidence_backend_parity_report.v1";
+  generatedAt: string;
+  query: string;
+  normalizedQuery: string;
+  tenantId?: string;
+  baselineBackend: string;
+  backends: EvidenceBackendReadModelSnapshot[];
+  parity: {
+    capturesMatch: boolean;
+    discoveryEvidenceMatch: boolean;
+    deltasMatch: boolean;
+    liveSnapshotsMatch: boolean;
+    cursorReplayMatch: boolean;
+    objectManifestsSafe: boolean;
+    noUnsafeRestrictedBodies: boolean;
+    matchesBaseline: boolean;
+  };
+  mismatches: Array<{ backend: string; field: string; expected: unknown; actual: unknown }>;
+  apiCutoverReady: boolean;
+  safeOutput: {
+    rawBodiesExposed: false;
+    objectReferencesExposed: false;
+    restrictedMaterialExposed: false;
+  };
+}
+
 export interface ProductionEvidenceRepository extends CaptureMetadataStore {
   beginTransaction<T>(operation: (transaction: CaptureMetadataStore) => T): T;
 }
@@ -129,6 +218,188 @@ export function saveCaptureWithObject(
     storageKind: "external_object",
     objectRef: record.ref
   });
+}
+
+export function buildObjectEvidenceManifest(
+  store: CaptureMetadataStore,
+  objects: ObjectEvidenceStore,
+  options: { tenantId?: string; generatedAt?: string; captureIds?: string[] } = {}
+): ObjectEvidenceManifest {
+  const captureIdFilter = options.captureIds ? new Set(options.captureIds) : undefined;
+  const captures = store.listCaptures()
+    .filter((capture) => !options.tenantId || capture.tenantId === options.tenantId)
+    .filter((capture) => !captureIdFilter || captureIdFilter.has(capture.id))
+    .filter((capture) => capture.storageKind === "external_object" && capture.objectRef);
+  const entries = captures.map((capture): ObjectEvidenceManifestEntry => {
+    const ref = capture.objectRef!;
+    const record = objects.getObject(ref);
+    return {
+      captureId: capture.id,
+      tenantId: capture.tenantId,
+      sourceId: capture.sourceId,
+      mediaType: capture.mediaType,
+      retentionClass: capture.retentionClass ?? "standard",
+      contentHash: capture.contentHash,
+      objectRefHash: stableId("object-ref", `${ref.bucket}:${ref.key}:${ref.versionId ?? ""}:${ref.sha256}`),
+      sizeBytes: ref.sizeBytes,
+      sha256: ref.sha256,
+      present: record !== undefined,
+      hashMatches: record !== undefined ? record.contentHash === capture.contentHash && record.ref.sha256 === ref.sha256 : false
+    };
+  });
+  return {
+    schemaVersion: "ti.object_evidence_manifest.v1",
+    generatedAt: options.generatedAt ?? nowIso(),
+    tenantId: options.tenantId,
+    entryCount: entries.length,
+    presentCount: entries.filter((entry) => entry.present).length,
+    missingCount: entries.filter((entry) => !entry.present).length,
+    hashMismatchCount: entries.filter((entry) => entry.present && !entry.hashMatches).length,
+    entries,
+    safeOutput: {
+      objectKeysExposed: false,
+      rawBodiesExposed: false,
+      unsafeRestrictedMetadataExposed: false
+    }
+  };
+}
+
+export function verifyObjectEvidenceManifest(
+  manifest: ObjectEvidenceManifest,
+  store: CaptureMetadataStore,
+  objects: ObjectEvidenceStore,
+  options: { generatedAt?: string } = {}
+): ObjectEvidenceManifestVerification {
+  const current = buildObjectEvidenceManifest(store, objects, {
+    tenantId: manifest.tenantId,
+    generatedAt: options.generatedAt,
+    captureIds: manifest.entries.map((entry) => entry.captureId)
+  });
+  const expectedByCapture = new Map(manifest.entries.map((entry) => [entry.captureId, entry]));
+  const currentByCapture = new Map(current.entries.map((entry) => [entry.captureId, entry]));
+  const missingObjectCaptureIds = manifest.entries
+    .filter((entry) => !currentByCapture.get(entry.captureId)?.present)
+    .map((entry) => entry.captureId);
+  const hashMismatchCaptureIds = manifest.entries
+    .filter((entry) => {
+      const currentEntry = currentByCapture.get(entry.captureId);
+      return currentEntry?.present === true && (
+        currentEntry.objectRefHash !== entry.objectRefHash
+        || currentEntry.sha256 !== entry.sha256
+        || currentEntry.contentHash !== entry.contentHash
+        || currentEntry.hashMatches !== true
+      );
+    })
+    .map((entry) => entry.captureId);
+  const unexpectedObjectCaptureIds = current.entries
+    .filter((entry) => !expectedByCapture.has(entry.captureId))
+    .map((entry) => entry.captureId);
+  return {
+    schemaVersion: "ti.object_evidence_manifest_verification.v1",
+    generatedAt: options.generatedAt ?? nowIso(),
+    tenantId: manifest.tenantId,
+    expectedCount: manifest.entryCount,
+    verifiedCount: manifest.entries.length - missingObjectCaptureIds.length - hashMismatchCaptureIds.length,
+    missingObjectCaptureIds,
+    hashMismatchCaptureIds,
+    unexpectedObjectCaptureIds,
+    safeToRestore: missingObjectCaptureIds.length === 0 && hashMismatchCaptureIds.length === 0 && unexpectedObjectCaptureIds.length === 0,
+    safeOutput: manifest.safeOutput
+  };
+}
+
+export function buildEvidenceBackendParityReport(
+  backends: EvidenceBackendParityInput[],
+  query: string,
+  options: { tenantId?: string; generatedAt?: string } = {}
+): EvidenceBackendParityReport {
+  if (backends.length === 0) throw new Error("At least one evidence backend is required for parity reporting");
+  const normalizedQuery = normalizeQuery(query);
+  const snapshots = backends.map((backend): EvidenceBackendReadModelSnapshot => {
+    const captures = backend.store.listCaptures()
+      .filter((capture) => !options.tenantId || capture.tenantId === options.tenantId)
+      .filter((capture) => evidenceMetadataValue(capture.metadata, "normalizedQuery") === normalizedQuery);
+    const discovery = backend.store.listDiscoveryEvidence()
+      .filter((item) => item.normalizedQuery === normalizedQuery)
+      .filter((item) => !options.tenantId || item.tenantId === options.tenantId);
+    const deltas = backend.store.queries().getEvidenceTimeline(query, { tenantId: options.tenantId });
+    const liveSnapshots = backend.store.queries().liveSnapshotsByQuery(query, { tenantId: options.tenantId });
+    const replay = buildEvidenceReplayProof(backend.store, query, { tenantId: options.tenantId });
+    const manifest = backend.objects
+      ? buildObjectEvidenceManifest(backend.store, backend.objects, {
+        tenantId: options.tenantId,
+        generatedAt: options.generatedAt,
+        captureIds: captures.map((capture) => capture.id)
+      })
+      : undefined;
+    const manifestVerification = manifest && backend.objects
+      ? verifyObjectEvidenceManifest(manifest, backend.store, backend.objects, { generatedAt: options.generatedAt })
+      : undefined;
+    return {
+      name: backend.name,
+      captureIds: captures.map((capture) => capture.id).sort(),
+      discoveryEvidenceIds: discovery.map((item) => item.id).sort(),
+      deltaCursors: deltas.map((delta) => delta.cursor).sort(),
+      liveSnapshotIds: liveSnapshots.map((snapshot) => snapshot.id).sort(),
+      replayable: replay.replayable,
+      nextCursor: replay.nextCursor,
+      objectManifestEntryCount: manifest?.entryCount ?? 0,
+      objectManifestSafeToRestore: manifestVerification?.safeToRestore ?? true,
+      unsafeRestrictedBodyCount: captures.filter((capture) =>
+        (capture.sensitive || capture.sensitivityFlags?.some(isRestrictedFlag)) && Boolean(capture.body)
+      ).length
+    };
+  });
+  const baseline = snapshots[0];
+  if (!baseline) throw new Error("At least one evidence backend is required for parity reporting");
+  const comparableFields = [
+    "captureIds",
+    "discoveryEvidenceIds",
+    "deltaCursors",
+    "liveSnapshotIds",
+    "replayable",
+    "nextCursor",
+    "objectManifestEntryCount",
+    "objectManifestSafeToRestore",
+    "unsafeRestrictedBodyCount"
+  ] as const;
+  const mismatches = snapshots.slice(1).flatMap((snapshot) =>
+    comparableFields.flatMap((field) => {
+      const expected = baseline[field];
+      const actual = snapshot[field];
+      return JSON.stringify(expected) === JSON.stringify(actual)
+        ? []
+        : [{ backend: snapshot.name, field, expected, actual }];
+    })
+  );
+  const hasNoMismatchFor = (field: (typeof comparableFields)[number]) => !mismatches.some((item) => item.field === field);
+  const parity = {
+    capturesMatch: hasNoMismatchFor("captureIds"),
+    discoveryEvidenceMatch: hasNoMismatchFor("discoveryEvidenceIds"),
+    deltasMatch: hasNoMismatchFor("deltaCursors"),
+    liveSnapshotsMatch: hasNoMismatchFor("liveSnapshotIds"),
+    cursorReplayMatch: hasNoMismatchFor("replayable") && hasNoMismatchFor("nextCursor"),
+    objectManifestsSafe: snapshots.every((snapshot) => snapshot.objectManifestSafeToRestore),
+    noUnsafeRestrictedBodies: snapshots.every((snapshot) => snapshot.unsafeRestrictedBodyCount === 0),
+    matchesBaseline: mismatches.length === 0
+  };
+  return {
+    schemaVersion: "ti.evidence_backend_parity_report.v1",
+    generatedAt: options.generatedAt ?? nowIso(),
+    query,
+    normalizedQuery,
+    tenantId: options.tenantId,
+    baselineBackend: baseline.name,
+    backends: snapshots,
+    parity,
+    mismatches,
+    apiCutoverReady: parity.matchesBaseline && parity.objectManifestsSafe && parity.noUnsafeRestrictedBodies,
+    safeOutput: {
+      rawBodiesExposed: false,
+      objectReferencesExposed: false,
+      restrictedMaterialExposed: false
+    }
+  };
 }
 
 export function buildEvidenceBackupIntegrityReport(

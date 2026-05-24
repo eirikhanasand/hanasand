@@ -46,6 +46,24 @@ Production clear-web source packs must stay safe-public:
 - forbidden source classes: private forums, credentialed sources, leaked-file endpoints, CAPTCHA bypass, threat actor interaction, and restricted raw payload collection;
 - required metadata: legal notes, legal basis, publisher identity, trust basis, crawl cadence, freshness target, adapter compatibility, approval scope, retention class, and rollback state.
 
+## Public Advisory And Security Signal Connectors
+Advisory-grade connectors may ingest only approved public records from these source families:
+- `github_advisory`: public GitHub Security Advisories or public repository advisory metadata, never private repository content.
+- `cert_government`: CISA KEV-style records, national CERT/NCSC feeds, and government advisories.
+- `vendor_report`: vendor security blogs, incident reports, and public research writeups.
+- `malware_report_feed`: public malware, tool, IOC, and research feeds that do not require payload retrieval.
+- `public_report_index`: curated public report indexes with canonical links back to public source material.
+
+Each connector record must normalize into an API-ready public signal delta with source family, source id, title, canonical URL, published or observed time, confidence, reliability score, language, region, tags, matched actors, malware/tools, CVEs, campaigns, sectors, countries, victims, and a deterministic dedupe key. Dedupe keys should combine source family, canonical URL, and matched-entity identity so GitHub advisories, CISA records, vendor posts, public feeds, and static captures can merge into one evidence-backed item without duplicating evidence.
+
+Connector output must preserve provenance and keep unsafe material out of API payloads. The DTO should expose public-only provenance, evidence-backed state, source id, connector family, collection time, parser version when available, and merge target. URLs with secrets, tokens, payload/download affordances, private repository paths, auth-gated links, or malformed schemes must be replaced with `unsafe_url_hash:<sha>` references. The raw unsafe URL must not appear in logs, evidence deltas, status DTOs, or suppression lists.
+
+Policy guards are mandatory for every advisory connector: public-only, no auth bypass, no private repo access, no CAPTCHA solving, no terms bypass, no exploit payload download, and no leaked data redistribution. Disabled, rejected, unavailable, policy-disabled, stale, duplicate, and edited records should remain visible as suppression or state metadata so analysts can understand why a source did not contribute to the fast answer.
+
+Use `buildPublicAdvisorySignalConnector` for source-family ranking and `buildPublicSignalFusionWorkbench` when combining advisory signals with public-channel and clear-web capture hints. The connector supports actor, malware/tool, CVE, campaign, sector, country, and victim/company queries, and writes useful signals into `publicSignalFusion.advisoryConnector` plus mergeable `publicSignalDeltas` targeting clear-web capture evidence.
+
+Use `publicSignalFusion.analystSourceWorkbench` for analyst-facing source decisions. The workbench explains why a public source was trusted, suppressed, merged, stale, duplicated, unavailable, edited/deleted, policy-disabled, parser-gap, legal/robots-held, or low-yield. Its action rows are dry-run-only and may propose approval, disable/pause, trust changes, cadence changes, duplicate marking, parser repair, legal/robots review, or source-pack promotion. These rows are handoff packets for Agent 01 governance, Agent 02 scheduler cadence, Agent 06 evidence yield, Agent 07 quality gates, Agent 09 API fields, and Agent 10 SLO dashboards; they must not mutate source state, start crawling, expose unsafe URLs, or weaken public-only guardrails.
+
 The starter pack now covers actor intelligence, vulnerability intelligence, ransomware/victim reporting, vendor research, government advisories, malware reports, and public datasets. It intentionally does not activate public-channel or restricted-metadata collection; those remain separate approval tracks.
 
 Use `buildSourceCoveragePlanApiResponse` or POST `/v1/sources/coverage-plan` to show another CTI application how to interpret coverage gaps. The DTO is dry-run-only and returns active sources, approved-idle sources, missing verticals, stale/policy/adapter gaps, safe source-pack recommendations, forbidden source classes, and install-plan summaries. It always reports `willMutate: false` and `willStartCrawling: false`.

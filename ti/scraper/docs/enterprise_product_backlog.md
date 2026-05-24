@@ -54,3 +54,15 @@ This backlog is for the scraper as a production CTI subsystem, not a demo. Work 
 - Agent 08 AC/AD: graph backend interface, review workflow persistence, ATT&CK/STIX/TAXII interoperability hardening.
 - Agent 09 AC/AD: enterprise API surface, auth boundary, OpenAPI contract, SDK-friendly polling, and future webhook/SSE boundary.
 - Agent 10 AC/AD: production observability, SLO dashboard, 24h soak automation, release train, disaster recovery, and capacity plan.
+
+## Extended Agent Programs
+- Agent 01 AF/AG: source reliability economics and enterprise governance audit trail.
+- Agent 02 AD/AE: production queue backend cutover, lease semantics, multi-tenant budgets, and fairness governance.
+- Agent 03 AE/AF: browser worker isolation, dynamic capture readiness, and report parser benchmarks.
+- Agent 04 AF/AG: public signal source-pack expansion and advisory conflict/correlation handling.
+- Agent 05 AC-AF: restricted metadata certification, operational playbooks, quality/abuse-resistance evaluation, and isolation capacity budget.
+- Agent 06 AD/AE: evidence search/vector handoff boundary and immutable provenance chain of custody.
+- Agent 07 AF/AG: analyst feedback loop for extraction/ranking and ATT&CK mapping quality drift evaluation.
+- Agent 08 AH/AI: graph query pagination/performance and graph-to-search pivot recommendations.
+- Agent 09 AE/AF: OpenAPI contract freeze, client compatibility matrix, API auth boundary, tenant boundary, and rate-limit design.
+- Agent 10 AE/AF: enterprise observability dashboard contract and 30-day capacity/cost simulation.

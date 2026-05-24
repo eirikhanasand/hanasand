@@ -41,6 +41,38 @@ describe("api v1", () => {
     expect(sources.nextCursor).toBe("1");
   });
 
+  test("publishes auth integration boundary without accepting secrets in scraper", async () => {
+    const options = { store: new InMemoryScraperStore(), frontier: new FocusedFrontier() };
+    const response = await body(await handleApiRequest(api("/v1/auth/integration-notes"), options));
+    expect(response).toMatchObject({
+      version: "v1",
+      authBoundary: {
+        schemaVersion: "ti.enterprise_auth_boundary.v1",
+        mode: "trusted_gateway_forwarded_identity",
+        enforcedHere: false,
+        requiredForwardedHeaders: expect.arrayContaining(["x-tenant-id", "x-actor-id"]),
+        tenantContract: {
+          header: "x-tenant-id",
+          requiredForProduction: true
+        },
+        requesterContract: {
+          header: "x-actor-id",
+          requiredForProduction: true,
+          auditOnlyHere: true
+        },
+        secretHandling: {
+          scraperDoesNotStoreSecrets: true,
+          bearerTokensAcceptedHere: false
+        }
+      },
+      notes: expect.arrayContaining([
+        expect.stringContaining("Authenticate at the main CTI app")
+      ])
+    });
+    expect(JSON.stringify(response).toLowerCase()).not.toContain("authorization:");
+    expect(JSON.stringify(response).toLowerCase()).not.toContain("cookie=");
+  });
+
   test("executes approved public canary activation collection and exposes operator view", async () => {
     const store = new InMemoryScraperStore();
     const objectStore = new InMemoryObjectEvidenceStore();
@@ -69,10 +101,16 @@ describe("api v1", () => {
       method: "POST",
       body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", maxSources: 2, maxTasks: 1, generatedAt: "2026-05-24T10:01:00.000Z" })
     }), options));
+    const canaryRunId = (run.canaryRun as { runId: string }).runId;
     expect(run.canaryRun).toMatchObject({
       mode: "production_canary",
+      runId: expect.any(String),
+      planId: expect.any(String),
       completedTaskCount: 1,
       failedTaskCount: 0,
+      retryScheduledCount: 0,
+      retryExhaustedCount: 0,
+      remainingQueuedTaskCount: 1,
       insertedCaptureCount: 1,
       health: {
         freshnessSeconds: 0,
@@ -89,19 +127,29 @@ describe("api v1", () => {
     expect(String(captures[0]?.metadata.safeExcerpt)).toContain("APT42");
     expect(store.listIncidents().length).toBeGreaterThanOrEqual(1);
     expect(objectStore.getObject(captures[0]!.objectRef!)).toBeDefined();
+    const canaryRunRecord = store.listRuns()[0];
+    expect(canaryRunRecord?.id).toBe(canaryRunId);
+    expect(canaryRunRecord).toMatchObject({
+      status: "running",
+      taskCount: 2,
+      captureCount: 1,
+      incidentCount: 1
+    });
 
     const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options));
     const operatorView = operator.operatorView as {
       activeSources: unknown[];
+      latestRun?: { runId: string; status: string; taskCount: number; captureCount: number; incidentCount: number };
       latestCaptures: unknown[];
-      schedulerHealth: { errorRate: number; promotionYield: number; duplicateRate: number };
+      schedulerHealth: { errorRate: number; promotionYield: number; duplicateRate: number; retryScheduledCount: number; retryExhaustedCount: number };
       evidenceStorage: { externalObjectCaptureCount: number; inlineCaptureCount: number; missingObjectReferenceCount: number };
       blockedOrHeldItems: unknown[];
       publicAnswerReadiness: Array<{ query: string; captureCount: number }>;
     };
     expect(operatorView.activeSources.length).toBeGreaterThanOrEqual(8);
+    expect(operatorView.latestRun).toMatchObject({ runId: canaryRunRecord?.id, status: "running", taskCount: 2, captureCount: 1, incidentCount: 1 });
     expect(operatorView.latestCaptures).toHaveLength(1);
-    expect(operatorView.schedulerHealth).toMatchObject({ errorRate: 0, promotionYield: 1, duplicateRate: 0 });
+    expect(operatorView.schedulerHealth).toMatchObject({ errorRate: 0, promotionYield: 1, duplicateRate: 0, retryScheduledCount: 0, retryExhaustedCount: 0 });
     expect(operatorView.evidenceStorage).toMatchObject({ externalObjectCaptureCount: 1, inlineCaptureCount: 0, missingObjectReferenceCount: 0 });
     expect(operatorView.blockedOrHeldItems).toEqual([]);
     expect(operatorView.publicAnswerReadiness.find((item) => item.query === "APT42")?.captureCount).toBe(1);
@@ -157,6 +205,51 @@ describe("api v1", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("records canary retry and run health when a public source fetch fails", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const canaryFetch = async () => new Response("temporary upstream failure", { status: 503 });
+    const options = { store, frontier, objectStore: new InMemoryObjectEvidenceStore(), canaryFetch };
+
+    await body(await handleApiRequest(api("/v1/sources/canary-activation", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", generatedAt: "2026-05-24T10:00:00.000Z" })
+    }), options));
+    const run = await body(await handleApiRequest(api("/v1/ops/canary/run", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "analyst-1", maxSources: 1, maxTasks: 1, generatedAt: "2026-05-24T10:01:00.000Z", timeoutMs: 1000 })
+    }), options));
+
+    expect(run.canaryRun).toMatchObject({
+      mode: "production_canary",
+      queuedTaskCount: 1,
+      completedTaskCount: 0,
+      failedTaskCount: 1,
+      retryScheduledCount: 1,
+      retryExhaustedCount: 0,
+      remainingQueuedTaskCount: 1,
+      health: {
+        errorRate: 1,
+        promotionYield: 0
+      }
+    });
+    expect(store.listRuns()[0]).toMatchObject({ status: "running", taskCount: 1, captureCount: 0, incidentCount: 0 });
+    expect(frontier.snapshot()).toHaveLength(1);
+    expect(store.listSources()[0]?.health?.status).toBe("degraded");
+
+    const operator = await body(await handleApiRequest(api("/v1/ops/canary"), options));
+    expect(operator.operatorView).toMatchObject({
+      queue: { queued: 1, leased: 0, deadLetters: 0 },
+      schedulerHealth: {
+        errorRate: 0.01,
+        retryScheduledCount: 1,
+        retryExhaustedCount: 0,
+        failingSourceCount: 0,
+        degradedSourceCount: 1
+      }
+    });
   });
 
   test("publishes enterprise contract index for CTI integration without unsafe example leaks", async () => {
@@ -255,6 +348,77 @@ describe("api v1", () => {
         safeWordingGuarantee: string;
       };
     };
+    const enterpriseApiSurface = contract.enterpriseApiSurface as {
+      schemaVersion: string;
+      status: string;
+      authBoundary: {
+        schemaVersion: string;
+        mode: string;
+        requiredForwardedHeaders: string[];
+        authzModel: { scopes: string[]; adminOnlyRoutes: string[] };
+        tenantContract: { header: string; requiredForProduction: boolean; isolationRule: string };
+        requesterContract: { header: string; requiredForProduction: boolean; auditOnlyHere: boolean };
+        secretHandling: { bearerTokensAcceptedHere: boolean; logRedaction: string[] };
+      };
+      identity: { tenantHeader: string; requesterHeader: string; requestIdHeader: string };
+      idempotency: { header: string; requiredOn: string[]; conflictCode: string; retryRule: string };
+      pagination: { style: string; requestFields: string[]; responseFields: string[]; maxLimit: number; paginatedRoutes: string[] };
+      rateLimits: { model: string; responseHeaders: string[]; overloadCodes: string[]; burstSensitiveRoutes: Array<{ route: string; retryAfterSeconds: number }> };
+      auditFields: { requiredOnMutations: string[]; requiredOnEvidenceBearingResponses: string[]; redactedAlways: string[] };
+      errors: { codes: string[]; retryableCodes: string[]; failClosedCodes: string[] };
+      openapi: { schemaVersion: string; openapi: string; paths: Record<string, unknown>; components: { schemas: Record<string, unknown> } };
+      examples: Array<{ name: string; request: { method: string; path: string; headers: Record<string, string> }; responseKeys: string[] }>;
+      noLeakGuarantee: string;
+    };
+    const sdkIntegration = contract.sdkIntegration as {
+      schemaVersion: string;
+      status: string;
+      routes: Record<string, string>;
+      polling: {
+        intervalSeconds: number;
+        requestFields: string[];
+        responseFields: string[];
+        terminalStates: string[];
+        retryableStates: string[];
+        emptyDelta: { status: string; changed: boolean; requiredFields: string[]; clientBehavior: string };
+        duplicateRunReuse: { warningCode: string; requiredFields: string[]; clientBehavior: string };
+        degradedModes: Record<string, { retryAfterSeconds: number; preserveLastGoodAnswer: boolean }>;
+      };
+      backoff: { preferHeaders: string[]; fallbackSeconds: number; maxClientPollSeconds: number; jitter: string };
+      eventBoundary: { delivery: string; allowedModes: string[]; eventTypes: string[]; payloadRule: string; forbiddenPayloadFields: string[]; replayRule: string };
+      examples: Array<{ name: string; client: string; steps: string[]; responseKeys: string[] }>;
+      openapi: { schemaVersion: string; components: string[]; xSdkPollingContract: { intervalSeconds: number; cursorFields: string[]; retryHeaders: string[] } };
+      noLeakGuarantee: string;
+    };
+    const clientCompatibilityMatrix = contract.clientCompatibilityMatrix as {
+      schemaVersion: string;
+      status: string;
+      contractFreeze: {
+        schemaVersion: string;
+        openapi: string;
+        routeCount: number;
+        requiredComponentSchemas: string[];
+        requiredSemantics: string[];
+        noBreakingChangeRule: string;
+      };
+      sharedGuarantees: {
+        errorCodes: string[];
+        retryHeaders: string[];
+        redactedAlways: string[];
+        noLeakRule: string;
+      };
+      clients: Array<{
+        client: string;
+        primaryRoutes: string[];
+        requiredResponseKeys: string[];
+        states: string[];
+        noLeakExamples?: string[];
+        openapiComponents?: string[];
+        forbiddenPayloadFields?: string[];
+      }>;
+      proof: { contractIndex: string; apiTests: string; noLeakSerialization: string };
+    };
+    const openapi = contract.openapi as typeof enterpriseApiSurface.openapi;
     const semantics = contract.semantics as {
       idempotency: { header: string; route: string; behavior: string };
       cursorPolling: { responseFields: string[] };
@@ -286,6 +450,14 @@ describe("api v1", () => {
       };
       publicWrapperResponsiveAudit: typeof publicWrapperResponsiveAudit;
       publicWrapperDeltaAudit: typeof publicWrapperDeltaAudit;
+      enterpriseApiSurface: typeof enterpriseApiSurface;
+      sdkIntegration: typeof sdkIntegration;
+      clientCompatibilityMatrix: typeof clientCompatibilityMatrix;
+      authBoundary: typeof enterpriseApiSurface.authBoundary;
+      pagination: typeof enterpriseApiSurface.pagination;
+      rateLimits: typeof enterpriseApiSurface.rateLimits;
+      auditFields: typeof enterpriseApiSurface.auditFields;
+      openapi: typeof enterpriseApiSurface.openapi;
       cutoverScenarios: Array<{ code: string; state: string; warningCode: string; publicBehavior: string }>;
       publicChannelCanary: { routes: string[]; fields: string[]; guarantee: string };
       publicChannelPromotionCanary: { fields: string[]; healthSignals: string[]; guarantee: string };
@@ -314,7 +486,24 @@ describe("api v1", () => {
     expect(contract).toMatchObject({
       endpoint: "/v1/contracts",
       version: "v1",
-      schemaVersion: "ti.scraper.enterprise_api_contract.v1"
+      schemaVersion: "ti.scraper.enterprise_api_contract.v1",
+      enterpriseApiSurface: {
+        schemaVersion: "ti.enterprise_api_surface.v1",
+        owner: "Agent 09",
+        status: "contract_frozen_for_openapi_generation"
+      },
+      sdkIntegration: {
+        schemaVersion: "ti.sdk_integration_contract.v1",
+        status: "contract_only_no_push_delivery"
+      },
+      clientCompatibilityMatrix: {
+        schemaVersion: "ti.client_compatibility_matrix.v1",
+        status: "contract_frozen_for_client_generation"
+      },
+      openapi: {
+        schemaVersion: "ti.openapi_ready_contract.v1",
+        openapi: "3.1.0"
+      }
     });
     expect(routeInventory).toMatchObject({
       source: "src/api/server.ts",
@@ -542,6 +731,177 @@ describe("api v1", () => {
       "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
       "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
     ]));
+    expect(enterpriseApiSurface.authBoundary).toMatchObject({
+      schemaVersion: "ti.enterprise_auth_boundary.v1",
+      mode: "trusted_gateway_forwarded_identity",
+      requiredForwardedHeaders: expect.arrayContaining(["x-tenant-id", "x-actor-id"]),
+      tenantContract: {
+        header: "x-tenant-id",
+        requiredForProduction: true
+      },
+      requesterContract: {
+        header: "x-actor-id",
+        requiredForProduction: true,
+        auditOnlyHere: true
+      },
+      secretHandling: {
+        bearerTokensAcceptedHere: false
+      }
+    });
+    expect(enterpriseApiSurface.authBoundary.authzModel.scopes).toEqual(expect.arrayContaining([
+      "intel:read",
+      "intel:run",
+      "sources:write",
+      "scraper:admin"
+    ]));
+    expect(enterpriseApiSurface.identity).toMatchObject({
+      tenantHeader: "x-tenant-id",
+      requesterHeader: "x-actor-id",
+      requestIdHeader: "x-request-id"
+    });
+    expect(enterpriseApiSurface.idempotency).toMatchObject({
+      header: "idempotency-key",
+      conflictCode: "idempotency_conflict",
+      conflictStatus: 409
+    });
+    expect(enterpriseApiSurface.idempotency.requiredOn).toContain("POST /v1/intel/runs");
+    expect(enterpriseApiSurface.pagination).toMatchObject({
+      style: "cursor",
+      maxLimit: 100
+    });
+    expect(enterpriseApiSurface.pagination.requestFields).toEqual(expect.arrayContaining(["cursor", "limit"]));
+    expect(enterpriseApiSurface.pagination.responseFields).toContain("nextCursor");
+    expect(enterpriseApiSurface.pagination.paginatedRoutes).toEqual(expect.arrayContaining(["GET /v1/sources", "GET /v1/intel/runs/{id}/results"]));
+    expect(enterpriseApiSurface.rateLimits).toMatchObject({
+      model: "gateway_enforced_with_route_hints"
+    });
+    expect(enterpriseApiSurface.rateLimits.responseHeaders).toEqual(expect.arrayContaining(["retry-after", "x-rate-limit-policy", "x-request-id"]));
+    expect(enterpriseApiSurface.rateLimits.overloadCodes).toEqual(expect.arrayContaining(["queue_pressure", "provider_unavailable", "scraper_unavailable"]));
+    expect(enterpriseApiSurface.auditFields.requiredOnMutations).toEqual(expect.arrayContaining(["tenantId", "requesterId", "requestId", "idempotencyKey"]));
+    expect(enterpriseApiSurface.auditFields.requiredOnEvidenceBearingResponses).toEqual(expect.arrayContaining(["sourceId", "captureId", "contentHash", "ledgerIds"]));
+    expect(enterpriseApiSurface.auditFields.redactedAlways).toEqual(expect.arrayContaining(["authorization", "cookie", "object_key", "credential"]));
+    expect(enterpriseApiSurface.errors.codes).toEqual(expect.arrayContaining(["bad_request", "idempotency_conflict", "queue_pressure", "policy_blocked"]));
+    expect(enterpriseApiSurface.errors.retryableCodes).toContain("queue_pressure");
+    expect(enterpriseApiSurface.errors.failClosedCodes).toContain("policy_blocked");
+    expect(enterpriseApiSurface.openapi.paths).toHaveProperty("/v1/intel/search");
+    expect(enterpriseApiSurface.openapi.paths).toHaveProperty("/v1/intel/runs/{id}/results");
+    expect(Object.keys(enterpriseApiSurface.openapi.components.schemas)).toEqual(expect.arrayContaining(["ErrorEnvelope", "CursorPage", "IdempotentRunRequest", "PublicSearchResponse"]));
+    expect(Object.keys(enterpriseApiSurface.openapi.components.schemas)).toEqual(expect.arrayContaining(["SdkPollingEnvelope", "SdkSubscriptionRegistration"]));
+    expect(enterpriseApiSurface.examples.map((example) => example.name)).toEqual(expect.arrayContaining([
+      "tenant_scoped_public_search",
+      "idempotent_run_create",
+      "cursor_results_page"
+    ]));
+    expect(enterpriseApiSurface.noLeakGuarantee).toContain("never raw bodies");
+    expect(sdkIntegration.routes).toMatchObject({
+      initialSearch: "GET /v1/intel/search",
+      publicWrapperSearch: "POST /api/ti/search",
+      futureSse: "GET /v1/events/search-stream",
+      futureWebhookRegistration: "POST /v1/webhooks/subscriptions"
+    });
+    expect(sdkIntegration.polling).toMatchObject({
+      intervalSeconds: 3,
+      emptyDelta: {
+        status: "waiting_for_deltas",
+        changed: false
+      },
+      duplicateRunReuse: {
+        warningCode: "duplicate_run_reuse"
+      }
+    });
+    expect(sdkIntegration.polling.responseFields).toEqual(expect.arrayContaining(["runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "publicTiAnswer", "publicWrapperDelta"]));
+    expect(sdkIntegration.polling.retryableStates).toEqual(expect.arrayContaining(["searching", "queued", "partial", "metadata_review", "queue_pressure"]));
+    expect(sdkIntegration.polling.emptyDelta.requiredFields).toEqual(expect.arrayContaining(["runId", "pollCursor", "deltaCursor", "updated"]));
+    expect(sdkIntegration.polling.emptyDelta.clientBehavior).toContain("do not clear evidence sections");
+    expect(sdkIntegration.polling.duplicateRunReuse.requiredFields).toEqual(expect.arrayContaining(["runId", "idempotencyKey", "pollCursor", "deltaCursor"]));
+    expect(sdkIntegration.polling.degradedModes.queue_pressure).toMatchObject({ retryAfterSeconds: 5, preserveLastGoodAnswer: true });
+    expect(sdkIntegration.backoff.preferHeaders).toEqual(expect.arrayContaining(["retry-after", "x-rate-limit-policy", "x-request-id"]));
+    expect(sdkIntegration.backoff.maxClientPollSeconds).toBe(30);
+    expect(sdkIntegration.eventBoundary).toMatchObject({
+      delivery: "future_contract_only",
+      allowedModes: expect.arrayContaining(["sse", "webhook"])
+    });
+    expect(sdkIntegration.eventBoundary.eventTypes).toEqual(expect.arrayContaining(["delta.available", "run.ready", "review.required"]));
+    expect(sdkIntegration.eventBoundary.forbiddenPayloadFields).toEqual(expect.arrayContaining(["raw_body", "restricted_raw_url", "credential", "object_reference", "leaked_row"]));
+    expect(sdkIntegration.examples.map((example) => example.name)).toEqual(expect.arrayContaining([
+      "browser_poll_loop",
+      "backend_service_poll_loop",
+      "analyst_automation_review_hold",
+      "future_webhook_registration"
+    ]));
+    expect(sdkIntegration.openapi).toMatchObject({
+      schemaVersion: "ti.sdk_openapi_extension.v1",
+      components: expect.arrayContaining(["SdkPollingEnvelope", "SdkSubscriptionRegistration"]),
+      xSdkPollingContract: {
+        intervalSeconds: 3
+      }
+    });
+    expect(sdkIntegration.openapi.xSdkPollingContract.cursorFields).toEqual(expect.arrayContaining(["pollCursor", "deltaCursor", "nextCursor"]));
+    expect(sdkIntegration.noLeakGuarantee).toContain("never push raw bodies");
+    expect(clientCompatibilityMatrix.contractFreeze).toMatchObject({
+      schemaVersion: "ti.openapi_contract_freeze.v1",
+      openapi: "3.1.0",
+      routeCount: Object.keys(openapi.paths).length
+    });
+    expect(clientCompatibilityMatrix.contractFreeze.requiredComponentSchemas).toEqual(expect.arrayContaining([
+      "ErrorEnvelope",
+      "CursorPage",
+      "IdempotentRunRequest",
+      "PublicSearchResponse",
+      "SdkPollingEnvelope",
+      "SdkSubscriptionRegistration"
+    ]));
+    expect(clientCompatibilityMatrix.contractFreeze.requiredSemantics).toEqual(expect.arrayContaining([
+      "trusted_gateway_forwarded_identity",
+      "tenant_header_boundary",
+      "stable_error_envelope",
+      "cursor_pagination",
+      "idempotent_run_creation",
+      "retry_after_headers",
+      "public_wrapper_delta_polling",
+      "no_leak_examples"
+    ]));
+    expect(clientCompatibilityMatrix.sharedGuarantees.errorCodes).toEqual(expect.arrayContaining(["bad_request", "queue_pressure", "policy_blocked"]));
+    expect(clientCompatibilityMatrix.sharedGuarantees.retryHeaders).toEqual(expect.arrayContaining(["retry-after", "x-rate-limit-policy", "x-request-id"]));
+    expect(clientCompatibilityMatrix.sharedGuarantees.redactedAlways).toEqual(expect.arrayContaining(["authorization", "cookie", "object_key", "credential"]));
+    expect(clientCompatibilityMatrix.clients.map((client) => client.client)).toEqual(expect.arrayContaining([
+      "frontend_ti",
+      "cti_backend",
+      "analyst_automation",
+      "future_sdk",
+      "future_sse_webhooks"
+    ]));
+    expect(clientCompatibilityMatrix.clients.find((client) => client.client === "frontend_ti")).toMatchObject({
+      primaryRoutes: expect.arrayContaining(["POST /api/ti/search", "GET /v1/intel/search"]),
+      requiredResponseKeys: expect.arrayContaining(["runId", "pollCursor", "deltaCursor", "publicTiAnswer", "publicWrapperDelta"]),
+      states: expect.arrayContaining(["first_response", "empty_delta", "metadata_review", "graph_hold", "claim_ledger_hold", "ready"])
+    });
+    expect(clientCompatibilityMatrix.clients.find((client) => client.client === "cti_backend")).toMatchObject({
+      primaryRoutes: expect.arrayContaining(["POST /v1/intel/runs", "GET /v1/intel/runs/{id}/results", "POST /v1/exports/stix"]),
+      requiredResponseKeys: expect.arrayContaining(["run", "results", "nextCursor", "bundle"])
+    });
+    expect(clientCompatibilityMatrix.clients.find((client) => client.client === "analyst_automation")).toMatchObject({
+      primaryRoutes: expect.arrayContaining(["GET /v1/analyst/loop", "GET /v1/evidence/claim-ledger", "GET /v1/restricted-metadata/status"]),
+      states: expect.arrayContaining(["metadata_review", "needs_source_activation", "blocked_unsafe_target", "review_required"])
+    });
+    expect(clientCompatibilityMatrix.clients.find((client) => client.client === "future_sdk")?.openapiComponents).toEqual(expect.arrayContaining(["SdkPollingEnvelope", "SdkSubscriptionRegistration"]));
+    expect(clientCompatibilityMatrix.clients.find((client) => client.client === "future_sse_webhooks")).toMatchObject({
+      primaryRoutes: expect.arrayContaining(["GET /v1/events/search-stream", "POST /v1/webhooks/subscriptions"]),
+      forbiddenPayloadFields: expect.arrayContaining(["raw_body", "restricted_raw_url", "credential", "leaked_row"])
+    });
+    expect(clientCompatibilityMatrix.proof).toMatchObject({
+      contractIndex: "bun run check:contract-index",
+      apiTests: "bun test src/tests/api.test.ts src/tests/ops.test.ts"
+    });
+    expect(openapi).toEqual(enterpriseApiSurface.openapi);
+    expect(semantics.enterpriseApiSurface).toEqual(enterpriseApiSurface);
+    expect(semantics.sdkIntegration).toEqual(sdkIntegration);
+    expect(semantics.clientCompatibilityMatrix).toEqual(clientCompatibilityMatrix);
+    expect(semantics.authBoundary).toEqual(enterpriseApiSurface.authBoundary);
+    expect(semantics.pagination).toEqual(enterpriseApiSurface.pagination);
+    expect(semantics.rateLimits).toEqual(enterpriseApiSurface.rateLimits);
+    expect(semantics.auditFields).toEqual(enterpriseApiSurface.auditFields);
+    expect(semantics.openapi).toEqual(enterpriseApiSurface.openapi);
     expect(routeInventory.routes.map((route) => `${route.method} ${route.path}`)).toEqual(expect.arrayContaining([
       "GET /v1/health",
       "GET /v1/contracts",
@@ -598,6 +958,8 @@ describe("api v1", () => {
       "pollCursor",
       "deltaCursor",
       "updated",
+      "analystLoop",
+      "tiExperience",
       "answer",
       "publicTiAnswer",
       "publicWrapperDelta"
@@ -783,7 +1145,7 @@ describe("api v1", () => {
     });
     expect(semantics.restrictedMetadataConnectorCertification).toMatchObject({
       routes: expect.arrayContaining(["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search"]),
-      scenarios: expect.arrayContaining(["healthy_approved_metadata_source", "unsafe_link_form_download", "retention_expiry"]),
+      scenarios: expect.arrayContaining(["healthy_approved_metadata_source", "missing_approval", "unsafe_link_form_download", "retention_expiry"]),
       packetFields: expect.arrayContaining(["networkIsolation", "approval", "redaction", "guarantees", "noLeakSerialization"])
     });
     expect(semantics.restrictedMetadataConnectorCertification.guarantee).toContain("no downloads");
@@ -1297,127 +1659,36 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }));
 
-    expect(response.publicChannel).toMatchObject({
-      status: "partial",
-      queuedTasks: 1,
-      summary: {
-        freshness: {
-          latestMessageId: 10,
-          safePartialEvidenceCount: 1
-        },
-        reliability: {
-          sourceCount: 1,
-          rating: "healthy",
-          needsReviewCount: 0
-        },
-        promotionYield: {
-          rating: "high",
-          promotedCount: 1
-        },
-        answerReadiness: {
-          status: "ready"
-        }
-      },
-      sla: {
-        status: "pass",
-        enforcement: {
-          status: "pass",
-          releaseAction: "promote",
-          agent10ReleasePacket: {
-            runtimeProofName: "public_channel_sla",
-            decisionImpact: "promote"
-          }
-        },
-        releaseGate: {
-          agent10ProofName: "public_channel_sla",
-          decisionImpact: "promote"
-        },
-        metrics: {
-          cursorFreshness: {
-            latestMessageTimestamp: "2026-05-23T23:59:00.000Z"
-          },
-          ledgerBackedClaimYield: {
-            ledgerBackedClaimCount: 1,
-            candidateClaimCount: 1
-          }
-        }
-      },
-      cutoverReport: {
-        summary: {
-          readyChannelCount: 1,
-          safePartialEvidenceCount: 1,
-          recommendedNextAction: "ready_for_cutover"
-        },
-        evidenceFreshness: {
-          latestMessageId: 10,
-          safePartialEvidenceCount: 1
-        }
-      },
-      reliability: {
-        sources: [{
-          sourceId: "src_telegram",
-          rating: "healthy",
-          partialEvidenceOnly: false
-        }]
-      },
-      abuseControls: [{
-        sourceId: "src_telegram",
-        allowed: true
-      }],
-      canaryRollout: {
-        mode: "dry_run",
-        summary: {
-          selectedSourceCount: 1,
-          replayableEvidenceCount: 1
-        },
-        selectedSources: expect.arrayContaining([expect.objectContaining({
-          sourceId: "src_telegram",
-          agent06EvidenceHandoff: expect.objectContaining({ metadataOnly: true })
-        })])
-      },
-      promotionCanary: {
-        mode: "dry_run",
-        summary: {
-          evidenceCount: 1,
-          replayableEvidenceCount: 1,
-          noLeakSerialization: true
-        },
-        sourceHealth: expect.arrayContaining([expect.objectContaining({
-          sourceId: "src_telegram",
-          rateLimitDebt: "none",
-          evidenceYield: expect.any(Number),
-          claimYield: expect.any(Number)
-        })]),
-        handoffs: {
-          agent06EvidenceCutover: expect.objectContaining({ evidenceCutoverReady: true }),
-          agent07PublicAnswer: expect.objectContaining({ answerState: expect.any(String) }),
-          agent10RcGate: expect.objectContaining({ status: expect.any(String) })
-        }
-      },
-      promotionCertification: {
-        mode: "dry_run",
-        summary: {
-          certifiedEvidenceCount: expect.any(Number),
-          sourceHealthUpdateCount: 1,
-          noLeakSerialization: true
-        },
-        handoffs: {
-          agent06EvidenceCertification: expect.objectContaining({ certifiedLedgerIds: expect.any(Array) }),
-          agent07AnswerStateMachine: expect.objectContaining({ state: expect.any(String) }),
-          agent08GraphCertification: expect.objectContaining({ status: expect.any(String) }),
-          agent10RcGate: expect.objectContaining({ status: expect.any(String) })
-        }
-      },
-      operatorControlEffects: expect.any(Array),
-      evidence: [{
-        sourceId: "src_telegram",
-        channel: "cybercrimeintel",
-        messageUrl: "https://t.me/cybercrimeintel/10",
-        extractedUrls: ["https://evil.example"],
-        forward: { fromChannel: "public_origin", fromMessageId: 4 },
-        confidence: 0.95
-      }]
-    });
+    const publicChannel = response.publicChannel as {
+      queuedTasks: number;
+      sla: { metrics: { ledgerBackedClaimYield: { ledgerBackedClaimCount: number; candidateClaimCount: number } } };
+      cutoverReport: { evidenceFreshness: { latestMessageId: number; safePartialEvidenceCount: number } };
+      canaryRollout: { mode: string; summary: { selectedSourceCount: number; replayableEvidenceCount: number }; selectedSources: Array<{ sourceId: string; agent06EvidenceHandoff: { metadataOnly: boolean } }> };
+      promotionCanary: { mode: string; summary: { evidenceCount: number; noLeakSerialization: boolean }; handoffs: { agent06EvidenceCutover: { evidenceCutoverReady: boolean } } };
+      promotionCertification: { mode: string; summary: { noLeakSerialization: boolean } };
+      evidence: Array<{ sourceId: string; channel: string; messageUrl: string; extractedUrls: string[]; confidence: number }>;
+      abuseControls: Array<{ sourceId: string; allowed: boolean }>;
+    };
+    expect(publicChannel.queuedTasks).toBe(1);
+    expect(publicChannel.sla.metrics.ledgerBackedClaimYield).toMatchObject({ ledgerBackedClaimCount: 1, candidateClaimCount: 1 });
+    expect(publicChannel.cutoverReport.evidenceFreshness).toMatchObject({ latestMessageId: 10, safePartialEvidenceCount: 1 });
+    expect(publicChannel.canaryRollout.mode).toBe("dry_run");
+    expect(publicChannel.canaryRollout.summary).toMatchObject({ selectedSourceCount: 1, replayableEvidenceCount: 1 });
+    expect(publicChannel.canaryRollout.selectedSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceId: "src_telegram", agent06EvidenceHandoff: expect.objectContaining({ metadataOnly: true }) })
+    ]));
+    expect(publicChannel.promotionCanary.mode).toBe("dry_run");
+    expect(publicChannel.promotionCanary.summary).toMatchObject({ evidenceCount: 1, noLeakSerialization: true });
+    expect(publicChannel.promotionCanary.handoffs.agent06EvidenceCutover.evidenceCutoverReady).toBe(true);
+    expect(publicChannel.promotionCertification).toMatchObject({ mode: "dry_run", summary: { noLeakSerialization: true } });
+    expect(publicChannel.abuseControls).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", allowed: true })]));
+    expect(publicChannel.evidence).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceId: "src_telegram",
+      channel: "cybercrimeintel",
+      messageUrl: "https://t.me/cybercrimeintel/10",
+      extractedUrls: ["https://evil.example"],
+      confidence: 0.95
+    })]));
     expect(response.planner).toMatchObject({
       mode: "interactive_live_search",
       zeroTaskReason: "none"
@@ -1535,7 +1806,27 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }));
 
-    expect(response).toMatchObject({
+    const statusResponse = response as {
+      endpoint: string;
+      status: string;
+      query: string;
+      queuedTasks: number;
+      safeOutput: { rawPrivateDataExposed: boolean; rawMediaPayloadsExposed: boolean; credentialsExposed: boolean; mediaRetention: string; piiMinimized: boolean };
+      poll: { cursor: number; nextCursor: number; media: { retention: string; rawFetchAllowed: boolean } };
+      reliability: { summary: { sourceCount: number; needsReviewCount: number }; sources: Array<{ sourceId: string; metrics: { promotionYield: number } }> };
+      abuseControls: Array<{ sourceId: string; allowed: boolean; suppressedUrlCount: number }>;
+      operatorStates: Array<{ sourceId: string; state: string; collectable: boolean }>;
+      sourcePackCompatibility: Array<{ sourceId: string; compatible: boolean; retentionClass: string }>;
+      sourcePackReadiness: { summary: { approvedPublicCount: number; replayableEvidenceCount: number }; sources: Array<{ sourceId: string; replayableEvidenceHandoff: { targetAgent: string; metadataOnly: boolean } }> };
+      canaryRollout: { mode: string; summary: { approvedSourceCount: number; selectedSourceCount: number }; selectedSources: Array<{ sourceId: string; phase: string; agent06EvidenceHandoff: { metadataOnly: boolean } }> };
+      promotionCanary: { mode: string; summary: { evidenceCount: number; noLeakSerialization: boolean } };
+      promotionCertification: { mode: string; summary: { noLeakSerialization: boolean; sourceHealthUpdateCount: number } };
+      actorReadiness: { status: string; sourceRatings: Array<{ sourceId: string; partialEvidenceOnly: boolean }> };
+      answerReadiness: { freshness: { latestMessageId: number; safePartialEvidenceCount: number }; promotionYield: { rating: string; promotedCount: number } };
+      sla: { enforcement: { agent06LedgerHandoff: { state: string }; agent07AnswerReadiness: { state: string; claimStatus: string } }; metrics: { collectionSuccess: { sourceCount: number }; promotionYield: { averageRatio: number } } };
+      operatorControlEffects: unknown[];
+    };
+    expect(statusResponse).toMatchObject({
       endpoint: "/v1/public-channels/status",
       status: "ready",
       query: "APT29",
@@ -1551,191 +1842,36 @@ describe("api v1", () => {
         cursor: 19,
         nextCursor: 20,
         media: { retention: "metadata_only", rawFetchAllowed: false }
-      },
-      promotion: {
-        status: "ready",
-        safeOutput: {
-          rawMediaPayloadsExposed: false,
-          mediaRetention: "metadata_only"
-        }
-      },
-      reliability: {
-        summary: {
-          sourceCount: 1,
-          needsReviewCount: 0
-        },
-        sources: [{
-          sourceId: "src_telegram",
-          rating: "healthy",
-          metrics: {
-            topicFit: expect.any(Number),
-            promotionYield: 1
-          }
-        }],
-        safeOutput: {
-          rawPrivateDataExposed: false,
-          rawMediaPayloadsExposed: false,
-          piiMinimized: true
-        }
-      },
-      abuseControls: [{
-        sourceId: "src_telegram",
-        allowed: true,
-        suppressedUrlCount: 0
-      }],
-      operatorStates: [{
-        sourceId: "src_telegram",
-        state: "actively_collectable",
-        collectable: true
-      }],
-      sourcePackCompatibility: [{
-        sourceId: "src_telegram",
-        compatible: true,
-        retentionClass: "public_chat_text",
-        abuseControlDefaults: {
-          mediaRetention: "metadata_only",
-          piiMinimized: true
-        }
-      }],
-      sourcePackReadiness: {
-        status: expect.any(String),
-        summary: {
-          sourcePackCount: 0,
-          candidateCount: 0,
-          approvedPublicCount: 1,
-          blockedCount: 0,
-          replayableEvidenceCount: 1,
-          releaseHold: false
-        },
-        sources: expect.arrayContaining([expect.objectContaining({
-          sourceId: "src_telegram",
-          replayableEvidenceHandoff: expect.objectContaining({
-            targetAgent: "agent_06",
-            metadataOnly: true
-          }),
-          answerCaveats: expect.objectContaining({ targetAgent: "agent_07" }),
-          releaseGate: expect.objectContaining({ targetAgent: "agent_10" })
-        })]),
-        safeOutput: {
-          rawPrivateDataExposed: false,
-          rawMediaPayloadsExposed: false,
-          credentialsExposed: false,
-          mediaRetention: "metadata_only",
-          piiMinimized: true
-        }
-      },
-      canaryRollout: {
-        mode: "dry_run",
-        status: "ready",
-        summary: {
-          approvedSourceCount: 1,
-          selectedSourceCount: 1,
-          releaseTrain: "canary_ready"
-        },
-        selectedSources: expect.arrayContaining([expect.objectContaining({
-          sourceId: "src_telegram",
-          phase: "first_channel",
-          agent06EvidenceHandoff: expect.objectContaining({ metadataOnly: true }),
-          agent10ReleaseTrain: expect.objectContaining({ status: "pass" })
-        })]),
-        controls: expect.objectContaining({
-          queryDedupe: expect.objectContaining({ repeatedActorQueryControls: true }),
-          abuse: expect.objectContaining({ unavailableWindowHandling: "metadata_only_replay" })
-        }),
-        safeOutput: expect.objectContaining({
-          rawPrivateDataExposed: false,
-          rawMediaPayloadsExposed: false,
-          credentialsExposed: false
-        })
-      },
-      promotionCanary: {
-        mode: "dry_run",
-        summary: {
-          evidenceCount: 1,
-          claimCandidateCount: expect.any(Number),
-          graphHintCount: expect.any(Number),
-          noLeakSerialization: true
-        },
-        sourceHealth: expect.arrayContaining([expect.objectContaining({
-          sourceId: "src_telegram",
-          duplicateUrlPressure: "low",
-          rollbackTriggers: expect.any(Array)
-        })]),
-        handoffs: {
-          agent06EvidenceCutover: expect.objectContaining({ replayableLedgerIds: expect.any(Array) }),
-          agent07PublicAnswer: expect.objectContaining({ caveatCodes: expect.any(Array) }),
-          agent10RcGate: expect.objectContaining({ status: "pass" })
-        }
-      },
-      promotionCertification: {
-        mode: "dry_run",
-        status: "certified",
-        summary: {
-          certifiedEvidenceCount: expect.any(Number),
-          answerEligibleClaimCount: expect.any(Number),
-          graphEligibleHintCount: expect.any(Number),
-          sourceHealthUpdateCount: 1,
-          releaseDecision: "promote",
-          noLeakSerialization: true
-        },
-        handoffs: {
-          agent06EvidenceCertification: expect.objectContaining({ certifiedLedgerIds: expect.any(Array) }),
-          agent07AnswerStateMachine: expect.objectContaining({
-            state: "ready",
-            transition: "promote_public_channel_claims"
-          }),
-          agent08GraphCertification: expect.objectContaining({ status: "certified" }),
-          agent10RcGate: expect.objectContaining({ status: "pass", decision: "promote" })
-        }
-      },
-      actorReadiness: {
-        status: "ready",
-        sourceRatings: [{
-          sourceId: "src_telegram",
-          partialEvidenceOnly: false
-        }]
-      },
-      answerReadiness: {
-        freshness: {
-          latestMessageId: 20,
-          safePartialEvidenceCount: 1
-        },
-        reliability: {
-          sourceCount: 1,
-          rating: "healthy"
-        },
-        promotionYield: {
-          rating: "high",
-          promotedCount: 1
-        }
-      },
-      sla: {
-        status: "pass",
-        enforcement: {
-          status: "pass",
-          agent06LedgerHandoff: {
-            state: "pass"
-          },
-          agent07AnswerReadiness: {
-            state: "pass",
-            claimStatus: "ready"
-          }
-        },
-        releaseGate: {
-          owner: "Agent 04",
-          agent10ProofName: "public_channel_sla"
-        },
-        metrics: {
-          collectionSuccess: {
-            sourceCount: 1
-          },
-          promotionYield: {
-            averageRatio: 1
-          }
-        }
-      },
-      operatorControlEffects: expect.any(Array)
+      }
     });
+    expect(statusResponse.reliability.summary).toMatchObject({ sourceCount: 1, needsReviewCount: 0 });
+    expect(statusResponse.reliability.sources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", metrics: expect.objectContaining({ promotionYield: 1 }) })]));
+    expect(statusResponse.abuseControls).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", allowed: true, suppressedUrlCount: 0 })]));
+    expect(statusResponse.operatorStates).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", state: "actively_collectable", collectable: true })]));
+    expect(statusResponse.sourcePackCompatibility).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", compatible: true, retentionClass: "public_chat_text" })]));
+    expect(statusResponse.sourcePackReadiness.summary).toMatchObject({ approvedPublicCount: 1, replayableEvidenceCount: 1 });
+    expect(statusResponse.sourcePackReadiness.sources).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceId: "src_telegram",
+      replayableEvidenceHandoff: expect.objectContaining({ targetAgent: "agent_06", metadataOnly: true })
+    })]));
+    expect(statusResponse.canaryRollout.mode).toBe("dry_run");
+    expect(statusResponse.canaryRollout.summary).toMatchObject({ approvedSourceCount: 1, selectedSourceCount: 1 });
+    expect(statusResponse.canaryRollout.selectedSources).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceId: "src_telegram",
+      phase: "first_channel",
+      agent06EvidenceHandoff: expect.objectContaining({ metadataOnly: true })
+    })]));
+    expect(statusResponse.promotionCanary).toMatchObject({ mode: "dry_run", summary: { evidenceCount: 1, noLeakSerialization: true } });
+    expect(statusResponse.promotionCertification).toMatchObject({ mode: "dry_run", summary: { sourceHealthUpdateCount: 1, noLeakSerialization: true } });
+    expect(statusResponse.actorReadiness.status).toBe("ready");
+    expect(statusResponse.actorReadiness.sourceRatings).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", partialEvidenceOnly: false })]));
+    expect(statusResponse.answerReadiness.freshness).toMatchObject({ latestMessageId: 20, safePartialEvidenceCount: 1 });
+    expect(statusResponse.answerReadiness.promotionYield).toMatchObject({ rating: "high", promotedCount: 1 });
+    expect(statusResponse.sla.enforcement.agent06LedgerHandoff.state).toBe("pass");
+    expect(statusResponse.sla.enforcement.agent07AnswerReadiness).toMatchObject({ state: "pass", claimStatus: "ready" });
+    expect(statusResponse.sla.metrics.collectionSuccess.sourceCount).toBe(1);
+    expect(statusResponse.sla.metrics.promotionYield.averageRatio).toBe(1);
+    expect(statusResponse.operatorControlEffects).toEqual(expect.any(Array));
     expect(response.publicSignalFusion).toMatchObject({
       status: expect.any(String),
       guardrails: {
@@ -1755,7 +1891,52 @@ describe("api v1", () => {
       publicSignalDeltas: expect.arrayContaining([expect.objectContaining({
         sourceId: "src_telegram",
         mergeTarget: "public_channel_partial_evidence"
-      })])
+      })]),
+      advisoryConnector: expect.objectContaining({
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          noPrivateRepoAccess: true,
+          noExploitPayloadDownload: true
+        }),
+        rankedSignals: expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: "src_github_advisory",
+            family: "github_advisory",
+            mergeTarget: "clear_web_capture_evidence"
+          }),
+          expect.objectContaining({
+            sourceId: "src_cisa_kev",
+            family: "cert_government",
+            mergeTarget: "clear_web_capture_evidence"
+          })
+        ])
+      }),
+      analystSourceWorkbench: expect.objectContaining({
+        schemaVersion: "ti.public_source_workbench.v1",
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          dryRunOnly: true,
+          noPrivateRepoAccess: true,
+          unsafeUrlsExposed: false
+        }),
+        decisions: expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: "src_github_advisory",
+            publicOnly: true,
+            provenance: expect.objectContaining({ unsafeUrlExposed: false })
+          })
+        ]),
+        dryRunActions: expect.arrayContaining([
+          expect.objectContaining({
+            willMutate: false,
+            willStartCrawling: false,
+            publicOnly: true
+          })
+        ]),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.analystSourceWorkbench"]
+        })
+      })
     });
     const evidence = response.evidence as Array<{
       messageUrl: string;
@@ -4038,6 +4219,79 @@ describe("api v1", () => {
         sourceHash: "urlhash"
       })
     ]));
+    expect(response.analystLoop).toMatchObject({
+      resultState: "metadata_review",
+      runStatusClarity: {
+        reviewTasks: 1,
+        meaningfulWorkCount: 1
+      }
+    });
+    const tiExperience = (response as {
+      tiExperience: {
+        visibleStates: string[];
+        reviewCards: unknown[];
+        notificationPacket: {
+          company: string;
+          affectedAccounts: string;
+          datasetSize: string;
+          externalDeliveryPerformed: boolean;
+          safeToSendWithoutReview: boolean;
+        };
+      };
+    }).tiExperience;
+    const publicWrapperDelta = (response as {
+      publicWrapperDelta: {
+        stablePublicFields: string[];
+        deltas: { analystLoop: { state: string; reviewTaskCount: number; queuedTaskCount: number } };
+      };
+    }).publicWrapperDelta;
+    expect(tiExperience).toMatchObject({
+      schemaVersion: "ti.analyst_loop_ui.v1",
+      state: "metadata_review",
+      safeToRenderVerifiedLeakFacts: false,
+      partial: true,
+      progress: {
+        metadataReview: true,
+        ready: false
+      },
+      runStatusClarity: {
+        queuedTasks: 0,
+        reviewTasks: 1,
+        meaningfulWorkCount: 1
+      },
+      sourceActivationWorkflow: {
+        silentAutoActivationAllowed: false
+      },
+      guarantees: {
+        metadataOnly: true,
+        rawLeakMaterialAccessed: false,
+        notificationDeliveredExternally: false,
+        doesNotImplyVerification: true
+      }
+    });
+    expect(tiExperience.visibleStates).toEqual(["queued", "metadata_review", "blocked_unsafe_target", "needs_source_activation", "ready"]);
+    expect(tiExperience.reviewCards).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        company: "Fjord Energy AS",
+        affectedAccounts: "50k accounts",
+        datasetSize: "20 GB",
+        sourceHash: "urlhash",
+        unsafeMaterialAccessed: false
+      })
+    ]));
+    expect(tiExperience.notificationPacket).toMatchObject({
+      company: "Fjord Energy AS",
+      affectedAccounts: "50k accounts",
+      datasetSize: "20 GB",
+      externalDeliveryPerformed: false,
+      safeToSendWithoutReview: false
+    });
+    expect(publicWrapperDelta.stablePublicFields).toEqual(expect.arrayContaining(["analystLoop", "tiExperience"]));
+    expect(publicWrapperDelta.deltas.analystLoop).toMatchObject({
+      state: "metadata_review",
+      reviewTaskCount: 1,
+      queuedTaskCount: 0
+    });
     expect(store.listAnalystMetadataReviewTasks()).toHaveLength(1);
     expect(store.listAnalystMetadataReviewTasks()[0]).toMatchObject({
       company: "Fjord Energy AS",
@@ -4067,6 +4321,226 @@ describe("api v1", () => {
       reviewTasks: 1,
       meaningfulWorkCount: 1
     });
+    const inbox = await body(await handleApiRequest(api("/v1/analyst/metadata-review-tasks"), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(inbox).toMatchObject({
+      contract: {
+        endpoint: "/v1/analyst/metadata-review-tasks",
+        metadataOnly: true,
+        safeForApi: true,
+        actionsEndpoint: "/v1/analyst/metadata-review-tasks/{taskId}/actions"
+      },
+      runStatusClarity: {
+        reviewTasks: 1,
+        metadataReviewTasks: 1,
+        notificationDrafts: 1,
+        meaningfulWorkCount: 2
+      }
+    });
+    const inboxTask = (inbox.tasks as Array<{ company: string; affectedAccounts: string; datasetSize: string; sourceHash: string; allowedActions: string[] }>)[0];
+    expect(inboxTask).toMatchObject({
+      company: "Fjord Energy AS",
+      affectedAccounts: "50k accounts",
+      datasetSize: "20 GB",
+      sourceHash: "urlhash"
+    });
+    expect(inboxTask.allowedActions).toEqual(expect.arrayContaining(["notify_company", "mark_duplicate", "request_approval", "escalate"]));
+    expect(JSON.stringify(inbox)).not.toContain("customer-dump");
+    expect(JSON.stringify(inbox)).not.toContain("password");
+    const reviewTaskId = (inbox.tasks as Array<{ id: string }>)[0].id;
+    const action = await body(await handleApiRequest(api(`/v1/analyst/metadata-review-tasks/${encodeURIComponent(reviewTaskId)}/actions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "analyst-1" },
+      body: JSON.stringify({ action: "notify_company", dryRun: false, reason: "Prepare safe victim notification draft." })
+    }), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(action).toMatchObject({
+      contract: {
+        metadataOnly: true,
+        externalDeliveryPerformed: false,
+        sourceActivationPerformed: false
+      },
+      dryRun: false,
+      action: "notify_company",
+      result: {
+        status: "notified",
+        persisted: true
+      },
+      notificationPacket: {
+        company: "Fjord Energy AS",
+        affectedAccounts: "50k accounts",
+        datasetSize: "20 GB",
+        safeToSend: false
+      }
+    });
+    expect(store.getAnalystMetadataReviewTask(reviewTaskId)?.status).toBe("notified");
+    const readModel = await body(await handleApiRequest(api("/v1/analyst/loop?q=Akira"), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(readModel).toMatchObject({
+      contract: {
+        endpoint: "/v1/analyst/loop",
+        schemaVersion: "ti.analyst_loop_read_model.v1",
+        metadataOnly: true,
+        safeForApi: true
+      },
+      state: "metadata_review",
+      runStatusClarity: {
+        reviewTasks: 1,
+        metadataReviewTasks: 1,
+        notificationDrafts: 1,
+        meaningfulWorkCount: 1
+      },
+      persistence: {
+        replayableFromStore: true,
+        survivesFileBackedRestart: true
+      }
+    });
+    expect((readModel.reviewTasks as Array<{ company: string; datasetSize: string; sourceHash: string }>)[0]).toMatchObject({
+      company: "Fjord Energy AS",
+      datasetSize: "20 GB",
+      sourceHash: "urlhash"
+    });
+    expect((readModel.notificationPackets as Array<{ safeToSend: boolean; company: string }>)[0]).toMatchObject({
+      company: "Fjord Energy AS",
+      safeToSend: false
+    });
+    expect(JSON.stringify(readModel)).not.toContain("customer-dump");
+    expect(JSON.stringify(readModel)).not.toContain("password");
+    store.saveAnalystSourceActivationPacket({
+      id: "activation_test_fjord",
+      planId: "plan_test_activation",
+      runId: "run_test_activation",
+      sourceId: "src_onion",
+      action: "request_operator_approval",
+      execution: "approval_required",
+      reason: "Operator approval required before restoring metadata-only queue.",
+      expectedEffect: "Queue safe metadata only after explicit approval.",
+      rollback: "Keep source disabled.",
+      dryRun: true,
+      createdAt: "2026-05-24T10:05:00.000Z"
+    });
+    const sourceActivationPackets = await body(await handleApiRequest(api("/v1/analyst/source-activation-packets"), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(sourceActivationPackets).toMatchObject({
+      contract: {
+        endpoint: "/v1/analyst/source-activation-packets",
+        metadataOnly: true,
+        safeForApi: true,
+        sourceMutationPerformed: false,
+        crawlingStarted: false
+      },
+      runStatusClarity: {
+        activationPackets: 1,
+        approvalRequired: 1,
+        meaningfulWorkCount: 1
+      }
+    });
+    const activationPacketId = (sourceActivationPackets.packets as Array<{ id: string; execution: string; dryRun: boolean }>)[0].id;
+    const activationAction = await body(await handleApiRequest(api(`/v1/analyst/source-activation-packets/${encodeURIComponent(activationPacketId)}/actions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "operator-1" },
+      body: JSON.stringify({ action: "approve_metadata_only", dryRun: false, reason: "Approve metadata-only review queue." })
+    }), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(activationAction).toMatchObject({
+      contract: {
+        metadataOnly: true,
+        sourceMutationPerformed: false,
+        crawlingStarted: false,
+        restrictedFetchEnabled: false
+      },
+      dryRun: false,
+      action: "approve_metadata_only",
+      result: {
+        approvalRecorded: true,
+        approvalDryRunOnly: true
+      },
+      packet: {
+        approvedBy: "operator-1",
+        dryRun: true
+      }
+    });
+    expect(store.listAnalystSourceActivationPackets()[0]).toMatchObject({
+      approvedBy: "operator-1"
+    });
+    expect(JSON.stringify(sourceActivationPackets)).not.toContain("customer-dump");
+    expect(JSON.stringify(activationAction)).not.toContain("password");
+    const notificationQueue = await body(await handleApiRequest(api("/v1/analyst/victim-notification-packets"), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(notificationQueue).toMatchObject({
+      contract: {
+        endpoint: "/v1/analyst/victim-notification-packets",
+        metadataOnly: true,
+        safeForApi: true,
+        externalDeliveryPerformed: false,
+        rawLeakMaterialAccessed: false
+      },
+      runStatusClarity: {
+        notificationPackets: 1,
+        drafts: 1,
+        meaningfulWorkCount: 1
+      }
+    });
+    const notificationPacketId = (notificationQueue.packets as Array<{ id: string }>)[0].id;
+    const notificationApproval = await body(await handleApiRequest(api(`/v1/analyst/victim-notification-packets/${encodeURIComponent(notificationPacketId)}/actions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "analyst-2" },
+      body: JSON.stringify({ action: "approve_packet", dryRun: false, reason: "Approved redacted company notification packet." })
+    }), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(notificationApproval).toMatchObject({
+      contract: {
+        metadataOnly: true,
+        externalDeliveryPerformed: false,
+        rawLeakMaterialAccessed: false
+      },
+      dryRun: false,
+      action: "approve_packet",
+      result: {
+        nextStatus: "approved",
+        externalDeliveryPerformed: false
+      },
+      packet: {
+        approvedBy: "analyst-2",
+        safeToSend: true,
+        status: "approved"
+      }
+    });
+    const sentRecord = await body(await handleApiRequest(api(`/v1/analyst/victim-notification-packets/${encodeURIComponent(notificationPacketId)}/actions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "analyst-2" },
+      body: JSON.stringify({ action: "record_external_sent", dryRun: false, reason: "Company notified by approved external process." })
+    }), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(sentRecord).toMatchObject({
+      action: "record_external_sent",
+      result: {
+        nextStatus: "sent",
+        externalDeliveryPerformed: false
+      },
+      packet: {
+        status: "sent"
+      }
+    });
+    expect(store.listAnalystClaimLedgerEntries().filter((entry) => entry.reviewTaskId === reviewTaskId).map((entry) => entry.ledgerStatus)).toEqual(expect.arrayContaining(["notified"]));
+    expect(JSON.stringify(notificationQueue)).not.toContain("customer-dump");
+    expect(JSON.stringify(sentRecord)).not.toContain("password");
     expect(JSON.stringify(store.listAnalystMetadataReviewTasks())).not.toContain("password");
     const restricted = response.restrictedMetadata as {
       runtimeProofs: Array<{ kind: string; metadataOnly: boolean; safeForApi: boolean; forbiddenAlternatives: string[] }>;
@@ -4587,8 +5061,43 @@ describe("api v1", () => {
       publicWarningCodes: string[];
       publicWarningText: string[];
     };
+    const dashboard = response.dashboard as {
+      schemaVersion: string;
+      fields: Array<{ field: string; gate: string; feedbackTargets: string[] }>;
+      metrics: { usefulAnswerRate: number; citationAvailability: number; sourceFamilyDiversity: number };
+      reviewQueues: { analystReview: string[]; graphReview: string[] };
+      releaseGate: { decision: string };
+    };
+    const entityResolutionWorkbench = response.entityResolutionWorkbench as {
+      schemaVersion: string;
+      candidates: Array<{ kind: string; canonicalValue: string; reviewState: string; uncertaintyReasons: string[]; correctionActions: string[]; provenance: Array<{ evidenceId: string; captureId: string }> }>;
+      reviewQueues: { aliasCollisions: string[]; graphReview: string[] };
+      safety: { rawEvidenceExposed: boolean; restrictedPayloadsExposed: boolean; preservesUncertainty: boolean };
+    };
+    const timelinessGroundTruth = response.timelinessGroundTruth as {
+      schemaVersion: string;
+      queryClass: string;
+      fields: Array<{ field: string; status: string; score: number }>;
+      releaseImpact: { publicAnswerState: string; holdsReadyPromotion: boolean; caveats: string[] };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; preservesUncertainty: boolean };
+    };
+    const attackMappingQuality = response.attackMappingQuality as {
+      schemaVersion: string;
+      summary: { candidateCount: number; mappedAttackIdCount: number };
+      techniques: Array<{ attackId?: string; confidence: number; reviewState: string; stixEligibility: { impact: string }; citations: Array<{ evidenceId: string; sourceId: string; captureId: string }> }>;
+      reviewQueues: { missingTechniqueId: string[]; stixBlocked: string[] };
+      releaseImpact: { publicAnswerState: string; holdsReadyPromotion: boolean; caveats: string[] };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; preservesUncertainty: boolean };
+    };
+    const analystFeedbackLoop = response.analystFeedbackLoop as {
+      schemaVersion: string;
+      items: Array<{ mark: string; target: string; immutable: boolean; appliesAutomatically: boolean }>;
+      routing: { qualityGate: string[]; entityResolution: string[]; publicAnswerCaveats: string[]; parserRepair: string[] };
+      policy: { modelSelfMutationAllowed: boolean; analystApprovalRequired: boolean; preservesProvenance: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean };
+    };
     const publicTiAnswer = response.publicTiAnswer as { schemaVersion: string; displayState: string; waitReasons: Array<{ code: string }> };
-    const examples = response.examples as Array<{ quality: { status: string } }>;
+    const examples = response.examples as Array<{ quality: { status: string }; dashboard: { schemaVersion: string } }>;
 
     expect(examples.map((example) => example.quality.status)).toEqual(expect.arrayContaining([
       "ready",
@@ -4602,10 +5111,71 @@ describe("api v1", () => {
     ]));
     expect(quality.publicWarningCodes).toContain("alias_collision_warning");
     expect(quality.analystActions.map((action) => action.kind)).toContain("suppress_noisy_alias");
+    expect(dashboard).toMatchObject({
+      schemaVersion: "ti.search_quality_dashboard.v1",
+      releaseGate: { decision: expect.any(String) }
+    });
+    expect(dashboard.fields.map((field) => field.field)).toEqual(expect.arrayContaining(["actor_summary", "provenance", "freshness", "iocs"]));
+    expect(dashboard.metrics.usefulAnswerRate).toBeGreaterThanOrEqual(0);
+    expect(dashboard.metrics.citationAvailability).toBeGreaterThanOrEqual(0);
+    expect(dashboard.metrics.sourceFamilyDiversity).toBeGreaterThanOrEqual(1);
+    expect(entityResolutionWorkbench.schemaVersion).toBe("ti.entity_resolution_workbench.v1");
+    expect(entityResolutionWorkbench.candidates.map((candidate) => candidate.kind)).toEqual(expect.arrayContaining(["actor_alias", "ransomware_rebrand"]));
+    expect(entityResolutionWorkbench.candidates.some((candidate) => candidate.canonicalValue === "Akira" && candidate.correctionActions.includes("send_to_graph_review"))).toBe(true);
+    expect(entityResolutionWorkbench.reviewQueues.graphReview.length).toBeGreaterThan(0);
+    expect(entityResolutionWorkbench.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      restrictedPayloadsExposed: false,
+      preservesUncertainty: true
+    });
+    expect(timelinessGroundTruth.schemaVersion).toBe("ti.timeliness_ground_truth.v1");
+    expect(["high_activity_actor", "ransomware", "actor"]).toContain(timelinessGroundTruth.queryClass);
+    expect(timelinessGroundTruth.fields.map((field) => field.field)).toEqual(expect.arrayContaining(["recent_activity", "source_freshness"]));
+    expect(typeof timelinessGroundTruth.releaseImpact.holdsReadyPromotion).toBe("boolean");
+    expect(Array.isArray(timelinessGroundTruth.releaseImpact.caveats)).toBe(true);
+    expect(timelinessGroundTruth.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      preservesUncertainty: true
+    });
+    expect(attackMappingQuality.schemaVersion).toBe("ti.attack_mapping_quality.v1");
+    expect(attackMappingQuality.summary.candidateCount).toBeGreaterThan(0);
+    expect(attackMappingQuality.summary.mappedAttackIdCount).toBeGreaterThanOrEqual(0);
+    expect(attackMappingQuality.techniques.every((technique) => technique.citations.every((citation) => citation.evidenceId && citation.sourceId && citation.captureId))).toBe(true);
+    expect(typeof attackMappingQuality.releaseImpact.holdsReadyPromotion).toBe("boolean");
+    expect(attackMappingQuality.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      preservesUncertainty: true
+    });
+    expect(analystFeedbackLoop.schemaVersion).toBe("ti.analyst_feedback_loop.v1");
+    expect(analystFeedbackLoop.items.length).toBeGreaterThan(0);
+    expect(analystFeedbackLoop.items.every((item) => item.immutable && item.appliesAutomatically === false)).toBe(true);
+    expect(analystFeedbackLoop.policy).toMatchObject({
+      modelSelfMutationAllowed: false,
+      analystApprovalRequired: true,
+      preservesProvenance: true
+    });
+    expect(analystFeedbackLoop.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false
+    });
+    expect(examples.every((example) => example.dashboard.schemaVersion === "ti.search_quality_dashboard.v1")).toBe(true);
     expect(publicTiAnswer.schemaVersion).toBe("ti.public_answer_contract.v1");
     expect(["partial", "review_required"]).toContain(publicTiAnswer.displayState);
     expect(JSON.stringify(quality)).not.toContain("Cyber gang list");
     expect(JSON.stringify(quality)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(dashboard)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(dashboard)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(entityResolutionWorkbench)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(entityResolutionWorkbench)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(timelinessGroundTruth)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(timelinessGroundTruth)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(attackMappingQuality)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(attackMappingQuality)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(analystFeedbackLoop)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(analystFeedbackLoop)).not.toContain("https://quality.example.test");
   });
 
   test("smokes mounted quality endpoints through the Bun API server", async () => {

@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { actorAliasesFor } from "../pipeline/actorAliases.ts";
+import { buildAnalystFeedbackLoopDto } from "../pipeline/analystFeedback.ts";
+import { buildAttackMappingQualityDto } from "../pipeline/attackMappingQuality.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto, fuseActorProfile, type ActorProfileSnapshot } from "../pipeline/actorProfileFusion.ts";
+import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
 import { evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
 import { EXTRACTOR_VERSION } from "../pipeline/extractors.ts";
 import { buildActorQueryExtractionProfile, buildLiveTiSearchSummary, buildTiSearchResultDto, extractionProfileKinds, summarizeEvidenceDeltas, type EvidenceStage, type TiConfidenceCaveatCode } from "../pipeline/intelligenceProfiles.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
-import { analystCaveatPacks, buildSearchQualityApiDto, buildSearchQualityApplyPlan, evaluateSearchQualityGate, searchQualityApiExamples } from "../pipeline/searchQualityGate.ts";
+import { analystCaveatPacks, buildSearchQualityApiDto, buildSearchQualityApplyPlan, buildSearchQualityDashboardDto, evaluateSearchQualityGate, searchQualityApiExamples } from "../pipeline/searchQualityGate.ts";
+import { buildTimelinessGroundTruthHarnessDto } from "../pipeline/timelinessGroundTruth.ts";
 import { hashContent } from "../utils.ts";
 import { extractionEvaluationCorpus } from "./fixtures/extraction/corpus.ts";
 import { extractionCalibrationCorpus } from "./fixtures/extraction/calibration.ts";
@@ -970,6 +974,11 @@ describe("pipeline", () => {
       expect(example.quality.caveatCodes).toBeArray();
       expect(example.quality.qualityNoteCodes).toBeArray();
       expect(example.quality.publicWarningText.length).toBeGreaterThan(0);
+      expect(example.dashboard.schemaVersion).toBe("ti.search_quality_dashboard.v1");
+      expect(example.dashboard.fields.length).toBeGreaterThanOrEqual(12);
+      expect(example.dashboard.metrics.usefulAnswerRate).toBeGreaterThanOrEqual(0);
+      expect(example.dashboard.metrics.expectedFactRecall).toBeGreaterThanOrEqual(0);
+      expect(example.dashboard.reviewQueues).toBeDefined();
       expect(Object.keys(example.quality.evidenceStageCounts).sort()).toEqual([
         "captured_page",
         "extracted_relationship",
@@ -1008,9 +1017,177 @@ describe("pipeline", () => {
 
     const aliasGate = evaluateSearchQualityGate({ dto: aliasCollision });
     const aliasQuality = buildSearchQualityApiDto(aliasCollision, aliasGate);
+    const aliasDashboard = buildSearchQualityDashboardDto(aliasCollision, aliasGate, "2026-05-24T12:00:00.000Z");
     expect(aliasQuality.publicWarningCodes).toContain("alias_collision_warning");
     expect(aliasQuality.publicWarningText.join(" ")).toContain("alias");
     expect(aliasQuality.analystActions.map((action) => action.kind)).toContain("suppress_noisy_alias");
+    expect(aliasDashboard.metrics.citationAvailability).toBeGreaterThan(0);
+    expect(aliasDashboard.fields.map((field) => field.field)).toEqual(expect.arrayContaining([
+      "actor_summary",
+      "recent_activity",
+      "tools_malware",
+      "cves",
+      "iocs",
+      "provenance"
+    ]));
+    expect(aliasDashboard.releaseGate.decision).not.toBe("promote");
+    expect(JSON.stringify(aliasDashboard)).not.toContain("Cyber gang list");
+  });
+
+  test("builds entity resolution workbench candidates with review states and provenance", () => {
+    const workbench = buildEntityResolutionWorkbenchDto({
+      query: "Turla Snake",
+      generatedAt: "2026-05-24T02:00:00.000Z",
+      evidence: [
+        stagedResult("turla-resolution-a", "captured_page", "Turla, also known as Snake, used Snake malware against Fjord Energy AS in Norway with CVE-2026-1234 and hxxps://snake[.]example[.]com/a."),
+        stagedResult("turla-resolution-b", "extracted_relationship", "Waterbug operators used phishing against Fjord Energy AS in the energy sector. Last seen 2026-05-23."),
+        stagedResult("akira-resolution", "metadata_only_claim", "Akira claimed victim: Northwind Health and listed a ransomware post.")
+      ]
+    });
+
+    const byKind = (kind: string) => workbench.candidates.filter((candidate) => candidate.kind === kind);
+    const turla = byKind("actor_alias").find((candidate) => candidate.canonicalValue === "Turla");
+    const snakeTool = byKind("malware_tool").find((candidate) => candidate.canonicalValue === "Snake");
+    const akiraRebrand = byKind("ransomware_rebrand").find((candidate) => candidate.canonicalValue === "Akira");
+    if (!turla) throw new Error("Expected Turla actor candidate");
+    if (!snakeTool) throw new Error("Expected Snake tool candidate");
+    if (!akiraRebrand) throw new Error("Expected Akira ransomware rebrand candidate");
+
+    expect(workbench.schemaVersion).toBe("ti.entity_resolution_workbench.v1");
+    expect(workbench.summary.candidateCount).toBeGreaterThan(0);
+    expect(workbench.summary.reviewRequiredCount).toBeGreaterThan(0);
+    expect(turla.observedValues.map((value) => value.toLowerCase())).toEqual(expect.arrayContaining(["turla", "snake"]));
+    expect(turla.confidenceReasons.join(" ")).toContain("source family");
+    expect(snakeTool.reviewState).toBe("review_required");
+    expect(snakeTool.uncertaintyReasons.join(" ")).toContain("alias collision");
+    expect(akiraRebrand.reviewState).toBe("review_required");
+    expect(akiraRebrand.uncertaintyReasons.join(" ")).toContain("metadata-only");
+    expect(byKind("victim_company").map((candidate) => candidate.canonicalValue)).toEqual(expect.arrayContaining(["Fjord Energy AS", "Northwind Health"]));
+    expect(byKind("cve").map((candidate) => candidate.canonicalValue)).toContain("CVE-2026-1234");
+    expect(byKind("infrastructure").some((candidate) => candidate.canonicalValue.includes("snake.example.com"))).toBe(true);
+    expect(snakeTool).toBeDefined();
+    expect(workbench.reviewQueues.aliasCollisions).toContain(snakeTool!.id);
+    expect(workbench.reviewQueues.graphReview.length).toBeGreaterThan(0);
+    expect(workbench.candidates.every((candidate) => candidate.provenance.every((item) => item.evidenceId && item.captureId && item.extractorVersion))).toBe(true);
+    expect(JSON.stringify(workbench)).not.toContain("rawText");
+    expect(workbench.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      restrictedPayloadsExposed: false,
+      preservesUncertainty: true
+    });
+  });
+
+  test("builds timeliness ground truth harness that blocks stale latest-activity wording", () => {
+    const staleApt29 = buildTimelinessGroundTruthHarnessDto({
+      query: "APT29",
+      generatedAt: "2026-05-24T00:00:00.000Z",
+      evidence: [
+        stagedResult("apt29-stale-time-a", "captured_page", "APT29 used phishing against Northwind Health. Last seen 2025-12-01.", undefined, undefined, undefined, {
+          publishedAt: "2025-12-01T00:00:00.000Z"
+        }),
+        stagedResult("apt29-stale-time-b", "live_discovery", "Historical report says Cozy Bear targeted government agencies in 2024.", undefined, undefined, undefined, {
+          publishedAt: "2025-11-20T00:00:00.000Z"
+        })
+      ]
+    });
+    const freshApt29 = buildTimelinessGroundTruthHarnessDto({
+      query: "APT29",
+      generatedAt: "2026-05-24T00:00:00.000Z",
+      evidence: [
+        stagedResult("apt29-fresh-time-a", "captured_page", "Mandiant linked APT29 to phishing against Northwind Health. Last seen 2026-05-22.", undefined, undefined, undefined, {
+          publishedAt: "2026-05-22T00:00:00.000Z"
+        }),
+        stagedResult("apt29-fresh-time-b", "extracted_relationship", "Graph relationship: APT29 used credential dumping against Northwind Health in Norway on 2026-05-23.", undefined, undefined, undefined, {
+          publishedAt: "2026-05-23T00:00:00.000Z"
+        })
+      ]
+    });
+
+    expect(staleApt29.schemaVersion).toBe("ti.timeliness_ground_truth.v1");
+    expect(staleApt29.queryClass).toBe("high_activity_actor");
+    expect(staleApt29.expectations.staleCannotBeLatest).toBe(true);
+    expect(staleApt29.fields.find((field) => field.field === "recent_activity")?.status).toBe("stale");
+    expect(staleApt29.gaps.map((gap) => gap.code)).toEqual(expect.arrayContaining(["stale_latest_source", "stale_field"]));
+    expect(staleApt29.releaseImpact).toMatchObject({
+      publicAnswerState: "partial",
+      holdsReadyPromotion: true
+    });
+    expect(freshApt29.releaseImpact.holdsReadyPromotion).toBe(false);
+    expect(freshApt29.fields.find((field) => field.field === "recent_activity")?.status).toBe("current");
+    expect(JSON.stringify(staleApt29)).not.toContain("Historical report");
+    expect(staleApt29.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      preservesUncertainty: true
+    });
+  });
+
+  test("builds analyst feedback loop contracts without model self mutation", () => {
+    const evidence = [
+      stagedResult("feedback-apt29-a", "captured_page", "APT29 may have used phishing against Northwind Health. Last seen 2025-12-01.", undefined, undefined, undefined, {
+        publishedAt: "2025-12-01T00:00:00.000Z"
+      })
+    ];
+    const actorProfile = buildLiveActorIntelligenceDto({ query: "APT29", evidence });
+    const answer = buildPublicIntelAnswerDto(actorProfile, { status: "partial", score: 0.42, publicWarningCodes: ["weak-evidence"], publicWarningText: ["weak evidence"] });
+    const qualityGate = evaluateSearchQualityGate({ dto: actorProfile });
+    const qualityDashboard = buildSearchQualityDashboardDto(actorProfile, qualityGate, "2026-05-24T12:00:00.000Z");
+    const entityResolutionWorkbench = buildEntityResolutionWorkbenchDto({ query: "APT29", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const timelinessGroundTruth = buildTimelinessGroundTruthHarnessDto({ query: "APT29", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const feedback = buildAnalystFeedbackLoopDto({
+      query: "APT29",
+      actorProfile,
+      claims: answer.claims,
+      qualityDashboard,
+      entityResolutionWorkbench,
+      timelinessGroundTruth,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(feedback.schemaVersion).toBe("ti.analyst_feedback_loop.v1");
+    expect(feedback.items.map((item) => item.mark)).toEqual(expect.arrayContaining(["stale", "underconfident", "missing"]));
+    expect(feedback.routing.qualityGate.length).toBeGreaterThan(0);
+    expect(feedback.routing.entityResolution.length).toBeGreaterThan(0);
+    expect(feedback.routing.publicAnswerCaveats.length).toBeGreaterThan(0);
+    expect(feedback.policy).toMatchObject({
+      modelSelfMutationAllowed: false,
+      analystApprovalRequired: true,
+      rawEvidenceRequired: false,
+      preservesProvenance: true
+    });
+    expect(feedback.items.every((item) => item.immutable && item.appliesAutomatically === false)).toBe(true);
+    expect(JSON.stringify(feedback)).not.toContain("https://example.test");
+    expect(JSON.stringify(feedback)).not.toContain("may have used phishing");
+  });
+
+  test("builds ATT&CK mapping quality and drift evaluation without raw evidence", () => {
+    const evidence = [
+      stagedResult("attack-quality-ready", "reviewed_promoted", "Mandiant linked APT29 to phishing and credential dumping against Northwind Health in the healthcare sector. First seen 2026-05-22."),
+      stagedResult("attack-quality-held", "captured_page", "Conflicting reports disputed APT29 living off the land mapping for Northwind Health; analysts marked a deprecated ATT&CK technique reference.")
+    ];
+    const quality = buildAttackMappingQualityDto({
+      query: "APT29",
+      evidence,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(quality.schemaVersion).toBe("ti.attack_mapping_quality.v1");
+    expect(quality.summary.candidateCount).toBeGreaterThanOrEqual(2);
+    expect(quality.summary.mappedAttackIdCount).toBeGreaterThan(0);
+    expect(quality.techniques.some((technique) => technique.attackId === "T1566")).toBe(true);
+    expect(quality.techniques.some((technique) => technique.actorRelevance.matchedActorAliases.includes("APT29"))).toBe(true);
+    expect(quality.reviewQueues.deprecatedOrRevoked.length).toBeGreaterThan(0);
+    expect(quality.reviewQueues.contradictions.length).toBeGreaterThan(0);
+    expect(quality.reviewQueues.stixBlocked.length).toBeGreaterThan(0);
+    expect(quality.releaseImpact.holdsReadyPromotion).toBe(true);
+    expect(quality.techniques.every((technique) => technique.citations.every((citation) => citation.evidenceId && citation.sourceId && citation.captureId))).toBe(true);
+    expect(quality.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      preservesUncertainty: true
+    });
+    expect(JSON.stringify(quality)).not.toContain("https://example.test");
+    expect(JSON.stringify(quality)).not.toContain("Conflicting reports disputed");
   });
 });
 
@@ -1038,6 +1215,7 @@ function stagedResult(
       sourceId: `src_${id}`,
       url: `https://example.test/${id}`,
       collectedAt: "2026-05-24T01:00:00.000Z",
+      publishedAt: typeof metadata.publishedAt === "string" ? metadata.publishedAt : undefined,
       title: id,
       rawText,
       contentHash: hashContent(rawText),

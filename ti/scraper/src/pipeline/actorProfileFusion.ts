@@ -560,10 +560,6 @@ const FACT_SUPPRESSING_CAVEATS = new Set<TiConfidenceCaveatCode>([
 ]);
 
 export function fuseActorProfile(input: FuseActorProfileInput): FusedActorProfile {
-  if (input.evidence.length === 0 && !input.baseline) {
-    throw new Error("Cannot fuse an actor profile without baseline or evidence.");
-  }
-
   const now = input.now ?? new Date().toISOString();
   const evidenceDtos = input.evidence.map((item) => ({
     evidence: item,

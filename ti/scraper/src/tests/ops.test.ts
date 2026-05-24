@@ -425,6 +425,26 @@ describe("ops controls", () => {
       }
     };
     const healthy = verifyScraperNativeSearchReadiness(healthyProbe);
+    const metadataReview = verifyScraperNativeSearchReadiness({
+      ...healthyProbe,
+      search: {
+        ...healthyProbe.search,
+        json: {
+          ...healthyProbe.search.json,
+          status: "metadata_review"
+        }
+      },
+      publicPage: {
+        url: "https://hanasand.com/ti?q=APT29",
+        status: 200,
+        body: "<div data-mode=\"live_search\">metadata_review queued run</div>"
+      },
+      publicApiPost: {
+        url: "https://api.hanasand.com/api/ti/search",
+        status: 200,
+        json: { runId: "run_public_2", status: "metadata_review" }
+      }
+    });
     const failing = verifyScraperNativeSearchReadiness({
       scraperHealth: { status: 503, json: { ok: false } },
       search: {
@@ -466,6 +486,7 @@ describe("ops controls", () => {
     });
 
     expect(healthy.ok).toBe(true);
+    expect(metadataReview.ok).toBe(true);
     expect(healthy.rollback.required).toBe(false);
     expect(() => assertScraperNativeSearchReadiness(healthy)).not.toThrow();
     expect(failing.ok).toBe(false);
@@ -1884,6 +1905,123 @@ describe("ops controls", () => {
     expect(promote.realTimeSearchBoard.proofCommands).toContain("bun run check:contract-index");
     expect(promote.realTimeSearchBoard.proofCommands).toContain("bun run check:live-search-deploy");
     expect(promote.realTimeSearchBoard.rollbackCommands).toContain("pause real-time delta promotion and return Searching/queued-only public answers");
+    expect(promote.observabilityDashboard.schemaVersion).toBe("ti.production_observability.dashboard.v1");
+    expect(promote.observabilityDashboard.dryRun).toBe(true);
+    expect(["ready", "watch"]).toContain(promote.observabilityDashboard.decision);
+    expect(promote.observabilityDashboard.sloDashboard.windowHours).toBe(24);
+    expect(promote.observabilityDashboard.sloDashboard.metrics.map((metric) => metric.name)).toEqual([
+      "initial_latency_p95_ms",
+      "partial_latency_p95_ms",
+      "queue_age_p95_seconds",
+      "worker_saturation_percent",
+      "memory_rss_max_gb",
+      "cpu_max_percent",
+      "adapter_failure_rate_percent",
+      "source_unavailable_rate_percent",
+      "policy_block_rate_percent",
+      "evidence_write_read_proof",
+      "graph_export_readiness",
+      "public_proof_matrix"
+    ]);
+    expect(promote.observabilityDashboard.sloDashboard.metrics.find((metric) => metric.name === "memory_rss_max_gb")).toMatchObject({
+      value: 74,
+      warnAt: 96,
+      criticalAt: 160,
+      status: "pass",
+      alertName: "ti_scraper_memory_rss_high"
+    });
+    expect(promote.observabilityDashboard.soakAutomation).toMatchObject({
+      cadenceSeconds: 60,
+      durationHours: 24,
+      checkpointsHours: [0, 6, 12, 18, 24],
+      environment: {
+        scraperTargetGb: 96,
+        scraperCeilingGb: 160,
+        preserveCtiReserveGb: 500,
+        assumesGpu: false
+      }
+    });
+    expect(promote.observabilityDashboard.soakAutomation.command).toContain("TI_SOAK_DURATION_MINUTES=1440");
+    expect(promote.observabilityDashboard.publicProofMatrix.map((proof) => proof.query)).toEqual(queries);
+    expect(promote.observabilityDashboard.publicProofMatrix.every((proof) => proof.status === "pass")).toBe(true);
+    expect(promote.observabilityDashboard.failureClassification.map((item) => item.name)).toEqual([
+      "latency",
+      "queue",
+      "worker",
+      "resource",
+      "source",
+      "policy",
+      "evidence",
+      "graph",
+      "public_proof",
+      "deployment",
+      "restricted_safety"
+    ]);
+    expect(promote.observabilityDashboard.rollbackDecisionPacket.operatorRunbook).toContain("preserve 500 GB for the rest of CTI before increasing scraper capacity");
+    expect(promote.observabilityDashboard.rollbackDecisionPacket.operatorRunbook).toContain("do not assume GPU availability for any worker lane");
+    expect(promote.observabilityDashboard.proofCommands).toContain("bun run soak:production");
+    expect(promote.observabilityDashboard.proofCommands).toContain("docker exec hanasand_ti_scraper wget -qO- http://localhost:8097/v1/ops/resource-snapshot");
+    expect(promote.enterpriseReleaseTrain.schemaVersion).toBe("ti.enterprise_release_train.v1");
+    expect(promote.enterpriseReleaseTrain.dryRun).toBe(true);
+    expect(["canary-with-warnings", "promote-with-warnings", "promote"]).toContain(promote.enterpriseReleaseTrain.decision);
+    expect(promote.enterpriseReleaseTrain.stages.map((stage) => stage.name)).toEqual([
+      "local_contract_green",
+      "route_inventory_green",
+      "public_proof_matrix_green",
+      "canary_ready",
+      "canary_with_warnings",
+      "promote_with_warnings",
+      "promote",
+      "rollback",
+      "emergency_stop",
+      "no_go"
+    ]);
+    expect(promote.enterpriseReleaseTrain.disasterRecovery.proofs.map((proof) => proof.name)).toEqual([
+      "evidence_export_manifest",
+      "claim_ledger_replay",
+      "graph_export_replay",
+      "source_registry_backup",
+      "scheduler_queue_drain",
+      "public_wrapper_rollback",
+      "container_rollback"
+    ]);
+    expect(promote.enterpriseReleaseTrain.disasterRecovery.proofs.every((proof) => !proof.noLeakExample.includes("raw body"))).toBe(true);
+    expect(promote.enterpriseReleaseTrain.disasterRecovery.rollbackCommands).toContain("restore previous public wrapper fallback and redeploy hanasand_api");
+    expect(promote.enterpriseReleaseTrain.capacityPlan).toMatchObject({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      nonScraperReservedGb: 864,
+      browserPool: "disabled_until_explicitly_allocated",
+      assumesGpu: false,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      status: "pass",
+      workerCaps: {
+        clearWebWorkers: 128,
+        publicChannelWorkers: 8,
+        restrictedMetadataWorkers: 4,
+        browserWorkers: 0
+      }
+    });
+    expect(promote.enterpriseReleaseTrain.dependencyHealth.map((health) => health.name)).toEqual([
+      "scraper",
+      "api",
+      "frontend",
+      "docker",
+      "route_inventory",
+      "contract_index",
+      "public_proof_matrix",
+      "source_freshness",
+      "evidence_writes",
+      "graph_export_holds",
+      "restricted_metadata_safety",
+      "queue_headroom"
+    ]);
+    expect(promote.enterpriseReleaseTrain.noLeakReleaseExamples).toContain("DR manifests use hashes, capture ids, ledger ids, and source ids; no raw bodies or credentials");
+    expect(promote.enterpriseReleaseTrain.operatorRunbook).toContain("keep browser workers disabled and do not assume GPU capacity");
+    expect(promote.enterpriseReleaseTrain.proofCommands).toContain("bun run check:contract-index");
+    expect(promote.enterpriseReleaseTrain.proofCommands).toContain("bun run check:deploy-hygiene && bun run check:docker-contexts");
     expect(promote.runtimeProofs.find((proof) => proof.name === "graph_export_sla")?.graphExportSla).toMatchObject({
       endpoint: "agent10_release_packet",
       state: "pass",
@@ -1922,7 +2060,10 @@ describe("ops controls", () => {
     expect(promote.statusReport).toContain(`rcBoard: ${promote.rcBoard.decision}`);
     expect(promote.statusReport).toContain(`productTiBoard: ${promote.productTiBoard.decision}`);
     expect(promote.statusReport).toContain(`realTimeSearchBoard: ${promote.realTimeSearchBoard.decision}`);
+    expect(promote.statusReport).toContain(`observabilityDashboard: ${promote.observabilityDashboard.decision}`);
+    expect(promote.statusReport).toContain(`enterpriseReleaseTrain: ${promote.enterpriseReleaseTrain.decision}`);
     expect(promote.nextProofCommands).toContain("bun run check:remote-drift");
+    expect(promote.nextProofCommands).toContain("bun run soak:production");
     expect(promote.nextProofCommands).toContain("bun run check:deploy-hygiene");
     expect(promote.nextProofCommands).toContain("bun run check:docker-contexts");
     expect(promote.nextProofCommands).toContain("bun run check:live-search-deploy");

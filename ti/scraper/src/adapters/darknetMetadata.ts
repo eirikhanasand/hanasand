@@ -545,6 +545,110 @@ export interface RestrictedMetadataAnalystOperationsDto {
   readonly agent10EmergencyStopGates: readonly string[];
   readonly victimNotificationPacketCount: number;
   readonly claimLedgerStatuses: readonly string[];
+  readonly victimClaimWorkflow: RestrictedMetadataVictimClaimWorkflowDto;
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataVictimClaimWorkflowScenario =
+  | "unique_company_claim"
+  | "duplicate_victim_posts"
+  | "stale_repost"
+  | "false_claim_review"
+  | "actor_name_mismatch"
+  | "claimed_count_mismatch"
+  | "source_takedown"
+  | "legal_hold"
+  | "retention_expiry"
+  | "draft_notification_review";
+
+export interface RestrictedMetadataVictimClaimWorkflowPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataVictimClaimWorkflowScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly normalizedClaim: {
+    readonly company: string;
+    readonly victim: string;
+    readonly normalizedVictimKey: string;
+    readonly actor?: string;
+    readonly claimedAt?: string;
+    readonly sector?: string;
+    readonly country?: string;
+    readonly affectedAccounts?: string;
+    readonly datasetSize?: string;
+    readonly claimedDataType: string;
+    readonly sourceFamily: DarknetMetadataSourceType | "public_advisory" | "public_report" | "analyst_review";
+  };
+  readonly grouping: {
+    readonly groupId: string;
+    readonly duplicateOf?: string;
+    readonly sourceHashes: readonly string[];
+    readonly groupedBy: readonly string[];
+    readonly sourceHashOnly: true;
+  };
+  readonly reviewState:
+    | "metadata_review"
+    | "duplicate"
+    | "contradicted"
+    | "stale"
+    | "false_claim_review"
+    | "takedown_unavailable"
+    | "legal_hold"
+    | "retention_expiring"
+    | "notification_draft";
+  readonly contradictionReasons: readonly string[];
+  readonly notificationDraft?: {
+    readonly status: "draft_review";
+    readonly company: string;
+    readonly claimSummary: string;
+    readonly affectedAccounts?: string;
+    readonly datasetType?: string;
+    readonly claimedAt?: string;
+    readonly actorStatementSummary?: string;
+    readonly sourceHash: string;
+    readonly confidence: number;
+    readonly redactions: readonly string[];
+    readonly legalHold: boolean;
+    readonly retentionClass: RetentionClass;
+    readonly whatWasNotAccessed: readonly string[];
+    readonly safeToSend: false;
+  };
+  readonly handoffs: {
+    readonly agent06ClaimLedger: "metadata_review" | "duplicate" | "contradicted" | "legal_hold" | "retention_expiring";
+    readonly agent07AnswerCaveat: "restricted_claim_unverified" | "duplicate_claim" | "contradicted_claim" | "stale_claim" | "notification_review_only";
+    readonly agent08GraphHold: "hold_unreviewed_restricted_claim" | "hold_duplicate_or_contradicted_claim" | "hold_legal_or_retention";
+    readonly agent09ApiState: "safe_metadata_only";
+    readonly agent10ReleaseGate: "pass" | "hold";
+  };
+  readonly proof: {
+    readonly noRawLeakMaterial: true;
+    readonly noUnsafeUrls: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPrivateAccess: true;
+    readonly noCaptchaSolving: true;
+    readonly noAuthBypass: true;
+    readonly noThreatActorInteraction: true;
+    readonly hashOnlySourceIdentifiers: true;
+    readonly graphPromotionHeld: true;
+    readonly stixPromotionEligible: false;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataVictimClaimWorkflowDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly packets: readonly RestrictedMetadataVictimClaimWorkflowPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataVictimClaimWorkflowScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataVictimClaimWorkflowScenario[];
+  readonly reviewStates: readonly string[];
+  readonly duplicateGroupCount: number;
+  readonly contradictionCount: number;
+  readonly notificationDraftCount: number;
+  readonly graphPromotionHoldCount: number;
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
 }
 
@@ -821,6 +925,61 @@ export interface RestrictedMetadataOperationsRemediationPlanItem {
   readonly forbiddenAlternatives: readonly string[];
 }
 
+export type RestrictedMetadataOperationalPlaybookScenario =
+  | "emergency_stop"
+  | "source_quarantine"
+  | "legal_hold"
+  | "retention_expiry"
+  | "approval_expiry"
+  | "redaction_repair"
+  | "proxy_failure"
+  | "unsafe_source_discovery"
+  | "stale_victim_repost"
+  | "false_claim_review"
+  | "duplicate_claim_review";
+
+export interface RestrictedMetadataOperationalPlaybookDto {
+  readonly playbookId: string;
+  readonly scenario: RestrictedMetadataOperationalPlaybookScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly trigger: string;
+  readonly detectionFields: readonly string[];
+  readonly safeOperatorAction: string;
+  readonly expectedDtoEffect: string;
+  readonly rollback: readonly string[];
+  readonly auditLogFields: readonly string[];
+  readonly affectedAgents: readonly string[];
+  readonly proofCommand: string;
+  readonly sourceHashOnly: true;
+  readonly nonMutating: true;
+  readonly handoffs: {
+    readonly agent01Governance: string;
+    readonly agent02Scheduler: string;
+    readonly agent06Ledger: string;
+    readonly agent07Answer: string;
+    readonly agent08Graph: string;
+    readonly agent09Api: string;
+    readonly agent10Release: "pass" | "hold" | "rollback";
+  };
+  readonly forbiddenAlternatives: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataOperationalPlaybooksDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly nonMutating: true;
+  readonly playbooks: readonly RestrictedMetadataOperationalPlaybookDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataOperationalPlaybookScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataOperationalPlaybookScenario[];
+  readonly affectedAgents: readonly string[];
+  readonly proofCommands: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
 export interface RestrictedMetadataRuntimeProofDto {
   readonly kind: RestrictedMetadataRuntimeProofKind;
   readonly sourceId: string;
@@ -969,6 +1128,7 @@ export type RestrictedMetadataAuditReplayScenario =
 
 export type RestrictedMetadataConnectorCertificationScenario =
   | "healthy_approved_metadata_source"
+  | "missing_approval"
   | "expired_approval"
   | "kill_switch"
   | "proxy_isolation_failure"
@@ -1405,6 +1565,7 @@ export interface RestrictedMetadataOperationsReadinessDto {
   readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
   readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
+  readonly operationalPlaybooks: RestrictedMetadataOperationalPlaybooksDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly compliance: RestrictedMetadataComplianceSummaryDto;
   readonly agent09SearchSummary: RestrictedMetadataComplianceSummaryDto;
@@ -1467,6 +1628,7 @@ export interface RestrictedMetadataOperationsStatusDto {
   readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
   readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
+  readonly operationalPlaybooks: RestrictedMetadataOperationalPlaybooksDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly remediationPlan: readonly RestrictedMetadataOperationsRemediationPlanItem[];
   readonly connectorFixtures: readonly RestrictedMetadataConnectorFixture[];
@@ -1918,6 +2080,7 @@ export interface RestrictedMetadataApplyPlan {
   readonly nonBlockingSearch: RestrictedMetadataNonBlockingSearchSemanticsDto;
   readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
   readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
+  readonly operationalPlaybooks: RestrictedMetadataOperationalPlaybooksDto;
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
   readonly summary: Record<RestrictedMetadataApplySafety, number>;
   readonly agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket";
@@ -2027,6 +2190,397 @@ const RESTRICTED_ISOLATION_HARNESS_SCENARIOS: readonly RestrictedMetadataIsolati
   "threat_actor_interaction_denied"
 ];
 
+const RESTRICTED_VICTIM_CLAIM_WORKFLOW_SCENARIOS: readonly RestrictedMetadataVictimClaimWorkflowScenario[] = [
+  "unique_company_claim",
+  "duplicate_victim_posts",
+  "stale_repost",
+  "false_claim_review",
+  "actor_name_mismatch",
+  "claimed_count_mismatch",
+  "source_takedown",
+  "legal_hold",
+  "retention_expiry",
+  "draft_notification_review"
+];
+
+const RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS: readonly RestrictedMetadataOperationalPlaybookScenario[] = [
+  "emergency_stop",
+  "source_quarantine",
+  "legal_hold",
+  "retention_expiry",
+  "approval_expiry",
+  "redaction_repair",
+  "proxy_failure",
+  "unsafe_source_discovery",
+  "stale_victim_repost",
+  "false_claim_review",
+  "duplicate_claim_review"
+];
+
+function buildRestrictedMetadataOperationalPlaybooksContract(
+  observedScenarios: readonly RestrictedMetadataOperationalPlaybookScenario[] = RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS
+): RestrictedMetadataOperationalPlaybooksDto {
+  return restrictedMetadataOperationalPlaybooksSummary(
+    RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS.map(restrictedMetadataOperationalPlaybook),
+    observedScenarios
+  );
+}
+
+function restrictedMetadataOperationalPlaybooksSummary(
+  playbooks: readonly RestrictedMetadataOperationalPlaybookDto[],
+  observedScenarios: readonly RestrictedMetadataOperationalPlaybookScenario[] = playbooks.map((playbook) => playbook.scenario)
+): RestrictedMetadataOperationalPlaybooksDto {
+  const withFixtures = restrictedMetadataDedupeOperationalPlaybooks([
+    ...playbooks,
+    ...RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS.map(restrictedMetadataOperationalPlaybook)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    nonMutating: true,
+    playbooks: withFixtures,
+    fixtureScenarios: RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...withFixtures.map((playbook) => playbook.scenario)
+    ]) as RestrictedMetadataOperationalPlaybookScenario[],
+    affectedAgents: restrictedMetadataUniqueStrings(withFixtures.flatMap((playbook) => playbook.affectedAgents)),
+    proofCommands: restrictedMetadataUniqueStrings(withFixtures.map((playbook) => playbook.proofCommand)),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataOperationalPlaybook(
+  scenario: RestrictedMetadataOperationalPlaybookScenario
+): RestrictedMetadataOperationalPlaybookDto {
+  const config: Record<RestrictedMetadataOperationalPlaybookScenario, {
+    readonly trigger: string;
+    readonly detectionFields: readonly string[];
+    readonly safeOperatorAction: string;
+    readonly expectedDtoEffect: string;
+    readonly rollback: readonly string[];
+    readonly releaseGate: "pass" | "hold" | "rollback";
+    readonly proofCommand: string;
+  }> = {
+    emergency_stop: {
+      trigger: "kill switch active, unsafe target blocked, or forbidden restricted action attempt",
+      detectionFields: ["enforcement.emergencyStop", "killSwitchDrills", "emergencyStopCertification", "runtimeProofs.kind"],
+      safeOperatorAction: "pause restricted metadata workers and keep public search running from unrestricted sources",
+      expectedDtoEffect: "restricted context is blocked or held while Agent 10 receives rollback evidence",
+      rollback: ["keep restricted workers paused", "clear restricted leases", "restore last audit-clean config only after review"],
+      releaseGate: "rollback",
+      proofCommand: "bun run check:restricted-metadata-status"
+    },
+    source_quarantine: {
+      trigger: "source needs quarantine after proxy failure, unsafe discovery, or governance drift",
+      detectionFields: ["remediationPlan.action", "governancePackets", "auditReplay", "sourceId"],
+      safeOperatorAction: "mark source held for review without fetching the restricted target",
+      expectedDtoEffect: "source remains metadata-only hold and scheduler sees restricted worker backoff",
+      rollback: ["remove quarantine only after operator and legal approval"],
+      releaseGate: "hold",
+      proofCommand: "bun run check:restricted-metadata-status"
+    },
+    legal_hold: {
+      trigger: "legal hold is attached to a restricted metadata claim or source",
+      detectionFields: ["retention.legalHold", "victimClaimWorkflow.reviewStates", "auditTrail.eventTypes"],
+      safeOperatorAction: "preserve metadata-only records and block retention deletion until legal release",
+      expectedDtoEffect: "Agent 06 ledger keeps legal_hold state and Agent 10 holds promotion",
+      rollback: ["do not expire metadata until legal hold is removed"],
+      releaseGate: "hold",
+      proofCommand: "bun run check:restricted-metadata-status"
+    },
+    retention_expiry: {
+      trigger: "restricted metadata retention is expired or expiring",
+      detectionFields: ["retention.retentionExpiresAt", "operationalSla.metrics.retentionExpiredCount", "remediationPlan"],
+      safeOperatorAction: "review retention expiry as metadata-only maintenance without deleting legal-hold records",
+      expectedDtoEffect: "retention_expiring appears in claim workflow and release gates hold",
+      rollback: ["restore metadata-only snapshot if expiry was misclassified"],
+      releaseGate: "hold",
+      proofCommand: "bun run check:restricted-metadata-apply-plan"
+    },
+    approval_expiry: {
+      trigger: "approval is missing or expired for a restricted metadata source",
+      detectionFields: ["approval.approvalId", "approval.expired", "connectorCertification.observedScenarios"],
+      safeOperatorAction: "request metadata-only renewal and keep source disabled or held",
+      expectedDtoEffect: "approval_required state remains visible without queueing restricted collection",
+      rollback: ["keep source out of metadata queue until approval is current"],
+      releaseGate: "hold",
+      proofCommand: "bun run check:restricted-metadata-apply-plan"
+    },
+    redaction_repair: {
+      trigger: "redaction proof reports unsafe field or missing hash-only representation",
+      detectionFields: ["redactionGuarantees", "auditReplay", "noLeakSerialization"],
+      safeOperatorAction: "repair API/storage redaction and re-run no-leak proof",
+      expectedDtoEffect: "Agent 06/09 receive hold_redaction until repair proof is clean",
+      rollback: ["revert to last no-leak DTO contract"],
+      releaseGate: "hold",
+      proofCommand: "bun test src/tests/darknetMetadata.test.ts"
+    },
+    proxy_failure: {
+      trigger: "approved proxy boundary is unhealthy, mismatched, or timed out",
+      detectionFields: ["runtimeProofs.evidence.proxyFailure", "networkIsolation", "schedulerIsolation"],
+      safeOperatorAction: "quarantine proxy and pause restricted workers for that network",
+      expectedDtoEffect: "Agent 02 sees hold_for_backoff and direct egress remains denied",
+      rollback: ["keep direct egress disabled", "restore proxy only after isolation proof passes"],
+      releaseGate: "hold",
+      proofCommand: "bun run check:restricted-metadata-status"
+    },
+    unsafe_source_discovery: {
+      trigger: "download, form, contact, credential, private, or actor-interaction target is discovered",
+      detectionFields: ["forbiddenActionCounters", "connectorCertification", "emergencyStopCertification"],
+      safeOperatorAction: "activate restricted kill switch for the source class and retain hash-only evidence",
+      expectedDtoEffect: "unsafe target is represented by hash only and Agent 10 receives rollback",
+      rollback: ["do not open target", "keep unsafe source blocked"],
+      releaseGate: "rollback",
+      proofCommand: "bun run check:restricted-metadata-status"
+    },
+    stale_victim_repost: {
+      trigger: "victim claim appears to be an old repost or mirror",
+      detectionFields: ["victimClaimWorkflow.reviewStates", "grouping.sourceHashes", "normalizedClaim.claimedAt"],
+      safeOperatorAction: "mark stale claim caveat and hold graph promotion",
+      expectedDtoEffect: "Agent 07 receives stale_claim caveat and Agent 08 holds STIX promotion",
+      rollback: ["restore metadata_review if fresh evidence is later approved"],
+      releaseGate: "hold",
+      proofCommand: "bun test src/tests/darknetMetadata.test.ts"
+    },
+    false_claim_review: {
+      trigger: "claim may be false, impersonated, contradicted, or takedown-unavailable",
+      detectionFields: ["victimClaimWorkflow.contradictionReasons", "agent07AnswerCaveat", "agent08GraphHold"],
+      safeOperatorAction: "keep claim in analyst review and prevent public fact wording",
+      expectedDtoEffect: "contradicted claim caveat is visible and release remains held",
+      rollback: ["resolve only after analyst-approved evidence review"],
+      releaseGate: "hold",
+      proofCommand: "bun test src/tests/darknetMetadata.test.ts"
+    },
+    duplicate_claim_review: {
+      trigger: "duplicate victim/company posts group to an existing claim",
+      detectionFields: ["victimClaimWorkflow.grouping", "duplicateGroupCount", "sourceHashOnly"],
+      safeOperatorAction: "mark duplicate without deleting provenance or notifying externally",
+      expectedDtoEffect: "Agent 06 ledger records duplicate and Agent 08 graph promotion stays held",
+      rollback: ["split duplicate group if analyst review finds distinct claims"],
+      releaseGate: "hold",
+      proofCommand: "bun test src/tests/darknetMetadata.test.ts"
+    }
+  };
+  const item = config[scenario];
+  return {
+    playbookId: stableId("restricted-operational-playbook", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    trigger: item.trigger,
+    detectionFields: item.detectionFields,
+    safeOperatorAction: item.safeOperatorAction,
+    expectedDtoEffect: item.expectedDtoEffect,
+    rollback: item.rollback,
+    auditLogFields: ["sourceId", "sourceHash", "policyAuditId", "operatorId", "timestamp", "reason", "action", "resultState"],
+    affectedAgents: ["Agent 01", "Agent 02", "Agent 06", "Agent 07", "Agent 08", "Agent 09", "Agent 10"],
+    proofCommand: item.proofCommand,
+    sourceHashOnly: true,
+    nonMutating: true,
+    handoffs: {
+      agent01Governance: "review approval and legal notes before any source state change",
+      agent02Scheduler: "hold or pause restricted worker leases without touching public search",
+      agent06Ledger: "record metadata-only claim/evidence state with hashes only",
+      agent07Answer: "emit caveat or hold; never promote restricted claim as public fact",
+      agent08Graph: "hold graph and STIX promotion until analyst review",
+      agent09Api: "surface compact safe DTO state only",
+      agent10Release: item.releaseGate
+    },
+    forbiddenAlternatives: RESTRICTED_APPLY_PROHIBITED_ALTERNATIVES,
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataDedupeOperationalPlaybooks(
+  playbooks: readonly RestrictedMetadataOperationalPlaybookDto[]
+): RestrictedMetadataOperationalPlaybookDto[] {
+  const seen = new Set<string>();
+  return playbooks.filter((playbook) => {
+    if (seen.has(playbook.scenario)) return false;
+    seen.add(playbook.scenario);
+    return true;
+  });
+}
+
+function restrictedMetadataVictimClaimWorkflowContract(
+  observedScenarios: readonly RestrictedMetadataVictimClaimWorkflowScenario[] = RESTRICTED_VICTIM_CLAIM_WORKFLOW_SCENARIOS
+): RestrictedMetadataVictimClaimWorkflowDto {
+  const packets = RESTRICTED_VICTIM_CLAIM_WORKFLOW_SCENARIOS.map(restrictedMetadataVictimClaimWorkflowPacket);
+  return restrictedMetadataVictimClaimWorkflowSummary(packets, observedScenarios);
+}
+
+function restrictedMetadataVictimClaimWorkflowSummary(
+  packets: readonly RestrictedMetadataVictimClaimWorkflowPacketDto[],
+  observedScenarios: readonly RestrictedMetadataVictimClaimWorkflowScenario[] = packets.map((packet) => packet.scenario)
+): RestrictedMetadataVictimClaimWorkflowDto {
+  const withFixtures = restrictedMetadataDedupeVictimClaimWorkflowPackets([
+    ...packets,
+    ...RESTRICTED_VICTIM_CLAIM_WORKFLOW_SCENARIOS.map(restrictedMetadataVictimClaimWorkflowPacket)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets: withFixtures,
+    fixtureScenarios: RESTRICTED_VICTIM_CLAIM_WORKFLOW_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...withFixtures.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataVictimClaimWorkflowScenario[],
+    reviewStates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.reviewState)),
+    duplicateGroupCount: withFixtures.filter((packet) => packet.reviewState === "duplicate").length,
+    contradictionCount: withFixtures.filter((packet) => packet.contradictionReasons.length > 0).length,
+    notificationDraftCount: withFixtures.filter((packet) => packet.notificationDraft).length,
+    graphPromotionHoldCount: withFixtures.filter((packet) => packet.proof.graphPromotionHeld).length,
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataVictimClaimWorkflowPacket(
+  scenario: RestrictedMetadataVictimClaimWorkflowScenario
+): RestrictedMetadataVictimClaimWorkflowPacketDto {
+  const duplicate = scenario === "duplicate_victim_posts";
+  const stale = scenario === "stale_repost";
+  const falseClaim = scenario === "false_claim_review";
+  const actorMismatch = scenario === "actor_name_mismatch";
+  const countMismatch = scenario === "claimed_count_mismatch";
+  const takedown = scenario === "source_takedown";
+  const legalHold = scenario === "legal_hold";
+  const retentionExpiry = scenario === "retention_expiry";
+  const notification = scenario === "draft_notification_review";
+  const contradictionReasons = [
+    actorMismatch ? "actor_name_mismatch" : undefined,
+    countMismatch ? "claimed_count_mismatch" : undefined,
+    falseClaim ? "false_claim_under_review" : undefined,
+    takedown ? "source_takedown_or_unavailable" : undefined
+  ].filter((reason): reason is string => Boolean(reason));
+  const reviewState: RestrictedMetadataVictimClaimWorkflowPacketDto["reviewState"] = duplicate
+    ? "duplicate"
+    : stale
+      ? "stale"
+      : falseClaim
+        ? "false_claim_review"
+        : takedown
+          ? "takedown_unavailable"
+          : contradictionReasons.length > 0
+            ? "contradicted"
+            : legalHold
+              ? "legal_hold"
+              : retentionExpiry
+                ? "retention_expiring"
+                : notification
+                  ? "notification_draft"
+                  : "metadata_review";
+  const company = scenario === "unique_company_claim" ? "Fjord Energy AS" : "Northwind Health";
+  const sourceHash = `hash_${scenario}`;
+  const sourceHashes = duplicate
+    ? ["hash_duplicate_primary", "hash_duplicate_mirror"]
+    : countMismatch
+      ? ["hash_count_claim_50k", "hash_count_claim_5k"]
+      : actorMismatch
+        ? ["hash_actor_claim_alpha", "hash_actor_claim_beta"]
+        : [sourceHash];
+  const retentionClass: RetentionClass = legalHold ? "legal_hold" : retentionExpiry ? "short" : "standard";
+  return {
+    packetId: stableId("restricted-victim-claim", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    normalizedClaim: {
+      company,
+      victim: company,
+      normalizedVictimKey: company.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""),
+      actor: actorMismatch ? "conflicting actor names" : "restricted actor claim",
+      claimedAt: stale ? "2024-01-10T00:00:00.000Z" : "2026-05-01T00:00:00.000Z",
+      sector: company.includes("Health") ? "healthcare" : "energy",
+      country: "NO",
+      affectedAccounts: countMismatch ? "conflicting counts" : "claimed count redacted to metadata",
+      datasetSize: "claimed size redacted to metadata",
+      claimedDataType: "claimed dataset type metadata",
+      sourceFamily: scenario === "unique_company_claim" ? "public_report" : "tor_metadata"
+    },
+    grouping: {
+      groupId: stableId("restricted-victim-claim-group", company),
+      duplicateOf: duplicate ? stableId("restricted-victim-claim", "unique_company_claim") : undefined,
+      sourceHashes,
+      groupedBy: ["normalizedVictimKey", "sourceHash", "actor", "claimedAt", "sector", "country", "affectedAccounts", "datasetSize", "sourceFamily"],
+      sourceHashOnly: true
+    },
+    reviewState,
+    contradictionReasons,
+    notificationDraft: notification ? {
+      status: "draft_review",
+      company,
+      claimSummary: "Metadata-only restricted claim draft for analyst review; no leaked files or unsafe source content accessed.",
+      affectedAccounts: "claimed count redacted to metadata",
+      datasetType: "claimed dataset type metadata",
+      claimedAt: "2026-05-01T00:00:00.000Z",
+      actorStatementSummary: "Actor statement summarized as unverified metadata-only context.",
+      sourceHash,
+      confidence: 0.54,
+      redactions: ["raw_leak_material", "unsafe_restricted_url", "credential_material", "screenshot_bytes", "private_access_material"],
+      legalHold,
+      retentionClass,
+      whatWasNotAccessed: restrictedMetadataAnalystWhatWasNotAccessed(),
+      safeToSend: false
+    } : undefined,
+    handoffs: {
+      agent06ClaimLedger: duplicate ? "duplicate" : contradictionReasons.length > 0 || falseClaim || takedown ? "contradicted" : legalHold ? "legal_hold" : retentionExpiry ? "retention_expiring" : "metadata_review",
+      agent07AnswerCaveat: duplicate ? "duplicate_claim" : stale ? "stale_claim" : contradictionReasons.length > 0 || falseClaim || takedown ? "contradicted_claim" : notification ? "notification_review_only" : "restricted_claim_unverified",
+      agent08GraphHold: legalHold || retentionExpiry ? "hold_legal_or_retention" : duplicate || contradictionReasons.length > 0 || falseClaim || takedown ? "hold_duplicate_or_contradicted_claim" : "hold_unreviewed_restricted_claim",
+      agent09ApiState: "safe_metadata_only",
+      agent10ReleaseGate: reviewState === "metadata_review" ? "pass" : "hold"
+    },
+    proof: {
+      noRawLeakMaterial: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPrivateAccess: true,
+      noCaptchaSolving: true,
+      noAuthBypass: true,
+      noThreatActorInteraction: true,
+      hashOnlySourceIdentifiers: true,
+      graphPromotionHeld: true,
+      stixPromotionEligible: false
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataDedupeVictimClaimWorkflowPackets(
+  packets: readonly RestrictedMetadataVictimClaimWorkflowPacketDto[]
+): RestrictedMetadataVictimClaimWorkflowPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    const key = `${packet.scenario}:${packet.grouping.groupId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function restrictedMetadataVictimClaimWorkflowScenariosForAnalystPackets(
+  packets: readonly RestrictedMetadataAnalystOperationPacketDto[]
+): RestrictedMetadataVictimClaimWorkflowScenario[] {
+  const scenarios = new Set<RestrictedMetadataVictimClaimWorkflowScenario>();
+  for (const packet of packets) {
+    if (packet.scenario === "duplicate_victim_claim") scenarios.add("duplicate_victim_posts");
+    if (packet.scenario === "contradictory_actor_statement") scenarios.add("actor_name_mismatch");
+    if (packet.scenario === "victim_notification_packet") scenarios.add("draft_notification_review");
+    if (packet.scenario === "legal_hold") scenarios.add("legal_hold");
+    if (packet.scenario === "retention_expiry") scenarios.add("retention_expiry");
+    if (packet.scenario === "named_company_leak_claim" || packet.scenario === "victim_query" || packet.scenario === "metadata_only_capture_promoted_to_review") {
+      scenarios.add("unique_company_claim");
+    }
+  }
+  return [...scenarios];
+}
+
 function restrictedMetadataAnalystOperationsFallback(observedScenarios: readonly RestrictedMetadataAnalystOperationScenario[] = RESTRICTED_ANALYST_OPERATION_SCENARIOS): RestrictedMetadataAnalystOperationsDto {
   const noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto = {
     passed: true,
@@ -2109,6 +2663,7 @@ function restrictedMetadataAnalystOperationsFallback(observedScenarios: readonly
     agent10EmergencyStopGates: ["pass", "rollback"],
     victimNotificationPacketCount: 1,
     claimLedgerStatuses: ["metadata_review", "blocked"],
+    victimClaimWorkflow: restrictedMetadataVictimClaimWorkflowContract(),
     noLeakSerialization
   };
 }
@@ -2251,6 +2806,8 @@ const RESTRICTED_APPLY_ACTIONS: readonly RestrictedMetadataApplyAction[] = [
 ];
 
 const RESTRICTED_APPLY_PROHIBITED_ALTERNATIVES = [
+  "download_stolen_files",
+  "interact_with_threat_actor",
   "payload download remains prohibited",
   "credential or authentication bypass remains prohibited",
   "CAPTCHA solving remains prohibited",
@@ -2946,6 +3503,12 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
     nonBlockingSearch: restrictedMetadataNonBlockingSearchSemanticsForApplyPlan(connectorCertifications, killSwitchDrills, emergencyStopCertification),
     analystOperations,
     isolationHarness,
+    operationalPlaybooks: buildRestrictedMetadataOperationalPlaybooksContract([
+      "approval_expiry",
+      "retention_expiry",
+      "emergency_stop",
+      "source_quarantine"
+    ]),
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck(),
     summary,
     agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket",
@@ -3869,6 +4432,16 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     packet.forbiddenActionChecks.unsafeTargetBlocked ? "unsafe_form_contact_detection" : undefined,
     packet.forbiddenActionChecks.nonMetadataCapture ? "raw_payload_denied" : undefined
   ].filter((scenario): scenario is RestrictedMetadataIsolationHarnessScenario => Boolean(scenario)));
+  const operationalPlaybooks = buildRestrictedMetadataOperationalPlaybooksContract([
+    runtime.killSwitch.active ? "emergency_stop" : undefined,
+    runtime.state === "proxy_failure" || runtime.state === "timeout" ? "proxy_failure" : undefined,
+    packet.forbiddenActionChecks.unsafeTargetBlocked ? "unsafe_source_discovery" : undefined,
+    packet.approvalExpired || !packet.approvalId ? "approval_expiry" : undefined,
+    packet.legalHold ? "legal_hold" : undefined,
+    packet.statuses.includes("retention_expired") ? "retention_expiry" : undefined,
+    !packet.redactionProof || !packet.screenshotHashOnly ? "redaction_repair" : undefined,
+    input.capture ? "duplicate_claim_review" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataOperationalPlaybookScenario => Boolean(scenario)));
 
   return {
     sourceId: input.source.id,
@@ -3933,6 +4506,7 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     nonBlockingSearch,
     analystOperations,
     isolationHarness,
+    operationalPlaybooks,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, [governancePacket], auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     compliance: searchSummary,
     agent09SearchSummary: searchSummary,
@@ -4024,6 +4598,19 @@ export function buildRestrictedMetadataOperationsStatus(input: {
     "private_access_denied",
     "threat_actor_interaction_denied"
   ]);
+  const operationalPlaybooks = buildRestrictedMetadataOperationalPlaybooksContract([
+    "emergency_stop",
+    "source_quarantine",
+    "legal_hold",
+    "retention_expiry",
+    "approval_expiry",
+    "redaction_repair",
+    "proxy_failure",
+    "unsafe_source_discovery",
+    "stale_victim_repost",
+    "false_claim_review",
+    "duplicate_claim_review"
+  ]);
   const partialState = matchingResults.length > 0
     ? "partial_metadata"
     : sources.some((source) => source.readiness === "ready")
@@ -4063,12 +4650,13 @@ export function buildRestrictedMetadataOperationsStatus(input: {
     nonBlockingSearch,
     analystOperations,
     isolationHarness,
+    operationalPlaybooks,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, governancePackets, auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     remediationPlan: dedupeOperationsRemediationItems(sources.flatMap((source) => source.remediationPlan)),
     connectorFixtures: restrictedMetadataConnectorFixtures(),
     agent06EvidenceHandoffProof: restrictedMetadataEvidenceHandoffSafetyProof(handoffs),
-    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "isolationHarness"],
-    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch", "analystOperations", "isolationHarness"]
+    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "isolationHarness", "operationalPlaybooks"],
+    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch", "analystOperations", "isolationHarness", "operationalPlaybooks"]
   };
 }
 
@@ -5513,6 +6101,7 @@ function olderRestrictedMetadataAnalystOperationsSummary(
     agent10EmergencyStopGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent10EmergencyStopGate)),
     victimNotificationPacketCount: withFixtures.filter((packet) => packet.victimNotificationPacket).length,
     claimLedgerStatuses: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.claimLedger.status)),
+    victimClaimWorkflow: restrictedMetadataVictimClaimWorkflowContract(restrictedMetadataVictimClaimWorkflowScenariosForAnalystPackets(withFixtures)),
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
   };
 }
@@ -5886,6 +6475,7 @@ function restrictedMetadataAnalystOperationsSummary(
     agent10EmergencyStopGates: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.agent10EmergencyStopGate)),
     victimNotificationPacketCount: withFixtures.filter((packet) => packet.victimNotificationPacket).length,
     claimLedgerStatuses: restrictedMetadataUniqueStrings(withFixtures.map((packet) => packet.claimLedger.status)),
+    victimClaimWorkflow: restrictedMetadataVictimClaimWorkflowContract(restrictedMetadataVictimClaimWorkflowScenariosForAnalystPackets(withFixtures)),
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
   };
 }
@@ -6438,6 +7028,7 @@ function restrictedMetadataCertificationScenarioForReadiness(
   hasMetadataResult: boolean
 ): RestrictedMetadataConnectorCertificationScenario {
   if (packet.approvalExpired) return "expired_approval";
+  if (!packet.approvalId) return "missing_approval";
   if (runtime.killSwitch.active) return "kill_switch";
   if (sla.metrics.proxyFailureCount > 0) return "proxy_isolation_failure";
   if (sla.metrics.timeoutCount > 0) return "high_timeout";
@@ -6453,7 +7044,7 @@ function restrictedMetadataCertificationScenarioForCutover(
   source: RestrictedMetadataCutoverSourceStatus,
   diagnostic?: RestrictedMetadataSourceAuditDiagnostic
 ): RestrictedMetadataConnectorCertificationScenario {
-  if (source.statuses.includes("pending_approval")) return "expired_approval";
+  if (source.statuses.includes("pending_approval")) return "missing_approval";
   if (source.statuses.includes("kill_switch_active")) return "kill_switch";
   if (diagnostic?.proxyHealthy === false) return "proxy_isolation_failure";
   if (source.statuses.includes("blocked_unsafe_target")) return "unsafe_link_form_download";
@@ -6597,7 +7188,7 @@ function restrictedMetadataConnectorCertificationFixturePackets(): RestrictedMet
   return restrictedMetadataConnectorCertificationScenarioOrder().map((scenario, index) => {
     const network = (["tor", "i2p", "freenet"] as const)[index % 3];
     const emergency = scenario === "kill_switch" || scenario === "unsafe_link_form_download" || scenario === "retention_expiry";
-    const hold = scenario === "expired_approval" || scenario === "proxy_isolation_failure" || scenario === "redaction_repair";
+    const hold = scenario === "missing_approval" || scenario === "expired_approval" || scenario === "proxy_isolation_failure" || scenario === "redaction_repair";
     return restrictedMetadataConnectorCertificationPacket({
       sourceId: `fixture_${scenario}`,
       network,
@@ -6609,7 +7200,7 @@ function restrictedMetadataConnectorCertificationFixturePackets(): RestrictedMet
       proxyApproved: scenario !== "proxy_isolation_failure",
       proxyHealthy: scenario !== "proxy_isolation_failure",
       failureAttribution: scenario === "proxy_isolation_failure" ? "proxy_failure" : scenario === "high_timeout" ? "timeout" : "none",
-      approvalId: scenario === "expired_approval" ? "approval_expired_fixture" : "approval_fixture",
+      approvalId: scenario === "missing_approval" ? undefined : scenario === "expired_approval" ? "approval_expired_fixture" : "approval_fixture",
       approvalExpired: scenario === "expired_approval",
       killSwitchActive: scenario === "kill_switch",
       sourceStatus: scenario === "kill_switch" ? "disabled" : "active",
@@ -6634,6 +7225,7 @@ function restrictedMetadataConnectorCertificationFixturePackets(): RestrictedMet
 function restrictedMetadataConnectorCertificationScenarioOrder(): RestrictedMetadataConnectorCertificationScenario[] {
   return [
     "healthy_approved_metadata_source",
+    "missing_approval",
     "expired_approval",
     "kill_switch",
     "proxy_isolation_failure",
@@ -6830,6 +7422,7 @@ function legacyRestrictedMetadataAnalystOperationsSummary(
     agent10EmergencyStopGates: Array.from(new Set(packets.map((packet) => packet.agent10EmergencyStopGate))),
     victimNotificationPacketCount: packets.filter((packet) => packet.victimNotificationPacket).length,
     claimLedgerStatuses: Array.from(new Set(packets.map((packet) => packet.claimLedger.status))),
+    victimClaimWorkflow: restrictedMetadataVictimClaimWorkflowContract(restrictedMetadataVictimClaimWorkflowScenariosForAnalystPackets(packets)),
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
   };
 }
@@ -6915,6 +7508,7 @@ function restrictedMetadataAnalystScenariosForCertification(
 ): RestrictedMetadataAnalystOperationScenario[] {
   const mapping: Record<RestrictedMetadataConnectorCertificationScenario, RestrictedMetadataAnalystOperationScenario[]> = {
     healthy_approved_metadata_source: ["approval_granted", "metadata_only_capture_queued"],
+    missing_approval: ["approval_requested"],
     expired_approval: ["approval_expired"],
     kill_switch: ["kill_switch_active", "emergency_stop_rollback"],
     proxy_isolation_failure: ["proxy_isolation_failure"],
@@ -7062,6 +7656,7 @@ function restrictedMetadataScenarioForCertification(
 ): RestrictedMetadataNonBlockingSearchScenario {
   const mapping: Record<RestrictedMetadataConnectorCertificationScenario, RestrictedMetadataNonBlockingSearchScenario> = {
     healthy_approved_metadata_source: "approved_metadata_canary",
+    missing_approval: "no_approval",
     expired_approval: "expired_approval",
     kill_switch: "kill_switch",
     proxy_isolation_failure: "proxy_failure",
@@ -7145,6 +7740,14 @@ export function restrictedMetadataAnalystOperationsContract(): RestrictedMetadat
     scenario,
     reason: "frozen restricted metadata analyst operations fixture"
   })));
+}
+
+export function restrictedMetadataVictimClaimWorkflowCertificationContract(): RestrictedMetadataVictimClaimWorkflowDto {
+  return restrictedMetadataVictimClaimWorkflowContract();
+}
+
+export function restrictedMetadataOperationalPlaybooksContract(): RestrictedMetadataOperationalPlaybooksDto {
+  return buildRestrictedMetadataOperationalPlaybooksContract();
 }
 
 export function restrictedMetadataIsolationHarnessContract(): RestrictedMetadataIsolationHarnessDto {
@@ -7325,6 +7928,7 @@ function restrictedMetadataKillSwitchDrillScenarioForCertification(
 ): RestrictedMetadataKillSwitchDrillScenario {
   const mapping: Record<RestrictedMetadataConnectorCertificationScenario, RestrictedMetadataKillSwitchDrillScenario> = {
     healthy_approved_metadata_source: "healthy_metadata_only_canary",
+    missing_approval: "expired_approval",
     expired_approval: "expired_approval",
     kill_switch: "kill_switch_activation_mid_run",
     proxy_isolation_failure: "proxy_failure",

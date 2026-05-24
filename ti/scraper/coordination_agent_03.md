@@ -1,31 +1,30 @@
-Status: active_task_ab
+Status: active_task_ag
 
 ## CURRENT ASSIGNMENT - READ FIRST
 
-Task AB: Dynamic Page, PDF, And Report Capture Adapter Contracts
+Task AG: Public Adapter Production Hardening And Source Failure Observatory
 
-Build the next adapter layer for enterprise-grade public CTI collection. This is not a small patch; keep working until the contracts, tests, docs, and coordination notes are complete.
+You completed dynamic/PDF/report capture, parser profiles, browser isolation, freshness regression, and report benchmarks. Now turn those contracts into an operator-grade adapter observatory.
 
 Scope:
-- Own dynamic public web capture contracts for JavaScript-heavy vendor reports using Playwright-compatible abstractions, but keep the default runtime Bun/TypeScript and keep network calls mocked in tests.
-- Own PDF/report capture interfaces for public vendor reports, advisories, and long-form technical writeups. The scraper should preserve provenance, canonical URL, publication time, content hash, source trust, extraction status, and parser warnings.
-- Build a parser profile matrix that lets the system choose between static HTML, dynamic page, PDF/report, RSS entry, and public channel handoff without hard-coded one-off logic.
-- Add failure taxonomy for dynamic/PDF capture: timeout, robots/policy hold, unsupported media, content too large, parser confidence low, duplicate canonical, rate limited, unavailable, and source disabled.
-- Wire DTOs so Agent 06 evidence storage, Agent 07 extraction quality, Agent 09 API contracts, and Agent 10 ops dashboards can consume the adapter output without reaching into adapter internals.
-- Add tests that prove safe public-only collection, no private access, no auth bypass, no CAPTCHA solving, no raw restricted material, deterministic canonicalization, and dedupe behavior.
+- Build a source failure observatory for static HTML, RSS, dynamic page, PDF/report, public channel handoff, and advisory/security signal capture.
+- Track failure class, parser profile, source id, source family, query class, canonical URL hash, retry-after, stale date, robots/legal hold, unsupported MIME, content-too-large, timeout, duplicate canonical, parser confidence, extraction warnings, and handoff target.
+- Emit route/API-ready DTOs that Agent 01 can use for source marketplace scoring, Agent 02 for scheduling cadence/backoff, Agent 06 for evidence retention, Agent 07 for quality gates, Agent 09 for API contracts, and Agent 10 for observability dashboards.
+- Add adapter production readiness packets for enabling dynamic/browser workers later without changing safety defaults. Browser workers remain disabled unless explicitly allocated.
+- Preserve safety: public-only by default, no auth bypass, no CAPTCHA solving, no private communities, no exploit payload download, no restricted raw material, and no unsafe URL exposure.
 
-Integration expectations:
-- Prefer new modules under `src/adapters` and focused tests under `src/tests`.
-- Update `docs/operations.md` or a focused adapter doc with operational caveats and resource cost expectations.
-- Update this file with progress, risks, and proof commands before stopping.
-- Run at minimum `bun run check`, targeted adapter tests, and any route/API tests touched.
+Proof requirements:
+- Add fixtures for APT29, APT42, ransomware, CVE/advisory, malware/tool, country/sector, vendor report, CERT advisory, duplicate, stale, unavailable, rate-limited, policy-held, unsupported, and parser-gap sources.
+- Add tests for failure taxonomy, retry/backoff semantics, parser profile selection, dynamic/browser disabled state, no-leak serialization, and integration DTO stability.
+- Update operations/source docs and `coordination.md`.
+- Run `bun run check`, adapter/parser/public-signal tests, route inventory, and full tests if shared contracts change.
 
 ## QUEUED NEXT TASKS - CONTINUE AFTER CURRENT PROOF
 
-Task AC: Parser Profile Matrix And Extraction Handoff Quality
+Task AH: Adapter Runtime Enablement Plan
 
-Turn the parser profile matrix into a production contract with parser scoring, fallback ordering, extraction confidence bands, content-language hints, citation spans, and redaction-safe handoff to Agent 07. Include fixtures for APT29, APT42, ransomware actors, CVEs, vendor reports, CERT advisories, and unavailable/duplicate sources.
+Design the controlled rollout plan for enabling dynamic/browser/PDF worker pools in production: canary sources, memory caps, timeout caps, source allowlist, parser confidence thresholds, rollback, and release gates.
 
-Task AD: Source Freshness Expansion And Public Collection Regression Suite
+Task AI: Multilingual Public Report Capture And Translation Handoff
 
-Build a regression suite that proves newly onboarded public sources stay fresh and useful for actor queries. Track stale feeds, broken parser profiles, empty captures, noisy sources, duplicate-heavy sources, and sources that should be disabled or moved to review.
+Add contracts for language detection, translation handoff, original-text retention metadata, citation spans, and cross-language source scoring without introducing model or translation service coupling.

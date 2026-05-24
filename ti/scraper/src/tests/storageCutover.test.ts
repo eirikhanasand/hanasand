@@ -4,11 +4,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildEvidenceClaimLedgerDto } from "../api/evidenceDtos.ts";
 import {
+  analystClaimLedgerEntryFromPostgresRow,
+  analystClaimLedgerEntryToPostgresRow,
+  analystLoopSnapshotFromPostgresRows,
+  analystLoopSnapshotToPostgresRows,
+  analystMetadataReviewTaskFromPostgresRow,
+  analystMetadataReviewTaskToPostgresRow,
+  analystSourceActivationPacketFromPostgresRow,
+  analystSourceActivationPacketToPostgresRow,
+  analystVictimNotificationPacketFromPostgresRow,
+  analystVictimNotificationPacketToPostgresRow
+} from "../storage/analystLoopPostgres.ts";
+import {
   buildEvidenceCutoverRehearsalReport,
   buildEvidenceBackupIntegrityReport,
+  buildEvidenceBackendParityReport,
   buildEvidenceReplayProof,
   buildEvidenceTrustLedgerReport,
+  buildObjectEvidenceManifest,
   saveCaptureWithObject,
+  verifyObjectEvidenceManifest,
+  type CaptureMetadataStore,
   type EvidencePostgresTable,
   type ObjectEvidenceStore,
   type ObjectEvidenceWrite,
@@ -17,9 +33,22 @@ import {
 } from "../storage/evidenceStore.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
+import { FileObjectEvidenceStore } from "../storage/fileObjectStore.ts";
 import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
 import { DEFAULT_RETENTION_POLICIES, simulateInterruptedRetentionEnforcement } from "../storage/retention.ts";
-import type { DiscoveryEvidence, EvidenceDelta, LiveSearchSnapshot, ObjectStoreRef, PipelineResult, RawCapture } from "../types.ts";
+import type {
+  AnalystClaimLedgerEntry,
+  AnalystLoopSnapshot,
+  AnalystMetadataReviewTask,
+  AnalystSourceActivationPacket,
+  AnalystVictimNotificationPacket,
+  DiscoveryEvidence,
+  EvidenceDelta,
+  LiveSearchSnapshot,
+  ObjectStoreRef,
+  PipelineResult,
+  RawCapture
+} from "../types.ts";
 import { hashContent } from "../utils.ts";
 
 describe("evidence storage cutover", () => {
@@ -101,6 +130,182 @@ describe("evidence storage cutover", () => {
     expect(sql).not.toContain("leaked_rows");
     expect(sql).not.toContain("credential_value");
     expect(sql).not.toContain("download_url TEXT");
+  });
+
+  test("analyst loop Postgres rows round-trip safe metadata workflow without raw leak material", () => {
+    const reviewTask: AnalystMetadataReviewTask = {
+      id: "review_fjord",
+      tenantId: "tenant_cutover",
+      planId: "plan_fjord",
+      runId: "run_fjord",
+      taskId: "task_fjord",
+      sourceId: "src_onion",
+      captureId: "cap_fjord_metadata",
+      status: "open",
+      resultState: "metadata_review",
+      company: "Fjord Energy AS",
+      victim: "Fjord Energy AS",
+      affectedAccounts: "50k accounts",
+      affectedAccountsCount: 50_000,
+      accountSubjects: ["employees", "contractors"],
+      datasetSize: "20 GB",
+      datasetSizeBytes: 20_000_000_000,
+      actorStatement: "Actor claims Fjord Energy AS leaked, 50k accounts, 20 GB.",
+      claimedAt: "2026-05-20T00:00:00.000Z",
+      observedAt: "2026-05-24T10:00:00.000Z",
+      sourceUrl: "redacted://hash/urlhash",
+      sourceHash: "urlhash",
+      provenance: {
+        sourceId: "src_onion",
+        captureId: "cap_fjord_metadata",
+        contentHash: "contenthash",
+        unsafeMaterialAccessed: false
+      },
+      allowedActions: ["notify_company", "mark_duplicate", "request_approval", "escalate"],
+      confidence: 0.82,
+      unsafeMaterialAccessed: false,
+      whatWasNotAccessed: [
+        "No restricted dataset was downloaded or opened.",
+        "No credentials, cookies, private channels, or invite-only areas were accessed.",
+        "No threat actor interaction was performed."
+      ],
+      createdAt: "2026-05-24T10:01:00.000Z",
+      updatedAt: "2026-05-24T10:01:00.000Z"
+    };
+    const activationPacket: AnalystSourceActivationPacket = {
+      id: "activation_fjord",
+      tenantId: "tenant_cutover",
+      planId: "plan_fjord",
+      runId: "run_fjord",
+      sourceId: "src_onion",
+      action: "request_operator_approval",
+      execution: "approval_required",
+      reason: "Operator approval required before metadata-only source restoration.",
+      expectedEffect: "Queue safe metadata only.",
+      rollback: "Keep source disabled.",
+      dryRun: true,
+      createdAt: "2026-05-24T10:01:00.000Z"
+    };
+    const notificationPacket: AnalystVictimNotificationPacket = {
+      id: "notification_fjord",
+      tenantId: "tenant_cutover",
+      reviewTaskId: reviewTask.id,
+      status: "draft",
+      company: "Fjord Energy AS",
+      victim: "Fjord Energy AS",
+      claimSummary: "Fjord Energy AS was named in a metadata-only leak claim; 50k accounts were claimed affected; 20 GB was claimed.",
+      affectedAccounts: "50k accounts",
+      datasetSize: "20 GB",
+      actorStatement: reviewTask.actorStatement,
+      claimedAt: reviewTask.claimedAt,
+      observedAt: reviewTask.observedAt,
+      sourceHash: reviewTask.sourceHash,
+      confidence: 0.82,
+      provenance: reviewTask.provenance,
+      redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"],
+      whatWasNotAccessed: reviewTask.whatWasNotAccessed,
+      safeToSend: false,
+      createdAt: "2026-05-24T10:02:00.000Z",
+      updatedAt: "2026-05-24T10:02:00.000Z"
+    };
+    const claimLedgerEntry: AnalystClaimLedgerEntry = {
+      id: "claim_fjord_dataset",
+      tenantId: "tenant_cutover",
+      normalizedQuery: "fjord energy as",
+      reviewTaskId: reviewTask.id,
+      captureId: reviewTask.captureId,
+      sourceId: reviewTask.sourceId,
+      claimKind: "dataset_size_claim",
+      company: "Fjord Energy AS",
+      victim: "Fjord Energy AS",
+      claimTextSummary: "20 GB was claimed as dataset size or volume.",
+      sourceHash: reviewTask.sourceHash,
+      confidence: 0.82,
+      ledgerStatus: "metadata_review",
+      observedAt: reviewTask.observedAt,
+      provenance: reviewTask.provenance,
+      createdAt: "2026-05-24T10:03:00.000Z"
+    };
+    const loopSnapshot: AnalystLoopSnapshot = {
+      id: "snapshot_fjord",
+      tenantId: "tenant_cutover",
+      planId: "plan_fjord",
+      runId: "run_fjord",
+      normalizedQuery: "fjord energy as",
+      resultState: "metadata_review",
+      headline: "1 metadata review task",
+      queuedTasks: 0,
+      reviewTasks: 1,
+      rejectedSources: 0,
+      blockedUnsafeTargets: 0,
+      meaningfulWorkCount: 1,
+      nextSteps: [{
+        state: "metadata_review",
+        label: "Review leak metadata",
+        detail: "Review safe metadata before notification.",
+        tone: "watch"
+      }],
+      reviewTaskIds: [reviewTask.id],
+      activationPacketIds: [activationPacket.id],
+      victimNotificationPacketId: notificationPacket.id,
+      capturedAt: "2026-05-24T10:04:00.000Z"
+    };
+
+    const reviewRow = analystMetadataReviewTaskToPostgresRow(reviewTask);
+    const activationRow = analystSourceActivationPacketToPostgresRow(activationPacket);
+    const notificationRow = analystVictimNotificationPacketToPostgresRow(notificationPacket);
+    const claimRow = analystClaimLedgerEntryToPostgresRow(claimLedgerEntry);
+    const snapshotRows = analystLoopSnapshotToPostgresRows({
+      metadataReviewTasks: [reviewTask],
+      sourceActivationPackets: [activationPacket],
+      victimNotificationPackets: [notificationPacket],
+      claimLedgerEntries: [claimLedgerEntry],
+      loopSnapshots: [loopSnapshot]
+    });
+
+    expect(reviewRow).toMatchObject({
+      plan_id: "plan_fjord",
+      result_state: "metadata_review",
+      affected_accounts_text: "50k accounts",
+      dataset_size_text: "20 GB",
+      unsafe_material_accessed: false
+    });
+    expect(activationRow).toMatchObject({
+      execution: "approval_required",
+      dry_run: true
+    });
+    expect(notificationRow).toMatchObject({
+      review_task_id: "review_fjord",
+      safe_to_send: false
+    });
+    expect(claimRow).toMatchObject({
+      claim_kind: "dataset_size_claim",
+      ledger_status: "metadata_review"
+    });
+    expect(analystMetadataReviewTaskFromPostgresRow(reviewRow)).toEqual(reviewTask);
+    expect(analystSourceActivationPacketFromPostgresRow(activationRow)).toEqual(activationPacket);
+    expect(analystVictimNotificationPacketFromPostgresRow(notificationRow)).toEqual(notificationPacket);
+    expect(analystClaimLedgerEntryFromPostgresRow(claimRow)).toEqual(claimLedgerEntry);
+    expect(analystLoopSnapshotFromPostgresRows(snapshotRows)).toEqual({
+      metadataReviewTasks: [reviewTask],
+      sourceActivationPackets: [activationPacket],
+      victimNotificationPackets: [notificationPacket],
+      claimLedgerEntries: [claimLedgerEntry],
+      loopSnapshots: [loopSnapshot]
+    });
+    expect(JSON.stringify(snapshotRows)).not.toContain("leakedRows");
+    expect(JSON.stringify(snapshotRows)).not.toContain("credentialValues");
+    expect(() => analystMetadataReviewTaskToPostgresRow({
+      ...reviewTask,
+      provenance: {
+        ...reviewTask.provenance,
+        rawPayload: "do not persist"
+      }
+    })).toThrow("Unsafe analyst provenance key");
+    expect(() => analystSourceActivationPacketToPostgresRow({
+      ...activationPacket,
+      dryRun: false as true
+    })).toThrow("dry-run");
   });
 
   test("fake Postgres repository exposes transaction boundary and delta subject helpers", () => {
@@ -362,6 +567,128 @@ describe("evidence storage cutover", () => {
 
     expect(() => saveCaptureWithObject(store, objects, capture, "<html>public report</html>")).toThrow("object store unavailable");
     expect(store.getCapture(capture.id)).toBeUndefined();
+  });
+
+  test("builds no-key object evidence manifests for backup export and restore verification", () => {
+    const store = new InMemoryScraperStore();
+    const objects = new InMemoryObjectEvidenceStore();
+    const body = "<html>APT29 public evidence for durable object manifest.</html>";
+    const capture = saveCaptureWithObject(store, objects, fixtureCapture({
+      id: "cap_manifest",
+      tenantId: "tenant_cutover",
+      sourceId: "src_cutover",
+      storageKind: "external_object",
+      body: undefined,
+      contentHash: hashContent(body),
+      retentionClass: "public_report"
+    }), body);
+
+    const manifest = buildObjectEvidenceManifest(store, objects, {
+      tenantId: "tenant_cutover",
+      generatedAt: "2026-05-24T20:03:00.000Z"
+    });
+    expect(manifest).toMatchObject({
+      schemaVersion: "ti.object_evidence_manifest.v1",
+      entryCount: 1,
+      presentCount: 1,
+      missingCount: 0,
+      hashMismatchCount: 0,
+      safeOutput: {
+        objectKeysExposed: false,
+        rawBodiesExposed: false,
+        unsafeRestrictedMetadataExposed: false
+      }
+    });
+    expect(manifest.entries[0]).toMatchObject({
+      captureId: "cap_manifest",
+      sourceId: "src_cutover",
+      retentionClass: "public_report",
+      present: true,
+      hashMatches: true
+    });
+    expect(JSON.stringify(manifest)).not.toContain(capture.objectRef?.key);
+    expect(JSON.stringify(manifest)).not.toContain(body);
+
+    const healthyVerification = verifyObjectEvidenceManifest(manifest, store, objects, {
+      generatedAt: "2026-05-24T20:04:00.000Z"
+    });
+    expect(healthyVerification).toMatchObject({
+      expectedCount: 1,
+      verifiedCount: 1,
+      missingObjectCaptureIds: [],
+      hashMismatchCaptureIds: [],
+      safeToRestore: true
+    });
+
+    if (!capture.objectRef) throw new Error("Expected external object ref");
+    objects.deleteObject(capture.objectRef, "restore drill missing object");
+    const missingVerification = verifyObjectEvidenceManifest(manifest, store, objects, {
+      generatedAt: "2026-05-24T20:05:00.000Z"
+    });
+    expect(missingVerification).toMatchObject({
+      expectedCount: 1,
+      verifiedCount: 0,
+      missingObjectCaptureIds: ["cap_manifest"],
+      safeToRestore: false
+    });
+    expect(JSON.stringify(missingVerification)).not.toContain(capture.objectRef.key);
+  });
+
+  test("proves memory file-backed and postgres-style read-model parity for API cutover", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ti-backend-parity-"));
+    try {
+      const memoryStore = new InMemoryScraperStore();
+      const memoryObjects = new InMemoryObjectEvidenceStore();
+      seedBackendParityFixture(memoryStore, memoryObjects);
+
+      const fileSnapshotPath = join(dir, "scraper-store.json");
+      const fileObjectRoot = join(dir, "objects");
+      const fileStoreBeforeRestart = new FileBackedScraperStore({ snapshotPath: fileSnapshotPath });
+      const fileObjects = new FileObjectEvidenceStore({ rootDir: fileObjectRoot });
+      seedBackendParityFixture(fileStoreBeforeRestart, fileObjects);
+      const fileStoreAfterRestart = new FileBackedScraperStore({ snapshotPath: fileSnapshotPath });
+
+      const postgresStore = new FakePostgresEvidenceRepository();
+      const postgresObjects = new InMemoryObjectEvidenceStore();
+      postgresStore.beginTransaction((tx) => seedBackendParityFixture(tx, postgresObjects));
+
+      const report = buildEvidenceBackendParityReport([
+        { name: "memory", store: memoryStore, objects: memoryObjects },
+        { name: "file_backed_after_restart", store: fileStoreAfterRestart, objects: fileObjects },
+        { name: "postgres_style_transaction", store: postgresStore, objects: postgresObjects }
+      ], "APT29", {
+        tenantId: "tenant_cutover",
+        generatedAt: "2026-05-24T20:06:00.000Z"
+      });
+
+      expect(report).toMatchObject({
+        schemaVersion: "ti.evidence_backend_parity_report.v1",
+        baselineBackend: "memory",
+        apiCutoverReady: true,
+        parity: {
+          capturesMatch: true,
+          discoveryEvidenceMatch: true,
+          deltasMatch: true,
+          liveSnapshotsMatch: true,
+          cursorReplayMatch: true,
+          objectManifestsSafe: true,
+          noUnsafeRestrictedBodies: true,
+          matchesBaseline: true
+        },
+        mismatches: []
+      });
+      expect(report.backends.map((backend) => backend.name)).toEqual([
+        "memory",
+        "file_backed_after_restart",
+        "postgres_style_transaction"
+      ]);
+      expect(report.backends.every((backend) => backend.objectManifestEntryCount === 1)).toBe(true);
+      expect(report.backends.every((backend) => backend.replayable)).toBe(true);
+      expect(JSON.stringify(report)).not.toContain("object/key");
+      expect(JSON.stringify(report)).not.toContain("APT29 parity public report body");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("suppresses duplicate capture content hashes before production cutover", () => {
@@ -844,6 +1171,64 @@ class FailingObjectStore implements ObjectEvidenceStore {
   deleteObject(_ref: ObjectStoreRef, _reason: string): boolean {
     return false;
   }
+}
+
+function seedBackendParityFixture(store: CaptureMetadataStore, objects: ObjectEvidenceStore): void {
+  const body = "APT29 parity public report body with CVE-2026-7777 and WellMess.";
+  const discovery = store.saveDiscoveryEvidence(fixtureDiscovery({
+    id: "disc_backend_parity",
+    resultId: "result_backend_parity",
+    snippet: "APT29 parity discovery evidence."
+  }));
+  const capture = saveCaptureWithObject(store, objects, fixtureCapture({
+    id: "cap_backend_parity",
+    body: undefined,
+    storageKind: "external_object",
+    contentHash: hashContent(body),
+    retentionClass: "public_report",
+    metadata: {
+      query: "APT29",
+      normalizedQuery: "apt29",
+      runId: "run_backend_parity",
+      promotedFromDiscoveryId: discovery.id
+    }
+  }), body);
+  store.promoteDiscoveryEvidence({
+    discoveryEvidenceId: discovery.id,
+    captureId: capture.id,
+    promotedAt: "2026-05-24T20:06:01.000Z",
+    promotedBy: "pipeline"
+  });
+  store.saveEvidenceDelta(fixtureDelta({
+    id: "delta_backend_parity_extraction",
+    cursor: "2026-05-24T20:06:02.000Z#delta_backend_parity_extraction",
+    kind: "updated",
+    subjectType: "extraction",
+    subjectId: "incident_backend_parity",
+    discoveryEvidenceIds: [discovery.id],
+    captureIds: [capture.id],
+    incidentIds: ["incident_backend_parity"]
+  }));
+  store.saveEvidenceDelta(fixtureDelta({
+    id: "delta_backend_parity_relationship",
+    cursor: "2026-05-24T20:06:03.000Z#delta_backend_parity_relationship",
+    kind: "added",
+    subjectType: "relationship",
+    subjectId: "rel_backend_parity",
+    discoveryEvidenceIds: [discovery.id],
+    captureIds: [capture.id],
+    incidentIds: ["incident_backend_parity"],
+    relationshipIds: ["rel_backend_parity"]
+  }));
+  store.saveLiveSearchSnapshot(fixtureSnapshot({
+    id: "snap_backend_parity",
+    runId: "run_backend_parity",
+    capturedAt: "2026-05-24T20:06:04.000Z",
+    discoveryEvidenceIds: [discovery.id],
+    captureIds: [capture.id],
+    incidentIds: ["incident_backend_parity"],
+    newEvidenceIds: [discovery.id, capture.id, "incident_backend_parity", "rel_backend_parity"]
+  }));
 }
 
 function seedTrustLedgerClaim(

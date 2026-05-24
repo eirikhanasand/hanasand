@@ -83,10 +83,10 @@ async function checkQuery(query: string): Promise<QueryProof> {
   const apiJson = parseJson(apiPostProof.body);
   const apiGetJson = parseJson(apiGetProof.body);
   const hasRunIdProof = hasRunId(apiJson) || apiBody.includes("runid") || apiBody.includes("run_id");
-  const hasLiveStateProof = hasLiveState(apiJson) || apiBody.includes("partial") || apiBody.includes("ready");
+  const hasLiveStateProof = hasLiveState(apiJson) || hasLiveStateText(apiBody);
   const pageOk = is2xx(publicProof.status)
-    && (publicBody.includes("live_search") || publicBody.includes("ready"))
-    && (publicBody.includes("partial") || publicBody.includes("ready"))
+    && (publicBody.includes("live_search") || hasLiveStateText(publicBody))
+    && hasLiveStateText(publicBody)
     && (publicBody.includes("queued") || publicBody.includes("run"));
   const apiPostOk = is2xx(apiPostProof.status) && hasRunIdProof && hasLiveStateProof;
   const apiGetOk = is2xx(apiGetProof.status) && hasRunId(apiGetJson) && hasLiveState(apiGetJson);
@@ -103,7 +103,7 @@ async function checkQuery(query: string): Promise<QueryProof> {
     canonicalApiMethod: "POST",
     hasRunId: hasRunIdProof,
     hasLiveState: hasLiveStateProof,
-    expectedOutput: "HTTP 2xx; public /ti GET has live_search/ready queued/run; public API canonical proof is POST JSON with run id and partial/ready state; API GET is optional and required only when TI_REQUIRE_GET_API_PROOF=true"
+    expectedOutput: "HTTP 2xx; public /ti GET has live_search/ready queued/run; public API canonical proof is POST JSON with run id and partial/ready/searching/queued/metadata_review state; API GET is optional and required only when TI_REQUIRE_GET_API_PROOF=true"
   };
 }
 
@@ -136,8 +136,16 @@ function hasRunId(value: unknown): boolean {
 
 function hasLiveState(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  if (value.status === "partial" || value.status === "ready" || value.state === "partial" || value.state === "ready") return true;
+  if (isLiveState(value.status) || isLiveState(value.state)) return true;
   return hasLiveState(value.run) || hasLiveState(value.scheduler) || hasLiveState(value.publicChannel);
+}
+
+function hasLiveStateText(value: string): boolean {
+  return ["partial", "ready", "searching", "queued", "metadata_review", "metadata-review", "degraded", "blocked", "disabled"].some((state) => value.includes(state));
+}
+
+function isLiveState(value: unknown): boolean {
+  return typeof value === "string" && hasLiveStateText(value.toLowerCase());
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

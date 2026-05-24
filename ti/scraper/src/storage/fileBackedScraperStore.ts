@@ -175,13 +175,13 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
     try {
       const snapshot = JSON.parse(readFileSync(this.snapshotPath, "utf8")) as Partial<FileBackedScraperSnapshot>;
       for (const source of snapshot.sources ?? []) super.saveSource(source);
-      for (const capture of snapshot.captures ?? []) super.saveCapture(capture);
+      for (const capture of snapshot.captures ?? []) this.hydrateCaptureSnapshot(capture);
       for (const incident of snapshot.incidents ?? []) super.saveIncident(incident);
       for (const plan of snapshot.plans ?? []) super.savePlan(plan);
       for (const run of snapshot.runs ?? []) super.saveRun(run);
-      for (const evidence of snapshot.discoveryEvidence ?? []) super.saveDiscoveryEvidence(evidence);
-      for (const snapshotRow of snapshot.liveSearchSnapshots ?? []) super.saveLiveSearchSnapshot(snapshotRow);
-      for (const delta of snapshot.evidenceDeltas ?? []) super.saveEvidenceDelta(delta);
+      for (const evidence of snapshot.discoveryEvidence ?? []) this.hydrateDiscoveryEvidenceSnapshot(evidence);
+      for (const snapshotRow of snapshot.liveSearchSnapshots ?? []) this.hydrateLiveSearchSnapshotSnapshot(snapshotRow);
+      for (const delta of snapshot.evidenceDeltas ?? []) this.hydrateEvidenceDeltaSnapshot(delta);
       for (const job of snapshot.replayJobs ?? []) super.saveReplayJob(job);
       for (const task of snapshot.analystMetadataReviewTasks ?? []) super.saveAnalystMetadataReviewTask(task);
       for (const packet of snapshot.analystSourceActivationPackets ?? []) super.saveAnalystSourceActivationPacket(packet);

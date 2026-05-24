@@ -2706,7 +2706,7 @@ function severityRank(severity: SourceActivationUnderservedReason["severity"]): 
 }
 
 function isStale(source: SourceRecord, referenceAt = nowIso()): boolean {
-  const target = source.catalog?.collection.freshnessTargetSeconds;
+  const target = source.catalog?.collection?.freshnessTargetSeconds;
   if (!target || !source.lastSeenAt) return false;
   return Date.parse(referenceAt) - Date.parse(source.lastSeenAt) > target * 1000;
 }

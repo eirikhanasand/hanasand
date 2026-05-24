@@ -915,6 +915,166 @@ export interface RealTimeSearchReleaseBoardPacket {
   rollbackCommands: string[];
 }
 
+export type ProductionObservabilityDecision = "ready" | "watch" | "hold" | "rollback" | "emergency-stop";
+
+export type ProductionObservabilityMetricName =
+  | "initial_latency_p95_ms"
+  | "partial_latency_p95_ms"
+  | "queue_age_p95_seconds"
+  | "worker_saturation_percent"
+  | "memory_rss_max_gb"
+  | "cpu_max_percent"
+  | "adapter_failure_rate_percent"
+  | "source_unavailable_rate_percent"
+  | "policy_block_rate_percent"
+  | "evidence_write_read_proof"
+  | "graph_export_readiness"
+  | "public_proof_matrix";
+
+export interface ProductionObservabilityMetric {
+  name: ProductionObservabilityMetricName;
+  value: number;
+  warnAt: number;
+  criticalAt: number;
+  unit: "ms" | "seconds" | "percent" | "gb" | "boolean" | "count";
+  status: "pass" | "warning" | "blocker";
+  alertName: string;
+  proofCommand: string;
+  runbookAction: string;
+}
+
+export interface ProductionFailureClassification {
+  name:
+    | "latency"
+    | "queue"
+    | "worker"
+    | "resource"
+    | "source"
+    | "policy"
+    | "evidence"
+    | "graph"
+    | "public_proof"
+    | "deployment"
+    | "restricted_safety";
+  status: "pass" | "warning" | "blocker";
+  rollbackTrigger: string;
+  owner: string;
+  runbookAction: string;
+}
+
+export interface ProductionObservabilityDashboardPacket {
+  schemaVersion: "ti.production_observability.dashboard.v1";
+  dryRun: true;
+  decision: ProductionObservabilityDecision;
+  generatedAt: string;
+  sloDashboard: {
+    windowHours: 24;
+    metrics: ProductionObservabilityMetric[];
+    alertThresholds: Array<{
+      metric: ProductionObservabilityMetricName;
+      warnAt: number;
+      criticalAt: number;
+      unit: ProductionObservabilityMetric["unit"];
+      alertName: string;
+    }>;
+  };
+  soakAutomation: {
+    command: string;
+    cadenceSeconds: 60;
+    durationHours: 24;
+    checkpointsHours: number[];
+    proofCommands: string[];
+    environment: {
+      scraperTargetGb: 96;
+      scraperCeilingGb: 160;
+      preserveCtiReserveGb: 500;
+      assumesGpu: false;
+    };
+  };
+  publicProofMatrix: Array<{
+    query: string;
+    publicStatus?: number;
+    apiStatus?: number;
+    status: "pass" | "warning" | "blocker";
+  }>;
+  failureClassification: ProductionFailureClassification[];
+  rollbackDecisionPacket: {
+    decision: ProductionObservabilityDecision;
+    triggers: string[];
+    rollbackCommands: string[];
+    operatorRunbook: string[];
+  };
+  proofCommands: string[];
+}
+
+export type EnterpriseReleaseDecision = "no-go" | "canary-ready" | "canary-with-warnings" | "promote-with-warnings" | "promote" | "rollback" | "emergency-stop";
+
+export interface DisasterRecoveryProof {
+  name:
+    | "evidence_export_manifest"
+    | "claim_ledger_replay"
+    | "graph_export_replay"
+    | "source_registry_backup"
+    | "scheduler_queue_drain"
+    | "public_wrapper_rollback"
+    | "container_rollback";
+  status: "pass" | "warning" | "blocker";
+  proofCommand: string;
+  restoreCommand: string;
+  expectedRecoveryMinutes: number;
+  noLeakExample: string;
+}
+
+export interface EnterpriseCapacityPlan {
+  hostRamGb: number;
+  scraperTargetGb: 96;
+  scraperCeilingGb: 160;
+  preserveCtiReserveGb: 500;
+  nonScraperReservedGb: number;
+  browserPool: "disabled_until_explicitly_allocated";
+  assumesGpu: false;
+  boundedCaches: true;
+  diskFirstEvidence: true;
+  status: "pass" | "warning" | "blocker";
+  allocations: Array<{
+    service: "scraper" | "api" | "frontend" | "postgres" | "search_vector" | "graph" | "object_store" | "os_cache_emergency";
+    reservedGb: number;
+    notes: string;
+  }>;
+  workerCaps: {
+    clearWebWorkers: number;
+    publicChannelWorkers: number;
+    restrictedMetadataWorkers: number;
+    browserWorkers: 0;
+  };
+}
+
+export interface EnterpriseReleaseTrainPacket {
+  schemaVersion: "ti.enterprise_release_train.v1";
+  dryRun: true;
+  decision: EnterpriseReleaseDecision;
+  stages: Array<{
+    name: "local_contract_green" | "route_inventory_green" | "public_proof_matrix_green" | "canary_ready" | "canary_with_warnings" | "promote_with_warnings" | "promote" | "rollback" | "emergency_stop" | "no_go";
+    status: "pass" | "warning" | "blocker";
+    proofCommand: string;
+    operatorAction: string;
+  }>;
+  disasterRecovery: {
+    proofs: DisasterRecoveryProof[];
+    rollbackCommands: string[];
+    backupManifests: string[];
+  };
+  capacityPlan: EnterpriseCapacityPlan;
+  dependencyHealth: Array<{
+    name: "scraper" | "api" | "frontend" | "docker" | "route_inventory" | "contract_index" | "public_proof_matrix" | "source_freshness" | "evidence_writes" | "graph_export_holds" | "restricted_metadata_safety" | "queue_headroom";
+    status: "pass" | "warning" | "blocker";
+    proofCommand: string;
+  }>;
+  noLeakReleaseExamples: string[];
+  operatorRunbook: string[];
+  proofCommands: string[];
+}
+
 export interface CutoverSoakTrendDeltas {
   publicQueries: number;
   runReuse: {
@@ -976,6 +1136,8 @@ export interface CutoverSoakReleasePacket {
   rcBoard: FinalRcBoardPacket;
   productTiBoard: ProductTiReleaseBoardPacket;
   realTimeSearchBoard: RealTimeSearchReleaseBoardPacket;
+  observabilityDashboard: ProductionObservabilityDashboardPacket;
+  enterpriseReleaseTrain: EnterpriseReleaseTrainPacket;
   trends: CutoverSoakTrendDeltas;
   blockers: Array<{
     owner: string;
@@ -1286,7 +1448,7 @@ export function verifyLiveSearchDeployProbe(probe: LiveSearchDeployProbe): LiveS
   const checks = [
     check("public_ti.http_ok", probe.publicTi.status >= 200 && probe.publicTi.status < 300, "public /ti search returns HTTP 2xx"),
     check("public_ti.live_search_marker", publicBody.includes("live_search"), "public /ti response includes live_search marker"),
-    check("public_ti.partial_marker", publicBody.includes("partial") || publicBody.includes("ready") || publicBody.includes("searching") || publicBody.includes("queued"), "public /ti response includes a live partial/ready/searching/queued result marker"),
+    check("public_ti.partial_marker", publicBody.includes("partial") || publicBody.includes("ready") || publicBody.includes("searching") || publicBody.includes("queued") || publicBody.includes("metadata_review"), "public /ti response includes a live partial/ready/searching/queued/metadata_review result marker"),
     check("api_search.http_ok", probe.apiSearch.status >= 200 && probe.apiSearch.status < 300, "API /api/ti/search returns HTTP 2xx"),
     check("api_search.run_id", hasRunId(apiJson) || apiBody.includes("runid") || apiBody.includes("run_id"), "API /api/ti/search returns a run id")
   ];
@@ -1348,11 +1510,11 @@ export function verifyScraperNativeSearchReadiness(probe: ScraperNativeSearchRea
     check("degraded.sane_state", degradedState === "degraded" || degradedState === "blocked" || degradedState === "partial", "degraded search reports a sane state"),
     check("public_page.http_ok", probe.publicPage.status >= 200 && probe.publicPage.status < 300, "public /ti page returns HTTP 2xx"),
     check("public_page.live_search_marker", publicBody.includes("live_search"), "public /ti page includes live_search marker"),
-    check("public_page.partial_marker", publicBody.includes("partial") || publicBody.includes("ready") || publicBody.includes("searching") || publicBody.includes("queued"), "public /ti page includes partial/ready/searching/queued marker"),
+    check("public_page.partial_marker", publicBody.includes("partial") || publicBody.includes("ready") || publicBody.includes("searching") || publicBody.includes("queued") || publicBody.includes("metadata_review"), "public /ti page includes partial/ready/searching/queued/metadata_review marker"),
     ...(probe.publicApiPost ? [
       check("public_api_post.http_ok", probe.publicApiPost.status >= 200 && probe.publicApiPost.status < 300, "canonical public /api/ti/search POST returns HTTP 2xx"),
       check("public_api_post.run_id", hasRunId(publicApiPost) || publicApiPostBody.includes("runid") || publicApiPostBody.includes("run_id"), "canonical public /api/ti/search POST returns a run id"),
-      check("public_api_post.live_state", hasPartialResult(publicApiPost) || ["partial", "ready", "searching", "queued"].includes(readString(publicApiPost, "status") ?? "") || publicApiPostBody.includes("partial") || publicApiPostBody.includes("ready") || publicApiPostBody.includes("searching") || publicApiPostBody.includes("queued"), "canonical public /api/ti/search POST returns partial, ready, searching, or queued state")
+      check("public_api_post.live_state", hasPartialResult(publicApiPost) || ["partial", "ready", "searching", "queued", "metadata_review"].includes(readString(publicApiPost, "status") ?? "") || publicApiPostBody.includes("partial") || publicApiPostBody.includes("ready") || publicApiPostBody.includes("searching") || publicApiPostBody.includes("queued") || publicApiPostBody.includes("metadata_review"), "canonical public /api/ti/search POST returns partial, ready, searching, queued, or metadata_review state")
     ] : []),
     ...(probe.publicApiGet ? [
       check("public_api_get.optional_or_http_ok", !probe.requireGetApiProof || (probe.publicApiGet.status >= 200 && probe.publicApiGet.status < 300), "public /api/ti/search GET is optional unless TI_REQUIRE_GET_API_PROOF=true"),
@@ -2034,7 +2196,7 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
       ...entry,
       status: realTimeStatus,
       proofCommand: "bun run check:scraper-native-search",
-      expectedOutput: `${entry.query} returns stable run/cursor fields, honest freshness, and pollable partial/ready/searching state`
+      expectedOutput: `${entry.query} returns stable run/cursor fields, honest freshness, and pollable partial/ready/searching/metadata_review state`
     })),
     integrations: {
       contractsRoute: realTimeStatus,
@@ -2060,10 +2222,14 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
       "pause real-time delta promotion and return Searching/queued-only public answers"
     ])
   };
+  const observabilityDashboard = buildProductionObservabilityDashboardPacket(input, realTimeSearchBoard, productTiBoard, deploymentProofs);
+  const enterpriseReleaseTrain = buildEnterpriseReleaseTrainPacket(input, releaseTrain, rcBoard, realTimeSearchBoard, observabilityDashboard, deploymentProofs);
   const nextProofCommands = uniqueStrings([
     ...blockers.map((blocker) => blocker.proofCommand),
     ...warnings.map((warning) => warning.proofCommand),
     ...deploymentProofs.map((proof) => proof.proofCommand),
+    ...observabilityDashboard.proofCommands,
+    ...enterpriseReleaseTrain.proofCommands,
     "bun test",
     "bun run check",
     "bun run check:route-inventory",
@@ -2095,12 +2261,384 @@ export function buildCutoverSoakReleasePacket(input: CutoverSoakReleasePacketInp
     rcBoard,
     productTiBoard,
     realTimeSearchBoard,
+    observabilityDashboard,
+    enterpriseReleaseTrain,
     trends: input.trends,
     blockers,
     warnings,
     nextProofCommands,
-    statusReport: buildReleaseStatusReport(decision, input, blockers, warnings, nextProofCommands, rcBoard, productTiBoard, realTimeSearchBoard)
+    statusReport: buildReleaseStatusReport(decision, input, blockers, warnings, nextProofCommands, rcBoard, productTiBoard, realTimeSearchBoard, observabilityDashboard, enterpriseReleaseTrain)
   };
+}
+
+function buildProductionObservabilityDashboardPacket(
+  input: CutoverSoakReleasePacketInput,
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket,
+  productTiBoard: ProductTiReleaseBoardPacket,
+  deploymentProofs: CutoverDeploymentProofSlot[]
+): ProductionObservabilityDashboardPacket {
+  const summary = input.soak.summary;
+  const proofCommand = "bun run soak:production";
+  const lowerIsBetter = (
+    name: ProductionObservabilityMetricName,
+    value: number,
+    warnAt: number,
+    criticalAt: number,
+    unit: ProductionObservabilityMetric["unit"],
+    alertName: string,
+    runbookAction: string,
+    metricProofCommand = proofCommand
+  ): ProductionObservabilityMetric => ({
+    name,
+    value,
+    warnAt,
+    criticalAt,
+    unit,
+    status: value > criticalAt ? "blocker" : value > warnAt ? "warning" : "pass",
+    alertName,
+    proofCommand: metricProofCommand,
+    runbookAction
+  });
+  const booleanProof = (
+    name: ProductionObservabilityMetricName,
+    ok: boolean,
+    alertName: string,
+    runbookAction: string,
+    metricProofCommand: string
+  ): ProductionObservabilityMetric => ({
+    name,
+    value: ok ? 1 : 0,
+    warnAt: 1,
+    criticalAt: 0,
+    unit: "boolean",
+    status: ok ? "pass" : "blocker",
+    alertName,
+    proofCommand: metricProofCommand,
+    runbookAction
+  });
+  const publicProofMatrix = buildObservabilityPublicProofMatrix(input.deploymentDrift);
+  const publicProofOk = publicProofMatrix.every((proof) => proof.status !== "blocker");
+  const metrics: ProductionObservabilityMetric[] = [
+    lowerIsBetter("initial_latency_p95_ms", summary.initialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.initialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.initialLatencyP95Ms * 2, "ms", "ti_initial_latency_p95_high", "return immediate queued/searching response and defer slow source work"),
+    lowerIsBetter("partial_latency_p95_ms", summary.partialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.partialLatencyP95Ms, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.partialLatencyP95Ms * 2, "ms", "ti_partial_latency_p95_high", "pause slow adapters and keep public answers in partial mode"),
+    lowerIsBetter("queue_age_p95_seconds", summary.queueAgeP95Seconds, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxQueueAgeP95Seconds, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxQueueAgeP95Seconds * 2, "seconds", "ti_queue_age_p95_high", "drain low-priority queues and stop new canary fanout"),
+    lowerIsBetter("worker_saturation_percent", summary.workerSaturationPercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxWorkerSaturationPercent, 95, "percent", "ti_worker_saturation_high", "reduce worker concurrency and defer source activation waves"),
+    lowerIsBetter("memory_rss_max_gb", summary.memoryRssMaxGb, 96, 160, "gb", "ti_scraper_memory_rss_high", "stop browser workers first, then roll back scraper-native search before 160 GB"),
+    lowerIsBetter("cpu_max_percent", summary.cpuMaxPercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxCpuPercent, 95, "percent", "ti_cpu_max_high", "reduce live-search workers and keep API/frontend headroom"),
+    lowerIsBetter("adapter_failure_rate_percent", summary.errorRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxErrorRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxErrorRatePercent * 2, "percent", "ti_adapter_failure_rate_high", "classify failing adapters and keep affected sources partial"),
+    lowerIsBetter("source_unavailable_rate_percent", summary.sourceUnavailableRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxSourceUnavailableRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxSourceUnavailableRatePercent * 2, "percent", "ti_source_unavailable_rate_high", "pause noisy unavailable sources and preserve stale-source caveats"),
+    lowerIsBetter("policy_block_rate_percent", summary.policyBlockRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxPolicyBlockRatePercent, DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxPolicyBlockRatePercent * 2, "percent", "ti_policy_block_rate_high", "keep restricted sources metadata-only and alert on repeated unsafe attempts"),
+    booleanProof("evidence_write_read_proof", input.soak.checks.find((check) => check.name === "proof.evidence_write_read")?.ok !== false, "ti_evidence_write_read_proof_failed", "hold evidence promotion and run backup/restore proof", "bun test src/tests/storageCutover.test.ts src/tests/evidenceEndpoints.test.ts"),
+    booleanProof("graph_export_readiness", input.soak.checks.find((check) => check.name === "proof.graph_export_readiness")?.ok !== false, "ti_graph_export_readiness_failed", "hold graph/STIX export promotion", "bun run check:graph-review-mounted"),
+    booleanProof("public_proof_matrix", publicProofOk, "ti_public_proof_matrix_failed", "restore public API fallback and rerun Inspur public proof", "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof")
+  ];
+  const metricStatus = worstProofStatus(metrics.map((metric) => metric.status));
+  const failureClassification = buildProductionFailureClassification(metrics, input, realTimeSearchBoard);
+  const blockerNames = metrics.filter((metric) => metric.status === "blocker").map((metric) => metric.name);
+  const warningNames = metrics.filter((metric) => metric.status === "warning").map((metric) => metric.name);
+  const emergencyStop = input.trends.restrictedKillSwitch.active || input.trends.rollbackTriggers.some((trigger) => trigger.includes("restricted"));
+  const decision: ProductionObservabilityDecision = emergencyStop
+    ? "emergency-stop"
+    : input.soak.status === "rollback" || input.deploymentDrift.state === "rollback" || metricStatus === "blocker"
+      ? "rollback"
+      : input.soak.status === "hold"
+        ? "hold"
+        : warningNames.length > 0 || input.deploymentDrift.state === "drift"
+          ? "watch"
+          : "ready";
+  const proofCommands = uniqueStrings([
+    "bun run soak:production",
+    "bun run check:live-search-deploy",
+    "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof",
+    "bun run check:remote-drift",
+    "bun run check:route-inventory",
+    "docker exec hanasand_ti_scraper wget -qO- http://localhost:8097/v1/ops/resource-snapshot",
+    ...metrics.map((metric) => metric.proofCommand),
+    ...deploymentProofs.map((proof) => proof.proofCommand)
+  ]);
+  return {
+    schemaVersion: "ti.production_observability.dashboard.v1",
+    dryRun: true,
+    decision,
+    generatedAt: input.generatedAt ?? "dry-run",
+    sloDashboard: {
+      windowHours: 24,
+      metrics,
+      alertThresholds: metrics.map((metric) => ({
+        metric: metric.name,
+        warnAt: metric.warnAt,
+        criticalAt: metric.criticalAt,
+        unit: metric.unit,
+        alertName: metric.alertName
+      }))
+    },
+    soakAutomation: {
+      command: "TI_SCRAPER_INTERNAL_BASE=http://ti-scraper:8097 PUBLIC_TI_API_BASE_URL=https://api.hanasand.com/api/ti/search TI_SOAK_DURATION_MINUTES=1440 TI_SOAK_INTERVAL_SECONDS=60 bun run soak:production",
+      cadenceSeconds: 60,
+      durationHours: 24,
+      checkpointsHours: [0, 6, 12, 18, 24],
+      proofCommands,
+      environment: {
+        scraperTargetGb: 96,
+        scraperCeilingGb: 160,
+        preserveCtiReserveGb: 500,
+        assumesGpu: false
+      }
+    },
+    publicProofMatrix,
+    failureClassification,
+    rollbackDecisionPacket: {
+      decision,
+      triggers: uniqueStrings([...blockerNames, ...input.trends.rollbackTriggers]),
+      rollbackCommands: uniqueStrings([
+        ...realTimeSearchBoard.rollbackCommands,
+        ...productTiBoard.rollbackCommands,
+        input.deploymentDrift.rollbackTarget.command,
+        "set public TI search to queued-only and pause source activation waves",
+        "reduce scraper worker concurrency until RSS is below 96 GB"
+      ]),
+      operatorRunbook: [
+        "start 24h soak with soakAutomation.command and record checkpoints at 0h, 6h, 12h, 18h, and 24h",
+        "page on warning metrics; hold promotion on blocker metrics",
+        "preserve 500 GB for the rest of CTI before increasing scraper capacity",
+        "do not assume GPU availability for any worker lane",
+        "rerun public proof matrix before canary promotion or rollback closure"
+      ]
+    },
+    proofCommands
+  };
+}
+
+function buildEnterpriseReleaseTrainPacket(
+  input: CutoverSoakReleasePacketInput,
+  releaseTrain: CutoverReleaseTrainOrchestration,
+  rcBoard: FinalRcBoardPacket,
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket,
+  observabilityDashboard: ProductionObservabilityDashboardPacket,
+  deploymentProofs: CutoverDeploymentProofSlot[]
+): EnterpriseReleaseTrainPacket {
+  const deployment = (name: CutoverDeploymentProofSlotName) => deploymentProofs.find((proof) => proof.name === name);
+  const dependencyHealth: EnterpriseReleaseTrainPacket["dependencyHealth"] = [
+    { name: "scraper", status: deployment("remote_typecheck")?.status ?? "blocker", proofCommand: "bun run check" },
+    { name: "api", status: deployment("public_post_api_proof")?.status ?? "blocker", proofCommand: "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof" },
+    { name: "frontend", status: deployment("frontend_ti_query_proof")?.status ?? "blocker", proofCommand: "bun run check:live-search-deploy" },
+    { name: "docker", status: deployment("docker_image_test_enforcement")?.status ?? "blocker", proofCommand: "bun run check:deploy-hygiene && bun run check:docker-contexts" },
+    { name: "route_inventory", status: deployment("route_inventory")?.status ?? "blocker", proofCommand: "bun run check:route-inventory" },
+    { name: "contract_index", status: deployment("contracts_route")?.status ?? "blocker", proofCommand: "bun run check:contract-index" },
+    { name: "public_proof_matrix", status: proofStatusFromObservabilityMetric(observabilityDashboard, "public_proof_matrix"), proofCommand: "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof" },
+    { name: "source_freshness", status: releaseTrain.stages.find((stage) => stage.name === "source_and_channel_readiness")?.status ?? "blocker", proofCommand: "bun test src/tests/sourceSeeds.test.ts src/tests/telegramPublic.test.ts" },
+    { name: "evidence_writes", status: proofStatusFromObservabilityMetric(observabilityDashboard, "evidence_write_read_proof"), proofCommand: "bun test src/tests/storageCutover.test.ts src/tests/evidenceEndpoints.test.ts" },
+    { name: "graph_export_holds", status: proofStatusFromObservabilityMetric(observabilityDashboard, "graph_export_readiness"), proofCommand: "bun run check:graph-review-mounted" },
+    { name: "restricted_metadata_safety", status: deployment("restricted_emergency_stop")?.status ?? "blocker", proofCommand: "bun run check:restricted-metadata-status && bun run check:restricted-metadata-apply-plan" },
+    { name: "queue_headroom", status: rcBoard.queuePressure.status, proofCommand: "bun test src/tests/schedulerProduction.test.ts" }
+  ];
+  const capacityPlan = buildEnterpriseCapacityPlan(input);
+  const drStatus: DisasterRecoveryProof["status"] = worstProofStatus([
+    proofStatusFromObservabilityMetric(observabilityDashboard, "evidence_write_read_proof"),
+    proofStatusFromObservabilityMetric(observabilityDashboard, "graph_export_readiness"),
+    deployment("public_post_api_proof")?.status ?? "blocker",
+    deployment("docker_image_test_enforcement")?.status ?? "blocker"
+  ]);
+  const disasterRecoveryProofs: DisasterRecoveryProof[] = [
+    drProof("evidence_export_manifest", drStatus, "bun test src/tests/storageCutover.test.ts", "restore evidence objects from manifest and rerun replay-plan", 30, "capture ids, object hashes, and redacted metadata only"),
+    drProof("claim_ledger_replay", proofStatusFromObservabilityMetric(observabilityDashboard, "evidence_write_read_proof"), "bun test src/tests/storageCutover.test.ts src/tests/evidenceEndpoints.test.ts", "replay claim ledger rows from backup without raw leak material", 20, "ledger ids, source hashes, claim summaries, and confidence only"),
+    drProof("graph_export_replay", proofStatusFromObservabilityMetric(observabilityDashboard, "graph_export_readiness"), "bun run check:graph-review-mounted", "rebuild graph export queue from reviewed relationships", 20, "relationship ids, review states, and STIX-safe descriptors only"),
+    drProof("source_registry_backup", releaseTrain.stages.find((stage) => stage.name === "source_and_channel_readiness")?.status ?? "blocker", "bun test src/tests/sourceSeeds.test.ts", "restore source registry snapshot and keep restricted sources approval-gated", 15, "source ids, canonical URLs, legal notes, and status only"),
+    drProof("scheduler_queue_drain", rcBoard.queuePressure.status, "bun test src/tests/schedulerProduction.test.ts", "pause intake, drain leased work, preserve cursors, and replay dead letters", 10, "run ids, queue ids, retry causes, and cursors only"),
+    drProof("public_wrapper_rollback", deployment("public_post_api_proof")?.status ?? "blocker", "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof", "restore previous public wrapper fallback and verify POST proof", 10, "public status, run ids, and live state only"),
+    drProof("container_rollback", deployment("docker_image_test_enforcement")?.status ?? "blocker", "bun run check:deploy-hygiene && bun run check:remote-drift", input.deploymentDrift.rollbackTarget.command, 15, "image id, compose hash, and health status only")
+  ];
+  const dependencyStatus = worstProofStatus(dependencyHealth.map((health) => health.status));
+  const drWorstStatus = worstProofStatus(disasterRecoveryProofs.map((proof) => proof.status));
+  const decision = enterpriseReleaseDecision(rcBoard, realTimeSearchBoard, observabilityDashboard, dependencyStatus, drWorstStatus, capacityPlan.status);
+  const stages: EnterpriseReleaseTrainPacket["stages"] = [
+    releaseStage("local_contract_green", deployment("local_tests")?.status ?? "blocker", "bun test && bun run check", "block release until local contracts are green"),
+    releaseStage("route_inventory_green", deployment("route_inventory")?.status ?? "blocker", "bun run check:route-inventory", "hold route rollout until mounted route inventory is current"),
+    releaseStage("public_proof_matrix_green", proofStatusFromObservabilityMetric(observabilityDashboard, "public_proof_matrix"), "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof", "restore public fallback on proof failure"),
+    releaseStage("canary_ready", rcBoard.decision === "canary-ready" || rcBoard.decision === "promote" || rcBoard.decision === "promote-with-warnings" ? "pass" : rcBoard.decision === "canary-with-warnings" ? "warning" : "blocker", "bun run soak:production", "start canary only after proof and capacity gates pass"),
+    releaseStage("canary_with_warnings", rcBoard.decision === "canary-with-warnings" || decision === "canary-with-warnings" ? "warning" : "pass", "bun run soak:production", "allow only bounded canary while warnings are active"),
+    releaseStage("promote_with_warnings", decision === "promote-with-warnings" ? "warning" : "pass", "bun run plan:cutover examples/cutover-rehearsal-pass.json", "require operator acknowledgement for warning promotion"),
+    releaseStage("promote", decision === "promote" ? "pass" : decision === "promote-with-warnings" ? "warning" : "blocker", "bun run plan:cutover examples/cutover-rehearsal-pass.json", "promote only when release packet is pass or acknowledged warning"),
+    releaseStage("rollback", decision === "rollback" ? "blocker" : "pass", input.deploymentDrift.rollbackTarget.command, "execute last-known-good rollback on rollback decision"),
+    releaseStage("emergency_stop", decision === "emergency-stop" ? "blocker" : "pass", "bun run check:restricted-metadata-status", "activate restricted emergency stop and pause risky workers"),
+    releaseStage("no_go", decision === "no-go" ? "blocker" : "pass", "bun test && bun run check", "do not promote while proof is incomplete")
+  ];
+  const proofCommands = uniqueStrings([
+    ...stages.map((stage) => stage.proofCommand),
+    ...dependencyHealth.map((health) => health.proofCommand),
+    ...disasterRecoveryProofs.map((proof) => proof.proofCommand),
+    ...observabilityDashboard.proofCommands
+  ]);
+  return {
+    schemaVersion: "ti.enterprise_release_train.v1",
+    dryRun: true,
+    decision,
+    stages,
+    disasterRecovery: {
+      proofs: disasterRecoveryProofs,
+      rollbackCommands: uniqueStrings([
+        input.deploymentDrift.rollbackTarget.command,
+        "restore previous public wrapper fallback and redeploy hanasand_api",
+        "pause source activation waves and drain scheduler queues",
+        "hold graph/STIX export until replay proof passes"
+      ]),
+      backupManifests: ["evidence-export-manifest", "claim-ledger-replay", "graph-export-replay", "source-registry-snapshot"]
+    },
+    capacityPlan,
+    dependencyHealth,
+    noLeakReleaseExamples: [
+      "public proof matrix stores query, status, run id, cursor, and live state only",
+      "DR manifests use hashes, capture ids, ledger ids, and source ids; no raw bodies or credentials",
+      "restricted metadata rollback preserves approval state and URL hashes without unsafe target URLs",
+      "graph replay uses reviewed relationship ids and STIX-safe descriptors only"
+    ],
+    operatorRunbook: [
+      "run local, route, contract, public proof, deploy hygiene, Docker context, and remote drift checks before canary",
+      "keep scraper target at 96 GB and normal ceiling at 160 GB unless explicitly reallocated",
+      "preserve at least 500 GB outside scraper for API, frontend, DB, search/vector, graph, object store, and OS cache",
+      "keep browser workers disabled and do not assume GPU capacity",
+      "execute DR proof before promotion and after rollback closure"
+    ],
+    proofCommands
+  };
+}
+
+function buildEnterpriseCapacityPlan(input: CutoverSoakReleasePacketInput): EnterpriseCapacityPlan {
+  const budget = input.promotionPacket.resourceBudget;
+  const nonScraperReservedGb = budget.nonScraperReservedGb;
+  const status: EnterpriseCapacityPlan["status"] = budget.scraperTargetGb > 96 || budget.scraperCeilingGb > 160 || nonScraperReservedGb < 500 || input.soak.summary.memoryRssMaxGb > 160
+    ? "blocker"
+    : input.soak.summary.memoryRssMaxGb > 96 || input.soak.summary.workerSaturationPercent > DEFAULT_LIVE_SEARCH_SOAK_CRITERIA.maxWorkerSaturationPercent
+      ? "warning"
+      : "pass";
+  return {
+    hostRamGb: Math.max(1_024, nonScraperReservedGb + budget.scraperCeilingGb),
+    scraperTargetGb: 96,
+    scraperCeilingGb: 160,
+    preserveCtiReserveGb: 500,
+    nonScraperReservedGb,
+    browserPool: "disabled_until_explicitly_allocated",
+    assumesGpu: false,
+    boundedCaches: true,
+    diskFirstEvidence: true,
+    status,
+    allocations: [
+      { service: "scraper", reservedGb: 96, notes: "default target for scraper runtime, queues, adapters, and compact caches" },
+      { service: "api", reservedGb: 24, notes: "public and enterprise API headroom outside scraper budget" },
+      { service: "frontend", reservedGb: 8, notes: "frontend service headroom outside scraper budget" },
+      { service: "postgres", reservedGb: 96, notes: "future durable metadata and queue storage" },
+      { service: "search_vector", reservedGb: 160, notes: "future OpenSearch/vector workload reserve" },
+      { service: "graph", reservedGb: 96, notes: "future graph store and query reserve" },
+      { service: "object_store", reservedGb: 160, notes: "disk-first evidence/object cache reserve" },
+      { service: "os_cache_emergency", reservedGb: 192, notes: "OS cache and emergency rollback headroom" }
+    ],
+    workerCaps: {
+      clearWebWorkers: 128,
+      publicChannelWorkers: 8,
+      restrictedMetadataWorkers: 4,
+      browserWorkers: 0
+    }
+  };
+}
+
+function enterpriseReleaseDecision(
+  rcBoard: FinalRcBoardPacket,
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket,
+  observabilityDashboard: ProductionObservabilityDashboardPacket,
+  dependencyStatus: "pass" | "warning" | "blocker",
+  drStatus: "pass" | "warning" | "blocker",
+  capacityStatus: "pass" | "warning" | "blocker"
+): EnterpriseReleaseDecision {
+  if (rcBoard.decision === "emergency-stop" || realTimeSearchBoard.decision === "emergency-stop" || observabilityDashboard.decision === "emergency-stop") return "emergency-stop";
+  if (rcBoard.decision === "rollback" || realTimeSearchBoard.decision === "rollback" || observabilityDashboard.decision === "rollback") return "rollback";
+  if (dependencyStatus === "blocker" || drStatus === "blocker" || capacityStatus === "blocker" || rcBoard.decision === "no-go" || realTimeSearchBoard.decision === "no-go") return "no-go";
+  if (dependencyStatus === "warning" || drStatus === "warning" || capacityStatus === "warning" || observabilityDashboard.decision === "watch" || rcBoard.decision === "promote-with-warnings" || realTimeSearchBoard.decision === "promote-with-warnings") return "promote-with-warnings";
+  if (rcBoard.decision === "canary-with-warnings" || realTimeSearchBoard.decision === "canary-with-warnings") return "canary-with-warnings";
+  if (rcBoard.decision === "canary-ready" || realTimeSearchBoard.decision === "canary-ready" || rcBoard.decision === "canary-only") return "canary-ready";
+  if (rcBoard.decision === "promote" && realTimeSearchBoard.decision === "promote") return "promote";
+  return "no-go";
+}
+
+function proofStatusFromObservabilityMetric(
+  dashboard: ProductionObservabilityDashboardPacket,
+  name: ProductionObservabilityMetricName
+): "pass" | "warning" | "blocker" {
+  return dashboard.sloDashboard.metrics.find((metric) => metric.name === name)?.status ?? "blocker";
+}
+
+function drProof(
+  name: DisasterRecoveryProof["name"],
+  status: DisasterRecoveryProof["status"],
+  proofCommand: string,
+  restoreCommand: string,
+  expectedRecoveryMinutes: number,
+  noLeakExample: string
+): DisasterRecoveryProof {
+  return { name, status, proofCommand, restoreCommand, expectedRecoveryMinutes, noLeakExample };
+}
+
+function releaseStage(
+  name: EnterpriseReleaseTrainPacket["stages"][number]["name"],
+  status: EnterpriseReleaseTrainPacket["stages"][number]["status"],
+  proofCommand: string,
+  operatorAction: string
+): EnterpriseReleaseTrainPacket["stages"][number] {
+  return { name, status, proofCommand, operatorAction };
+}
+
+function buildObservabilityPublicProofMatrix(
+  deploymentDrift: DeploymentDriftReport
+): ProductionObservabilityDashboardPacket["publicProofMatrix"] {
+  const apiByQuery = new Map(deploymentDrift.apiSearchProofs.map((proof) => [proof.query, proof]));
+  const publicByQuery = new Map(deploymentDrift.publicProofs.map((proof) => [proof.query, proof]));
+  const queries: string[] = [];
+  const seen = new Set<string>();
+  for (const query of [...deploymentDrift.publicProofs.map((proof) => proof.query), ...deploymentDrift.apiSearchProofs.map((proof) => proof.query)]) {
+    if (seen.has(query)) continue;
+    seen.add(query);
+    queries.push(query);
+  }
+  return queries.map((query) => {
+    const publicProof = publicByQuery.get(query);
+    const apiProof = apiByQuery.get(query);
+    const publicOk = publicProof ? publicProof.status >= 200 && publicProof.status < 300 : true;
+    const apiOk = apiProof ? apiProof.status >= 200 && apiProof.status < 300 : true;
+    return {
+      query,
+      publicStatus: publicProof?.status,
+      apiStatus: apiProof?.status,
+      status: publicOk && apiOk ? "pass" : "blocker"
+    };
+  });
+}
+
+function buildProductionFailureClassification(
+  metrics: ProductionObservabilityMetric[],
+  input: CutoverSoakReleasePacketInput,
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket
+): ProductionFailureClassification[] {
+  const metric = (name: ProductionObservabilityMetricName) => metrics.find((item) => item.name === name)?.status ?? "blocker";
+  const status = (...names: ProductionObservabilityMetricName[]): ProductionFailureClassification["status"] => worstProofStatus(names.map(metric));
+  const classify = (
+    name: ProductionFailureClassification["name"],
+    metricStatus: ProductionFailureClassification["status"],
+    rollbackTrigger: string,
+    owner: string,
+    runbookAction: string
+  ): ProductionFailureClassification => ({ name, status: metricStatus, rollbackTrigger, owner, runbookAction });
+  return [
+    classify("latency", status("initial_latency_p95_ms", "partial_latency_p95_ms"), "latency.p95", "Agent 09/10", "keep first response queued/searching and pause slow sources"),
+    classify("queue", status("queue_age_p95_seconds"), "queue.age_p95", "Agent 02/10", "drain low-priority work and block duplicate live runs"),
+    classify("worker", status("worker_saturation_percent"), "workers.saturation", "Agent 02/10", "reduce worker concurrency and defer canaries"),
+    classify("resource", status("memory_rss_max_gb", "cpu_max_percent"), "resource.memory_or_cpu", "Agent 10", "keep scraper under 96 GB target and roll back before 160 GB"),
+    classify("source", status("adapter_failure_rate_percent", "source_unavailable_rate_percent"), "source.adapter_or_unavailable", "Agent 01/03/04", "pause failing sources and keep caveated partials"),
+    classify("policy", status("policy_block_rate_percent"), "policy.block_rate", "Agent 05/10", "hold restricted metadata and alert without exposing raw material"),
+    classify("evidence", status("evidence_write_read_proof"), "proof.evidence_write_read", "Agent 06", "hold evidence promotion until write/read proof is green"),
+    classify("graph", status("graph_export_readiness"), "proof.graph_export_readiness", "Agent 08", "hold graph/STIX export until review gates pass"),
+    classify("public_proof", status("public_proof_matrix"), "proof.public_matrix", "Agent 09/10", "restore public fallback and rerun public proof matrix"),
+    classify("deployment", input.deploymentDrift.state === "rollback" ? "blocker" : input.deploymentDrift.state === "drift" ? "warning" : "pass", "deployment.drift", "Agent 10", "use last-known-good source/image/compose rollback target"),
+    classify("restricted_safety", input.trends.restrictedKillSwitch.active || realTimeSearchBoard.decision === "emergency-stop" ? "blocker" : "pass", "restricted.kill_switch_state", "Agent 05/10", "activate emergency stop and pause restricted metadata workers")
+  ];
 }
 
 function liveSearchAlerts(observation: LiveSearchObservation, slo: LiveSearchSlo): LiveSearchAlert[] {
@@ -2225,7 +2763,7 @@ function hasRunId(value: Record<string, unknown> | undefined): boolean {
 function hasPartialResult(value: Record<string, unknown> | undefined): boolean {
   if (!value) return false;
   const status = readString(value, "status") ?? readString(value, "state");
-  if (status === "partial") return true;
+  if (["partial", "ready", "searching", "queued", "metadata_review"].includes(status ?? "")) return true;
   const mode = readString(value, "mode");
   if (mode === "live_search" || mode === "interactive") {
     const publicChannel = readRecord(value, "publicChannel");
@@ -2791,7 +3329,7 @@ function buildProductTiReleaseBoardPacket(
     query,
     status: publicStatus,
     proofCommand: `TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof`,
-    expectedOutput: `${query} public POST proof returns HTTP 2xx, run id, live state, and honest partial/ready status`
+    expectedOutput: `${query} public POST proof returns HTTP 2xx, run id, live state, and honest partial/ready/metadata_review status`
   }));
   const proofCommands = uniqueStrings([
     ...rcBoard.proofCommands,
@@ -2968,7 +3506,7 @@ function buildSupersededRealTimeSearchReleaseBoardPacket(
     scenario("memory_budget", "Agent 10", productTiBoard.resourceHeadroom.status, "bun run check:remote-drift", "scraper stays below 96 GB target and 160 GB normal ceiling", "reduce workers and keep fallback"),
     scenario("worker_queue_headroom", "Agent 02/10", productTiBoard.queuePressure.status, "bun test src/tests/schedulerProduction.test.ts", "worker queue headroom stays within release SLO", "drain low-priority live-search queue"),
     scenario("frontend_no_default", "Agent 09/10", frontendStatus, "bun run check:live-search-deploy", "frontend /ti has no default APT29 or stale demo content", "restore previous frontend build"),
-    scenario("public_post_compatibility", "Agent 09/10", publicStatus, "TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof", "canonical public POST returns run id and partial/ready state", "restore public API fallback"),
+    scenario("public_post_compatibility", "Agent 09/10", publicStatus, "TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof", "canonical public POST returns run id and partial/ready/metadata_review state", "restore public API fallback"),
     scenario("remote_container_health", "Agent 10", remoteStatus, "bun run check:remote-drift", "remote containers are healthy/running and source drift is aligned", "docker compose up -d ti-scraper api frontend --no-build")
   ];
   const queryMatrix: RealTimeSearchReleaseBoardPacket["queryMatrix"] = REAL_TIME_SEARCH_PROOF_QUERIES.map((entry) => ({
@@ -2977,7 +3515,7 @@ function buildSupersededRealTimeSearchReleaseBoardPacket(
     proofCommand: entry.query === "CVE-2024-3094"
       ? "TI_PUBLIC_PROOF_ACTORS=APT42,Turla,Akira,RandomActor,MadeUpActor,CVE-2024-3094 TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof"
       : "bun test src/tests/api.test.ts",
-    expectedOutput: `${entry.query} returns stable run/cursor fields, honest freshness, and pollable partial/ready/searching state`
+    expectedOutput: `${entry.query} returns stable run/cursor fields, honest freshness, and pollable partial/ready/searching/metadata_review state`
   }));
   const proofCommands = uniqueStrings([
     ...productTiBoard.proofCommands,
@@ -3308,9 +3846,11 @@ function buildReleaseStatusReport(
   blockers: Array<{ owner: string; name: string }>,
   warnings: Array<{ owner: string; name: string }>,
   nextProofCommands: string[],
-  rcBoard?: FinalRcBoardPacket,
-  productTiBoard?: ProductTiReleaseBoardPacket,
-  realTimeSearchBoard?: RealTimeSearchReleaseBoardPacket
+  rcBoard: FinalRcBoardPacket,
+  productTiBoard: ProductTiReleaseBoardPacket,
+  realTimeSearchBoard: RealTimeSearchReleaseBoardPacket,
+  observabilityDashboard: ProductionObservabilityDashboardPacket,
+  enterpriseReleaseTrain: EnterpriseReleaseTrainPacket
 ): string {
   return [
     `Agent 10 soak release decision: ${decision}`,
@@ -3325,9 +3865,11 @@ function buildReleaseStatusReport(
     `releaseTrain: ${normalizeReleaseTrainStages(input, normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)).map((stage) => `${stage.name}=${stage.status}/${stage.decisionImpact}`).join(", ")}`,
     `rcGate: ${buildReleaseCandidateGatePacket(input, decision, buildReleaseTrainOrchestration(input, decision, normalizeReleaseTrainStages(input, normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs), blockers, warnings).decision}`,
     `canaryExecution: ${buildCanaryReleaseExecutionPacket(input, buildReleaseCandidateGatePacket(input, decision, buildReleaseTrainOrchestration(input, decision, normalizeReleaseTrainStages(input, normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs)), normalizeRuntimeReleaseProofs(input.runtimeProofs), normalizeDeploymentProofSlots(input.deploymentProofs), blockers, warnings)).decision}`,
-    `rcBoard: ${rcBoard?.decision ?? "unbuilt"}`,
-    `productTiBoard: ${productTiBoard?.decision ?? "unbuilt"}`,
-    `realTimeSearchBoard: ${realTimeSearchBoard?.decision ?? "unbuilt"}`,
+    `rcBoard: ${rcBoard.decision}`,
+    `productTiBoard: ${productTiBoard.decision}`,
+    `realTimeSearchBoard: ${realTimeSearchBoard.decision}`,
+    `observabilityDashboard: ${observabilityDashboard.decision}`,
+    `enterpriseReleaseTrain: ${enterpriseReleaseTrain.decision}`,
     `restrictedKillSwitchActive: ${input.trends.restrictedKillSwitch.active}`,
     `rollbackTriggers: ${input.trends.rollbackTriggers.length > 0 ? input.trends.rollbackTriggers.join(", ") : "none"}`,
     `blockers: ${blockers.length > 0 ? blockers.map((blocker) => `${blocker.owner}:${blocker.name}`).join(", ") : "none"}`,

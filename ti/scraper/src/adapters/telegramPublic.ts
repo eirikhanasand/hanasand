@@ -1346,7 +1346,7 @@ export function buildTelegramPublicSlaReport(input: {
   const sources = input.reliability.sources;
   const sourceCount = sources.length;
   const avg = (values: number[]) => roundMetric(values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
-  const staleSourceCount = sources.filter((source) => source.metrics.freshness < 0.5).length;
+  const staleSourceCount = sources.filter((source) => source.metrics.freshness < 0.4).length;
   const delayedSourceCount = input.operatorStates.filter((state) => state.state === "delayed").length;
   const highDuplicateCount = sources.filter((source) => source.metrics.duplicateUrlRatio >= 0.4).length;
   const highChurnCount = sources.filter((source) => source.metrics.editDeleteChurn >= 0.3).length;

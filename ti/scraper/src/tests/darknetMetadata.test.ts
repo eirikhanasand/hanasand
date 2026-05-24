@@ -34,6 +34,7 @@ import {
   restrictedMetadataIsolationHarnessContract,
   restrictedMetadataKillSwitchDrillContract,
   restrictedMetadataNonBlockingSearchContract,
+  restrictedMetadataOperationalPlaybooksContract,
   restrictedMetadataPolicyDelta,
   restrictedMetadataProductionAuditEvents,
   restrictedMetadataProductionBoundaryContracts,
@@ -41,6 +42,7 @@ import {
   restrictedMetadataRetentionExpiryDelta,
   restrictedMetadataRuntimeIsolationContract,
   restrictedMetadataSourcePackEntryToSource,
+  restrictedMetadataVictimClaimWorkflowCertificationContract,
   validateRestrictedMetadataSourcePack,
   type ApprovedProxyBoundary,
   type DarknetMetadataSourceType,
@@ -48,6 +50,8 @@ import {
   type RestrictedMetadataAnalystOperationScenario,
   type RestrictedMetadataIsolationHarnessScenario,
   type RestrictedMetadataNonBlockingSearchScenario,
+  type RestrictedMetadataOperationalPlaybookScenario,
+  type RestrictedMetadataVictimClaimWorkflowScenario,
   type RestrictedMetadataSourcePack
 } from "../adapters/darknetMetadata.ts";
 import { evaluateSourceForCollection } from "../policy/collectionPolicy.ts";
@@ -116,6 +120,33 @@ const ISOLATION_HARNESS_SCENARIOS: RestrictedMetadataIsolationHarnessScenario[] 
   "credential_storage_denied",
   "private_access_denied",
   "threat_actor_interaction_denied"
+] as const;
+
+const VICTIM_CLAIM_WORKFLOW_SCENARIOS: RestrictedMetadataVictimClaimWorkflowScenario[] = [
+  "unique_company_claim",
+  "duplicate_victim_posts",
+  "stale_repost",
+  "false_claim_review",
+  "actor_name_mismatch",
+  "claimed_count_mismatch",
+  "source_takedown",
+  "legal_hold",
+  "retention_expiry",
+  "draft_notification_review"
+] as const;
+
+const OPERATIONAL_PLAYBOOK_SCENARIOS: RestrictedMetadataOperationalPlaybookScenario[] = [
+  "emergency_stop",
+  "source_quarantine",
+  "legal_hold",
+  "retention_expiry",
+  "approval_expiry",
+  "redaction_repair",
+  "proxy_failure",
+  "unsafe_source_discovery",
+  "stale_victim_repost",
+  "false_claim_review",
+  "duplicate_claim_review"
 ] as const;
 
 function source(input: Partial<SourceRecord> = {}): SourceRecord {
@@ -2703,6 +2734,7 @@ describe("darknet metadata adapter", () => {
     });
     expect(status.connectorCertification.fixtureScenarios).toEqual(expect.arrayContaining([
       "healthy_approved_metadata_source",
+      "missing_approval",
       "expired_approval",
       "kill_switch",
       "proxy_isolation_failure",
@@ -2896,8 +2928,75 @@ describe("darknet metadata adapter", () => {
       packet.noLeakSerialization.passed
     )).toBe(true);
     expect(status.analystOperations.victimNotificationPacketCount).toBeGreaterThan(0);
+    expect(status.analystOperations.victimClaimWorkflow).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.analystOperations.victimClaimWorkflow.observedScenarios).toEqual(expect.arrayContaining([
+      "duplicate_victim_posts",
+      "actor_name_mismatch",
+      "draft_notification_review"
+    ]));
+    expect(status.analystOperations.victimClaimWorkflow.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.grouping.sourceHashOnly &&
+      packet.handoffs.agent09ApiState === "safe_metadata_only" &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.hashOnlySourceIdentifiers &&
+      packet.proof.graphPromotionHeld &&
+      packet.proof.stixPromotionEligible === false &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.operationalPlaybooks).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      nonMutating: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.operationalPlaybooks.observedScenarios).toEqual(expect.arrayContaining([
+      "emergency_stop",
+      "source_quarantine",
+      "legal_hold",
+      "retention_expiry",
+      "approval_expiry",
+      "redaction_repair",
+      "proxy_failure",
+      "unsafe_source_discovery",
+      "stale_victim_repost",
+      "false_claim_review",
+      "duplicate_claim_review"
+    ]));
+    expect(status.operationalPlaybooks.playbooks.every((playbook) =>
+      playbook.metadataOnly &&
+      playbook.safeForApi &&
+      playbook.dryRunOnly &&
+      playbook.nonMutating &&
+      playbook.sourceHashOnly &&
+      playbook.affectedAgents.includes("Agent 10") &&
+      playbook.auditLogFields.includes("sourceHash") &&
+      playbook.forbiddenAlternatives.includes("payload download remains prohibited") &&
+      playbook.noLeakSerialization.passed
+    )).toBe(true);
     expect(status.agent09SearchFields).toContain("analystOperations");
+    expect(status.agent09SearchFields).toContain("operationalPlaybooks");
     expect(status.agent10SoakFields).toContain("analystOperations");
+    expect(status.agent10SoakFields).toContain("operationalPlaybooks");
     expect(status.isolationHarness).toMatchObject({
       metadataOnly: true,
       safeForApi: true,
@@ -2973,6 +3072,7 @@ describe("darknet metadata adapter", () => {
     });
     expect(certification.fixtureScenarios).toEqual([
       "healthy_approved_metadata_source",
+      "missing_approval",
       "expired_approval",
       "kill_switch",
       "proxy_isolation_failure",
@@ -2983,6 +3083,19 @@ describe("darknet metadata adapter", () => {
       "retention_expiry",
       "low_yield_source"
     ]);
+    expect(certification.packets.find((packet) => packet.scenario === "missing_approval")).toMatchObject({
+      status: "hold",
+      approval: {
+        approvalId: undefined,
+        expired: false
+      },
+      networkIsolation: {
+        directEgressAllowed: false
+      },
+      agent10EmergencyStopReleaseTrain: {
+        decision: "hold"
+      }
+    });
     expect(certification.packets.every((packet) =>
       packet.metadataOnly &&
       packet.safeForApi &&
@@ -3409,11 +3522,151 @@ describe("darknet metadata adapter", () => {
     expect(operations.agent08GraphHolds).toEqual(expect.arrayContaining(["restricted_context_hold", "review_before_graph_promotion"]));
     expect(operations.agent10EmergencyStopGates).toEqual(expect.arrayContaining(["pass", "hold", "rollback"]));
     expect(operations.victimNotificationPacketCount).toBeGreaterThan(0);
+    expect(operations.victimClaimWorkflow.fixtureScenarios).toEqual(VICTIM_CLAIM_WORKFLOW_SCENARIOS);
+    expect(operations.victimClaimWorkflow.observedScenarios).toEqual(expect.arrayContaining([
+      "duplicate_victim_posts",
+      "actor_name_mismatch",
+      "draft_notification_review"
+    ]));
     const serialized = JSON.stringify(operations).toLowerCase();
     expect(serialized).not.toContain("http://");
     expect(serialized).not.toContain(".onion");
     expect(serialized).not.toContain("customer-dump");
     expect(serialized).not.toContain("password");
+  });
+
+  test("freezes restricted victim claim workflow without unsafe serialization", () => {
+    const workflow = restrictedMetadataVictimClaimWorkflowCertificationContract();
+    expect(workflow).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(workflow.fixtureScenarios).toEqual(VICTIM_CLAIM_WORKFLOW_SCENARIOS);
+    expect(workflow.reviewStates).toEqual(expect.arrayContaining([
+      "metadata_review",
+      "duplicate",
+      "contradicted",
+      "stale",
+      "false_claim_review",
+      "takedown_unavailable",
+      "legal_hold",
+      "retention_expiring",
+      "notification_draft"
+    ]));
+    expect(workflow.duplicateGroupCount).toBeGreaterThan(0);
+    expect(workflow.contradictionCount).toBeGreaterThan(0);
+    expect(workflow.notificationDraftCount).toBeGreaterThan(0);
+    expect(workflow.graphPromotionHoldCount).toBe(workflow.packets.length);
+    expect(workflow.packets.find((packet) => packet.scenario === "duplicate_victim_posts")).toMatchObject({
+      reviewState: "duplicate",
+      grouping: {
+        sourceHashOnly: true
+      },
+      handoffs: {
+        agent06ClaimLedger: "duplicate",
+        agent08GraphHold: "hold_duplicate_or_contradicted_claim"
+      }
+    });
+    expect(workflow.packets.find((packet) => packet.scenario === "actor_name_mismatch")).toMatchObject({
+      reviewState: "contradicted",
+      contradictionReasons: expect.arrayContaining(["actor_name_mismatch"]),
+      proof: {
+        stixPromotionEligible: false
+      }
+    });
+    expect(workflow.packets.find((packet) => packet.scenario === "draft_notification_review")).toMatchObject({
+      reviewState: "notification_draft",
+      notificationDraft: {
+        status: "draft_review",
+        safeToSend: false,
+        whatWasNotAccessed: expect.arrayContaining(["leaked record rows", "credentials", "threat actor interaction"])
+      }
+    });
+    expect(workflow.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.grouping.sourceHashOnly &&
+      packet.grouping.groupedBy.includes("normalizedVictimKey") &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.hashOnlySourceIdentifiers &&
+      packet.proof.graphPromotionHeld &&
+      packet.proof.stixPromotionEligible === false &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(workflow).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted operational playbooks without unsafe serialization", () => {
+    const playbooks = restrictedMetadataOperationalPlaybooksContract();
+    expect(playbooks).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      nonMutating: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(playbooks.fixtureScenarios).toEqual(OPERATIONAL_PLAYBOOK_SCENARIOS);
+    expect(playbooks.observedScenarios).toEqual(expect.arrayContaining(OPERATIONAL_PLAYBOOK_SCENARIOS));
+    expect(playbooks.affectedAgents).toEqual(expect.arrayContaining([
+      "Agent 01",
+      "Agent 02",
+      "Agent 06",
+      "Agent 07",
+      "Agent 08",
+      "Agent 09",
+      "Agent 10"
+    ]));
+    expect(playbooks.proofCommands).toEqual(expect.arrayContaining([
+      "bun run check:restricted-metadata-status",
+      "bun run check:restricted-metadata-apply-plan",
+      "bun test src/tests/darknetMetadata.test.ts"
+    ]));
+    expect(playbooks.playbooks.find((playbook) => playbook.scenario === "emergency_stop")).toMatchObject({
+      handoffs: {
+        agent10Release: "rollback"
+      },
+      proofCommand: "bun run check:restricted-metadata-status"
+    });
+    expect(playbooks.playbooks.find((playbook) => playbook.scenario === "duplicate_claim_review")).toMatchObject({
+      nonMutating: true,
+      sourceHashOnly: true,
+      handoffs: {
+        agent08Graph: "hold graph and STIX promotion until analyst review"
+      }
+    });
+    expect(playbooks.playbooks.every((playbook) =>
+      playbook.metadataOnly &&
+      playbook.safeForApi &&
+      playbook.dryRunOnly &&
+      playbook.nonMutating &&
+      playbook.sourceHashOnly &&
+      playbook.detectionFields.length > 0 &&
+      playbook.auditLogFields.includes("sourceHash") &&
+      playbook.forbiddenAlternatives.includes("payload download remains prohibited") &&
+      playbook.forbiddenAlternatives.includes("threat actor interaction remains prohibited") &&
+      playbook.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(playbooks).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "raw leak", "captcha bypass"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
   });
 
   test("freezes restricted connector isolation harness without unsafe serialization", () => {

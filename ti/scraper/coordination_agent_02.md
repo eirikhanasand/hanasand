@@ -31,3 +31,13 @@ Superseded by active Task AA below; do not request another assignment until Task
 Own scheduler behavior for responsive public `/ti` searches. The product requirement is that an actor query feels alive immediately: first response may be compact, but a live run must be attached/reused, polling cadence should be seconds not minutes, and duplicate public polling must not flood the queue.
 
 Deliver scheduler contracts and fixtures for APT29, APT42, Turla, Volt Typhoon, Scattered Spider, Akira, random actor, ransomware/victim, CVE, malware/tool, country, and sector queries. Cover run reuse, 3-second public polling hints, backpressure, abandoned clients, source activation fanout, no-result searching state, live discovery to capture task promotion, public-channel windows, restricted metadata holds, and worker headroom under 96 GB/160 GB limits. Expose compact fields through `/v1/frontier/status`, `/v1/intel/search.scheduler`, `/v1/frontier/apply-plan`, `/v1/contracts`, Agent 07 answer states, Agent 09 public wrapper DTO, and Agent 10 RC board. Verify scheduler/API/full tests, typecheck, route inventory, frontier apply-plan proof, cutover rehearsal/plan, and no queue mutation from dry-run controls.
+
+## ADDITIONAL QUEUED NEXT TASKS - CONTINUE AFTER CURRENT QUEUE
+
+Task AD: Production Queue Backend Cutover And Lease Semantics
+
+Design and implement the adapter boundary for moving from embedded queue state to Postgres/Redis/NATS-backed workers. Cover leases, acknowledgements, checkpoints, retries, dead letters, cancellation, dedupe, run reuse, cursor continuity, drain mode, and rollback. Keep tests deterministic with Bun and in-memory fakes.
+
+Task AE: Multi-Tenant Scheduler Budgets And Fairness Governance
+
+Add tenant-aware scheduler budgets so one tenant, actor sweep, public-channel window, restricted review, graph export, or evidence replay cannot starve interactive CTI searches. Emit compact SLO and fairness DTOs for Agent 09/10 and dry-run remediation plans.

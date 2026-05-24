@@ -1,6 +1,6 @@
 import type { LiveActorIntelligenceDto } from "./actorProfileFusion.ts";
 import type { ExtractionCalibrationReport, ExtractionQualityNoteCode } from "./evaluation.ts";
-import type { EvidenceStage, TiConfidenceCaveatCode } from "./intelligenceProfiles.ts";
+import type { EvidenceStage, TiConfidenceCaveat, TiConfidenceCaveatCode } from "./intelligenceProfiles.ts";
 
 export type SearchQualityStatus =
   | "ready"
@@ -103,10 +103,72 @@ export interface SearchQualityApiDto {
   publicWarningCodes: SearchQualityPublicWarningCode[];
 }
 
+export type SearchQualityDashboardField =
+  | "actor_summary"
+  | "aliases"
+  | "recent_activity"
+  | "targets"
+  | "sectors"
+  | "countries"
+  | "tools_malware"
+  | "cves"
+  | "ttps"
+  | "campaigns"
+  | "infrastructure"
+  | "datasets"
+  | "victim_company_claims"
+  | "iocs"
+  | "confidence"
+  | "freshness"
+  | "provenance";
+
+export type SearchQualityDashboardGate = "pass" | "warn" | "hold" | "missing";
+
+export interface SearchQualityFieldGateDto {
+  field: SearchQualityDashboardField;
+  gate: SearchQualityDashboardGate;
+  confidence: number;
+  evidenceCount: number;
+  citationCount: number;
+  freshnessScore: number;
+  reasons: string[];
+  feedbackTargets: Array<"source_activation" | "parser_repair" | "graph_review" | "analyst_review" | "public_answer_hold">;
+}
+
+export interface SearchQualityDashboardDto {
+  schemaVersion: "ti.search_quality_dashboard.v1";
+  query: string;
+  generatedAt: string;
+  status: SearchQualityStatus;
+  score: number;
+  metrics: {
+    usefulAnswerRate: number;
+    expectedFactRecall: number;
+    staleFactSuppression: "pass" | "hold";
+    contradictionHandling: "pass" | "hold";
+    sourceFamilyDiversity: number;
+    evidenceCount: number;
+    citationAvailability: number;
+    freshnessScore: number;
+  };
+  releaseGate: {
+    decision: "promote" | "partial" | "hold";
+    reasons: string[];
+  };
+  fields: SearchQualityFieldGateDto[];
+  reviewQueues: {
+    sourceActivation: string[];
+    parserRepair: string[];
+    graphReview: string[];
+    analystReview: string[];
+  };
+}
+
 export interface SearchQualityApiExampleDto {
   name: string;
   query: string;
   quality: SearchQualityApiDto;
+  dashboard: SearchQualityDashboardDto;
 }
 
 const QUALITY_STATUS_RANK: SearchQualityStatus[] = [
@@ -339,6 +401,58 @@ export function buildSearchQualityApiDto(dto: LiveActorIntelligenceDto, gate: Se
   };
 }
 
+export function buildSearchQualityDashboardDto(
+  dto: LiveActorIntelligenceDto,
+  gate: SearchQualityGateResult,
+  generatedAt = new Date().toISOString()
+): SearchQualityDashboardDto {
+  const fields = dashboardFields(dto, gate);
+  const actionable = fields.filter((field) => field.gate === "pass" || field.gate === "warn").length;
+  const expectedFactRecall = fields.filter((field) => field.evidenceCount > 0).length / fields.length;
+  const sourceFamilyDiversity = uniqueSourceFamilies(dto).length;
+  const citationAvailability = dto.provenance.length === 0
+    ? 0
+    : dto.provenance.filter((item) => item.ledgerIds.length > 0 || item.captureId || item.url).length / dto.provenance.length;
+  const holdReasons = [
+    ...gate.reasons,
+    ...fields.filter((field) => field.gate === "hold" || field.gate === "missing").map((field) => `${field.field}: ${field.reasons.join("; ")}`)
+  ];
+  const decision = gate.status === "ready" && fields.every((field) => field.gate !== "hold" && field.gate !== "missing")
+    ? "promote"
+    : gate.status === "contradicted" || fields.some((field) => field.gate === "hold")
+      ? "hold"
+      : "partial";
+
+  return {
+    schemaVersion: "ti.search_quality_dashboard.v1",
+    query: dto.query,
+    generatedAt,
+    status: gate.status,
+    score: gate.score,
+    metrics: {
+      usefulAnswerRate: roundRatio(actionable / fields.length),
+      expectedFactRecall: roundRatio(expectedFactRecall),
+      staleFactSuppression: gate.supportingStatuses.includes("stale") ? "hold" : "pass",
+      contradictionHandling: gate.supportingStatuses.includes("contradicted") ? "hold" : "pass",
+      sourceFamilyDiversity,
+      evidenceCount: dto.provenance.length,
+      citationAvailability: roundRatio(citationAvailability),
+      freshnessScore: roundRatio(dto.recentActivity.freshnessScore)
+    },
+    releaseGate: {
+      decision,
+      reasons: uniqueStrings(holdReasons).slice(0, 12)
+    },
+    fields,
+    reviewQueues: {
+      sourceActivation: reviewQueueReasons(fields, "source_activation"),
+      parserRepair: reviewQueueReasons(fields, "parser_repair"),
+      graphReview: reviewQueueReasons(fields, "graph_review"),
+      analystReview: reviewQueueReasons(fields, "analyst_review")
+    }
+  };
+}
+
 export function searchQualityApiExamples(): SearchQualityApiExampleDto[] {
   return [
     qualityExample("ready", "Ready Example", "ready", 0.86, { captured_page: 1, extracted_relationship: 1, reviewed_promoted: 1 }, [], []),
@@ -502,20 +616,37 @@ function qualityExample(
   }
   const analystActions = exampleAnalystActions(status, caveatCodes, qualityNoteCodes);
   const ready = status === "ready";
+  const quality: SearchQualityApiDto = {
+    status,
+    score,
+    caveatCodes,
+    qualityNoteCodes,
+    evidenceStageCounts,
+    analystActions,
+    canPromoteToReady: ready,
+    publicWarningText: ready ? ["quality gate is ready with durable or reviewed evidence"] : [statusReason(status)],
+    publicWarningCodes: ready ? [] : [status, ...caveatCodes, ...qualityNoteCodes]
+  };
+  const exampleDto = exampleLiveActorDto(query, score, evidenceStageCounts, caveatCodes);
+  const gate: SearchQualityGateResult = {
+    status,
+    supportingStatuses: [status],
+    score,
+    reasons: ready ? ["evidence is sufficiently captured and confident for ranked intelligence"] : [statusReason(status)],
+    caveatCodes,
+    qualityNoteCodes,
+    caveatPack: analystCaveatPackFor(query),
+    apiWarnings: ready ? [] : [{
+      code: status,
+      message: statusReason(status),
+      severity: status === "contradicted" ? "critical" : "warning"
+    }]
+  };
   return {
     name,
     query,
-    quality: {
-      status,
-      score,
-      caveatCodes,
-      qualityNoteCodes,
-      evidenceStageCounts,
-      analystActions,
-      canPromoteToReady: ready,
-      publicWarningText: ready ? ["quality gate is ready with durable or reviewed evidence"] : [statusReason(status)],
-      publicWarningCodes: ready ? [] : [status, ...caveatCodes, ...qualityNoteCodes]
-    }
+    quality,
+    dashboard: buildSearchQualityDashboardDto(exampleDto, gate, "2026-05-24T00:00:00.000Z")
   };
 }
 
@@ -560,4 +691,178 @@ function singlePartialSourceFamily(stageCounts: Record<EvidenceStage, number>): 
   ].filter((count) => count > 0).length;
   const durableFamilies = stageCounts.captured_page + stageCounts.extracted_relationship + stageCounts.reviewed_promoted;
   return partialFamilies === 1 && durableFamilies === 0;
+}
+
+function dashboardFields(dto: LiveActorIntelligenceDto, gate: SearchQualityGateResult): SearchQualityFieldGateDto[] {
+  return [
+    fieldGate("actor_summary", dto.summaryBullets.length, dto.confidence, dto, gate, dto.summaryBullets.length ? [] : ["summary is missing"]),
+    fieldGate("aliases", dto.aliases.length, dto.confidence, dto, gate, dto.aliases.length ? [] : ["no aliases extracted"]),
+    fieldGate("recent_activity", dto.recentActivity.notes.length || dto.recentActivity.lastSeen ? 1 : 0, dto.recentActivity.freshnessScore, dto, gate, gate.supportingStatuses.includes("stale") ? ["recent activity is stale or graph-stale"] : []),
+    fieldGate("targets", dto.targets.victims.length, fieldReadinessConfidence(dto, "victims"), dto, gate, dto.targets.victims.length ? [] : ["no victim or target claims ready"]),
+    fieldGate("sectors", dto.targets.sectors.length, fieldReadinessConfidence(dto, "sectors"), dto, gate, dto.targets.sectors.length ? [] : ["no sector claims extracted"]),
+    fieldGate("countries", dto.targets.regions.length, fieldReadinessConfidence(dto, "regions"), dto, gate, dto.targets.regions.length ? [] : ["no country or region claims extracted"]),
+    fieldGate("tools_malware", dto.malwareTools.length, fieldReadinessConfidence(dto, "malware_tools"), dto, gate, dto.malwareTools.length ? [] : ["no malware/tool claims extracted"]),
+    fieldGate("cves", dto.vulnerabilities.length, fieldReadinessConfidence(dto, "vulnerabilities"), dto, gate, dto.vulnerabilities.length ? [] : ["no CVE claims extracted"]),
+    fieldGate("ttps", dto.ttps.length, fieldReadinessConfidence(dto, "ttps"), dto, gate, dto.ttps.length ? [] : ["no TTP claims extracted"]),
+    fieldGate("campaigns", dto.campaigns.length, dto.confidence, dto, gate, dto.campaigns.length ? [] : ["no campaign names extracted"]),
+    fieldGate("infrastructure", dto.infrastructure.length, fieldReadinessConfidence(dto, "infrastructure"), dto, gate, dto.infrastructure.length ? [] : ["no infrastructure indicators extracted"]),
+    fieldGate("datasets", dto.datasets.coverage.length, dto.confidence, dto, gate, dto.datasets.coverage.length ? [] : ["dataset coverage is missing"]),
+    fieldGate("victim_company_claims", dto.targets.victims.length, fieldReadinessConfidence(dto, "victims"), dto, gate, gate.qualityNoteCodes.includes("weak_victim_claim") ? ["victim/company claims need analyst review"] : []),
+    fieldGate("iocs", dto.datasets.indicatorCount, dto.confidence, dto, gate, dto.datasets.indicatorCount ? [] : ["no IOCs extracted"]),
+    fieldGate("confidence", dto.confidence >= 0.35 ? 1 : 0, dto.confidence, dto, gate, gate.supportingStatuses.includes("weak-evidence") ? ["confidence below useful-answer threshold"] : []),
+    fieldGate("freshness", dto.recentActivity.freshnessScore > 0 ? 1 : 0, dto.recentActivity.freshnessScore, dto, gate, gate.supportingStatuses.includes("stale") ? ["stale facts suppressed from ready promotion"] : []),
+    fieldGate("provenance", dto.provenance.length, dto.provenance.length ? 1 : 0, dto, gate, dto.provenance.length ? [] : ["no provenance records attached"])
+  ];
+}
+
+function fieldGate(
+  field: SearchQualityDashboardField,
+  evidenceCount: number,
+  confidence: number,
+  dto: LiveActorIntelligenceDto,
+  gate: SearchQualityGateResult,
+  fieldReasons: string[]
+): SearchQualityFieldGateDto {
+  const citationCount = dto.provenance.filter((item) => item.ledgerIds.length > 0 || item.captureId || item.url).length;
+  const reasons = uniqueStrings([
+    ...fieldReasons,
+    ...(gate.supportingStatuses.includes("contradicted") ? ["contradicted evidence prevents promotion"] : []),
+    ...(gate.supportingStatuses.includes("source-biased") ? ["source-family diversity below target"] : []),
+    ...(evidenceCount === 0 ? ["field has no supporting extracted evidence"] : []),
+    ...(confidence < 0.35 ? ["field confidence is low"] : [])
+  ]);
+  const gateState: SearchQualityDashboardGate = gate.supportingStatuses.includes("contradicted")
+    ? "hold"
+    : evidenceCount === 0
+      ? "missing"
+      : confidence < 0.35 || reasons.some((reason) => /stale|source-family|review|low/i.test(reason))
+        ? "warn"
+        : "pass";
+  return {
+    field,
+    gate: gateState,
+    confidence: roundRatio(confidence),
+    evidenceCount,
+    citationCount,
+    freshnessScore: roundRatio(dto.recentActivity.freshnessScore),
+    reasons,
+    feedbackTargets: feedbackTargets(gateState, reasons, field)
+  };
+}
+
+function feedbackTargets(
+  gate: SearchQualityDashboardGate,
+  reasons: string[],
+  field: SearchQualityDashboardField
+): SearchQualityFieldGateDto["feedbackTargets"] {
+  const targets = new Set<SearchQualityFieldGateDto["feedbackTargets"][number]>();
+  if (gate === "missing") targets.add("source_activation");
+  if (reasons.some((reason) => /no .*extracted|parser|IOC|CVE|TTP|malware|infrastructure/i.test(reason))) targets.add("parser_repair");
+  if (reasons.some((reason) => /contradicted|stale|source-family/i.test(reason))) targets.add("graph_review");
+  if (reasons.some((reason) => /review|victim|company|low/i.test(reason))) targets.add("analyst_review");
+  if (gate === "hold" || gate === "missing" || field === "confidence" || field === "freshness") targets.add("public_answer_hold");
+  return [...targets];
+}
+
+function reviewQueueReasons(
+  fields: SearchQualityFieldGateDto[],
+  target: SearchQualityFieldGateDto["feedbackTargets"][number]
+): string[] {
+  return fields
+    .filter((field) => field.feedbackTargets.includes(target))
+    .map((field) => `${field.field}: ${field.reasons[0] ?? field.gate}`)
+    .slice(0, 12);
+}
+
+function uniqueSourceFamilies(dto: LiveActorIntelligenceDto): string[] {
+  return uniqueStrings(dto.provenance.map((item) => item.sourceId.split("_").slice(0, 3).join("_") || item.sourceId));
+}
+
+function fieldReadinessConfidence(dto: LiveActorIntelligenceDto, field: keyof LiveActorIntelligenceDto["readiness"]["fields"]): number {
+  return dto.readiness.fields[field]?.confidence ?? dto.confidence;
+}
+
+function roundRatio(value: number): number {
+  return Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim()))];
+}
+
+function exampleLiveActorDto(
+  query: string,
+  confidence: number,
+  evidenceStageCounts: Record<EvidenceStage, number>,
+  caveatCodes: TiConfidenceCaveatCode[]
+): LiveActorIntelligenceDto {
+  const evidenceCount = Object.values(evidenceStageCounts).reduce((sum, count) => sum + count, 0);
+  const readinessFields = {
+    summary: readinessField("summary", confidence, evidenceCount),
+    aliases: readinessField("aliases", confidence, evidenceCount),
+    recent_activity: readinessField("recent_activity", confidence, evidenceCount),
+    timeline_changes: readinessField("timeline_changes", confidence, evidenceCount),
+    targets: readinessField("targets", confidence, evidenceCount),
+    victims: readinessField("victims", confidence, evidenceStageCounts.metadata_only_claim),
+    sectors: readinessField("sectors", confidence, evidenceCount),
+    regions: readinessField("regions", confidence, evidenceCount),
+    ttps: readinessField("ttps", confidence, evidenceCount),
+    malware_tools: readinessField("malware_tools", confidence, evidenceCount),
+    vulnerabilities: readinessField("vulnerabilities", confidence, evidenceCount),
+    infrastructure: readinessField("infrastructure", confidence, evidenceCount),
+    datasets: readinessField("datasets", confidence, evidenceCount)
+  } satisfies LiveActorIntelligenceDto["readiness"]["fields"];
+  return {
+    query,
+    actor: query,
+    summaryBullets: evidenceCount ? [`${query} has evidence for quality evaluation.`] : [],
+    aliases: query === "Ready Example" ? ["Example Alias"] : [],
+    recentActivity: { freshnessScore: confidence, notes: evidenceCount ? ["example freshness signal"] : [] },
+    targets: { victims: evidenceStageCounts.metadata_only_claim ? ["Example Victim"] : [], sectors: evidenceCount ? ["technology"] : [], regions: evidenceCount ? ["global"] : [] },
+    campaigns: evidenceCount ? ["example campaign"] : [],
+    ttps: evidenceCount ? ["phishing"] : [],
+    infrastructure: [],
+    malwareTools: evidenceCount ? ["example tool"] : [],
+    vulnerabilities: evidenceCount ? ["CVE-2026-0001"] : [],
+    datasets: { coverage: ["example"], sourceCount: evidenceCount, indicatorCount: evidenceCount, entityCount: evidenceCount, evidenceStageCounts },
+    caveats: caveatCodes.map((code): TiConfidenceCaveat => ({
+      code,
+      label: code.replaceAll("_", " "),
+      severity: code === "contradicted" ? "critical" : "warning",
+      reason: code,
+      grounding: []
+    })),
+    confidence,
+    provenance: Array.from({ length: evidenceCount }, (_, index) => ({
+      evidenceId: `example-evidence-${index + 1}`,
+      ledgerIds: [`ledger-${index + 1}`],
+      sourceId: `example_source_${index + 1}`,
+      captureId: `cap_${index + 1}`,
+      evidenceStage: "captured_page" as EvidenceStage,
+      grounding: [],
+      confidence
+    })),
+    profileDeltas: [],
+    falsePositiveControls: [],
+    readiness: {
+      overall: confidence >= 0.65 ? "fact" as const : "partial_evidence" as const,
+      fields: readinessFields,
+      downgradeReasons: [],
+      sourceFamilyCount: Math.max(1, evidenceCount),
+      evidenceStageCounts
+    },
+    needsAnalystReview: false
+  };
+}
+
+function readinessField(field: keyof LiveActorIntelligenceDto["readiness"]["fields"], confidence: number, evidenceCount: number): LiveActorIntelligenceDto["readiness"]["fields"][typeof field] {
+  return {
+    field,
+    status: confidence >= 0.65 && evidenceCount > 0 ? "fact" as const : evidenceCount > 0 ? "partial_evidence" as const : "needs_review" as const,
+    confidence,
+    evidenceIds: Array.from({ length: evidenceCount }, (_, index) => `example-evidence-${index + 1}`),
+    provenance: [],
+    caveatCodes: [],
+    reasons: evidenceCount ? [] : ["field has no supporting extracted evidence"]
+  };
 }

@@ -35,6 +35,27 @@ const deltaAudit = isRecord(record.publicWrapperDeltaAudit) ? record.publicWrapp
 const deltaFixtures = Array.isArray(deltaAudit.fixtures) ? deltaAudit.fixtures.filter(isRecord) : [];
 const deltaFixtureNames = deltaFixtures.map((fixture) => String(fixture.name ?? ""));
 const deltaStableFields = stringArray(deltaAudit.stableFields);
+const enterpriseApiSurface = isRecord(record.enterpriseApiSurface) ? record.enterpriseApiSurface : {};
+const authBoundary = isRecord(enterpriseApiSurface.authBoundary) ? enterpriseApiSurface.authBoundary : {};
+const pagination = isRecord(enterpriseApiSurface.pagination) ? enterpriseApiSurface.pagination : {};
+const rateLimits = isRecord(enterpriseApiSurface.rateLimits) ? enterpriseApiSurface.rateLimits : {};
+const auditFields = isRecord(enterpriseApiSurface.auditFields) ? enterpriseApiSurface.auditFields : {};
+const sdkIntegration = isRecord(record.sdkIntegration) ? record.sdkIntegration : {};
+const sdkPolling = isRecord(sdkIntegration.polling) ? sdkIntegration.polling : {};
+const sdkEmptyDelta = isRecord(sdkPolling.emptyDelta) ? sdkPolling.emptyDelta : {};
+const sdkDuplicateRunReuse = isRecord(sdkPolling.duplicateRunReuse) ? sdkPolling.duplicateRunReuse : {};
+const sdkEventBoundary = isRecord(sdkIntegration.eventBoundary) ? sdkIntegration.eventBoundary : {};
+const sdkOpenapi = isRecord(sdkIntegration.openapi) ? sdkIntegration.openapi : {};
+const clientCompatibilityMatrix = isRecord(record.clientCompatibilityMatrix) ? record.clientCompatibilityMatrix : {};
+const contractFreeze = isRecord(clientCompatibilityMatrix.contractFreeze) ? clientCompatibilityMatrix.contractFreeze : {};
+const compatibilityClients = Array.isArray(clientCompatibilityMatrix.clients)
+  ? clientCompatibilityMatrix.clients.filter(isRecord)
+  : [];
+const compatibilityClientNames = compatibilityClients.map((client) => String(client.client ?? ""));
+const openapi = isRecord(record.openapi) ? record.openapi : {};
+const openapiPaths = isRecord(openapi.paths) ? openapi.paths : {};
+const openapiComponents = isRecord(openapi.components) ? openapi.components : {};
+const openapiSchemas = isRecord(openapiComponents.schemas) ? openapiComponents.schemas : {};
 
 const checks = [
   response.status === 200,
@@ -50,6 +71,49 @@ const checks = [
   isRecord(semantics.publicWrapperDeltaAudit) && semantics.publicWrapperDeltaAudit.schemaVersion === "ti.public_wrapper_delta_contract.v1",
   ["status", "summary", "runId", "refreshAfterSeconds", "pollCursor", "deltaCursor", "updated", "sources", "publicChannel", "restrictedMetadata", "claimLedger", "graph"]
     .every((field) => deltaStableFields.includes(field)),
+  enterpriseApiSurface.schemaVersion === "ti.enterprise_api_surface.v1",
+  isRecord(semantics.enterpriseApiSurface) && semantics.enterpriseApiSurface.schemaVersion === "ti.enterprise_api_surface.v1",
+  sdkIntegration.schemaVersion === "ti.sdk_integration_contract.v1",
+  isRecord(semantics.sdkIntegration) && semantics.sdkIntegration.schemaVersion === "ti.sdk_integration_contract.v1",
+  sdkIntegration.status === "contract_only_no_push_delivery",
+  sdkPolling.intervalSeconds === 3,
+  stringArray(sdkPolling.responseFields).includes("pollCursor"),
+  stringArray(sdkPolling.responseFields).includes("deltaCursor"),
+  stringArray(sdkPolling.retryableStates).includes("metadata_review"),
+  sdkEmptyDelta.status === "waiting_for_deltas",
+  sdkEmptyDelta.changed === false,
+  sdkDuplicateRunReuse.warningCode === "duplicate_run_reuse",
+  stringArray(sdkEventBoundary.allowedModes).includes("sse"),
+  stringArray(sdkEventBoundary.allowedModes).includes("webhook"),
+  stringArray(sdkEventBoundary.eventTypes).includes("delta.available"),
+  stringArray(sdkEventBoundary.forbiddenPayloadFields).includes("raw_body"),
+  sdkOpenapi.schemaVersion === "ti.sdk_openapi_extension.v1",
+  clientCompatibilityMatrix.schemaVersion === "ti.client_compatibility_matrix.v1",
+  isRecord(semantics.clientCompatibilityMatrix) && semantics.clientCompatibilityMatrix.schemaVersion === "ti.client_compatibility_matrix.v1",
+  clientCompatibilityMatrix.status === "contract_frozen_for_client_generation",
+  contractFreeze.schemaVersion === "ti.openapi_contract_freeze.v1",
+  contractFreeze.openapi === "3.1.0",
+  Number(contractFreeze.routeCount ?? 0) === Object.keys(openapiPaths).length,
+  ["ErrorEnvelope", "CursorPage", "IdempotentRunRequest", "PublicSearchResponse", "SdkPollingEnvelope", "SdkSubscriptionRegistration"]
+    .every((name) => stringArray(contractFreeze.requiredComponentSchemas).includes(name)),
+  ["trusted_gateway_forwarded_identity", "tenant_header_boundary", "stable_error_envelope", "cursor_pagination", "idempotent_run_creation", "retry_after_headers", "public_wrapper_delta_polling", "no_leak_examples"]
+    .every((name) => stringArray(contractFreeze.requiredSemantics).includes(name)),
+  ["frontend_ti", "cti_backend", "analyst_automation", "future_sdk", "future_sse_webhooks"]
+    .every((name) => compatibilityClientNames.includes(name)),
+  compatibilityClients.every((client) => stringArray(client.primaryRoutes).length > 0 && stringArray(client.requiredResponseKeys).length > 0 && stringArray(client.states).length > 0),
+  authBoundary.schemaVersion === "ti.enterprise_auth_boundary.v1",
+  stringArray(authBoundary.requiredForwardedHeaders).includes("x-tenant-id"),
+  stringArray(authBoundary.requiredForwardedHeaders).includes("x-actor-id"),
+  stringArray(pagination.requestFields).includes("cursor"),
+  stringArray(pagination.responseFields).includes("nextCursor"),
+  stringArray(rateLimits.overloadCodes).includes("queue_pressure"),
+  stringArray(auditFields.requiredOnMutations).includes("idempotencyKey"),
+  stringArray(auditFields.redactedAlways).includes("authorization"),
+  openapi.schemaVersion === "ti.openapi_ready_contract.v1",
+  isRecord(openapiSchemas.ErrorEnvelope),
+  isRecord(openapiSchemas.PublicSearchResponse),
+  isRecord(openapiSchemas.SdkPollingEnvelope),
+  isRecord(openapiSchemas.SdkSubscriptionRegistration),
   routeTruthAudit.expectedRouteInventoryCount === routes.length,
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/coverage-closeout"),
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/activation-batches"),
@@ -165,6 +229,26 @@ console.log(JSON.stringify({
     stableFields: deltaStableFields,
     fixtureNames: deltaFixtureNames
   },
+  enterpriseApiSurface: {
+    schemaVersion: String(enterpriseApiSurface.schemaVersion ?? ""),
+    authHeaders: stringArray(authBoundary.requiredForwardedHeaders),
+    paginationFields: stringArray(pagination.responseFields),
+    rateLimitCodes: stringArray(rateLimits.overloadCodes),
+    openapi: String(openapi.openapi ?? "")
+  },
+  sdkIntegration: {
+    schemaVersion: String(sdkIntegration.schemaVersion ?? ""),
+    status: String(sdkIntegration.status ?? ""),
+    pollingSeconds: Number(sdkPolling.intervalSeconds ?? 0),
+    responseFields: stringArray(sdkPolling.responseFields),
+    eventModes: stringArray(sdkEventBoundary.allowedModes)
+  },
+  clientCompatibilityMatrix: {
+    schemaVersion: String(clientCompatibilityMatrix.schemaVersion ?? ""),
+    status: String(clientCompatibilityMatrix.status ?? ""),
+    contractFreeze: String(contractFreeze.schemaVersion ?? ""),
+    clients: compatibilityClientNames
+  },
   sourceActivationExecutionReadiness: {
     routes: stringArray(sourceExecution.routes),
     fields: stringArray(sourceExecution.fields)
@@ -177,7 +261,7 @@ console.log(JSON.stringify({
     routes: stringArray(evidenceCertification.routes),
     scenarios: stringArray(evidenceCertification.scenarios)
   },
-  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive/delta public wrapper fixtures, source activation, and evidence persistence certification without unsafe leaks"
+  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive/delta public wrapper fixtures, enterprise API/OpenAPI/SDK integration/client matrix surface, source activation, and evidence persistence certification without unsafe leaks"
 }, null, 2));
 
 if (!ok) process.exit(1);

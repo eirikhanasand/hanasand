@@ -2,7 +2,7 @@ import type { FocusedFrontier } from "../frontier/frontier.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
-import type { CollectionTask, RawCapture, SourceCatalogMetadata, SourceRecord } from "../types.ts";
+import type { CollectionPlan, CollectionRun, CollectionTask, RawCapture, SourceCatalogMetadata, SourceRecord } from "../types.ts";
 import { hashContent, normalizeWhitespace, nowIso, stableId } from "../utils.ts";
 
 export type CanaryFetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -16,6 +16,7 @@ export interface CanaryCollectionOptions {
   maxSources?: number;
   maxTasks?: number;
   maxBytes?: number;
+  timeoutMs?: number;
   operatorId?: string;
   now?: () => string;
 }
@@ -38,11 +39,16 @@ export interface CanaryDeactivationResult {
 export interface CanaryCollectionCycleResult {
   generatedAt: string;
   mode: "production_canary";
+  runId: string;
+  planId: string;
   activatedSourceCount: number;
   queuedTaskCount: number;
   leasedTaskCount: number;
   completedTaskCount: number;
   failedTaskCount: number;
+  retryScheduledCount: number;
+  retryExhaustedCount: number;
+  remainingQueuedTaskCount: number;
   insertedCaptureCount: number;
   duplicateCaptureCount: number;
   incidentCount: number;
@@ -74,11 +80,22 @@ export interface CanaryOperatorSummary {
     leased: number;
     deadLetters: number;
   };
+  latestRun?: {
+    runId: string;
+    status: CollectionRun["status"];
+    taskCount: number;
+    captureCount: number;
+    incidentCount: number;
+    updatedAt: string;
+    error?: string;
+  };
   schedulerHealth: {
     freshnessSeconds: number;
     errorRate: number;
     duplicateRate: number;
     promotionYield: number;
+    retryScheduledCount: number;
+    retryExhaustedCount: number;
     healthySourceCount: number;
     degradedSourceCount: number;
     failingSourceCount: number;
@@ -245,6 +262,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const maxSources = Math.max(1, options.maxSources ?? 10);
   const maxTasks = Math.max(1, options.maxTasks ?? 5);
   const maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
+  const timeoutMs = Math.max(1_000, options.timeoutMs ?? 30_000);
   const activation = activatePublicCanarySources({
     store: options.store,
     tenantId: options.tenantId,
@@ -257,10 +275,29 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     .filter((source) => !canaryRejection(source))
     .slice(0, maxSources);
 
-  let queuedTaskCount = 0;
-  for (const source of sources) {
-    if (!sourceDue(source, generatedAt)) continue;
-    options.frontier.enqueueTask(taskForSource(source, generatedAt, options.tenantId, maxBytes));
+  const dueSources = sources.filter((source) => sourceDue(source, generatedAt));
+  const planId = stableId("canary-plan", `${options.tenantId ?? "global"}:${generatedAt}`);
+  const runId = stableId("canary-run", `${planId}:${options.operatorId ?? "canary-operator"}`);
+  const tasks = dueSources.map((source) => taskForSource(source, generatedAt, options.tenantId, maxBytes, runId));
+  const plan = canaryCollectionPlan({
+    planId,
+    tenantId: options.tenantId,
+    operatorId: options.operatorId,
+    generatedAt,
+    tasks,
+    rejected: activation.rejected
+  });
+  const run = canaryCollectionRun({
+    runId,
+    plan,
+    generatedAt,
+    taskCount: tasks.length,
+    rejectedSourceCount: activation.rejected.length
+  });
+  options.store.savePlan(plan);
+  options.store.saveRun(run);
+
+  for (const source of dueSources) {
     options.store.saveSource({
       ...source,
       updatedAt: generatedAt,
@@ -271,14 +308,18 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
         nextEligibleAt: new Date(Date.parse(generatedAt) + source.crawlFrequencySeconds * 1000).toISOString()
       }
     });
-    queuedTaskCount += 1;
   }
+  for (const task of tasks) options.frontier.enqueueTask(task);
+
+  let queuedTaskCount = tasks.length;
 
   const errors: CanaryCollectionCycleResult["errors"] = [];
   const latestCaptureIds: string[] = [];
   let leasedTaskCount = 0;
   let completedTaskCount = 0;
   let failedTaskCount = 0;
+  let retryScheduledCount = 0;
+  let retryExhaustedCount = 0;
   let insertedCaptureCount = 0;
   let duplicateCaptureCount = 0;
   let incidentCount = 0;
@@ -291,13 +332,15 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     const source = options.store.getSource(task.sourceId);
     if (!source) {
       failedTaskCount += 1;
-      options.frontier.fail(task, new Date(generatedAt), "source missing");
+      const ack = options.frontier.fail(task, new Date(generatedAt), "source missing");
+      if (ack.status === "retry_scheduled") retryScheduledCount += 1;
+      if (ack.status === "retry_exhausted") retryExhaustedCount += 1;
       errors.push({ taskId: task.id, sourceId: task.sourceId, message: "source missing" });
       continue;
     }
 
     try {
-      const item = await fetchCanaryCollectedItem(source, task, fetcher, generatedAt, maxBytes);
+      const item = await fetchCanaryCollectedItem(source, task, fetcher, generatedAt, maxBytes, timeoutMs);
       const pipeline = processCollectedItem(item);
       const body = pipeline.capture.body;
       const capture = body && options.objectStore && !pipeline.capture.sensitive
@@ -317,20 +360,36 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     } catch (error) {
       failedTaskCount += 1;
       const message = error instanceof Error ? error.message : String(error);
-      options.frontier.fail(task, new Date(generatedAt), message);
+      const ack = options.frontier.fail(task, new Date(generatedAt), message);
+      if (ack.status === "retry_scheduled") retryScheduledCount += 1;
+      if (ack.status === "retry_exhausted") retryExhaustedCount += 1;
       errors.push({ taskId: task.id, sourceId: task.sourceId, message });
       updateSourceFailure(options.store, source, generatedAt, message);
     }
   }
+  const remainingQueuedTaskCount = options.frontier.snapshot().filter((item) => item.task.runId === runId).length;
+  finalizeCanaryRun(options.store, runId, generatedAt, {
+    completedTaskCount,
+    failedTaskCount,
+    retryScheduledCount,
+    retryExhaustedCount,
+    remainingQueuedTaskCount,
+    error: errors[0]?.message
+  });
 
   return {
     generatedAt,
     mode: "production_canary",
+    runId,
+    planId,
     activatedSourceCount: activation.activated.length + activation.alreadyActive.length,
     queuedTaskCount,
     leasedTaskCount,
     completedTaskCount,
     failedTaskCount,
+    retryScheduledCount,
+    retryExhaustedCount,
+    remainingQueuedTaskCount,
     insertedCaptureCount,
     duplicateCaptureCount,
     incidentCount,
@@ -354,6 +413,10 @@ export function buildCanaryOperatorSummary(input: {
   const canarySources = input.store.listSources()
     .filter((source) => source.metadata?.canaryPortfolio === true);
   const activeSourceRecords = canarySources.filter((source) => source.status === "active");
+  const latestRun = input.store.listRuns()
+    .filter((run) => run.requestId.startsWith("req_public_canary"))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  const deadLetters = input.frontier.deadLetterSnapshot();
   const activeSources = activeSourceRecords.map((source) => ({
       sourceId: source.id,
       sourceName: source.name,
@@ -394,13 +457,24 @@ export function buildCanaryOperatorSummary(input: {
     queue: {
       queued: input.frontier.snapshot().length,
       leased: input.frontier.leasedSnapshot().length,
-      deadLetters: input.frontier.deadLetterSnapshot().length
+      deadLetters: deadLetters.length
     },
+    latestRun: latestRun ? {
+      runId: latestRun.id,
+      status: latestRun.status,
+      taskCount: latestRun.taskCount,
+      captureCount: latestRun.captureCount,
+      incidentCount: latestRun.incidentCount,
+      updatedAt: latestRun.updatedAt,
+      error: latestRun.error
+    } : undefined,
     schedulerHealth: {
       freshnessSeconds: latestFreshnessSeconds(input.store, generatedAt),
       errorRate: sourceErrorRate(activeSourceRecords),
       duplicateRate: canaryDuplicateRate(canaryCaptures),
       promotionYield: rate(incidents.length, Math.max(1, canaryCaptures.length)),
+      retryScheduledCount: input.frontier.groupedSnapshot(new Date(generatedAt)).metrics.throughput.retryScheduled,
+      retryExhaustedCount: input.frontier.groupedSnapshot(new Date(generatedAt)).metrics.throughput.retryExhausted,
       healthySourceCount: activeSourceRecords.filter((source) => source.health?.status === "healthy").length,
       degradedSourceCount: activeSourceRecords.filter((source) => source.health?.status === "degraded").length,
       failingSourceCount: activeSourceRecords.filter((source) => source.health?.status === "failing").length
@@ -412,7 +486,7 @@ export function buildCanaryOperatorSummary(input: {
       missingObjectReferenceCount: canaryCaptures.filter((capture) => capture.storageKind === "external_object" && !capture.objectRef).length
     },
     blockedOrHeldItems: [
-      ...input.frontier.deadLetterSnapshot().map((dead) => ({
+      ...deadLetters.map((dead) => ({
         taskId: dead.taskId,
         sourceId: dead.task?.sourceId,
         reason: dead.reason,
@@ -476,13 +550,24 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & {
   return { stop: () => clearInterval(timer) };
 }
 
-async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTask, fetcher: CanaryFetch, collectedAt: string, maxBytes: number) {
-  const response = await fetcher(task.targetUrl, {
-    headers: {
-      "accept": source.type === "rss" ? "application/rss+xml, application/xml, text/xml, text/html;q=0.8, text/plain;q=0.5" : "text/html, text/plain;q=0.8",
-      "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
-    }
-  });
+async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTask, fetcher: CanaryFetch, collectedAt: string, maxBytes: number, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await fetcher(task.targetUrl, {
+      signal: controller.signal,
+      headers: {
+        "accept": source.type === "rss" ? "application/rss+xml, application/xml, text/xml, text/html;q=0.8, text/plain;q=0.5" : "text/html, text/plain;q=0.8",
+        "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+      }
+    });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`canary fetch timed out after ${timeoutMs}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const text = (await response.text()).slice(0, maxBytes);
   const parsed = source.type === "rss" ? parseRssText(text) : parseHtmlText(text, task.targetUrl);
@@ -540,7 +625,130 @@ function externalizedCapture(capture: RawCapture, objectStore: ObjectEvidenceSto
   };
 }
 
-function taskForSource(source: SourceRecord, queuedAt: string, tenantId: string | undefined, maxBytes: number): CollectionTask {
+function canaryCollectionPlan(input: {
+  planId: string;
+  tenantId?: string;
+  operatorId?: string;
+  generatedAt: string;
+  tasks: CollectionTask[];
+  rejected: Array<{ sourceId: string; reason: string }>;
+}): CollectionPlan {
+  const requestId = stableId("req_public_canary", `${input.tenantId ?? "global"}:${input.generatedAt}`);
+  return {
+    id: input.planId,
+    tenantId: input.tenantId,
+    request: {
+      id: requestId,
+      tenantId: input.tenantId,
+      query: "public canary",
+      entityType: "free_text",
+      includeClearWeb: true,
+      includeTelegram: false,
+      includeDarknetMetadata: false,
+      maxTasks: input.tasks.length,
+      createdAt: input.generatedAt,
+      requesterId: input.operatorId,
+      priority: "normal",
+      reason: "continuous safe-public source canary collection",
+      budgetClass: "background_refresh"
+    },
+    tasks: input.tasks,
+    reviewRequired: [],
+    rejected: input.rejected,
+    queryTerms: CANARY_QUERIES,
+    budget: {
+      class: "background_refresh",
+      maxTasks: input.tasks.length,
+      immediateTaskLimit: input.tasks.length,
+      maxBytesPerTask: Math.max(0, ...input.tasks.map((task) => task.maxBytes ?? 0)),
+      deadlineAt: new Date(Date.parse(input.generatedAt) + 5 * 60_000).toISOString(),
+      backgroundAvailableAt: input.generatedAt
+    },
+    audit: [{
+      id: stableId("audit", `public-canary:${input.planId}`),
+      tenantId: input.tenantId,
+      actorId: input.operatorId,
+      action: "public_canary_plan_created",
+      subjectType: "collection_plan",
+      subjectId: input.planId,
+      occurredAt: input.generatedAt,
+      metadata: {
+        safePublicOnly: true,
+        restrictedSourcesAllowed: false,
+        taskCount: input.tasks.length,
+        rejectedSourceCount: input.rejected.length
+      }
+    }]
+  };
+}
+
+function canaryCollectionRun(input: {
+  runId: string;
+  plan: CollectionPlan;
+  generatedAt: string;
+  taskCount: number;
+  rejectedSourceCount: number;
+}): CollectionRun {
+  return {
+    id: input.runId,
+    tenantId: input.plan.tenantId,
+    planId: input.plan.id,
+    requestId: input.plan.request.id,
+    status: input.taskCount > 0 ? "queued" : "completed",
+    createdAt: input.generatedAt,
+    updatedAt: input.generatedAt,
+    startedAt: input.taskCount > 0 ? input.generatedAt : undefined,
+    completedAt: input.taskCount === 0 ? input.generatedAt : undefined,
+    idempotencyKey: `public-canary:${input.plan.tenantId ?? "global"}:${input.generatedAt}`,
+    requestHash: stableId("canary-request", `${input.plan.id}:${input.taskCount}`),
+    taskCount: input.taskCount,
+    reviewTaskCount: 0,
+    rejectedSourceCount: input.rejectedSourceCount,
+    captureCount: 0,
+    incidentCount: 0
+  };
+}
+
+function finalizeCanaryRun(
+  store: ScraperStore,
+  runId: string,
+  at: string,
+  result: {
+    completedTaskCount: number;
+    failedTaskCount: number;
+    retryScheduledCount: number;
+    retryExhaustedCount: number;
+    remainingQueuedTaskCount: number;
+    error?: string;
+  }
+): void {
+  const run = store.getRun(runId);
+  if (!run) return;
+  const captureCount = store.listCaptures().filter((capture) => capture.metadata.canary === true && capture.collectedAt === at).length;
+  const incidentCount = store.listIncidents().filter((incident) => {
+    const capture = incident.captureId ? store.getCapture(incident.captureId) : undefined;
+    return capture?.metadata.canary === true && capture.collectedAt === at;
+  }).length;
+  const terminal = result.remainingQueuedTaskCount === 0;
+  const status: CollectionRun["status"] = terminal
+    ? result.retryExhaustedCount > 0 && result.completedTaskCount === 0
+      ? "failed"
+      : "completed"
+    : "running";
+  store.saveRun({
+    ...run,
+    status,
+    updatedAt: at,
+    completedAt: terminal ? at : undefined,
+    captureCount,
+    incidentCount,
+    error: result.error && (status === "failed" || result.failedTaskCount > 0)
+      ? `${result.error}; retryScheduled=${result.retryScheduledCount}; retryExhausted=${result.retryExhaustedCount}`
+      : undefined
+  });
+}
+
+function taskForSource(source: SourceRecord, queuedAt: string, tenantId: string | undefined, maxBytes: number, runId: string): CollectionTask {
   return {
     id: stableId("canary-task", `${source.id}:${queuedAt}`),
     tenantId: tenantId ?? source.tenantId,
@@ -552,6 +760,7 @@ function taskForSource(source: SourceRecord, queuedAt: string, tenantId: string 
     reason: "production public canary collection",
     retryCount: 0,
     maxRetries: 1,
+    runId,
     sourceConcurrencyKey: source.id,
     fairnessKey: "public-canary",
     crawlBudgetKey: "public-canary",

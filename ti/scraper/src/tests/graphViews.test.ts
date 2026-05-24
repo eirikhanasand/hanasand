@@ -3,6 +3,7 @@ import {
   buildActorProfileGraphView,
   buildGraphCutoverReportApiDto,
   buildGraphCutoverReport,
+  buildGraphBackendCutoverRehearsalDto,
   buildGraphBackendRepositoryContractDto,
   buildCorrelationGraphQuery,
   buildCorrelationTimeline,
@@ -495,6 +496,44 @@ describe("CTI graph persistence and query views", () => {
     expect(backendContract.exportEligibility.readyRelationshipIds.length).toBeGreaterThan(0);
     expect(backendContract.cursorDeltas.relationshipIds.length).toBeGreaterThan(0);
     expect(query.runtime.backendContract.mode).toBe("backend_neutral_graph_repository_contract");
+    const backendCutover = buildGraphBackendCutoverRehearsalDto(snapshot, { generatedAt: "2026-05-24T00:14:00.000Z" });
+    expect(backendCutover).toMatchObject({
+      mode: "graph_backend_cutover_rehearsal",
+      targetBackends: expect.arrayContaining(["postgres_graph_tables", "neo4j"]),
+      replayImport: {
+        source: "agent06_evidence_claim_ledger",
+        cursorField: "graph.deltas[].cursor",
+        restrictedMaterialPolicy: "metadata_only_review_hold"
+      },
+      verification: {
+        tenantScopedRows: true,
+        cursorContinuity: true,
+        reviewAuditAppendOnly: true,
+        confidenceHistoryAppendOnly: true,
+        exportEligibilityRecomputed: true,
+        noRawRestrictedMaterialSerialized: true
+      },
+      backupRestore: {
+        restoreVerification: "replay_snapshot_then_compare_counts_cursors_and_export_eligibility",
+        rollbackPath: "restore_last_verified_snapshot_and_hold_graph_exports"
+      },
+      releasePacket: {
+        owner: "Agent 08",
+        proofCommand: "bun test src/tests/graphViews.test.ts",
+        agent10Field: "graphBackendCutoverRehearsal"
+      }
+    });
+    expect(backendCutover.migrationSchemas.map((schema) => schema.backend)).toEqual(["postgres_graph_tables", "neo4j"]);
+    expect(backendCutover.migrationSchemas.every((schema) => schema.tenantIsolation === "tenant_id_partition_or_label_property_required")).toBe(true);
+    expect(backendCutover.migrationSchemas.flatMap((schema) => schema.recordKinds)).toEqual(expect.arrayContaining(["actor", "victim", "relationship", "evidence_support", "review_decision", "cursor_delta", "export_eligibility"]));
+    expect(backendCutover.replayImport.importOrder).toEqual(["nodes", "relationships", "evidence_support", "review_audit", "confidence_history", "cursor_deltas", "export_eligibility"]);
+    expect(backendCutover.replayImport.replayableRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendCutover.replayImport.reviewHeldRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendCutover.exportEligibility.readyRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendCutover.exportEligibility.heldRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendCutover.exportEligibility.policy).toBe("weak_public_channel_and_restricted_edges_remain_pivots_or_review_holds_until_promoted");
+    expect(query.runtime.backendCutover.mode).toBe("graph_backend_cutover_rehearsal");
+    expect(query.runtime.backendCutover.repositoryContract.operations.every((operation) => operation.tenantScoped)).toBe(true);
   });
 
   test("reports noisy co-mentions and actor alias collisions as integrity and export blockers", () => {
@@ -950,6 +989,39 @@ describe("CTI graph persistence and query views", () => {
     expect(query.relationships.some((relationship) => relationship.relationshipKind === "victim-country" && relationship.target.value === "Norway")).toBe(true);
     expect(query.relationships.some((relationship) => relationship.relationshipKind === "actor-malware" && relationship.target.value === "Akira ransomware")).toBe(true);
     expect(query.relationships.some((relationship) => relationship.relationshipKind === "actor-target" && relationship.target.value === "Fjord Manufacturing")).toBe(true);
+    expect(query.investigationWorkspace).toMatchObject({
+      mode: "read_only_investigation_workspace",
+      deltaPolling: { cursorField: "graph.deltas[].cursor", nextPollSeconds: 3 },
+      safety: {
+        restrictedMaterialPolicy: "metadata_only_review_hold",
+        rawRestrictedMaterialIncluded: false,
+        taxiiBoundary: "descriptor_only_no_server"
+      }
+    });
+    expect(query.investigationWorkspace.nodeGroups.map((group) => group.type)).toEqual(expect.arrayContaining(["actor", "victim", "attack-pattern", "vulnerability", "malware"]));
+    expect(query.investigationWorkspace.nodes.find((node) => node.value === "APT29")).toMatchObject({
+      type: "actor",
+      exportReadyRelationshipCount: expect.any(Number),
+      heldRelationshipCount: expect.any(Number)
+    });
+    expect(query.investigationWorkspace.relationshipConfidenceLedger.every((entry) =>
+      Array.isArray(entry.whyExists)
+      && Array.isArray(entry.supportingLedgerIds)
+      && Array.isArray(entry.disagreeingSourceIds)
+      && Array.isArray(entry.allowedActions)
+      && typeof entry.provenanceComplete === "boolean"
+    )).toBe(true);
+    expect(query.investigationWorkspace.relationshipConfidenceLedger.find((entry) => entry.target.value === "T1003 OS Credential Dumping")).toMatchObject({
+      contradiction: true,
+      reviewBlocked: true,
+      allowedActions: expect.arrayContaining(["attach_contradiction"])
+    });
+    expect(query.investigationWorkspace.relationshipConfidenceLedger.find((entry) => entry.target.value === "T1003.001 LSASS Memory")).toMatchObject({
+      stale: true,
+      allowedActions: expect.arrayContaining(["mark_stale"])
+    });
+    expect(query.investigationWorkspace.reviewActions.map((item) => item.action)).toEqual(expect.arrayContaining(["hold", "attach_contradiction", "mark_stale"]));
+    expect(JSON.stringify(query.investigationWorkspace)).not.toContain("https://");
 
     const byTarget = (target: string) => query.relationships.find((relationship) => relationship.target.value === target);
     expect(byTarget("T1566 Phishing")?.exportReady).toBe(true);
@@ -1366,6 +1438,7 @@ describe("CTI graph persistence and query views", () => {
       endpoint: "/v1/exports/stix",
       generatedAt: "2026-05-24T00:02:00.000Z"
     });
+    const cutover = buildGraphBackendCutoverRehearsalDto(snapshot, { generatedAt: "2026-05-24T00:03:00.000Z" });
 
     expect(report.findings.map((finding) => finding.code)).toEqual(expect.arrayContaining([
       "export_schema_risk",
@@ -1383,6 +1456,10 @@ describe("CTI graph persistence and query views", () => {
       publicAnswerEffect: "remove",
       stixEffect: "exclude"
     });
+    expect(cutover.replayImport.ledgerCompleteness).toBe("hold_missing_ledger_ids");
+    expect(cutover.replayImport.missingLedgerRelationshipIds).toContain("rel--schema-ledger-risk");
+    expect(cutover.releasePacket.status).toBe("rollback");
+    expect(cutover.releasePacket.rollbackPath).toMatch(/hold graph\/STIX promotion/i);
   });
 
   test("publishes graph review API examples for every frozen action and manual discovery review", () => {

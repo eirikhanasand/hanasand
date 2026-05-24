@@ -1,0 +1,180 @@
+import { describe, expect, test } from "bun:test";
+import { agent07ExtractionHandoff, selectParserProfile, type ParserFailureCategory } from "../adapters/parserProfiles.ts";
+import type { AdapterRunResult, CollectedItem, SourceRecord, SourceType } from "../types.ts";
+import { hashContent } from "../utils.ts";
+
+const createdAt = new Date(0).toISOString();
+
+function source(id: string, type: SourceType, url: string, trustScore = 0.82): SourceRecord {
+  return {
+    id,
+    name: id.replaceAll("_", " "),
+    type,
+    url,
+    accessMethod: type === "telegram_public" ? "official_api" : "public_http",
+    status: "active",
+    risk: "low",
+    trustScore,
+    language: "en",
+    crawlFrequencySeconds: 3600,
+    legalNotes: "Public source fixture.",
+    createdAt,
+    updatedAt: createdAt
+  };
+}
+
+function item(input: {
+  source: SourceRecord;
+  taskId: string;
+  url: string;
+  title: string;
+  text: string;
+  publishedAt?: string;
+  parserWarnings?: string[];
+}): CollectedItem {
+  return {
+    sourceId: input.source.id,
+    taskId: input.taskId,
+    url: input.url,
+    title: input.title,
+    rawText: input.text,
+    collectedAt: "2026-05-24T12:00:00.000Z",
+    publishedAt: input.publishedAt,
+    contentHash: hashContent(input.text),
+    language: "en",
+    links: [],
+    sensitive: false,
+    metadata: {
+      citationSpans: [{ start: 0, end: Math.min(80, input.text.length), label: "lead_sentence" }],
+      parserWarnings: input.parserWarnings ?? []
+    }
+  };
+}
+
+function result(collected: CollectedItem): AdapterRunResult {
+  return { items: [collected], discovered: [], warnings: [], metadata: {} };
+}
+
+describe("parser profile production matrix", () => {
+  test("scores representative public CTI fixtures for Agent 07 extraction handoff", () => {
+    const fixtures = [
+      {
+        label: "APT29 vendor PDF report",
+        source: source("src_apt29_pdf", "pdf", "https://vendor.example.test/reports/apt29.pdf", 0.91),
+        contentType: "application/pdf",
+        text: "APT29 advisory documents malware, phishing, and CVE-2026-2929 infrastructure used against government victims.",
+        expectedProfile: "pdf_report"
+      },
+      {
+        label: "APT42 dynamic vendor report",
+        source: source("src_apt42_dynamic", "dynamic_web", "https://vendor.example.test/research/apt42", 0.86),
+        contentType: "text/html",
+        requiresJavascript: true,
+        text: "APT42 intrusion campaign used credential phishing and malware against civil society organizations.",
+        expectedProfile: "dynamic_page"
+      },
+      {
+        label: "ransomware actor RSS entry",
+        source: source("src_ransomware_rss", "rss", "https://news.example.test/feed.xml", 0.79),
+        contentType: "application/rss+xml",
+        text: "Akira ransomware claims against a manufacturer are summarized with source attribution and timestamps.",
+        expectedProfile: "rss_entry"
+      },
+      {
+        label: "CVE static advisory",
+        source: source("src_cve_static", "static_web", "https://advisory.example.test/cve-2024-3094", 0.88),
+        contentType: "text/html",
+        text: "CVE-2024-3094 advisory describes xz-utils backdoor indicators, affected versions, and mitigations.",
+        expectedProfile: "static_html"
+      },
+      {
+        label: "CERT advisory",
+        source: source("src_cert_advisory", "static_web", "https://cert.example.test/advisories/ta26-001", 0.94),
+        contentType: "text/html",
+        text: "CERT advisory warns of exploitation activity, mitigation actions, and observed indicators.",
+        expectedProfile: "static_html"
+      },
+      {
+        label: "public channel normalized handoff",
+        source: source("src_public_channel", "telegram_public", "https://t.me/public_cti", 0.74),
+        contentType: "application/json",
+        publicChannelHandoff: true,
+        text: "Public channel post links to a vendor report and mentions a ransomware claim with timestamped provenance.",
+        expectedProfile: "public_channel_handoff"
+      }
+    ] as const;
+
+    for (const fixture of fixtures) {
+      const profile = selectParserProfile({
+        sourceType: fixture.source.type,
+        url: fixture.source.url,
+        contentType: fixture.contentType,
+        requiresJavascript: "requiresJavascript" in fixture ? fixture.requiresJavascript : undefined,
+        publicChannelHandoff: "publicChannelHandoff" in fixture ? fixture.publicChannelHandoff : undefined,
+        textSample: fixture.text,
+        language: "en"
+      });
+      const collected = item({
+        source: fixture.source,
+        taskId: `task_${fixture.source.id}`,
+        url: fixture.source.url,
+        title: fixture.label,
+        text: fixture.text,
+        publishedAt: "2026-05-20T00:00:00.000Z"
+      });
+      const handoff = agent07ExtractionHandoff({
+        source: fixture.source,
+        result: result(collected),
+        profile
+      });
+
+      expect(profile.profile).toBe(fixture.expectedProfile);
+      expect(profile.extractionScore).toBeGreaterThan(0.7);
+      expect(profile.fallbackOrder.length).toBeGreaterThan(0);
+      expect(handoff).toMatchObject({
+        schemaVersion: "ti.agent07.extraction_handoff.v1",
+        redactionSafe: true,
+        sourceId: fixture.source.id,
+        parserProfile: fixture.expectedProfile,
+        extractionStatus: "ready_for_extraction",
+        languageHint: "en"
+      });
+      expect(handoff.forbiddenFields).toContain("rawText");
+      expect(Object.keys(handoff)).not.toContain("rawText");
+      expect(Object.keys(handoff)).not.toContain("html");
+      expect(handoff.citationSpans).toHaveLength(1);
+    }
+  });
+
+  test("marks unavailable and duplicate public sources as blocked handoffs with safe taxonomy", () => {
+    const cases: Array<{ category: ParserFailureCategory; retryableScore: number }> = [
+      { category: "unavailable", retryableScore: 0 },
+      { category: "duplicate_canonical", retryableScore: 0 }
+    ];
+    const src = source("src_blocked_vendor", "static_web", "https://vendor.example.test/report");
+
+    for (const testCase of cases) {
+      const profile = selectParserProfile({
+        sourceType: src.type,
+        url: src.url,
+        contentType: "text/html",
+        textSample: "Blocked fixture",
+        failureCategory: testCase.category
+      });
+      const handoff = agent07ExtractionHandoff({
+        source: src,
+        result: { items: [], discovered: [], warnings: ["blocked fixture"], metadata: { failureCategory: testCase.category } },
+        profile
+      });
+
+      expect(profile.extractionScore).toBe(testCase.retryableScore);
+      expect(profile.extractionConfidenceBand).toBe("blocked");
+      expect(handoff).toMatchObject({
+        extractionStatus: "blocked",
+        blockedReason: testCase.category,
+        extractionConfidenceBand: "blocked"
+      });
+      expect(handoff.safeSummary).toBeUndefined();
+    }
+  });
+});
