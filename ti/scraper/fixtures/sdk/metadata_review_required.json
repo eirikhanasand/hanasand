@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "metadata_review_required",
+  "description": "Restricted metadata and low-confidence claims surface safe analyst-review state only.",
+  "route": "GET /v1/intel/search?q=Example%20Victim",
+  "runId": "run_sdk_review_001",
+  "status": "metadata_review",
+  "pollCursor": "poll_sdk_review_001",
+  "deltaCursor": "delta_sdk_review_001",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:05:00.000Z",
+  "warningCodes": ["metadata_review", "restricted_source_hold"],
+  "reviewGates": [
+    {
+      "gate": "restricted_metadata_review",
+      "claimHeadline": "Example Victim claim requires review",
+      "verificationBoundary": "claim metadata only; no unsafe content was accessed"
+    }
+  ],
+  "publicWrapperDelta": {
+    "changed": true,
+    "sections": ["reviewGates", "sourceCoverage"]
+  }
+}

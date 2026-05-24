@@ -6,6 +6,26 @@ import type { CollectionPlan, CollectionRun, CollectionTask, RawCapture, SourceC
 import { hashContent, normalizeWhitespace, nowIso, stableId } from "../utils.ts";
 
 export type CanaryFetch = (input: string, init?: RequestInit) => Promise<Response>;
+type CanaryFetchMode = "native_live_http" | "injected_proof_fetch";
+
+interface CanaryFetchProvenance {
+  mode: CanaryFetchMode;
+  adapterVersion: "public_canary_fetcher:v1";
+  requestedUrl: string;
+  requestedUrlHash: string;
+  finalUrl: string;
+  finalUrlHash: string;
+  httpStatus: number;
+  ok: boolean;
+  contentType?: string;
+  fetchedAt: string;
+  durationMs: number;
+  bytesReceived: number;
+  maxBytes: number;
+  truncated: boolean;
+  bounded: true;
+  userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)";
+}
 
 export interface CanaryCollectionOptions {
   store: ScraperStore;
@@ -13,6 +33,7 @@ export interface CanaryCollectionOptions {
   objectStore?: ObjectEvidenceStore;
   fetch?: CanaryFetch;
   tenantId?: string;
+  activateSources?: boolean;
   maxSources?: number;
   maxTasks?: number;
   maxBytes?: number;
@@ -41,7 +62,9 @@ export interface CanaryCollectionCycleResult {
   mode: "production_canary";
   runId: string;
   planId: string;
+  activationApplied: boolean;
   activatedSourceCount: number;
+  activeSourceCount: number;
   queuedTaskCount: number;
   leasedTaskCount: number;
   completedTaskCount: number;
@@ -60,6 +83,47 @@ export interface CanaryCollectionCycleResult {
     duplicateRate: number;
     promotionYield: number;
   };
+}
+
+export interface CanaryLoopState {
+  schemaVersion: "ti.public_canary_loop_runtime.v1";
+  supervisorAttached: boolean;
+  enabled: boolean;
+  running: boolean;
+  startedAt: string;
+  intervalSeconds: number;
+  nextCycleAt?: string;
+  lastCycleAt?: string;
+  lastSuccessAt?: string;
+  lastErrorAt?: string;
+  lastError?: string;
+  cycleCount: number;
+  successCount: number;
+  errorCount: number;
+  consecutiveErrorCount: number;
+  maxSources: number;
+  maxTasks: number;
+  maxBytes: number;
+  timeoutMs: number;
+  queueLimit: number;
+  activateSources: boolean;
+  controls: {
+    canaryPortfolioOnly: true;
+    activationRequiresHumanApproval: true;
+    continuousLoopAutoActivation: boolean;
+    nativeFetchDefault: boolean;
+    objectBoundaryConfigured: boolean;
+    boundedQueueRequired: true;
+    dedupeBeforeWrite: true;
+    retriesBounded: true;
+    restrictedSourcesExcluded: true;
+  };
+  latestResult?: CanaryCollectionCycleResult;
+}
+
+export interface CanaryCollectionLoopHandle {
+  stop(): void;
+  getState(): CanaryLoopState;
 }
 
 export interface CanaryOperatorSummary {
@@ -100,11 +164,16 @@ export interface CanaryOperatorSummary {
     degradedSourceCount: number;
     failingSourceCount: number;
   };
+  runtime: CanaryLoopState;
   evidenceStorage: {
     metadataStore: "file_backed_or_repository";
+    productionEvidenceMode: "native_live_http" | "injected_proof_only" | "mixed" | "none" | "unknown";
     externalObjectCaptureCount: number;
     inlineCaptureCount: number;
     missingObjectReferenceCount: number;
+    nativeLiveHttpCaptureCount: number;
+    injectedProofFetchCaptureCount: number;
+    unknownFetchModeCaptureCount: number;
   };
   blockedOrHeldItems: Array<{
     sourceId?: string;
@@ -120,6 +189,14 @@ export interface CanaryOperatorSummary {
     storageKind: RawCapture["storageKind"];
     contentHash: string;
     title?: string;
+    fetchProvenance?: {
+      mode: CanaryFetchMode;
+      httpStatus: number;
+      finalUrlHash: string;
+      durationMs: number;
+      bytesReceived: number;
+      truncated: boolean;
+    };
   }>;
   extraction: {
     captureCount: number;
@@ -133,6 +210,109 @@ export interface CanaryOperatorSummary {
     latestCollectedAt?: string;
     whyPartial: string[];
   }>;
+}
+
+export interface CanaryReadinessPacket {
+  schemaVersion: "ti.public_canary_readiness.v1";
+  generatedAt: string;
+  decision: "promote" | "canary-with-warnings" | "hold";
+  mode: "production_canary";
+  minimums: {
+    minActiveSources: number;
+    maxFreshnessSeconds: number;
+    requiredQueries: string[];
+    requireExternalObjectStorage: boolean;
+    requireNativeLiveHttp: boolean;
+  };
+  evidence: {
+    activeSourceCount: number;
+    latestRunId?: string;
+    latestRunStatus?: CollectionRun["status"];
+    latestCaptureCount: number;
+    canaryCaptureCount: number;
+    externalObjectCaptureCount: number;
+    missingObjectReferenceCount: number;
+    nativeLiveHttpCaptureCount: number;
+    injectedProofFetchCaptureCount: number;
+    averageIncidentConfidence: number;
+    promotionYield: number;
+    freshnessSeconds: number;
+  };
+  queryReadiness: Array<{
+    query: string;
+    captureCount: number;
+    latestCollectedAt?: string;
+    readyForPublicAnswer: boolean;
+    reasons: string[];
+  }>;
+  blockers: string[];
+  warnings: string[];
+  controls: {
+    activationRequiresHumanApproval: true;
+    continuousLoopAutoActivation: false;
+    restrictedSourcesExcluded: true;
+    reversiblePauseAvailable: true;
+    rawBodiesExternalizedWhenObjectStoreConfigured: true;
+    liveFetchProvenanceAvailable: true;
+    nativeLiveHttpRequired: boolean;
+  };
+  proofCommands: string[];
+}
+
+export interface CanarySoakReport {
+  schemaVersion: "ti.public_canary_soak.v1";
+  generatedAt: string;
+  decision: "promote" | "canary-with-warnings" | "hold";
+  mode: "production_canary";
+  window: {
+    hours: number;
+    since: string;
+    until: string;
+    minCycles: number;
+  };
+  cycles: Array<{
+    runId: string;
+    status: CollectionRun["status"];
+    updatedAt: string;
+    taskCount: number;
+    captureCount: number;
+    incidentCount: number;
+    error?: string;
+  }>;
+  metrics: {
+    cycleCount: number;
+    completedCycleCount: number;
+    runningCycleCount: number;
+    failedCycleCount: number;
+    zeroTaskCycleCount: number;
+    totalTaskCount: number;
+    totalCaptureCount: number;
+    totalIncidentCount: number;
+    queueDepth: number;
+    deadLetterCount: number;
+    activeSourceCount: number;
+    externalObjectCaptureCount: number;
+    missingObjectReferenceCount: number;
+    nativeLiveHttpCaptureCount: number;
+    injectedProofFetchCaptureCount: number;
+    freshnessSeconds: number;
+    errorRate: number;
+    duplicateRate: number;
+    promotionYield: number;
+  };
+  blockers: string[];
+  warnings: string[];
+  controls: {
+    canaryPortfolioOnly: true;
+    activationRequiresHumanApproval: true;
+    continuousLoopAutoActivation: false;
+    boundedQueueRequired: true;
+    objectBoundaryRequired: true;
+    fetchProvenanceRequired: true;
+    nativeLiveHttpRequired: boolean;
+    restrictedSourcesExcluded: true;
+  };
+  proofCommands: string[];
 }
 
 const CANARY_QUERIES = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "CVE"];
@@ -259,18 +439,22 @@ export function pausePublicCanarySources(input: {
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   const generatedAt = options.now?.() ?? nowIso();
   const fetcher = options.fetch ?? fetch;
+  const fetchMode: CanaryFetchMode = options.fetch ? "injected_proof_fetch" : "native_live_http";
   const maxSources = Math.max(1, options.maxSources ?? 10);
   const maxTasks = Math.max(1, options.maxTasks ?? 5);
   const maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
   const timeoutMs = Math.max(1_000, options.timeoutMs ?? 30_000);
-  const activation = activatePublicCanarySources({
-    store: options.store,
-    tenantId: options.tenantId,
-    operatorId: options.operatorId,
-    now: generatedAt
-  });
+  const activation = options.activateSources === true
+    ? activatePublicCanarySources({
+        store: options.store,
+        tenantId: options.tenantId,
+        operatorId: options.operatorId,
+        now: generatedAt
+      })
+    : emptyCanaryActivation(generatedAt, options.operatorId);
   const sources = options.store.listSources()
     .filter((source) => source.status === "active")
+    .filter((source) => source.metadata?.canaryPortfolio === true)
     .filter((source) => !options.tenantId || source.tenantId === options.tenantId || source.tenantId === undefined)
     .filter((source) => !canaryRejection(source))
     .slice(0, maxSources);
@@ -285,7 +469,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     operatorId: options.operatorId,
     generatedAt,
     tasks,
-    rejected: activation.rejected
+    rejected: activation.rejected,
+    activationApplied: options.activateSources === true
   });
   const run = canaryCollectionRun({
     runId,
@@ -340,7 +525,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     }
 
     try {
-      const item = await fetchCanaryCollectedItem(source, task, fetcher, generatedAt, maxBytes, timeoutMs);
+      const item = await fetchCanaryCollectedItem(source, task, fetcher, fetchMode, generatedAt, maxBytes, timeoutMs);
       const pipeline = processCollectedItem(item);
       const body = pipeline.capture.body;
       const capture = body && options.objectStore && !pipeline.capture.sensitive
@@ -355,7 +540,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
       latestCaptureIds.push(saved.capture.id);
       completedTaskCount += 1;
       options.frontier.complete(task);
-      updateSourceSuccess(options.store, source, generatedAt);
+      updateSourceSuccess(options.store, source, generatedAt, capture.metadata);
       updateRunProgress(options.store, task, generatedAt, saved.incident ? 1 : 0);
     } catch (error) {
       failedTaskCount += 1;
@@ -382,7 +567,9 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
     mode: "production_canary",
     runId,
     planId,
+    activationApplied: options.activateSources === true,
     activatedSourceCount: activation.activated.length + activation.alreadyActive.length,
+    activeSourceCount: sources.length,
     queuedTaskCount,
     leasedTaskCount,
     completedTaskCount,
@@ -408,6 +595,7 @@ export function buildCanaryOperatorSummary(input: {
   store: ScraperStore;
   frontier: FocusedFrontier;
   generatedAt?: string;
+  runtime?: CanaryLoopState;
 }): CanaryOperatorSummary {
   const generatedAt = input.generatedAt ?? nowIso();
   const canarySources = input.store.listSources()
@@ -431,18 +619,34 @@ export function buildCanaryOperatorSummary(input: {
     .filter((capture) => input.store.getSource(capture.sourceId)?.metadata?.canaryPortfolio === true)
     .sort((a, b) => b.collectedAt.localeCompare(a.collectedAt))
     .slice(0, 20)
-    .map((capture) => ({
-      captureId: capture.id,
-      sourceId: capture.sourceId,
-      url: capture.url,
-      collectedAt: capture.collectedAt,
-      storageKind: capture.storageKind,
-      contentHash: capture.contentHash,
-      title: typeof capture.metadata.title === "string" ? capture.metadata.title : undefined
-    }));
+    .map((capture) => {
+      const fetchProvenance = fetchProvenanceFromMetadata(capture.metadata);
+      return {
+        captureId: capture.id,
+        sourceId: capture.sourceId,
+        url: capture.url,
+        collectedAt: capture.collectedAt,
+        storageKind: capture.storageKind,
+        contentHash: capture.contentHash,
+        title: typeof capture.metadata.title === "string" ? capture.metadata.title : undefined,
+        fetchProvenance: fetchProvenance ? {
+          mode: fetchProvenance.mode,
+          httpStatus: fetchProvenance.httpStatus,
+          finalUrlHash: fetchProvenance.finalUrlHash,
+          durationMs: fetchProvenance.durationMs,
+          bytesReceived: fetchProvenance.bytesReceived,
+          truncated: fetchProvenance.truncated
+        } : undefined
+      };
+    });
   const canaryCaptures = input.store.listCaptures()
     .filter((capture) => input.store.getSource(capture.sourceId)?.metadata?.canaryPortfolio === true);
-  const incidents = input.store.listIncidents();
+  const nativeLiveHttpCaptureCount = canaryCaptures.filter((capture) => fetchProvenanceFromMetadata(capture.metadata)?.mode === "native_live_http").length;
+  const injectedProofFetchCaptureCount = canaryCaptures.filter((capture) => fetchProvenanceFromMetadata(capture.metadata)?.mode === "injected_proof_fetch").length;
+  const unknownFetchModeCaptureCount = canaryCaptures.filter((capture) => !fetchProvenanceFromMetadata(capture.metadata)).length;
+  const canaryCaptureIds = new Set(canaryCaptures.map((capture) => capture.id));
+  const incidents = input.store.listIncidents()
+    .filter((incident) => incident.captureId ? canaryCaptureIds.has(incident.captureId) : input.store.getSource(incident.sourceId)?.metadata?.canaryPortfolio === true);
   const reviewReasons = new Map<string, number>();
   let confidenceSum = 0;
   for (const incident of incidents) {
@@ -479,11 +683,23 @@ export function buildCanaryOperatorSummary(input: {
       degradedSourceCount: activeSourceRecords.filter((source) => source.health?.status === "degraded").length,
       failingSourceCount: activeSourceRecords.filter((source) => source.health?.status === "failing").length
     },
+    runtime: input.runtime ?? detachedCanaryLoopState({
+      generatedAt,
+      queueLimit: input.frontier.groupedSnapshot(new Date(generatedAt)).total
+    }),
     evidenceStorage: {
       metadataStore: "file_backed_or_repository",
+      productionEvidenceMode: productionEvidenceMode({
+        nativeLiveHttpCaptureCount,
+        injectedProofFetchCaptureCount,
+        unknownFetchModeCaptureCount
+      }),
       externalObjectCaptureCount: canaryCaptures.filter((capture) => capture.storageKind === "external_object").length,
       inlineCaptureCount: canaryCaptures.filter((capture) => capture.storageKind !== "external_object").length,
-      missingObjectReferenceCount: canaryCaptures.filter((capture) => capture.storageKind === "external_object" && !capture.objectRef).length
+      missingObjectReferenceCount: canaryCaptures.filter((capture) => capture.storageKind === "external_object" && !capture.objectRef).length,
+      nativeLiveHttpCaptureCount,
+      injectedProofFetchCaptureCount,
+      unknownFetchModeCaptureCount
     },
     blockedOrHeldItems: [
       ...deadLetters.map((dead) => ({
@@ -525,6 +741,226 @@ export function buildCanaryOperatorSummary(input: {
   };
 }
 
+export function buildCanaryReadinessPacket(input: {
+  store: ScraperStore;
+  frontier: FocusedFrontier;
+  generatedAt?: string;
+  minActiveSources?: number;
+  maxFreshnessSeconds?: number;
+  requiredQueries?: string[];
+  requireExternalObjectStorage?: boolean;
+  requireNativeLiveHttp?: boolean;
+}): CanaryReadinessPacket {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const minimums = {
+    minActiveSources: Math.max(1, input.minActiveSources ?? 8),
+    maxFreshnessSeconds: Math.max(60, input.maxFreshnessSeconds ?? 86_400),
+    requiredQueries: (input.requiredQueries?.length ? input.requiredQueries : ["APT42", "Turla"]).map((query) => query.trim()).filter(Boolean),
+    requireExternalObjectStorage: input.requireExternalObjectStorage !== false,
+    requireNativeLiveHttp: input.requireNativeLiveHttp === true
+  };
+  const summary = buildCanaryOperatorSummary({
+    store: input.store,
+    frontier: input.frontier,
+    generatedAt
+  });
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  if (summary.activeSources.length < minimums.minActiveSources) {
+    blockers.push(`active canary source count ${summary.activeSources.length} is below minimum ${minimums.minActiveSources}`);
+  }
+  if (!summary.latestRun) blockers.push("no canary run has been recorded");
+  if ((summary.latestRun?.captureCount ?? 0) <= 0) blockers.push("latest canary run produced no captures");
+  if (summary.schedulerHealth.freshnessSeconds > minimums.maxFreshnessSeconds) {
+    blockers.push(`latest canary capture is older than ${minimums.maxFreshnessSeconds} seconds`);
+  }
+  if (summary.schedulerHealth.errorRate > 0.2) warnings.push(`source error rate ${summary.schedulerHealth.errorRate.toFixed(3)} exceeds 0.200`);
+  if (summary.schedulerHealth.duplicateRate > 0.5) warnings.push(`duplicate capture rate ${summary.schedulerHealth.duplicateRate.toFixed(3)} exceeds 0.500`);
+  if (summary.schedulerHealth.promotionYield <= 0) warnings.push("no canary captures have promoted into incident candidates yet");
+  if (summary.evidenceStorage.missingObjectReferenceCount > 0) blockers.push("one or more externalized canary captures are missing object references");
+  if (minimums.requireExternalObjectStorage && summary.evidenceStorage.externalObjectCaptureCount <= 0) {
+    blockers.push("no canary captures have crossed the external object evidence boundary");
+  }
+  if (summary.evidenceStorage.unknownFetchModeCaptureCount > 0) blockers.push("one or more canary captures are missing fetch provenance");
+  if (minimums.requireNativeLiveHttp && summary.evidenceStorage.nativeLiveHttpCaptureCount <= 0) {
+    blockers.push("no native live HTTP canary captures are available for production readiness");
+  }
+  if (summary.queue.deadLetters > 0) warnings.push(`${summary.queue.deadLetters} canary tasks are in dead letter state`);
+  if (summary.queue.queued > 0) warnings.push(`${summary.queue.queued} canary tasks remain queued`);
+
+  const queryReadiness = minimums.requiredQueries.map((query) => {
+    const match = summary.publicAnswerReadiness.find((item) => item.query.toLowerCase() === query.toLowerCase());
+    const captureCount = match?.captureCount ?? 0;
+    const reasons = match?.whyPartial ?? ["query is not tracked by the canary readiness matrix"];
+    const readyForPublicAnswer = captureCount > 0 && summary.extraction.incidentCount > 0;
+    if (!readyForPublicAnswer) blockers.push(`${query} is not backed by fresh canary capture and extraction evidence`);
+    return {
+      query,
+      captureCount,
+      latestCollectedAt: match?.latestCollectedAt,
+      readyForPublicAnswer,
+      reasons
+    };
+  });
+
+  const decision = blockers.length > 0
+    ? "hold"
+    : warnings.length > 0
+      ? "canary-with-warnings"
+      : "promote";
+
+  return {
+    schemaVersion: "ti.public_canary_readiness.v1",
+    generatedAt,
+    decision,
+    mode: "production_canary",
+    minimums,
+    evidence: {
+      activeSourceCount: summary.activeSources.length,
+      latestRunId: summary.latestRun?.runId,
+      latestRunStatus: summary.latestRun?.status,
+      latestCaptureCount: summary.latestCaptures.length,
+      canaryCaptureCount: summary.extraction.captureCount,
+      externalObjectCaptureCount: summary.evidenceStorage.externalObjectCaptureCount,
+      missingObjectReferenceCount: summary.evidenceStorage.missingObjectReferenceCount,
+      nativeLiveHttpCaptureCount: summary.evidenceStorage.nativeLiveHttpCaptureCount,
+      injectedProofFetchCaptureCount: summary.evidenceStorage.injectedProofFetchCaptureCount,
+      averageIncidentConfidence: summary.extraction.averageIncidentConfidence,
+      promotionYield: summary.schedulerHealth.promotionYield,
+      freshnessSeconds: summary.schedulerHealth.freshnessSeconds
+    },
+    queryReadiness,
+    blockers: uniqueStrings(blockers),
+    warnings: uniqueStrings(warnings),
+    controls: {
+      activationRequiresHumanApproval: true,
+      continuousLoopAutoActivation: false,
+      restrictedSourcesExcluded: true,
+      reversiblePauseAvailable: true,
+      rawBodiesExternalizedWhenObjectStoreConfigured: true,
+      liveFetchProvenanceAvailable: true,
+      nativeLiveHttpRequired: minimums.requireNativeLiveHttp
+    },
+    proofCommands: [
+      "bun run check:canary-proof-path",
+      "bun run check:route-inventory",
+      "bun run check:deploy-hygiene",
+      "bun run check:scraper-native-search"
+    ]
+  };
+}
+
+export function buildCanarySoakReport(input: {
+  store: ScraperStore;
+  frontier: FocusedFrontier;
+  generatedAt?: string;
+  windowHours?: number;
+  minCycles?: number;
+  maxFreshnessSeconds?: number;
+  requireNativeLiveHttp?: boolean;
+}): CanarySoakReport {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const windowHours = Math.max(1, input.windowHours ?? 24);
+  const minCycles = Math.max(1, input.minCycles ?? 2);
+  const since = new Date(Date.parse(generatedAt) - windowHours * 60 * 60 * 1000).toISOString();
+  const summary = buildCanaryOperatorSummary({
+    store: input.store,
+    frontier: input.frontier,
+    generatedAt
+  });
+  const cycles = input.store.listRuns()
+    .filter((run) => run.requestId.startsWith("req_public_canary"))
+    .filter((run) => Date.parse(run.updatedAt) >= Date.parse(since) && Date.parse(run.updatedAt) <= Date.parse(generatedAt))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((run) => ({
+      runId: run.id,
+      status: run.status,
+      updatedAt: run.updatedAt,
+      taskCount: run.taskCount,
+      captureCount: run.captureCount,
+      incidentCount: run.incidentCount,
+      error: run.error
+    }));
+  const failedCycleCount = cycles.filter((cycle) => cycle.status === "failed").length;
+  const zeroTaskCycleCount = cycles.filter((cycle) => cycle.taskCount === 0).length;
+  const maxFreshnessSeconds = Math.max(60, input.maxFreshnessSeconds ?? 86_400);
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  if (cycles.length < minCycles) blockers.push(`canary cycle count ${cycles.length} is below minimum ${minCycles}`);
+  if (summary.activeSources.length < 8) blockers.push(`active canary source count ${summary.activeSources.length} is below minimum 8`);
+  if (summary.evidenceStorage.externalObjectCaptureCount <= 0) blockers.push("no canary captures have crossed the external object evidence boundary");
+  if (summary.evidenceStorage.missingObjectReferenceCount > 0) blockers.push("one or more externalized canary captures are missing object references");
+  if (summary.evidenceStorage.unknownFetchModeCaptureCount > 0) blockers.push("one or more canary captures are missing fetch provenance");
+  if (input.requireNativeLiveHttp === true && summary.evidenceStorage.nativeLiveHttpCaptureCount <= 0) {
+    blockers.push("no native live HTTP canary captures are available in the soak window");
+  }
+  if (summary.schedulerHealth.freshnessSeconds > maxFreshnessSeconds) blockers.push(`latest canary capture is older than ${maxFreshnessSeconds} seconds`);
+  if (failedCycleCount > 0) warnings.push(`${failedCycleCount} canary cycles failed in the soak window`);
+  if (summary.queue.deadLetters > 0) warnings.push(`${summary.queue.deadLetters} canary tasks are in dead letter state`);
+  if (summary.schedulerHealth.errorRate > 0.2) warnings.push(`source error rate ${summary.schedulerHealth.errorRate.toFixed(3)} exceeds 0.200`);
+  if (summary.schedulerHealth.duplicateRate > 0.5) warnings.push(`duplicate capture rate ${summary.schedulerHealth.duplicateRate.toFixed(3)} exceeds 0.500`);
+  if (summary.schedulerHealth.promotionYield <= 0) warnings.push("no canary captures have promoted into incident candidates yet");
+
+  const decision = blockers.length > 0
+    ? "hold"
+    : warnings.length > 0
+      ? "canary-with-warnings"
+      : "promote";
+
+  return {
+    schemaVersion: "ti.public_canary_soak.v1",
+    generatedAt,
+    decision,
+    mode: "production_canary",
+    window: {
+      hours: windowHours,
+      since,
+      until: generatedAt,
+      minCycles
+    },
+    cycles,
+    metrics: {
+      cycleCount: cycles.length,
+      completedCycleCount: cycles.filter((cycle) => cycle.status === "completed").length,
+      runningCycleCount: cycles.filter((cycle) => cycle.status === "running").length,
+      failedCycleCount,
+      zeroTaskCycleCount,
+      totalTaskCount: cycles.reduce((sum, cycle) => sum + cycle.taskCount, 0),
+      totalCaptureCount: cycles.reduce((sum, cycle) => sum + cycle.captureCount, 0),
+      totalIncidentCount: cycles.reduce((sum, cycle) => sum + cycle.incidentCount, 0),
+      queueDepth: summary.queue.queued,
+      deadLetterCount: summary.queue.deadLetters,
+      activeSourceCount: summary.activeSources.length,
+      externalObjectCaptureCount: summary.evidenceStorage.externalObjectCaptureCount,
+      missingObjectReferenceCount: summary.evidenceStorage.missingObjectReferenceCount,
+      nativeLiveHttpCaptureCount: summary.evidenceStorage.nativeLiveHttpCaptureCount,
+      injectedProofFetchCaptureCount: summary.evidenceStorage.injectedProofFetchCaptureCount,
+      freshnessSeconds: summary.schedulerHealth.freshnessSeconds,
+      errorRate: summary.schedulerHealth.errorRate,
+      duplicateRate: summary.schedulerHealth.duplicateRate,
+      promotionYield: summary.schedulerHealth.promotionYield
+    },
+    blockers: uniqueStrings(blockers),
+    warnings: uniqueStrings(warnings),
+    controls: {
+      canaryPortfolioOnly: true,
+      activationRequiresHumanApproval: true,
+      continuousLoopAutoActivation: false,
+      boundedQueueRequired: true,
+      objectBoundaryRequired: true,
+      fetchProvenanceRequired: true,
+      nativeLiveHttpRequired: input.requireNativeLiveHttp === true,
+      restrictedSourcesExcluded: true
+    },
+    proofCommands: [
+      "bun run check:canary-proof-path",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "bun test src/tests/api.test.ts -t canary"
+    ]
+  };
+}
+
 export function buildCanaryOperatorConsoleHtml(summary: CanaryOperatorSummary): string {
   const health = summary.schedulerHealth;
   const rows = [
@@ -560,6 +996,10 @@ export function buildCanaryOperatorConsoleHtml(summary: CanaryOperatorSummary): 
 </html>`;
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -568,41 +1008,161 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
+function emptyCanaryActivation(generatedAt: string, operatorId?: string): CanaryActivationResult {
+  return {
+    generatedAt,
+    operatorId: operatorId ?? "canary-operator",
+    activated: [],
+    alreadyActive: [],
+    rejected: []
+  };
+}
+
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & {
   intervalSeconds?: number;
+  queueLimit?: number;
   enabled?: boolean;
   onCycle?: (result: CanaryCollectionCycleResult) => void;
   onError?: (error: unknown) => void;
-}): { stop(): void } {
-  if (options.enabled === false) return { stop() {} };
+}): CanaryCollectionLoopHandle {
+  const startedAt = options.now?.() ?? nowIso();
+  const intervalSeconds = Math.max(5, options.intervalSeconds ?? 60);
+  const maxSources = Math.max(1, options.maxSources ?? 10);
+  const maxTasks = Math.max(1, options.maxTasks ?? 5);
+  const maxBytes = Math.max(1024, options.maxBytes ?? 512_000);
+  const timeoutMs = Math.max(1_000, options.timeoutMs ?? 30_000);
+  const state: CanaryLoopState = {
+    schemaVersion: "ti.public_canary_loop_runtime.v1",
+    supervisorAttached: true,
+    enabled: options.enabled !== false,
+    running: false,
+    startedAt,
+    intervalSeconds,
+    nextCycleAt: options.enabled === false ? undefined : startedAt,
+    cycleCount: 0,
+    successCount: 0,
+    errorCount: 0,
+    consecutiveErrorCount: 0,
+    maxSources,
+    maxTasks,
+    maxBytes,
+    timeoutMs,
+    queueLimit: Math.max(0, options.queueLimit ?? options.frontier.groupedSnapshot(new Date(startedAt)).total),
+    activateSources: options.activateSources === true,
+    controls: {
+      canaryPortfolioOnly: true,
+      activationRequiresHumanApproval: true,
+      continuousLoopAutoActivation: options.activateSources === true,
+      nativeFetchDefault: !options.fetch,
+      objectBoundaryConfigured: Boolean(options.objectStore),
+      boundedQueueRequired: true,
+      dedupeBeforeWrite: true,
+      retriesBounded: true,
+      restrictedSourcesExcluded: true
+    }
+  };
+  if (options.enabled === false) {
+    return {
+      stop() {},
+      getState: () => ({ ...state })
+    };
+  }
   let running = false;
-  const intervalMs = Math.max(5, options.intervalSeconds ?? 60) * 1000;
+  const intervalMs = intervalSeconds * 1000;
+  const nextAfter = (at: string) => new Date(Date.parse(at) + intervalMs).toISOString();
   const tick = async () => {
     if (running) return;
     running = true;
+    state.running = true;
+    state.lastCycleAt = options.now?.() ?? nowIso();
+    state.nextCycleAt = nextAfter(state.lastCycleAt);
     try {
-      options.onCycle?.(await runCanaryCollectionCycle(options));
+      const result = await runCanaryCollectionCycle({
+        ...options,
+        maxSources,
+        maxTasks,
+        maxBytes,
+        timeoutMs,
+        activateSources: options.activateSources === true
+      });
+      state.latestResult = result;
+      state.cycleCount += 1;
+      state.successCount += 1;
+      state.consecutiveErrorCount = 0;
+      state.lastSuccessAt = result.generatedAt;
+      state.queueLimit = Math.max(0, options.queueLimit ?? state.queueLimit);
+      options.onCycle?.(result);
     } catch (error) {
+      const at = options.now?.() ?? nowIso();
+      state.cycleCount += 1;
+      state.errorCount += 1;
+      state.consecutiveErrorCount += 1;
+      state.lastErrorAt = at;
+      state.lastError = error instanceof Error ? error.message : String(error);
+      state.nextCycleAt = nextAfter(at);
       options.onError?.(error);
     } finally {
       running = false;
+      state.running = false;
     }
   };
   void tick();
   const timer = setInterval(() => void tick(), intervalMs);
-  return { stop: () => clearInterval(timer) };
+  return {
+    stop: () => {
+      clearInterval(timer);
+      state.enabled = false;
+      state.running = false;
+      state.nextCycleAt = undefined;
+    },
+    getState: () => ({ ...state, controls: { ...state.controls }, latestResult: state.latestResult ? { ...state.latestResult, errors: [...state.latestResult.errors], latestCaptureIds: [...state.latestResult.latestCaptureIds], health: { ...state.latestResult.health } } : undefined })
+  };
 }
 
-async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTask, fetcher: CanaryFetch, collectedAt: string, maxBytes: number, timeoutMs: number) {
+function detachedCanaryLoopState(input: { generatedAt: string; queueLimit: number }): CanaryLoopState {
+  return {
+    schemaVersion: "ti.public_canary_loop_runtime.v1",
+    supervisorAttached: false,
+    enabled: false,
+    running: false,
+    startedAt: input.generatedAt,
+    intervalSeconds: 0,
+    cycleCount: 0,
+    successCount: 0,
+    errorCount: 0,
+    consecutiveErrorCount: 0,
+    maxSources: 0,
+    maxTasks: 0,
+    maxBytes: 0,
+    timeoutMs: 0,
+    queueLimit: input.queueLimit,
+    activateSources: false,
+    controls: {
+      canaryPortfolioOnly: true,
+      activationRequiresHumanApproval: true,
+      continuousLoopAutoActivation: false,
+      nativeFetchDefault: true,
+      objectBoundaryConfigured: false,
+      boundedQueueRequired: true,
+      dedupeBeforeWrite: true,
+      retriesBounded: true,
+      restrictedSourcesExcluded: true
+    }
+  };
+}
+
+async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTask, fetcher: CanaryFetch, fetchMode: CanaryFetchMode, collectedAt: string, maxBytes: number, timeoutMs: number) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const started = Date.now();
+  const userAgent = "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" as const;
   let response: Response;
   try {
     response = await fetcher(task.targetUrl, {
       signal: controller.signal,
       headers: {
         "accept": source.type === "rss" ? "application/rss+xml, application/xml, text/xml, text/html;q=0.8, text/plain;q=0.5" : "text/html, text/plain;q=0.8",
-        "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+        "user-agent": userAgent
       }
     });
   } catch (error) {
@@ -612,7 +1172,28 @@ async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTa
     clearTimeout(timeout);
   }
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const text = (await response.text()).slice(0, maxBytes);
+  const fullText = await response.text();
+  const bytesReceived = new TextEncoder().encode(fullText).length;
+  const text = fullText.slice(0, maxBytes);
+  const finalUrl = response.url || task.targetUrl;
+  const fetchProvenance: CanaryFetchProvenance = {
+    mode: fetchMode,
+    adapterVersion: "public_canary_fetcher:v1",
+    requestedUrl: task.targetUrl,
+    requestedUrlHash: stableId("url", task.targetUrl),
+    finalUrl,
+    finalUrlHash: stableId("url", finalUrl),
+    httpStatus: response.status,
+    ok: response.ok,
+    contentType: response.headers.get("content-type") ?? undefined,
+    fetchedAt: collectedAt,
+    durationMs: Math.max(0, Date.now() - started),
+    bytesReceived,
+    maxBytes,
+    truncated: fullText.length > text.length,
+    bounded: true,
+    userAgent
+  };
   const parsed = source.type === "rss" ? parseRssText(text) : parseHtmlText(text, task.targetUrl);
   const rawText = normalizeWhitespace(parsed.rawText || text);
   if (!rawText) throw new Error("empty response body");
@@ -636,7 +1217,13 @@ async function fetchCanaryCollectedItem(source: SourceRecord, task: CollectionTa
       title: parsed.title ?? source.name,
       evidenceStage: "captured_page",
       canary: true,
-      sourceUrl: source.url
+      sourceUrl: source.url,
+      fetchProvenance,
+      fetchMode: fetchProvenance.mode,
+      adapterVersion: fetchProvenance.adapterVersion,
+      finalUrlHash: fetchProvenance.finalUrlHash,
+      responseBytes: fetchProvenance.bytesReceived,
+      responseTruncated: fetchProvenance.truncated
     },
     sensitive: false
   };
@@ -675,6 +1262,7 @@ function canaryCollectionPlan(input: {
   generatedAt: string;
   tasks: CollectionTask[];
   rejected: Array<{ sourceId: string; reason: string }>;
+  activationApplied: boolean;
 }): CollectionPlan {
   const requestId = stableId("req_public_canary", `${input.tenantId ?? "global"}:${input.generatedAt}`);
   return {
@@ -718,6 +1306,7 @@ function canaryCollectionPlan(input: {
       metadata: {
         safePublicOnly: true,
         restrictedSourcesAllowed: false,
+        activationApplied: input.activationApplied,
         taskCount: input.tasks.length,
         rejectedSourceCount: input.rejected.length
       }
@@ -843,17 +1432,27 @@ function sourceDue(source: SourceRecord, now: string): boolean {
   return !nextEligibleAt || Date.parse(nextEligibleAt) <= Date.parse(now);
 }
 
-function updateSourceSuccess(store: ScraperStore, source: SourceRecord, at: string): void {
+function updateSourceSuccess(store: ScraperStore, source: SourceRecord, at: string, captureMetadata: Record<string, unknown> = {}): void {
+  const fetchProvenance = fetchProvenanceFromMetadata(captureMetadata);
   store.saveSource({
     ...source,
     lastSeenAt: at,
     updatedAt: at,
+    metadata: {
+      ...source.metadata,
+      lastCanaryFetchMode: fetchProvenance?.mode,
+      lastHttpStatus: fetchProvenance?.httpStatus,
+      lastFinalUrlHash: fetchProvenance?.finalUrlHash,
+      lastFetchDurationMs: fetchProvenance?.durationMs,
+      lastFetchBytes: fetchProvenance?.bytesReceived
+    },
     health: {
       status: "healthy",
       checkedAt: at,
       lastSuccessAt: at,
       consecutiveFailures: 0,
-      errorRate: 0
+      errorRate: 0,
+      medianLatencyMs: fetchProvenance?.durationMs
     },
     crawlState: {
       retryCount: 0,
@@ -909,6 +1508,50 @@ function canaryDuplicateRate(captures: RawCapture[]): number {
   if (captures.length === 0) return 0;
   const uniqueHashes = new Set(captures.map((capture) => `${capture.sourceId}:${capture.canonicalUrl ?? capture.url}:${capture.contentHash}`));
   return rate(captures.length - uniqueHashes.size, captures.length);
+}
+
+function productionEvidenceMode(input: {
+  nativeLiveHttpCaptureCount: number;
+  injectedProofFetchCaptureCount: number;
+  unknownFetchModeCaptureCount: number;
+}): CanaryOperatorSummary["evidenceStorage"]["productionEvidenceMode"] {
+  if (input.unknownFetchModeCaptureCount > 0) return "unknown";
+  if (input.nativeLiveHttpCaptureCount > 0 && input.injectedProofFetchCaptureCount > 0) return "mixed";
+  if (input.nativeLiveHttpCaptureCount > 0) return "native_live_http";
+  if (input.injectedProofFetchCaptureCount > 0) return "injected_proof_only";
+  return "none";
+}
+
+function fetchProvenanceFromMetadata(metadata: Record<string, unknown>): CanaryFetchProvenance | undefined {
+  const value = metadata.fetchProvenance;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const mode = record.mode;
+  const httpStatus = record.httpStatus;
+  const finalUrlHash = record.finalUrlHash;
+  const durationMs = record.durationMs;
+  const bytesReceived = record.bytesReceived;
+  if ((mode !== "native_live_http" && mode !== "injected_proof_fetch") || typeof httpStatus !== "number" || typeof finalUrlHash !== "string" || typeof durationMs !== "number" || typeof bytesReceived !== "number") {
+    return undefined;
+  }
+  return {
+    mode,
+    adapterVersion: "public_canary_fetcher:v1",
+    requestedUrl: typeof record.requestedUrl === "string" ? record.requestedUrl : "",
+    requestedUrlHash: typeof record.requestedUrlHash === "string" ? record.requestedUrlHash : "",
+    finalUrl: typeof record.finalUrl === "string" ? record.finalUrl : "",
+    finalUrlHash,
+    httpStatus,
+    ok: record.ok === true,
+    contentType: typeof record.contentType === "string" ? record.contentType : undefined,
+    fetchedAt: typeof record.fetchedAt === "string" ? record.fetchedAt : "",
+    durationMs,
+    bytesReceived,
+    maxBytes: typeof record.maxBytes === "number" ? record.maxBytes : 0,
+    truncated: record.truncated === true,
+    bounded: true,
+    userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+  };
 }
 
 function updateRunProgress(store: ScraperStore, task: CollectionTask, at: string, incidentDelta: number): void {

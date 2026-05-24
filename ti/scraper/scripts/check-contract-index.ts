@@ -18,9 +18,21 @@ const rolloutPromotion = isRecord(semantics.sourceRolloutPromotionPacket)
 const evidenceCertification = isRecord(semantics.evidencePersistenceCertification)
   ? semantics.evidencePersistenceCertification
   : {};
+const publicCanaryControlPlane = isRecord(semantics.publicCanaryControlPlane)
+  ? semantics.publicCanaryControlPlane
+  : {};
+const apiRegressionSentinel = isRecord(record.apiRegressionSentinel) ? record.apiRegressionSentinel : {};
+const apiGatewayIntegration = isRecord(record.apiGatewayIntegration) ? record.apiGatewayIntegration : {};
+const regressionRouteInvariant = isRecord(apiRegressionSentinel.routeInventoryInvariant)
+  ? apiRegressionSentinel.routeInventoryInvariant
+  : {};
+const regressionResponseInvariant = isRecord(apiRegressionSentinel.responseShapeInvariant)
+  ? apiRegressionSentinel.responseShapeInvariant
+  : {};
 const surfaces = Array.isArray(record.surfaces) ? record.surfaces.filter(isRecord) : [];
 const sourcesSurface = surfaces.find((surface) => surface.name === "sources") ?? {};
 const evidenceSurface = surfaces.find((surface) => surface.name === "evidence") ?? {};
+const opsSurface = surfaces.find((surface) => surface.name === "ops") ?? {};
 const routes = isRecord(record.routeInventory) && Array.isArray(record.routeInventory.routes)
   ? record.routeInventory.routes.filter(isRecord)
   : [];
@@ -47,6 +59,86 @@ const sdkDuplicateRunReuse = isRecord(sdkPolling.duplicateRunReuse) ? sdkPolling
 const sdkEventBoundary = isRecord(sdkIntegration.eventBoundary) ? sdkIntegration.eventBoundary : {};
 const sdkOpenapi = isRecord(sdkIntegration.openapi) ? sdkIntegration.openapi : {};
 const clientCompatibilityMatrix = isRecord(record.clientCompatibilityMatrix) ? record.clientCompatibilityMatrix : {};
+const streamingWebhookCompatibility = isRecord(record.streamingWebhookCompatibility) ? record.streamingWebhookCompatibility : {};
+const streamingPollingCompatibility = isRecord(streamingWebhookCompatibility.pollingCompatibility) ? streamingWebhookCompatibility.pollingCompatibility : {};
+const streamingEventEnvelope = isRecord(streamingWebhookCompatibility.eventEnvelope) ? streamingWebhookCompatibility.eventEnvelope : {};
+const streamingEventTypes = Array.isArray(streamingWebhookCompatibility.eventTypes)
+  ? streamingWebhookCompatibility.eventTypes.filter(isRecord)
+  : [];
+const streamingDeliveryModes = Array.isArray(streamingWebhookCompatibility.deliveryModes)
+  ? streamingWebhookCompatibility.deliveryModes.filter(isRecord)
+  : [];
+const streamingWebhooks = isRecord(streamingWebhookCompatibility.webhooks) ? streamingWebhookCompatibility.webhooks : {};
+const streamingWebhookFailure = isRecord(streamingWebhooks.failureBehavior) ? streamingWebhooks.failureBehavior : {};
+const streamingNoLeak = isRecord(streamingWebhookCompatibility.noLeak) ? streamingWebhookCompatibility.noLeak : {};
+const publicWrapperCutoverReadiness = isRecord(record.publicWrapperCutoverReadiness) ? record.publicWrapperCutoverReadiness : {};
+const cutoverStableAgreement = isRecord(publicWrapperCutoverReadiness.stableFieldAgreement) ? publicWrapperCutoverReadiness.stableFieldAgreement : {};
+const cutoverFallbackWatch = isRecord(publicWrapperCutoverReadiness.fallbackWatch) ? publicWrapperCutoverReadiness.fallbackWatch : {};
+const cutoverDeprecationWatch = isRecord(publicWrapperCutoverReadiness.deprecationWatch) ? publicWrapperCutoverReadiness.deprecationWatch : {};
+const cutoverGatewayWatch = isRecord(publicWrapperCutoverReadiness.gatewayWatch) ? publicWrapperCutoverReadiness.gatewayWatch : {};
+const realtimeDeliveryPrototype = isRecord(record.realtimeDeliveryPrototype) ? record.realtimeDeliveryPrototype : {};
+const realtimeFeatureFlags = isRecord(realtimeDeliveryPrototype.featureFlags) ? realtimeDeliveryPrototype.featureFlags : {};
+const realtimeFallback = isRecord(realtimeDeliveryPrototype.fallbackToPolling) ? realtimeDeliveryPrototype.fallbackToPolling : {};
+const realtimeEventEnvelope = isRecord(realtimeDeliveryPrototype.eventEnvelope) ? realtimeDeliveryPrototype.eventEnvelope : {};
+const realtimeEventPrototypes = Array.isArray(realtimeDeliveryPrototype.eventPrototypes)
+  ? realtimeDeliveryPrototype.eventPrototypes.filter(isRecord)
+  : [];
+const realtimeDeliveryModes = Array.isArray(realtimeDeliveryPrototype.deliveryModes)
+  ? realtimeDeliveryPrototype.deliveryModes.filter(isRecord)
+  : [];
+const realtimeNoLeak = isRecord(realtimeDeliveryPrototype.noLeak) ? realtimeDeliveryPrototype.noLeak : {};
+const realtimePublicGuardrails = isRecord(realtimeDeliveryPrototype.publicWrapperGuardrails) ? realtimeDeliveryPrototype.publicWrapperGuardrails : {};
+const realtimeDeliverySoak = isRecord(record.realtimeDeliverySoak) ? record.realtimeDeliverySoak : {};
+const realtimeSoakScenarios = Array.isArray(realtimeDeliverySoak.soakScenarios)
+  ? realtimeDeliverySoak.soakScenarios.filter(isRecord)
+  : [];
+const realtimeSoakScenarioNames = realtimeSoakScenarios.map((scenario) => String(scenario.name ?? ""));
+const realtimeSoakOutbox = isRecord(realtimeDeliverySoak.webhookOutbox) ? realtimeDeliverySoak.webhookOutbox : {};
+const realtimeSoakCursorGap = isRecord(realtimeDeliverySoak.cursorGapReplay) ? realtimeDeliverySoak.cursorGapReplay : {};
+const realtimeSoakPollingFallback = isRecord(realtimeDeliverySoak.pollingFallback) ? realtimeDeliverySoak.pollingFallback : {};
+const realtimeSoakNoLeak = isRecord(realtimeDeliverySoak.noLeak) ? realtimeDeliverySoak.noLeak : {};
+const clientGenerationFreeze = isRecord(record.clientGenerationFreeze) ? record.clientGenerationFreeze : {};
+const frontendProgressiveUpdateContract = isRecord(record.frontendProgressiveUpdateContract) ? record.frontendProgressiveUpdateContract : {};
+const frontendProgressiveRoutes = isRecord(frontendProgressiveUpdateContract.routes) ? frontendProgressiveUpdateContract.routes : {};
+const frontendProgressiveMergeSemantics = isRecord(frontendProgressiveUpdateContract.mergeSemantics) ? frontendProgressiveUpdateContract.mergeSemantics : {};
+const frontendProgressiveNoLeak = isRecord(frontendProgressiveUpdateContract.noLeak) ? frontendProgressiveUpdateContract.noLeak : {};
+const frontendProgressiveProofMatrix = Array.isArray(frontendProgressiveUpdateContract.uiProofMatrix)
+  ? frontendProgressiveUpdateContract.uiProofMatrix.filter(isRecord)
+  : [];
+const frontendProgressiveScenarios = frontendProgressiveProofMatrix.map((fixture) => String(fixture.scenario ?? ""));
+const scraperNativeReplacementReadiness = isRecord(record.scraperNativeReplacementReadiness) ? record.scraperNativeReplacementReadiness : {};
+const scraperNativeReplacementProofMatrix = Array.isArray(scraperNativeReplacementReadiness.proofMatrix)
+  ? scraperNativeReplacementReadiness.proofMatrix.filter(isRecord)
+  : [];
+const scraperNativeReplacementCases = scraperNativeReplacementProofMatrix.map((row) => String(row.case ?? ""));
+const darkwebIndexFrontendContract = isRecord(record.darkwebIndexFrontendContract) ? record.darkwebIndexFrontendContract : {};
+const darkwebFrontendApiRoutes = isRecord(darkwebIndexFrontendContract.apiRoutes) ? darkwebIndexFrontendContract.apiRoutes : {};
+const darkwebFrontendTable = isRecord(darkwebIndexFrontendContract.table) ? darkwebIndexFrontendContract.table : {};
+const darkwebFrontendDrawer = isRecord(darkwebIndexFrontendContract.safeDetailDrawer) ? darkwebIndexFrontendContract.safeDetailDrawer : {};
+const darkwebFrontendCopyRules = isRecord(darkwebIndexFrontendContract.copyRules) ? darkwebIndexFrontendContract.copyRules : {};
+const darkwebFrontendNoLeak = isRecord(darkwebIndexFrontendContract.noLeak) ? darkwebIndexFrontendContract.noLeak : {};
+const darkwebFrontendReleaseGate = isRecord(darkwebIndexFrontendContract.releaseGate) ? darkwebIndexFrontendContract.releaseGate : {};
+const sourceAtlasFrontendContract = isRecord(record.sourceAtlasFrontendContract) ? record.sourceAtlasFrontendContract : {};
+const sourceAtlasFrontendApiRoutes = isRecord(sourceAtlasFrontendContract.apiRoutes) ? sourceAtlasFrontendContract.apiRoutes : {};
+const sourceAtlasFrontendTable = isRecord(sourceAtlasFrontendContract.table) ? sourceAtlasFrontendContract.table : {};
+const sourceAtlasFrontendDrawer = isRecord(sourceAtlasFrontendContract.safeDetailDrawer) ? sourceAtlasFrontendContract.safeDetailDrawer : {};
+const sourceAtlasFrontendImportPlans = isRecord(sourceAtlasFrontendContract.importPlans) ? sourceAtlasFrontendContract.importPlans : {};
+const sourceAtlasFrontendCopyRules = isRecord(sourceAtlasFrontendContract.copyRules) ? sourceAtlasFrontendContract.copyRules : {};
+const sourceAtlasFrontendNoLeak = isRecord(sourceAtlasFrontendContract.noLeak) ? sourceAtlasFrontendContract.noLeak : {};
+const sourceAtlasFrontendReleaseGate = isRecord(sourceAtlasFrontendContract.releaseGate) ? sourceAtlasFrontendContract.releaseGate : {};
+const clientGenerationOpenapiManifest = isRecord(clientGenerationFreeze.openapiManifest) ? clientGenerationFreeze.openapiManifest : {};
+const clientGenerationOperationManifest = isRecord(clientGenerationFreeze.operationManifest) ? clientGenerationFreeze.operationManifest : {};
+const clientGenerationSchemaManifest = isRecord(clientGenerationFreeze.schemaManifest) ? clientGenerationFreeze.schemaManifest : {};
+const clientGenerationFixtureManifest = isRecord(clientGenerationFreeze.fixtureManifest) ? clientGenerationFreeze.fixtureManifest : {};
+const clientGenerationChangelogGate = isRecord(clientGenerationFreeze.changelogGate) ? clientGenerationFreeze.changelogGate : {};
+const clientGenerationDeprecationPolicy = isRecord(clientGenerationChangelogGate.deprecationPolicy) ? clientGenerationChangelogGate.deprecationPolicy : {};
+const clientGenerationFixtureGate = isRecord(clientGenerationChangelogGate.fixtureGate) ? clientGenerationChangelogGate.fixtureGate : {};
+const clientGenerationDriftPolicy = isRecord(clientGenerationFreeze.driftPolicy) ? clientGenerationFreeze.driftPolicy : {};
+const clientGenerationNoLeak = isRecord(clientGenerationFreeze.noLeak) ? clientGenerationFreeze.noLeak : {};
+const clientGenerationClients = Array.isArray(clientGenerationFreeze.generatedClients)
+  ? clientGenerationFreeze.generatedClients.filter(isRecord)
+  : [];
+const clientGenerationTargets = clientGenerationClients.map((client) => String(client.target ?? ""));
 const contractFreeze = isRecord(clientCompatibilityMatrix.contractFreeze) ? clientCompatibilityMatrix.contractFreeze : {};
 const compatibilityClients = Array.isArray(clientCompatibilityMatrix.clients)
   ? clientCompatibilityMatrix.clients.filter(isRecord)
@@ -61,6 +153,21 @@ const checks = [
   response.status === 200,
   record.endpoint === "/v1/contracts",
   routeTruthAudit.schemaVersion === "ti.route_truth_audit.v1",
+  apiRegressionSentinel.schemaVersion === "ti.api_regression_sentinel.v1",
+  apiGatewayIntegration.schemaVersion === "ti.api_gateway_integration.v1",
+  isRecord(semantics.apiGatewayIntegration) && semantics.apiGatewayIntegration.schemaVersion === "ti.api_gateway_integration.v1",
+  apiGatewayIntegration.status === "deployment_plan_ready",
+  stringArray(apiGatewayIntegration.proofCommands).includes("bun run check:api-gateway"),
+  isRecord(semantics.apiRegressionSentinel) && semantics.apiRegressionSentinel.schemaVersion === "ti.api_regression_sentinel.v1",
+  apiRegressionSentinel.status === "active_backward_compatibility_gate",
+  Number(regressionRouteInvariant.expectedRouteCount ?? 0) === routes.length,
+  ["GET /v1/contracts", "GET /v1/intel/search", "POST /v1/intel/runs", "GET /v1/intel/runs/{id}/results", "POST /api/ti/search"]
+    .every((route) => stringArray(regressionRouteInvariant.requiredStableRoutes).includes(route)),
+  ["endpoint", "routeInventory", "apiRegressionSentinel", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "openapi", "semantics"]
+    .every((key) => stringArray(regressionResponseInvariant.requiredTopLevelKeys).includes(key)),
+  ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "publicTiAnswer", "publicWrapperDelta"]
+    .every((field) => stringArray(regressionResponseInvariant.publicSearchRequiredKeys).includes(field)),
+  stringArray(apiRegressionSentinel.proofCommands).includes("bun run check:api-regression"),
   responsiveAudit.schemaVersion === "ti.public_wrapper_responsive_search.v1",
   isRecord(semantics.publicWrapperResponsiveAudit) && semantics.publicWrapperResponsiveAudit.schemaVersion === "ti.public_wrapper_responsive_search.v1",
   responsivePublicWrapper.canonicalMethod === "POST",
@@ -76,6 +183,172 @@ const checks = [
   sdkIntegration.schemaVersion === "ti.sdk_integration_contract.v1",
   isRecord(semantics.sdkIntegration) && semantics.sdkIntegration.schemaVersion === "ti.sdk_integration_contract.v1",
   sdkIntegration.status === "contract_only_no_push_delivery",
+  streamingWebhookCompatibility.schemaVersion === "ti.streaming_webhook_compatibility.v1",
+  isRecord(semantics.streamingWebhookCompatibility) && semantics.streamingWebhookCompatibility.schemaVersion === "ti.streaming_webhook_compatibility.v1",
+  streamingWebhookCompatibility.status === "contract_only_polling_remains_primary",
+  publicWrapperCutoverReadiness.schemaVersion === "ti.public_wrapper_cutover_readiness.v1",
+  isRecord(semantics.publicWrapperCutoverReadiness) && semantics.publicWrapperCutoverReadiness.schemaVersion === "ti.public_wrapper_cutover_readiness.v1",
+  publicWrapperCutoverReadiness.status === "watch_ready_polling_compatible",
+  realtimeDeliveryPrototype.schemaVersion === "ti.realtime_delivery_prototype.v1",
+  isRecord(semantics.realtimeDeliveryPrototype) && semantics.realtimeDeliveryPrototype.schemaVersion === "ti.realtime_delivery_prototype.v1",
+  realtimeDeliveryPrototype.status === "disabled_by_default_polling_primary",
+  realtimeFeatureFlags.enabledByDefault === false,
+  stringArray(realtimeFeatureFlags.sseFlag).length === 0 ? String(realtimeFeatureFlags.sseFlag ?? "").includes("false") : false,
+  realtimeFallback.pollingPrimary === true,
+  realtimeFallback.intervalSeconds === 3,
+  ["sse", "webhook"].every((mode) => realtimeDeliveryModes.some((delivery) => delivery.mode === mode && delivery.enabled === false && delivery.mounted === false)),
+  ["run.status", "answer.delta", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "quality.caveat", "error.retry_hint", "run.terminal"]
+    .every((type) => realtimeEventPrototypes.some((event) => event.type === type && event.enabled === false)),
+  ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "sequence", "createdAt"]
+    .every((field) => stringArray(realtimeEventEnvelope.requiredFields).includes(field)),
+  realtimePublicGuardrails.noDefaultActor === true,
+  realtimePublicGuardrails.noDemoOrStaleCacheCopy === true,
+  realtimePublicGuardrails.unknownQueryCopy === "Searching",
+  ["raw_body", "restricted_raw_url", "credential", "object_reference", "webhook_secret", "private_channel_material"]
+    .every((field) => stringArray(realtimeNoLeak.forbiddenPayloadFields).includes(field)),
+  stringArray(realtimeDeliveryPrototype.proofCommands).includes("bun run check:api-regression"),
+  stringArray(realtimeDeliveryPrototype.proofCommands).includes("bun run check:sdk-fixtures"),
+  realtimeDeliverySoak.schemaVersion === "ti.realtime_delivery_soak.v1",
+  isRecord(semantics.realtimeDeliverySoak) && semantics.realtimeDeliverySoak.schemaVersion === "ti.realtime_delivery_soak.v1",
+  realtimeDeliverySoak.status === "disabled_soak_contract_ready_polling_primary",
+  ["disabled_sse_replay", "webhook_outbox_retry", "cursor_gap_replay", "fallback_to_polling", "unsafe_payload_block"]
+    .every((scenario) => realtimeSoakScenarioNames.includes(scenario)),
+  realtimeSoakPollingFallback.pollingPrimary === true,
+  realtimeSoakPollingFallback.intervalSeconds === 3,
+  stringArray(realtimeSoakOutbox.states).includes("retry_scheduled"),
+  stringArray(realtimeSoakOutbox.nonActions).includes("do not deliver callbacks"),
+  stringArray(realtimeSoakCursorGap.actions).includes("fallback_to_polling"),
+  stringArray(realtimeSoakNoLeak.forbiddenPayloadFields).includes("webhook_secret"),
+  stringArray(realtimeDeliverySoak.proofCommands).includes("bun run check:contract-index"),
+  clientGenerationFreeze.schemaVersion === "ti.client_generation_freeze.v1",
+  isRecord(semantics.clientGenerationFreeze) && semantics.clientGenerationFreeze.schemaVersion === "ti.client_generation_freeze.v1",
+  clientGenerationFreeze.status === "frozen_contract_ready_for_codegen",
+  clientGenerationOpenapiManifest.openapi === "3.1.0",
+  Number(clientGenerationOpenapiManifest.routeCount ?? 0) === Object.keys(openapiPaths).length,
+  ["contracts_get_v1_contracts", "intel_get_v1_intel_search", "intel_post_v1_intel_runs", "intel_get_v1_intel_runs_id_results"]
+    .every((operationId) => stringArray(clientGenerationOperationManifest.requiredOperationIds).includes(operationId)),
+  ["ClientGenerationFreeze", "GeneratedClientTarget", "SdkPollingEnvelope", "RealtimeDeliveryPrototype", "WebhookDeliveryAttempt"]
+    .every((schema) => stringArray(clientGenerationSchemaManifest.requiredSchemas).includes(schema)),
+  ["typescript_fetch_browser", "typescript_node_service", "analyst_automation_types", "future_realtime_types"]
+    .every((target) => clientGenerationTargets.includes(target)),
+  clientGenerationClients.every((client) => stringArray(client.primaryRoutes).length > 0 && stringArray(client.requiredSchemas).length > 0 && stringArray(client.requiredFixtures).length > 0),
+  stringArray(clientGenerationFixtureManifest.requiredFixtures).includes("fixtures/sdk/initial_public_search.json"),
+  stringArray(clientGenerationFixtureManifest.invariantFields).includes("pollCursor"),
+  clientGenerationChangelogGate.schemaVersion === "ti.generated_client_changelog_gate.v1",
+  clientGenerationChangelogGate.status === "ready_for_generated_client_release_gate",
+  clientGenerationChangelogGate.releasePolicy === "contract_only_no_artifact_publish",
+  Number(clientGenerationDeprecationPolicy.minimumNoticeDays ?? 0) === 90,
+  clientGenerationDeprecationPolicy.publicWrapperAlias === "POST /api/ti/search",
+  ["operation_id_removed", "required_schema_removed", "cursor_field_removed", "unsafe_payload_field_added"]
+    .every((blocker) => stringArray(clientGenerationChangelogGate.breakingChangeBlockers).includes(blocker)),
+  ["fixture_added", "deprecation_notice_added", "realtime_type_added_disabled"]
+    .every((changeClass) => stringArray(clientGenerationChangelogGate.requiredChangeClasses).includes(changeClass)),
+  stringArray(clientGenerationFixtureGate.requiredFiles).includes("fixtures/sdk/initial_public_search.json"),
+  stringArray(clientGenerationChangelogGate.generatedClientReleaseChecklist).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
+  ["operation_id_drift", "required_schema_missing", "public_wrapper_field_drift", "unsafe_payload_field_detected"]
+    .every((check) => stringArray(clientGenerationDriftPolicy.failClosedChecks).includes(check)),
+  ["raw_body", "restricted_raw_url", "credential", "webhook_secret", "authorization", "cookie"]
+    .every((field) => stringArray(clientGenerationNoLeak.forbiddenPayloadFields).includes(field)),
+  stringArray(clientGenerationFreeze.proofCommands).includes("bun run check:sdk-fixtures"),
+  stringArray(clientGenerationFreeze.proofCommands).includes("bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts"),
+  frontendProgressiveUpdateContract.schemaVersion === "ti.frontend_progressive_update_contract.v1",
+  isRecord(semantics.frontendProgressiveUpdateContract) && semantics.frontendProgressiveUpdateContract.schemaVersion === "ti.frontend_progressive_update_contract.v1",
+  frontendProgressiveUpdateContract.status === "frozen_ui_polling_contract",
+  frontendProgressiveRoutes.publicPost === "POST /api/ti/search",
+  frontendProgressiveRoutes.scraperNativeGet === "GET /v1/intel/search",
+  ["status", "runId", "pollCursor", "deltaCursor", "publicTiAnswer", "publicWrapperDelta"]
+    .every((field) => stringArray(frontendProgressiveUpdateContract.requiredFields).includes(field)),
+  ["first_response", "repeated_poll_empty_delta", "new_delta_available", "made_up_actor_searching", "metadata_review_hold", "final_ready"]
+    .every((scenario) => frontendProgressiveScenarios.includes(scenario)),
+  ["merge by runId and deltaCursor", "preserve previous publicTiAnswer on empty deltas", "never backfill default actor/demo copy"]
+    .every((rule) => stringArray(frontendProgressiveMergeSemantics.rules).includes(rule)),
+  ["raw_body", "restricted_raw_url", "credential", "webhook_secret"]
+    .every((field) => stringArray(frontendProgressiveNoLeak.forbiddenUiPayloadFields).includes(field)),
+  stringArray(frontendProgressiveUpdateContract.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
+  scraperNativeReplacementReadiness.schemaVersion === "ti.scraper_native_replacement_readiness.v1",
+  isRecord(semantics.scraperNativeReplacementReadiness) && semantics.scraperNativeReplacementReadiness.schemaVersion === "ti.scraper_native_replacement_readiness.v1",
+  scraperNativeReplacementReadiness.status === "replacement_board_ready_polling_primary",
+  scraperNativeReplacementReadiness.decision === "watch_ready",
+  ["known_actor", "random_actor", "made_up_actor", "restricted_metadata_hold", "graph_hold", "empty_delta"]
+    .every((caseName) => scraperNativeReplacementCases.includes(caseName)),
+  stringArray(scraperNativeReplacementReadiness.blockers).includes("default_actor_detected"),
+  stringArray(scraperNativeReplacementReadiness.blockers).includes("unknown_ready_without_evidence"),
+  stringArray(scraperNativeReplacementReadiness.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
+  darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1",
+  isRecord(semantics.darkwebIndexFrontendContract) && semantics.darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1",
+  darkwebIndexFrontendContract.status === "frozen_metadata_only_frontend_contract",
+  darkwebIndexFrontendContract.route === "/ti/darkweb/index",
+  darkwebIndexFrontendContract.publicRoute === "hanasand.com/ti/darkweb/index",
+  darkwebFrontendApiRoutes.status === "/v1/darkweb/status",
+  darkwebFrontendApiRoutes.search === "/v1/darkweb/search",
+  ["redactedDisplayUrl", "category", "legalTriage", "safeSummary", "lastSeen", "liveness", "provenance", "reviewState"]
+    .every((field) => stringArray(darkwebFrontendTable.columns).includes(field)),
+  ["q", "category", "legalTriage", "liveness", "network", "reviewState", "cursor", "limit"]
+    .every((field) => stringArray(darkwebFrontendTable.filters).includes(field)),
+  ["summary", "classification", "whatWasNotAccessed", "sourceProvenance", "refreshHistory", "graphLinks", "reviewState"]
+    .every((section) => stringArray(darkwebFrontendDrawer.sections).includes(section)),
+  darkwebFrontendCopyRules.legalTriageDisclaimer === "Risk labels are triage labels, not legal advice.",
+  darkwebFrontendNoLeak.metadataOnly === true,
+  darkwebFrontendNoLeak.rawUnsafeUrlPublicOutputAllowed === false,
+  ["rawUnsafeUrl", "fullOnionUrl", "credential", "object_key", "leaked_row", "payload_download"]
+    .every((field) => stringArray(darkwebFrontendNoLeak.forbiddenUiPayloadFields).includes(field)),
+  stringArray(darkwebFrontendReleaseGate.blockers).includes("what_was_not_accessed_missing"),
+  stringArray(darkwebIndexFrontendContract.proofCommands).includes("bun run check:contract-index"),
+  sourceAtlasFrontendContract.schemaVersion === "ti.source_atlas_frontend_contract.v1",
+  isRecord(semantics.sourceAtlasFrontendContract) && semantics.sourceAtlasFrontendContract.schemaVersion === "ti.source_atlas_frontend_contract.v1",
+  sourceAtlasFrontendContract.status === "frozen_dry_run_source_discovery_frontend_contract",
+  sourceAtlasFrontendContract.route === "/ti/sources/atlas",
+  sourceAtlasFrontendContract.publicRoute === "hanasand.com/ti/sources/atlas",
+  sourceAtlasFrontendApiRoutes.atlas === "/v1/sources/atlas",
+  sourceAtlasFrontendApiRoutes.export === "/v1/sources/atlas/export",
+  ["id", "domain", "family", "queryClassCoverage", "sourceValueScore", "parserCapability", "legalRobotsState", "activationReadiness", "approvalRequired"]
+    .every((field) => stringArray(sourceAtlasFrontendTable.columns).includes(field)),
+  ["queryClass", "family", "parserState", "legalRobotsState", "activationReadiness", "recordLimit"]
+    .every((field) => stringArray(sourceAtlasFrontendTable.filters).includes(field)),
+  ["sourceSummary", "coverage", "parserCapability", "legalRobots", "activationReadiness", "approvalPacket", "rollbackPacket", "canaryPlan", "whatWillNotHappen"]
+    .every((section) => stringArray(sourceAtlasFrontendDrawer.sections).includes(section)),
+  ["first_100", "first_1000", "future_10k"].every((label) => stringArray(sourceAtlasFrontendImportPlans.labels).includes(label)),
+  sourceAtlasFrontendCopyRules.dryRunBanner === "Dry run only. No sources are imported or crawled from this view.",
+  sourceAtlasFrontendNoLeak.publicOnly === true,
+  sourceAtlasFrontendNoLeak.dryRunOnly === true,
+  ["rawRestrictedUrl", "privateInviteUrl", "credential", "raw_payload", "object_key", "download_url"]
+    .every((field) => stringArray(sourceAtlasFrontendNoLeak.forbiddenUiPayloadFields).includes(field)),
+  ["source pack import", "registry mutation", "crawl enqueue", "silent activation", "private/invite/auth/CAPTCHA activation"]
+    .every((operation) => stringArray(sourceAtlasFrontendNoLeak.forbiddenOperations).includes(operation)),
+  stringArray(sourceAtlasFrontendReleaseGate.blockers).includes("auto_activation_allowed"),
+  stringArray(sourceAtlasFrontendReleaseGate.blockers).includes("private_auth_captcha_source_detected"),
+  stringArray(sourceAtlasFrontendContract.proofCommands).includes("bun run check:contract-index"),
+  cutoverStableAgreement.publicWrapperRoute === "POST /api/ti/search",
+  cutoverStableAgreement.scraperNativeRoute === "GET /v1/intel/search",
+  cutoverStableAgreement.pollingSeconds === 3,
+  ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "publicTiAnswer", "publicWrapperDelta"]
+    .every((field) => stringArray(cutoverStableAgreement.requiredFields).includes(field)),
+  cutoverFallbackWatch.requiredCopyForNoResult === "Searching",
+  ["default_actor_fallback", "demo_copy", "stale_cache_copy", "implicit_apt29_example", "unknown_ready_without_evidence"]
+    .every((code) => stringArray(cutoverFallbackWatch.bannedFallbackCodes).includes(code)),
+  ["default APT29", "cached demo", "stale local cache"]
+    .every((pattern) => stringArray(cutoverFallbackWatch.bannedTextPatterns).includes(pattern)),
+  cutoverDeprecationWatch.aliasRoute === "POST /api/ti/search",
+  cutoverDeprecationWatch.canonicalRoute === "GET /v1/intel/search",
+  cutoverDeprecationWatch.state === "compatibility_wrapper_until_cutover",
+  stringArray(cutoverDeprecationWatch.rollbackTriggers).includes("default_actor_detected"),
+  stringArray(cutoverDeprecationWatch.rollbackTriggers).includes("rate_limit_header_missing"),
+  stringArray(cutoverGatewayWatch.requiredForwardedHeaders).includes("x-tenant-id"),
+  stringArray(publicWrapperCutoverReadiness.proofCommands).includes("bun run check:api-gateway"),
+  stringArray(publicWrapperCutoverReadiness.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
+  streamingPollingCompatibility.pollingPrimary === true,
+  streamingPollingCompatibility.intervalSeconds === 3,
+  ["runId", "status", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "warningCodes"]
+    .every((field) => stringArray(streamingPollingCompatibility.sameFields).includes(field)),
+  ["sse", "webhook"].every((mode) => streamingDeliveryModes.some((delivery) => delivery.mode === mode)),
+  ["run.status", "answer.delta", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "error.retry_hint", "run.terminal"]
+    .every((type) => streamingEventTypes.some((event) => event.type === type)),
+  ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "sequence", "createdAt"]
+    .every((field) => stringArray(streamingEventEnvelope.requiredFields).includes(field)),
+  streamingWebhookFailure.maxAttempts === 6,
+  Array.isArray(streamingWebhookFailure.retryableStatuses) && streamingWebhookFailure.retryableStatuses.includes(429),
+  ["raw_body", "restricted_raw_url", "credential", "object_reference", "webhook_secret"]
+    .every((field) => stringArray(streamingNoLeak.forbiddenPayloadFields).includes(field)),
   sdkPolling.intervalSeconds === 3,
   stringArray(sdkPolling.responseFields).includes("pollCursor"),
   stringArray(sdkPolling.responseFields).includes("deltaCursor"),
@@ -117,6 +390,37 @@ const checks = [
   routeTruthAudit.expectedRouteInventoryCount === routes.length,
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/coverage-closeout"),
   routes.some((route) => route.method === "POST" && route.path === "/v1/sources/activation-batches"),
+  routes.some((route) => route.method === "GET" && route.path === "/v1/ops/canary/readiness"),
+  routes.some((route) => route.method === "GET" && route.path === "/v1/ops/canary/soak"),
+  publicCanaryControlPlane.schemaVersion === "ti.public_canary_control_plane.v1",
+  stringArray(publicCanaryControlPlane.routes).includes("/v1/ops/canary/readiness"),
+  stringArray(publicCanaryControlPlane.routes).includes("/v1/ops/canary/soak"),
+  stringArray(publicCanaryControlPlane.proofCommands).includes("bun run check:canary-proof-path"),
+  isRecord(publicCanaryControlPlane.activation) && publicCanaryControlPlane.activation.requiresHumanApproval === true,
+  isRecord(publicCanaryControlPlane.collection) && publicCanaryControlPlane.collection.continuousLoopAutoActivation === false,
+  stringArray(isRecord(publicCanaryControlPlane.collection) ? publicCanaryControlPlane.collection.backgroundEnv : undefined).includes("TI_CANARY_MAX_QUEUE_SIZE"),
+  isRecord(isRecord(publicCanaryControlPlane.collection) ? publicCanaryControlPlane.collection.fetchProvenance : undefined)
+    && publicCanaryControlPlane.collection.fetchProvenance.liveMode === "native_live_http"
+    && stringArray(publicCanaryControlPlane.collection.fetchProvenance.requiredCaptureMetadata).includes("fetchProvenance.finalUrlHash"),
+  isRecord(publicCanaryControlPlane.runtimeLoop)
+    && publicCanaryControlPlane.runtimeLoop.schemaVersion === "ti.public_canary_loop_runtime.v1"
+    && publicCanaryControlPlane.runtimeLoop.routeField === "/v1/ops/canary.operatorView.runtime"
+    && stringArray(publicCanaryControlPlane.runtimeLoop.fields).includes("consecutiveErrorCount")
+    && stringArray(publicCanaryControlPlane.runtimeLoop.controls).includes("dedupeBeforeWrite"),
+  isRecord(publicCanaryControlPlane.readiness) && publicCanaryControlPlane.readiness.schemaVersion === "ti.public_canary_readiness.v1",
+  isRecord(publicCanaryControlPlane.soak) && publicCanaryControlPlane.soak.schemaVersion === "ti.public_canary_soak.v1",
+  stringArray(isRecord(publicCanaryControlPlane.readiness) ? publicCanaryControlPlane.readiness.optionalProductionGates : undefined).includes("requireNativeLiveHttp=true"),
+  stringArray(isRecord(publicCanaryControlPlane.soak) ? publicCanaryControlPlane.soak.optionalProductionGates : undefined).includes("requireNativeLiveHttp=true"),
+  stringArray(isRecord(publicCanaryControlPlane.soak) ? publicCanaryControlPlane.soak.controls : undefined).includes("canaryPortfolioOnly"),
+  stringArray(isRecord(publicCanaryControlPlane.soak) ? publicCanaryControlPlane.soak.controls : undefined).includes("fetchProvenanceRequired"),
+  stringArray(isRecord(publicCanaryControlPlane.soak) ? publicCanaryControlPlane.soak.controls : undefined).includes("nativeLiveHttpRequired"),
+  stringArray(isRecord(publicCanaryControlPlane.soak) ? publicCanaryControlPlane.soak.requiredMetrics : undefined).includes("nativeLiveHttpCaptureCount"),
+  stringArray(isRecord(publicCanaryControlPlane.readiness) ? publicCanaryControlPlane.readiness.requiredQueries : undefined).includes("APT42"),
+  stringArray(isRecord(publicCanaryControlPlane.readiness) ? publicCanaryControlPlane.readiness.requiredQueries : undefined).includes("Turla"),
+  stringArray(isRecord(publicCanaryControlPlane.operatorView) ? publicCanaryControlPlane.operatorView.fields : undefined).includes("evidenceStorage.productionEvidenceMode"),
+  stringArray(opsSurface.responseKeys).includes("readiness"),
+  stringArray(opsSurface.guarantees).includes("public_canary_control_plane"),
+  stringArray(opsSurface.guarantees).includes("no_implicit_source_activation"),
   auditFixtures.some((fixture) => fixture.name === "route_inventory_drift"),
   auditFixtures.some((fixture) => fixture.name === "missing_schema_examples"),
   auditFixtures.some((fixture) => fixture.name === "public_post_compatibility"),
@@ -207,9 +511,13 @@ const checks = [
   !JSON.stringify(json).toLowerCase().includes("authorization:")
 ];
 const ok = checks.every(Boolean);
+const failedCheckIndexes = checks
+  .map((passed, index) => passed ? undefined : index)
+  .filter((index): index is number => typeof index === "number");
 
 console.log(JSON.stringify({
   ok,
+  failedCheckIndexes,
   command: "bun run check:contract-index",
   endpoint: record.endpoint,
   routeCount: routes.length,
@@ -243,11 +551,100 @@ console.log(JSON.stringify({
     responseFields: stringArray(sdkPolling.responseFields),
     eventModes: stringArray(sdkEventBoundary.allowedModes)
   },
+  sourceAtlasFrontendContract: {
+    schemaVersion: String(sourceAtlasFrontendContract.schemaVersion ?? ""),
+    status: String(sourceAtlasFrontendContract.status ?? ""),
+    route: String(sourceAtlasFrontendContract.route ?? ""),
+    tableColumns: stringArray(sourceAtlasFrontendTable.columns),
+    filters: stringArray(sourceAtlasFrontendTable.filters),
+    importPlanLabels: stringArray(sourceAtlasFrontendImportPlans.labels)
+  },
+  streamingWebhookCompatibility: {
+    schemaVersion: String(streamingWebhookCompatibility.schemaVersion ?? ""),
+    status: String(streamingWebhookCompatibility.status ?? ""),
+    deliveryModes: streamingDeliveryModes.map((mode) => String(mode.mode ?? "")),
+    eventTypes: streamingEventTypes.map((event) => String(event.type ?? "")),
+    pollingFields: stringArray(streamingPollingCompatibility.sameFields),
+    forbiddenPayloadFields: stringArray(streamingNoLeak.forbiddenPayloadFields)
+  },
+  publicWrapperCutoverReadiness: {
+    schemaVersion: String(publicWrapperCutoverReadiness.schemaVersion ?? ""),
+    status: String(publicWrapperCutoverReadiness.status ?? ""),
+    publicWrapperRoute: String(cutoverStableAgreement.publicWrapperRoute ?? ""),
+    requiredFields: stringArray(cutoverStableAgreement.requiredFields),
+    bannedFallbackCodes: stringArray(cutoverFallbackWatch.bannedFallbackCodes),
+    rollbackTriggers: stringArray(cutoverDeprecationWatch.rollbackTriggers),
+    proofCommands: stringArray(publicWrapperCutoverReadiness.proofCommands)
+  },
+  realtimeDeliveryPrototype: {
+    schemaVersion: String(realtimeDeliveryPrototype.schemaVersion ?? ""),
+    status: String(realtimeDeliveryPrototype.status ?? ""),
+    enabledByDefault: realtimeFeatureFlags.enabledByDefault === true,
+    deliveryModes: realtimeDeliveryModes.map((mode) => String(mode.mode ?? "")),
+    eventTypes: realtimeEventPrototypes.map((event) => String(event.type ?? "")),
+    pollingPrimary: realtimeFallback.pollingPrimary === true,
+    forbiddenPayloadFields: stringArray(realtimeNoLeak.forbiddenPayloadFields)
+  },
+  realtimeDeliverySoak: {
+    schemaVersion: String(realtimeDeliverySoak.schemaVersion ?? ""),
+    status: String(realtimeDeliverySoak.status ?? ""),
+    scenarios: realtimeSoakScenarioNames,
+    outboxStates: stringArray(realtimeSoakOutbox.states),
+    cursorGapActions: stringArray(realtimeSoakCursorGap.actions),
+    pollingPrimary: realtimeSoakPollingFallback.pollingPrimary === true,
+    forbiddenPayloadFields: stringArray(realtimeSoakNoLeak.forbiddenPayloadFields)
+  },
+  clientGenerationFreeze: {
+    schemaVersion: String(clientGenerationFreeze.schemaVersion ?? ""),
+    status: String(clientGenerationFreeze.status ?? ""),
+    openapi: String(clientGenerationOpenapiManifest.openapi ?? ""),
+    generatedTargets: clientGenerationTargets,
+    requiredSchemas: stringArray(clientGenerationSchemaManifest.requiredSchemas),
+    changelogGateStatus: String(clientGenerationChangelogGate.status ?? ""),
+    breakingChangeBlockers: stringArray(clientGenerationChangelogGate.breakingChangeBlockers),
+    minimumNoticeDays: Number(clientGenerationDeprecationPolicy.minimumNoticeDays ?? 0),
+    failClosedChecks: stringArray(clientGenerationDriftPolicy.failClosedChecks)
+  },
+  frontendProgressiveUpdateContract: {
+    schemaVersion: String(frontendProgressiveUpdateContract.schemaVersion ?? ""),
+    status: String(frontendProgressiveUpdateContract.status ?? ""),
+    routes: frontendProgressiveRoutes,
+    scenarios: frontendProgressiveScenarios,
+    mergeRules: stringArray(frontendProgressiveMergeSemantics.rules)
+  },
+  scraperNativeReplacementReadiness: {
+    schemaVersion: String(scraperNativeReplacementReadiness.schemaVersion ?? ""),
+    status: String(scraperNativeReplacementReadiness.status ?? ""),
+    decision: String(scraperNativeReplacementReadiness.decision ?? ""),
+    cases: scraperNativeReplacementCases,
+    blockers: stringArray(scraperNativeReplacementReadiness.blockers),
+    proofCommands: stringArray(scraperNativeReplacementReadiness.proofCommands)
+  },
+  darkwebIndexFrontendContract: {
+    schemaVersion: String(darkwebIndexFrontendContract.schemaVersion ?? ""),
+    status: String(darkwebIndexFrontendContract.status ?? ""),
+    route: String(darkwebIndexFrontendContract.route ?? ""),
+    columns: stringArray(darkwebFrontendTable.columns),
+    filters: stringArray(darkwebFrontendTable.filters),
+    drawerSections: stringArray(darkwebFrontendDrawer.sections),
+    forbiddenUiPayloadFields: stringArray(darkwebFrontendNoLeak.forbiddenUiPayloadFields)
+  },
   clientCompatibilityMatrix: {
     schemaVersion: String(clientCompatibilityMatrix.schemaVersion ?? ""),
     status: String(clientCompatibilityMatrix.status ?? ""),
     contractFreeze: String(contractFreeze.schemaVersion ?? ""),
     clients: compatibilityClientNames
+  },
+  apiRegressionSentinel: {
+    schemaVersion: String(apiRegressionSentinel.schemaVersion ?? ""),
+    status: String(apiRegressionSentinel.status ?? ""),
+    requiredStableRoutes: stringArray(regressionRouteInvariant.requiredStableRoutes),
+    requiredTopLevelKeys: stringArray(regressionResponseInvariant.requiredTopLevelKeys)
+  },
+  apiGatewayIntegration: {
+    schemaVersion: String(apiGatewayIntegration.schemaVersion ?? ""),
+    status: String(apiGatewayIntegration.status ?? ""),
+    proofCommands: stringArray(apiGatewayIntegration.proofCommands)
   },
   sourceActivationExecutionReadiness: {
     routes: stringArray(sourceExecution.routes),
@@ -261,7 +658,15 @@ console.log(JSON.stringify({
     routes: stringArray(evidenceCertification.routes),
     scenarios: stringArray(evidenceCertification.scenarios)
   },
-  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive/delta public wrapper fixtures, enterprise API/OpenAPI/SDK integration/client matrix surface, source activation, and evidence persistence certification without unsafe leaks"
+  publicCanaryControlPlane: {
+    schemaVersion: String(publicCanaryControlPlane.schemaVersion ?? ""),
+    routes: stringArray(publicCanaryControlPlane.routes),
+    readinessProductionGates: stringArray(isRecord(publicCanaryControlPlane.readiness) ? publicCanaryControlPlane.readiness.optionalProductionGates : undefined),
+    soakControls: stringArray(isRecord(publicCanaryControlPlane.soak) ? publicCanaryControlPlane.soak.controls : undefined),
+    operatorFields: stringArray(isRecord(publicCanaryControlPlane.operatorView) ? publicCanaryControlPlane.operatorView.fields : undefined),
+    proofCommands: stringArray(publicCanaryControlPlane.proofCommands)
+  },
+  expectedOutput: "ok=true; /v1/contracts indexes route truth audit, responsive/delta public wrapper fixtures, enterprise API/OpenAPI/SDK integration/client matrix surface, scraper-native replacement readiness, realtime delivery soak, source activation, and evidence persistence certification without unsafe leaks"
 }, null, 2));
 
 if (!ok) process.exit(1);

@@ -27,6 +27,7 @@ export {
   buildStixExportPreview,
   buildStixExportReadinessApiDto,
   buildTaxiiCollectionReadiness,
+  buildTaxiiDescriptorStixBundleGovernanceDto,
   buildVictimProfileGraphView,
   checkStixExportReadiness,
   downgradeAndExpireStaleRelationships,

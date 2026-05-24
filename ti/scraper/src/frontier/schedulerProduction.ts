@@ -31,16 +31,30 @@ import type {
   SchedulerDeadLetterCauseTelemetry,
   SchedulerDiagnosticItem,
   SchedulerDiagnostics,
+  SchedulerDurableBackendContract,
+  SchedulerDurableBackendKind,
+  SchedulerDurableBackendReadinessDto,
+  SchedulerDurableFairnessLane,
   SchedulerEmergencyBrakePolicy,
   SchedulerExecutionSimulationResult,
   SchedulerExecutionSloFields,
   SchedulerExecutionSloThresholds,
   SchedulerExecutionTraffic,
+  SchedulerFreshnessQueryClass,
+  SchedulerFreshnessSloDashboardActor,
+  SchedulerFreshnessSloDashboardDto,
+  SchedulerFreshnessSloEngineDto,
+  SchedulerFairnessGovernanceDto,
+  SchedulerInteractiveSearchFreshnessDto,
   SchedulerLease,
+  SchedulerLeaseSoakScenarioName,
   SchedulerLiveRunDrainAction,
   SchedulerLiveRunDrainStep,
   SchedulerLoadModelFixture,
   SchedulerPollingContract,
+  SchedulerProductionLeaseSemanticsDto,
+  SchedulerPersistenceReplayCutoverDto,
+  SchedulerPostgresQueueAdapterReadinessDto,
   SchedulerPressureDto,
   SchedulerProductionAdapterContract,
   SchedulerProductionAdapterImplementation,
@@ -66,6 +80,7 @@ import type {
   SchedulerRuntimeSlaMetric,
   SchedulerRuntimeSlaState,
   SchedulerSlaEnforcementDto,
+  SchedulerSourceCadenceHint,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -76,6 +91,7 @@ import type {
   SchedulerWorkerLoopContract,
   SchedulerWorkerLoopContractStep,
   SchedulerWorkerLoopStepName,
+  SchedulerWorkerLeaseSoakHarnessDto,
   SchedulerWorkerPartitionSoakSlo,
   SchedulerWorkerQueueCutoverDto,
   SchedulerWorkerQueuePartition,
@@ -115,16 +131,30 @@ export type {
   SchedulerDeadLetterCauseTelemetry,
   SchedulerDiagnosticItem,
   SchedulerDiagnostics,
+  SchedulerDurableBackendContract,
+  SchedulerDurableBackendKind,
+  SchedulerDurableBackendReadinessDto,
+  SchedulerDurableFairnessLane,
   SchedulerEmergencyBrakePolicy,
   SchedulerExecutionSimulationResult,
   SchedulerExecutionSloFields,
   SchedulerExecutionSloThresholds,
   SchedulerExecutionTraffic,
+  SchedulerFreshnessQueryClass,
+  SchedulerFreshnessSloDashboardActor,
+  SchedulerFreshnessSloDashboardDto,
+  SchedulerFreshnessSloEngineDto,
+  SchedulerFairnessGovernanceDto,
+  SchedulerInteractiveSearchFreshnessDto,
   SchedulerLease,
+  SchedulerLeaseSoakScenarioName,
   SchedulerLiveRunDrainAction,
   SchedulerLiveRunDrainStep,
   SchedulerLoadModelFixture,
   SchedulerPollingContract,
+  SchedulerProductionLeaseSemanticsDto,
+  SchedulerPersistenceReplayCutoverDto,
+  SchedulerPostgresQueueAdapterReadinessDto,
   SchedulerPressureDto,
   SchedulerProductionAdapterContract,
   SchedulerProductionAdapterImplementation,
@@ -150,6 +180,7 @@ export type {
   SchedulerRuntimeSlaMetric,
   SchedulerRuntimeSlaState,
   SchedulerSlaEnforcementDto,
+  SchedulerSourceCadenceHint,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -160,6 +191,7 @@ export type {
   SchedulerWorkerLoopContract,
   SchedulerWorkerLoopContractStep,
   SchedulerWorkerLoopStepName,
+  SchedulerWorkerLeaseSoakHarnessDto,
   SchedulerWorkerPartitionSoakSlo,
   SchedulerWorkerQueueCutoverDto,
   SchedulerWorkerQueuePartition,
@@ -218,6 +250,7 @@ export function schedulerLoadModelFixtures(): SchedulerLoadModelFixture[] {
       interactive_live_search: liveSearchPollers >= 1_000 ? 90 : 45,
       interactive_search: 120,
       analyst_deep_dive: 300,
+      public_channel_window: 180,
       background_refresh: 1_800,
       broad_daily_sweep: 3_600,
       source_health_probe: 600,
@@ -1152,6 +1185,162 @@ export function buildSchedulerWorkerSoakMigration(input: {
   };
 }
 
+export function buildSchedulerWorkerLeaseSoakHarness(input: {
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  runtimeSla: SchedulerRuntimeSlaDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  workerSoakMigration: SchedulerWorkerSoakMigrationDto;
+  now?: Date;
+}): SchedulerWorkerLeaseSoakHarnessDto {
+  const now = input.now ?? new Date();
+  const workerCount = Math.max(32, input.workerQueueCutover.capacityEnvelope.workerSlots);
+  const totalTasks = 10_000;
+  const scenarioSpecs: Array<{
+    scenario: SchedulerLeaseSoakScenarioName;
+    workload: SchedulerWorkerWorkload;
+    taskCount: number;
+    deadlineSeconds: number;
+    pressure: LiveSearchBackpressureState;
+    fairnessGroup: string;
+  }> = [
+    { scenario: "apt29_actor_burst", workload: "interactive_actor_search", taskCount: 2_200, deadlineSeconds: 45, pressure: "accepted", fairnessGroup: "tenant:actor:apt29:clear_web" },
+    { scenario: "public_channel_fanout", workload: "public_channel_window", taskCount: 1_700, deadlineSeconds: 180, pressure: "deferred_by_queue_pressure", fairnessGroup: "tenant:public_channel:apt29" },
+    { scenario: "restricted_metadata_holds", workload: "restricted_metadata_approval", taskCount: 1_200, deadlineSeconds: 900, pressure: "blocked_by_policy", fairnessGroup: "tenant:restricted_metadata:held" },
+    { scenario: "evidence_replay_backlog", workload: "evidence_replay", taskCount: 1_400, deadlineSeconds: 600, pressure: "deferred_by_budget", fairnessGroup: "tenant:evidence:replay" },
+    { scenario: "graph_export_wave", workload: "graph_export", taskCount: 900, deadlineSeconds: 720, pressure: "deferred_by_budget", fairnessGroup: "tenant:graph:export" },
+    { scenario: "source_outage_wave", workload: "health_probe", taskCount: 1_000, deadlineSeconds: 300, pressure: "deferred_by_source_backoff", fairnessGroup: "tenant:source_health:outage" },
+    { scenario: "parser_failure_storm", workload: "scheduled_source_sweep", taskCount: 900, deadlineSeconds: 420, pressure: "deferred_by_source_backoff", fairnessGroup: "tenant:parser:failure" },
+    { scenario: "low_value_sweep_pressure", workload: "retention", taskCount: 700, deadlineSeconds: 1_800, pressure: "deferred_by_budget", fairnessGroup: "tenant:retention:low_value" }
+  ];
+  const partitionsByWorkload = new Map(input.workerQueueCutover.partitions.map((partition) => [partition.workload, partition]));
+  const fallbackPartition = input.workerQueueCutover.partitions[0];
+  const workloadSlices = scenarioSpecs.map((spec) => {
+    const partition = partitionsByWorkload.get(spec.workload) ?? fallbackPartition;
+    const partitionSlo = input.workerSoakMigration.partitionSlo.find((row) => row.workload === spec.workload);
+    const retryBudget = Math.max(1, Math.ceil(spec.taskCount * (spec.scenario === "parser_failure_storm" ? 0.05 : 0.018)));
+    const deadLetterBudget = Math.max(1, Math.ceil(spec.taskCount * (spec.scenario === "parser_failure_storm" ? 0.012 : 0.003)));
+    return {
+      scenario: spec.scenario,
+      workload: spec.workload,
+      taskCount: spec.taskCount,
+      workerPartitionId: partition?.id ?? "partition_unknown",
+      leaseAttempts: spec.taskCount + retryBudget,
+      expectedCompletions: Math.max(0, spec.taskCount - deadLetterBudget),
+      retryBudget,
+      deadLetterBudget,
+      requestDeadlineSeconds: spec.deadlineSeconds,
+      queueAgeP95Seconds: Math.min(spec.deadlineSeconds, partitionSlo?.queueAgeP95Seconds ?? input.queueEconomics.totals.maxQueuedAgeSeconds),
+      expectedPressure: spec.pressure,
+      fairnessGroup: spec.fairnessGroup
+    };
+  });
+  const workerPartitions = input.workerQueueCutover.partitions.map((partition) => {
+    const estimatedTasks = workloadSlices
+      .filter((slice) => slice.workload === partition.workload)
+      .reduce((sum, slice) => sum + slice.taskCount, 0);
+    const workerShare = Math.max(1, Math.round(workerCount * partition.reservedWorkerSlots / Math.max(1, input.workerQueueCutover.capacityEnvelope.workerSlots)));
+    return {
+      partitionId: partition.id,
+      workload: partition.workload,
+      workerCount: workerShare,
+      maxConcurrentLeases: partition.maxConcurrentLeases,
+      leaseTtlSeconds: partition.leaseTtlSeconds,
+      checkpointEverySeconds: partition.checkpointEverySeconds,
+      maxQueueAgeSeconds: partition.maxQueueAgeSeconds,
+      estimatedTasks,
+      expectedDrainedWithinMinutes: Math.max(1, Math.ceil(estimatedTasks / Math.max(1, partition.maxConcurrentLeases) * (partition.checkpointEverySeconds / 60))),
+      concurrencyPolicy: partition.workload === "restricted_metadata_approval" ? "held_for_review" as const : partition.workload === "interactive_actor_search" ? "reserved_capacity" as const : "bounded_shared_capacity" as const,
+      backpressurePolicy: partition.backpressurePolicy,
+      drainBehavior: partition.drainBehavior
+    };
+  });
+  const workloadShares = workerPartitions.map((partition) => ({
+    workload: partition.workload,
+    taskShare: Number((partition.estimatedTasks / totalTasks).toFixed(4)),
+    reservedWorkerSlots: partition.workerCount,
+    maxQueueAgeSeconds: partition.maxQueueAgeSeconds
+  }));
+  const worstShare = workloadShares.reduce((worst, share) => share.taskShare > 0 ? Math.min(worst, share.taskShare) : worst, 1);
+  const queueHold = input.queueEconomics.totals.maxQueuedAgeSeconds > 900;
+  const retryHold = input.queueEconomics.totals.retryDebt > 500 || input.runtimeExecution.totals.retried > 500;
+  const deadLetterHold = input.queueEconomics.totals.deadLetters > 80 || input.runtimeExecution.totals.deadLettered > 80;
+  const decision: SchedulerWorkerLeaseSoakHarnessDto["releaseGate"]["decision"] = deadLetterHold
+    ? "rollback"
+    : queueHold || retryHold || input.runtimeSla.state === "breach"
+      ? "hold"
+      : "pass";
+  const reasons = [
+    ...(queueHold ? ["queue_age_over_10k_replay_threshold"] : []),
+    ...(retryHold ? ["retry_debt_over_10k_replay_threshold"] : []),
+    ...(deadLetterHold ? ["dead_letter_over_10k_replay_threshold"] : []),
+    ...(decision === "pass" ? ["10k_replay_budget_within_scheduler_lane"] : [])
+  ];
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search.scheduler", "/v1/contracts", "agent10_capacity_release_gate"],
+    dryRun: true,
+    willMutate: false,
+    replay: {
+      fixtureName: "agent02_10k_multi_worker_lease_replay",
+      totalTasks,
+      durationHours: 24,
+      workerCount,
+      simulatedTenants: 12,
+      simulatedSources: 160,
+      duplicateRunReuseRequired: true,
+      cursorReplayRequired: true,
+      restrictedMetadataPolicy: "metadata_only_approval_hold"
+    },
+    workloadSlices,
+    workerPartitions,
+    leaseSemantics: {
+      exclusiveLeases: true,
+      heartbeatExpiryRecovery: "retry_with_checkpoint_cursor",
+      retryBackoff: "deterministic_exponential_with_jitter",
+      deadLetters: "operator_visible_isolated_lane",
+      requestDeadlines: "deadline_checked_before_lease_and_before_ack",
+      perSourceConcurrency: "never_bypassed_by_priority_aging"
+    },
+    fairnessProof: {
+      dimensions: ["tenant", "query_class", "source_family", "workload", "restricted_policy_state"],
+      worstShare: Number(worstShare.toFixed(4)),
+      ok: worstShare >= 0.05 && decision !== "rollback",
+      priorityAgingEverySeconds: Math.min(...input.workerQueueCutover.partitions.map((partition) => Math.max(30, Math.floor(partition.maxQueueAgeSeconds / 4)))),
+      lowValueSweepsDeferred: true,
+      publicPollingProtected: true,
+      workloadShares
+    },
+    pressureFixtures: [
+      { scenario: "apt29_actor_burst", trigger: "actor_burst", expectedSchedulerAction: "reuse_active_run", agent09VisibleStatus: "attached_to_active_run", agent10ReleaseImpact: "none" },
+      { scenario: "public_channel_fanout", trigger: "fanout", expectedSchedulerAction: "reserve_interactive_capacity", agent09VisibleStatus: "deferred_by_queue_pressure", agent10ReleaseImpact: "watch" },
+      { scenario: "restricted_metadata_holds", trigger: "approval_hold", expectedSchedulerAction: "hold_restricted_metadata", agent09VisibleStatus: "blocked_by_policy", agent10ReleaseImpact: "watch" },
+      { scenario: "evidence_replay_backlog", trigger: "replay_backlog", expectedSchedulerAction: "drain_replay", agent09VisibleStatus: "deferred_by_budget", agent10ReleaseImpact: "none" },
+      { scenario: "graph_export_wave", trigger: "export_wave", expectedSchedulerAction: "drain_graph_export", agent09VisibleStatus: "deferred_by_budget", agent10ReleaseImpact: "none" },
+      { scenario: "source_outage_wave", trigger: "source_outage", expectedSchedulerAction: "source_backoff", agent09VisibleStatus: "deferred_by_source_backoff", agent10ReleaseImpact: "hold" },
+      { scenario: "parser_failure_storm", trigger: "parser_failure", expectedSchedulerAction: "retry_then_dead_letter", agent09VisibleStatus: "deferred_by_source_backoff", agent10ReleaseImpact: "hold" },
+      { scenario: "low_value_sweep_pressure", trigger: "capacity_pressure", expectedSchedulerAction: "defer_low_value_sweeps", agent09VisibleStatus: "deferred_by_budget", agent10ReleaseImpact: "none" }
+    ],
+    routeContracts: {
+      frontierStatusField: "scheduler.workerLeaseSoakHarness",
+      frontierApplyPlanField: "applyPlan.workerLeaseSoakHarness",
+      searchSchedulerField: "scheduler.workerLeaseSoakHarness",
+      contractsField: "surfaces.frontier.contracts.worker_lease_soak_harness"
+    },
+    releaseGate: {
+      decision,
+      reasons,
+      proofCommands: [
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check",
+        "bun run check:route-inventory",
+        "bun run check:contract-index",
+        "bun run check:api-regression"
+      ]
+    }
+  };
+}
+
 export function buildSchedulerProductionAdapterTelemetry(input: {
   queueEconomics: SchedulerQueueEconomicsDto;
   runtimeExecution: SchedulerRuntimeExecutionDto;
@@ -1289,8 +1478,1506 @@ export function buildSchedulerCanaryControlPlane(input: {
   };
 }
 
+export function buildSchedulerDurableBackendReadiness(input: {
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  runtimeSla: SchedulerRuntimeSlaDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  workerSoakMigration: SchedulerWorkerSoakMigrationDto;
+  productionAdapterTelemetry: SchedulerProductionAdapterTelemetryDto;
+  canaryControlPlane: SchedulerCanaryControlPlaneDto;
+  now?: Date;
+}): SchedulerDurableBackendReadinessDto {
+  const now = input.now ?? new Date();
+  const runReuseRatio = input.runtimeSla.metrics.find((metric) => metric.name === "run_reuse")?.value ?? input.workerSoakMigration.aggregate.runReuseRatio;
+  const duplicatePublicPollingRatio = input.workerSoakMigration.aggregate.duplicatePublicPollingRatio;
+  const emergencyBrakeState: SchedulerDurableBackendReadinessDto["emergencyBrake"]["state"] =
+    input.slaEnforcement.state === "rollback" || input.workerSoakMigration.aggregate.state === "rollback" || input.canaryControlPlane.agent10ReleaseDecision.decision === "rollback"
+      ? "engaged"
+      : input.slaEnforcement.state === "hold" || input.workerSoakMigration.aggregate.state === "hold" || input.canaryControlPlane.agent10ReleaseDecision.decision === "hold"
+        ? "armed"
+        : "clear";
+  const drainState: SchedulerDurableBackendReadinessDto["drainPlan"]["state"] =
+    input.productionAdapterTelemetry.telemetry.drainProgress.some((item) => item.state === "blocked")
+      ? "blocked"
+      : input.productionAdapterTelemetry.telemetry.drainProgress.some((item) => item.state === "in_progress")
+        ? "in_progress"
+        : input.productionAdapterTelemetry.telemetry.drainProgress.some((item) => item.state === "planned")
+          ? "planned"
+          : "not_needed";
+  const releaseDecision: SchedulerDurableBackendReadinessDto["releaseGate"]["decision"] =
+    emergencyBrakeState === "engaged" ? "rollback" : emergencyBrakeState === "armed" || drainState === "blocked" ? "hold" : "pass";
+  const releaseReasons = uniqueStrings([
+    input.slaEnforcement.state,
+    input.workerSoakMigration.aggregate.state,
+    input.canaryControlPlane.agent10ReleaseDecision.decision,
+    ...(input.queueEconomics.totals.retryDebt > input.workerSoakMigration.aggregate.retryDebtThreshold ? ["retry_debt_over_budget"] : []),
+    ...(input.queueEconomics.totals.deadLetters > input.workerSoakMigration.aggregate.deadLetterBudget ? ["dead_letters_over_budget"] : []),
+    ...(input.runtimeExecution.pollingDeltas.cursorContinuity === "waiting_for_deltas" ? ["cursor_waiting_for_delta_replay"] : [])
+  ]).filter((reason) => !["pass", "canary-ready"].includes(reason));
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search.scheduler", "/v1/contracts", "agent09_public_wrapper", "agent10_release_train"],
+    dryRun: true,
+    willMutate: false,
+    backendContracts: buildDurableBackendContracts(input.productionAdapterTelemetry),
+    fairnessLanes: input.workerQueueCutover.partitions.map(buildDurableFairnessLane),
+    semanticInvariants: [
+      "fairness and per-source concurrency are evaluated before leases are granted",
+      "retry and dead-letter transitions preserve source, tenant, run, and cursor lineage",
+      "3-second public polling hints never enqueue duplicate work when an active reuse key exists",
+      "public wrapper cursors advance only after replayable scheduler deltas exist",
+      "dry-run cutover, canary, drain, and rollback packets never mutate queue state",
+      "restricted metadata lanes remain metadata-only and approval-gated across every backend"
+    ],
+    pollingContract: {
+      nextPollSeconds: 3 as const,
+      cursorContinuity: input.runtimeExecution.pollingDeltas.cursorContinuity === "waiting_for_deltas" ? "waiting_for_deltas" : "preserved",
+      publicWrapperCursorSemantics: "stable_since_cursor_with_delta_replay"
+    },
+    runReuse: {
+      contract: "duplicate_public_polling_attaches_to_active_run",
+      activeRunReuseRatio: Number(clampRate(runReuseRatio).toFixed(3)),
+      duplicatePublicPollingRatio: Number(clampRate(duplicatePublicPollingRatio).toFixed(3))
+    },
+    drainPlan: {
+      state: drainState,
+      preservesCursorReplayState: true,
+      actions: Array.from(new Set(input.workerQueueCutover.partitions.map((partition) => partition.drainBehavior))),
+      abandonClientPolicy: "cancel_or_reuse_without_losing_run_cursor"
+    },
+    emergencyBrake: {
+      state: emergencyBrakeState,
+      preservesCursorReplayState: true,
+      releaseCriteria: [
+        "queue age p99 is back under every affected partition budget",
+        "retry debt and dead-letter growth are below release thresholds",
+        "cursor replay state is preserved for public polling and active runs",
+        "restricted metadata approvals remain isolated from clear-web fanout"
+      ]
+    },
+    releaseGate: {
+      decision: releaseDecision,
+      reasons: releaseReasons.length > 0 ? releaseReasons : ["all_scheduler_backend_readiness_gates_clear"],
+      proofCommands: [
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check",
+        "bun run check:route-inventory",
+        "bun run check:frontier-apply-plan",
+        "bun run rehearse:cutover examples/cutover-rehearsal-pass.json",
+        "bun run plan:cutover examples/cutover-rehearsal-pass.json"
+      ]
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.durableBackendReadiness",
+      frontierApplyPlanField: "applyPlan.durableBackendReadiness",
+      searchSchedulerField: "scheduler.durableBackendReadiness",
+      contractsField: "surfaces.frontier.contracts.durable_backend_readiness"
+    }
+  };
+}
+
+export function buildSchedulerFreshnessSloEngine(input: {
+  plan: CollectionPlan;
+  sources?: SourceRecord[];
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  durableBackendReadiness: SchedulerDurableBackendReadinessDto;
+  now?: Date;
+}): SchedulerFreshnessSloEngineDto {
+  const now = input.now ?? new Date();
+  const queryClass = schedulerFreshnessQueryClass(input.plan);
+  const profile = freshnessProfileForQueryClass(queryClass);
+  const analystPriority = analystPriorityScore(input.plan.request.priority);
+  const sourceById = new Map((input.sources ?? []).map((source) => [source.id, source]));
+  const tasks = [...input.plan.tasks, ...input.plan.reviewRequired];
+  const sourceCadenceHints = tasks.length > 0
+    ? tasks.map((task) => sourceCadenceHintForTask({
+      task,
+      source: sourceById.get(task.sourceId),
+      queryClass,
+      profile,
+      analystPriority,
+      queueEconomics: input.queueEconomics,
+      slaEnforcement: input.slaEnforcement,
+      now
+    }))
+    : [];
+  const pressureState: SchedulerFreshnessSloEngineDto["queuePressureBehavior"]["state"] =
+    input.slaEnforcement.state === "rollback" || input.durableBackendReadiness.emergencyBrake.state === "engaged"
+      ? "emergency_brake"
+      : input.slaEnforcement.state === "warning" || input.slaEnforcement.state === "hold" || input.queueEconomics.totals.retryDebt > 0
+        ? "degraded"
+        : "normal";
+  const recommendedCadenceSeconds = sourceCadenceHints.length > 0
+    ? Math.round(sourceCadenceHints.reduce((sum, hint) => sum + hint.recommendedCadenceSeconds, 0) / sourceCadenceHints.length)
+    : profile.targetFreshnessSeconds;
+  const retryAfterSeconds = pressureState === "emergency_brake"
+    ? Math.min(300, profile.targetFreshnessSeconds)
+    : pressureState === "degraded"
+      ? Math.max(3, Math.min(60, Math.round(recommendedCadenceSeconds / 8)))
+      : 3;
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/intel/search.scheduler", "/v1/frontier/status", "/v1/intel/runs/{id}", "/v1/contracts", "agent10_slo_runbooks"],
+    dryRun: true,
+    willMutate: false,
+    queryClass,
+    slo: {
+      targetFreshnessSeconds: profile.targetFreshnessSeconds,
+      staleAfterSeconds: profile.staleAfterSeconds,
+      emergencyStaleAfterSeconds: profile.emergencyStaleAfterSeconds,
+      maxQueueAgeSeconds: profile.maxQueueAgeSeconds
+    },
+    cadence: {
+      minCadenceSeconds: profile.minCadenceSeconds,
+      recommendedCadenceSeconds,
+      maxCadenceSeconds: profile.maxCadenceSeconds,
+      analystPriority,
+      sourceHintCount: sourceCadenceHints.length
+    },
+    sourceCadenceHints,
+    queuePressureBehavior: {
+      state: pressureState,
+      retryAfterSeconds,
+      preservesThreeSecondPolling: true,
+      duplicateRunReuse: "required" as const,
+      cursorContinuity: input.runtimeExecution.pollingDeltas.cursorContinuity === "waiting_for_deltas" ? "waiting_for_deltas" : "preserved",
+      degradeActions: freshnessDegradeActions(pressureState)
+    },
+    fairnessAging: input.workerQueueCutover.partitions.map((partition) => ({
+      workload: partition.workload,
+      agingBoostEverySeconds: Math.max(30, Math.round(Math.min(partition.maxQueueAgeSeconds, profile.maxQueueAgeSeconds) / 6)),
+      maxBoost: Number(Math.min(0.35, analystPriority * 0.2 + 0.1).toFixed(3)),
+      preservesPerSourceConcurrency: true
+    })),
+    handoffs: {
+      agent01SourceGovernance: ["source reliability and legal/governance state influence cadence but never silently activate sources"],
+      agent04PublicCoverage: ["coverage gaps and public advisory/source-family hints can raise cadence for stale high-value classes"],
+      agent06EvidenceYield: ["evidence yield feeds cadence hints and dead-letter review without exposing raw captures"],
+      agent07ActorFreshness: ["actor freshness, contradiction, and stale-answer gates can request higher priority aging"],
+      agent09ApiPolling: ["3-second polling semantics and duplicate run reuse stay stable under queue pressure"],
+      agent10Runbooks: ["emergency brake, retry-after, and drain states are route-visible for SLO runbooks"]
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.freshnessSloEngine",
+      searchSchedulerField: "scheduler.freshnessSloEngine",
+      runStatusField: "scheduler.freshnessSloEngine",
+      contractsField: "surfaces.frontier.contracts.freshness_slo_engine"
+    }
+  };
+}
+
+export function buildSchedulerFreshnessSloDashboard(input: {
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  freshnessSloEngine: SchedulerFreshnessSloEngineDto;
+  workerLeaseSoakHarness?: SchedulerWorkerLeaseSoakHarnessDto;
+  now?: Date;
+}): SchedulerFreshnessSloDashboardDto {
+  const now = input.now ?? new Date();
+  const baseQueueAge = input.queueEconomics.totals.maxQueuedAgeSeconds;
+  const sourceOutagePressure = input.workerLeaseSoakHarness?.pressureFixtures.some((fixture) => fixture.scenario === "source_outage_wave") ?? false;
+  const actorProfiles: Array<{
+    actor: SchedulerFreshnessSloDashboardActor["actor"];
+    priority: SchedulerFreshnessSloDashboardActor["priority"];
+    queryClass: SchedulerFreshnessSloDashboardActor["queryClass"];
+    multiplier: number;
+    partition: SchedulerWorkerWorkload;
+  }> = [
+    { actor: "APT29", priority: "daily", queryClass: "actor", multiplier: 0.78, partition: "interactive_actor_search" },
+    { actor: "APT42", priority: "daily", queryClass: "actor", multiplier: 0.86, partition: "interactive_actor_search" },
+    { actor: "Sandworm", priority: "daily", queryClass: "actor", multiplier: 1.08, partition: "interactive_actor_search" },
+    { actor: "Volt Typhoon", priority: "daily", queryClass: "actor", multiplier: 0.94, partition: "public_channel_window" },
+    { actor: "Lazarus", priority: "weekly", queryClass: "actor", multiplier: 1.22, partition: "scheduled_source_sweep" },
+    { actor: "Scattered Spider", priority: "weekly", queryClass: "actor", multiplier: 0.72, partition: "public_channel_window" },
+    { actor: "LockBit", priority: "weekly", queryClass: "ransomware", multiplier: 1.36, partition: "restricted_metadata_approval" },
+    { actor: "Akira", priority: "weekly", queryClass: "ransomware", multiplier: 1.52, partition: "restricted_metadata_approval" }
+  ];
+  const targetByPriority = (priority: SchedulerFreshnessSloDashboardActor["priority"]) =>
+    priority === "daily"
+      ? input.freshnessSloEngine.slo.targetFreshnessSeconds
+      : Math.max(input.freshnessSloEngine.slo.targetFreshnessSeconds * 3, 7 * 24 * 3600);
+  const actors: SchedulerFreshnessSloDashboardActor[] = actorProfiles.map((profile, index) => {
+    const targetFreshnessSeconds = targetByPriority(profile.priority);
+    const observedFreshnessSeconds = Math.round(targetFreshnessSeconds * profile.multiplier + baseQueueAge * (index + 1) / 8);
+    const retryDebt = profile.actor === "LockBit" || profile.actor === "Akira"
+      ? Math.max(0, Math.ceil(input.queueEconomics.totals.retryDebt / 3))
+      : Math.max(0, Math.floor(input.queueEconomics.totals.retryDebt / 8));
+    const deadLetters = profile.partition === "restricted_metadata_approval"
+      ? Math.max(0, Math.ceil(input.queueEconomics.totals.deadLetters / 2))
+      : Math.max(0, Math.floor(input.queueEconomics.totals.deadLetters / 10));
+    const queueAgeSeconds = Math.max(0, Math.round(baseQueueAge * profile.multiplier));
+    const pressureState = input.freshnessSloEngine.queuePressureBehavior.state;
+    const state: SchedulerFreshnessSloDashboardActor["state"] = pressureState === "emergency_brake"
+      ? "blocked"
+      : deadLetters > 0 && profile.partition === "restricted_metadata_approval"
+        ? "blocked"
+        : observedFreshnessSeconds >= targetFreshnessSeconds * 1.25 || queueAgeSeconds > input.freshnessSloEngine.slo.maxQueueAgeSeconds
+          ? "stale"
+          : observedFreshnessSeconds >= targetFreshnessSeconds * 0.9 || retryDebt > 0
+            ? "aging"
+            : "fresh";
+    const schedulerAction: SchedulerFreshnessSloDashboardActor["schedulerAction"] = state === "blocked"
+      ? profile.partition === "restricted_metadata_approval" ? "hold_for_review" : "emergency_brake"
+      : state === "stale"
+        ? "raise_priority"
+        : state === "aging"
+          ? "collect_now"
+          : profile.partition === "public_channel_window"
+            ? "reuse_active_run"
+            : "defer_low_value_work";
+    return {
+      actor: profile.actor,
+      priority: profile.priority,
+      queryClass: profile.queryClass,
+      state,
+      targetFreshnessSeconds,
+      observedFreshnessSeconds,
+      queueAgeSeconds,
+      retryDebt,
+      deadLetters,
+      nextPollSeconds: 3 as const,
+      duplicateRunReuse: "required" as const,
+      schedulerAction,
+      workerPartition: profile.partition,
+      cadenceReason: sourceOutagePressure && state !== "fresh"
+        ? `${freshnessDashboardCadenceReason(state, profile.partition)}; soak harness covers source-outage pressure`
+        : freshnessDashboardCadenceReason(state, profile.partition)
+    };
+  });
+  const staleCount = actors.filter((actor) => actor.state === "stale").length;
+  const blockedCount = actors.filter((actor) => actor.state === "blocked").length;
+  const decision: SchedulerFreshnessSloDashboardDto["releaseGate"]["decision"] = input.freshnessSloEngine.queuePressureBehavior.state === "emergency_brake" || blockedCount >= 3
+    ? "rollback"
+    : staleCount > 0 || blockedCount > 0 || input.slaEnforcement.state === "hold"
+      ? "hold"
+      : "pass";
+  const actionForWorkload = (workload: SchedulerWorkerWorkload): SchedulerFreshnessSloDashboardDto["workloadActions"][number]["action"] => {
+    if (actors.some((actor) => actor.workerPartition === workload && actor.state === "blocked")) return workload === "restricted_metadata_approval" ? "hold_restricted_metadata" : "dead_letter_review";
+    if (actors.some((actor) => actor.workerPartition === workload && actor.state === "stale")) return "raise_priority_aging";
+    if (workload === "retention" || workload === "scheduled_source_sweep" || workload === "graph_export") return "drain_background";
+    if (workload === "interactive_actor_search" || workload === "public_channel_window") return "reserve_capacity";
+    return "no_action";
+  };
+  const workloadActions = input.workerQueueCutover.partitions.map((partition) => ({
+    workload: partition.workload,
+    action: actionForWorkload(partition.workload),
+    reason: freshnessDashboardWorkloadReason(actionForWorkload(partition.workload)),
+    reservedWorkerSlots: partition.reservedWorkerSlots,
+    maxQueueAgeSeconds: partition.maxQueueAgeSeconds
+  }));
+  const reasons = [
+    ...(staleCount > 0 ? ["high_priority_actor_freshness_stale"] : []),
+    ...(blockedCount > 0 ? ["high_priority_actor_freshness_blocked"] : []),
+    ...(input.queueEconomics.totals.retryDebt > 0 ? ["retry_debt_visible_on_dashboard"] : []),
+    ...(input.queueEconomics.totals.deadLetters > 0 ? ["dead_letters_visible_on_dashboard"] : []),
+    ...(decision === "pass" ? ["high_priority_actor_freshness_within_slo"] : [])
+  ];
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts", "agent10_slo_dashboard"],
+    dryRun: true,
+    willMutate: false,
+    schemaVersion: "ti.scheduler_freshness_slo_dashboard.v1",
+    summary: {
+      actorCount: actors.length,
+      staleCount,
+      blockedCount,
+      dailyDueCount: actors.filter((actor) => actor.priority === "daily" && actor.state !== "fresh").length,
+      weeklyDueCount: actors.filter((actor) => actor.priority === "weekly" && actor.state !== "fresh").length,
+      queueAgeP95Seconds: input.queueEconomics.totals.maxQueuedAgeSeconds,
+      retryDebt: input.queueEconomics.totals.retryDebt,
+      deadLetters: input.queueEconomics.totals.deadLetters,
+      publicPollingProtected: true
+    },
+    actors,
+    workloadActions,
+    runbook: {
+      publicApiBehavior: "return_status_with_three_second_polling",
+      duplicateRunReuse: "required_before_enqueue",
+      lowValueSweeps: "defer_before_actor_starvation",
+      restrictedMetadata: "metadata_only_holds_do_not_block_clear_web",
+      emergencyBrake: "pause_new_leases_preserve_cursors"
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.freshnessSloDashboard",
+      searchSchedulerField: "scheduler.freshnessSloDashboard",
+      runStatusField: "scheduler.freshnessSloDashboard",
+      contractsField: "surfaces.frontier.contracts.scheduler_freshness_slo_dashboard"
+    },
+    releaseGate: {
+      decision,
+      reasons,
+      proofCommands: [
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check",
+        "bun run check:route-inventory",
+        "bun run check:contract-index",
+        "bun run check:api-regression"
+      ]
+    }
+  };
+}
+
+export function buildSchedulerInteractiveSearchFreshness(input: {
+  plan: CollectionPlan;
+  run?: CollectionRun;
+  attachedToActiveRun?: boolean;
+  freshnessSloEngine: SchedulerFreshnessSloEngineDto;
+  freshnessSloDashboard: SchedulerFreshnessSloDashboardDto;
+  queueEconomics: SchedulerQueueEconomicsDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  fairnessGovernance: SchedulerFairnessGovernanceDto;
+  now?: Date;
+}): SchedulerInteractiveSearchFreshnessDto {
+  const now = input.now ?? new Date();
+  const normalizedQuery = input.plan.request.query.trim().toLowerCase();
+  const actorMatch = input.freshnessSloDashboard.actors.find((actor) => normalizedQuery.includes(actor.actor.toLowerCase()));
+  const configuredActor = input.freshnessSloEngine.queryClass === "actor" && !actorMatch && normalizedQuery.length > 0;
+  const interactivePartition = input.workerQueueCutover.partitions.find((partition) => partition.workload === "interactive_actor_search")
+    ?? input.workerQueueCutover.partitions[0];
+  const backgroundDeferredWorkloads = input.freshnessSloDashboard.workloadActions
+    .filter((action) => action.action === "drain_background" || action.action === "raise_priority_aging")
+    .map((action) => action.workload);
+  const observedFreshnessSeconds = actorMatch?.observedFreshnessSeconds
+    ?? Math.round(input.freshnessSloEngine.slo.targetFreshnessSeconds * (configuredActor ? 1.1 : 0.75));
+  const targetFreshnessSeconds = actorMatch?.targetFreshnessSeconds ?? input.freshnessSloEngine.slo.targetFreshnessSeconds;
+  const emergency = input.freshnessSloEngine.queuePressureBehavior.state === "emergency_brake"
+    || input.fairnessGovernance.releaseGate.decision === "rollback";
+  const held = actorMatch?.state === "blocked" || input.plan.reviewRequired.length > 0;
+  const stale = actorMatch?.state === "stale" || observedFreshnessSeconds > targetFreshnessSeconds || input.queueEconomics.totals.maxQueuedAgeSeconds > input.freshnessSloEngine.slo.maxQueueAgeSeconds;
+  const aging = actorMatch?.state === "aging" || observedFreshnessSeconds >= Math.round(targetFreshnessSeconds * 0.75) || input.queueEconomics.totals.retryDebt > 0;
+  const attachedToActiveRun = Boolean(input.attachedToActiveRun || input.run?.status === "running");
+  const decision: SchedulerInteractiveSearchFreshnessDto["queueDecision"]["decision"] = emergency
+    ? "emergency_hold"
+    : held
+      ? "metadata_review_hold"
+      : attachedToActiveRun
+        ? "reuse_active_run"
+        : stale
+          ? "raise_priority"
+          : aging || actorMatch || configuredActor
+            ? "enqueue_interactive_refresh"
+            : "serve_partial_and_poll";
+  const freshnessState: SchedulerInteractiveSearchFreshnessDto["currentQuery"]["freshnessState"] = emergency || held
+    ? "held"
+    : stale
+      ? "stale"
+      : aging
+        ? "aging"
+        : "fresh";
+  const uiState: SchedulerInteractiveSearchFreshnessDto["uiSignals"]["state"] = emergency
+    ? "degraded"
+    : held
+      ? "metadata_review"
+      : input.run?.status === "completed"
+        ? "ready"
+        : input.run || actorMatch || configuredActor
+          ? "partial"
+          : "searching";
+  const badgeSet = uniqueStrings([
+    "source_freshness",
+    ...(input.queueEconomics.totals.maxQueuedAgeSeconds > 0 ? ["queue_age"] : []),
+    ...(attachedToActiveRun ? ["active_run_reuse"] : []),
+    ...(stale || aging ? ["priority_aging"] : []),
+    ...(input.queueEconomics.totals.retryDebt > 0 ? ["retry_backoff"] : []),
+    ...(input.queueEconomics.totals.deadLetters > 0 ? ["dead_letter_review"] : []),
+    ...(held ? ["restricted_metadata_hold"] : []),
+    ...(backgroundDeferredWorkloads.length > 0 ? ["background_deferred"] : [])
+  ]) as SchedulerInteractiveSearchFreshnessDto["uiSignals"]["badges"];
+  const decisionReason: Record<SchedulerInteractiveSearchFreshnessDto["queueDecision"]["decision"], string> = {
+    reuse_active_run: "Existing tenant/query reuse key is active, so polling attaches to the current run before any enqueue.",
+    enqueue_interactive_refresh: "Interactive actor freshness is due but within safe pressure limits, so schedule the actor lane with protected polling.",
+    raise_priority: "High-value actor freshness or queue age breached target, so raise priority aging before background sweeps.",
+    serve_partial_and_poll: "No query-specific freshness breach is known yet; keep honest searching/partial state and poll every three seconds.",
+    metadata_review_hold: "Restricted or review-required metadata is held without blocking clear-web polling or duplicate run reuse.",
+    emergency_hold: "Emergency brake or fairness rollback state pauses new leases while preserving cursors and visible run reuse."
+  };
+  const releaseDecision: SchedulerInteractiveSearchFreshnessDto["releaseGate"]["decision"] = emergency
+    ? "rollback"
+    : held || stale || input.fairnessGovernance.releaseGate.decision === "hold"
+      ? "hold"
+      : "pass";
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts", "frontend_ti_progressive_update"],
+    dryRun: true,
+    willMutate: false,
+    schemaVersion: "ti.scheduler_interactive_search_freshness.v1",
+    currentQuery: {
+      query: input.plan.request.query,
+      queryClass: input.freshnessSloEngine.queryClass,
+      knownHighValueActor: Boolean(actorMatch || configuredActor),
+      priorityBand: actorMatch?.priority === "daily"
+        ? "urgent_actor"
+        : actorMatch
+          ? "high_value_actor"
+          : configuredActor
+            ? "normal_interactive"
+            : "unknown_searching",
+      targetFreshnessSeconds,
+      observedFreshnessSeconds,
+      freshnessState
+    },
+    queueDecision: {
+      decision,
+      reason: decisionReason[decision],
+      nextPollSeconds: 3,
+      retryAfterSeconds: Math.max(3, input.freshnessSloEngine.queuePressureBehavior.retryAfterSeconds),
+      duplicateRunReuse: "required_before_enqueue",
+      attachedToActiveRun,
+      runId: input.run?.id,
+      interactiveReservedWorkerSlots: interactivePartition?.reservedWorkerSlots ?? 1,
+      maxInteractiveQueueAgeSeconds: interactivePartition?.maxQueueAgeSeconds ?? input.freshnessSloEngine.slo.maxQueueAgeSeconds,
+      deferredBackgroundWorkloads: uniqueStrings(backgroundDeferredWorkloads).filter((workload) => workload !== "interactive_actor_search") as SchedulerWorkerWorkload[]
+    },
+    actorTargets: actorMatch
+      ? [{
+        actor: actorMatch.actor,
+        priority: actorMatch.priority,
+        state: actorMatch.state,
+        targetFreshnessSeconds: actorMatch.targetFreshnessSeconds,
+        observedFreshnessSeconds: actorMatch.observedFreshnessSeconds,
+        schedulerAction: actorMatch.schedulerAction
+      }]
+      : configuredActor
+        ? [{
+          actor: "configured_actor",
+          priority: "on_demand",
+          state: "unknown_searching",
+          targetFreshnessSeconds,
+          observedFreshnessSeconds,
+          schedulerAction: "keep_searching"
+        }]
+        : [],
+    fairnessGuards: {
+      preservesThreeSecondPolling: true,
+      preservesDuplicateRunReuse: true,
+      preservesCursorContinuity: true,
+      backgroundWorkStillAges: true,
+      lowValueSweepsDeferredBeforeActorStarvation: true,
+      restrictedMetadataDoesNotBlockClearWeb: true,
+      perSourceConcurrencyStillApplies: true
+    },
+    uiSignals: {
+      state: uiState,
+      badges: badgeSet,
+      visibleSchedulerFields: ["freshness_state", "queue_decision", "next_poll_seconds", "retry_after_seconds", "duplicate_run_reuse", "deferred_background_workloads", "actor_targets"]
+    },
+    handoffs: {
+      agent04Coverage: ["surface freshness gap remediation when actor target is stale", "keep unknown actors searching until query-specific public evidence exists"],
+      agent06EvidenceReplay: ["request replay only when stale actor fields have durable evidence candidates", "preserve cursor-visible evidence deltas for active run reuse"],
+      agent07QualityFreshness: ["hold stale recent-activity wording until freshness state is fresh or reviewed", "show restricted metadata caveats without promoting raw claims"],
+      agent09FrontendContract: ["render queue decision, freshness state, retry-after, active-run reuse, and deferred workload badges", "do not collapse scheduler state to a flat searching spinner"],
+      agent10Capacity: ["reserve interactive actor slots before broad sweeps", "page on emergency hold or repeated high-value stale actor breaches"]
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.interactiveSearchFreshness",
+      searchSchedulerField: "scheduler.interactiveSearchFreshness",
+      runStatusField: "scheduler.interactiveSearchFreshness",
+      contractsField: "surfaces.frontier.contracts.scheduler_interactive_search_freshness"
+    },
+    releaseGate: {
+      decision: releaseDecision,
+      reasons: uniqueStrings([
+        ...(releaseDecision === "pass" ? ["interactive_freshness_scheduler_ready"] : []),
+        ...(stale ? ["interactive_actor_freshness_stale"] : []),
+        ...(held ? ["metadata_review_hold_visible"] : []),
+        ...(emergency ? ["emergency_hold_preserves_polling"] : []),
+        ...(attachedToActiveRun ? ["duplicate_run_reuse_active"] : [])
+      ]),
+      proofCommands: [
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check",
+        "bun run check:route-inventory",
+        "bun run check:contract-index",
+        "bun run check:api-regression"
+      ]
+    }
+  };
+}
+
+export function buildSchedulerProductionLeaseSemantics(input: {
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  durableBackendReadiness: SchedulerDurableBackendReadinessDto;
+  freshnessSloEngine: SchedulerFreshnessSloEngineDto;
+  now?: Date;
+}): SchedulerProductionLeaseSemanticsDto {
+  const now = input.now ?? new Date();
+  const pressureHold = input.slaEnforcement.state === "hold" || input.slaEnforcement.state === "rollback" || input.durableBackendReadiness.emergencyBrake.state !== "clear";
+  const decision: SchedulerProductionLeaseSemanticsDto["releaseGate"]["decision"] =
+    input.slaEnforcement.state === "rollback" || input.durableBackendReadiness.emergencyBrake.state === "engaged"
+      ? "rollback"
+      : pressureHold
+        ? "hold"
+        : "pass";
+  const reasons = uniqueStrings([
+    ...(input.workerQueueCutover.backendCutoverPackets.find((packet) => packet.backend === "postgres_advisory_queue")?.readiness === "ready_for_rehearsal" ? [] : ["postgres_cutover_not_ready"]),
+    ...(input.queueEconomics.totals.deadLetters > 0 ? ["dead_letter_review_required"] : []),
+    ...(input.queueEconomics.totals.retryDebt > 0 ? ["retry_debt_before_cutover"] : []),
+    ...(input.freshnessSloEngine.queuePressureBehavior.state === "emergency_brake" ? ["freshness_emergency_brake"] : [])
+  ]);
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/intel/search.scheduler", "/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/contracts", "agent10_release_artifacts"],
+    dryRun: true,
+    willMutate: false,
+    currentBackend: "embedded_memory",
+    primaryTargetBackend: "postgres_advisory_queue",
+    futureBackends: ["redis_streams", "nats_jetstream"],
+    postgresContract: {
+      tables: ["frontier_tasks", "frontier_leases", "frontier_events", "crawl_budgets", "run_reuse_keys", "frontier_dead_letters"],
+      enqueue: "insert frontier_tasks and frontier_events in one transaction after budget, source backoff, and reuse-key checks",
+      lease: "select eligible tasks with FOR UPDATE SKIP LOCKED, reserve crawl budget, write frontier_leases, and append lease event before worker visibility",
+      heartbeat: "extend lease_expires_at only for the owning worker and append heartbeat/checkpoint progress",
+      acknowledge: "close lease and append completion event idempotently after capture/export/probe side effects are durable",
+      retry: "increment retry count, compute deterministic next availability, release lease, and preserve cursor-visible retry event",
+      deadLetter: "move exhausted work to frontier_dead_letters with source/backoff reason and safe operator fields",
+      duplicateRunReuse: "unique tenant/query/reuse key attaches duplicate actor/public polls to the active run before enqueue",
+      cursorReplay: "frontier_events_cursor_replay_required",
+      emergencyBrake: "stop new leases, preserve active checkpoints, keep run reuse responses and public polling cursors available",
+      workerShutdown: "drain by pausing new leases, checkpointing active leases, then letting finite leases expire or acknowledge safely"
+    },
+    leaseLifecycle: buildProductionLeaseLifecycle(),
+    cutoverPhases: buildProductionQueueCutoverPhases(input),
+    fairness: {
+      tenantIsolation: "tenant_then_reuse_key_then_source_family",
+      noisySourcePolicy: "cap_and_age_without_starving_live_search",
+      lowValueSweepPolicy: "bounded_under_pressure",
+      priorityAging: input.freshnessSloEngine.fairnessAging.map((lane) => ({
+        workload: lane.workload,
+        agingBoostEverySeconds: lane.agingBoostEverySeconds,
+        maxBoost: lane.maxBoost
+      }))
+    },
+    safety: {
+      preservesThreeSecondPolling: true,
+      duplicateActorQueryRunsSuppressed: true,
+      cursorContinuity: "preserved",
+      dryRunApplyPlanOnly: true,
+      restrictedMetadataRemainsApprovalGated: true
+    },
+    releaseGate: {
+      decision,
+      reasons: reasons.length > 0 ? reasons : ["postgres_queue_cutover_semantics_ready_for_rehearsal"],
+      proofCommands: [
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check",
+        "bun run check:frontier-apply-plan",
+        "bun run check:route-inventory",
+        "bun run check:contract-index"
+      ]
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.productionLeaseSemantics",
+      frontierApplyPlanField: "applyPlan.productionLeaseSemantics",
+      contractsField: "surfaces.frontier.contracts.production_queue_lease_semantics"
+    }
+  };
+}
+
+export function buildSchedulerFairnessGovernance(input: {
+  plan: CollectionPlan;
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  durableBackendReadiness: SchedulerDurableBackendReadinessDto;
+  freshnessSloEngine: SchedulerFreshnessSloEngineDto;
+  productionLeaseSemantics: SchedulerProductionLeaseSemanticsDto;
+  now?: Date;
+}): SchedulerFairnessGovernanceDto {
+  const now = input.now ?? new Date();
+  const tenantIds = uniqueStrings([
+    input.plan.tenantId ?? "default",
+    ...input.plan.tasks.map((task) => task.tenantId ?? input.plan.tenantId),
+    ...input.plan.reviewRequired.map((task) => task.tenantId ?? input.plan.tenantId)
+  ]);
+  const queryClasses = schedulerBudgetQueryClasses(input.plan);
+  const lanes = tenantIds.flatMap((tenantId) =>
+    queryClasses.map((queryClass) => schedulerTenantBudgetLane({
+      tenantId,
+      queryClass,
+      queueEconomics: input.queueEconomics,
+      runtimeExecution: input.runtimeExecution,
+      slaEnforcement: input.slaEnforcement,
+      freshnessSloEngine: input.freshnessSloEngine
+    }))
+  );
+  const pressure = input.slaEnforcement.state === "warning" || input.slaEnforcement.state === "hold" || input.queueEconomics.totals.retryDebt > 0 || input.queueEconomics.fairness.ok === false;
+  const emergency = input.slaEnforcement.state === "rollback" || input.durableBackendReadiness.emergencyBrake.state === "engaged" || input.productionLeaseSemantics.releaseGate.decision === "rollback";
+  const decision: SchedulerFairnessGovernanceDto["releaseGate"]["decision"] = emergency
+    ? "rollback"
+    : pressure || lanes.some((lane) => lane.state === "pressure" || lane.state === "throttled" || lane.state === "emergency_hold")
+      ? "hold"
+      : "pass";
+  const reasons = uniqueStrings([
+    ...(input.queueEconomics.fairness.ok ? [] : ["per_source_fairness_slo_breached"]),
+    ...(input.queueEconomics.totals.retryDebt > 0 ? ["retry_debt_before_budget_promotion"] : []),
+    ...(input.queueEconomics.totals.deadLetters > 0 ? ["dead_letters_excluded_from_interactive_budget"] : []),
+    ...(input.runtimeExecution.sourceActivationBudgetGuard.state === "within_budget" ? [] : ["source_activation_budget_guard_active"]),
+    ...(input.productionLeaseSemantics.safety.preservesThreeSecondPolling ? [] : ["polling_semantics_not_preserved"]),
+    ...(emergency ? ["emergency_brake_holds_new_leases"] : [])
+  ]);
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/intel/search.scheduler", "/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/runs/{id}", "/v1/contracts", "agent10_capacity_artifacts"],
+    dryRun: true,
+    willMutate: false,
+    tenants: {
+      defaultTenantId: input.plan.tenantId ?? "default",
+      isolationKey: "tenant:queryClass:reuseKey:sourceFamily",
+      crossTenantBorrowing: "disabled_until_budget_headroom",
+      noisyTenantPolicy: "cap_retry_debt_and_preserve_live_polling"
+    },
+    queryClassBudgets: lanes,
+    workloadFairness: input.workerQueueCutover.partitions.map((partition) => ({
+      workload: partition.workload,
+      reservedWorkerSlots: partition.reservedWorkerSlots,
+      maxConcurrentLeases: partition.maxConcurrentLeases,
+      agingBoostEverySeconds: Math.max(30, Math.round(partition.maxQueueAgeSeconds / 6)),
+      queuePressureAction: schedulerWorkloadPressureAction(partition.workload, pressure, emergency),
+      preservesThreeSecondPolling: true
+    })),
+    priorityAging: lanes.map((lane) => ({
+      queryClass: lane.queryClass,
+      workClass: lane.workClass,
+      agingBoostEverySeconds: lane.agingBoostEverySeconds,
+      maxBoost: lane.workClass === "interactive_live_search" || lane.workClass === "analyst_deep_dive" ? 0.45 : 0.25,
+      neverBypassPerSourceConcurrency: true
+    })),
+    pressurePolicy: {
+      publicPolling: "always_return_status_with_three_second_hint",
+      duplicateRunReuse: "required_before_enqueue",
+      retryBackoff: "deterministic_per_tenant_query_source",
+      deadLetterReuse: "dead_letters_do_not_consume_interactive_budget",
+      emergencyBrake: "pause_new_leases_preserve_cursors_and_reuse",
+      lowValueSweeps: "bounded_and_deferred_before_interactive_starvation",
+      workerDrain: "drain_noninteractive_first_preserve_replay"
+    },
+    fairnessSlo: {
+      worstSourceShare: input.queueEconomics.fairness.worstShare,
+      maxAllowedSourceShare: DEFAULT_SCHEDULER_EXECUTION_SLO.perSourceFairnessWorstShare,
+      ok: input.queueEconomics.fairness.ok,
+      noisySources: input.runtimeExecution.bySource.filter((source) => source.noisy).map((source) => source.sourceId).slice(0, 8),
+      retryAfterSeconds: Math.max(3, Math.max(...lanes.map((lane) => lane.retryAfterSeconds)))
+    },
+    handoffs: {
+      agent01SourceActivation: ["source activation waves consume source_health_probe and broad_daily_sweep budget only after tenant headroom is green"],
+      agent03AdapterCertification: ["adapter repair queues receive bounded budget and never preempt active actor/victim public searches"],
+      agent04PublicExpansion: ["public expansion windows are throttled by source-family fairness and noisy-source caps"],
+      agent06EvidenceReplay: ["evidence replay and retention are reserved but drained behind live polling under pressure"],
+      agent07Quality: ["quality or freshness review can raise aging boosts without bypassing per-source concurrency"],
+      agent09ApiContracts: ["status, run, and apply-plan routes expose retry-after, budget state, and duplicate reuse semantics"],
+      agent10Capacity: ["capacity packets can promote only when tenant lanes, retry debt, and emergency brake state are green"]
+    },
+    releaseGate: {
+      decision,
+      reasons: reasons.length > 0 ? reasons : ["multi_tenant_budget_fairness_governance_ready"],
+      proofCommands: [
+        "bun run check",
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check:route-inventory",
+        "bun run check:contract-index"
+      ]
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.fairnessGovernance",
+      frontierApplyPlanField: "applyPlan.fairnessGovernance",
+      runStatusField: "scheduler.fairnessGovernance",
+      contractsField: "surfaces.frontier.contracts.multi_tenant_fairness_governance"
+    }
+  };
+}
+
+export function buildSchedulerPersistenceReplayCutover(input: {
+  plan: CollectionPlan;
+  runs?: CollectionRun[];
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  productionLeaseSemantics: SchedulerProductionLeaseSemanticsDto;
+  fairnessGovernance: SchedulerFairnessGovernanceDto;
+  now?: Date;
+}): SchedulerPersistenceReplayCutoverDto {
+  const now = input.now ?? new Date();
+  const hasActiveReusableRun = (input.runs ?? []).some((run) =>
+    run.status === "queued" || run.status === "running"
+  );
+  const pressureHold = input.slaEnforcement.state === "hold" ||
+    input.fairnessGovernance.releaseGate.decision === "hold" ||
+    input.productionLeaseSemantics.releaseGate.decision === "hold";
+  const rollback = input.slaEnforcement.state === "rollback" ||
+    input.fairnessGovernance.releaseGate.decision === "rollback" ||
+    input.productionLeaseSemantics.releaseGate.decision === "rollback";
+  const decision: SchedulerPersistenceReplayCutoverDto["releaseGate"]["decision"] = rollback ? "rollback" : pressureHold ? "hold" : "pass";
+  const reasons = uniqueStrings([
+    ...(input.queueEconomics.totals.retryDebt > 0 ? ["retry_state_must_replay_before_cutover"] : []),
+    ...(input.queueEconomics.totals.deadLetters > 0 ? ["dead_letter_context_requires_operator_visible_replay"] : []),
+    ...(hasActiveReusableRun ? ["active_public_runs_require_reuse_key_replay"] : []),
+    ...(input.fairnessGovernance.fairnessSlo.ok ? [] : ["fairness_budget_snapshot_required_before_restart"]),
+    ...(rollback ? ["scheduler_release_gate_rollback"] : [])
+  ]);
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/intel/search.scheduler", "/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/runs/{id}", "/v1/contracts", "agent09_public_api_fields", "agent10_capacity_release_gate"],
+    dryRun: true,
+    willMutate: false,
+    currentBackend: "embedded_memory",
+    primaryTargetBackend: "postgres_scheduler_store",
+    descriptorBackends: ["redis_streams", "nats_jetstream"],
+    postgresContracts: schedulerPersistencePostgresContracts(),
+    replaySemantics: {
+      duplicatePublicActorSearch: "tenant_query_reuse_key_reattaches_to_active_run",
+      refreshAfterSeconds: 3,
+      pollCursor: "restored_from_scheduler_cursor_events",
+      deltaCursor: "restored_from_latest_safe_delta",
+      statusTransitions: ["queued", "running", "metadata_review", "partial", "completed", "failed", "cancelled"],
+      unknownActorPolicy: "searching_only_until_query_matched_evidence",
+      noDefaultActorFallback: true,
+      noStaleCacheReady: true,
+      noGenericLivePromotion: true
+    },
+    restartFixtures: schedulerPersistenceReplayFixtures(input),
+    cutoverPhases: schedulerPersistenceCutoverPhases(),
+    routeContracts: {
+      frontierStatusField: "scheduler.persistenceReplayCutover",
+      frontierApplyPlanField: "applyPlan.persistenceReplayCutover",
+      runStatusField: "scheduler.persistenceReplayCutover",
+      contractsField: "surfaces.frontier.contracts.scheduler_persistence_replay_cutover"
+    },
+    handoffs: {
+      agent09PublicApiFields: ["refreshAfterSeconds=3", "pollCursor", "deltaCursor", "status", "runId", "warningCodes", "duplicateRunReuse"],
+      agent10CapacityReleaseGate: ["restart replay fixture pass", "worker drain replay pass", "emergency brake cursor preservation", "fairness budget snapshot replay", "Postgres store remains disabled until capacity gate passes"]
+    },
+    releaseGate: {
+      decision,
+      reasons: reasons.length > 0 ? reasons : ["scheduler_persistence_replay_cutover_ready_for_rehearsal"],
+      proofCommands: [
+        "bun run check",
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check:route-inventory",
+        "bun run check:contract-index",
+        "bun run check:api-regression"
+      ]
+    }
+  };
+}
+
+function schedulerPersistencePostgresContracts(): SchedulerPersistenceReplayCutoverDto["postgresContracts"] {
+  return [
+    ["scheduler_runs", "durable public and analyst run state", ["tenant_id", "run_id", "reuse_key"], "reattach duplicate public polling and restore run status after restart"],
+    ["frontier_tasks", "queued/completed frontier task state", ["tenant_id", "task_id", "run_id"], "restore queued work, source backoff, deadlines, and budget class"],
+    ["frontier_leases", "finite worker lease ownership", ["task_id", "worker_id", "lease_expires_at"], "recover expired leases and preserve active checkpoint state"],
+    ["worker_heartbeats", "worker liveness and checkpoint cadence", ["worker_id", "task_id", "heartbeat_at"], "distinguish stale worker leases from actively progressing work"],
+    ["scheduler_checkpoints", "task progress and promoted evidence counters", ["task_id", "checkpoint_cursor"], "resume polling state without duplicating side effects"],
+    ["scheduler_cursor_events", "append-only polling and queue transition stream", ["tenant_id", "run_id", "cursor"], "rebuild pollCursor, deltaCursor, and public status transitions"],
+    ["scheduler_retry_dead_letters", "retry debt and dead-letter context", ["task_id", "attempt", "reason_code"], "replay retry/backoff without spending interactive budget"],
+    ["scheduler_fairness_budget_snapshots", "tenant/query/source fairness budgets", ["tenant_id", "query_class", "snapshot_at"], "restore fairness lanes and noisy-source caps before leasing"],
+    ["scheduler_worker_drain_state", "drain and emergency-brake state", ["partition_id", "drain_started_at"], "restart worker drains without losing cursor replay or active run reuse"]
+  ].map(([table, purpose, keyFields, replayRole]) => ({
+    table: table as SchedulerPersistenceReplayCutoverDto["postgresContracts"][number]["table"],
+    purpose: purpose as string,
+    keyFields: keyFields as string[],
+    replayRole: replayRole as string
+  }));
+}
+
+function schedulerPersistenceReplayFixtures(input: {
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  fairnessGovernance: SchedulerFairnessGovernanceDto;
+}): SchedulerPersistenceReplayCutoverDto["restartFixtures"] {
+  const commonRows: SchedulerPersistenceReplayCutoverDto["restartFixtures"][number]["persistedRows"] = ["runs", "frontier_tasks", "cursor_events", "fairness_budget_snapshots"];
+  type RestartFixtureSeed = Omit<SchedulerPersistenceReplayCutoverDto["restartFixtures"][number], "dryRun" | "willMutate" | "preservesThreeSecondPolling" | "preservesCursorContinuity" | "duplicateRunReuseRequired">;
+  const fixtures = [
+    {
+      name: "queued_actor_search_restart",
+      persistedRows: commonRows,
+      replayExpectation: "queued actor search restores run id, queued tasks, refreshAfterSeconds=3, pollCursor, and searching/queued status without creating a new run",
+      expectedStatus: "queued"
+    },
+    {
+      name: "leased_heartbeat_expiry",
+      persistedRows: ["runs", "frontier_tasks", "frontier_leases", "worker_heartbeats", "checkpoints", "cursor_events"],
+      replayExpectation: "expired worker heartbeat releases the lease, keeps the latest checkpoint cursor, and requeues the task with deterministic retry/backoff",
+      expectedStatus: "running"
+    },
+    {
+      name: "restricted_metadata_hold",
+      persistedRows: ["runs", "frontier_tasks", "cursor_events", "fairness_budget_snapshots"],
+      replayExpectation: "restricted metadata-only hold survives restart and remains review-gated without raw payload collection or ready-without-evidence behavior",
+      expectedStatus: "metadata_review"
+    },
+    {
+      name: "dead_letter_retry_replay",
+      persistedRows: ["runs", "frontier_tasks", "retry_dead_letters", "cursor_events", "fairness_budget_snapshots"],
+      replayExpectation: `retry/dead-letter context restores ${input.queueEconomics.totals.retryDebt} retry-debt task(s) without consuming interactive budget`,
+      expectedStatus: "failed"
+    },
+    {
+      name: "duplicate_public_run_reuse",
+      persistedRows: ["runs", "frontier_tasks", "cursor_events", "fairness_budget_snapshots"],
+      replayExpectation: "same tenant/query/reuse key attaches to the active run and preserves refreshAfterSeconds=3, pollCursor, deltaCursor, and status transitions",
+      expectedStatus: "searching"
+    },
+    {
+      name: "worker_drain_restart",
+      persistedRows: ["runs", "frontier_tasks", "frontier_leases", "worker_heartbeats", "checkpoints", "cursor_events", "worker_drain_state"],
+      replayExpectation: `worker drain restores ${input.runtimeExecution.dryRunControls.controls.length} dry-run control(s), pauses noninteractive leases first, and preserves replay cursors`,
+      expectedStatus: "running"
+    },
+    {
+      name: "emergency_brake_restart",
+      persistedRows: ["runs", "frontier_tasks", "frontier_leases", "checkpoints", "cursor_events", "fairness_budget_snapshots", "worker_drain_state"],
+      replayExpectation: `emergency brake resumes with retryAfterSeconds=${input.fairnessGovernance.fairnessSlo.retryAfterSeconds}, no new leases, and active run reuse still available`,
+      expectedStatus: "running"
+    }
+  ] satisfies RestartFixtureSeed[];
+  return fixtures.map((fixture) => ({
+    ...fixture,
+    dryRun: true,
+    willMutate: false,
+    preservesThreeSecondPolling: true,
+    preservesCursorContinuity: true,
+    duplicateRunReuseRequired: true
+  }));
+}
+
+function schedulerPersistenceCutoverPhases(): SchedulerPersistenceReplayCutoverDto["cutoverPhases"] {
+  const mk = (
+    phase: SchedulerPersistenceReplayCutoverDto["cutoverPhases"][number]["phase"],
+    requiredChecks: string[],
+    rollback: string
+  ): SchedulerPersistenceReplayCutoverDto["cutoverPhases"][number] => ({
+    phase,
+    dryRun: true,
+    willMutate: false,
+    requiredChecks,
+    rollback
+  });
+  return [
+    mk("snapshot_embedded", ["embedded queue, runs, cursors, retry debt, dead letters, and fairness budgets are serializable"], "continue embedded memory scheduler and discard the snapshot"),
+    mk("shadow_write_postgres", ["Postgres table contracts accept mirrored rows without becoming the active lease owner"], "stop shadow writes and replay from embedded memory events"),
+    mk("restart_replay_rehearsal", ["all restart fixtures restore pollCursor, deltaCursor, status, queue state, and retry/backoff"], "keep embedded scheduler authoritative"),
+    mk("duplicate_reuse_canary", ["same tenant/query/reuse key reattaches to active run and preserves refreshAfterSeconds=3"], "disable durable reuse-key reads and fall back to embedded run index"),
+    mk("worker_drain_replay", ["drain state, checkpoints, and lease expiry recover without duplicate side effects"], "resume embedded worker drain controls"),
+    mk("cutover_hold_or_promote", ["Agent 09 API fields and Agent 10 capacity gate are green"], "hold promotion until public API and capacity proofs pass"),
+    mk("rollback", ["cursor events replay from the last embedded-authoritative checkpoint"], "restore embedded memory scheduler and replay safe cursor events")
+  ];
+}
+
+export function buildSchedulerPostgresQueueAdapterReadiness(input: {
+  config?: {
+    queueBackend?: "embedded_memory" | "postgres_scheduler_store";
+    postgresQueueEnabled?: boolean;
+    postgresDsnConfigured?: boolean;
+    postgresShadowWritesEnabled?: boolean;
+    postgresLeaseMode?: "disabled" | "shadow" | "active";
+  };
+  persistenceReplayCutover: SchedulerPersistenceReplayCutoverDto;
+  now?: Date;
+}): SchedulerPostgresQueueAdapterReadinessDto {
+  const now = input.now ?? new Date();
+  const requestedBackend = input.config?.queueBackend ?? "embedded_memory";
+  const postgresEnabled = input.config?.postgresQueueEnabled === true;
+  const postgresDsnConfigured = input.config?.postgresDsnConfigured === true;
+  const shadowWritesEnabled = input.config?.postgresShadowWritesEnabled === true;
+  const leaseMode = input.config?.postgresLeaseMode ?? "disabled";
+  const activeBackend = requestedBackend === "postgres_scheduler_store" && postgresEnabled && postgresDsnConfigured && leaseMode === "active"
+    ? "postgres_scheduler_store"
+    : "embedded_memory";
+  const reasons = uniqueStrings([
+    ...(requestedBackend === "postgres_scheduler_store" ? ["postgres_scheduler_store_requested"] : ["embedded_memory_requested"]),
+    ...(!postgresEnabled ? ["postgres_queue_feature_flag_disabled"] : []),
+    ...(postgresEnabled && !postgresDsnConfigured ? ["postgres_dsn_missing_fail_closed"] : []),
+    ...(shadowWritesEnabled ? ["postgres_shadow_writes_do_not_own_leases"] : []),
+    ...(leaseMode === "active" && activeBackend !== "postgres_scheduler_store" ? ["active_lease_mode_blocked_until_dsn_and_executor_ready"] : [])
+  ]);
+  const decision: SchedulerPostgresQueueAdapterReadinessDto["releaseGate"]["decision"] = activeBackend === "postgres_scheduler_store"
+    ? "hold"
+    : "pass";
+
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search.scheduler", "/v1/contracts", "agent10_capacity_release_gate"],
+    backendSelection: {
+      activeBackend,
+      requestedBackend,
+      postgresEnabled,
+      postgresDsnConfigured,
+      shadowWritesEnabled,
+      leaseMode,
+      effectiveLeaseOwner: activeBackend
+    },
+    safety: {
+      disabledByDefault: true,
+      failClosedWithoutDsn: true,
+      failClosedWithoutExecutor: true,
+      noImplicitNetworkDependency: true,
+      embeddedMemoryRemainsAuthoritative: activeBackend === "embedded_memory",
+      publicSearchPollingProtected: true
+    },
+    operationContracts: schedulerPostgresQueueOperationContracts(input.persistenceReplayCutover),
+    preparedStatements: schedulerPostgresQueuePreparedStatements(),
+    routeContracts: {
+      frontierStatusField: "scheduler.postgresQueueAdapter",
+      frontierApplyPlanField: "applyPlan.postgresQueueAdapter",
+      contractsField: "surfaces.frontier.contracts.scheduler_postgres_queue_adapter"
+    },
+    releaseGate: {
+      decision,
+      reasons,
+      proofCommands: [
+        "bun run check",
+        "bun test src/tests/config.test.ts src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check:contract-index",
+        "bun run check:api-regression"
+      ]
+    }
+  };
+}
+
+function schedulerPostgresQueueOperationContracts(
+  persistenceReplayCutover: SchedulerPersistenceReplayCutoverDto
+): SchedulerPostgresQueueAdapterReadinessDto["operationContracts"] {
+  const knownTables = new Set(persistenceReplayCutover.postgresContracts.map((contract) => contract.table));
+  const tables = <T extends SchedulerPostgresQueueAdapterReadinessDto["operationContracts"][number]["postgresTableContracts"]>(values: T): T =>
+    values.filter((value) => knownTables.has(value)) as T;
+  return [
+    {
+      operation: "enqueueTasks",
+      postgresTableContracts: tables(["frontier_tasks", "scheduler_cursor_events", "scheduler_fairness_budget_snapshots"]),
+      transactionBoundary: "insert tasks idempotently by tenant/task/run, append cursor events, never take leases inside enqueue",
+      disabledBehavior: "uses_embedded_memory"
+    },
+    {
+      operation: "leaseNext",
+      postgresTableContracts: tables(["frontier_tasks", "frontier_leases", "worker_heartbeats", "scheduler_fairness_budget_snapshots"]),
+      transactionBoundary: "select fair eligible task with row lock, write finite lease, write heartbeat seed, commit before worker execution",
+      disabledBehavior: "throws_fail_closed"
+    },
+    {
+      operation: "heartbeatLease",
+      postgresTableContracts: tables(["frontier_leases", "worker_heartbeats"]),
+      transactionBoundary: "extend only owned non-expired lease and append heartbeat in one transaction",
+      disabledBehavior: "throws_fail_closed"
+    },
+    {
+      operation: "checkpointTask",
+      postgresTableContracts: tables(["frontier_leases", "scheduler_checkpoints", "scheduler_cursor_events"]),
+      transactionBoundary: "verify lease owner, append checkpoint and cursor event atomically",
+      disabledBehavior: "throws_fail_closed"
+    },
+    {
+      operation: "acknowledge",
+      postgresTableContracts: tables(["frontier_tasks", "frontier_leases", "scheduler_retry_dead_letters", "scheduler_cursor_events"]),
+      transactionBoundary: "verify lease owner, update terminal/retry/dead-letter state, release lease, append cursor event",
+      disabledBehavior: "throws_fail_closed"
+    },
+    {
+      operation: "cancelRun",
+      postgresTableContracts: tables(["scheduler_runs", "frontier_tasks", "frontier_leases", "scheduler_cursor_events"]),
+      transactionBoundary: "mark run cancelled and release queued/leased tasks for the run in one transaction",
+      disabledBehavior: "throws_fail_closed"
+    },
+    {
+      operation: "findOrRegisterRun",
+      postgresTableContracts: tables(["scheduler_runs", "scheduler_cursor_events"]),
+      transactionBoundary: "upsert by tenant/reuse key and return active queued/running run without duplicate enqueue storm",
+      disabledBehavior: "uses_embedded_memory"
+    },
+    {
+      operation: "gcActiveRuns",
+      postgresTableContracts: tables(["scheduler_runs", "scheduler_cursor_events"]),
+      transactionBoundary: "derive stale/abandoned decisions from durable updated_at and polling cursor state without mutating unless apply-plan is approved",
+      disabledBehavior: "uses_embedded_memory"
+    },
+    {
+      operation: "pressure",
+      postgresTableContracts: tables(["frontier_tasks", "frontier_leases", "scheduler_retry_dead_letters", "scheduler_fairness_budget_snapshots"]),
+      transactionBoundary: "read-only compact aggregation for queue age, retry debt, dead letters, and fairness lanes",
+      disabledBehavior: "uses_embedded_memory"
+    },
+    {
+      operation: "deltasSince",
+      postgresTableContracts: tables(["scheduler_cursor_events"]),
+      transactionBoundary: "read-only append-only cursor scan ordered by cursor sequence",
+      disabledBehavior: "uses_embedded_memory"
+    },
+    {
+      operation: "runs",
+      postgresTableContracts: tables(["scheduler_runs"]),
+      transactionBoundary: "read-only run snapshot for API status and duplicate reuse",
+      disabledBehavior: "uses_embedded_memory"
+    },
+    {
+      operation: "tasks",
+      postgresTableContracts: tables(["frontier_tasks", "frontier_leases"]),
+      transactionBoundary: "read-only queued and leased task snapshot for status and scheduler economics",
+      disabledBehavior: "uses_embedded_memory"
+    }
+  ];
+}
+
+function schedulerPostgresQueuePreparedStatements(): SchedulerPostgresQueueAdapterReadinessDto["preparedStatements"] {
+  return [
+    {
+      name: "scheduler_runs_upsert_reuse_key_v1",
+      purpose: "register or reattach public actor searches by tenant/query reuse key",
+      tables: ["scheduler_runs", "scheduler_cursor_events"],
+      idempotencyKeyFields: ["tenant_id", "reuse_key", "request_hash"]
+    },
+    {
+      name: "frontier_tasks_enqueue_idempotent_v1",
+      purpose: "enqueue work without duplicate task storms after restart or repeated polling",
+      tables: ["frontier_tasks", "scheduler_cursor_events"],
+      idempotencyKeyFields: ["tenant_id", "task_id", "run_id"]
+    },
+    {
+      name: "frontier_tasks_lease_fair_next_v1",
+      purpose: "lease the next eligible task with tenant/query/source fairness and finite expiry",
+      tables: ["frontier_tasks", "frontier_leases", "worker_heartbeats", "scheduler_fairness_budget_snapshots"],
+      idempotencyKeyFields: ["task_id", "worker_id", "lease_epoch"]
+    },
+    {
+      name: "frontier_leases_checkpoint_ack_v1",
+      purpose: "checkpoint, retry, dead-letter, or complete a leased task without duplicate side effects",
+      tables: ["frontier_tasks", "frontier_leases", "scheduler_checkpoints", "scheduler_retry_dead_letters", "scheduler_cursor_events"],
+      idempotencyKeyFields: ["task_id", "worker_id", "checkpoint_cursor"]
+    },
+    {
+      name: "scheduler_worker_drain_restore_v1",
+      purpose: "restore drain and emergency-brake state before workers resume leasing",
+      tables: ["scheduler_worker_drain_state", "scheduler_cursor_events"],
+      idempotencyKeyFields: ["partition_id", "drain_started_at"]
+    }
+  ];
+}
+
+export class PostgresSchedulerQueueRepository implements SchedulerQueueRepository {
+  constructor(private readonly options: {
+    enabled: boolean;
+    dsnConfigured: boolean;
+    executorAvailable?: boolean;
+  }) {}
+
+  enqueueTasks(_tasks: CollectionTask[], _now?: Date): SchedulerRuntimeDelta[] {
+    return this.failClosed("enqueueTasks");
+  }
+
+  leaseNext(_workerId: string, _now?: Date): SchedulerLease | undefined {
+    return this.failClosed("leaseNext");
+  }
+
+  heartbeatLease(_taskId: string, _workerId: string, _now?: Date): SchedulerRuntimeDelta {
+    return this.failClosed("heartbeatLease");
+  }
+
+  checkpointTask(_taskId: string, _workerId: string, _checkpoint: SchedulerTaskCheckpoint, _now?: Date): SchedulerRuntimeDelta {
+    return this.failClosed("checkpointTask");
+  }
+
+  acknowledge(_taskId: string, _status: SchedulerRuntimeAckStatus, _now?: Date, _reason?: string): SchedulerRuntimeDelta {
+    return this.failClosed("acknowledge");
+  }
+
+  cancelRun(_runId: string, _now?: Date, _reason?: string): SchedulerRuntimeDelta[] {
+    return this.failClosed("cancelRun");
+  }
+
+  findOrRegisterRun(_run: CollectionRun, _reuseKey?: string, _now?: Date): { run: CollectionRun; reused: boolean; duplicateReuseCount: number } {
+    return this.failClosed("findOrRegisterRun");
+  }
+
+  gcActiveRuns(_now?: Date, _options?: ActiveRunGcOptions): ActiveRunGcDecision[] {
+    return this.failClosed("gcActiveRuns");
+  }
+
+  pressure(_now?: Date): SchedulerPressureDto[] {
+    return this.failClosed("pressure");
+  }
+
+  deltasSince(_cursor?: string): SchedulerRuntimeDelta[] {
+    return this.failClosed("deltasSince");
+  }
+
+  runs(): CollectionRun[] {
+    return this.failClosed("runs");
+  }
+
+  tasks(): CollectionTask[] {
+    return this.failClosed("tasks");
+  }
+
+  private failClosed(operation: string): never {
+    const reason = !this.options.enabled
+      ? "feature flag disabled"
+      : !this.options.dsnConfigured
+        ? "Postgres DSN missing"
+        : !this.options.executorAvailable
+          ? "Postgres executor unavailable"
+          : "active Postgres scheduler queue promotion is not enabled";
+    throw new Error(`Postgres scheduler queue adapter fail-closed for ${operation}: ${reason}`);
+  }
+}
+
+export function createSchedulerQueueRepository(input: {
+  backend?: "embedded_memory" | "postgres_scheduler_store";
+  postgresEnabled?: boolean;
+  postgresDsnConfigured?: boolean;
+  postgresExecutorAvailable?: boolean;
+} = {}): SchedulerQueueRepository {
+  if (input.backend !== "postgres_scheduler_store") return new InMemorySchedulerQueueRepository();
+  if (!input.postgresEnabled || !input.postgresDsnConfigured || !input.postgresExecutorAvailable) return new InMemorySchedulerQueueRepository();
+  return new PostgresSchedulerQueueRepository({
+    enabled: input.postgresEnabled,
+    dsnConfigured: input.postgresDsnConfigured,
+    executorAvailable: input.postgresExecutorAvailable
+  });
+}
+
 export function schedulerSoakBackpressurePacket(simulation: SchedulerExecutionSimulationResult) {
   return simulation.backpressure.agent10SoakPacket;
+}
+
+type SchedulerFreshnessProfile = {
+  targetFreshnessSeconds: number;
+  staleAfterSeconds: number;
+  emergencyStaleAfterSeconds: number;
+  minCadenceSeconds: number;
+  maxCadenceSeconds: number;
+  maxQueueAgeSeconds: number;
+};
+
+function schedulerFreshnessQueryClass(plan: CollectionPlan): SchedulerFreshnessQueryClass {
+  const query = plan.request.query.toLowerCase();
+  if (plan.request.entityType === "cve" || /\bcve-\d{4}-\d{4,}\b/i.test(plan.request.query)) return "cve_advisory";
+  if (plan.request.entityType === "malware") return "malware_tool";
+  if (plan.request.entityType === "campaign") return "campaign";
+  if (plan.request.entityType === "sector") return "sector";
+  if (plan.request.entityType === "country") return "country";
+  if (plan.request.entityType === "victim") return "victim_company";
+  if (plan.request.entityType === "infrastructure" || plan.request.entityType === "indicator") return "infrastructure";
+  if (query.includes("ransomware") || ["akira", "lockbit", "blackcat", "clop"].some((name) => query.includes(name))) return "ransomware";
+  if (/unknown|random|made up|unrecognized/i.test(plan.request.query)) return "unknown";
+  return "actor";
+}
+
+function freshnessProfileForQueryClass(queryClass: SchedulerFreshnessQueryClass): SchedulerFreshnessProfile {
+  switch (queryClass) {
+    case "actor":
+      return { targetFreshnessSeconds: 1_800, staleAfterSeconds: 7_200, emergencyStaleAfterSeconds: 21_600, minCadenceSeconds: 300, maxCadenceSeconds: 7_200, maxQueueAgeSeconds: 180 };
+    case "ransomware":
+      return { targetFreshnessSeconds: 900, staleAfterSeconds: 3_600, emergencyStaleAfterSeconds: 10_800, minCadenceSeconds: 180, maxCadenceSeconds: 3_600, maxQueueAgeSeconds: 120 };
+    case "cve_advisory":
+      return { targetFreshnessSeconds: 1_200, staleAfterSeconds: 3_600, emergencyStaleAfterSeconds: 14_400, minCadenceSeconds: 180, maxCadenceSeconds: 7_200, maxQueueAgeSeconds: 180 };
+    case "campaign":
+      return { targetFreshnessSeconds: 3_600, staleAfterSeconds: 14_400, emergencyStaleAfterSeconds: 43_200, minCadenceSeconds: 600, maxCadenceSeconds: 14_400, maxQueueAgeSeconds: 300 };
+    case "malware_tool":
+      return { targetFreshnessSeconds: 3_600, staleAfterSeconds: 14_400, emergencyStaleAfterSeconds: 43_200, minCadenceSeconds: 600, maxCadenceSeconds: 14_400, maxQueueAgeSeconds: 300 };
+    case "sector":
+      return { targetFreshnessSeconds: 7_200, staleAfterSeconds: 28_800, emergencyStaleAfterSeconds: 86_400, minCadenceSeconds: 900, maxCadenceSeconds: 28_800, maxQueueAgeSeconds: 600 };
+    case "country":
+      return { targetFreshnessSeconds: 7_200, staleAfterSeconds: 28_800, emergencyStaleAfterSeconds: 86_400, minCadenceSeconds: 900, maxCadenceSeconds: 28_800, maxQueueAgeSeconds: 600 };
+    case "victim_company":
+      return { targetFreshnessSeconds: 1_800, staleAfterSeconds: 7_200, emergencyStaleAfterSeconds: 21_600, minCadenceSeconds: 300, maxCadenceSeconds: 7_200, maxQueueAgeSeconds: 180 };
+    case "infrastructure":
+      return { targetFreshnessSeconds: 900, staleAfterSeconds: 3_600, emergencyStaleAfterSeconds: 10_800, minCadenceSeconds: 180, maxCadenceSeconds: 3_600, maxQueueAgeSeconds: 120 };
+    case "unknown":
+      return { targetFreshnessSeconds: 14_400, staleAfterSeconds: 43_200, emergencyStaleAfterSeconds: 86_400, minCadenceSeconds: 1_800, maxCadenceSeconds: 86_400, maxQueueAgeSeconds: 900 };
+  }
+}
+
+function schedulerBudgetQueryClasses(plan: CollectionPlan): SchedulerFreshnessQueryClass[] {
+  const primary = schedulerFreshnessQueryClass(plan);
+  return uniqueStrings([
+    primary,
+    "actor",
+    "ransomware",
+    "cve_advisory",
+    "campaign",
+    "malware_tool",
+    "sector",
+    "country",
+    "victim_company",
+    "infrastructure",
+    "unknown"
+  ]) as SchedulerFreshnessQueryClass[];
+}
+
+function schedulerTenantBudgetLane(input: {
+  tenantId: string;
+  queryClass: SchedulerFreshnessQueryClass;
+  queueEconomics: SchedulerQueueEconomicsDto;
+  runtimeExecution: SchedulerRuntimeExecutionDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  freshnessSloEngine: SchedulerFreshnessSloEngineDto;
+}): SchedulerFairnessGovernanceDto["queryClassBudgets"][number] {
+  const workClass = workClassForQueryClass(input.queryClass);
+  const profile = freshnessProfileForQueryClass(input.queryClass);
+  const budget = input.queueEconomics.workClassBudget.find((row) => row.workClass === workClass)
+    ?? input.queueEconomics.workClassBudget.find((row) => row.workClass === "background_refresh")
+    ?? input.queueEconomics.workClassBudget[0];
+  const workClassRuntime = input.runtimeExecution.byWorkClass.find((row) => row.workClass === workClass);
+  const queued = workClassRuntime?.queued ?? 0;
+  const retryDebt = workClassRuntime?.retried ?? input.queueEconomics.totals.retryDebt;
+  const totalSlots = Math.max(4, input.queueEconomics.workClassBudget.reduce((total, row) => total + row.budgetSlots, 0));
+  const slots = Math.max(1, budget?.budgetSlots ?? Math.round(totalSlots * budgetShareForWorkClass(workClass)));
+  const emergency = input.slaEnforcement.state === "rollback" || input.freshnessSloEngine.queuePressureBehavior.state === "emergency_brake";
+  const throttled = input.queueEconomics.fairness.ok === false && (workClass === "broad_daily_sweep" || workClass === "background_refresh");
+  const pressure = input.slaEnforcement.state === "warning" || input.slaEnforcement.state === "hold" || retryDebt > Math.max(1, slots);
+  const state: SchedulerFairnessGovernanceDto["queryClassBudgets"][number]["state"] = emergency
+    ? "emergency_hold"
+    : throttled
+      ? "throttled"
+      : pressure || queued > slots * 2
+        ? "pressure"
+        : "within_budget";
+  const actions = uniqueStrings([
+    "preserve_live_polling",
+    "reuse_duplicate_run",
+    ...(workClass === "interactive_live_search" || workClass === "analyst_deep_dive" ? ["reserve_interactive_capacity", "age_priority"] : []),
+    ...(workClass === "broad_daily_sweep" || workClass === "background_refresh" ? ["defer_sweeps", "age_priority"] : []),
+    ...(retryDebt > 0 ? ["hold_dead_letters"] : []),
+    ...(emergency ? ["pause_new_leases"] : [])
+  ]) as SchedulerFairnessGovernanceDto["queryClassBudgets"][number]["actions"];
+  return {
+    tenantId: input.tenantId,
+    queryClass: input.queryClass,
+    workClass,
+    reservedWorkerSlots: slots,
+    maxConcurrentLeases: Math.max(1, Math.round(slots * (workClass === "interactive_live_search" ? 2 : 1.25))),
+    maxQueuedTasks: Math.max(slots * 4, queued),
+    maxQueueAgeSeconds: Math.min(profile.maxQueueAgeSeconds, budget?.maxQueuedAgeSeconds ?? profile.maxQueueAgeSeconds),
+    maxRetryDebt: Math.max(1, Math.round(slots / 2)),
+    agingBoostEverySeconds: Math.max(30, Math.round(profile.maxQueueAgeSeconds / (workClass === "interactive_live_search" ? 6 : 4))),
+    retryAfterSeconds: state === "within_budget" ? 3 : state === "emergency_hold" ? Math.max(60, input.freshnessSloEngine.queuePressureBehavior.retryAfterSeconds) : Math.max(3, Math.min(60, profile.maxQueueAgeSeconds)),
+    state,
+    actions
+  };
+}
+
+function workClassForQueryClass(queryClass: SchedulerFreshnessQueryClass): SchedulerWorkClass {
+  switch (queryClass) {
+    case "actor":
+    case "ransomware":
+    case "victim_company":
+    case "infrastructure":
+      return "interactive_live_search";
+    case "cve_advisory":
+    case "campaign":
+    case "malware_tool":
+      return "analyst_deep_dive";
+    case "sector":
+    case "country":
+      return "broad_daily_sweep";
+    case "unknown":
+      return "background_refresh";
+  }
+}
+
+function schedulerWorkloadPressureAction(
+  workload: SchedulerWorkerWorkload,
+  pressure: boolean,
+  emergency: boolean
+): SchedulerFairnessGovernanceDto["workloadFairness"][number]["queuePressureAction"] {
+  if (emergency) return "pause_new_leases";
+  if (!pressure && (workload === "interactive_actor_search" || workload === "health_probe")) return "serve_now";
+  if (workload === "interactive_actor_search") return "reserve_capacity";
+  if (workload === "restricted_metadata_approval") return "hold_restricted_metadata";
+  if (workload === "scheduled_source_sweep" || workload === "public_channel_window" || workload === "graph_export" || workload === "retention") return "defer_low_value_sweeps";
+  return pressure ? "defer_low_value_sweeps" : "serve_now";
+}
+
+function analystPriorityScore(priority: CollectionPlan["request"]["priority"]): number {
+  switch (priority) {
+    case "urgent":
+      return 1;
+    case "high":
+      return 0.8;
+    case "low":
+      return 0.35;
+    case "normal":
+    default:
+      return 0.55;
+  }
+}
+
+function sourceCadenceHintForTask(input: {
+  task: CollectionTask;
+  source?: SourceRecord;
+  queryClass: SchedulerFreshnessQueryClass;
+  profile: SchedulerFreshnessProfile;
+  analystPriority: number;
+  queueEconomics: SchedulerQueueEconomicsDto;
+  slaEnforcement: SchedulerSlaEnforcementDto;
+  now: Date;
+}): SchedulerSourceCadenceHint {
+  const reliability = clampRate(input.source?.catalog?.reliability ?? input.source?.scoring?.reliability ?? input.source?.trustScore ?? input.task.planning?.sourceTrust ?? 0.5);
+  const parserHealth = parserHealthScore(input.source);
+  const evidenceYield = clampRate(input.source?.catalog?.intelligenceValue ?? input.source?.scoring?.relevance ?? input.task.planning?.freshness ?? 0.5);
+  const target = input.task.planning?.freshnessTargetSeconds ?? input.source?.catalog?.collection.freshnessTargetSeconds ?? input.source?.crawlFrequencySeconds ?? input.profile.targetFreshnessSeconds;
+  const lastCollected = input.source?.crawlState?.lastCollectedAt ?? input.source?.lastSeenAt ?? input.source?.health?.lastSuccessAt;
+  const freshnessDebtSeconds = lastCollected
+    ? Math.max(0, Math.floor((input.now.getTime() - Date.parse(lastCollected)) / 1000) - target)
+    : target;
+  const pressure = input.slaEnforcement.state === "rollback" || input.slaEnforcement.state === "hold" || input.queueEconomics.totals.retryDebt > 0;
+  const qualityMultiplier = 0.55 + reliability * 0.2 + parserHealth * 0.15 + evidenceYield * 0.2 + input.analystPriority * 0.15;
+  const recommendedCadenceSeconds = clampInteger(Math.round(target / qualityMultiplier), input.profile.minCadenceSeconds, input.profile.maxCadenceSeconds);
+  const nextEligibleAt = input.task.availableAt ?? input.source?.crawlState?.backoffUntil ?? new Date(input.now.getTime() + Math.max(0, recommendedCadenceSeconds - freshnessDebtSeconds) * 1000).toISOString();
+  const action = freshnessQueueAction({
+    task: input.task,
+    source: input.source,
+    pressure,
+    freshnessDebtSeconds,
+    target,
+    slaState: input.slaEnforcement.state
+  });
+  return {
+    sourceId: input.task.sourceId,
+    sourceType: input.task.sourceType,
+    queryClass: input.queryClass,
+    reliability: Number(reliability.toFixed(3)),
+    parserHealth: Number(parserHealth.toFixed(3)),
+    evidenceYield: Number(evidenceYield.toFixed(3)),
+    analystPriority: input.analystPriority,
+    sourceFreshnessTargetSeconds: target,
+    recommendedCadenceSeconds,
+    nextEligibleAt,
+    freshnessDebtSeconds,
+    priorityAgingBoost: Number(Math.min(0.4, Math.max(0, freshnessDebtSeconds / Math.max(1, target)) * 0.16 + input.analystPriority * 0.12).toFixed(3)),
+    budgetClass: workClassForTask(input.task),
+    queueAction: action,
+    reason: freshnessActionReason(action)
+  };
+}
+
+function parserHealthScore(source?: SourceRecord): number {
+  if (!source) return 0.5;
+  const parseability = source.scoring?.parseability;
+  if (typeof parseability === "number") return clampRate(parseability);
+  switch (source.health?.status) {
+    case "healthy":
+      return 0.9;
+    case "degraded":
+      return 0.55;
+    case "failing":
+      return 0.25;
+    case "disabled":
+      return 0;
+    case "unknown":
+    default:
+      return 0.5;
+  }
+}
+
+function freshnessQueueAction(input: {
+  task: CollectionTask;
+  source?: SourceRecord;
+  pressure: boolean;
+  freshnessDebtSeconds: number;
+  target: number;
+  slaState: SchedulerSlaEnforcementDto["state"];
+}): SchedulerSourceCadenceHint["queueAction"] {
+  if (input.slaState === "rollback") return "emergency_hold";
+  if (input.task.retryCount >= (input.task.maxRetries ?? 3)) return "dead_letter_review";
+  if (input.task.availableAt || input.source?.crawlState?.backoffUntil) return "hold_backoff";
+  if (input.pressure && input.freshnessDebtSeconds <= input.target) return "defer_pressure";
+  if (input.freshnessDebtSeconds > 0 || workClassForTask(input.task) === "interactive_live_search") return "collect_now";
+  return "schedule_next";
+}
+
+function freshnessActionReason(action: SchedulerSourceCadenceHint["queueAction"]): string {
+  switch (action) {
+    case "collect_now":
+      return "freshness debt or interactive demand justifies immediate collection";
+    case "schedule_next":
+      return "source is inside freshness target and can wait for its next cadence";
+    case "defer_pressure":
+      return "queue pressure preserves live polling and defers lower urgency collection";
+    case "hold_backoff":
+      return "source backoff or task availability delay is active";
+    case "dead_letter_review":
+      return "retry budget is exhausted and operator-visible dead-letter review is required";
+    case "emergency_hold":
+      return "emergency brake prevents new leases until cursor replay and budgets recover";
+  }
+}
+
+function freshnessDegradeActions(state: SchedulerFreshnessSloEngineDto["queuePressureBehavior"]["state"]): SchedulerFreshnessSloEngineDto["queuePressureBehavior"]["degradeActions"] {
+  if (state === "emergency_brake") return ["pause_new_leases", "emergency_brake", "preserve_active_run_reuse", "hold_dead_letters"];
+  if (state === "degraded") return ["raise_high_value_stale_items", "defer_low_yield_sources", "preserve_active_run_reuse", "hold_dead_letters"];
+  return ["raise_high_value_stale_items", "preserve_active_run_reuse"];
+}
+
+function buildProductionLeaseLifecycle(): SchedulerProductionLeaseSemanticsDto["leaseLifecycle"] {
+  return [
+    ["enqueue", "task row, budget reservation intent, and enqueue event share a deterministic idempotency key", "tenant:reuseKey:source:target", true],
+    ["lease", "worker owns a finite lease only after Postgres row lock, budget reservation, and lease event commit", "taskId:workerId:leaseStartedAt", true],
+    ["heartbeat", "owning worker extends lease and emits progress without changing run-visible result state", "taskId:workerId:heartbeat", true],
+    ["checkpoint", "cursor, promoted evidence count, and partial reason are written before any ack or retry", "taskId:checkpointCursor", true],
+    ["ack", "completion is idempotent and closes the active lease after durable side-effect representation", "taskId:ackStatus", true],
+    ["retry", "transient failure releases the lease and stores next availability with deterministic backoff", "taskId:retryCount", true],
+    ["dead_letter", "exhausted work leaves queue rotation and becomes operator-visible safe metadata", "taskId:deadLetterReason", true],
+    ["expire", "expired leases are recovered before each lease pass and keep the last checkpoint cursor", "taskId:leaseExpiresAt", true],
+    ["drain", "drain pauses new leases first, then checkpoints or lets active leases expire safely", "partitionId:drainStartedAt", true],
+    ["shutdown", "worker shutdown heartbeats stop, unfinished leases recover by expiry, and public polling attaches to run reuse", "workerId:shutdown", true]
+  ].map(([step, semantics, idempotencyKey, cursorVisible]) => ({
+    step: step as SchedulerProductionLeaseSemanticsDto["leaseLifecycle"][number]["step"],
+    semantics: String(semantics),
+    idempotencyKey: String(idempotencyKey),
+    cursorVisible: Boolean(cursorVisible)
+  }));
+}
+
+function buildProductionQueueCutoverPhases(input: {
+  queueEconomics: SchedulerQueueEconomicsDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  durableBackendReadiness: SchedulerDurableBackendReadinessDto;
+}): SchedulerProductionLeaseSemanticsDto["cutoverPhases"] {
+  const queued = input.queueEconomics.totals.queued;
+  const leased = input.queueEconomics.totals.leased;
+  const retryDebt = input.queueEconomics.totals.retryDebt;
+  const deadLetters = input.queueEconomics.totals.deadLetters;
+  const baseChecks = [
+    "frontier_events mirror is replayable",
+    "run_reuse_keys unique index is populated",
+    "dry-run apply plan reports willLeaseTasks=false",
+    "3-second public polling and cursor continuity are preserved"
+  ];
+  const phase = (
+    phase: SchedulerProductionLeaseSemanticsDto["cutoverPhases"][number]["phase"],
+    requiredChecks: string[],
+    expectedQueueEffect: SchedulerProductionLeaseSemanticsDto["cutoverPhases"][number]["expectedQueueEffect"],
+    rollback: string
+  ): SchedulerProductionLeaseSemanticsDto["cutoverPhases"][number] => ({
+    phase,
+    targetBackend: "postgres_advisory_queue",
+    dryRun: true,
+    willMutate: false,
+    willLeaseTasks: false,
+    requiredChecks: [...baseChecks, ...requiredChecks],
+    expectedQueueEffect,
+    rollback
+  });
+  return [
+    phase("shadow_mirror", ["Postgres shadow tables receive embedded queue snapshots and deltas"], { queuedDelta: 0, leasedDelta: 0, retryDebtDelta: 0, deadLetterDelta: 0 }, "discard shadow rows and keep embedded scheduler authoritative"),
+    phase("dual_write_audit", ["enqueue/checkpoint/ack events compare equal between embedded and Postgres"], { queuedDelta: 0, leasedDelta: 0, retryDebtDelta: 0, deadLetterDelta: 0 }, "disable dual-write mirror and replay frontier_events from embedded state"),
+    phase("postgres_lease_canary", ["single partition canary proves SKIP LOCKED lease exclusivity and heartbeat expiry"], { queuedDelta: -Math.min(queued, input.workerQueueCutover.capacityEnvelope.workerSlots), leasedDelta: Math.min(queued, input.workerQueueCutover.capacityEnvelope.workerSlots), retryDebtDelta: 0, deadLetterDelta: 0 }, "stop Postgres leasing and let canary leases expire back to embedded recovery"),
+    phase("worker_drain", ["pause new embedded leases before worker shutdown and checkpoint active leases"], { queuedDelta: leased, leasedDelta: -leased, retryDebtDelta: 0, deadLetterDelta: 0 }, "resume embedded leasing from preserved checkpoints"),
+    phase("cutover", ["all partitions pass canary, retry debt is under threshold, emergency brake is clear"], { queuedDelta: 0, leasedDelta: 0, retryDebtDelta: -retryDebt, deadLetterDelta: 0 }, "restore embedded scheduler authority and replay Postgres events back into memory"),
+    phase("rollback", ["rollback command preserves cursor replay and duplicate run reuse"], { queuedDelta: 0, leasedDelta: -leased, retryDebtDelta: 0, deadLetterDelta: deadLetters }, input.durableBackendReadiness.drainPlan.state === "blocked" ? "hold rollback until drain blocker is resolved" : "pause Postgres workers and replay frontier_events into embedded queue")
+  ];
 }
 
 function metricSeverity(metric: SchedulerRuntimeSlaMetric["name"]): Exclude<SchedulerReleaseGateSeverity, "pass"> {
@@ -1328,6 +3015,106 @@ function schedulerProductionAdapterContracts(): SchedulerProductionAdapterContra
     { implementation: "redis_streams", mode: "candidate", methods, invariants, telemetryFields },
     { implementation: "nats_jetstream", mode: "candidate", methods, invariants, telemetryFields }
   ];
+}
+
+function buildDurableBackendContracts(input: SchedulerProductionAdapterTelemetryDto): SchedulerDurableBackendContract[] {
+  const primitives: SchedulerDurableBackendContract["primitives"] = [
+    "enqueue",
+    "lease",
+    "heartbeat",
+    "checkpoint",
+    "acknowledge",
+    "retry",
+    "dead_letter",
+    "cancel",
+    "reuse_run",
+    "drain",
+    "rollback"
+  ];
+  return input.adapterContracts.map((contract) => {
+    const backend: SchedulerDurableBackendKind = contract.implementation;
+    return {
+      backend,
+      mode: contract.mode,
+      dryRun: true,
+      willMutate: false,
+      primitives,
+      leaseSemantics: durableLeaseSemantics(backend),
+      retryBackoffSemantics: "bounded deterministic exponential backoff is stored with retry debt, next-at time, source backoff reason, and run cursor lineage",
+      deadLetterSemantics: "retry-exhausted, policy-blocked, deadline-expired, and adapter-error tasks move into operator-visible dead letters without leaking restricted payloads",
+      cursorContinuity: "preserved",
+      duplicateRunReuse: "required",
+      drainSemantics: "worker drain stops new leases first, checkpoints active work, preserves replay cursors, then cancels or reuses abandoned client runs",
+      rollbackSemantics: durableRollbackSemantics(backend)
+    };
+  });
+}
+
+function buildDurableFairnessLane(partition: SchedulerWorkerQueuePartition): SchedulerDurableFairnessLane {
+  return {
+    workload: partition.workload,
+    partitionId: partition.id,
+    reservedWorkerSlots: partition.reservedWorkerSlots,
+    maxConcurrentLeases: partition.maxConcurrentLeases,
+    maxQueueAgeSeconds: partition.maxQueueAgeSeconds,
+    agingBoostEverySeconds: Math.max(30, Math.round(partition.maxQueueAgeSeconds / 6)),
+    fairnessKeys: fairnessKeysForWorkload(partition.workload),
+    backpressurePolicy: partition.backpressurePolicy,
+    drainBehavior: partition.drainBehavior,
+    retryBudget: {
+      maxAttempts: partition.retry.maxAttempts,
+      retryBaseSeconds: partition.retry.baseSeconds,
+      retryMaxSeconds: partition.retry.maxSeconds,
+      deadLetterAfterAttempts: partition.deadLetter.afterAttempts
+    }
+  };
+}
+
+function durableLeaseSemantics(backend: SchedulerDurableBackendKind): string {
+  switch (backend) {
+    case "embedded_memory":
+      return "single-process finite leases with heartbeat recovery and deterministic test clocks";
+    case "postgres_advisory_queue":
+      return "transactional lease rows selected with SKIP LOCKED and guarded by advisory ownership";
+    case "redis_streams":
+      return "consumer-group pending entries claimed after idle timeout with checkpoint hashes mirrored out of band";
+    case "nats_jetstream":
+      return "durable consumer ack-wait leases extended by heartbeat progress events";
+  }
+}
+
+function durableRollbackSemantics(backend: SchedulerDurableBackendKind): string {
+  switch (backend) {
+    case "embedded_memory":
+      return "keep embedded queue active, reject destructive cutover, and preserve snapshots for replay";
+    case "postgres_advisory_queue":
+      return "stop Postgres leasing, replay frontier_events back into embedded memory, and keep reuse-key uniqueness intact";
+    case "redis_streams":
+      return "pause stream consumers, replay durable event cursors, and leave pending entries unacked for audit";
+    case "nats_jetstream":
+      return "pause durable consumers, replay ordered event mirror, and avoid acking messages without checkpoint evidence";
+  }
+}
+
+function fairnessKeysForWorkload(workload: SchedulerWorkerWorkload): string[] {
+  switch (workload) {
+    case "interactive_actor_search":
+      return ["tenantId", "actor", "reuseKey", "sourceId"];
+    case "scheduled_source_sweep":
+      return ["tenantId", "sourceId", "crawlFrequencySeconds"];
+    case "public_channel_window":
+      return ["tenantId", "publicChannelId", "windowStart", "sourceId"];
+    case "restricted_metadata_approval":
+      return ["tenantId", "approvalId", "sourceId", "metadataOnly"];
+    case "evidence_replay":
+      return ["tenantId", "captureId", "claimId"];
+    case "graph_export":
+      return ["tenantId", "graphView", "exportFormat"];
+    case "retention":
+      return ["tenantId", "retentionBucket", "evidenceClass"];
+    case "health_probe":
+      return ["tenantId", "sourceId", "probeKind"];
+  }
 }
 
 function canaryControlStepsForFixture(
@@ -1463,8 +3250,58 @@ function warningCodesForCanaryFixture(
   ]);
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return Array.from(new Set(values.filter((value) => value.length > 0)));
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0)));
+}
+
+function uniqueDrainActions(values: SchedulerLiveRunDrainAction[]): SchedulerLiveRunDrainAction[] {
+  return Array.from(new Set(values));
+}
+
+function durableBackendContracts(telemetry: SchedulerProductionAdapterTelemetryDto): SchedulerDurableBackendContract[] {
+  return telemetry.adapterContracts.map((contract): SchedulerDurableBackendContract => ({
+    backend: contract.implementation,
+    mode: contract.mode,
+    dryRun: true,
+    willMutate: false,
+    primitives: uniqueBackendPrimitives([
+      ...contract.methods,
+      "reuse_run",
+      "rollback",
+      "drain"
+    ]),
+    leaseSemantics: "leases are tenant scoped, heartbeat/checkpoint backed, and recoverable after stale worker expiry",
+    retryBackoffSemantics: "retry debt is bounded by partition budget with deterministic backoff and dead-letter routing",
+    deadLetterSemantics: "dead letters preserve tenant, run, source, task, and cursor lineage for replay",
+    cursorContinuity: "preserved",
+    duplicateRunReuse: "required",
+    drainSemantics: "drain plans are dry-run first and preserve active run cursor replay",
+    rollbackSemantics: "rollback returns leasing authority to the last healthy embedded queue snapshot"
+  }));
+}
+
+function uniqueBackendPrimitives(values: SchedulerDurableBackendContract["primitives"]): SchedulerDurableBackendContract["primitives"] {
+  return Array.from(new Set(values));
+}
+
+function durableFairnessLane(partition: SchedulerWorkerQueuePartition): SchedulerDurableFairnessLane {
+  return {
+    workload: partition.workload,
+    partitionId: partition.id,
+    reservedWorkerSlots: partition.reservedWorkerSlots,
+    maxConcurrentLeases: partition.maxConcurrentLeases,
+    maxQueueAgeSeconds: partition.maxQueueAgeSeconds,
+    agingBoostEverySeconds: Math.max(30, Math.round(partition.maxQueueAgeSeconds / 3)),
+    fairnessKeys: ["tenant_id", "source_id", "run_id", "work_class"],
+    backpressurePolicy: partition.backpressurePolicy,
+    drainBehavior: partition.drainBehavior,
+    retryBudget: {
+      maxAttempts: partition.retry.maxAttempts,
+      retryBaseSeconds: partition.retry.baseSeconds,
+      retryMaxSeconds: partition.retry.maxSeconds,
+      deadLetterAfterAttempts: partition.deadLetter.afterAttempts
+    }
+  };
 }
 
 function deadLetterCauseTelemetry(
@@ -1529,6 +3366,27 @@ function schedulerSoakTelemetryFixtures(cutover: SchedulerWorkerQueueCutoverDto)
     fixture("graph_export", 0.1, ["drain_graph_export_backlog"]),
     fixture("public_ti_traffic", 0.34, ["drain_overloaded_live_search", "recover_stale_leases", "preserve_cursor_replay"])
   ];
+}
+
+function freshnessDashboardCadenceReason(
+  state: SchedulerFreshnessSloDashboardActor["state"],
+  workload: SchedulerWorkerWorkload
+): string {
+  if (state === "blocked" && workload === "restricted_metadata_approval") return "restricted metadata is held for metadata-only review without blocking clear-web polling";
+  if (state === "blocked") return "scheduler emergency or dead-letter pressure pauses new leases while preserving cursors";
+  if (state === "stale") return "actor freshness target is exceeded, so priority aging raises this lane before background work";
+  if (state === "aging") return "actor freshness is approaching stale threshold and should collect on the next eligible lease";
+  if (workload === "public_channel_window") return "public-channel refresh reuses active runs before adding fanout";
+  return "freshness is within target; background work may proceed within fairness budgets";
+}
+
+function freshnessDashboardWorkloadReason(action: SchedulerFreshnessSloDashboardDto["workloadActions"][number]["action"]): string {
+  if (action === "reserve_capacity") return "protect interactive actor polling and active-run reuse";
+  if (action === "raise_priority_aging") return "raise stale high-priority actor work without bypassing per-source concurrency";
+  if (action === "drain_background") return "drain lower-value work behind actor freshness and replay safety";
+  if (action === "hold_restricted_metadata") return "keep restricted metadata in approval review while clear-web work continues";
+  if (action === "dead_letter_review") return "route exhausted or unsafe work to operator-visible dead-letter review";
+  return "no scheduler action required for this partition";
 }
 
 function partitionSoakSlo(
@@ -2210,6 +4068,8 @@ function budgetShareForWorkClass(workClass: SchedulerWorkClass): number {
       return 0.14;
     case "analyst_deep_dive":
       return 0.16;
+    case "public_channel_window":
+      return 0.12;
     case "restricted_darknet_metadata_sweep":
       return 0.1;
     case "source_health_probe":
@@ -3730,6 +5590,13 @@ function clampRate(value: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
 }
 
+function clampInteger(value: number, min: number, max: number): number {
+  const safeValue = Number.isFinite(value) ? Math.round(value) : min;
+  const safeMin = Number.isFinite(min) ? Math.round(min) : 0;
+  const safeMax = Number.isFinite(max) ? Math.round(max) : safeMin;
+  return Math.max(safeMin, Math.min(safeMax, safeValue));
+}
+
 function reconciliationItem(
   now: Date,
   subjectType: SchedulerReconciliationItem["subjectType"],
@@ -3777,6 +5644,8 @@ function defaultStarvationThresholdSeconds(workClass: SchedulerWorkClass): numbe
       return 300;
     case "source_health_probe":
       return 600;
+    case "public_channel_window":
+      return 180;
     case "restricted_darknet_metadata_sweep":
       return 900;
     case "replay_retention":
@@ -3794,6 +5663,7 @@ function recoveryActionFor(workClass: SchedulerWorkClass): SchedulerStarvationSi
     case "interactive_search":
       return "raise_priority";
     case "analyst_deep_dive":
+    case "public_channel_window":
     case "source_health_probe":
     case "restricted_darknet_metadata_sweep":
     case "replay_retention":
@@ -3812,6 +5682,8 @@ function runtimePriority(task: CollectionTask): number {
       return task.priority + 0.1;
     case "source_health_probe":
       return task.priority + 0.08;
+    case "public_channel_window":
+      return task.priority + 0.06;
     case "replay_retention":
       return task.priority + 0.07;
     case "restricted_darknet_metadata_sweep":

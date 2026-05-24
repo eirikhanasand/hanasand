@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "cursor_results_page",
+  "description": "Result pages are cursor-based and carry only redacted evidence/provenance DTOs.",
+  "route": "GET /v1/intel/runs/run_sdk_initial_001/results?cursor=results_sdk_initial_001&limit=2",
+  "runId": "run_sdk_initial_001",
+  "status": "partial",
+  "pollCursor": "poll_sdk_initial_004",
+  "deltaCursor": "delta_sdk_initial_002",
+  "nextCursor": "results_sdk_initial_002",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:04:00.000Z",
+  "warningCodes": [],
+  "results": [
+    {
+      "captureId": "cap_sdk_public_001",
+      "sourceId": "src_public_report_001",
+      "contentHash": "sha256:public-evidence-hash",
+      "confidence": "medium",
+      "summary": "Public report supports actor tradecraft context."
+    }
+  ],
+  "page": {
+    "limit": 2,
+    "hasMore": true
+  }
+}

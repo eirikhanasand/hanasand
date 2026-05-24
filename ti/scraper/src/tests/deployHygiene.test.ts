@@ -12,6 +12,8 @@ describe("deploy hygiene", () => {
     expect(report.checks.find((item) => item.name === "dockerfile.test_enforced")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.api_depends_on_scraper")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "compose.scraper_memory_target")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "compose.scraper_evidence_volume")?.ok).toBe(true);
+    expect(report.checks.find((item) => item.name === "compose.scraper_canary_no_auto_activate")?.ok).toBe(true);
     expect(report.checks.find((item) => item.name === "dockerignore.root_excludes_env")?.ok).toBe(true);
     expect(() => assertDeployHygiene(report)).not.toThrow();
   });
@@ -36,7 +38,8 @@ describe("deploy hygiene", () => {
       "    mem_limit: 96g",
       "    environment:",
       "      SCRAPER_MEMORY_TARGET_MB: 98304",
-      "      SCRAPER_MEMORY_CEILING_MB: 163840"
+      "      SCRAPER_MEMORY_CEILING_MB: 163840",
+      "      TI_CANARY_AUTO_ACTIVATE: \"true\""
     ].join("\n"));
 
     const report = checkDeployHygiene(root);
@@ -44,6 +47,8 @@ describe("deploy hygiene", () => {
     expect(report.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "dockerfile.test_enforced")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "compose.api_depends_on_scraper")?.ok).toBe(false);
+    expect(report.checks.find((item) => item.name === "compose.scraper_evidence_volume")?.ok).toBe(false);
+    expect(report.checks.find((item) => item.name === "compose.scraper_canary_no_auto_activate")?.ok).toBe(false);
     expect(report.checks.find((item) => item.name === "dockerignore.root_excludes_env")?.ok).toBe(false);
     expect(() => assertDeployHygiene(report)).toThrow("dockerfile.test_enforced");
   });

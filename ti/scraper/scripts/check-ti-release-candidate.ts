@@ -1,7 +1,7 @@
 import { startApiServer } from "../src/api/server.ts";
 import { FocusedFrontier } from "../src/frontier/frontier.ts";
 import { processCollectedItem } from "../src/pipeline/pipeline.ts";
-import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
+import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../src/storage/memoryStore.ts";
 import type { CollectionRun, DiscoveryEvidence, EvidenceDelta, LiveSearchSnapshot, RawCapture, SourceRecord } from "../src/types.ts";
 import { hashContent, stableId } from "../src/utils.ts";
 
@@ -32,6 +32,7 @@ const checks: RcCheck[] = [];
 try {
   checks.push(...await checkSearchMatrix(base, queries));
   checks.push(await checkSourceCoverage(base));
+  checks.push(await checkCanaryReadiness());
   checks.push(await checkEvidenceReplay(base));
   checks.push(await checkGraphWorkspace(base));
   checks.push(await checkContractIndex(base));
@@ -49,11 +50,18 @@ const packet = {
   milestone: "scraper-native /ti release candidate",
   decision,
   exitCriteria: {
-    publicPostProofMatrix: "covered_by_check:scraper-native-search_and_external_check:inspur-public-proof",
+    publicPostProofMatrix: {
+      localCoveredBy: "scraper_native_search_matrix",
+      externalCommand: "TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof",
+      canonicalMethod: "POST",
+      canonicalPath: "/api/ti/search",
+      requiredQueries: queries
+    },
     localScraperNativeMatrix: queries,
     noDefaultDemoCacheBehavior: checks.find((check) => check.name === "scraper_native_search_matrix")?.ok ?? false,
     partialResultsPollingSeconds: 3,
     sourceGapsAndPolicyHoldsExplicit: checks.find((check) => check.name === "source_coverage_and_policy_holds")?.ok ?? false,
+    publicCanaryReadinessPromotes: checks.find((check) => check.name === "public_canary_readiness")?.ok ?? false,
     evidenceAndGraphDeltasProvenanceBacked: checks.find((check) => check.name === "evidence_replay_and_cutover")?.ok === true && checks.find((check) => check.name === "graph_investigation_workspace")?.ok === true,
     restrictedMaterialMetadataOnly: checks.find((check) => check.name === "runtime_no_leak_surface")?.ok ?? false,
     restartReplayPreservesState: checks.find((check) => check.name === "evidence_replay_and_cutover")?.ok ?? false,
@@ -130,6 +138,96 @@ async function checkSourceCoverage(baseUrl: string): Promise<RcCheck> {
   };
 }
 
+async function checkCanaryReadiness(): Promise<RcCheck> {
+  const canaryStore = new InMemoryScraperStore();
+  const canaryFrontier = new FocusedFrontier();
+  const canaryObjectStore = new InMemoryObjectEvidenceStore();
+  const canaryServer = startApiServer({
+    port: 0,
+    store: canaryStore,
+    frontier: canaryFrontier,
+    objectStore: canaryObjectStore,
+    canaryFetch: async (url) => canaryResponse(url)
+  });
+  const canaryBaseUrl = `http://127.0.0.1:${canaryServer.port}`;
+  try {
+    const activation = await fetchJson(`${canaryBaseUrl}/v1/sources/canary-activation`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "rc-canary-proof", generatedAt })
+    });
+    const run = await fetchJson(`${canaryBaseUrl}/v1/ops/canary/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "rc-canary-proof", maxSources: 5, maxTasks: 5, generatedAt })
+    });
+    const readinessResponse = await fetchJson(`${canaryBaseUrl}/v1/ops/canary/readiness?requiredQueries=APT42,Turla&generatedAt=${encodeURIComponent(generatedAt)}`);
+    const apt42 = await fetchJson(`${canaryBaseUrl}/v1/intel/search?q=APT42&entityType=actor`);
+    const turla = await fetchJson(`${canaryBaseUrl}/v1/intel/search?q=Turla&entityType=actor`);
+  const activationBody = record(activation.json);
+  const runBody = record(record(run.json).canaryRun);
+  const readiness = record(record(readinessResponse.json).readiness);
+  const evidence = record(readiness.evidence);
+  const controls = record(readiness.controls);
+  const queryReadiness = Array.isArray(readiness.queryReadiness) ? readiness.queryReadiness.filter(isRecord) : [];
+  const publicAnswers = [record(apt42.json), record(turla.json)];
+  const queryRowsReady = ["APT42", "Turla"].every((query) =>
+    queryReadiness.some((row) => row.query === query && row.readyForPublicAnswer === true && Number(row.captureCount) > 0)
+  );
+  const publicAnswersReady = publicAnswers.every((answer) => {
+    const profile = record(answer.actorProfile);
+    const datasets = record(profile.datasets);
+    const counts = record(datasets.evidenceStageCounts);
+    return ["ready", "partial"].includes(String(answer.status ?? "")) && Number(counts.captured_page ?? 0) > 0;
+  });
+  const safeControls = controls.activationRequiresHumanApproval === true
+    && controls.continuousLoopAutoActivation === false
+    && controls.restrictedSourcesExcluded === true;
+  const noUnsafe = ![readinessResponse.body, apt42.body, turla.body].join("\n").toLowerCase().includes("public-canary-evidence/");
+  const ok = activation.status === 200
+    && run.status === 200
+    && readinessResponse.status === 200
+    && runBody.mode === "production_canary"
+    && runBody.activationApplied === false
+    && Number(runBody.completedTaskCount ?? 0) >= 5
+    && Number(runBody.insertedCaptureCount ?? 0) >= 5
+    && readiness.schemaVersion === "ti.public_canary_readiness.v1"
+    && readiness.decision === "promote"
+    && Number(evidence.activeSourceCount ?? 0) >= 5
+    && Number(evidence.externalObjectCaptureCount ?? 0) >= 5
+    && Number(evidence.missingObjectReferenceCount ?? 0) === 0
+    && queryRowsReady
+    && publicAnswersReady
+    && safeControls
+    && noUnsafe;
+  return {
+    name: "public_canary_readiness",
+    ok,
+    status: ok ? "pass" : "hold",
+    message: "approved public canary activation and bounded collection produce object-backed captures and APT42/Turla public answer readiness",
+    details: {
+      activationStatus: activation.status,
+      activatedSources: Array.isArray(record(activationBody.activation).activatedSources) ? record(activationBody.activation).activatedSources.length : undefined,
+      runStatus: run.status,
+      completedTaskCount: runBody.completedTaskCount,
+      insertedCaptureCount: runBody.insertedCaptureCount,
+      readinessDecision: readiness.decision,
+      evidence: {
+        activeSourceCount: evidence.activeSourceCount,
+        externalObjectCaptureCount: evidence.externalObjectCaptureCount,
+        missingObjectReferenceCount: evidence.missingObjectReferenceCount,
+        promotionYield: evidence.promotionYield
+      },
+      queryReadiness,
+      safeControls,
+      publicAnswersReady
+    }
+  };
+  } finally {
+    canaryServer.stop();
+  }
+}
+
 async function checkEvidenceReplay(baseUrl: string): Promise<RcCheck> {
   const replay = await fetchJson(`${baseUrl}/v1/evidence/replay-plan?q=APT29&runId=run_rc`);
   const cutover = await fetchJson(`${baseUrl}/v1/evidence/cutover-report?q=APT29&runId=run_rc&generatedAt=${encodeURIComponent(generatedAt)}`);
@@ -160,27 +258,65 @@ async function checkGraphWorkspace(baseUrl: string): Promise<RcCheck> {
   const response = await fetchJson(`${baseUrl}/v1/graph/query?q=APT29&runId=run_rc&generatedAt=${encodeURIComponent(generatedAt)}`);
   const graph = record(record(response.json).graph);
   const workspace = record(graph.investigationWorkspace);
+  const attackCampaignWorkspace = record(graph.attackCampaignWorkspace);
+  const reviewBoard = record(attackCampaignWorkspace.reviewBoard);
   const ledger = Array.isArray(workspace.relationshipConfidenceLedger) ? workspace.relationshipConfidenceLedger.filter(isRecord) : [];
   const deltas = Array.isArray(graph.deltas) ? graph.deltas : [];
   const safety = record(workspace.safety);
+  const reviewBoardSafety = record(reviewBoard.safety);
+  const reviewBoardLanes = Array.isArray(reviewBoard.lanes) ? reviewBoard.lanes.filter(isRecord) : [];
+  const reviewBoardRows = Array.isArray(reviewBoard.rows) ? reviewBoard.rows.filter(isRecord) : [];
   const provenanceBacked = ledger.length > 0 && ledger.every((entry) =>
     Array.isArray(entry.supportingEvidenceIds)
     && Array.isArray(entry.supportingLedgerIds)
     && Array.isArray(entry.supportingCaptureIds)
     && typeof entry.provenanceComplete === "boolean"
   );
+  const reviewBoardProvenanceBacked = reviewBoardRows.length > 0 && reviewBoardRows.every((row) =>
+    Array.isArray(row.relationshipIds)
+    && Array.isArray(row.evidenceIds)
+    && Array.isArray(row.ledgerIds)
+    && Array.isArray(row.sourceIds)
+    && typeof row.exportEligible === "boolean"
+    && typeof row.recommendedAction === "string"
+    && typeof row.releaseImpact === "string"
+  );
+  const reviewBoardLanesPresent = [
+    "ready_for_public_fact",
+    "needs_evidence",
+    "stale_or_contradicted",
+    "restricted_or_policy_hold",
+    "export_blocked"
+  ].every((lane) => reviewBoardLanes.some((entry) => entry.lane === lane));
   const reviewActions = Array.isArray(workspace.reviewActions) && workspace.reviewActions.length > 0;
   const safe = safety.rawRestrictedMaterialIncluded === false && safety.restrictedMaterialPolicy === "metadata_only_review_hold";
+  const reviewBoardSafe = reviewBoardSafety.rawRestrictedMaterialIncluded === false
+    && reviewBoardSafety.metadataOnly === true
+    && reviewBoardSafety.taxiiBoundary === "descriptor_only_no_server";
+  const ok = response.status === 200
+    && workspace.mode === "read_only_investigation_workspace"
+    && provenanceBacked
+    && reviewActions
+    && deltas.length > 0
+    && safe
+    && attackCampaignWorkspace.mode === "attack_technique_timeline_campaign_graph"
+    && reviewBoard.mode === "enterprise_campaign_timeline_review_board"
+    && reviewBoardProvenanceBacked
+    && reviewBoardLanesPresent
+    && reviewBoardSafe;
   return {
     name: "graph_investigation_workspace",
-    ok: response.status === 200 && workspace.mode === "read_only_investigation_workspace" && provenanceBacked && reviewActions && deltas.length > 0 && safe,
-    status: response.status === 200 && workspace.mode === "read_only_investigation_workspace" && provenanceBacked && reviewActions && deltas.length > 0 && safe ? "pass" : "hold",
-    message: "graph workspace exposes provenance-backed relationship ledger, review actions, export holds, and pollable deltas",
+    ok,
+    status: ok ? "pass" : "hold",
+    message: "graph workspace exposes provenance-backed relationship ledger, review actions, campaign review board, export holds, and pollable deltas",
     details: {
       status: response.status,
       relationshipLedgerCount: ledger.length,
       deltaCount: deltas.length,
-      safety
+      reviewBoardRowCount: reviewBoardRows.length,
+      reviewBoardLanes: reviewBoardLanes.map((lane) => lane.lane),
+      safety,
+      reviewBoardSafety
     }
   };
 }
@@ -282,6 +418,30 @@ async function fetchJson(url: string, init?: RequestInit): Promise<{ status: num
 async function fetchText(url: string): Promise<{ url: string; status: number; body: string }> {
   const response = await fetch(url);
   return { url, status: response.status, body: await response.text() };
+}
+
+function canaryResponse(url: string): Response {
+  if (url.includes("microsoft.com")) {
+    return rss("APT42 credential theft infrastructure observed", "APT42 targeted public sector victims with phishing infrastructure and malware delivery.");
+  }
+  if (url.includes("cloud.google.com/blog/products/identity-security")) {
+    return rss("Turla Snake malware activity", "Turla operators used Snake malware against government victims with command infrastructure.");
+  }
+  if (url.includes("cloud.google.com/blog/topics/threat-intelligence")) {
+    return rss("Turla and APT42 public research roundup", "Public threat research references Turla, APT42, phishing, malware, and defensive indicators.");
+  }
+  return rss("CVE-2026-11111 public advisory", "Public advisory references CVE-2026-11111 exploitation and malware activity.");
+}
+
+function rss(title: string, description: string): Response {
+  return new Response(`
+    <rss><channel><item>
+      <title>${title}</title>
+      <link>https://example.test/canary/${encodeURIComponent(title.toLowerCase().replaceAll(" ", "-"))}</link>
+      <description>${description}</description>
+      <pubDate>Sun, 24 May 2026 11:01:00 GMT</pubDate>
+    </item></channel></rss>
+  `, { status: 200, headers: { "content-type": "application/rss+xml" } });
 }
 
 function seedReleaseCandidateStore(store: InMemoryScraperStore, queue: FocusedFrontier): void {

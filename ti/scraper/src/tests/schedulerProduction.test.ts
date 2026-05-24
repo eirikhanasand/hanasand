@@ -13,11 +13,22 @@ import {
   buildSchedulerSlaEnforcement,
   buildSchedulerWorkerQueueCutover,
   buildSchedulerWorkerSoakMigration,
+  buildSchedulerWorkerLeaseSoakHarness,
   buildSchedulerProductionAdapterTelemetry,
   buildSchedulerCanaryControlPlane,
+  buildSchedulerDurableBackendReadiness,
+  buildSchedulerFreshnessSloEngine,
+  buildSchedulerFreshnessSloDashboard,
+  buildSchedulerInteractiveSearchFreshness,
+  buildSchedulerProductionLeaseSemantics,
+  buildSchedulerFairnessGovernance,
+  buildSchedulerPersistenceReplayCutover,
+  buildSchedulerPostgresQueueAdapterReadiness,
+  createSchedulerQueueRepository,
   detectSchedulerStarvation,
   evaluateSchedulerSoakScenario,
   InMemorySchedulerQueueRepository,
+  PostgresSchedulerQueueRepository,
   schedulerBackpressureSummaryForTasks,
   schedulerLoadModelFixtures,
   schedulerSoakScenarios,
@@ -29,7 +40,7 @@ import {
   simulateFairnessEnforcement,
   SCHEDULER_CUTOVER_DESIGN
 } from "../frontier/schedulerProduction.ts";
-import type { CollectionRun, CollectionTask, PlanningBudgetClass, SourceRecord, TaskPlanningMetadata } from "../types.ts";
+import type { CollectionPlan, CollectionRun, CollectionTask, PlanningBudgetClass, SourceRecord, TaskPlanningMetadata } from "../types.ts";
 
 function source(input: Partial<SourceRecord> = {}): SourceRecord {
   const type = input.type ?? "rss";
@@ -143,6 +154,46 @@ function task(input: Partial<CollectionTask> & { id: string; sourceId: string; b
       sourceTrust: 0.9,
       selectedFor: input.budgetClass === "source_health_probe" ? "probe" : input.budgetClass === "restricted_darknet_metadata_sweep" ? "metadata" : "background"
     }
+  };
+}
+
+function plan(input: {
+  query?: string;
+  entityType?: CollectionPlan["request"]["entityType"];
+  priority?: CollectionPlan["request"]["priority"];
+  tasks: CollectionTask[];
+  reviewRequired?: CollectionTask[];
+}): CollectionPlan {
+  return {
+    id: "plan_freshness",
+    tenantId: "tenant_test",
+    request: {
+      id: "request_freshness",
+      tenantId: "tenant_test",
+      query: input.query ?? "APT29",
+      entityType: input.entityType ?? "actor",
+      includeClearWeb: true,
+      includeTelegram: true,
+      includeDarknetMetadata: false,
+      maxTasks: 10,
+      createdAt: "2026-05-24T10:00:00.000Z",
+      priority: input.priority ?? "high"
+    },
+    tasks: input.tasks,
+    reviewRequired: input.reviewRequired ?? [],
+    rejected: [],
+    explanations: input.tasks.map((item) => ({
+      sourceId: item.sourceId,
+      status: "selected",
+      reason: "freshness fixture",
+      targetUrl: item.targetUrl,
+      taskId: item.id,
+      priority: item.priority,
+      budgetClass: item.planning?.budgetClass,
+      queryTerms: item.planning?.queryTerms
+    })),
+    queryTerms: ["APT29"],
+    audit: []
   };
 }
 
@@ -918,6 +969,93 @@ describe("scheduler production readiness", () => {
     expect(soak.releaseTrain.proofCommands).toContain("bun run rehearse:cutover examples/cutover-rehearsal-pass.json");
   });
 
+  test("builds 10k multi-worker lease replay harness for enterprise scheduler soak", () => {
+    const now = new Date("2026-05-24T21:45:00.000Z");
+    const queued = Array.from({ length: 64 }, (_, index) => task({
+      id: `task_lease_soak_${index}`,
+      sourceId: index < 20 ? "src_lease_soak_public_hot" : `src_lease_soak_${index}`,
+      sourceType: index % 7 === 0 ? "tor_metadata" : index % 4 === 0 ? "telegram_public" : "rss",
+      budgetClass: index < 24 ? "interactive_live_search" : index % 7 === 0 ? "restricted_darknet_metadata_sweep" : "broad_daily_sweep",
+      runId: "run_lease_soak",
+      queuedAt: "2026-05-24T21:30:00.000Z",
+      retryCount: index % 11 === 0 ? 1 : 0,
+      fairnessKey: index < 20 ? "tenant:actor:apt29:clear_web" : undefined
+    }));
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 128, memoryCeilingMb: 128 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 4, now });
+    const sla = buildSchedulerRuntimeSla({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runs: [run({ id: "run_lease_soak", status: "running", requestHash: "lease-soak-reuse", updatedAt: "2026-05-24T21:44:00.000Z" })],
+      now
+    });
+    const enforcement = buildSchedulerSlaEnforcement({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runtimeSla: sla,
+      runs: [run({ id: "run_lease_soak", status: "running", requestHash: "lease-soak-reuse", updatedAt: "2026-05-24T21:44:00.000Z" })],
+      now
+    });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const harness = buildSchedulerWorkerLeaseSoakHarness({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runtimeSla: sla,
+      workerQueueCutover: cutover,
+      workerSoakMigration: soak,
+      now
+    });
+
+    expect(harness.apiTargets).toContain("/v1/frontier/status");
+    expect(harness.apiTargets).toContain("/v1/contracts");
+    expect(harness.dryRun).toBe(true);
+    expect(harness.willMutate).toBe(false);
+    expect(harness.replay.fixtureName).toBe("agent02_10k_multi_worker_lease_replay");
+    expect(harness.replay.totalTasks).toBe(10_000);
+    expect(harness.replay.duplicateRunReuseRequired).toBe(true);
+    expect(harness.workloadSlices.reduce((sum, slice) => sum + slice.taskCount, 0)).toBe(10_000);
+    expect(harness.workloadSlices.map((slice) => slice.scenario)).toEqual([
+      "apt29_actor_burst",
+      "public_channel_fanout",
+      "restricted_metadata_holds",
+      "evidence_replay_backlog",
+      "graph_export_wave",
+      "source_outage_wave",
+      "parser_failure_storm",
+      "low_value_sweep_pressure"
+    ]);
+    expect(harness.workloadSlices.every((slice) =>
+      slice.leaseAttempts >= slice.taskCount &&
+      slice.retryBudget > 0 &&
+      slice.deadLetterBudget > 0 &&
+      slice.requestDeadlineSeconds > 0 &&
+      slice.workerPartitionId.length > 0
+    )).toBe(true);
+    expect(harness.workerPartitions.map((partition) => partition.workload)).toEqual(expect.arrayContaining([
+      "interactive_actor_search",
+      "public_channel_window",
+      "restricted_metadata_approval",
+      "evidence_replay",
+      "graph_export",
+      "retention",
+      "health_probe"
+    ]));
+    expect(harness.leaseSemantics.exclusiveLeases).toBe(true);
+    expect(harness.leaseSemantics.perSourceConcurrency).toContain("never_bypassed");
+    expect(harness.fairnessProof.dimensions).toEqual(["tenant", "query_class", "source_family", "workload", "restricted_policy_state"]);
+    expect(harness.fairnessProof.publicPollingProtected).toBe(true);
+    expect(harness.fairnessProof.lowValueSweepsDeferred).toBe(true);
+    expect(harness.pressureFixtures.map((fixture) => fixture.expectedSchedulerAction)).toEqual(expect.arrayContaining([
+      "reuse_active_run",
+      "hold_restricted_metadata",
+      "retry_then_dead_letter",
+      "defer_low_value_sweeps"
+    ]));
+    expect(harness.routeContracts.contractsField).toBe("surfaces.frontier.contracts.worker_lease_soak_harness");
+    expect(harness.releaseGate.proofCommands).toContain("bun run check:contract-index");
+  });
+
   test("defines scheduler production adapter telemetry for canary and RC gates", () => {
     const now = new Date("2026-05-24T09:45:00.000Z");
     const queued = [
@@ -1012,6 +1150,594 @@ describe("scheduler production readiness", () => {
     expect(controlPlane.routeContracts.frontierApplyPlanField).toBe("applyPlan.canaryControlPlane");
     expect(controlPlane.agent10ReleaseDecision.fields).toContain("headroom");
     expect(controlPlane.agent10ReleaseDecision.proofCommands).toContain("bun run check:frontier-apply-plan");
+  });
+
+  test("defines durable backend readiness with fairness, drain, emergency brake, and cursor semantics", () => {
+    const now = new Date("2026-05-24T10:25:00.000Z");
+    const queued = [
+      ...Array.from({ length: 16 }, (_, index) => task({
+        id: `task_durable_live_${index}`,
+        sourceId: index < 10 ? "src_durable_public_hot" : `src_durable_public_${index}`,
+        sourceType: index % 4 === 0 ? "telegram_public" : "rss",
+        budgetClass: index < 7 ? "interactive_live_search" : "broad_daily_sweep",
+        runId: "run_durable_live",
+        queuedAt: "2026-05-24T10:12:00.000Z",
+        retryCount: index % 5 === 0 ? 1 : 0,
+        fairnessKey: index < 10 ? "public-channel:durable-hot" : undefined
+      })),
+      task({ id: "task_durable_restricted", sourceId: "src_durable_restricted", sourceType: "tor_metadata", budgetClass: "restricted_darknet_metadata_sweep", runId: "run_durable_restricted", queuedAt: "2026-05-24T10:14:00.000Z" }),
+      task({ id: "task_durable_replay", sourceId: "src_durable_replay", budgetClass: "background_refresh", fairnessKey: "evidence:replay", runId: "run_durable_replay", queuedAt: "2026-05-24T10:00:00.000Z" }),
+      task({ id: "task_durable_graph", sourceId: "src_durable_graph", budgetClass: "background_refresh", fairnessKey: "graph:export", runId: "run_durable_graph", queuedAt: "2026-05-24T10:01:00.000Z" }),
+      task({ id: "task_durable_retention", sourceId: "src_durable_retention", budgetClass: "background_refresh", fairnessKey: "retention:daily", runId: "run_durable_retention", queuedAt: "2026-05-24T09:58:00.000Z" }),
+      task({ id: "task_durable_health", sourceId: "src_durable_health", budgetClass: "source_health_probe", runId: "run_durable_health", queuedAt: "2026-05-24T10:18:00.000Z" })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 96, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 6, now });
+    const sla = buildSchedulerRuntimeSla({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runs: [run({ id: "run_durable_live", status: "running", requestHash: "durable-reuse", updatedAt: "2026-05-24T10:24:00.000Z" })],
+      now
+    });
+    const enforcement = buildSchedulerSlaEnforcement({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runtimeSla: sla,
+      runs: [run({ id: "run_durable_live", status: "running", requestHash: "durable-reuse", updatedAt: "2026-05-24T10:24:00.000Z" })],
+      now
+    });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runtimeSla: sla,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      workerSoakMigration: soak,
+      now
+    });
+    const controlPlane = buildSchedulerCanaryControlPlane({
+      productionAdapterTelemetry: telemetry,
+      queueEconomics: economics,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      workerSoakMigration: soak,
+      now
+    });
+    const readiness = buildSchedulerDurableBackendReadiness({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      runtimeSla: sla,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      workerSoakMigration: soak,
+      productionAdapterTelemetry: telemetry,
+      canaryControlPlane: controlPlane,
+      now
+    });
+
+    expect(readiness.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search.scheduler", "/v1/contracts"]));
+    expect(readiness.dryRun).toBe(true);
+    expect(readiness.willMutate).toBe(false);
+    expect(readiness.backendContracts.map((contract) => contract.backend)).toEqual([
+      "embedded_memory",
+      "postgres_advisory_queue",
+      "redis_streams",
+      "nats_jetstream"
+    ]);
+    expect(readiness.backendContracts.every((contract) =>
+      contract.dryRun &&
+      contract.willMutate === false &&
+      contract.primitives.includes("lease") &&
+      contract.primitives.includes("checkpoint") &&
+      contract.primitives.includes("dead_letter") &&
+      contract.primitives.includes("reuse_run") &&
+      contract.cursorContinuity === "preserved" &&
+      contract.duplicateRunReuse === "required"
+    )).toBe(true);
+    expect(readiness.fairnessLanes.map((lane) => lane.workload)).toEqual(expect.arrayContaining([
+      "interactive_actor_search",
+      "scheduled_source_sweep",
+      "public_channel_window",
+      "restricted_metadata_approval",
+      "evidence_replay",
+      "graph_export",
+      "retention",
+      "health_probe"
+    ]));
+    expect(readiness.fairnessLanes.every((lane) =>
+      lane.reservedWorkerSlots > 0 &&
+      lane.maxConcurrentLeases >= lane.reservedWorkerSlots &&
+      lane.agingBoostEverySeconds > 0 &&
+      lane.fairnessKeys.length > 0 &&
+      lane.retryBudget.deadLetterAfterAttempts > lane.retryBudget.maxAttempts
+    )).toBe(true);
+    expect(readiness.semanticInvariants).toContain("fairness and per-source concurrency are evaluated before leases are granted");
+    expect(readiness.semanticInvariants).toContain("3-second public polling hints never enqueue duplicate work when an active reuse key exists");
+    expect(readiness.pollingContract.nextPollSeconds).toBe(3);
+    expect(readiness.pollingContract.publicWrapperCursorSemantics).toBe("stable_since_cursor_with_delta_replay");
+    expect(readiness.runReuse.contract).toBe("duplicate_public_polling_attaches_to_active_run");
+    expect(readiness.drainPlan.preservesCursorReplayState).toBe(true);
+    expect(readiness.drainPlan.actions).toEqual(expect.arrayContaining(["drain_overloaded_live_search", "drain_public_channel_backlog", "hold_restricted_metadata"]));
+    expect(readiness.emergencyBrake.preservesCursorReplayState).toBe(true);
+    expect(readiness.emergencyBrake.releaseCriteria).toContain("cursor replay state is preserved for public polling and active runs");
+    expect(["pass", "hold", "rollback"]).toContain(readiness.releaseGate.decision);
+    expect(readiness.releaseGate.proofCommands).toContain("bun run check");
+    expect(readiness.routeContracts.contractsField).toBe("surfaces.frontier.contracts.durable_backend_readiness");
+  });
+
+  test("builds freshness SLO cadence hints from source reliability parser health yield and queue pressure", () => {
+    const now = new Date("2026-05-24T11:00:00.000Z");
+    const sources = [
+      source({
+        id: "src_fresh_primary",
+        type: "rss",
+        trustScore: 0.94,
+        crawlFrequencySeconds: 1_800,
+        health: { status: "healthy", consecutiveFailures: 0, errorRate: 0.01, lastSuccessAt: "2026-05-24T08:00:00.000Z" },
+        scoring: { reliability: 0.95, freshness: 0.3, relevance: 0.9, uniqueness: 0.8, parseability: 0.92, policyRiskPenalty: 0, operatorBoost: 0.2 },
+        crawlState: { lastCollectedAt: "2026-05-24T08:00:00.000Z", retryCount: 0 }
+      }),
+      source({
+        id: "src_fresh_backoff",
+        type: "telegram_public",
+        trustScore: 0.78,
+        crawlFrequencySeconds: 900,
+        health: { status: "degraded", consecutiveFailures: 2, errorRate: 0.2, lastFailureAt: "2026-05-24T10:40:00.000Z" },
+        scoring: { reliability: 0.72, freshness: 0.5, relevance: 0.7, uniqueness: 0.7, parseability: 0.5, policyRiskPenalty: 0, operatorBoost: 0.1 },
+        crawlState: { lastCollectedAt: "2026-05-24T10:00:00.000Z", backoffUntil: "2026-05-24T11:20:00.000Z", retryCount: 2 }
+      })
+    ];
+    const queued = [
+      task({ id: "task_fresh_primary", sourceId: "src_fresh_primary", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T10:45:00.000Z", planning: {
+        budgetClass: "interactive_live_search",
+        decision: "selected",
+        reason: "stale actor source",
+        queryTerms: ["APT29"],
+        freshness: 0.2,
+        freshnessTargetSeconds: 1_800,
+        sourceTrust: 0.95,
+        selectedFor: "interactive"
+      } }),
+      task({ id: "task_fresh_backoff", sourceId: "src_fresh_backoff", sourceType: "telegram_public", budgetClass: "broad_daily_sweep", queuedAt: "2026-05-24T10:48:00.000Z", availableAt: "2026-05-24T11:20:00.000Z", retryCount: 1, planning: {
+        budgetClass: "broad_daily_sweep",
+        decision: "waiting-for-backoff",
+        reason: "public channel backoff",
+        queryTerms: ["APT29"],
+        freshness: 0.5,
+        freshnessTargetSeconds: 900,
+        sourceTrust: 0.72,
+        selectedFor: "background"
+      } })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 96, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const freshness = buildSchedulerFreshnessSloEngine({
+      plan: plan({ query: "APT29", entityType: "actor", priority: "urgent", tasks: queued }),
+      sources,
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      durableBackendReadiness: readiness,
+      now
+    });
+
+    expect(freshness.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(freshness.dryRun).toBe(true);
+    expect(freshness.willMutate).toBe(false);
+    expect(freshness.queryClass).toBe("actor");
+    expect(freshness.slo.targetFreshnessSeconds).toBe(1_800);
+    expect(freshness.cadence.analystPriority).toBe(1);
+    expect(freshness.cadence.sourceHintCount).toBe(2);
+    expect(freshness.sourceCadenceHints.map((hint) => hint.sourceId)).toEqual(["src_fresh_primary", "src_fresh_backoff"]);
+    expect(freshness.sourceCadenceHints[0]).toMatchObject({
+      queueAction: "collect_now",
+      reliability: 0.94,
+      parserHealth: 0.9,
+      evidenceYield: 0.2
+    });
+    expect(freshness.sourceCadenceHints[0]?.freshnessDebtSeconds).toBeGreaterThan(0);
+    expect(freshness.sourceCadenceHints[0]?.priorityAgingBoost).toBeGreaterThan(0);
+    expect(freshness.sourceCadenceHints[1]).toMatchObject({ queueAction: "hold_backoff", nextEligibleAt: "2026-05-24T11:20:00.000Z" });
+    expect(freshness.queuePressureBehavior.preservesThreeSecondPolling).toBe(true);
+    expect(freshness.queuePressureBehavior.duplicateRunReuse).toBe("required");
+    expect(freshness.queuePressureBehavior.retryAfterSeconds).toBeGreaterThanOrEqual(3);
+    expect(freshness.fairnessAging.every((lane) => lane.preservesPerSourceConcurrency && lane.agingBoostEverySeconds > 0)).toBe(true);
+    expect(freshness.handoffs.agent09ApiPolling[0]).toContain("3-second polling");
+    expect(freshness.routeContracts.contractsField).toBe("surfaces.frontier.contracts.freshness_slo_engine");
+  });
+
+  test("builds route-visible freshness SLO dashboard for high-priority actor workload fairness", () => {
+    const now = new Date("2026-05-24T11:30:00.000Z");
+    const queued = [
+      task({ id: "task_dash_actor", sourceId: "src_dash_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T11:24:00.000Z", runId: "run_dash_actor" }),
+      task({ id: "task_dash_channel", sourceId: "src_dash_channel", sourceType: "telegram_public", budgetClass: "background_refresh", queuedAt: "2026-05-24T11:20:00.000Z", runId: "run_dash_channel" }),
+      task({ id: "task_dash_restricted", sourceId: "src_dash_restricted", sourceType: "tor_metadata", budgetClass: "restricted_darknet_metadata_sweep", queuedAt: "2026-05-24T11:10:00.000Z", runId: "run_dash_restricted", retryCount: 2, maxRetries: 3 })
+    ];
+    const economics = buildSchedulerQueueEconomics({
+      queued,
+      deadLetters: [{ taskId: "task_dash_restricted", task: queued[2], reason: "metadata approval hold", status: "retry_exhausted" }],
+      workerSlots: 64,
+      memoryCeilingMb: 96 * 1024,
+      now
+    });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const harness = buildSchedulerWorkerLeaseSoakHarness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: plan({ query: "APT29", entityType: "actor", priority: "urgent", tasks: queued }), queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const dashboard = buildSchedulerFreshnessSloDashboard({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      freshnessSloEngine: freshness,
+      workerLeaseSoakHarness: harness,
+      now
+    });
+
+    expect(dashboard.schemaVersion).toBe("ti.scheduler_freshness_slo_dashboard.v1");
+    expect(dashboard.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(dashboard.dryRun).toBe(true);
+    expect(dashboard.willMutate).toBe(false);
+    expect(dashboard.summary.actorCount).toBe(8);
+    expect(dashboard.summary.publicPollingProtected).toBe(true);
+    expect(dashboard.actors.map((actor) => actor.actor)).toEqual(expect.arrayContaining(["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira", "Scattered Spider"]));
+    expect(dashboard.actors.every((actor) => actor.nextPollSeconds === 3 && actor.duplicateRunReuse === "required" && actor.targetFreshnessSeconds > 0)).toBe(true);
+    expect(dashboard.actors.find((actor) => actor.actor === "APT29")).toMatchObject({
+      priority: "daily",
+      queryClass: "actor",
+      workerPartition: "interactive_actor_search"
+    });
+    expect(dashboard.actors.find((actor) => actor.actor === "LockBit")).toMatchObject({
+      priority: "weekly",
+      queryClass: "ransomware",
+      workerPartition: "restricted_metadata_approval"
+    });
+    expect(dashboard.workloadActions.map((action) => action.workload)).toEqual(expect.arrayContaining(["interactive_actor_search", "public_channel_window", "restricted_metadata_approval"]));
+    expect(dashboard.runbook).toMatchObject({
+      publicApiBehavior: "return_status_with_three_second_polling",
+      duplicateRunReuse: "required_before_enqueue",
+      restrictedMetadata: "metadata_only_holds_do_not_block_clear_web"
+    });
+    expect(dashboard.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_freshness_slo_dashboard");
+    expect(dashboard.releaseGate.proofCommands).toContain("bun run check:contract-index");
+  });
+
+  test("builds interactive search freshness decisions with run reuse and visible scheduler state", () => {
+    const now = new Date("2026-05-24T12:00:00.000Z");
+    const queued = [
+      task({ id: "task_interactive_actor", sourceId: "src_interactive_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T11:56:00.000Z", runId: "run_interactive_actor" }),
+      task({ id: "task_interactive_sweep", sourceId: "src_interactive_sweep", budgetClass: "broad_daily_sweep", queuedAt: "2026-05-24T11:30:00.000Z", runId: "run_interactive_sweep" })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 64, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [run({ id: "run_interactive_actor", status: "running", requestHash: "tenant:APT29" })], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const searchPlan = plan({ query: "APT29", entityType: "actor", priority: "urgent", tasks: queued });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: searchPlan, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const dashboard = buildSchedulerFreshnessSloDashboard({ queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, freshnessSloEngine: freshness, now });
+    const productionLeaseSemantics = buildSchedulerProductionLeaseSemantics({ queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, now });
+    const fairness = buildSchedulerFairnessGovernance({ plan: searchPlan, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, productionLeaseSemantics, now });
+    const interactive = buildSchedulerInteractiveSearchFreshness({
+      plan: searchPlan,
+      run: run({ id: "run_interactive_actor", status: "running", requestHash: "tenant:APT29" }),
+      attachedToActiveRun: true,
+      freshnessSloEngine: freshness,
+      freshnessSloDashboard: dashboard,
+      queueEconomics: economics,
+      workerQueueCutover: cutover,
+      fairnessGovernance: fairness,
+      now
+    });
+
+    expect(interactive.schemaVersion).toBe("ti.scheduler_interactive_search_freshness.v1");
+    expect(interactive.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(interactive.currentQuery).toMatchObject({ query: "APT29", knownHighValueActor: true, priorityBand: "urgent_actor" });
+    expect(interactive.queueDecision).toMatchObject({
+      decision: "reuse_active_run",
+      nextPollSeconds: 3,
+      duplicateRunReuse: "required_before_enqueue",
+      attachedToActiveRun: true,
+      runId: "run_interactive_actor"
+    });
+    expect(interactive.queueDecision.deferredBackgroundWorkloads).toContain("scheduled_source_sweep");
+    expect(interactive.actorTargets[0]).toMatchObject({ actor: "APT29" });
+    expect(interactive.fairnessGuards).toMatchObject({
+      preservesThreeSecondPolling: true,
+      preservesDuplicateRunReuse: true,
+      lowValueSweepsDeferredBeforeActorStarvation: true
+    });
+    expect(interactive.uiSignals.badges).toEqual(expect.arrayContaining(["source_freshness", "active_run_reuse", "background_deferred"]));
+    expect(interactive.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_interactive_search_freshness");
+  });
+
+  test("defines Postgres-first production queue cutover and lease semantics without mutating leases", () => {
+    const now = new Date("2026-05-24T12:00:00.000Z");
+    const queued = [
+      task({ id: "task_lease_actor", sourceId: "src_lease_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T11:55:00.000Z", runId: "run_lease_actor" }),
+      task({ id: "task_lease_sweep", sourceId: "src_lease_sweep", budgetClass: "broad_daily_sweep", queuedAt: "2026-05-24T11:40:00.000Z", runId: "run_lease_sweep" }),
+      task({ id: "task_lease_retry", sourceId: "src_lease_retry", budgetClass: "background_refresh", queuedAt: "2026-05-24T11:30:00.000Z", runId: "run_lease_retry", retryCount: 1 })
+    ];
+    const sources = [
+      source({ id: "src_lease_actor", trustScore: 0.9, crawlFrequencySeconds: 1_800 }),
+      source({ id: "src_lease_sweep", trustScore: 0.7, crawlFrequencySeconds: 7_200 }),
+      source({ id: "src_lease_retry", trustScore: 0.6, crawlFrequencySeconds: 3_600 })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 64, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [run({ id: "run_lease_actor", status: "running", requestHash: "tenant:APT29" })], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: plan({ query: "APT29", entityType: "actor", tasks: queued }), sources, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const semantics = buildSchedulerProductionLeaseSemantics({
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      durableBackendReadiness: readiness,
+      freshnessSloEngine: freshness,
+      now
+    });
+
+    expect(semantics.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/contracts"]));
+    expect(semantics.dryRun).toBe(true);
+    expect(semantics.willMutate).toBe(false);
+    expect(semantics.currentBackend).toBe("embedded_memory");
+    expect(semantics.primaryTargetBackend).toBe("postgres_advisory_queue");
+    expect(semantics.futureBackends).toEqual(["redis_streams", "nats_jetstream"]);
+    expect(semantics.postgresContract.tables).toEqual(expect.arrayContaining(["frontier_tasks", "frontier_leases", "frontier_events", "crawl_budgets", "run_reuse_keys", "frontier_dead_letters"]));
+    expect(semantics.postgresContract.lease).toContain("FOR UPDATE SKIP LOCKED");
+    expect(semantics.postgresContract.duplicateRunReuse).toContain("active run");
+    expect(semantics.leaseLifecycle.map((step) => step.step)).toEqual(["enqueue", "lease", "heartbeat", "checkpoint", "ack", "retry", "dead_letter", "expire", "drain", "shutdown"]);
+    expect(semantics.leaseLifecycle.every((step) => step.cursorVisible && step.idempotencyKey.length > 0)).toBe(true);
+    expect(semantics.cutoverPhases.map((phase) => phase.phase)).toEqual(["shadow_mirror", "dual_write_audit", "postgres_lease_canary", "worker_drain", "cutover", "rollback"]);
+    expect(semantics.cutoverPhases.every((phase) => phase.dryRun && phase.willMutate === false && phase.willLeaseTasks === false)).toBe(true);
+    expect(semantics.fairness.tenantIsolation).toBe("tenant_then_reuse_key_then_source_family");
+    expect(semantics.fairness.priorityAging.length).toBeGreaterThan(0);
+    expect(semantics.safety).toMatchObject({
+      preservesThreeSecondPolling: true,
+      duplicateActorQueryRunsSuppressed: true,
+      cursorContinuity: "preserved",
+      dryRunApplyPlanOnly: true,
+      restrictedMetadataRemainsApprovalGated: true
+    });
+    expect(["pass", "hold", "rollback"]).toContain(semantics.releaseGate.decision);
+    expect(semantics.releaseGate.proofCommands).toContain("bun run check:frontier-apply-plan");
+    expect(semantics.routeContracts.contractsField).toBe("surfaces.frontier.contracts.production_queue_lease_semantics");
+  });
+
+  test("governs multi-tenant query-class budgets and fairness without mutating queues", () => {
+    const now = new Date("2026-05-24T12:30:00.000Z");
+    const queued = [
+      task({ id: "task_budget_actor_a", tenantId: "tenant_alpha", sourceId: "src_budget_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T12:26:00.000Z", runId: "run_budget_actor" }),
+      task({ id: "task_budget_actor_b", tenantId: "tenant_beta", sourceId: "src_budget_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T12:27:00.000Z", runId: "run_budget_actor_beta" }),
+      task({ id: "task_budget_sweep", tenantId: "tenant_alpha", sourceId: "src_budget_sweep", budgetClass: "broad_daily_sweep", queuedAt: "2026-05-24T11:30:00.000Z", fairnessKey: "public-channel:noisy-source" }),
+      task({ id: "task_budget_replay", tenantId: "tenant_alpha", sourceId: "src_budget_replay", budgetClass: "background_refresh", queuedAt: "2026-05-24T11:20:00.000Z", retryCount: 1, fairnessKey: "evidence:replay" })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 48, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 1, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: plan({ query: "APT29", entityType: "actor", tasks: queued }), queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const semantics = buildSchedulerProductionLeaseSemantics({ queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, now });
+    const governance = buildSchedulerFairnessGovernance({
+      plan: plan({ query: "APT29", entityType: "actor", tasks: queued }),
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      slaEnforcement: enforcement,
+      workerQueueCutover: cutover,
+      durableBackendReadiness: readiness,
+      freshnessSloEngine: freshness,
+      productionLeaseSemantics: semantics,
+      now
+    });
+
+    expect(governance.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(governance.dryRun).toBe(true);
+    expect(governance.willMutate).toBe(false);
+    expect(governance.tenants.defaultTenantId).toBe("tenant_test");
+    expect(governance.tenants.isolationKey).toBe("tenant:queryClass:reuseKey:sourceFamily");
+    expect(governance.queryClassBudgets.map((lane) => lane.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware", "cve_advisory", "campaign", "malware_tool", "sector", "country", "victim_company", "infrastructure", "unknown"]));
+    expect(governance.queryClassBudgets.map((lane) => lane.tenantId)).toEqual(expect.arrayContaining(["tenant_alpha", "tenant_beta", "tenant_test"]));
+    expect(governance.queryClassBudgets.every((lane) => lane.reservedWorkerSlots > 0 && lane.maxConcurrentLeases > 0 && lane.maxQueueAgeSeconds > 0 && lane.retryAfterSeconds >= 3)).toBe(true);
+    expect(governance.queryClassBudgets.find((lane) => lane.queryClass === "actor")?.actions).toEqual(expect.arrayContaining(["preserve_live_polling", "reuse_duplicate_run", "reserve_interactive_capacity", "age_priority"]));
+    expect(governance.workloadFairness.map((lane) => lane.workload)).toEqual(expect.arrayContaining(["interactive_actor_search", "scheduled_source_sweep", "public_channel_window", "restricted_metadata_approval", "evidence_replay"]));
+    expect(governance.workloadFairness.every((lane) => lane.preservesThreeSecondPolling && lane.maxConcurrentLeases >= lane.reservedWorkerSlots)).toBe(true);
+    expect(governance.priorityAging.every((lane) => lane.neverBypassPerSourceConcurrency && lane.agingBoostEverySeconds > 0)).toBe(true);
+    expect(governance.pressurePolicy).toMatchObject({
+      publicPolling: "always_return_status_with_three_second_hint",
+      duplicateRunReuse: "required_before_enqueue",
+      lowValueSweeps: "bounded_and_deferred_before_interactive_starvation"
+    });
+    expect(governance.fairnessSlo.retryAfterSeconds).toBeGreaterThanOrEqual(3);
+    expect(governance.handoffs.agent09ApiContracts[0]).toContain("retry-after");
+    expect(["pass", "hold", "rollback"]).toContain(governance.releaseGate.decision);
+    expect(governance.releaseGate.proofCommands).toContain("bun run check");
+    expect(governance.routeContracts.contractsField).toBe("surfaces.frontier.contracts.multi_tenant_fairness_governance");
+  });
+
+  test("defines scheduler persistence and restart replay cutover without live dependencies", () => {
+    const now = new Date("2026-05-24T13:00:00.000Z");
+    const queued = [
+      task({ id: "task_replay_actor", tenantId: "tenant_replay", sourceId: "src_replay_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T12:58:00.000Z", runId: "run_replay_actor" }),
+      task({ id: "task_replay_leased", tenantId: "tenant_replay", sourceId: "src_replay_leased", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T12:50:00.000Z", runId: "run_replay_actor", retryCount: 1 }),
+      task({ id: "task_replay_metadata", tenantId: "tenant_replay", sourceId: "src_replay_metadata", sourceType: "tor_metadata", budgetClass: "restricted_darknet_metadata_sweep", queuedAt: "2026-05-24T12:40:00.000Z", runId: "run_replay_metadata" }),
+      task({ id: "task_replay_dead", tenantId: "tenant_replay", sourceId: "src_replay_dead", budgetClass: "background_refresh", queuedAt: "2026-05-24T12:30:00.000Z", retryCount: 3, maxRetries: 3, runId: "run_replay_dead" })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, deadLetters: [{ status: "retry_exhausted", taskId: "task_replay_dead", task: queued[3], reason: "retry budget exhausted" }], workerSlots: 48, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [run({ id: "run_replay_actor", status: "running", requestHash: "tenant_replay:apt29" })], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const replayPlan = plan({ query: "APT29", entityType: "actor", tasks: queued });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: replayPlan, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const semantics = buildSchedulerProductionLeaseSemantics({ queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, now });
+    const governance = buildSchedulerFairnessGovernance({ plan: replayPlan, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, productionLeaseSemantics: semantics, now });
+    const persistence = buildSchedulerPersistenceReplayCutover({
+      plan: replayPlan,
+      runs: [run({ id: "run_replay_actor", status: "running", requestHash: "tenant_replay:apt29" })],
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      slaEnforcement: enforcement,
+      productionLeaseSemantics: semantics,
+      fairnessGovernance: governance,
+      now
+    });
+
+    expect(persistence.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(persistence.dryRun).toBe(true);
+    expect(persistence.willMutate).toBe(false);
+    expect(persistence.currentBackend).toBe("embedded_memory");
+    expect(persistence.primaryTargetBackend).toBe("postgres_scheduler_store");
+    expect(persistence.descriptorBackends).toEqual(["redis_streams", "nats_jetstream"]);
+    expect(persistence.postgresContracts.map((contract) => contract.table)).toEqual(expect.arrayContaining([
+      "scheduler_runs",
+      "frontier_tasks",
+      "frontier_leases",
+      "worker_heartbeats",
+      "scheduler_checkpoints",
+      "scheduler_cursor_events",
+      "scheduler_retry_dead_letters",
+      "scheduler_fairness_budget_snapshots",
+      "scheduler_worker_drain_state"
+    ]));
+    expect(persistence.postgresContracts.every((contract) => contract.keyFields.length > 0 && contract.replayRole.length > 0)).toBe(true);
+    expect(persistence.replaySemantics).toMatchObject({
+      duplicatePublicActorSearch: "tenant_query_reuse_key_reattaches_to_active_run",
+      refreshAfterSeconds: 3,
+      pollCursor: "restored_from_scheduler_cursor_events",
+      deltaCursor: "restored_from_latest_safe_delta",
+      unknownActorPolicy: "searching_only_until_query_matched_evidence",
+      noDefaultActorFallback: true,
+      noStaleCacheReady: true,
+      noGenericLivePromotion: true
+    });
+    expect(persistence.restartFixtures.map((fixture) => fixture.name)).toEqual([
+      "queued_actor_search_restart",
+      "leased_heartbeat_expiry",
+      "restricted_metadata_hold",
+      "dead_letter_retry_replay",
+      "duplicate_public_run_reuse",
+      "worker_drain_restart",
+      "emergency_brake_restart"
+    ]);
+    expect(persistence.restartFixtures.every((fixture) => fixture.dryRun && fixture.willMutate === false && fixture.preservesThreeSecondPolling && fixture.preservesCursorContinuity && fixture.duplicateRunReuseRequired)).toBe(true);
+    expect(persistence.cutoverPhases.map((phase) => phase.phase)).toEqual(["snapshot_embedded", "shadow_write_postgres", "restart_replay_rehearsal", "duplicate_reuse_canary", "worker_drain_replay", "cutover_hold_or_promote", "rollback"]);
+    expect(persistence.cutoverPhases.every((phase) => phase.dryRun && phase.willMutate === false && phase.requiredChecks.length > 0)).toBe(true);
+    expect(persistence.handoffs.agent09PublicApiFields).toEqual(expect.arrayContaining(["refreshAfterSeconds=3", "pollCursor", "deltaCursor", "duplicateRunReuse"]));
+    expect(persistence.handoffs.agent10CapacityReleaseGate).toContain("restart replay fixture pass");
+    expect(["pass", "hold", "rollback"]).toContain(persistence.releaseGate.decision);
+    expect(persistence.releaseGate.proofCommands).toContain("bun run check:api-regression");
+    expect(persistence.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_persistence_replay_cutover");
+  });
+
+  test("keeps the Postgres scheduler queue adapter disabled and fail-closed until explicitly promoted", () => {
+    const now = new Date("2026-05-24T14:00:00.000Z");
+    const queued = [
+      task({ id: "task_pg_actor", tenantId: "tenant_pg", sourceId: "src_pg_actor", budgetClass: "interactive_live_search", queuedAt: "2026-05-24T13:58:00.000Z", runId: "run_pg_actor" })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 48, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [run({ id: "run_pg_actor", status: "running", requestHash: "tenant_pg:apt29" })], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const replayPlan = plan({ query: "APT29", entityType: "actor", tasks: queued });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: replayPlan, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const semantics = buildSchedulerProductionLeaseSemantics({ queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, now });
+    const governance = buildSchedulerFairnessGovernance({ plan: replayPlan, queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, freshnessSloEngine: freshness, productionLeaseSemantics: semantics, now });
+    const persistence = buildSchedulerPersistenceReplayCutover({
+      plan: replayPlan,
+      runs: [run({ id: "run_pg_actor", status: "running", requestHash: "tenant_pg:apt29" })],
+      queueEconomics: economics,
+      runtimeExecution: runtime,
+      slaEnforcement: enforcement,
+      productionLeaseSemantics: semantics,
+      fairnessGovernance: governance,
+      now
+    });
+    const adapter = buildSchedulerPostgresQueueAdapterReadiness({
+      config: {
+        queueBackend: "postgres_scheduler_store",
+        postgresQueueEnabled: false,
+        postgresDsnConfigured: false,
+        postgresShadowWritesEnabled: false,
+        postgresLeaseMode: "disabled"
+      },
+      persistenceReplayCutover: persistence,
+      now
+    });
+    const shadow = buildSchedulerPostgresQueueAdapterReadiness({
+      config: {
+        queueBackend: "postgres_scheduler_store",
+        postgresQueueEnabled: true,
+        postgresDsnConfigured: true,
+        postgresShadowWritesEnabled: true,
+        postgresLeaseMode: "shadow"
+      },
+      persistenceReplayCutover: persistence,
+      now
+    });
+
+    expect(adapter.backendSelection.requestedBackend).toBe("postgres_scheduler_store");
+    expect(adapter.backendSelection.activeBackend).toBe("embedded_memory");
+    expect(adapter.backendSelection.effectiveLeaseOwner).toBe("embedded_memory");
+    expect(adapter.backendSelection.postgresEnabled).toBe(false);
+    expect(adapter.safety).toMatchObject({
+      disabledByDefault: true,
+      failClosedWithoutDsn: true,
+      failClosedWithoutExecutor: true,
+      noImplicitNetworkDependency: true,
+      embeddedMemoryRemainsAuthoritative: true,
+      publicSearchPollingProtected: true
+    });
+    expect(adapter.operationContracts.map((contract) => contract.operation)).toEqual(expect.arrayContaining(["enqueueTasks", "leaseNext", "heartbeatLease", "checkpointTask", "acknowledge", "findOrRegisterRun", "deltasSince"]));
+    expect(adapter.operationContracts.find((contract) => contract.operation === "leaseNext")?.postgresTableContracts).toEqual(expect.arrayContaining(["frontier_tasks", "frontier_leases", "worker_heartbeats"]));
+    expect(adapter.operationContracts.find((contract) => contract.operation === "leaseNext")?.disabledBehavior).toBe("throws_fail_closed");
+    expect(adapter.preparedStatements.map((statement) => statement.name)).toEqual(expect.arrayContaining(["scheduler_runs_upsert_reuse_key_v1", "frontier_tasks_lease_fair_next_v1", "scheduler_worker_drain_restore_v1"]));
+    expect(adapter.releaseGate.reasons).toContain("postgres_queue_feature_flag_disabled");
+    expect(adapter.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_postgres_queue_adapter");
+    expect(shadow.backendSelection.activeBackend).toBe("embedded_memory");
+    expect(shadow.backendSelection.leaseMode).toBe("shadow");
+    expect(shadow.releaseGate.reasons).toContain("postgres_shadow_writes_do_not_own_leases");
+    expect(createSchedulerQueueRepository({ backend: "postgres_scheduler_store", postgresEnabled: false })).toBeInstanceOf(InMemorySchedulerQueueRepository);
+    expect(() => new PostgresSchedulerQueueRepository({ enabled: false, dsnConfigured: false }).leaseNext("worker_pg", now)).toThrow(/fail-closed/);
   });
 
   test("simulates 24h scheduler execution and emits backpressure SLO packets", () => {

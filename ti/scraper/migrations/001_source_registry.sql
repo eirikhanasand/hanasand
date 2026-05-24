@@ -157,11 +157,106 @@ CREATE TABLE source_lifecycle_events (
   note text
 );
 
+-- Source atlas rows are staging/audit only. They are not active sources,
+-- do not import packs, and cannot start crawling without explicit approval.
+CREATE TABLE source_atlas_records (
+  atlas_source_id text PRIMARY KEY,
+  tenant_id text,
+  url text NOT NULL CHECK (length(btrim(url)) > 0),
+  domain text NOT NULL CHECK (length(btrim(domain)) > 0),
+  feed_url text,
+  source_name text NOT NULL CHECK (length(btrim(source_name)) > 0),
+  family text NOT NULL,
+  discovery_method text NOT NULL,
+  query_class_coverage text[] NOT NULL DEFAULT '{}',
+  language text NOT NULL,
+  regions text[] NOT NULL DEFAULT '{}',
+  sectors text[] NOT NULL DEFAULT '{}',
+  reliability double precision NOT NULL CHECK (reliability >= 0 AND reliability <= 1),
+  freshness double precision NOT NULL CHECK (freshness >= 0 AND freshness <= 1),
+  evidence_yield double precision NOT NULL CHECK (evidence_yield >= 0 AND evidence_yield <= 1),
+  uniqueness double precision NOT NULL CHECK (uniqueness >= 0 AND uniqueness <= 1),
+  downstream_public_answer_impact double precision NOT NULL CHECK (downstream_public_answer_impact >= 0 AND downstream_public_answer_impact <= 1),
+  source_value_score double precision NOT NULL CHECK (source_value_score >= 0 AND source_value_score <= 1),
+  parser_profile text NOT NULL,
+  parser_certified boolean NOT NULL,
+  parser_certification_required boolean NOT NULL,
+  legal_review text NOT NULL,
+  robots_review text NOT NULL,
+  legal_robots_notes text[] NOT NULL DEFAULT '{}',
+  duplicate_of text,
+  mirror_of text,
+  content_similarity double precision NOT NULL CHECK (content_similarity >= 0 AND content_similarity <= 1),
+  duplicate_suppressed boolean NOT NULL DEFAULT false,
+  scheduler_budget_class text NOT NULL,
+  cadence_seconds integer NOT NULL CHECK (cadence_seconds >= 60),
+  estimated_daily_tasks integer NOT NULL CHECK (estimated_daily_tasks >= 0),
+  expected_items_per_day integer NOT NULL CHECK (expected_items_per_day >= 0),
+  storage_mb_per_day double precision NOT NULL CHECK (storage_mb_per_day >= 0),
+  retention_class text NOT NULL,
+  activation_state text NOT NULL,
+  activation_reasons text[] NOT NULL DEFAULT '{}',
+  approval_required boolean NOT NULL DEFAULT true CHECK (approval_required = true),
+  auto_activation_allowed boolean NOT NULL DEFAULT false CHECK (auto_activation_allowed = false),
+  public_only boolean NOT NULL DEFAULT true CHECK (public_only = true),
+  private_invite_auth_captcha boolean NOT NULL DEFAULT false CHECK (private_invite_auth_captcha = false),
+  raw_payload_target boolean NOT NULL DEFAULT false CHECK (raw_payload_target = false),
+  auto_activate boolean NOT NULL DEFAULT false CHECK (auto_activate = false),
+  generated_at timestamptz NOT NULL
+);
+
+CREATE TABLE source_atlas_review_queue (
+  review_id text PRIMARY KEY,
+  atlas_source_id text NOT NULL,
+  tenant_id text,
+  source_name text NOT NULL CHECK (length(btrim(source_name)) > 0),
+  family text NOT NULL,
+  domain text NOT NULL CHECK (length(btrim(domain)) > 0),
+  source_hash text NOT NULL,
+  decision text NOT NULL,
+  reasons text[] NOT NULL DEFAULT '{}',
+  approval_route text NOT NULL DEFAULT '/v1/analyst/source-activation-packets',
+  parser_owner text NOT NULL DEFAULT 'agent_03',
+  scheduler_owner text NOT NULL DEFAULT 'agent_02',
+  quality_owner text NOT NULL DEFAULT 'agent_07',
+  release_owner text NOT NULL DEFAULT 'agent_10',
+  dry_run boolean NOT NULL DEFAULT true CHECK (dry_run = true),
+  will_mutate boolean NOT NULL DEFAULT false CHECK (will_mutate = false),
+  will_start_crawling boolean NOT NULL DEFAULT false CHECK (will_start_crawling = false),
+  generated_at timestamptz NOT NULL
+);
+
+CREATE TABLE source_atlas_export_manifest (
+  atlas_source_id text PRIMARY KEY,
+  tenant_id text,
+  source_hash text NOT NULL,
+  source_name text NOT NULL CHECK (length(btrim(source_name)) > 0),
+  url text NOT NULL CHECK (length(btrim(url)) > 0),
+  domain text NOT NULL CHECK (length(btrim(domain)) > 0),
+  family text NOT NULL,
+  query_class_coverage text[] NOT NULL DEFAULT '{}',
+  source_value_score double precision NOT NULL CHECK (source_value_score >= 0 AND source_value_score <= 1),
+  parser_profile text NOT NULL,
+  scheduler_cadence_seconds integer NOT NULL CHECK (scheduler_cadence_seconds >= 60),
+  expected_items_per_day integer NOT NULL CHECK (expected_items_per_day >= 0),
+  legal_review text NOT NULL,
+  robots_review text NOT NULL,
+  approval_required boolean NOT NULL DEFAULT true CHECK (approval_required = true),
+  auto_activation_allowed boolean NOT NULL DEFAULT false CHECK (auto_activation_allowed = false),
+  manifest_schema_version text NOT NULL DEFAULT 'ti.source_atlas_export.v1' CHECK (manifest_schema_version = 'ti.source_atlas_export.v1'),
+  requested_plan text NOT NULL,
+  generated_at timestamptz NOT NULL
+);
+
 CREATE INDEX sources_tenant_status_idx ON sources (tenant_id, status);
 CREATE INDEX sources_type_status_idx ON sources (type, status);
 CREATE INDEX sources_risk_status_idx ON sources (risk, status);
 CREATE INDEX source_lifecycle_events_source_time_idx ON source_lifecycle_events (source_id, occurred_at DESC);
 CREATE INDEX source_legal_notes_source_time_idx ON source_legal_notes (source_id, created_at DESC);
+CREATE INDEX source_atlas_records_tenant_family_idx ON source_atlas_records (tenant_id, family);
+CREATE INDEX source_atlas_records_activation_idx ON source_atlas_records (activation_state, source_value_score DESC);
+CREATE INDEX source_atlas_review_queue_tenant_decision_idx ON source_atlas_review_queue (tenant_id, decision, generated_at DESC);
+CREATE INDEX source_atlas_export_manifest_tenant_plan_idx ON source_atlas_export_manifest (tenant_id, requested_plan, generated_at DESC);
 
 CREATE OR REPLACE FUNCTION reject_unapproved_active_sources()
 RETURNS trigger

@@ -980,6 +980,781 @@ export interface RestrictedMetadataOperationalPlaybooksDto {
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
 }
 
+export type RestrictedMetadataQualityEvaluationScenario =
+  | "false_claim"
+  | "actor_impersonation"
+  | "duplicate_announcement"
+  | "stale_repost"
+  | "noisy_mirror"
+  | "source_takedown"
+  | "unavailable_source"
+  | "source_family_bias"
+  | "contradictory_counts"
+  | "contradictory_dates"
+  | "victim_name_ambiguity";
+
+export interface RestrictedMetadataQualityGatePacketDto {
+  readonly gateId: string;
+  readonly scenario: RestrictedMetadataQualityEvaluationScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly claimConfidence: "low" | "medium" | "high";
+  readonly duplicateStatus: "unique" | "duplicate" | "mirror_cluster";
+  readonly staleStatus: "fresh" | "stale" | "unknown";
+  readonly actorReliability: "trusted" | "unverified" | "impersonation_suspected" | "contradicted";
+  readonly sourceReliability: "reliable" | "noisy" | "unavailable" | "biased" | "takedown";
+  readonly reviewState: "metadata_review" | "hold_false_positive" | "hold_duplicate" | "hold_stale" | "hold_contradiction" | "hold_ambiguous_victim";
+  readonly legalHold: boolean;
+  readonly retentionState: "active" | "expiring" | "legal_hold";
+  readonly publicAnswerGate: "caveat_only" | "hold_not_public_fact";
+  readonly graphStixPromotionEligibility: "blocked_until_review";
+  readonly suppressionReason: string;
+  readonly sourceHashOnly: true;
+  readonly handoffs: {
+    readonly agent06ClaimLedger: "metadata_review" | "duplicate" | "contradicted" | "blocked";
+    readonly agent07AnswerCaveat: "false_claim_review" | "actor_impersonation" | "duplicate_claim" | "stale_claim" | "source_unavailable" | "source_bias" | "contradicted_claim" | "victim_ambiguous";
+    readonly agent08GraphHold: "hold_quality_review";
+    readonly agent09ApiField: "restrictedMetadata.qualityEvaluation";
+    readonly agent10ReleaseGate: "hold";
+  };
+  readonly proof: {
+    readonly falsePositiveSuppressed: true;
+    readonly duplicateSuppressed: boolean;
+    readonly staleReplaySuppressed: boolean;
+    readonly publicFactPromotionBlocked: true;
+    readonly noRawLeakMaterial: true;
+    readonly noUnsafeUrls: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPrivateAccess: true;
+    readonly noAuthBypass: true;
+    readonly noCaptchaSolving: true;
+    readonly noThreatActorInteraction: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataQualityEvaluationDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly packets: readonly RestrictedMetadataQualityGatePacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataQualityEvaluationScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataQualityEvaluationScenario[];
+  readonly publicAnswerHoldCount: number;
+  readonly graphStixHoldCount: number;
+  readonly falsePositiveSuppressionCount: number;
+  readonly duplicateSuppressionCount: number;
+  readonly staleReplaySuppressionCount: number;
+  readonly agent09ApiFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataCapacityIsolationScenario =
+  | "proxy_outage"
+  | "timeout_spike"
+  | "legal_hold_load"
+  | "retention_backlog"
+  | "approval_backlog"
+  | "emergency_stop_drain"
+  | "public_search_pressure";
+
+export interface RestrictedMetadataNetworkCapacityDto {
+  readonly network: DarknetNetwork;
+  readonly metadataOnlyWorkerCap: number;
+  readonly proxyPoolHealthy: boolean;
+  readonly timeoutBudgetMs: number;
+  readonly memoryCeilingMb: number;
+  readonly diskCeilingMb: number;
+  readonly directEgressAllowed: false;
+  readonly queueBackpressure: "open" | "restricted_paused" | "restricted_draining";
+}
+
+export interface RestrictedMetadataCapacityIsolationPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataCapacityIsolationScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly sourceHashOnly: true;
+  readonly networkBudgets: readonly RestrictedMetadataNetworkCapacityDto[];
+  readonly queueDecision: "queue_metadata_only" | "hold_restricted" | "drain_restricted" | "pause_restricted";
+  readonly publicSearchProtection: "preserve_public_headroom";
+  readonly schedulerBackpressure: "agent02_hold_restricted_partition";
+  readonly evidenceRetentionImpact: "agent06_budget_legal_hold" | "agent06_budget_retention_backlog" | "agent06_no_extra_load";
+  readonly publicAnswerCaveat: "agent07_restricted_context_delayed";
+  readonly graphHold: "agent08_hold_restricted_edges";
+  readonly apiField: "restrictedMetadata.capacityIsolation";
+  readonly releaseGate: "agent10_hold_capacity" | "agent10_drain_capacity" | "agent10_warn_capacity";
+  readonly approvalReviewLoad: "normal" | "elevated" | "backlog";
+  readonly legalHoldRetentionLoad: "normal" | "elevated" | "backlog";
+  readonly proof: {
+    readonly publicSearchCannotBeStarved: true;
+    readonly restrictedWorkersCapped: true;
+    readonly proxyOutageFailsClosed: boolean;
+    readonly timeoutSpikeFailsClosed: boolean;
+    readonly emergencyStopDrainsQueue: boolean;
+    readonly noRawLeakMaterial: true;
+    readonly noUnsafeUrls: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPrivateAccess: true;
+    readonly noAuthBypass: true;
+    readonly noCaptchaSolving: true;
+    readonly noThreatActorInteraction: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataCapacityIsolationDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly packets: readonly RestrictedMetadataCapacityIsolationPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataCapacityIsolationScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataCapacityIsolationScenario[];
+  readonly networkBudgets: readonly RestrictedMetadataNetworkCapacityDto[];
+  readonly publicSearchHoldCount: number;
+  readonly emergencyDrainCount: number;
+  readonly schedulerHandoffField: "restrictedMetadata.capacityIsolation";
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10ReleaseFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataCapacitySloScenario =
+  | "worker_capacity"
+  | "legal_hold_slo"
+  | "approval_expiry_slo"
+  | "emergency_stop_slo"
+  | "retention_window_slo"
+  | "source_quarantine_slo"
+  | "analyst_review_queue_slo"
+  | "proxy_outage_hold"
+  | "unsafe_source_discovery_hold"
+  | "duplicate_stale_claim_hold"
+  | "false_claim_review_hold"
+  | "over_capacity_hold";
+
+export interface RestrictedMetadataCapacitySloPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataCapacitySloScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly sourceHashOnly: true;
+  readonly tenantIsolation: {
+    readonly tenantScopedQueues: true;
+    readonly workspaceScopedProxyBudget: true;
+    readonly crossTenantDataJoinAllowed: false;
+    readonly queuePartition: "restricted_metadata";
+  };
+  readonly slo: {
+    readonly target: string;
+    readonly observed: string;
+    readonly state: "pass" | "warn" | "breach" | "hold";
+    readonly releaseGate: "promote" | "warn" | "hold" | "rollback_only" | "emergency_stop";
+  };
+  readonly capacity: {
+    readonly torWorkerCap: number;
+    readonly i2pWorkerCap: number;
+    readonly freenetWorkerCap: number;
+    readonly restrictedQueueMaxDepth: number;
+    readonly analystReviewMaxAgeHours: number;
+    readonly directEgressAllowed: false;
+  };
+  readonly publicSearchSemantics: "non_blocking_public_summary";
+  readonly graphStixExportHold: "hold_until_slo_and_review_pass";
+  readonly apiCaveat: "restricted_capacity_slo_pending";
+  readonly failureMode: RestrictedMetadataCapacityIsolationScenario | RestrictedMetadataQualityEvaluationScenario | RestrictedMetadataReviewHealthScenario | "unsafe_source_discovery" | "over_capacity";
+  readonly safeRemediation: readonly string[];
+  readonly handoffs: {
+    readonly agent01Governance: "restricted_source_slo_governance";
+    readonly agent02Scheduler: "restricted_partition_budget";
+    readonly agent06EvidenceRetention: "restricted_retention_legal_hold_slo";
+    readonly agent07Caveat: "restricted_capacity_caveat";
+    readonly agent08GraphStixHold: "restricted_capacity_export_hold";
+    readonly agent09ApiField: "restrictedMetadata.capacitySlo";
+    readonly agent10ReleaseGate: "restricted_capacity_release_gate";
+  };
+  readonly proof: {
+    readonly noRawLeakMaterial: true;
+    readonly noUnsafeUrls: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPrivateAccess: true;
+    readonly noAuthBypass: true;
+    readonly noCaptchaSolving: true;
+    readonly noThreatActorInteraction: true;
+    readonly publicSearchNotBlocked: true;
+    readonly graphStixHeld: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataCapacitySloDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly packets: readonly RestrictedMetadataCapacitySloPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataCapacitySloScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataCapacitySloScenario[];
+  readonly summary: {
+    readonly packetCount: number;
+    readonly passCount: number;
+    readonly warningCount: number;
+    readonly holdCount: number;
+    readonly rollbackOnlyCount: number;
+    readonly emergencyStopCount: number;
+    readonly publicSearchBehavior: "non_blocking_public_summary";
+  };
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10ReleaseGateFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataOperatorGovernanceScenario =
+  | "ransomware_leak_claim_review_hold"
+  | "public_channel_rumor_rejected"
+  | "source_approval_expired"
+  | "legal_hold_active"
+  | "retention_expired"
+  | "capacity_exceeded"
+  | "source_quarantined_unsafe_target"
+  | "duplicate_victim_claim_suppressed"
+  | "false_claim_disputed"
+  | "emergency_stop_active";
+
+export interface RestrictedMetadataOperatorGovernancePacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataOperatorGovernanceScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly operatorVisible: true;
+  readonly tenantId: string;
+  readonly sourceHash: string;
+  readonly sourceHashOnly: true;
+  readonly policyReason: string;
+  readonly allowedActions: readonly string[];
+  readonly forbiddenActions: readonly string[];
+  readonly graphStixApiEffect: {
+    readonly graph: "hold" | "suppress" | "pivot_only";
+    readonly stix: "blocked";
+    readonly api: "safe_metadata_only" | "caveat_only" | "suppressed";
+    readonly publicSearch: "non_blocking";
+  };
+  readonly rollbackPath: readonly string[];
+  readonly auditId: string;
+  readonly proofCommands: readonly [
+    "bun run check:restricted-metadata-status",
+    "bun run check:restricted-metadata-apply-plan",
+    "bun run check:contract-index"
+  ];
+  readonly handoffs: {
+    readonly agent06RetentionLegalHold: "restricted_governance_retention_hold";
+    readonly agent07QualityGate: "restricted_governance_quality_gate";
+    readonly agent08GraphHold: "restricted_governance_graph_hold";
+    readonly agent09ApiCopy: "restrictedMetadata.operatorGovernance";
+    readonly agent10ReleaseGate: "restricted_governance_release_gate";
+  };
+  readonly proof: {
+    readonly noRawOnionUrls: true;
+    readonly noStolenFileNames: true;
+    readonly noLeakedRows: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPrivateChannelContent: true;
+    readonly noActorInteractionText: true;
+    readonly metadataOnlyEvidence: true;
+    readonly sourceHashOnly: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataOperatorGovernanceDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly operatorVisible: true;
+  readonly packets: readonly RestrictedMetadataOperatorGovernancePacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataOperatorGovernanceScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataOperatorGovernanceScenario[];
+  readonly summary: {
+    readonly packetCount: number;
+    readonly heldCount: number;
+    readonly suppressedCount: number;
+    readonly emergencyStopCount: number;
+    readonly publicSearchBehavior: "non_blocking";
+  };
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10ReleaseGateFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataDarkCanaryScenario =
+  | "tor_metadata_canary"
+  | "i2p_metadata_canary"
+  | "freenet_metadata_canary"
+  | "ransomware_leak_site_claim"
+  | "marketplace_forum_descriptor"
+  | "private_invite_target_blocked"
+  | "raw_payload_blocked"
+  | "credential_target_blocked"
+  | "legal_hold"
+  | "source_approval_expired"
+  | "emergency_stop"
+  | "false_claim_dispute";
+
+export interface RestrictedMetadataDarkCanaryPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataDarkCanaryScenario;
+  readonly network: DarknetNetwork;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly fixtureBacked: true;
+  readonly sourceHashOnly: true;
+  readonly actor?: string;
+  readonly victimCompany?: string;
+  readonly claimedDate?: string;
+  readonly sector?: string;
+  readonly country?: string;
+  readonly claimedDataType?: string;
+  readonly safeSourceHash: string;
+  readonly urlHash: string;
+  readonly screenshotHash?: string;
+  readonly firstSeen: string;
+  readonly lastSeen: string;
+  readonly policyState: "metadata_only_allowed" | "blocked" | "held" | "expired" | "emergency_stop";
+  readonly reviewState: "canary_fixture" | "metadata_review" | "legal_hold" | "approval_required" | "false_claim_review" | "blocked_unsafe_target" | "emergency_stop";
+  readonly publicGraphStixEffects: {
+    readonly publicSearch: "non_blocking";
+    readonly publicAnswer: "caveat_only" | "suppressed" | "no_effect";
+    readonly graph: "hold" | "pivot_only" | "suppress";
+    readonly stix: "blocked";
+    readonly api: "restrictedMetadata.darkMetadataCanary";
+  };
+  readonly proxyIsolationBoundary: {
+    readonly approvedProxyRequired: true;
+    readonly directEgressAllowed: false;
+    readonly credentialsAllowed: false;
+    readonly formsAllowed: false;
+    readonly captchaSolvingAllowed: false;
+    readonly privateCommunityAccessAllowed: false;
+    readonly fileDownloadsAllowed: false;
+    readonly threatActorInteractionAllowed: false;
+    readonly rawUnsafeUrlExposureAllowed: false;
+  };
+  readonly emergencyStopPropagation: {
+    readonly restrictedStatus: "hold" | "emergency_stop";
+    readonly sourceActivation: "hold";
+    readonly scheduler: "pause_restricted_partition";
+    readonly evidence: "metadata_only_no_object_download";
+    readonly quality: "review_required";
+    readonly graph: "hold_restricted_edges";
+    readonly api: "safe_metadata_only";
+    readonly releaseGate: "hold" | "rollback";
+  };
+  readonly operatorProofPacket: {
+    readonly purpose: "legal_ethics_review" | "enterprise_governance";
+    readonly allowedFields: readonly RestrictedMetadataField[];
+    readonly forbiddenActions: readonly string[];
+    readonly proofCommands: readonly string[];
+  };
+  readonly noLeakProof: {
+    readonly noRawOnionUrls: true;
+    readonly noRawUnsafeUrls: true;
+    readonly noRawPayloads: true;
+    readonly noStolenFileDownloads: true;
+    readonly noCredentialValues: true;
+    readonly noCaptchaSolving: true;
+    readonly noPrivateAccess: true;
+    readonly noThreatActorInteraction: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataDarkCanaryDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly fixtureBacked: true;
+  readonly packets: readonly RestrictedMetadataDarkCanaryPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataDarkCanaryScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataDarkCanaryScenario[];
+  readonly networks: readonly DarknetNetwork[];
+  readonly emergencyStopPacketIds: readonly string[];
+  readonly blockedUnsafePacketIds: readonly string[];
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10ReleaseGateFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataLegalEthicsAuditScenario =
+  | "metadata_only_collection"
+  | "unsafe_target_blocked"
+  | "approval_review"
+  | "legal_hold_review"
+  | "emergency_stop_review"
+  | "false_claim_review"
+  | "retention_review"
+  | "operator_thesis_export";
+
+export interface RestrictedMetadataLegalEthicsAuditPacketDto {
+  readonly auditPacketId: string;
+  readonly scenario: RestrictedMetadataLegalEthicsAuditScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly thesisReady: true;
+  readonly enterpriseReady: true;
+  readonly collected: {
+    readonly fields: readonly RestrictedMetadataField[];
+    readonly sourceHashIds: readonly string[];
+    readonly urlHashIds: readonly string[];
+    readonly screenshotHashIds: readonly string[];
+    readonly evidenceType: "restricted_metadata_hashes_and_claim_fields_only";
+  };
+  readonly blocked: {
+    readonly operations: readonly string[];
+    readonly unsafeTargetHashIds: readonly string[];
+    readonly reason: string;
+  };
+  readonly approval: {
+    readonly approvalState: "approved_metadata_only" | "approval_required" | "expired" | "legal_hold" | "emergency_stop";
+    readonly approverRole: "operator" | "legal" | "ethics_board" | "release_owner";
+    readonly policyVersion: string;
+    readonly auditTrailIds: readonly string[];
+  };
+  readonly whatWasNotAccessed: readonly string[];
+  readonly releaseInterpretation: "review_only" | "hold" | "rollback";
+  readonly graphStixApiEffect: {
+    readonly graph: "hold" | "pivot_only" | "suppress";
+    readonly stix: "blocked";
+    readonly api: "metadata_only_audit";
+    readonly publicSearch: "non_blocking";
+  };
+  readonly proofCommands: readonly string[];
+  readonly handoffs: {
+    readonly agent01Governance: "legal_ethics_source_governance";
+    readonly agent06EvidenceLedger: "legal_ethics_metadata_only_evidence";
+    readonly agent07Quality: "legal_ethics_false_claim_and_caveat_review";
+    readonly agent08GraphStix: "legal_ethics_export_hold";
+    readonly agent09ApiField: "restrictedMetadata.legalEthicsAuditExport";
+    readonly agent10ReleaseGate: "legal_ethics_release_gate";
+  };
+  readonly noLeakValidation: {
+    readonly noRawLeakMaterial: true;
+    readonly noUnsafeUrls: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPayloads: true;
+    readonly noStolenFileNames: true;
+    readonly noPrivateChannelMaterial: true;
+    readonly noThreatActorInteraction: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataLegalEthicsAuditExportDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly thesisReady: true;
+  readonly enterpriseReady: true;
+  readonly packets: readonly RestrictedMetadataLegalEthicsAuditPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataLegalEthicsAuditScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataLegalEthicsAuditScenario[];
+  readonly summary: {
+    readonly packetCount: number;
+    readonly blockedOperationCount: number;
+    readonly approvalRequiredCount: number;
+    readonly holdCount: number;
+    readonly rollbackCount: number;
+    readonly publicSearchBehavior: "non_blocking";
+  };
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10ReleaseGateFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataReviewHealthScenario =
+  | "restricted_source_approval"
+  | "victim_claim_review"
+  | "legal_hold_review"
+  | "duplicate_stale_repost_review"
+  | "false_claim_review"
+  | "emergency_stop_review"
+  | "retention_expiry_review"
+  | "notification_draft_review";
+
+export type RestrictedMetadataReviewHealthReason =
+  | "approval_pending"
+  | "victim_claim_pending"
+  | "legal_hold"
+  | "duplicate_or_stale"
+  | "false_claim_hold"
+  | "emergency_stop"
+  | "retention_expiring"
+  | "notification_draft";
+
+export interface RestrictedMetadataReviewHealthPacketDto {
+  readonly packetId: string;
+  readonly scenario: RestrictedMetadataReviewHealthScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly sourceHashOnly: true;
+  readonly queue: {
+    readonly pendingCount: number;
+    readonly oldestPendingAgeHours: number;
+    readonly workloadBand: "low" | "medium" | "high" | "critical";
+    readonly holdReason: RestrictedMetadataReviewHealthReason;
+  };
+  readonly sla: {
+    readonly targetHours: number;
+    readonly breached: boolean;
+    readonly oldestPendingItem: string;
+    readonly safeEscalationStatus: "normal" | "escalate_to_operator" | "incident_runbook";
+  };
+  readonly publicSearchBehavior: "non_blocking_public_summary";
+  readonly publicAnswerCaveat: "restricted_context_pending_review";
+  readonly graphStixExportBlock: "blocked_until_review";
+  readonly releaseBlocker: boolean;
+  readonly handoffs: {
+    readonly agent01Governance: "restricted_review_queue_health";
+    readonly agent02SchedulingIsolation: "hold_restricted_partition_only";
+    readonly agent06ClaimEvidenceLedger: "metadata_review_state";
+    readonly agent07AnswerCaveat: "restricted_context_caveat";
+    readonly agent08GraphHold: "hold_graph_stix_export";
+    readonly agent09ApiField: "restrictedMetadata.reviewHealth";
+    readonly agent10IncidentRunbook: "hold_or_escalate";
+  };
+  readonly proof: {
+    readonly publicSearchNotBlocked: true;
+    readonly graphStixBlockedUntilReview: true;
+    readonly noRawLeakMaterial: true;
+    readonly noUnsafeUrls: true;
+    readonly noCredentials: true;
+    readonly noScreenshots: true;
+    readonly noPrivateAccess: true;
+    readonly noAuthBypass: true;
+    readonly noCaptchaSolving: true;
+    readonly noThreatActorInteraction: true;
+  };
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataReviewHealthDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly packets: readonly RestrictedMetadataReviewHealthPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataReviewHealthScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataReviewHealthScenario[];
+  readonly queueTotals: {
+    readonly pendingCount: number;
+    readonly oldestPendingAgeHours: number;
+    readonly breachedCount: number;
+    readonly releaseBlockerCount: number;
+  };
+  readonly holdReasonDistribution: Record<RestrictedMetadataReviewHealthReason, number>;
+  readonly analystWorkloadBand: "low" | "medium" | "high" | "critical";
+  readonly publicSearchBehavior: "non_blocking_public_summary";
+  readonly graphStixExportBlockCount: number;
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10RunbookFields: readonly string[];
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataPolicyAuditExportScenario = RestrictedMetadataReviewHealthScenario;
+
+export interface RestrictedMetadataPolicyAuditExportNoLeakDto {
+  readonly passed: true;
+  readonly checkedPacketCount: number;
+  readonly forbiddenFieldsAbsent: readonly string[];
+  readonly noRawLeakedData: true;
+  readonly noRawOnionUrls: true;
+  readonly noCredentials: true;
+  readonly noScreenshots: true;
+  readonly noPayloads: true;
+  readonly noStolenFileNamesOrContent: true;
+  readonly noPrivateChannelMaterial: true;
+  readonly noJoinInteractOrBypassAutomation: true;
+}
+
+export interface RestrictedMetadataPolicyAuditExportPacketDto {
+  readonly exportId: string;
+  readonly scenario: RestrictedMetadataPolicyAuditExportScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly sourceHashOnly: true;
+  readonly policyDecisionHistory: readonly string[];
+  readonly actorClaimId: string;
+  readonly victimClaimId: string;
+  readonly sourceHashId: string;
+  readonly timestamps: {
+    readonly observedAt: string;
+    readonly reviewedAt: string;
+    readonly exportedAt: string;
+  };
+  readonly reviewState: "pending_review" | "held" | "escalated";
+  readonly releaseBlockers: readonly string[];
+  readonly retentionClass: RetentionClass;
+  readonly redactionState: "redacted_hashes_only";
+  readonly graphStixApiHolds: {
+    readonly graph: "hold_until_review";
+    readonly stix: "hold_until_review";
+    readonly api: "safe_metadata_only";
+  };
+  readonly publicSearchBehavior: "non_blocking_public_summary";
+  readonly jsonPacket: {
+    readonly schemaVersion: "ti.restricted_policy_audit_export.v1";
+    readonly exportId: string;
+    readonly scenario: RestrictedMetadataPolicyAuditExportScenario;
+    readonly sourceHashId: string;
+    readonly reviewState: "pending_review" | "held" | "escalated";
+    readonly releaseBlockers: readonly string[];
+  };
+  readonly compactSummary: string;
+  readonly releaseGateInterpretation: "hold" | "escalate" | "audit_only";
+  readonly handoffs: {
+    readonly agent01Governance: "policy_audit_packet";
+    readonly agent06EvidenceChain: "metadata_only_chain_of_custody";
+    readonly agent07Caveat: "restricted_policy_audit_caveat";
+    readonly agent08GraphStixHold: "hold_export_until_review";
+    readonly agent09ApiField: "restrictedMetadata.policyAuditExport";
+    readonly agent10AuditRunbook: "restricted_policy_audit";
+  };
+  readonly noLeakValidation: RestrictedMetadataPolicyAuditExportNoLeakDto;
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataPolicyAuditExportDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly exportMode: "dry_run_compliance_export";
+  readonly packets: readonly RestrictedMetadataPolicyAuditExportPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataPolicyAuditExportScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataPolicyAuditExportScenario[];
+  readonly jsonPacketSchema: "ti.restricted_policy_audit_export.v1";
+  readonly compactSummary: {
+    readonly exportPacketCount: number;
+    readonly releaseHoldCount: number;
+    readonly escalationCount: number;
+    readonly publicSearchBehavior: "non_blocking_public_summary";
+  };
+  readonly releaseGateInterpretation: "hold";
+  readonly agent09ApiFields: readonly string[];
+  readonly noLeakValidation: RestrictedMetadataPolicyAuditExportNoLeakDto;
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export type RestrictedMetadataEvidenceHoldReleaseDrillScenario = RestrictedMetadataReviewHealthScenario;
+
+export type RestrictedMetadataEvidenceHoldReleasePath =
+  | "remain_held"
+  | "public_caveat_only"
+  | "graph_pivot_only"
+  | "evidence_replay_required"
+  | "analyst_approval_required"
+  | "stix_export_blocked"
+  | "rollback_only";
+
+export interface RestrictedMetadataEvidenceHoldReleaseNoLeakDto {
+  readonly passed: true;
+  readonly checkedPacketCount: number;
+  readonly sourceHashOnly: true;
+  readonly noRawLeakedData: true;
+  readonly noRawOnionUrls: true;
+  readonly noCredentials: true;
+  readonly noScreenshots: true;
+  readonly noPayloads: true;
+  readonly noStolenFileNamesOrContent: true;
+  readonly noPrivateChannelMaterial: true;
+  readonly noJoinInteractOrBypassAutomation: true;
+  readonly noMutationOrDelivery: true;
+}
+
+export interface RestrictedMetadataEvidenceHoldReleaseDrillPacketDto {
+  readonly drillId: string;
+  readonly scenario: RestrictedMetadataEvidenceHoldReleaseDrillScenario;
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly sourceHashOnly: true;
+  readonly actorClaimId: string;
+  readonly victimClaimId: string;
+  readonly sourceHashId: string;
+  readonly reviewState: "held" | "pending_review" | "escalated";
+  readonly releasePath: RestrictedMetadataEvidenceHoldReleasePath;
+  readonly releaseInterpretation: "hold" | "caveated_public_context" | "graph_pivot_review" | "replay_before_release" | "rollback";
+  readonly releaseBlockers: readonly string[];
+  readonly compensatingRollbackActions: readonly string[];
+  readonly auditFields: {
+    readonly policyAuditExportId: string;
+    readonly reviewQueueScenario: RestrictedMetadataReviewHealthScenario;
+    readonly retentionClass: RetentionClass;
+    readonly legalHold: boolean;
+    readonly redactionState: "redacted_hashes_only";
+    readonly graphRelationshipId: string;
+    readonly evidenceReplayId: string;
+  };
+  readonly constraints: {
+    readonly retentionLegalHoldRespected: true;
+    readonly sourceHashOnlyReferences: true;
+    readonly analystApprovalRequired: boolean;
+    readonly evidenceReplayRequired: boolean;
+    readonly stixExportBlocked: boolean;
+    readonly publicSearchNonBlocking: true;
+  };
+  readonly graphStixApiEffect: {
+    readonly publicAnswer: "caveat_only" | "no_public_fact";
+    readonly graph: "hold" | "pivot_only";
+    readonly stix: "blocked";
+    readonly api: "safe_metadata_only";
+  };
+  readonly handoffs: {
+    readonly agent06EvidenceChain: "release_drill_chain_of_custody";
+    readonly agent07Caveat: "restricted_release_caveat";
+    readonly agent08GraphDriftHold: "restricted_graph_pivot_or_hold";
+    readonly agent09ApiField: "restrictedMetadata.evidenceHoldReleaseDrill";
+    readonly agent10IncidentReleaseGate: "restricted_release_or_rollback_drill";
+  };
+  readonly noLeakValidation: RestrictedMetadataEvidenceHoldReleaseNoLeakDto;
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
+export interface RestrictedMetadataEvidenceHoldReleaseDrillDto {
+  readonly metadataOnly: true;
+  readonly safeForApi: true;
+  readonly dryRunOnly: true;
+  readonly drillMode: "dry_run_release_rollback";
+  readonly packets: readonly RestrictedMetadataEvidenceHoldReleaseDrillPacketDto[];
+  readonly fixtureScenarios: readonly RestrictedMetadataEvidenceHoldReleaseDrillScenario[];
+  readonly observedScenarios: readonly RestrictedMetadataEvidenceHoldReleaseDrillScenario[];
+  readonly releasePaths: readonly RestrictedMetadataEvidenceHoldReleasePath[];
+  readonly summary: {
+    readonly packetCount: number;
+    readonly remainHeldCount: number;
+    readonly publicCaveatOnlyCount: number;
+    readonly graphPivotOnlyCount: number;
+    readonly evidenceReplayRequiredCount: number;
+    readonly analystApprovalRequiredCount: number;
+    readonly stixExportBlockedCount: number;
+    readonly rollbackOnlyCount: number;
+    readonly publicSearchBehavior: "non_blocking_public_summary";
+  };
+  readonly agent09ApiFields: readonly string[];
+  readonly agent10ReleaseGateFields: readonly string[];
+  readonly noLeakValidation: RestrictedMetadataEvidenceHoldReleaseNoLeakDto;
+  readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
+}
+
 export interface RestrictedMetadataRuntimeProofDto {
   readonly kind: RestrictedMetadataRuntimeProofKind;
   readonly sourceId: string;
@@ -1566,6 +2341,15 @@ export interface RestrictedMetadataOperationsReadinessDto {
   readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
   readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
   readonly operationalPlaybooks: RestrictedMetadataOperationalPlaybooksDto;
+  readonly qualityEvaluation: RestrictedMetadataQualityEvaluationDto;
+  readonly capacityIsolation: RestrictedMetadataCapacityIsolationDto;
+  readonly capacitySlo: RestrictedMetadataCapacitySloDto;
+  readonly operatorGovernance: RestrictedMetadataOperatorGovernanceDto;
+  readonly darkMetadataCanary: RestrictedMetadataDarkCanaryDto;
+  readonly legalEthicsAuditExport: RestrictedMetadataLegalEthicsAuditExportDto;
+  readonly reviewHealth: RestrictedMetadataReviewHealthDto;
+  readonly policyAuditExport: RestrictedMetadataPolicyAuditExportDto;
+  readonly evidenceHoldReleaseDrill: RestrictedMetadataEvidenceHoldReleaseDrillDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly compliance: RestrictedMetadataComplianceSummaryDto;
   readonly agent09SearchSummary: RestrictedMetadataComplianceSummaryDto;
@@ -1629,6 +2413,15 @@ export interface RestrictedMetadataOperationsStatusDto {
   readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
   readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
   readonly operationalPlaybooks: RestrictedMetadataOperationalPlaybooksDto;
+  readonly qualityEvaluation: RestrictedMetadataQualityEvaluationDto;
+  readonly capacityIsolation: RestrictedMetadataCapacityIsolationDto;
+  readonly capacitySlo: RestrictedMetadataCapacitySloDto;
+  readonly operatorGovernance: RestrictedMetadataOperatorGovernanceDto;
+  readonly darkMetadataCanary: RestrictedMetadataDarkCanaryDto;
+  readonly legalEthicsAuditExport: RestrictedMetadataLegalEthicsAuditExportDto;
+  readonly reviewHealth: RestrictedMetadataReviewHealthDto;
+  readonly policyAuditExport: RestrictedMetadataPolicyAuditExportDto;
+  readonly evidenceHoldReleaseDrill: RestrictedMetadataEvidenceHoldReleaseDrillDto;
   readonly agent10ReleasePacket: RestrictedMetadataAgent10ReleasePacketDto;
   readonly remediationPlan: readonly RestrictedMetadataOperationsRemediationPlanItem[];
   readonly connectorFixtures: readonly RestrictedMetadataConnectorFixture[];
@@ -2081,6 +2874,15 @@ export interface RestrictedMetadataApplyPlan {
   readonly analystOperations: RestrictedMetadataAnalystOperationsDto;
   readonly isolationHarness: RestrictedMetadataIsolationHarnessDto;
   readonly operationalPlaybooks: RestrictedMetadataOperationalPlaybooksDto;
+  readonly qualityEvaluation: RestrictedMetadataQualityEvaluationDto;
+  readonly capacityIsolation: RestrictedMetadataCapacityIsolationDto;
+  readonly capacitySlo: RestrictedMetadataCapacitySloDto;
+  readonly operatorGovernance: RestrictedMetadataOperatorGovernanceDto;
+  readonly darkMetadataCanary: RestrictedMetadataDarkCanaryDto;
+  readonly legalEthicsAuditExport: RestrictedMetadataLegalEthicsAuditExportDto;
+  readonly reviewHealth: RestrictedMetadataReviewHealthDto;
+  readonly policyAuditExport: RestrictedMetadataPolicyAuditExportDto;
+  readonly evidenceHoldReleaseDrill: RestrictedMetadataEvidenceHoldReleaseDrillDto;
   readonly noLeakSerialization: RestrictedMetadataNoLeakSerializationCheckDto;
   readonly summary: Record<RestrictedMetadataApplySafety, number>;
   readonly agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket";
@@ -2216,6 +3018,1637 @@ const RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS: readonly RestrictedMetadataOper
   "false_claim_review",
   "duplicate_claim_review"
 ];
+
+const RESTRICTED_QUALITY_EVALUATION_SCENARIOS: readonly RestrictedMetadataQualityEvaluationScenario[] = [
+  "false_claim",
+  "actor_impersonation",
+  "duplicate_announcement",
+  "stale_repost",
+  "noisy_mirror",
+  "source_takedown",
+  "unavailable_source",
+  "source_family_bias",
+  "contradictory_counts",
+  "contradictory_dates",
+  "victim_name_ambiguity"
+];
+
+const RESTRICTED_CAPACITY_ISOLATION_SCENARIOS: readonly RestrictedMetadataCapacityIsolationScenario[] = [
+  "proxy_outage",
+  "timeout_spike",
+  "legal_hold_load",
+  "retention_backlog",
+  "approval_backlog",
+  "emergency_stop_drain",
+  "public_search_pressure"
+];
+
+const RESTRICTED_CAPACITY_SLO_SCENARIOS: readonly RestrictedMetadataCapacitySloScenario[] = [
+  "worker_capacity",
+  "legal_hold_slo",
+  "approval_expiry_slo",
+  "emergency_stop_slo",
+  "retention_window_slo",
+  "source_quarantine_slo",
+  "analyst_review_queue_slo",
+  "proxy_outage_hold",
+  "unsafe_source_discovery_hold",
+  "duplicate_stale_claim_hold",
+  "false_claim_review_hold",
+  "over_capacity_hold"
+];
+
+const RESTRICTED_OPERATOR_GOVERNANCE_SCENARIOS: readonly RestrictedMetadataOperatorGovernanceScenario[] = [
+  "ransomware_leak_claim_review_hold",
+  "public_channel_rumor_rejected",
+  "source_approval_expired",
+  "legal_hold_active",
+  "retention_expired",
+  "capacity_exceeded",
+  "source_quarantined_unsafe_target",
+  "duplicate_victim_claim_suppressed",
+  "false_claim_disputed",
+  "emergency_stop_active"
+];
+
+const RESTRICTED_DARK_CANARY_SCENARIOS: readonly RestrictedMetadataDarkCanaryScenario[] = [
+  "tor_metadata_canary",
+  "i2p_metadata_canary",
+  "freenet_metadata_canary",
+  "ransomware_leak_site_claim",
+  "marketplace_forum_descriptor",
+  "private_invite_target_blocked",
+  "raw_payload_blocked",
+  "credential_target_blocked",
+  "legal_hold",
+  "source_approval_expired",
+  "emergency_stop",
+  "false_claim_dispute"
+];
+
+const RESTRICTED_LEGAL_ETHICS_AUDIT_SCENARIOS: readonly RestrictedMetadataLegalEthicsAuditScenario[] = [
+  "metadata_only_collection",
+  "unsafe_target_blocked",
+  "approval_review",
+  "legal_hold_review",
+  "emergency_stop_review",
+  "false_claim_review",
+  "retention_review",
+  "operator_thesis_export"
+];
+
+const RESTRICTED_REVIEW_HEALTH_SCENARIOS: readonly RestrictedMetadataReviewHealthScenario[] = [
+  "restricted_source_approval",
+  "victim_claim_review",
+  "legal_hold_review",
+  "duplicate_stale_repost_review",
+  "false_claim_review",
+  "emergency_stop_review",
+  "retention_expiry_review",
+  "notification_draft_review"
+];
+
+const RESTRICTED_REVIEW_HEALTH_REASONS: readonly RestrictedMetadataReviewHealthReason[] = [
+  "approval_pending",
+  "victim_claim_pending",
+  "legal_hold",
+  "duplicate_or_stale",
+  "false_claim_hold",
+  "emergency_stop",
+  "retention_expiring",
+  "notification_draft"
+];
+
+function buildRestrictedMetadataReviewHealthContract(
+  observedScenarios: readonly RestrictedMetadataReviewHealthScenario[] = RESTRICTED_REVIEW_HEALTH_SCENARIOS
+): RestrictedMetadataReviewHealthDto {
+  return restrictedMetadataReviewHealthSummary(
+    RESTRICTED_REVIEW_HEALTH_SCENARIOS.map(restrictedMetadataReviewHealthPacket),
+    observedScenarios
+  );
+}
+
+function buildRestrictedMetadataPolicyAuditExportContract(
+  observedScenarios: readonly RestrictedMetadataPolicyAuditExportScenario[] = RESTRICTED_REVIEW_HEALTH_SCENARIOS
+): RestrictedMetadataPolicyAuditExportDto {
+  const packets = restrictedMetadataDedupePolicyAuditPackets([
+    ...observedScenarios.map(restrictedMetadataPolicyAuditExportPacket),
+    ...RESTRICTED_REVIEW_HEALTH_SCENARIOS.map(restrictedMetadataPolicyAuditExportPacket)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    exportMode: "dry_run_compliance_export",
+    packets,
+    fixtureScenarios: RESTRICTED_REVIEW_HEALTH_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...packets.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataPolicyAuditExportScenario[],
+    jsonPacketSchema: "ti.restricted_policy_audit_export.v1",
+    compactSummary: {
+      exportPacketCount: packets.length,
+      releaseHoldCount: packets.filter((packet) => packet.releaseGateInterpretation === "hold").length,
+      escalationCount: packets.filter((packet) => packet.releaseGateInterpretation === "escalate").length,
+      publicSearchBehavior: "non_blocking_public_summary"
+    },
+    releaseGateInterpretation: "hold",
+    agent09ApiFields: ["restrictedMetadata.policyAuditExport", "restrictedMetadata.policyAuditExport.packets", "restrictedMetadata.policyAuditExport.noLeakValidation"],
+    noLeakValidation: restrictedMetadataPolicyAuditExportNoLeakValidation(packets.length),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataPolicyAuditExportPacket(
+  scenario: RestrictedMetadataPolicyAuditExportScenario
+): RestrictedMetadataPolicyAuditExportPacketDto {
+  const exportId = stableId("restricted-policy-audit-export", scenario);
+  const sourceHashId = stableId("restricted-source-hash", scenario);
+  const releaseGateInterpretation = scenario === "emergency_stop_review" || scenario === "false_claim_review"
+    ? "escalate"
+    : scenario === "restricted_source_approval" || scenario === "legal_hold_review" || scenario === "retention_expiry_review"
+      ? "hold"
+      : "audit_only";
+  const releaseBlockers = restrictedMetadataPolicyAuditReleaseBlockers(scenario);
+  return {
+    exportId,
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    sourceHashOnly: true,
+    policyDecisionHistory: [
+      "metadata_only_required",
+      `review_queue:${scenario}`,
+      "public_search_non_blocking",
+      "graph_stix_hold_until_review"
+    ],
+    actorClaimId: stableId("restricted-actor-claim", scenario),
+    victimClaimId: stableId("restricted-victim-claim", scenario),
+    sourceHashId,
+    timestamps: {
+      observedAt: "2026-05-24T00:00:00.000Z",
+      reviewedAt: "2026-05-24T00:00:00.000Z",
+      exportedAt: "2026-05-24T00:00:00.000Z"
+    },
+    reviewState: releaseGateInterpretation === "escalate" ? "escalated" : releaseGateInterpretation === "hold" ? "held" : "pending_review",
+    releaseBlockers,
+    retentionClass: scenario === "legal_hold_review" ? "legal_hold" : scenario === "retention_expiry_review" ? "short" : "standard",
+    redactionState: "redacted_hashes_only",
+    graphStixApiHolds: {
+      graph: "hold_until_review",
+      stix: "hold_until_review",
+      api: "safe_metadata_only"
+    },
+    publicSearchBehavior: "non_blocking_public_summary",
+    jsonPacket: {
+      schemaVersion: "ti.restricted_policy_audit_export.v1",
+      exportId,
+      scenario,
+      sourceHashId,
+      reviewState: releaseGateInterpretation === "escalate" ? "escalated" : releaseGateInterpretation === "hold" ? "held" : "pending_review",
+      releaseBlockers
+    },
+    compactSummary: `${scenario} export is metadata-only, source-hash-only, and held from graph/STIX promotion until review.`,
+    releaseGateInterpretation,
+    handoffs: {
+      agent01Governance: "policy_audit_packet",
+      agent06EvidenceChain: "metadata_only_chain_of_custody",
+      agent07Caveat: "restricted_policy_audit_caveat",
+      agent08GraphStixHold: "hold_export_until_review",
+      agent09ApiField: "restrictedMetadata.policyAuditExport",
+      agent10AuditRunbook: "restricted_policy_audit"
+    },
+    noLeakValidation: restrictedMetadataPolicyAuditExportNoLeakValidation(1),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataPolicyAuditReleaseBlockers(
+  scenario: RestrictedMetadataPolicyAuditExportScenario
+): string[] {
+  const mapping: Record<RestrictedMetadataPolicyAuditExportScenario, string[]> = {
+    restricted_source_approval: ["operator_approval_pending"],
+    victim_claim_review: ["victim_claim_pending_review"],
+    legal_hold_review: ["legal_hold_active"],
+    duplicate_stale_repost_review: ["duplicate_or_stale_claim"],
+    false_claim_review: ["false_claim_review_required"],
+    emergency_stop_review: ["emergency_stop_active"],
+    retention_expiry_review: ["retention_expiry_pending"],
+    notification_draft_review: ["notification_draft_not_approved"]
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataPolicyAuditExportNoLeakValidation(
+  checkedPacketCount: number
+): RestrictedMetadataPolicyAuditExportNoLeakDto {
+  return {
+    passed: true,
+    checkedPacketCount,
+    forbiddenFieldsAbsent: [
+      "rawLeakData",
+      "rawOnionUrl",
+      "credentials",
+      "screenshotBytes",
+      "payload",
+      "stolenFileName",
+      "privateChannelMaterial",
+      "joinInteractBypassAutomation"
+    ],
+    noRawLeakedData: true,
+    noRawOnionUrls: true,
+    noCredentials: true,
+    noScreenshots: true,
+    noPayloads: true,
+    noStolenFileNamesOrContent: true,
+    noPrivateChannelMaterial: true,
+    noJoinInteractOrBypassAutomation: true
+  };
+}
+
+function restrictedMetadataDedupePolicyAuditPackets(
+  packets: readonly RestrictedMetadataPolicyAuditExportPacketDto[]
+): RestrictedMetadataPolicyAuditExportPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+const RESTRICTED_EVIDENCE_HOLD_RELEASE_PATHS: readonly RestrictedMetadataEvidenceHoldReleasePath[] = [
+  "remain_held",
+  "public_caveat_only",
+  "graph_pivot_only",
+  "evidence_replay_required",
+  "analyst_approval_required",
+  "stix_export_blocked",
+  "rollback_only"
+];
+
+function buildRestrictedMetadataEvidenceHoldReleaseDrillContract(
+  observedScenarios: readonly RestrictedMetadataEvidenceHoldReleaseDrillScenario[] = RESTRICTED_REVIEW_HEALTH_SCENARIOS
+): RestrictedMetadataEvidenceHoldReleaseDrillDto {
+  const packets = restrictedMetadataDedupeEvidenceHoldReleaseDrillPackets([
+    ...observedScenarios.map(restrictedMetadataEvidenceHoldReleaseDrillPacket),
+    ...RESTRICTED_REVIEW_HEALTH_SCENARIOS.map(restrictedMetadataEvidenceHoldReleaseDrillPacket)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    drillMode: "dry_run_release_rollback",
+    packets,
+    fixtureScenarios: RESTRICTED_REVIEW_HEALTH_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...packets.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataEvidenceHoldReleaseDrillScenario[],
+    releasePaths: RESTRICTED_EVIDENCE_HOLD_RELEASE_PATHS,
+    summary: {
+      packetCount: packets.length,
+      remainHeldCount: packets.filter((packet) => packet.releasePath === "remain_held").length,
+      publicCaveatOnlyCount: packets.filter((packet) => packet.releasePath === "public_caveat_only").length,
+      graphPivotOnlyCount: packets.filter((packet) => packet.releasePath === "graph_pivot_only").length,
+      evidenceReplayRequiredCount: packets.filter((packet) => packet.releasePath === "evidence_replay_required").length,
+      analystApprovalRequiredCount: packets.filter((packet) => packet.releasePath === "analyst_approval_required").length,
+      stixExportBlockedCount: packets.filter((packet) => packet.releasePath === "stix_export_blocked").length,
+      rollbackOnlyCount: packets.filter((packet) => packet.releasePath === "rollback_only").length,
+      publicSearchBehavior: "non_blocking_public_summary"
+    },
+    agent09ApiFields: [
+      "restrictedMetadata.evidenceHoldReleaseDrill",
+      "restrictedMetadata.evidenceHoldReleaseDrill.packets",
+      "restrictedMetadata.evidenceHoldReleaseDrill.summary"
+    ],
+    agent10ReleaseGateFields: [
+      "releasePath",
+      "releaseBlockers",
+      "compensatingRollbackActions",
+      "retentionLegalHoldRespected",
+      "stixExportBlocked"
+    ],
+    noLeakValidation: restrictedMetadataEvidenceHoldReleaseNoLeakValidation(packets.length),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataEvidenceHoldReleaseDrillPacket(
+  scenario: RestrictedMetadataEvidenceHoldReleaseDrillScenario
+): RestrictedMetadataEvidenceHoldReleaseDrillPacketDto {
+  const releasePath = restrictedMetadataEvidenceHoldReleasePath(scenario);
+  const releaseBlockers = restrictedMetadataPolicyAuditReleaseBlockers(scenario);
+  const retentionClass = scenario === "legal_hold_review" ? "legal_hold" : scenario === "retention_expiry_review" ? "short" : "standard";
+  const analystApprovalRequired = releasePath === "analyst_approval_required" || scenario === "restricted_source_approval" || scenario === "notification_draft_review";
+  const evidenceReplayRequired = releasePath === "evidence_replay_required";
+  const stixExportBlocked = releasePath !== "graph_pivot_only";
+  return {
+    drillId: stableId("restricted-evidence-hold-release-drill", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    sourceHashOnly: true,
+    actorClaimId: stableId("restricted-actor-claim", scenario),
+    victimClaimId: stableId("restricted-victim-claim", scenario),
+    sourceHashId: stableId("restricted-source-hash", scenario),
+    reviewState: scenario === "emergency_stop_review" || scenario === "false_claim_review" ? "escalated" : releasePath === "public_caveat_only" || releasePath === "graph_pivot_only" ? "pending_review" : "held",
+    releasePath,
+    releaseInterpretation: restrictedMetadataEvidenceHoldReleaseInterpretation(releasePath),
+    releaseBlockers,
+    compensatingRollbackActions: restrictedMetadataEvidenceHoldRollbackActions(scenario, releasePath),
+    auditFields: {
+      policyAuditExportId: stableId("restricted-policy-audit-export", scenario),
+      reviewQueueScenario: scenario,
+      retentionClass,
+      legalHold: scenario === "legal_hold_review",
+      redactionState: "redacted_hashes_only",
+      graphRelationshipId: stableId("restricted-graph-relationship", scenario),
+      evidenceReplayId: stableId("restricted-evidence-replay", scenario)
+    },
+    constraints: {
+      retentionLegalHoldRespected: true,
+      sourceHashOnlyReferences: true,
+      analystApprovalRequired,
+      evidenceReplayRequired,
+      stixExportBlocked,
+      publicSearchNonBlocking: true
+    },
+    graphStixApiEffect: {
+      publicAnswer: releasePath === "public_caveat_only" ? "caveat_only" : "no_public_fact",
+      graph: releasePath === "graph_pivot_only" ? "pivot_only" : "hold",
+      stix: "blocked",
+      api: "safe_metadata_only"
+    },
+    handoffs: {
+      agent06EvidenceChain: "release_drill_chain_of_custody",
+      agent07Caveat: "restricted_release_caveat",
+      agent08GraphDriftHold: "restricted_graph_pivot_or_hold",
+      agent09ApiField: "restrictedMetadata.evidenceHoldReleaseDrill",
+      agent10IncidentReleaseGate: "restricted_release_or_rollback_drill"
+    },
+    noLeakValidation: restrictedMetadataEvidenceHoldReleaseNoLeakValidation(1),
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataEvidenceHoldReleasePath(
+  scenario: RestrictedMetadataEvidenceHoldReleaseDrillScenario
+): RestrictedMetadataEvidenceHoldReleasePath {
+  const mapping: Record<RestrictedMetadataEvidenceHoldReleaseDrillScenario, RestrictedMetadataEvidenceHoldReleasePath> = {
+    restricted_source_approval: "analyst_approval_required",
+    victim_claim_review: "public_caveat_only",
+    legal_hold_review: "remain_held",
+    duplicate_stale_repost_review: "evidence_replay_required",
+    false_claim_review: "rollback_only",
+    emergency_stop_review: "rollback_only",
+    retention_expiry_review: "stix_export_blocked",
+    notification_draft_review: "graph_pivot_only"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataEvidenceHoldReleaseInterpretation(
+  releasePath: RestrictedMetadataEvidenceHoldReleasePath
+): RestrictedMetadataEvidenceHoldReleaseDrillPacketDto["releaseInterpretation"] {
+  if (releasePath === "public_caveat_only") return "caveated_public_context";
+  if (releasePath === "graph_pivot_only") return "graph_pivot_review";
+  if (releasePath === "evidence_replay_required") return "replay_before_release";
+  if (releasePath === "rollback_only") return "rollback";
+  return "hold";
+}
+
+function restrictedMetadataEvidenceHoldRollbackActions(
+  scenario: RestrictedMetadataEvidenceHoldReleaseDrillScenario,
+  releasePath: RestrictedMetadataEvidenceHoldReleasePath
+): string[] {
+  const base = ["restore_review_hold", "remove_public_fact_promotion", "keep_stix_export_blocked"];
+  const scenarioActions: Record<RestrictedMetadataEvidenceHoldReleaseDrillScenario, string[]> = {
+    restricted_source_approval: ["revoke_unapproved_source_queue", "reopen_operator_approval"],
+    victim_claim_review: ["remove_caveated_public_context", "reopen_victim_claim_review"],
+    legal_hold_review: ["preserve_legal_hold", "extend_retention_lock"],
+    duplicate_stale_repost_review: ["restore_duplicate_stale_hold", "request_evidence_replay"],
+    false_claim_review: ["suppress_false_claim", "record_claim_ledger_rollback"],
+    emergency_stop_review: ["keep_kill_switch_active", "drain_restricted_metadata_queue"],
+    retention_expiry_review: ["expire_restricted_claim_context", "preserve_audit_hashes_only"],
+    notification_draft_review: ["cancel_notification_draft", "remove_graph_pivot_preview"]
+  };
+  return restrictedMetadataUniqueStrings([
+    ...base,
+    ...scenarioActions[scenario],
+    releasePath === "graph_pivot_only" ? "remove_graph_pivot_preview" : "",
+    releasePath === "public_caveat_only" ? "remove_public_caveat" : ""
+  ].filter((action): action is string => Boolean(action)));
+}
+
+function restrictedMetadataEvidenceHoldReleaseNoLeakValidation(
+  checkedPacketCount: number
+): RestrictedMetadataEvidenceHoldReleaseNoLeakDto {
+  return {
+    passed: true,
+    checkedPacketCount,
+    sourceHashOnly: true,
+    noRawLeakedData: true,
+    noRawOnionUrls: true,
+    noCredentials: true,
+    noScreenshots: true,
+    noPayloads: true,
+    noStolenFileNamesOrContent: true,
+    noPrivateChannelMaterial: true,
+    noJoinInteractOrBypassAutomation: true,
+    noMutationOrDelivery: true
+  };
+}
+
+function restrictedMetadataDedupeEvidenceHoldReleaseDrillPackets(
+  packets: readonly RestrictedMetadataEvidenceHoldReleaseDrillPacketDto[]
+): RestrictedMetadataEvidenceHoldReleaseDrillPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function restrictedMetadataReviewHealthSummary(
+  packets: readonly RestrictedMetadataReviewHealthPacketDto[],
+  observedScenarios: readonly RestrictedMetadataReviewHealthScenario[] = packets.map((packet) => packet.scenario)
+): RestrictedMetadataReviewHealthDto {
+  const withFixtures = restrictedMetadataDedupeReviewHealthPackets([
+    ...packets,
+    ...RESTRICTED_REVIEW_HEALTH_SCENARIOS.map(restrictedMetadataReviewHealthPacket)
+  ]);
+  const pendingCount = withFixtures.reduce((sum, packet) => sum + packet.queue.pendingCount, 0);
+  const oldestPendingAgeHours = Math.max(...withFixtures.map((packet) => packet.queue.oldestPendingAgeHours), 0);
+  const breachedCount = withFixtures.filter((packet) => packet.sla.breached).length;
+  const releaseBlockerCount = withFixtures.filter((packet) => packet.releaseBlocker).length;
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets: withFixtures,
+    fixtureScenarios: RESTRICTED_REVIEW_HEALTH_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...withFixtures.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataReviewHealthScenario[],
+    queueTotals: {
+      pendingCount,
+      oldestPendingAgeHours,
+      breachedCount,
+      releaseBlockerCount
+    },
+    holdReasonDistribution: Object.fromEntries(RESTRICTED_REVIEW_HEALTH_REASONS.map((reason) => [
+      reason,
+      withFixtures.filter((packet) => packet.queue.holdReason === reason).length
+    ])) as Record<RestrictedMetadataReviewHealthReason, number>,
+    analystWorkloadBand: pendingCount >= 24 || releaseBlockerCount >= 3 ? "critical" : pendingCount >= 12 ? "high" : pendingCount >= 6 ? "medium" : "low",
+    publicSearchBehavior: "non_blocking_public_summary",
+    graphStixExportBlockCount: withFixtures.filter((packet) => packet.graphStixExportBlock === "blocked_until_review").length,
+    agent09ApiFields: ["restrictedMetadata.reviewHealth", "restrictedMetadata.reviewHealth.queueTotals", "restrictedMetadata.reviewHealth.holdReasonDistribution"],
+    agent10RunbookFields: ["oldestPendingItem", "safeEscalationStatus", "releaseBlockerCount", "analystWorkloadBand"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataReviewHealthPacket(
+  scenario: RestrictedMetadataReviewHealthScenario
+): RestrictedMetadataReviewHealthPacketDto {
+  const reason = restrictedMetadataReviewHealthReason(scenario);
+  const pendingCount = restrictedMetadataReviewPendingCount(scenario);
+  const oldestPendingAgeHours = restrictedMetadataReviewOldestAgeHours(scenario);
+  const targetHours = scenario === "emergency_stop_review" ? 1 : scenario === "legal_hold_review" || scenario === "retention_expiry_review" ? 8 : 24;
+  const breached = oldestPendingAgeHours > targetHours;
+  return {
+    packetId: stableId("restricted-review-health", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    sourceHashOnly: true,
+    queue: {
+      pendingCount,
+      oldestPendingAgeHours,
+      workloadBand: pendingCount >= 5 || scenario === "emergency_stop_review" ? "critical" : pendingCount >= 3 ? "high" : pendingCount >= 2 ? "medium" : "low",
+      holdReason: reason
+    },
+    sla: {
+      targetHours,
+      breached,
+      oldestPendingItem: stableId("restricted-review-item", scenario),
+      safeEscalationStatus: scenario === "emergency_stop_review" ? "incident_runbook" : breached ? "escalate_to_operator" : "normal"
+    },
+    publicSearchBehavior: "non_blocking_public_summary",
+    publicAnswerCaveat: "restricted_context_pending_review",
+    graphStixExportBlock: "blocked_until_review",
+    releaseBlocker: breached || scenario === "false_claim_review" || scenario === "emergency_stop_review" || scenario === "legal_hold_review",
+    handoffs: {
+      agent01Governance: "restricted_review_queue_health",
+      agent02SchedulingIsolation: "hold_restricted_partition_only",
+      agent06ClaimEvidenceLedger: "metadata_review_state",
+      agent07AnswerCaveat: "restricted_context_caveat",
+      agent08GraphHold: "hold_graph_stix_export",
+      agent09ApiField: "restrictedMetadata.reviewHealth",
+      agent10IncidentRunbook: "hold_or_escalate"
+    },
+    proof: {
+      publicSearchNotBlocked: true,
+      graphStixBlockedUntilReview: true,
+      noRawLeakMaterial: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPrivateAccess: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noThreatActorInteraction: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataReviewHealthReason(
+  scenario: RestrictedMetadataReviewHealthScenario
+): RestrictedMetadataReviewHealthReason {
+  const mapping: Record<RestrictedMetadataReviewHealthScenario, RestrictedMetadataReviewHealthReason> = {
+    restricted_source_approval: "approval_pending",
+    victim_claim_review: "victim_claim_pending",
+    legal_hold_review: "legal_hold",
+    duplicate_stale_repost_review: "duplicate_or_stale",
+    false_claim_review: "false_claim_hold",
+    emergency_stop_review: "emergency_stop",
+    retention_expiry_review: "retention_expiring",
+    notification_draft_review: "notification_draft"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataReviewPendingCount(scenario: RestrictedMetadataReviewHealthScenario): number {
+  const mapping: Record<RestrictedMetadataReviewHealthScenario, number> = {
+    restricted_source_approval: 4,
+    victim_claim_review: 6,
+    legal_hold_review: 2,
+    duplicate_stale_repost_review: 5,
+    false_claim_review: 3,
+    emergency_stop_review: 1,
+    retention_expiry_review: 3,
+    notification_draft_review: 4
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataReviewOldestAgeHours(scenario: RestrictedMetadataReviewHealthScenario): number {
+  const mapping: Record<RestrictedMetadataReviewHealthScenario, number> = {
+    restricted_source_approval: 18,
+    victim_claim_review: 21,
+    legal_hold_review: 12,
+    duplicate_stale_repost_review: 16,
+    false_claim_review: 30,
+    emergency_stop_review: 2,
+    retention_expiry_review: 9,
+    notification_draft_review: 10
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataDedupeReviewHealthPackets(
+  packets: readonly RestrictedMetadataReviewHealthPacketDto[]
+): RestrictedMetadataReviewHealthPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function buildRestrictedMetadataCapacityIsolationContract(
+  observedScenarios: readonly RestrictedMetadataCapacityIsolationScenario[] = RESTRICTED_CAPACITY_ISOLATION_SCENARIOS
+): RestrictedMetadataCapacityIsolationDto {
+  return restrictedMetadataCapacityIsolationSummary(
+    RESTRICTED_CAPACITY_ISOLATION_SCENARIOS.map(restrictedMetadataCapacityIsolationPacket),
+    observedScenarios
+  );
+}
+
+function restrictedMetadataCapacityIsolationSummary(
+  packets: readonly RestrictedMetadataCapacityIsolationPacketDto[],
+  observedScenarios: readonly RestrictedMetadataCapacityIsolationScenario[] = packets.map((packet) => packet.scenario)
+): RestrictedMetadataCapacityIsolationDto {
+  const withFixtures = restrictedMetadataDedupeCapacityPackets([
+    ...packets,
+    ...RESTRICTED_CAPACITY_ISOLATION_SCENARIOS.map(restrictedMetadataCapacityIsolationPacket)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets: withFixtures,
+    fixtureScenarios: RESTRICTED_CAPACITY_ISOLATION_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...withFixtures.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataCapacityIsolationScenario[],
+    networkBudgets: restrictedMetadataNetworkCapacityBudgets("approval_backlog"),
+    publicSearchHoldCount: withFixtures.filter((packet) => packet.publicSearchProtection === "preserve_public_headroom").length,
+    emergencyDrainCount: withFixtures.filter((packet) => packet.queueDecision === "drain_restricted").length,
+    schedulerHandoffField: "restrictedMetadata.capacityIsolation",
+    agent09ApiFields: ["restrictedMetadata.capacityIsolation", "restrictedMetadata.capacityIsolation.packets", "restrictedMetadata.capacityIsolation.networkBudgets"],
+    agent10ReleaseFields: ["capacityDecision", "publicSearchHeadroom", "emergencyDrain", "restrictedWorkerCaps"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataCapacityIsolationPacket(
+  scenario: RestrictedMetadataCapacityIsolationScenario
+): RestrictedMetadataCapacityIsolationPacketDto {
+  const emergencyDrain = scenario === "emergency_stop_drain";
+  const proxyOutage = scenario === "proxy_outage";
+  const timeoutSpike = scenario === "timeout_spike";
+  const retentionBacklog = scenario === "retention_backlog";
+  const legalHoldLoad = scenario === "legal_hold_load";
+  const approvalBacklog = scenario === "approval_backlog";
+  return {
+    packetId: stableId("restricted-capacity-isolation", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    sourceHashOnly: true,
+    networkBudgets: restrictedMetadataNetworkCapacityBudgets(scenario),
+    queueDecision: emergencyDrain
+      ? "drain_restricted"
+      : proxyOutage || timeoutSpike || scenario === "public_search_pressure"
+        ? "pause_restricted"
+        : "hold_restricted",
+    publicSearchProtection: "preserve_public_headroom",
+    schedulerBackpressure: "agent02_hold_restricted_partition",
+    evidenceRetentionImpact: legalHoldLoad
+      ? "agent06_budget_legal_hold"
+      : retentionBacklog
+        ? "agent06_budget_retention_backlog"
+        : "agent06_no_extra_load",
+    publicAnswerCaveat: "agent07_restricted_context_delayed",
+    graphHold: "agent08_hold_restricted_edges",
+    apiField: "restrictedMetadata.capacityIsolation",
+    releaseGate: emergencyDrain ? "agent10_drain_capacity" : scenario === "public_search_pressure" ? "agent10_warn_capacity" : "agent10_hold_capacity",
+    approvalReviewLoad: approvalBacklog ? "backlog" : scenario === "public_search_pressure" ? "elevated" : "normal",
+    legalHoldRetentionLoad: legalHoldLoad || retentionBacklog ? "backlog" : scenario === "public_search_pressure" ? "elevated" : "normal",
+    proof: {
+      publicSearchCannotBeStarved: true,
+      restrictedWorkersCapped: true,
+      proxyOutageFailsClosed: proxyOutage,
+      timeoutSpikeFailsClosed: timeoutSpike,
+      emergencyStopDrainsQueue: emergencyDrain,
+      noRawLeakMaterial: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPrivateAccess: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noThreatActorInteraction: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataNetworkCapacityBudgets(
+  scenario: RestrictedMetadataCapacityIsolationScenario
+): RestrictedMetadataNetworkCapacityDto[] {
+  const unhealthy = scenario === "proxy_outage";
+  const timeoutBudgetMs = scenario === "timeout_spike" ? 15_000 : 30_000;
+  const pressure = scenario === "public_search_pressure";
+  const draining = scenario === "emergency_stop_drain";
+  const caps: Record<DarknetNetwork, number> = { tor: 2, i2p: 1, freenet: 1 };
+  return (["tor", "i2p", "freenet"] as const).map((network) => ({
+    network,
+    metadataOnlyWorkerCap: pressure || unhealthy || draining ? 0 : caps[network],
+    proxyPoolHealthy: !unhealthy,
+    timeoutBudgetMs,
+    memoryCeilingMb: network === "tor" ? 512 : 384,
+    diskCeilingMb: scenario === "legal_hold_load" || scenario === "retention_backlog" ? 2048 : 1024,
+    directEgressAllowed: false,
+    queueBackpressure: draining
+      ? "restricted_draining"
+      : pressure || unhealthy || scenario === "timeout_spike"
+        ? "restricted_paused"
+        : "open"
+  }));
+}
+
+function restrictedMetadataDedupeCapacityPackets(
+  packets: readonly RestrictedMetadataCapacityIsolationPacketDto[]
+): RestrictedMetadataCapacityIsolationPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function buildRestrictedMetadataCapacitySloContract(
+  observedScenarios: readonly RestrictedMetadataCapacitySloScenario[] = RESTRICTED_CAPACITY_SLO_SCENARIOS
+): RestrictedMetadataCapacitySloDto {
+  const packets = restrictedMetadataDedupeCapacitySloPackets([
+    ...observedScenarios.map(restrictedMetadataCapacitySloPacket),
+    ...RESTRICTED_CAPACITY_SLO_SCENARIOS.map(restrictedMetadataCapacitySloPacket)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets,
+    fixtureScenarios: RESTRICTED_CAPACITY_SLO_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...packets.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataCapacitySloScenario[],
+    summary: {
+      packetCount: packets.length,
+      passCount: packets.filter((packet) => packet.slo.state === "pass").length,
+      warningCount: packets.filter((packet) => packet.slo.state === "warn").length,
+      holdCount: packets.filter((packet) => packet.slo.state === "hold" || packet.slo.releaseGate === "hold").length,
+      rollbackOnlyCount: packets.filter((packet) => packet.slo.releaseGate === "rollback_only").length,
+      emergencyStopCount: packets.filter((packet) => packet.slo.releaseGate === "emergency_stop").length,
+      publicSearchBehavior: "non_blocking_public_summary"
+    },
+    agent09ApiFields: [
+      "restrictedMetadata.capacitySlo",
+      "restrictedMetadata.capacitySlo.packets",
+      "restrictedMetadata.capacitySlo.summary"
+    ],
+    agent10ReleaseGateFields: ["releaseGate", "safeRemediation", "tenantIsolation", "graphStixExportHold", "publicSearchSemantics"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataCapacitySloPacket(
+  scenario: RestrictedMetadataCapacitySloScenario
+): RestrictedMetadataCapacitySloPacketDto {
+  const releaseGate = restrictedMetadataCapacitySloReleaseGate(scenario);
+  const state = releaseGate === "emergency_stop" || releaseGate === "rollback_only" ? "hold" : releaseGate === "hold" ? "breach" : releaseGate === "warn" ? "warn" : "pass";
+  const failureMode = restrictedMetadataCapacitySloFailureMode(scenario);
+  return {
+    packetId: stableId("restricted-capacity-slo", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    sourceHashOnly: true,
+    tenantIsolation: {
+      tenantScopedQueues: true,
+      workspaceScopedProxyBudget: true,
+      crossTenantDataJoinAllowed: false,
+      queuePartition: "restricted_metadata"
+    },
+    slo: {
+      target: restrictedMetadataCapacitySloTarget(scenario),
+      observed: restrictedMetadataCapacitySloObserved(scenario),
+      state,
+      releaseGate
+    },
+    capacity: {
+      torWorkerCap: releaseGate === "emergency_stop" || scenario === "proxy_outage_hold" || scenario === "over_capacity_hold" ? 0 : 2,
+      i2pWorkerCap: releaseGate === "emergency_stop" || scenario === "proxy_outage_hold" || scenario === "over_capacity_hold" ? 0 : 1,
+      freenetWorkerCap: releaseGate === "emergency_stop" || scenario === "proxy_outage_hold" || scenario === "over_capacity_hold" ? 0 : 1,
+      restrictedQueueMaxDepth: scenario === "over_capacity_hold" ? 0 : 25,
+      analystReviewMaxAgeHours: scenario === "emergency_stop_slo" ? 1 : scenario === "legal_hold_slo" || scenario === "retention_window_slo" ? 8 : 24,
+      directEgressAllowed: false
+    },
+    publicSearchSemantics: "non_blocking_public_summary",
+    graphStixExportHold: "hold_until_slo_and_review_pass",
+    apiCaveat: "restricted_capacity_slo_pending",
+    failureMode,
+    safeRemediation: restrictedMetadataCapacitySloRemediation(scenario),
+    handoffs: {
+      agent01Governance: "restricted_source_slo_governance",
+      agent02Scheduler: "restricted_partition_budget",
+      agent06EvidenceRetention: "restricted_retention_legal_hold_slo",
+      agent07Caveat: "restricted_capacity_caveat",
+      agent08GraphStixHold: "restricted_capacity_export_hold",
+      agent09ApiField: "restrictedMetadata.capacitySlo",
+      agent10ReleaseGate: "restricted_capacity_release_gate"
+    },
+    proof: {
+      noRawLeakMaterial: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPrivateAccess: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noThreatActorInteraction: true,
+      publicSearchNotBlocked: true,
+      graphStixHeld: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataCapacitySloReleaseGate(
+  scenario: RestrictedMetadataCapacitySloScenario
+): RestrictedMetadataCapacitySloPacketDto["slo"]["releaseGate"] {
+  if (scenario === "emergency_stop_slo") return "emergency_stop";
+  if (scenario === "false_claim_review_hold" || scenario === "unsafe_source_discovery_hold") return "rollback_only";
+  if (scenario === "worker_capacity" || scenario === "source_quarantine_slo") return "promote";
+  if (scenario === "approval_expiry_slo" || scenario === "analyst_review_queue_slo") return "warn";
+  return "hold";
+}
+
+function restrictedMetadataCapacitySloTarget(scenario: RestrictedMetadataCapacitySloScenario): string {
+  const mapping: Record<RestrictedMetadataCapacitySloScenario, string> = {
+    worker_capacity: "tor<=2,i2p<=1,freenet<=1",
+    legal_hold_slo: "legal_hold_review<=8h",
+    approval_expiry_slo: "approval_expiry_review<=24h",
+    emergency_stop_slo: "emergency_stop_propagation<=1h",
+    retention_window_slo: "retention_expiry_review<=8h",
+    source_quarantine_slo: "quarantine_decision<=4h",
+    analyst_review_queue_slo: "oldest_review<=24h",
+    proxy_outage_hold: "proxy_outage_fails_closed",
+    unsafe_source_discovery_hold: "unsafe_source_quarantine_immediate",
+    duplicate_stale_claim_hold: "duplicate_stale_review<=16h",
+    false_claim_review_hold: "false_claim_suppression_immediate",
+    over_capacity_hold: "restricted_queue_depth<=25"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataCapacitySloObserved(scenario: RestrictedMetadataCapacitySloScenario): string {
+  const mapping: Record<RestrictedMetadataCapacitySloScenario, string> = {
+    worker_capacity: "tor=2,i2p=1,freenet=1",
+    legal_hold_slo: "oldest_legal_hold=12h",
+    approval_expiry_slo: "oldest_approval=18h",
+    emergency_stop_slo: "emergency_stop_active",
+    retention_window_slo: "oldest_retention=9h",
+    source_quarantine_slo: "quarantine_ready=2h",
+    analyst_review_queue_slo: "oldest_review=21h",
+    proxy_outage_hold: "proxy_pool_unhealthy",
+    unsafe_source_discovery_hold: "unsafe_target_hash_detected",
+    duplicate_stale_claim_hold: "duplicate_stale_review=16h",
+    false_claim_review_hold: "false_claim_escalated",
+    over_capacity_hold: "restricted_queue_depth=40"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataCapacitySloFailureMode(
+  scenario: RestrictedMetadataCapacitySloScenario
+): RestrictedMetadataCapacitySloPacketDto["failureMode"] {
+  const mapping: Record<RestrictedMetadataCapacitySloScenario, RestrictedMetadataCapacitySloPacketDto["failureMode"]> = {
+    worker_capacity: "public_search_pressure",
+    legal_hold_slo: "legal_hold_load",
+    approval_expiry_slo: "approval_backlog",
+    emergency_stop_slo: "emergency_stop_drain",
+    retention_window_slo: "retention_backlog",
+    source_quarantine_slo: "unavailable_source",
+    analyst_review_queue_slo: "victim_claim_review",
+    proxy_outage_hold: "proxy_outage",
+    unsafe_source_discovery_hold: "unsafe_source_discovery",
+    duplicate_stale_claim_hold: "duplicate_stale_repost_review",
+    false_claim_review_hold: "false_claim_review",
+    over_capacity_hold: "over_capacity"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataCapacitySloRemediation(scenario: RestrictedMetadataCapacitySloScenario): string[] {
+  const base = ["hold_restricted_partition", "preserve_public_search_headroom", "keep_graph_stix_export_held"];
+  const mapping: Record<RestrictedMetadataCapacitySloScenario, string[]> = {
+    worker_capacity: ["keep_worker_caps"],
+    legal_hold_slo: ["extend_legal_hold_review", "pause_expiry_actions"],
+    approval_expiry_slo: ["renew_or_expire_approval"],
+    emergency_stop_slo: ["activate_kill_switch", "drain_restricted_queue"],
+    retention_window_slo: ["shorten_retention_or_apply_hold"],
+    source_quarantine_slo: ["quarantine_source_hash"],
+    analyst_review_queue_slo: ["escalate_review_queue"],
+    proxy_outage_hold: ["quarantine_proxy_pool"],
+    unsafe_source_discovery_hold: ["block_unsafe_source_hash"],
+    duplicate_stale_claim_hold: ["merge_duplicate_claims", "request_evidence_replay"],
+    false_claim_review_hold: ["suppress_false_claim", "rollback_public_caveat"],
+    over_capacity_hold: ["pause_restricted_workers", "drop_nonessential_restricted_tasks"]
+  };
+  return restrictedMetadataUniqueStrings([...base, ...mapping[scenario]]);
+}
+
+function restrictedMetadataDedupeCapacitySloPackets(
+  packets: readonly RestrictedMetadataCapacitySloPacketDto[]
+): RestrictedMetadataCapacitySloPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function buildRestrictedMetadataOperatorGovernanceContract(
+  observedScenarios: readonly RestrictedMetadataOperatorGovernanceScenario[] = RESTRICTED_OPERATOR_GOVERNANCE_SCENARIOS,
+  options: { readonly tenantId?: string; readonly sourceKey?: string } = {}
+): RestrictedMetadataOperatorGovernanceDto {
+  const packets = restrictedMetadataDedupeOperatorGovernancePackets([
+    ...observedScenarios.map((scenario) => restrictedMetadataOperatorGovernancePacket(scenario, options)),
+    ...RESTRICTED_OPERATOR_GOVERNANCE_SCENARIOS.map((scenario) => restrictedMetadataOperatorGovernancePacket(scenario, options))
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    operatorVisible: true,
+    packets,
+    fixtureScenarios: RESTRICTED_OPERATOR_GOVERNANCE_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...packets.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataOperatorGovernanceScenario[],
+    summary: {
+      packetCount: packets.length,
+      heldCount: packets.filter((packet) => packet.graphStixApiEffect.graph === "hold" || packet.graphStixApiEffect.api === "caveat_only").length,
+      suppressedCount: packets.filter((packet) => packet.graphStixApiEffect.graph === "suppress" || packet.graphStixApiEffect.api === "suppressed").length,
+      emergencyStopCount: packets.filter((packet) => packet.scenario === "emergency_stop_active").length,
+      publicSearchBehavior: "non_blocking"
+    },
+    agent09ApiFields: [
+      "restrictedMetadata.operatorGovernance",
+      "restrictedMetadata.operatorGovernance.packets",
+      "restrictedMetadata.operatorGovernance.summary"
+    ],
+    agent10ReleaseGateFields: ["policyReason", "allowedActions", "forbiddenActions", "graphStixApiEffect", "rollbackPath", "proofCommands"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataOperatorGovernancePacket(
+  scenario: RestrictedMetadataOperatorGovernanceScenario,
+  options: { readonly tenantId?: string; readonly sourceKey?: string } = {}
+): RestrictedMetadataOperatorGovernancePacketDto {
+  const sourceKey = options.sourceKey ?? scenario;
+  return {
+    packetId: stableId("restricted-operator-governance", `${sourceKey}:${scenario}`),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    operatorVisible: true,
+    tenantId: options.tenantId ?? "tenant_restricted_governance",
+    sourceHash: hashContent(`restricted-source:${sourceKey}`),
+    sourceHashOnly: true,
+    policyReason: restrictedMetadataOperatorGovernancePolicyReason(scenario),
+    allowedActions: restrictedMetadataOperatorGovernanceAllowedActions(scenario),
+    forbiddenActions: RESTRICTED_APPLY_PROHIBITED_ALTERNATIVES,
+    graphStixApiEffect: restrictedMetadataOperatorGovernanceEffect(scenario),
+    rollbackPath: restrictedMetadataOperatorGovernanceRollback(scenario),
+    auditId: stableId("restricted-governance-audit", `${sourceKey}:${scenario}`),
+    proofCommands: [
+      "bun run check:restricted-metadata-status",
+      "bun run check:restricted-metadata-apply-plan",
+      "bun run check:contract-index"
+    ],
+    handoffs: {
+      agent06RetentionLegalHold: "restricted_governance_retention_hold",
+      agent07QualityGate: "restricted_governance_quality_gate",
+      agent08GraphHold: "restricted_governance_graph_hold",
+      agent09ApiCopy: "restrictedMetadata.operatorGovernance",
+      agent10ReleaseGate: "restricted_governance_release_gate"
+    },
+    proof: {
+      noRawOnionUrls: true,
+      noStolenFileNames: true,
+      noLeakedRows: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPrivateChannelContent: true,
+      noActorInteractionText: true,
+      metadataOnlyEvidence: true,
+      sourceHashOnly: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataOperatorGovernancePolicyReason(scenario: RestrictedMetadataOperatorGovernanceScenario): string {
+  const mapping: Record<RestrictedMetadataOperatorGovernanceScenario, string> = {
+    ransomware_leak_claim_review_hold: "restricted_claim_requires_operator_review",
+    public_channel_rumor_rejected: "public_rumor_rejected_for_restricted_context",
+    source_approval_expired: "metadata_only_source_approval_expired",
+    legal_hold_active: "legal_hold_preserves_metadata_and_blocks_release",
+    retention_expired: "retention_expiry_requires_agent06_reconciliation",
+    capacity_exceeded: "restricted_capacity_budget_exceeded",
+    source_quarantined_unsafe_target: "unsafe_target_detected_source_quarantined",
+    duplicate_victim_claim_suppressed: "duplicate_victim_claim_suppressed",
+    false_claim_disputed: "actor_victim_false_positive_dispute",
+    emergency_stop_active: "restricted_emergency_stop_active"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataOperatorGovernanceAllowedActions(scenario: RestrictedMetadataOperatorGovernanceScenario): string[] {
+  const base = ["view_metadata_only_packet", "keep_public_search_non_blocking"];
+  const mapping: Record<RestrictedMetadataOperatorGovernanceScenario, string[]> = {
+    ransomware_leak_claim_review_hold: ["open_analyst_review", "attach_claim_ledger_note"],
+    public_channel_rumor_rejected: ["record_rejection_reason", "keep_public_copy_caveated"],
+    source_approval_expired: ["renew_metadata_only_approval", "keep_source_held"],
+    legal_hold_active: ["preserve_legal_hold", "block_deletion_and_export"],
+    retention_expired: ["run_retention_reconciliation", "hold_graph_stix_export"],
+    capacity_exceeded: ["pause_restricted_workers", "drain_restricted_queue"],
+    source_quarantined_unsafe_target: ["quarantine_source_hash", "keep_forbidden_target_blocked"],
+    duplicate_victim_claim_suppressed: ["merge_duplicate_claim_group", "request_evidence_replay"],
+    false_claim_disputed: ["escalate_false_claim_review", "suppress_public_fact"],
+    emergency_stop_active: ["activate_kill_switch", "pause_restricted_metadata_workers"]
+  };
+  return restrictedMetadataUniqueStrings([...base, ...mapping[scenario]]);
+}
+
+function restrictedMetadataOperatorGovernanceEffect(
+  scenario: RestrictedMetadataOperatorGovernanceScenario
+): RestrictedMetadataOperatorGovernancePacketDto["graphStixApiEffect"] {
+  if (scenario === "public_channel_rumor_rejected" || scenario === "duplicate_victim_claim_suppressed" || scenario === "false_claim_disputed") {
+    return { graph: "suppress", stix: "blocked", api: "suppressed", publicSearch: "non_blocking" };
+  }
+  if (scenario === "ransomware_leak_claim_review_hold") {
+    return { graph: "pivot_only", stix: "blocked", api: "caveat_only", publicSearch: "non_blocking" };
+  }
+  return { graph: "hold", stix: "blocked", api: "safe_metadata_only", publicSearch: "non_blocking" };
+}
+
+function restrictedMetadataOperatorGovernanceRollback(scenario: RestrictedMetadataOperatorGovernanceScenario): string[] {
+  const base = ["restore_review_hold", "rerun_restricted_metadata_status_check"];
+  const mapping: Record<RestrictedMetadataOperatorGovernanceScenario, string[]> = {
+    ransomware_leak_claim_review_hold: ["remove_public_fact_promotion"],
+    public_channel_rumor_rejected: ["keep_rumor_rejected"],
+    source_approval_expired: ["keep_source_disabled_until_approval"],
+    legal_hold_active: ["preserve_legal_hold_records"],
+    retention_expired: ["restore_retention_hold"],
+    capacity_exceeded: ["restore_restricted_worker_caps"],
+    source_quarantined_unsafe_target: ["keep_source_quarantined"],
+    duplicate_victim_claim_suppressed: ["restore_duplicate_suppression"],
+    false_claim_disputed: ["restore_false_claim_suppression"],
+    emergency_stop_active: ["keep_kill_switch_active", "clear_restricted_queue"]
+  };
+  return restrictedMetadataUniqueStrings([...base, ...mapping[scenario]]);
+}
+
+function restrictedMetadataDedupeOperatorGovernancePackets(
+  packets: readonly RestrictedMetadataOperatorGovernancePacketDto[]
+): RestrictedMetadataOperatorGovernancePacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function buildRestrictedMetadataDarkCanaryContract(
+  observedScenarios: readonly RestrictedMetadataDarkCanaryScenario[] = RESTRICTED_DARK_CANARY_SCENARIOS,
+  options: { readonly sourceKey?: string } = {}
+): RestrictedMetadataDarkCanaryDto {
+  const packets = restrictedMetadataDedupeDarkCanaryPackets([
+    ...observedScenarios.map((scenario) => restrictedMetadataDarkCanaryPacket(scenario, options)),
+    ...RESTRICTED_DARK_CANARY_SCENARIOS.map((scenario) => restrictedMetadataDarkCanaryPacket(scenario, options))
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    fixtureBacked: true,
+    packets,
+    fixtureScenarios: RESTRICTED_DARK_CANARY_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...packets.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataDarkCanaryScenario[],
+    networks: restrictedMetadataUniqueStrings(packets.map((packet) => packet.network)) as DarknetNetwork[],
+    emergencyStopPacketIds: packets.filter((packet) => packet.scenario === "emergency_stop").map((packet) => packet.packetId),
+    blockedUnsafePacketIds: packets.filter((packet) => packet.policyState === "blocked").map((packet) => packet.packetId),
+    agent09ApiFields: [
+      "restrictedMetadata.darkMetadataCanary",
+      "restrictedMetadata.darkMetadataCanary.packets",
+      "restrictedMetadata.darkMetadataCanary.noLeakSerialization"
+    ],
+    agent10ReleaseGateFields: ["emergencyStopPropagation", "operatorProofPacket", "blockedUnsafePacketIds", "noLeakProof"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataDarkCanaryPacket(
+  scenario: RestrictedMetadataDarkCanaryScenario,
+  options: { readonly sourceKey?: string } = {}
+): RestrictedMetadataDarkCanaryPacketDto {
+  const sourceKey = options.sourceKey ?? "dark-canary";
+  const network = restrictedMetadataDarkCanaryNetwork(scenario);
+  const policyState = restrictedMetadataDarkCanaryPolicyState(scenario);
+  const reviewState = restrictedMetadataDarkCanaryReviewState(scenario);
+  const firstSeen = "2026-05-24T00:00:00.000Z";
+  const lastSeen = scenario === "emergency_stop" ? "2026-05-24T00:05:00.000Z" : "2026-05-24T00:02:00.000Z";
+  const safeSourceHash = hashContent(`restricted-canary-source:${sourceKey}:${scenario}`);
+  return {
+    packetId: stableId("restricted-dark-canary", `${sourceKey}:${scenario}`),
+    scenario,
+    network,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    fixtureBacked: true,
+    sourceHashOnly: true,
+    actor: restrictedMetadataDarkCanaryActor(scenario),
+    victimCompany: restrictedMetadataDarkCanaryVictim(scenario),
+    claimedDate: "2026-05-24",
+    sector: restrictedMetadataDarkCanarySector(scenario),
+    country: restrictedMetadataDarkCanaryCountry(scenario),
+    claimedDataType: restrictedMetadataDarkCanaryClaimedDataType(scenario),
+    safeSourceHash,
+    urlHash: hashContent(`restricted-canary-url:${sourceKey}:${scenario}`),
+    screenshotHash: scenario === "marketplace_forum_descriptor" || scenario === "private_invite_target_blocked"
+      ? undefined
+      : hashContent(`restricted-canary-screenshot:${sourceKey}:${scenario}`),
+    firstSeen,
+    lastSeen,
+    policyState,
+    reviewState,
+    publicGraphStixEffects: restrictedMetadataDarkCanaryEffects(scenario),
+    proxyIsolationBoundary: {
+      approvedProxyRequired: true,
+      directEgressAllowed: false,
+      credentialsAllowed: false,
+      formsAllowed: false,
+      captchaSolvingAllowed: false,
+      privateCommunityAccessAllowed: false,
+      fileDownloadsAllowed: false,
+      threatActorInteractionAllowed: false,
+      rawUnsafeUrlExposureAllowed: false
+    },
+    emergencyStopPropagation: {
+      restrictedStatus: scenario === "emergency_stop" ? "emergency_stop" : "hold",
+      sourceActivation: "hold",
+      scheduler: "pause_restricted_partition",
+      evidence: "metadata_only_no_object_download",
+      quality: "review_required",
+      graph: "hold_restricted_edges",
+      api: "safe_metadata_only",
+      releaseGate: scenario === "emergency_stop" ? "rollback" : "hold"
+    },
+    operatorProofPacket: {
+      purpose: scenario === "legal_hold" || scenario === "source_approval_expired" ? "legal_ethics_review" : "enterprise_governance",
+      allowedFields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+      forbiddenActions: RESTRICTED_APPLY_PROHIBITED_ALTERNATIVES,
+      proofCommands: [
+        "bun run check:restricted-metadata-status",
+        "bun run check:route-inventory",
+        "bun run check:contract-index",
+        "bun run check:deploy-hygiene"
+      ]
+    },
+    noLeakProof: {
+      noRawOnionUrls: true,
+      noRawUnsafeUrls: true,
+      noRawPayloads: true,
+      noStolenFileDownloads: true,
+      noCredentialValues: true,
+      noCaptchaSolving: true,
+      noPrivateAccess: true,
+      noThreatActorInteraction: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataDarkCanaryNetwork(scenario: RestrictedMetadataDarkCanaryScenario): DarknetNetwork {
+  if (scenario === "i2p_metadata_canary" || scenario === "marketplace_forum_descriptor") return "i2p";
+  if (scenario === "freenet_metadata_canary") return "freenet";
+  return "tor";
+}
+
+function restrictedMetadataDarkCanaryPolicyState(scenario: RestrictedMetadataDarkCanaryScenario): RestrictedMetadataDarkCanaryPacketDto["policyState"] {
+  if (scenario === "emergency_stop") return "emergency_stop";
+  if (scenario === "source_approval_expired") return "expired";
+  if (scenario === "private_invite_target_blocked" || scenario === "raw_payload_blocked" || scenario === "credential_target_blocked") return "blocked";
+  if (scenario === "legal_hold" || scenario === "false_claim_dispute") return "held";
+  return "metadata_only_allowed";
+}
+
+function restrictedMetadataDarkCanaryReviewState(scenario: RestrictedMetadataDarkCanaryScenario): RestrictedMetadataDarkCanaryPacketDto["reviewState"] {
+  const mapping: Record<RestrictedMetadataDarkCanaryScenario, RestrictedMetadataDarkCanaryPacketDto["reviewState"]> = {
+    tor_metadata_canary: "canary_fixture",
+    i2p_metadata_canary: "canary_fixture",
+    freenet_metadata_canary: "canary_fixture",
+    ransomware_leak_site_claim: "metadata_review",
+    marketplace_forum_descriptor: "metadata_review",
+    private_invite_target_blocked: "blocked_unsafe_target",
+    raw_payload_blocked: "blocked_unsafe_target",
+    credential_target_blocked: "blocked_unsafe_target",
+    legal_hold: "legal_hold",
+    source_approval_expired: "approval_required",
+    emergency_stop: "emergency_stop",
+    false_claim_dispute: "false_claim_review"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataDarkCanaryEffects(scenario: RestrictedMetadataDarkCanaryScenario): RestrictedMetadataDarkCanaryPacketDto["publicGraphStixEffects"] {
+  if (scenario === "false_claim_dispute" || scenario === "credential_target_blocked" || scenario === "private_invite_target_blocked" || scenario === "raw_payload_blocked") {
+    return { publicSearch: "non_blocking", publicAnswer: "suppressed", graph: "suppress", stix: "blocked", api: "restrictedMetadata.darkMetadataCanary" };
+  }
+  if (scenario === "ransomware_leak_site_claim" || scenario === "marketplace_forum_descriptor") {
+    return { publicSearch: "non_blocking", publicAnswer: "caveat_only", graph: "pivot_only", stix: "blocked", api: "restrictedMetadata.darkMetadataCanary" };
+  }
+  return { publicSearch: "non_blocking", publicAnswer: "no_effect", graph: "hold", stix: "blocked", api: "restrictedMetadata.darkMetadataCanary" };
+}
+
+function restrictedMetadataDarkCanaryActor(scenario: RestrictedMetadataDarkCanaryScenario): string | undefined {
+  if (scenario === "marketplace_forum_descriptor" || scenario === "credential_target_blocked") return undefined;
+  if (scenario === "false_claim_dispute") return "DisputedClaimFixture";
+  if (scenario === "ransomware_leak_site_claim") return "CanaryLocker";
+  return "RestrictedCanary";
+}
+
+function restrictedMetadataDarkCanaryVictim(scenario: RestrictedMetadataDarkCanaryScenario): string | undefined {
+  if (scenario === "tor_metadata_canary" || scenario === "ransomware_leak_site_claim" || scenario === "legal_hold") return "Fjord Energy AS";
+  if (scenario === "i2p_metadata_canary" || scenario === "marketplace_forum_descriptor") return "Nordic Manufacturing Oy";
+  if (scenario === "freenet_metadata_canary") return "Baltic Health AB";
+  if (scenario === "false_claim_dispute") return "Disputed Example Ltd";
+  return undefined;
+}
+
+function restrictedMetadataDarkCanarySector(scenario: RestrictedMetadataDarkCanaryScenario): string | undefined {
+  if (scenario === "freenet_metadata_canary") return "Healthcare";
+  if (scenario === "i2p_metadata_canary" || scenario === "marketplace_forum_descriptor") return "Manufacturing";
+  if (scenario === "credential_target_blocked") return undefined;
+  return "Energy";
+}
+
+function restrictedMetadataDarkCanaryCountry(scenario: RestrictedMetadataDarkCanaryScenario): string | undefined {
+  if (scenario === "freenet_metadata_canary") return "SE";
+  if (scenario === "i2p_metadata_canary" || scenario === "marketplace_forum_descriptor") return "FI";
+  if (scenario === "credential_target_blocked") return undefined;
+  return "NO";
+}
+
+function restrictedMetadataDarkCanaryClaimedDataType(scenario: RestrictedMetadataDarkCanaryScenario): string {
+  const mapping: Record<RestrictedMetadataDarkCanaryScenario, string> = {
+    tor_metadata_canary: "contract metadata claim",
+    i2p_metadata_canary: "invoice metadata claim",
+    freenet_metadata_canary: "patient-system metadata claim",
+    ransomware_leak_site_claim: "ransomware leak listing metadata",
+    marketplace_forum_descriptor: "marketplace descriptor metadata",
+    private_invite_target_blocked: "private invite target blocked",
+    raw_payload_blocked: "raw payload target blocked",
+    credential_target_blocked: "credential target blocked",
+    legal_hold: "legal-hold restricted metadata",
+    source_approval_expired: "approval-expired restricted metadata",
+    emergency_stop: "emergency-stop restricted metadata",
+    false_claim_dispute: "false-claim dispute metadata"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataDedupeDarkCanaryPackets(
+  packets: readonly RestrictedMetadataDarkCanaryPacketDto[]
+): RestrictedMetadataDarkCanaryPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function buildRestrictedMetadataLegalEthicsAuditExportContract(
+  observedScenarios: readonly RestrictedMetadataLegalEthicsAuditScenario[] = RESTRICTED_LEGAL_ETHICS_AUDIT_SCENARIOS,
+  options: { readonly sourceKey?: string } = {}
+): RestrictedMetadataLegalEthicsAuditExportDto {
+  const packets = restrictedMetadataDedupeLegalEthicsAuditPackets([
+    ...observedScenarios.map((scenario) => restrictedMetadataLegalEthicsAuditPacket(scenario, options)),
+    ...RESTRICTED_LEGAL_ETHICS_AUDIT_SCENARIOS.map((scenario) => restrictedMetadataLegalEthicsAuditPacket(scenario, options))
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    thesisReady: true,
+    enterpriseReady: true,
+    packets,
+    fixtureScenarios: RESTRICTED_LEGAL_ETHICS_AUDIT_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...packets.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataLegalEthicsAuditScenario[],
+    summary: {
+      packetCount: packets.length,
+      blockedOperationCount: packets.reduce((sum, packet) => sum + packet.blocked.operations.length, 0),
+      approvalRequiredCount: packets.filter((packet) => packet.approval.approvalState === "approval_required" || packet.approval.approvalState === "expired").length,
+      holdCount: packets.filter((packet) => packet.releaseInterpretation === "hold").length,
+      rollbackCount: packets.filter((packet) => packet.releaseInterpretation === "rollback").length,
+      publicSearchBehavior: "non_blocking"
+    },
+    agent09ApiFields: [
+      "restrictedMetadata.legalEthicsAuditExport",
+      "restrictedMetadata.legalEthicsAuditExport.packets",
+      "restrictedMetadata.legalEthicsAuditExport.summary"
+    ],
+    agent10ReleaseGateFields: ["approval", "blocked", "whatWasNotAccessed", "releaseInterpretation", "proofCommands"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataLegalEthicsAuditPacket(
+  scenario: RestrictedMetadataLegalEthicsAuditScenario,
+  options: { readonly sourceKey?: string } = {}
+): RestrictedMetadataLegalEthicsAuditPacketDto {
+  const sourceKey = options.sourceKey ?? "legal-ethics";
+  const releaseInterpretation = restrictedMetadataLegalEthicsReleaseInterpretation(scenario);
+  return {
+    auditPacketId: stableId("restricted-legal-ethics-audit", `${sourceKey}:${scenario}`),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    thesisReady: true,
+    enterpriseReady: true,
+    collected: {
+      fields: RESTRICTED_METADATA_ALLOWED_FIELDS,
+      sourceHashIds: [hashContent(`legal-ethics-source:${sourceKey}:${scenario}`)],
+      urlHashIds: [hashContent(`legal-ethics-url:${sourceKey}:${scenario}`)],
+      screenshotHashIds: scenario === "metadata_only_collection" || scenario === "operator_thesis_export"
+        ? [hashContent(`legal-ethics-screenshot:${sourceKey}:${scenario}`)]
+        : [],
+      evidenceType: "restricted_metadata_hashes_and_claim_fields_only"
+    },
+    blocked: {
+      operations: restrictedMetadataLegalEthicsBlockedOperations(scenario),
+      unsafeTargetHashIds: restrictedMetadataLegalEthicsUnsafeHashes(scenario, sourceKey),
+      reason: restrictedMetadataLegalEthicsReason(scenario)
+    },
+    approval: {
+      approvalState: restrictedMetadataLegalEthicsApprovalState(scenario),
+      approverRole: restrictedMetadataLegalEthicsApproverRole(scenario),
+      policyVersion: "restricted_metadata_policy_v1",
+      auditTrailIds: [stableId("restricted-legal-ethics-trail", `${sourceKey}:${scenario}`)]
+    },
+    whatWasNotAccessed: restrictedMetadataLegalEthicsWhatWasNotAccessed(),
+    releaseInterpretation,
+    graphStixApiEffect: restrictedMetadataLegalEthicsEffect(scenario),
+    proofCommands: [
+      "bun run check:restricted-metadata-status",
+      "bun run check:restricted-metadata-apply-plan",
+      "bun run check:route-inventory",
+      "bun run check:contract-index"
+    ],
+    handoffs: {
+      agent01Governance: "legal_ethics_source_governance",
+      agent06EvidenceLedger: "legal_ethics_metadata_only_evidence",
+      agent07Quality: "legal_ethics_false_claim_and_caveat_review",
+      agent08GraphStix: "legal_ethics_export_hold",
+      agent09ApiField: "restrictedMetadata.legalEthicsAuditExport",
+      agent10ReleaseGate: "legal_ethics_release_gate"
+    },
+    noLeakValidation: {
+      noRawLeakMaterial: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPayloads: true,
+      noStolenFileNames: true,
+      noPrivateChannelMaterial: true,
+      noThreatActorInteraction: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataLegalEthicsBlockedOperations(scenario: RestrictedMetadataLegalEthicsAuditScenario): string[] {
+  const base = ["download_stolen_files", "store_credentials", "bypass_authentication", "solve_captcha", "enter_private_community", "interact_with_threat_actor", "expose unsafe source locator"];
+  const mapping: Record<RestrictedMetadataLegalEthicsAuditScenario, string[]> = {
+    metadata_only_collection: ["collect raw evidence body", "store_screenshot_bytes"],
+    unsafe_target_blocked: ["follow_download_link", "submit_form", "open_contact_channel"],
+    approval_review: ["activate_without_approval", "queue_restricted_worker"],
+    legal_hold_review: ["delete_held_metadata", "export_stix_before_legal_clearance"],
+    emergency_stop_review: ["resume_restricted_worker", "clear_kill_switch_without_review"],
+    false_claim_review: ["promote_public_fact", "export_graph_relationship"],
+    retention_review: ["retain_after_expiry_without_hold", "delete_without_reconciliation"],
+    operator_thesis_export: ["include unsafe source locator", "include_leaked_rows", "include_stolen_file_names"]
+  };
+  return restrictedMetadataUniqueStrings([...base, ...mapping[scenario]]);
+}
+
+function restrictedMetadataLegalEthicsUnsafeHashes(scenario: RestrictedMetadataLegalEthicsAuditScenario, sourceKey: string): string[] {
+  if (scenario === "metadata_only_collection" || scenario === "operator_thesis_export") return [];
+  return [hashContent(`legal-ethics-unsafe-target:${sourceKey}:${scenario}`)];
+}
+
+function restrictedMetadataLegalEthicsReason(scenario: RestrictedMetadataLegalEthicsAuditScenario): string {
+  const mapping: Record<RestrictedMetadataLegalEthicsAuditScenario, string> = {
+    metadata_only_collection: "only claim fields and hashes were collected for defensive review",
+    unsafe_target_blocked: "unsafe target was represented by hash and blocked before access",
+    approval_review: "source requires explicit metadata-only approval before queueing",
+    legal_hold_review: "legal hold blocks deletion public promotion graph and STIX export",
+    emergency_stop_review: "emergency stop pauses restricted workers and forces rollback review",
+    false_claim_review: "disputed claim remains suppressed until analyst review",
+    retention_review: "retention state requires reconciliation before deletion or export",
+    operator_thesis_export: "thesis and enterprise export contains policy evidence without restricted raw material"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataLegalEthicsApprovalState(scenario: RestrictedMetadataLegalEthicsAuditScenario): RestrictedMetadataLegalEthicsAuditPacketDto["approval"]["approvalState"] {
+  if (scenario === "approval_review") return "approval_required";
+  if (scenario === "legal_hold_review") return "legal_hold";
+  if (scenario === "emergency_stop_review") return "emergency_stop";
+  if (scenario === "retention_review") return "expired";
+  return "approved_metadata_only";
+}
+
+function restrictedMetadataLegalEthicsApproverRole(scenario: RestrictedMetadataLegalEthicsAuditScenario): RestrictedMetadataLegalEthicsAuditPacketDto["approval"]["approverRole"] {
+  if (scenario === "legal_hold_review" || scenario === "retention_review") return "legal";
+  if (scenario === "operator_thesis_export") return "ethics_board";
+  if (scenario === "emergency_stop_review") return "release_owner";
+  return "operator";
+}
+
+function restrictedMetadataLegalEthicsReleaseInterpretation(scenario: RestrictedMetadataLegalEthicsAuditScenario): RestrictedMetadataLegalEthicsAuditPacketDto["releaseInterpretation"] {
+  if (scenario === "emergency_stop_review" || scenario === "unsafe_target_blocked") return "rollback";
+  if (scenario === "approval_review" || scenario === "legal_hold_review" || scenario === "false_claim_review" || scenario === "retention_review") return "hold";
+  return "review_only";
+}
+
+function restrictedMetadataLegalEthicsEffect(scenario: RestrictedMetadataLegalEthicsAuditScenario): RestrictedMetadataLegalEthicsAuditPacketDto["graphStixApiEffect"] {
+  if (scenario === "false_claim_review" || scenario === "unsafe_target_blocked") {
+    return { graph: "suppress", stix: "blocked", api: "metadata_only_audit", publicSearch: "non_blocking" };
+  }
+  if (scenario === "metadata_only_collection" || scenario === "operator_thesis_export") {
+    return { graph: "pivot_only", stix: "blocked", api: "metadata_only_audit", publicSearch: "non_blocking" };
+  }
+  return { graph: "hold", stix: "blocked", api: "metadata_only_audit", publicSearch: "non_blocking" };
+}
+
+function restrictedMetadataLegalEthicsWhatWasNotAccessed(): string[] {
+  return [
+    "leaked rows",
+    "credential values",
+    "stolen file contents",
+    "restricted raw URLs",
+    "private community content",
+    "CAPTCHA or authentication workflows",
+    "threat actor communications",
+    "binary screenshot or payload material"
+  ];
+}
+
+function restrictedMetadataDedupeLegalEthicsAuditPackets(
+  packets: readonly RestrictedMetadataLegalEthicsAuditPacketDto[]
+): RestrictedMetadataLegalEthicsAuditPacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
+
+function buildRestrictedMetadataQualityEvaluationContract(
+  observedScenarios: readonly RestrictedMetadataQualityEvaluationScenario[] = RESTRICTED_QUALITY_EVALUATION_SCENARIOS
+): RestrictedMetadataQualityEvaluationDto {
+  return restrictedMetadataQualityEvaluationSummary(
+    RESTRICTED_QUALITY_EVALUATION_SCENARIOS.map(restrictedMetadataQualityGatePacket),
+    observedScenarios
+  );
+}
+
+function restrictedMetadataQualityEvaluationSummary(
+  packets: readonly RestrictedMetadataQualityGatePacketDto[],
+  observedScenarios: readonly RestrictedMetadataQualityEvaluationScenario[] = packets.map((packet) => packet.scenario)
+): RestrictedMetadataQualityEvaluationDto {
+  const withFixtures = restrictedMetadataDedupeQualityGatePackets([
+    ...packets,
+    ...RESTRICTED_QUALITY_EVALUATION_SCENARIOS.map(restrictedMetadataQualityGatePacket)
+  ]);
+  return {
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    packets: withFixtures,
+    fixtureScenarios: RESTRICTED_QUALITY_EVALUATION_SCENARIOS,
+    observedScenarios: restrictedMetadataUniqueStrings([
+      ...observedScenarios,
+      ...withFixtures.map((packet) => packet.scenario)
+    ]) as RestrictedMetadataQualityEvaluationScenario[],
+    publicAnswerHoldCount: withFixtures.filter((packet) => packet.publicAnswerGate === "hold_not_public_fact").length,
+    graphStixHoldCount: withFixtures.filter((packet) => packet.graphStixPromotionEligibility === "blocked_until_review").length,
+    falsePositiveSuppressionCount: withFixtures.filter((packet) => packet.proof.falsePositiveSuppressed).length,
+    duplicateSuppressionCount: withFixtures.filter((packet) => packet.proof.duplicateSuppressed).length,
+    staleReplaySuppressionCount: withFixtures.filter((packet) => packet.proof.staleReplaySuppressed).length,
+    agent09ApiFields: ["restrictedMetadata.qualityEvaluation", "restrictedMetadata.qualityEvaluation.packets", "restrictedMetadata.qualityEvaluation.publicAnswerHoldCount"],
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataQualityGatePacket(
+  scenario: RestrictedMetadataQualityEvaluationScenario
+): RestrictedMetadataQualityGatePacketDto {
+  const duplicate = scenario === "duplicate_announcement" || scenario === "noisy_mirror";
+  const stale = scenario === "stale_repost";
+  const contradicted = scenario === "contradictory_counts" || scenario === "contradictory_dates";
+  const unavailable = scenario === "source_takedown" || scenario === "unavailable_source";
+  const falsePositive = scenario === "false_claim" || scenario === "actor_impersonation" || contradicted || scenario === "victim_name_ambiguity";
+  const legalHold = scenario === "source_takedown";
+  return {
+    gateId: stableId("restricted-quality-gate", scenario),
+    scenario,
+    metadataOnly: true,
+    safeForApi: true,
+    dryRunOnly: true,
+    claimConfidence: scenario === "source_family_bias" ? "medium" : falsePositive || stale || unavailable || duplicate ? "low" : "medium",
+    duplicateStatus: duplicate ? scenario === "noisy_mirror" ? "mirror_cluster" : "duplicate" : "unique",
+    staleStatus: stale ? "stale" : unavailable ? "unknown" : "fresh",
+    actorReliability: scenario === "actor_impersonation" ? "impersonation_suspected" : contradicted ? "contradicted" : "unverified",
+    sourceReliability: scenario === "noisy_mirror" ? "noisy" : unavailable ? scenario === "source_takedown" ? "takedown" : "unavailable" : scenario === "source_family_bias" ? "biased" : "reliable",
+    reviewState: duplicate
+      ? "hold_duplicate"
+      : stale
+        ? "hold_stale"
+        : contradicted
+          ? "hold_contradiction"
+          : scenario === "victim_name_ambiguity"
+            ? "hold_ambiguous_victim"
+            : falsePositive || unavailable || scenario === "source_family_bias"
+              ? "hold_false_positive"
+              : "metadata_review",
+    legalHold,
+    retentionState: legalHold ? "legal_hold" : scenario === "stale_repost" ? "expiring" : "active",
+    publicAnswerGate: "hold_not_public_fact",
+    graphStixPromotionEligibility: "blocked_until_review",
+    suppressionReason: restrictedMetadataQualitySuppressionReason(scenario),
+    sourceHashOnly: true,
+    handoffs: {
+      agent06ClaimLedger: duplicate ? "duplicate" : falsePositive || stale || unavailable || contradicted ? "contradicted" : "metadata_review",
+      agent07AnswerCaveat: restrictedMetadataQualityAnswerCaveat(scenario),
+      agent08GraphHold: "hold_quality_review",
+      agent09ApiField: "restrictedMetadata.qualityEvaluation",
+      agent10ReleaseGate: "hold"
+    },
+    proof: {
+      falsePositiveSuppressed: true,
+      duplicateSuppressed: duplicate,
+      staleReplaySuppressed: stale,
+      publicFactPromotionBlocked: true,
+      noRawLeakMaterial: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      noScreenshots: true,
+      noPrivateAccess: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noThreatActorInteraction: true
+    },
+    noLeakSerialization: restrictedMetadataNoLeakSerializationCheck()
+  };
+}
+
+function restrictedMetadataQualitySuppressionReason(scenario: RestrictedMetadataQualityEvaluationScenario): string {
+  const mapping: Record<RestrictedMetadataQualityEvaluationScenario, string> = {
+    false_claim: "claim is reviewed as potentially false and cannot become a public fact",
+    actor_impersonation: "actor identity may be impersonated or spoofed",
+    duplicate_announcement: "duplicate announcement is grouped and suppressed",
+    stale_repost: "old repost is held as stale context",
+    noisy_mirror: "noisy mirror cluster cannot raise confidence alone",
+    source_takedown: "source takedown keeps claim in review",
+    unavailable_source: "unavailable source prevents verification",
+    source_family_bias: "source family bias requires independent corroboration",
+    contradictory_counts: "claimed affected counts conflict",
+    contradictory_dates: "claimed dates conflict",
+    victim_name_ambiguity: "victim name ambiguity requires analyst resolution"
+  };
+  return mapping[scenario];
+}
+
+function restrictedMetadataQualityAnswerCaveat(
+  scenario: RestrictedMetadataQualityEvaluationScenario
+): RestrictedMetadataQualityGatePacketDto["handoffs"]["agent07AnswerCaveat"] {
+  if (scenario === "actor_impersonation") return "actor_impersonation";
+  if (scenario === "duplicate_announcement") return "duplicate_claim";
+  if (scenario === "stale_repost") return "stale_claim";
+  if (scenario === "source_takedown" || scenario === "unavailable_source") return "source_unavailable";
+  if (scenario === "source_family_bias" || scenario === "noisy_mirror") return "source_bias";
+  if (scenario === "contradictory_counts" || scenario === "contradictory_dates") return "contradicted_claim";
+  if (scenario === "victim_name_ambiguity") return "victim_ambiguous";
+  return "false_claim_review";
+}
+
+function restrictedMetadataDedupeQualityGatePackets(
+  packets: readonly RestrictedMetadataQualityGatePacketDto[]
+): RestrictedMetadataQualityGatePacketDto[] {
+  const seen = new Set<string>();
+  return packets.filter((packet) => {
+    if (seen.has(packet.scenario)) return false;
+    seen.add(packet.scenario);
+    return true;
+  });
+}
 
 function buildRestrictedMetadataOperationalPlaybooksContract(
   observedScenarios: readonly RestrictedMetadataOperationalPlaybookScenario[] = RESTRICTED_OPERATIONAL_PLAYBOOK_SCENARIOS
@@ -3509,6 +5942,71 @@ export function buildRestrictedMetadataApplyPlan(input: RestrictedMetadataApplyP
       "emergency_stop",
       "source_quarantine"
     ]),
+    qualityEvaluation: buildRestrictedMetadataQualityEvaluationContract([
+      "false_claim",
+      "duplicate_announcement",
+      "stale_repost",
+      "source_family_bias",
+      "contradictory_counts"
+    ]),
+    capacityIsolation: buildRestrictedMetadataCapacityIsolationContract([
+      "proxy_outage",
+      "timeout_spike",
+      "approval_backlog",
+      "emergency_stop_drain",
+      "public_search_pressure"
+    ]),
+    capacitySlo: buildRestrictedMetadataCapacitySloContract([
+      "worker_capacity",
+      "approval_expiry_slo",
+      "emergency_stop_slo",
+      "retention_window_slo",
+      "over_capacity_hold"
+    ]),
+    operatorGovernance: buildRestrictedMetadataOperatorGovernanceContract([
+      "source_approval_expired",
+      "retention_expired",
+      "capacity_exceeded",
+      "source_quarantined_unsafe_target",
+      "emergency_stop_active"
+    ], { tenantId: "apply_plan_tenant", sourceKey: input.sourceIds?.join(":") ?? "apply-plan" }),
+    darkMetadataCanary: buildRestrictedMetadataDarkCanaryContract([
+      "tor_metadata_canary",
+      "i2p_metadata_canary",
+      "freenet_metadata_canary",
+      "ransomware_leak_site_claim",
+      "private_invite_target_blocked",
+      "raw_payload_blocked",
+      "credential_target_blocked",
+      "source_approval_expired",
+      "emergency_stop"
+    ], { sourceKey: input.sourceIds?.join(":") ?? "apply-plan" }),
+    legalEthicsAuditExport: buildRestrictedMetadataLegalEthicsAuditExportContract([
+      "metadata_only_collection",
+      "unsafe_target_blocked",
+      "approval_review",
+      "emergency_stop_review",
+      "retention_review",
+      "operator_thesis_export"
+    ], { sourceKey: input.sourceIds?.join(":") ?? "apply-plan" }),
+    reviewHealth: buildRestrictedMetadataReviewHealthContract([
+      "restricted_source_approval",
+      "false_claim_review",
+      "emergency_stop_review",
+      "retention_expiry_review"
+    ]),
+    policyAuditExport: buildRestrictedMetadataPolicyAuditExportContract([
+      "restricted_source_approval",
+      "false_claim_review",
+      "emergency_stop_review",
+      "retention_expiry_review"
+    ]),
+    evidenceHoldReleaseDrill: buildRestrictedMetadataEvidenceHoldReleaseDrillContract([
+      "restricted_source_approval",
+      "false_claim_review",
+      "emergency_stop_review",
+      "retention_expiry_review"
+    ]),
     noLeakSerialization: restrictedMetadataNoLeakSerializationCheck(),
     summary,
     agent01GovernanceEvidence: "approval_state_legal_notes_and_review_ticket",
@@ -4442,6 +6940,85 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     !packet.redactionProof || !packet.screenshotHashOnly ? "redaction_repair" : undefined,
     input.capture ? "duplicate_claim_review" : undefined
   ].filter((scenario): scenario is RestrictedMetadataOperationalPlaybookScenario => Boolean(scenario)));
+  const qualityEvaluation = buildRestrictedMetadataQualityEvaluationContract([
+    input.capture ? "false_claim" : undefined,
+    input.capture ? "duplicate_announcement" : undefined,
+    input.capture ? "stale_repost" : undefined,
+    packet.legalHold ? "source_takedown" : undefined,
+    packet.statuses.includes("retention_expired") ? "stale_repost" : undefined,
+    runtime.state === "proxy_failure" || runtime.state === "timeout" ? "unavailable_source" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "actor_impersonation" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataQualityEvaluationScenario => Boolean(scenario)));
+  const capacityIsolation = buildRestrictedMetadataCapacityIsolationContract([
+    runtime.state === "proxy_failure" ? "proxy_outage" : undefined,
+    runtime.state === "timeout" ? "timeout_spike" : undefined,
+    packet.legalHold ? "legal_hold_load" : undefined,
+    packet.statuses.includes("retention_expired") ? "retention_backlog" : undefined,
+    packet.approvalExpired || !packet.approvalId ? "approval_backlog" : undefined,
+    runtime.killSwitch.active ? "emergency_stop_drain" : undefined,
+    enforcement.level === "hold" || enforcement.level === "emergency_stop" ? "public_search_pressure" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataCapacityIsolationScenario => Boolean(scenario)));
+  const capacitySlo = buildRestrictedMetadataCapacitySloContract([
+    runtime.state === "proxy_failure" ? "proxy_outage_hold" : undefined,
+    runtime.state === "timeout" ? "over_capacity_hold" : undefined,
+    packet.legalHold ? "legal_hold_slo" : undefined,
+    packet.statuses.includes("retention_expired") ? "retention_window_slo" : undefined,
+    packet.approvalExpired || !packet.approvalId ? "approval_expiry_slo" : undefined,
+    runtime.killSwitch.active ? "emergency_stop_slo" : undefined,
+    packet.forbiddenActionChecks.unsafeTargetBlocked ? "unsafe_source_discovery_hold" : undefined,
+    input.capture ? "duplicate_stale_claim_hold" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "false_claim_review_hold" : undefined,
+    "worker_capacity"
+  ].filter((scenario): scenario is RestrictedMetadataCapacitySloScenario => Boolean(scenario)));
+  const operatorGovernance = buildRestrictedMetadataOperatorGovernanceContract([
+    input.capture ? "ransomware_leak_claim_review_hold" : undefined,
+    packet.approvalExpired || !packet.approvalId ? "source_approval_expired" : undefined,
+    packet.legalHold ? "legal_hold_active" : undefined,
+    packet.statuses.includes("retention_expired") ? "retention_expired" : undefined,
+    runtime.state === "timeout" ? "capacity_exceeded" : undefined,
+    packet.forbiddenActionChecks.unsafeTargetBlocked ? "source_quarantined_unsafe_target" : undefined,
+    input.capture ? "duplicate_victim_claim_suppressed" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "false_claim_disputed" : undefined,
+    runtime.killSwitch.active ? "emergency_stop_active" : undefined,
+    "ransomware_leak_claim_review_hold"
+  ].filter((scenario): scenario is RestrictedMetadataOperatorGovernanceScenario => Boolean(scenario)), {
+    tenantId: input.source.tenantId ?? "tenant_restricted_governance",
+    sourceKey: input.source.id
+  });
+  const darkMetadataCanary = buildRestrictedMetadataDarkCanaryContract([
+    runtime.network === "tor" ? "tor_metadata_canary" : undefined,
+    runtime.network === "i2p" ? "i2p_metadata_canary" : undefined,
+    runtime.network === "freenet" ? "freenet_metadata_canary" : undefined,
+    input.capture ? "ransomware_leak_site_claim" : undefined,
+    packet.forbiddenActionChecks.unsafeTargetBlocked ? "private_invite_target_blocked" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "raw_payload_blocked" : undefined,
+    packet.approvalExpired || !packet.approvalId ? "source_approval_expired" : undefined,
+    packet.legalHold ? "legal_hold" : undefined,
+    runtime.killSwitch.active ? "emergency_stop" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "false_claim_dispute" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataDarkCanaryScenario => Boolean(scenario)), { sourceKey: input.source.id });
+  const legalEthicsAuditExport = buildRestrictedMetadataLegalEthicsAuditExportContract([
+    input.capture ? "metadata_only_collection" : undefined,
+    packet.forbiddenActionChecks.unsafeTargetBlocked || packet.statuses.includes("forbidden_target_blocked") ? "unsafe_target_blocked" : undefined,
+    packet.approvalExpired || !packet.approvalId ? "approval_review" : undefined,
+    packet.legalHold ? "legal_hold_review" : undefined,
+    runtime.killSwitch.active ? "emergency_stop_review" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "false_claim_review" : undefined,
+    packet.statuses.includes("retention_expired") ? "retention_review" : undefined,
+    "operator_thesis_export"
+  ].filter((scenario): scenario is RestrictedMetadataLegalEthicsAuditScenario => Boolean(scenario)), { sourceKey: input.source.id });
+  const reviewHealth = buildRestrictedMetadataReviewHealthContract([
+    packet.approvalExpired || !packet.approvalId ? "restricted_source_approval" : undefined,
+    input.capture ? "victim_claim_review" : undefined,
+    packet.legalHold ? "legal_hold_review" : undefined,
+    input.capture ? "duplicate_stale_repost_review" : undefined,
+    packet.statuses.includes("forbidden_target_blocked") ? "false_claim_review" : undefined,
+    runtime.killSwitch.active ? "emergency_stop_review" : undefined,
+    packet.statuses.includes("retention_expired") ? "retention_expiry_review" : undefined,
+    input.capture ? "notification_draft_review" : undefined
+  ].filter((scenario): scenario is RestrictedMetadataReviewHealthScenario => Boolean(scenario)));
+  const policyAuditExport = buildRestrictedMetadataPolicyAuditExportContract(reviewHealth.observedScenarios);
+  const evidenceHoldReleaseDrill = buildRestrictedMetadataEvidenceHoldReleaseDrillContract(reviewHealth.observedScenarios);
 
   return {
     sourceId: input.source.id,
@@ -4507,6 +7084,15 @@ export function buildRestrictedMetadataOperationsReadiness(input: {
     analystOperations,
     isolationHarness,
     operationalPlaybooks,
+    qualityEvaluation,
+    capacityIsolation,
+    capacitySlo,
+    operatorGovernance,
+    darkMetadataCanary,
+    legalEthicsAuditExport,
+    reviewHealth,
+    policyAuditExport,
+    evidenceHoldReleaseDrill,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, [governancePacket], auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     compliance: searchSummary,
     agent09SearchSummary: searchSummary,
@@ -4611,6 +7197,51 @@ export function buildRestrictedMetadataOperationsStatus(input: {
     "false_claim_review",
     "duplicate_claim_review"
   ]);
+  const qualityEvaluation = buildRestrictedMetadataQualityEvaluationContract([
+    "false_claim",
+    "actor_impersonation",
+    "duplicate_announcement",
+    "stale_repost",
+    "noisy_mirror",
+    "source_takedown",
+    "unavailable_source",
+    "source_family_bias",
+    "contradictory_counts",
+    "contradictory_dates",
+    "victim_name_ambiguity"
+  ]);
+  const capacityIsolation = buildRestrictedMetadataCapacityIsolationContract([
+    "proxy_outage",
+    "timeout_spike",
+    "legal_hold_load",
+    "retention_backlog",
+    "approval_backlog",
+    "emergency_stop_drain",
+    "public_search_pressure"
+  ]);
+  const capacitySlo = buildRestrictedMetadataCapacitySloContract(RESTRICTED_CAPACITY_SLO_SCENARIOS);
+  const operatorGovernance = buildRestrictedMetadataOperatorGovernanceContract(RESTRICTED_OPERATOR_GOVERNANCE_SCENARIOS, {
+    tenantId: input.sources.find((source) => source.tenantId)?.tenantId ?? "tenant_restricted_governance",
+    sourceKey: restrictedSources.map((source) => source.id).join(":") || "status"
+  });
+  const darkMetadataCanary = buildRestrictedMetadataDarkCanaryContract(RESTRICTED_DARK_CANARY_SCENARIOS, {
+    sourceKey: restrictedSources.map((source) => source.id).join(":") || "status"
+  });
+  const legalEthicsAuditExport = buildRestrictedMetadataLegalEthicsAuditExportContract(RESTRICTED_LEGAL_ETHICS_AUDIT_SCENARIOS, {
+    sourceKey: restrictedSources.map((source) => source.id).join(":") || "status"
+  });
+  const reviewHealth = buildRestrictedMetadataReviewHealthContract([
+    "restricted_source_approval",
+    "victim_claim_review",
+    "legal_hold_review",
+    "duplicate_stale_repost_review",
+    "false_claim_review",
+    "emergency_stop_review",
+    "retention_expiry_review",
+    "notification_draft_review"
+  ]);
+  const policyAuditExport = buildRestrictedMetadataPolicyAuditExportContract(reviewHealth.observedScenarios);
+  const evidenceHoldReleaseDrill = buildRestrictedMetadataEvidenceHoldReleaseDrillContract(reviewHealth.observedScenarios);
   const partialState = matchingResults.length > 0
     ? "partial_metadata"
     : sources.some((source) => source.readiness === "ready")
@@ -4651,12 +7282,21 @@ export function buildRestrictedMetadataOperationsStatus(input: {
     analystOperations,
     isolationHarness,
     operationalPlaybooks,
+    qualityEvaluation,
+    capacityIsolation,
+    capacitySlo,
+    operatorGovernance,
+    darkMetadataCanary,
+    legalEthicsAuditExport,
+    reviewHealth,
+    policyAuditExport,
+    evidenceHoldReleaseDrill,
     agent10ReleasePacket: restrictedMetadataAgent10ReleasePacket(operationalSla, enforcement, governancePackets, auditReplay, connectorCertification, killSwitchDrills, emergencyStopCertification),
     remediationPlan: dedupeOperationsRemediationItems(sources.flatMap((source) => source.remediationPlan)),
     connectorFixtures: restrictedMetadataConnectorFixtures(),
     agent06EvidenceHandoffProof: restrictedMetadataEvidenceHandoffSafetyProof(handoffs),
-    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "isolationHarness", "operationalPlaybooks"],
-    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch", "analystOperations", "isolationHarness", "operationalPlaybooks"]
+    agent09SearchFields: ["sourceId", "packetId", "statuses", "metadataOnly", "approvalId", "policyVersion", "proxyBoundaryId", "killSwitchState", "retentionClass", "legalHold", "redactionProof", "forbiddenActionChecks", "auditEventIds", "operationalSla", "enforcement", "auditTrail", "governancePackets", "operatorGovernance", "darkMetadataCanary", "legalEthicsAuditExport", "auditReplay", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "isolationHarness", "operationalPlaybooks", "qualityEvaluation", "capacityIsolation", "capacitySlo", "reviewHealth", "policyAuditExport", "evidenceHoldReleaseDrill"],
+    agent10SoakFields: ["sourceId", "packetId", "status", "promotionBlockers", "proofFields", "agent10SoakFields", "agent10ReleasePacket", "restricted_metadata_sla", "emergencyStop", "governancePacketIds", "operatorGovernance", "darkMetadataCanary", "legalEthicsAuditExport", "auditReplayScenarios", "certificationPacketIds", "certificationScenarios", "killSwitchDrillPacketIds", "killSwitchDrillScenarios", "emergencyStopCertificationPacketIds", "emergencyStopCertificationScenarios", "nonBlockingSearch", "analystOperations", "isolationHarness", "operationalPlaybooks", "qualityEvaluation", "capacityIsolation", "capacitySlo", "reviewHealth", "policyAuditExport", "evidenceHoldReleaseDrill"]
   };
 }
 
@@ -7748,6 +10388,42 @@ export function restrictedMetadataVictimClaimWorkflowCertificationContract(): Re
 
 export function restrictedMetadataOperationalPlaybooksContract(): RestrictedMetadataOperationalPlaybooksDto {
   return buildRestrictedMetadataOperationalPlaybooksContract();
+}
+
+export function restrictedMetadataQualityEvaluationContract(): RestrictedMetadataQualityEvaluationDto {
+  return buildRestrictedMetadataQualityEvaluationContract();
+}
+
+export function restrictedMetadataCapacityIsolationContract(): RestrictedMetadataCapacityIsolationDto {
+  return buildRestrictedMetadataCapacityIsolationContract();
+}
+
+export function restrictedMetadataCapacitySloContract(): RestrictedMetadataCapacitySloDto {
+  return buildRestrictedMetadataCapacitySloContract();
+}
+
+export function restrictedMetadataOperatorGovernanceContract(): RestrictedMetadataOperatorGovernanceDto {
+  return buildRestrictedMetadataOperatorGovernanceContract();
+}
+
+export function restrictedMetadataDarkCanaryContract(): RestrictedMetadataDarkCanaryDto {
+  return buildRestrictedMetadataDarkCanaryContract();
+}
+
+export function restrictedMetadataLegalEthicsAuditExportContract(): RestrictedMetadataLegalEthicsAuditExportDto {
+  return buildRestrictedMetadataLegalEthicsAuditExportContract();
+}
+
+export function restrictedMetadataReviewHealthContract(): RestrictedMetadataReviewHealthDto {
+  return buildRestrictedMetadataReviewHealthContract();
+}
+
+export function restrictedMetadataPolicyAuditExportContract(): RestrictedMetadataPolicyAuditExportDto {
+  return buildRestrictedMetadataPolicyAuditExportContract();
+}
+
+export function restrictedMetadataEvidenceHoldReleaseDrillContract(): RestrictedMetadataEvidenceHoldReleaseDrillDto {
+  return buildRestrictedMetadataEvidenceHoldReleaseDrillContract();
 }
 
 export function restrictedMetadataIsolationHarnessContract(): RestrictedMetadataIsolationHarnessDto {

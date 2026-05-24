@@ -1,5 +1,6 @@
 import { actorAliasesFor } from "./actorAliases.ts";
 import { buildActorQueryExtractionProfile, type EvidenceStage, type StagedEvidenceInput } from "./intelligenceProfiles.ts";
+import { stableId, uniqueStrings } from "../utils.ts";
 
 export type TimelinessQueryClass = "high_activity_actor" | "actor" | "ransomware" | "cve" | "malware_tool" | "unknown";
 export type TimelinessFieldName = "recent_activity" | "source_freshness" | "victim_claims" | "ttps" | "malware_tools" | "cves" | "infrastructure";
@@ -52,8 +53,102 @@ export interface TimelinessGroundTruthHarnessDto {
   };
 }
 
+export type ActorFreshnessCadence = "daily" | "weekly";
+export type ActorFreshnessState = "current" | "aging" | "stale" | "unknown";
+
+export interface HighPriorityActorFreshnessRowDto {
+  id: string;
+  actor: string;
+  aliases: string[];
+  priority: "critical" | "high";
+  cadence: {
+    expected: ActorFreshnessCadence;
+    targetMaxAgeDays: number;
+    nextReviewDueAt: string;
+  };
+  latest: {
+    latestSourceAt?: string;
+    latestClaimAt?: string;
+    latestEvidenceStage?: EvidenceStage;
+    freshnessScore: number;
+  };
+  states: {
+    overall: ActorFreshnessState;
+    recentActivity: TimelinessStatus;
+    sourceFreshness: TimelinessStatus;
+    publicAnswerState: "ready" | "partial" | "review_required" | "searching";
+    blocksReadyPromotion: boolean;
+  };
+  evidenceIds: string[];
+  sourceIds: string[];
+  reasons: string[];
+  handoffs: {
+    agent01SourceReliability?: string;
+    agent02SchedulerCadence?: string;
+    agent04SourceGap?: string;
+    agent06EvidenceReplay?: string;
+    agent09ApiField?: string;
+    agent10ReleaseGate?: string;
+  };
+}
+
+export interface HighPriorityActorFreshnessDashboardDto {
+  schemaVersion: "ti.high_priority_actor_freshness_dashboard.v1";
+  query: string;
+  generatedAt: string;
+  actors: HighPriorityActorFreshnessRowDto[];
+  summary: {
+    actorCount: number;
+    currentCount: number;
+    agingCount: number;
+    staleCount: number;
+    unknownCount: number;
+    dailyDueCount: number;
+    weeklyDueCount: number;
+    readyPromotionHoldCount: number;
+  };
+  queues: {
+    dailyRefresh: string[];
+    weeklyRefresh: string[];
+    staleAnswerHolds: string[];
+    missingEvidence: string[];
+    sourceGapReview: string[];
+  };
+  routing: {
+    agent01SourceReliability: string[];
+    agent02SchedulerCadence: string[];
+    agent04FreshnessSourceGaps: string[];
+    agent06EvidenceReplay: string[];
+    agent09ApiFields: string[];
+    agent10ReleaseGates: string[];
+  };
+  policy: {
+    preservesUncertainty: true;
+    staleCannotBeLatest: true;
+    unknownActorSearchingOnly: true;
+    noAutomaticPromotion: true;
+    noAutonomousScraping: true;
+  };
+  safety: {
+    rawEvidenceExposed: false;
+    sourceUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    objectKeysExposed: false;
+  };
+}
+
 const HIGH_ACTIVITY_ACTORS = new Set(["apt29", "apt42", "turla", "volt typhoon", "scattered spider", "akira", "lockbit"]);
 const RANSOMWARE = new Set(["akira", "lockbit", "clop", "alphv", "blackcat", "black cat"]);
+const DEFAULT_HIGH_PRIORITY_ACTORS: Array<{ actor: string; priority: "critical" | "high"; cadence: ActorFreshnessCadence; targetMaxAgeDays: number }> = [
+  { actor: "APT29", priority: "critical", cadence: "daily", targetMaxAgeDays: 14 },
+  { actor: "APT42", priority: "critical", cadence: "daily", targetMaxAgeDays: 14 },
+  { actor: "Sandworm", priority: "critical", cadence: "daily", targetMaxAgeDays: 14 },
+  { actor: "Volt Typhoon", priority: "critical", cadence: "daily", targetMaxAgeDays: 14 },
+  { actor: "Lazarus", priority: "high", cadence: "weekly", targetMaxAgeDays: 21 },
+  { actor: "Turla", priority: "high", cadence: "weekly", targetMaxAgeDays: 21 },
+  { actor: "LockBit", priority: "high", cadence: "daily", targetMaxAgeDays: 7 },
+  { actor: "Akira", priority: "high", cadence: "daily", targetMaxAgeDays: 7 }
+];
 
 export function buildTimelinessGroundTruthHarnessDto(input: {
   query: string;
@@ -102,6 +197,187 @@ export function buildTimelinessGroundTruthHarnessDto(input: {
       preservesUncertainty: true
     }
   };
+}
+
+export function buildHighPriorityActorFreshnessDashboardDto(input: {
+  query: string;
+  generatedAt?: string;
+  timelinessGroundTruth?: TimelinessGroundTruthHarnessDto;
+  monitoredActors?: Array<{ actor: string; priority?: "critical" | "high"; cadence?: ActorFreshnessCadence; targetMaxAgeDays?: number }>;
+}): HighPriorityActorFreshnessDashboardDto {
+  const generatedAt = input.generatedAt ?? input.timelinessGroundTruth?.generatedAt ?? new Date().toISOString();
+  const actors = (input.monitoredActors ?? DEFAULT_HIGH_PRIORITY_ACTORS).map((actorConfig) => {
+    const cadence = actorConfig.cadence ?? (actorConfig.priority === "critical" ? "daily" : "weekly");
+    const targetMaxAgeDays = actorConfig.targetMaxAgeDays ?? (cadence === "daily" ? 14 : 21);
+    const matched = queryMatchesActor(input.query, actorConfig.actor);
+    return actorFreshnessRow({
+      actor: actorConfig.actor,
+      priority: actorConfig.priority ?? (cadence === "daily" ? "critical" : "high"),
+      cadence,
+      targetMaxAgeDays,
+      generatedAt,
+      timeliness: matched ? input.timelinessGroundTruth : undefined
+    });
+  });
+  return {
+    schemaVersion: "ti.high_priority_actor_freshness_dashboard.v1",
+    query: input.query,
+    generatedAt,
+    actors,
+    summary: {
+      actorCount: actors.length,
+      currentCount: actors.filter((row) => row.states.overall === "current").length,
+      agingCount: actors.filter((row) => row.states.overall === "aging").length,
+      staleCount: actors.filter((row) => row.states.overall === "stale").length,
+      unknownCount: actors.filter((row) => row.states.overall === "unknown").length,
+      dailyDueCount: actors.filter((row) => row.cadence.expected === "daily" && row.states.overall !== "current").length,
+      weeklyDueCount: actors.filter((row) => row.cadence.expected === "weekly" && row.states.overall !== "current").length,
+      readyPromotionHoldCount: actors.filter((row) => row.states.blocksReadyPromotion).length
+    },
+    queues: {
+      dailyRefresh: actors.filter((row) => row.cadence.expected === "daily" && row.states.overall !== "current").map((row) => row.id),
+      weeklyRefresh: actors.filter((row) => row.cadence.expected === "weekly" && row.states.overall !== "current").map((row) => row.id),
+      staleAnswerHolds: actors.filter((row) => row.states.blocksReadyPromotion).map((row) => row.id),
+      missingEvidence: actors.filter((row) => row.states.overall === "unknown").map((row) => row.id),
+      sourceGapReview: actors.filter((row) => row.sourceIds.length < 2 || row.states.overall === "stale").map((row) => row.id)
+    },
+    routing: {
+      agent01SourceReliability: idsWithHandoff(actors, "agent01SourceReliability"),
+      agent02SchedulerCadence: idsWithHandoff(actors, "agent02SchedulerCadence"),
+      agent04FreshnessSourceGaps: idsWithHandoff(actors, "agent04SourceGap"),
+      agent06EvidenceReplay: idsWithHandoff(actors, "agent06EvidenceReplay"),
+      agent09ApiFields: idsWithHandoff(actors, "agent09ApiField"),
+      agent10ReleaseGates: idsWithHandoff(actors, "agent10ReleaseGate")
+    },
+    policy: {
+      preservesUncertainty: true,
+      staleCannotBeLatest: true,
+      unknownActorSearchingOnly: true,
+      noAutomaticPromotion: true,
+      noAutonomousScraping: true
+    },
+    safety: {
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function actorFreshnessRow(input: {
+  actor: string;
+  priority: "critical" | "high";
+  cadence: ActorFreshnessCadence;
+  targetMaxAgeDays: number;
+  generatedAt: string;
+  timeliness?: TimelinessGroundTruthHarnessDto;
+}): HighPriorityActorFreshnessRowDto {
+  const recent = input.timeliness?.fields.find((field) => field.field === "recent_activity");
+  const source = input.timeliness?.fields.find((field) => field.field === "source_freshness");
+  const latestSourceAt = input.timeliness?.latest.latestSourceAt;
+  const latestClaimAt = input.timeliness?.latest.latestClaimAt;
+  const sourceAge = latestSourceAt ? ageDays(latestSourceAt, input.generatedAt) : Number.POSITIVE_INFINITY;
+  const overall = freshnessState({
+    sourceStatus: source?.status ?? "unknown",
+    recentStatus: recent?.status ?? "unknown",
+    sourceAge,
+    targetMaxAgeDays: input.targetMaxAgeDays,
+    hasEvidence: (source?.evidenceIds.length ?? 0) > 0 || (recent?.evidenceIds.length ?? 0) > 0
+  });
+  const blocksReadyPromotion = overall === "stale" || overall === "unknown" || input.timeliness?.releaseImpact.holdsReadyPromotion === true;
+  const evidenceIds = uniqueStrings([
+    ...(recent?.evidenceIds ?? []),
+    ...(source?.evidenceIds ?? []),
+    ...(input.timeliness?.gaps.flatMap((gap) => gap.evidenceIds) ?? [])
+  ]).slice(0, 12);
+  const sourceIds = uniqueStrings([
+    ...(recent?.sourceIds ?? []),
+    ...(source?.sourceIds ?? [])
+  ]).slice(0, 12);
+  return {
+    id: stableId("high-priority-actor-freshness", `${input.actor}:${input.generatedAt}`),
+    actor: input.actor,
+    aliases: actorAliasesFor(input.actor).slice(0, 8),
+    priority: input.priority,
+    cadence: {
+      expected: input.cadence,
+      targetMaxAgeDays: input.targetMaxAgeDays,
+      nextReviewDueAt: nextReviewDueAt(latestSourceAt, input.generatedAt, input.cadence)
+    },
+    latest: {
+      latestSourceAt,
+      latestClaimAt,
+      latestEvidenceStage: input.timeliness?.latest.latestEvidenceStage,
+      freshnessScore: input.timeliness?.latest.freshnessScore ?? 0
+    },
+    states: {
+      overall,
+      recentActivity: recent?.status ?? "unknown",
+      sourceFreshness: source?.status ?? "unknown",
+      publicAnswerState: input.timeliness
+        ? input.timeliness.releaseImpact.publicAnswerState
+        : "searching",
+      blocksReadyPromotion
+    },
+    evidenceIds,
+    sourceIds,
+    reasons: actorFreshnessReasons(input.actor, overall, input.cadence, input.targetMaxAgeDays, sourceAge, input.timeliness),
+    handoffs: {
+      agent01SourceReliability: sourceIds.length < 2 ? "review source-family support before ready wording" : undefined,
+      agent02SchedulerCadence: overall !== "current" ? `schedule ${input.cadence} refresh for high-priority actor` : undefined,
+      agent04SourceGap: sourceIds.length < 2 || overall === "unknown" ? "fill public source gap with approved safe sources" : undefined,
+      agent06EvidenceReplay: evidenceIds.length > 0 ? "replay latest evidence before freshness promotion" : undefined,
+      agent09ApiField: "highPriorityActorFreshnessDashboard",
+      agent10ReleaseGate: blocksReadyPromotion ? "hold ready public answer until freshness gate passes" : undefined
+    }
+  };
+}
+
+function freshnessState(input: {
+  sourceStatus: TimelinessStatus;
+  recentStatus: TimelinessStatus;
+  sourceAge: number;
+  targetMaxAgeDays: number;
+  hasEvidence: boolean;
+}): ActorFreshnessState {
+  if (!input.hasEvidence) return "unknown";
+  if (input.sourceStatus === "stale" || input.recentStatus === "stale" || input.sourceAge > input.targetMaxAgeDays * 2) return "stale";
+  if (input.sourceStatus === "aging" || input.recentStatus === "aging" || input.sourceAge > input.targetMaxAgeDays) return "aging";
+  return "current";
+}
+
+function actorFreshnessReasons(
+  actor: string,
+  state: ActorFreshnessState,
+  cadence: ActorFreshnessCadence,
+  targetMaxAgeDays: number,
+  sourceAge: number,
+  timeliness: TimelinessGroundTruthHarnessDto | undefined
+): string[] {
+  return [
+    `${actor} is tracked on a ${cadence} freshness cadence`,
+    Number.isFinite(sourceAge) ? `latest source material is ${sourceAge} day(s) old against ${targetMaxAgeDays} day target` : "no current evidence is available for this actor in the dashboard context",
+    ...(timeliness?.releaseImpact.caveats ?? []),
+    ...(state === "stale" ? ["stale evidence cannot be used as latest activity"] : []),
+    ...(state === "unknown" ? ["public answer must remain Searching or partial until evidence arrives"] : [])
+  ].slice(0, 10);
+}
+
+function nextReviewDueAt(latestSourceAt: string | undefined, generatedAt: string, cadence: ActorFreshnessCadence): string {
+  const base = Number.isFinite(Date.parse(latestSourceAt ?? "")) ? Date.parse(latestSourceAt ?? "") : Date.parse(generatedAt);
+  const intervalDays = cadence === "daily" ? 1 : 7;
+  return new Date(base + intervalDays * 86_400_000).toISOString();
+}
+
+function queryMatchesActor(query: string, actor: string): boolean {
+  const normalizedQuery = query.toLowerCase();
+  const names = new Set([actor.toLowerCase(), ...actorAliasesFor(actor).map((alias) => alias.toLowerCase())]);
+  return [...names].some((name) => normalizedQuery === name || normalizedQuery.includes(name));
+}
+
+function idsWithHandoff(rows: HighPriorityActorFreshnessRowDto[], field: keyof HighPriorityActorFreshnessRowDto["handoffs"]): string[] {
+  return rows.filter((row) => Boolean(row.handoffs[field])).map((row) => row.id);
 }
 
 function buildFieldScores(

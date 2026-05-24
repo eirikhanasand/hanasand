@@ -129,6 +129,36 @@ describe("graph review route handlers", () => {
     expect(readiness.body.readiness.enforcement.items.map((item) => item.code)).toContain("weak_discovery_only_edge");
     expect(readiness.body.readiness.enforcement.releaseGate.publicAnswers).toBe("hold");
     expect(readiness.body.readiness.preview.excludedCount).toBeGreaterThan(0);
+    expect(readiness.body.readiness.persistence.mode).toBe("graph_review_persistence_contract");
+    expect(readiness.body.readiness.persistence.decisionActions).toEqual(expect.arrayContaining([
+      "promote",
+      "hold",
+      "reject",
+      "mark_stale",
+      "mark_contradicted",
+      "merge_duplicate",
+      "split_alias",
+      "mark_export_ready"
+    ]));
+    expect(readiness.body.readiness.exportGovernance).toMatchObject({
+      mode: "reviewed_export_subset_governance",
+      mediaType: "application/stix+json;version=2.1",
+      governanceChecks: {
+        taxiiBoundary: "descriptor_only_no_server",
+        sourceClaimProvenance: "source_capture_ledger_ids_required"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false
+      }
+    });
+    expect(readiness.body.readiness.exportGovernance.eligibleRelationshipIds.length).toBe(readiness.body.readiness.readyCount);
+    expect(plan.body.reviewPlan.persistence.rollbackPlan).toMatchObject({
+      strategy: "append_compensating_review_decision",
+      willDeleteAuditRows: false,
+      willRewriteEvidence: false
+    });
     expect(plan.body.reviewPlan.enforcement.releaseGate.stixPromotion).toMatch(/hold|rollback/);
     expect(plan.body.reviewPlan.actions.every((action) => action.action === "block_export")).toBe(true);
     expect(plan.body.reviewPlan.actions.some((action) => action.preconditions.includes("discovery-only evidence cannot be auto-promoted to export-ready"))).toBe(true);
@@ -219,9 +249,102 @@ describe("graph review route handlers", () => {
           relationships: Array<{ exportReady: boolean; provenanceIds: string[] }>;
           attackMatrix: unknown[];
           deltas: unknown[];
+          investigationWorkspace: {
+            reviewPersistence: {
+              mode: string;
+              decisions: Array<{ relationshipId: string; decisionId: string; ledgerIds: string[]; appendOnly: boolean; rollbackDecisionId: string }>;
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+            exportGovernance: {
+              mode: string;
+              eligibleRelationshipIds: string[];
+              heldRelationshipIds: string[];
+              agentHandoffs: { agent09ApiFields: string[] };
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+            costControls: {
+              mode: string;
+              tenant: { workspaceKind: string; isolation: string };
+              continuation: { boundedRelationshipIds: string[]; truncatedDimensions: string[] };
+              heldFacts: { policy: string; missingLedgerRelationshipIds: string[] };
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+            driftMonitor: {
+              mode: string;
+              tenant: { workspaceKind: string; budgetPolicy: string };
+              rows: Array<{ relationshipId: string; action: string; exportEligibleAfter: boolean }>;
+              deltaContract: { nextPollSeconds: number; eventTypes: string[] };
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+            relationshipExplanations: {
+              mode: string;
+              rows: Array<{ relationshipId: string; status: string; why: string[]; exportEligibility: { taxiiBoundary: string; eligible: boolean } }>;
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+            notebookExport: {
+              mode: string;
+              boundedNodes: unknown[];
+              boundedEdges: unknown[];
+              pivotRecommendations: unknown[];
+              relationshipExplanations: unknown[];
+              stixPreviewDescriptor: { taxiiBoundary: string; previewOnly: boolean };
+              costBudget: { nextPollSeconds: number };
+              deltaClientContract: {
+                mode: string;
+                polling: { intervalSeconds: number; cursorField: string };
+                notebookBinding: { previewOnly: boolean; taxiiBoundary: string };
+                safety: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+              };
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+            backendMigrationCertification: {
+              mode: string;
+              migrationOrder: Array<{ dataset: string }>;
+              cursorContinuity: { cursorField: string; nextPollSeconds: number };
+              tenantScoping: { isolation: string; crossTenantJoinsAllowed: boolean };
+              exportRecomputation: { taxiiBoundary: string };
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean };
+            };
+          };
+          attackCampaignWorkspace: {
+            freshnessSlo: {
+              mode: string;
+              policy: { publicFactPolicy: string; taxiiBoundary: string };
+              deltaContract: { cursorField: string; nextPollSeconds: number };
+              sourceCadenceRequests: Array<{ dryRun: boolean }>;
+              noLeak: { rawRestrictedMaterialIncluded: boolean; objectKeysIncluded: boolean; unsafeUrlsIncluded: boolean; metadataOnly: boolean };
+            };
+          };
           reviewQueue: { publicFactPolicy: string; total: number };
           exportReadiness: { reviewQueue: { publicFactPolicy: string } };
-          runtime: { enforcement: { releaseGate: { ledgerComplete: boolean; schemaSafe: boolean } } };
+          runtime: {
+            enforcement: { releaseGate: { ledgerComplete: boolean; schemaSafe: boolean } };
+            queryCostControls: { mode: string; queuePressure: { nextPollSeconds: number; schedulerBudgetClass: string }; budgets: Array<{ dimension: string; hardLimit: number }> };
+            driftMonitor: { mode: string; tenant: { workspaceKind: string }; rows: Array<{ action: string }> };
+            backendMigrationCertification: { mode: string; holdPolicy: { policy: string }; migrationOrder: Array<{ dataset: string }> };
+            neo4jMigrationAdapter: { mode: string; adapterBoundary: { implementationState: string; taxiiBoundary: string }; benchmarkScenarios: Array<{ name: string }>; parityChecks: { heldRowsRemainNonExportable: boolean }; noLeak: { metadataOnly: boolean; rawRestrictedMaterialIncluded: boolean } };
+            backendAdapterCutover: {
+              mode: string;
+              adapterStrategy: { primaryBackend: string; neo4jState: string; taxiiBoundary: string };
+              interfaces: Array<{ name: string; postgresTarget: string; neo4jTarget: string; tenantScoped: boolean }>;
+              migrations: Array<{ backend: string; migrationProof: string }>;
+              cursorReplay: { cursorField: string; orderPolicy: string };
+              reviewHoldParity: { policy: string };
+              cutoverReadiness: { fallback: string; proofCommands: string[] };
+              noLeak: { metadataOnly: boolean; rawRestrictedMaterialIncluded: boolean };
+            };
+            liveUpdate: {
+              clientContract: {
+                mode: string;
+                transport: string;
+                fixtureNames: string[];
+                polling: { intervalSeconds: number; cursorField: string };
+                handoffs: { agent09FrontendContract: string };
+              };
+            };
+            reviewPersistence: { mode: string };
+            reviewedExportSubset: { mode: string; eligibleRelationshipIds: string[] };
+          };
         };
       };
       const timeline = await fetchJson(`${base}/v1/graph/timeline?runId=${acceptedRunId}&q=APT29`) as {
@@ -256,6 +379,214 @@ describe("graph review route handlers", () => {
       expect(["ready", "hold_weak_edges"]).toContain(graph.graph.reviewQueue.publicFactPolicy);
       expect(graph.graph.exportReadiness.reviewQueue.publicFactPolicy).toBe(graph.graph.reviewQueue.publicFactPolicy);
       expect(graph.graph.runtime.enforcement.releaseGate.ledgerComplete).toBe(true);
+      expect(graph.graph.investigationWorkspace.reviewPersistence.mode).toBe("graph_review_persistence_contract");
+      expect(graph.graph.investigationWorkspace.reviewPersistence.decisions.length).toBeGreaterThan(0);
+      expect(graph.graph.investigationWorkspace.reviewPersistence.decisions.every((decision) => decision.appendOnly && decision.decisionId && decision.rollbackDecisionId)).toBe(true);
+      expect(graph.graph.investigationWorkspace.exportGovernance.mode).toBe("reviewed_export_subset_governance");
+      expect(graph.graph.investigationWorkspace.exportGovernance.eligibleRelationshipIds.length).toBeGreaterThan(0);
+      expect(graph.graph.investigationWorkspace.exportGovernance.agentHandoffs.agent09ApiFields).toContain("cursor");
+      expect(graph.graph.investigationWorkspace.reviewPersistence.noLeak).toMatchObject({
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false
+      });
+      expect(graph.graph.investigationWorkspace.exportGovernance.noLeak).toMatchObject({
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false
+      });
+      expect(graph.graph.investigationWorkspace.costControls).toMatchObject({
+        mode: "graph_query_cost_controls_tenant_budget",
+        tenant: {
+          workspaceKind: "investigation",
+          isolation: "tenant_and_workspace_scoped_budget"
+        },
+        heldFacts: {
+          policy: "held_facts_never_promote_because_of_budget_truncation"
+        },
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false
+        }
+      });
+      expect(graph.graph.investigationWorkspace.costControls.continuation.boundedRelationshipIds.length).toBeLessThanOrEqual(50);
+      expect(graph.graph.investigationWorkspace.driftMonitor).toMatchObject({
+        mode: "campaign_relationship_drift_monitor",
+        tenant: {
+          workspaceKind: "investigation",
+          budgetPolicy: "respect_graph_query_cost_controls"
+        },
+        deltaContract: {
+          nextPollSeconds: 3
+        },
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false
+        }
+      });
+      expect(graph.graph.investigationWorkspace.driftMonitor.rows.length).toBeGreaterThan(0);
+      expect(graph.graph.investigationWorkspace.driftMonitor.rows.some((row) => row.action === "keep_promoted")).toBe(true);
+      expect(graph.graph.investigationWorkspace.relationshipExplanations).toMatchObject({
+        mode: "graph_relationship_explainability",
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false
+        }
+      });
+      expect(graph.graph.investigationWorkspace.relationshipExplanations.rows.some((row) =>
+        row.exportEligibility.eligible && row.why.length > 0 && row.exportEligibility.taxiiBoundary === "descriptor_only_no_server"
+      )).toBe(true);
+      expect(graph.graph.investigationWorkspace.notebookExport).toMatchObject({
+        mode: "metadata_only_graph_investigation_notebook_export",
+        stixPreviewDescriptor: {
+          taxiiBoundary: "descriptor_only_no_server",
+          previewOnly: true
+        },
+        costBudget: {
+          nextPollSeconds: 3
+        },
+        deltaClientContract: {
+          mode: "graph_delta_client_contract",
+          polling: {
+            intervalSeconds: 3,
+            cursorField: "graph.deltas[].cursor"
+          },
+          notebookBinding: {
+            previewOnly: true,
+            taxiiBoundary: "descriptor_only_no_server"
+          },
+          safety: {
+            rawRestrictedMaterialIncluded: false,
+            objectKeysIncluded: false,
+            unsafeUrlsIncluded: false
+          }
+        },
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false
+        }
+      });
+      expect(graph.graph.investigationWorkspace.notebookExport.boundedNodes.length).toBeGreaterThan(0);
+      expect(graph.graph.investigationWorkspace.notebookExport.boundedEdges.length).toBeGreaterThan(0);
+      expect(graph.graph.investigationWorkspace.notebookExport.pivotRecommendations.length).toBeGreaterThan(0);
+      expect(graph.graph.investigationWorkspace.backendMigrationCertification).toMatchObject({
+        mode: "graph_backend_production_migration_certification",
+        cursorContinuity: {
+          cursorField: "graph.deltas[].cursor",
+          nextPollSeconds: 3
+        },
+        tenantScoping: {
+          isolation: "tenant_and_workspace_required_on_all_graph_rows",
+          crossTenantJoinsAllowed: false
+        },
+        exportRecomputation: {
+          taxiiBoundary: "descriptor_only_no_server"
+        },
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false
+        }
+      });
+      expect(graph.graph.investigationWorkspace.backendMigrationCertification.migrationOrder.map((row) => row.dataset)).toEqual(expect.arrayContaining([
+        "nodes",
+        "relationships",
+        "relationship_reviews",
+        "confidence_history",
+        "attack_campaign_timeline",
+        "graph_pivots",
+        "notebook_exports",
+        "stix_preview_subsets"
+      ]));
+      expect(graph.graph.runtime.queryCostControls.mode).toBe("graph_query_cost_controls_tenant_budget");
+      expect(graph.graph.runtime.queryCostControls.queuePressure).toMatchObject({
+        schedulerBudgetClass: "interactive_graph_query",
+        nextPollSeconds: 3
+      });
+      expect(graph.graph.runtime.queryCostControls.budgets.map((budget) => budget.dimension)).toContain("stix_preview_rows");
+      expect(graph.graph.runtime.driftMonitor.mode).toBe("campaign_relationship_drift_monitor");
+      expect(graph.graph.runtime.driftMonitor.tenant.workspaceKind).toBe("investigation");
+      expect(graph.graph.runtime.backendMigrationCertification.mode).toBe("graph_backend_production_migration_certification");
+      expect(graph.graph.runtime.backendMigrationCertification.holdPolicy.policy).toBe("held_relationships_remain_non_exportable_until_review_and_replay_pass");
+      expect(graph.graph.runtime.neo4jMigrationAdapter).toMatchObject({
+        mode: "neo4j_migration_adapter_contract_benchmark",
+        adapterBoundary: {
+          implementationState: "contract_only_no_live_driver",
+          taxiiBoundary: "descriptor_only_no_server"
+        },
+        parityChecks: {
+          heldRowsRemainNonExportable: true
+        },
+        noLeak: {
+          metadataOnly: true,
+          rawRestrictedMaterialIncluded: false
+        }
+      });
+      expect(graph.graph.runtime.neo4jMigrationAdapter.benchmarkScenarios.map((scenario) => scenario.name)).toEqual(expect.arrayContaining([
+        "actor_one_hop",
+        "campaign_two_hop",
+        "cursor_replay"
+      ]));
+      expect(graph.graph.runtime.backendAdapterCutover).toMatchObject({
+        mode: "neo4j_postgres_graph_backend_adapter_contract",
+        adapterStrategy: {
+          primaryBackend: "postgres_graph_tables",
+          neo4jState: "contract_only_no_live_driver",
+          taxiiBoundary: "descriptor_only_no_server"
+        },
+        cursorReplay: {
+          cursorField: "graph.deltas[].cursor",
+          orderPolicy: "preserve_delta_cursor_order_across_backends"
+        },
+        reviewHoldParity: {
+          policy: "held_relationships_remain_non_exportable_until_review_replay_and_recompute_pass"
+        },
+        cutoverReadiness: {
+          fallback: "keep_memory_snapshot_or_postgres_graph_tables_authoritative"
+        },
+        noLeak: {
+          metadataOnly: true,
+          rawRestrictedMaterialIncluded: false
+        }
+      });
+      expect(graph.graph.runtime.backendAdapterCutover.interfaces.every((item) => item.tenantScoped)).toBe(true);
+      expect(graph.graph.runtime.backendAdapterCutover.migrations.map((migration) => migration.backend)).toEqual(["postgres_graph_tables", "neo4j"]);
+      expect(graph.graph.runtime.liveUpdate.clientContract).toMatchObject({
+        mode: "graph_delta_client_contract",
+        transport: "polling_primary_sse_future",
+        polling: {
+          intervalSeconds: 3,
+          cursorField: "graph.deltas[].cursor"
+        },
+        handoffs: {
+          agent09FrontendContract: "poll_graph_deltas_every_3_seconds_with_stable_cursor_fields"
+        }
+      });
+      expect(graph.graph.runtime.liveUpdate.clientContract.fixtureNames).toContain("stix_export_eligibility_change");
+      expect(graph.graph.attackCampaignWorkspace.freshnessSlo).toMatchObject({
+        mode: "attack_campaign_freshness_slo",
+        policy: {
+          publicFactPolicy: "hold_stale_or_unreviewed_campaign_ttp_rows",
+          taxiiBoundary: "descriptor_only_no_server"
+        },
+        deltaContract: {
+          cursorField: "graph.deltas[].cursor",
+          nextPollSeconds: 3
+        },
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false,
+          metadataOnly: true
+        }
+      });
+      expect(graph.graph.attackCampaignWorkspace.freshnessSlo.sourceCadenceRequests.every((request) => request.dryRun)).toBe(true);
+      expect(graph.graph.runtime.reviewPersistence.mode).toBe("graph_review_persistence_contract");
+      expect(graph.graph.runtime.reviewedExportSubset.mode).toBe("reviewed_export_subset_governance");
       expect(timeline.timeline.endpoint).toBe("/v1/graph/timeline");
       expect(timeline.timeline.events.some((event) => event.label.includes("APT29"))).toBe(true);
       expect(invalid.status).toBe(404);
@@ -282,6 +613,27 @@ describe("graph review route handlers", () => {
     expect(bundle.objects.some((object) => object.type === "marking-definition" && object.name === "TI Scraper Review Required")).toBe(true);
     expect(Array.isArray(identity?.x_ti_blocked_relationships)).toBe(true);
     expect(JSON.stringify(identity?.x_ti_blocked_relationships)).toContain("weak_discovery_only_edge");
+    expect(identity?.x_ti_review_persistence).toMatchObject({
+      mode: "graph_review_persistence_contract",
+      rollbackStrategy: "append_compensating_review_decision",
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false
+      }
+    });
+    expect(identity?.x_ti_reviewed_export_subset).toMatchObject({
+      mediaType: "application/stix+json;version=2.1",
+      governanceChecks: {
+        taxiiBoundary: "descriptor_only_no_server",
+        restrictedMetadataHolds: "metadata_only_edges_remain_descriptor_context"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false
+      }
+    });
   });
 });
 

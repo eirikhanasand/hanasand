@@ -1,15 +1,11 @@
-Status: ready_for_next_task
+Status: active_program_bc_external_public_proof_blocked
 
-- Added production-canary proof coverage showing bounded, approved public-source collection promotes fresh APT42 and Turla captures into `/v1/intel/search` public answers with captured-page provenance, evidence ledger references, and non-searching safe summaries.
-- Tightened canary operator readiness so public-answer counts are based on canary-portfolio captures only.
-- Preserved durable object-boundary behavior for live canary captures and kept operator health/readiness DTOs compact and source-provenance aware.
-- Reconciled shared graph ATT&CK campaign workspace helper drift so route/type checks stay green with the current enterprise graph DTOs.
-- Added `ti.search_quality_dashboard.v1` field-level gates, quality metrics, release decisions, review queues, docs, API wiring, and tests.
-- Added `ti.entity_resolution_workbench.v1` for actor aliases, ransomware rebrands, victim/company normalization, countries/sectors, malware/tools, CVEs, infrastructure, review states, correction actions, compact provenance, docs, API wiring, and tests.
-- Added `ti.timeliness_ground_truth.v1` to score latest-source dates, recent-activity freshness, field freshness, query-class expectations, and stale/latest gaps for high-activity actors.
-- Added `ti.analyst_feedback_loop.v1` for analyst marks, immutable routing into quality/source/entity/graph/API caveat repair paths, docs, API wiring, and tests.
-- Added `ti.attack_mapping_quality.v1` for ATT&CK technique confidence, deprecated/revoked holds, compact evidence citations, actor relevance, campaign timeframe, contradiction flags, STIX eligibility impact, docs, API wiring, and tests.
-- Kept DTOs provenance-preserving without raw evidence text, source URLs, object keys, credentials, cookies, authorization material, or restricted payloads.
-- Verification green: `bun run check`, `bun test`, focused canary/API proof, focused graph campaign proof, `bun run check:route-inventory`, `bun run check:search-quality-mounted`, and `bun run check:scraper-native-search`.
+- Added `ti.quality_runtime_value_gates.v1` for route-visible CTI answer value scoring across actor, campaign, malware/tool, CVE, country, sector, victim, infrastructure, and unknown queries.
+- Wired compact runtime value gates into `/v1/quality/evaluate`, `/v1/intel/search`, `/v1/contracts`, route inventory, docs, and API/pipeline regression coverage.
+- Added dark-web metadata quality caveats, no-leak field rules, source-atlas value feedback, analyst-actionability scoring, and remediation handoffs for Agents 01/02/03/04/05/06/08/09/10.
+- Added regression fixtures for fresh actor activity, random and made-up unknown queries, stale APT rejection, fresh CVE, ransomware/victim claim, country/sector surge, dark-web metadata hold, public-channel weak signal, and contradiction clusters.
+- Repaired related drift in public-signal value impact, public-channel scheduler budget classes, graph/STIX fixture typing, contract-index sanitization, and live-search gate typing.
+- Verification green: `bun run check`, `bun test`, focused quality pipeline/API tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and `bun run check:canary-proof-path`.
+- External proof blocker: `TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search` and `TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search` cannot complete because `https://api.hanasand.com/api/ti/search` refuses connections from this environment; an escalated retry is still pending because approval was unavailable.
 
-Requesting the next Agent 07 task.
+Next continuation: rerun the scraper-native public proof when the API is reachable, then continue the long-running Agent 07 quality/value-gate vision from `coordination_program_backlog.md`.

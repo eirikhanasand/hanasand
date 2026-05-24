@@ -12,6 +12,7 @@ services:
       .env
     environment:
       FRONTEND_INTERNAL_API: ${FRONTEND_INTERNAL_API:-http://api:8080/api}
+      TI_SCRAPER_API_BASE: ${TI_SCRAPER_API_BASE:-http://ti-scraper:8097}
       MAIL_JMAP_INTERNAL_URL: ${MAIL_JMAP_INTERNAL_URL:-http://stalwart:8080}
       MAIL_PUBLIC_BASE_URL: ${MAIL_PUBLIC_BASE_URL:-https://mail.hanasand.com}
       MAIL_INBOX_USERNAME: ${MAIL_INBOX_USERNAME:-eirik}
@@ -97,6 +98,16 @@ services:
       SCRAPER_MAX_REQUEST_TASKS: 500
       SCRAPER_DARKNET_METADATA_ONLY: "true"
       SCRAPER_HIGH_RISK_REQUIRES_APPROVAL: "true"
+      TI_EVIDENCE_ROOT: /var/lib/ti-scraper/evidence
+      TI_EVIDENCE_METADATA_PATH: /var/lib/ti-scraper/evidence/metadata/scraper-store.json
+      TI_EVIDENCE_OBJECT_DIR: /var/lib/ti-scraper/evidence/objects
+      TI_CANARY_ENABLED: "true"
+      TI_CANARY_AUTO_ACTIVATE: "false"
+      TI_CANARY_INTERVAL_SECONDS: 300
+      TI_CANARY_MAX_TASKS: 3
+      TI_CANARY_MAX_SOURCES: 10
+    volumes:
+      - ti_scraper_evidence:/var/lib/ti-scraper/evidence
     expose:
       - "8097"
     healthcheck:
@@ -153,6 +164,7 @@ services:
 
 volumes:
   postgres_data:
+  ti_scraper_evidence:
 
 networks:
   pwnednet:

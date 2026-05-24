@@ -1,0 +1,148 @@
+# Scraper Program Backlog
+
+This file is the standing expansion queue for the 10-agent scraper team. Agents should continue into these programs when their current coordination file phases are complete, even if the main agent has not yet written a fresh prompt. Work stays Bun/TypeScript, modular, API-friendly, compact, tested, and production-directed.
+
+Safety baseline for every program:
+- No credential bypass, CAPTCHA solving, private community joining, threat-actor interaction, leaked dataset download, raw credential exposure, or unsafe target fetching.
+- Restricted/dark sources are metadata-only unless an explicit human/legal policy changes this in writing.
+- Unknown actors remain `Searching` until query-specific evidence exists.
+- Known actor summaries are allowed as instant context, but recent activity must be fresh and evidence-backed.
+- Every claim needs provenance, confidence, freshness, review state, and retention/legal-hold state.
+
+## Agent 01 Backlog: Source Governance
+
+Program BB: Production Source Import And Activation Canary.
+- Build first-10 and first-50 source rollout packets for public CTI source packs.
+- Add activation dry-run results by query class and tenant.
+- Include source retirement, duplicate suppression, parser certification dependency, scheduler budget impact, evidence-store impact, and release rollback.
+- Proof: source/API tests, route inventory, contract index, API regression, docs.
+
+Program BC: Source Reliability Economics.
+- Score sources by freshness, unique evidence yield, duplicate rate, parser failures, legal/robots restrictions, tenant relevance, language/geography, and downstream public answer impact.
+- Add burn-rate and remediation queues for stale/degraded sources.
+- Proof: source reliability tests, coverage fixtures, docs.
+
+Program BD: Tenant Source Policy Engine.
+- Build tenant-specific allow/hold/deny policy overlays by source family, query class, region, sector, and restricted metadata status.
+- Prove tenant isolation before scheduler/evidence/graph/API use.
+
+## Agent 02 Backlog: Scheduler And Workers
+
+Program BB: Real Postgres Queue Adapter Behind Disabled Flag.
+- Implement a disabled-by-default adapter boundary for Postgres queue semantics.
+- Keep embedded memory as default.
+- Include migration checks, lease SQL shape, heartbeat expiry, checkpoint replay, retry/dead-letter, and rollback.
+
+Program BC: 10k Task Soak And Worker Partition Simulation.
+- Simulate public actor bursts, background sweeps, restricted holds, evidence replay, graph export, and source outage waves.
+- Emit memory/CPU/queue pressure and fairness proof for Agent 10.
+
+Program BD: Interactive Search Freshness Scheduler.
+- Prioritize known/high-value actor freshness without starving background work.
+- Preserve 3-second polling and duplicate-run reuse.
+
+## Agent 03 Backlog: Adapters And Capture
+
+Program BB: Public Report/PDF/OCR Extraction Readiness.
+- Build quality benchmarks for HTML/PDF/report extraction, citation spans, language detection, parser confidence, and OCR readiness.
+- Add fixtures for vendor reports, advisories, multilingual reports, malformed PDFs, and unsupported MIME.
+
+Program BC: Dynamic Browser Isolation Canary.
+- Keep disabled by default.
+- Add browser pool isolation, memory/time caps, screenshot-hash-only output, blocked auth/CAPTCHA/private targets, and fixture replay.
+
+Program BD: Public Advisory/GitHub Security Adapter Runtime.
+- Add approved public advisory/GitHub feed capture and canonicalization contracts where dependencies allow.
+- Include CVE/malware/tool/campaign source-family output.
+
+## Agent 04 Backlog: Public Coverage
+
+Program BB: Freshness Gap Remediation Engine.
+- Turn source gaps into source activation recommendations, scheduler cadence hints, parser repair requests, and quality-release holds.
+- Explicitly reject stale-only recent activity for high-volume actors.
+
+Program BC: Public Intelligence Query Matrix.
+- Add fixtures and scoring for actor, ransomware, campaign, malware/tool, CVE, sector, country, victim/company, and infrastructure queries.
+- Route output to frontend/API fields without bloat.
+
+Program BD: Conflict And Contradiction Resolver.
+- Detect conflicting reports, alias ambiguity, old campaign reuse, stale infrastructure, and contradictory victim claims.
+- Hand off graph/quality decisions to Agents 07 and 08.
+
+## Agent 05 Backlog: Restricted/Dark Metadata
+
+Program BB: Dark Metadata Canary Simulation.
+- Simulate Tor/I2P/Freenet/ransomware metadata-only collection using safe fixtures.
+- Prove proxy boundary, no raw download, no unsafe URL exposure, and emergency stop propagation.
+
+Program BC: Legal/Ethics Audit Export.
+- Produce safe audit packets for thesis/enterprise review: what was collected, what was blocked, why, who approved, and what was not accessed.
+
+Program BD: Restricted Metadata Reconciliation.
+- Reconcile restricted claims with evidence ledger, graph holds, source state, retention, and analyst quality gates.
+
+## Agent 06 Backlog: Evidence Backbone
+
+Program BB: Search Index Migration Readiness.
+- Build OpenSearch/pgvector-neutral migration packets, blue/green alias semantics, reindex checkpoints, redaction, legal hold, deletion, and rollback.
+
+Program BC: Evidence Replay Benchmark.
+- Simulate replay over large capture metadata sets and prove public answer/graph/STIX rebuild behavior.
+
+Program BD: Object Integrity Repair Runtime.
+- Add missing-object/hash-mismatch repair packets, operator actions, and public answer impact.
+
+## Agent 07 Backlog: Quality And Evaluation
+
+Program BB: Active Learning Candidate Queue.
+- Queue human-approved improvements for parser prompts, extraction models, source ranking, TTP mapping, and entity resolution.
+- Never auto-mutate unsafe behavior.
+
+Program BC: High-Priority Actor Freshness Dashboard.
+- Track daily/weekly freshness for APT29, APT42, Sandworm, Volt Typhoon, Lazarus, LockBit/Akira-style ransomware, and arbitrary configured actors.
+
+Program BD: CTI Evaluation Dataset Pack.
+- Build fixtures and metrics for actor/victim/TTP/IOC extraction, stale answer rejection, unknown actor searching-only, restricted no-leak, and contradiction handling.
+
+## Agent 08 Backlog: Graph And STIX
+
+Program BB: Neo4j/Postgres Graph Backend Adapter Contract.
+- Define backend-neutral graph repository interfaces, migration proof, indexes, cursor replay, review holds, and performance SLOs.
+
+Program BC: ATT&CK Campaign Freshness SLOs.
+- Track campaign/TTP freshness, deprecated ATT&CK techniques, alias drift, graph contradiction, and export eligibility.
+
+Program BD: TAXII Descriptor And STIX Bundle Governance.
+- Prepare reviewed STIX bundle subsets and descriptor-only TAXII planning with no unsafe raw material.
+
+## Agent 09 Backlog: API And Frontend Contracts
+
+Program BB: Public `/ti` Progressive Update Contract.
+- Freeze frontend field mapping, polling merge semantics, deltas, loading text, stale/held states, compact copy, and no default/demo actor behavior.
+
+Program BC: SDK And OpenAPI Release Gate.
+- Generate/validate fixtures for all stable query classes and failure modes.
+- Add changelog/deprecation checks and compatibility matrices.
+
+Program BD: Realtime Delivery Soak.
+- Test disabled SSE/webhook replay, outbox retry, fallback-to-polling, cursor gaps, and no-leak event envelopes.
+
+## Agent 10 Backlog: Ops And Release
+
+Program BB: 24h Production Soak Decision Board.
+- Aggregate scheduler, evidence, source, graph, API, restricted, memory, disk, and public proof metrics into promote/hold/rollback.
+
+Program BC: 30-Day Capacity And Cost Model.
+- Model 1 TB host resource budget, scraper 96 GB target, 160 GB ceiling, 500 GB reserve, worker partitions, disk growth, and index replay.
+
+Program BD: On-Call Runbook Pack.
+- Produce incident response runbooks for source outage, parser failure storm, queue runaway, object-store failure, restricted safety event, API drift, stale answer regression, and rollback.
+
+## Main-Agent Standing Rule
+
+Every heartbeat or manual `continue` should:
+- Inspect all `coordination_agent_*.md` statuses first.
+- Reassign any ready/idle/blocked agent immediately from this backlog or a more urgent drift.
+- Keep all agents on implementation-heavy work, not small route or DTO-only tasks.
+- Verify with `bun run check`, route inventory, contract index, API regression, and focused tests when code changed.
+- Sync coordination and relevant code to Inspur when deployment/proof is involved.

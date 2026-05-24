@@ -1,10 +1,31 @@
 import {
+  buildEvidenceChainOfCustodyReport,
   buildEvidenceCutoverRehearsalReport,
+  buildEvidenceIndexReplayMigrationReport,
+  buildEvidenceObjectIntegrityRepairReport,
+  buildEvidenceReplayBenchmarkReport,
   buildEvidenceReplayProof,
+  buildEvidenceRetentionRuntimeReport,
+  buildEvidenceSearchBackendMigrationReadinessReport,
+  buildEvidenceSearchConsistencySloReport,
+  buildEvidenceSearchIndexHandoff,
   buildEvidenceTrustLedgerReport,
   type CaptureMetadataStore,
+  type EvidenceChainOfCustodyReport,
+  type EvidenceIndexReplayMigrationReport,
+  type EvidenceObjectIntegrityRepairReport,
+  type EvidenceReplayBenchmarkReport,
+  type EvidenceRetentionRuntimeReport,
+  type EvidenceSearchBackendMigrationReadinessReport,
+  type EvidenceSearchConsistencySloReport,
   type ObjectEvidenceStore
 } from "../storage/evidenceStore.ts";
+import {
+  buildEvidenceSearchReadModelBackendWriteSet,
+  evidenceSearchReadModelReadiness,
+  type EvidenceSearchReadModelBackendWriteSet,
+  type EvidenceSearchReadModelReadiness
+} from "../storage/evidenceSearchReadModel.ts";
 import type {
   EvidenceCutoverGateStatus,
   EvidenceCutoverRehearsalReport,
@@ -114,7 +135,60 @@ export interface EvidenceCutoverReportDto {
   };
   exportBlockers: EvidenceCutoverRehearsalReport["exportBlockers"];
   promotionGate: EvidenceCutoverRehearsalReport["promotionGate"];
+  chainOfCustody: EvidenceChainOfCustodyReport;
+  indexReplayMigration: EvidenceIndexReplayMigrationReport;
+  objectIntegrityRepair: EvidenceObjectIntegrityRepairReport;
+  replayBenchmark: EvidenceReplayBenchmarkReport;
+  searchBackendMigration: EvidenceSearchBackendMigrationReadinessReport;
+  retentionRuntime: EvidenceRetentionRuntimeReport;
+  searchConsistencySlo: EvidenceSearchConsistencySloReport;
+  readModelCutover: EvidenceSearchReadModelCutoverDto;
   examples: EvidenceCutoverApiExamples;
+}
+
+export interface EvidenceSearchReadModelCutoverDto {
+  schemaVersion: "ti.evidence_search_read_model_cutover.v1";
+  generatedAt: string;
+  status: "ready_for_embedded_replay" | "hold_for_explicit_backend_enablement" | "blocked";
+  canCutoverToProductionBackend: boolean;
+  embeddedReplayReady: boolean;
+  productionBackendsFailClosed: boolean;
+  handoffId: string;
+  writeSet: {
+    schemaVersion: EvidenceSearchReadModelBackendWriteSet["schemaVersion"];
+    postgresDocuments: number;
+    openSearchDocuments: number;
+    pgvectorCandidates: number;
+    restrictedMetadataDocuments: number;
+    metadataOnlyDocuments: number;
+    legalHoldDocuments: number;
+    unsafeDocumentsSkipped: number;
+  };
+  readiness: {
+    embedded: EvidenceSearchReadModelReadiness;
+    postgres: EvidenceSearchReadModelReadiness;
+    openSearchPgvector: EvidenceSearchReadModelReadiness;
+  };
+  vectorPolicy: {
+    restrictedMetadataSearchable: true;
+    restrictedMetadataEmbedded: false;
+    restrictedMetadataVectorRows: number;
+    vectorRowsHashOnly: true;
+  };
+  replayPolicy: {
+    replayIdRequired: true;
+    retentionTombstonesRequired: true;
+    legalHoldPreserved: true;
+    staleExtractorReprocessingRequired: true;
+  };
+  safeOutput: {
+    rawBodiesExposed: false;
+    objectKeysExposed: false;
+    unsafeUrlsExposed: false;
+    credentialsExposed: false;
+    restrictedRawContentExposed: false;
+    actorInteractionExposed: false;
+  };
 }
 
 export interface EvidenceLedgerEnforcementDto {
@@ -274,6 +348,14 @@ export function buildEvidenceCutoverReportDto(
 ): EvidenceCutoverReportDto {
   const report = buildEvidenceCutoverRehearsalReport(store, objects, query, options);
   const trustLedger = buildEvidenceTrustLedgerReport(store, objects, query, options);
+  const chainOfCustody = buildEvidenceChainOfCustodyReport(store, objects, query, options);
+  const indexReplayMigration = buildEvidenceIndexReplayMigrationReport(store, objects, query, options);
+  const objectIntegrityRepair = buildEvidenceObjectIntegrityRepairReport(store, objects, query, options);
+  const replayBenchmark = buildEvidenceReplayBenchmarkReport(store, objects, query, options);
+  const searchBackendMigration = buildEvidenceSearchBackendMigrationReadinessReport(store, objects, query, options);
+  const retentionRuntime = buildEvidenceRetentionRuntimeReport(store, objects, query, options);
+  const searchConsistencySlo = buildEvidenceSearchConsistencySloReport(store, objects, query, options);
+  const readModelCutover = buildEvidenceSearchReadModelCutoverDto(store, query, options);
   return {
     endpoint: "/v1/evidence/cutover-report",
     method: "GET",
@@ -293,7 +375,83 @@ export function buildEvidenceCutoverReportDto(
     trustLedger: compactTrustLedger(trustLedger),
     exportBlockers: report.exportBlockers,
     promotionGate: report.promotionGate,
+    chainOfCustody,
+    indexReplayMigration,
+    objectIntegrityRepair,
+    replayBenchmark,
+    searchBackendMigration,
+    retentionRuntime,
+    searchConsistencySlo,
+    readModelCutover,
     examples: evidenceCutoverApiExamples()
+  };
+}
+
+function buildEvidenceSearchReadModelCutoverDto(
+  store: CaptureMetadataStore,
+  query: string,
+  options: { tenantId?: string; generatedAt?: string } = {}
+): EvidenceSearchReadModelCutoverDto {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const handoff = buildEvidenceSearchIndexHandoff(store, query, {
+    tenantId: options.tenantId,
+    generatedAt
+  });
+  const writeSet = buildEvidenceSearchReadModelBackendWriteSet(handoff, { generatedAt });
+  const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
+  const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
+  const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
+  const openSearchPgvector = evidenceSearchReadModelReadiness({ backend: "opensearch_pgvector" });
+  const blocked = writeSet.counts.unsafeDocumentsSkipped > 0 || restrictedVectorRows > 0;
+  const productionBackendsFailClosed = !postgres.canWrite && !postgres.canSearch && !openSearchPgvector.canWrite && !openSearchPgvector.canSearch;
+
+  return {
+    schemaVersion: "ti.evidence_search_read_model_cutover.v1",
+    generatedAt,
+    status: blocked
+      ? "blocked"
+      : productionBackendsFailClosed
+        ? "hold_for_explicit_backend_enablement"
+        : "ready_for_embedded_replay",
+    canCutoverToProductionBackend: !blocked && !productionBackendsFailClosed,
+    embeddedReplayReady: embedded.canWrite && embedded.canSearch && writeSet.counts.unsafeDocumentsSkipped === 0,
+    productionBackendsFailClosed,
+    handoffId: writeSet.handoffId,
+    writeSet: {
+      schemaVersion: writeSet.schemaVersion,
+      postgresDocuments: writeSet.counts.postgresDocuments,
+      openSearchDocuments: writeSet.counts.openSearchDocuments,
+      pgvectorCandidates: writeSet.counts.pgvectorCandidates,
+      restrictedMetadataDocuments: writeSet.counts.restrictedMetadataDocuments,
+      metadataOnlyDocuments: writeSet.counts.metadataOnlyDocuments,
+      legalHoldDocuments: writeSet.counts.legalHoldDocuments,
+      unsafeDocumentsSkipped: writeSet.counts.unsafeDocumentsSkipped
+    },
+    readiness: {
+      embedded,
+      postgres,
+      openSearchPgvector
+    },
+    vectorPolicy: {
+      restrictedMetadataSearchable: true,
+      restrictedMetadataEmbedded: false,
+      restrictedMetadataVectorRows: 0,
+      vectorRowsHashOnly: true
+    },
+    replayPolicy: {
+      replayIdRequired: true,
+      retentionTombstonesRequired: true,
+      legalHoldPreserved: true,
+      staleExtractorReprocessingRequired: true
+    },
+    safeOutput: {
+      rawBodiesExposed: false,
+      objectKeysExposed: false,
+      unsafeUrlsExposed: false,
+      credentialsExposed: false,
+      restrictedRawContentExposed: false,
+      actorInteractionExposed: false
+    }
   };
 }
 
@@ -370,7 +528,7 @@ export function evidenceCutoverReportApiContract(): {
     endpoint: "/v1/evidence/cutover-report",
     method: "GET",
     queryParams: ["q", "runId", "sinceCursor", "generatedAt"],
-    response: ["readiness", "counts", "replayPlan", "retention", "redaction", "trustLedger", "exportBlockers", "promotionGate"],
+    response: ["readiness", "counts", "replayPlan", "retention", "redaction", "trustLedger", "exportBlockers", "promotionGate", "chainOfCustody", "indexReplayMigration", "objectIntegrityRepair", "replayBenchmark", "searchBackendMigration", "retentionRuntime", "searchConsistencySlo", "readModelCutover"],
     examples: evidenceCutoverApiExamples()
   };
 }

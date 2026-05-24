@@ -18,3 +18,7 @@ export function hashContent(value: string): string {
 export function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
+
+export function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.length > 0)));
+}

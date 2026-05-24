@@ -1,10 +1,12 @@
 Status: ready_for_next_task
 
-## Agent 10 Summary
+# Agent 10 Summary
 
-- Completed Task AE: `observabilityDashboard.enterpriseViews` now exposes 13 enterprise observability lanes for queue, sources, evidence, extraction, graph, API, polling, resources, workers, error budget, freshness, deployment drift, and release-train state.
-- Added alert/failure classifications, release impacts, rollback recommendations, proof commands, no-leak examples, and Agent 01-10 integration status rollups.
-- Resource controls remain explicit: 96 GB scraper target, 160 GB normal ceiling, 500 GB CTI reserve, browser pool disabled, bounded caches, disk-first evidence, and no GPU assumption.
-- Proof is green for focused ops/API tests and `bun run check`; broader gate checks were run after the task update.
+- Completed Program BE release-train hardening for the longer-running Agent 10 operations lane.
+- Added `releaseTrainHardening` to `ti.cutover.soak_release_packet.v1` with 7-day public `/ti` soak gates, 30-day capacity forecast gates, deploy mismatch detectors, image/version pins, migration readiness checks, remote proof commands, and rollback criteria for the public API wrapper and scraper backend.
+- Kept release decisions tied to the existing release artifact bundle, production soak board, on-call pack, resource arbitration, and capacity simulation instead of creating a parallel surface.
+- Preserved the fixed resource policy: 96 GB scraper target, 160 GB ceiling, at least 500 GB CTI reserve, browser workers disabled by default, disk-first evidence, and no GPU assumption.
+- Repaired parallel release blockers in `/v1/contracts` no-leak key serialization, duplicate contract semantics wiring, and graph snapshot fixture typing.
+- Verification is green: `bun run check`, focused ops/API/scheduler tests, release candidate, deploy hygiene, route inventory, contract index, and full `bun test` (510 pass).
 
-Ready for Task AF or the next Agent 10 assignment.
+Ready for the next Agent 10 task. Suggested next lane: operations proof for the value-program dark-web metadata index and source-atlas refresh on Inspur, including remote refresh soak, alert thresholds, and deployment proof.

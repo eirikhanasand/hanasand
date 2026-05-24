@@ -254,29 +254,54 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
             operationalStatus,
             seeded
         })
+        const publicState = publicResultStateFor(query, seeded, analystLoop)
+        const publicOperationalStatus = publicState === analystLoop.resultState
+            ? operationalStatus
+            : {
+                ...operationalStatus,
+                state: publicState === 'partial' ? 'partial' : 'searching',
+                headline: publicState === 'partial'
+                    ? 'Instant actor context is ready while live discovery continues.'
+                    : 'Live discovery is running.'
+            } satisfies TiOperationalStatus
+        const publicAnalystLoop = publicState === analystLoop.resultState
+            ? analystLoop
+            : {
+                ...analystLoop,
+                resultState: publicState,
+                headline: publicState === 'partial'
+                    ? 'Instant actor context is ready while live discovery continues.'
+                    : 'Live discovery is still building an evidence-backed answer.',
+                nextSteps: [{
+                    state: 'queued',
+                    label: publicState === 'partial' ? 'Searching' : 'Searching',
+                    detail: 'Live discovery is still building an evidence-backed answer.',
+                    tone: 'watch'
+                }]
+            } satisfies TiAnalystLoop
         return {
             ...seeded,
             mode: seeded.mode === 'live_search' ? 'live_search' : 'scraper',
-            status: analystLoop.resultState,
+            status: publicState,
             runId: run.id,
             refreshAfterSeconds: 3,
-            summary: analystLoop.metadataReviewInbox[0]?.company
-                ? metadataReviewSummary(analystLoop.metadataReviewInbox[0])
+            summary: publicAnalystLoop.metadataReviewInbox[0]?.company
+                ? metadataReviewSummary(publicAnalystLoop.metadataReviewInbox[0])
                 : seeded.summary,
-            operationalStatus,
-            analystLoop,
+            operationalStatus: publicOperationalStatus,
+            analystLoop: publicAnalystLoop,
             sources: [
                 {
                     id: run.id,
                     name: 'TI scraper run',
                     type: 'scraper_run',
-                    provenance: analystLoop.runStatusClarity.summary
+                    provenance: publicAnalystLoop.runStatusClarity.summary
                 },
                 ...seeded.sources
             ],
             notes: [
-                analystLoop.headline,
-                operationalStatus.headline,
+                publicAnalystLoop.headline,
+                publicOperationalStatus.headline,
                 `Run ${run.id}`,
                 ...seeded.notes
             ]
@@ -286,9 +311,19 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
     }
 }
 
+function publicResultStateFor(query: string, seeded: TiSearchResponse, analystLoop: TiAnalystLoop): TiResultState {
+    if (analystLoop.resultState !== 'ready') return analystLoop.resultState
+    if (seeded.recentActivity.length > 0) return 'partial'
+    if (knownActorProfile(query)) return 'partial'
+    if (seeded.summary.trim().toLowerCase() === 'searching' && analystLoop.runStatusClarity.meaningfulWorkCount === 0) {
+        return 'searching'
+    }
+    return analystLoop.resultState
+}
+
 async function liveSearch(query: string): Promise<TiSearchResponse> {
     const known = knownActorProfile(query)
-    const matches = await searchClearWeb(query)
+    const matches = filterLiveMatchesForQuery(query, await searchClearWeb(query), Boolean(known))
     if (matches.length) {
         const generatedAt = new Date().toISOString()
         const activity = matches.slice(0, 6).map((match, index) => ({
@@ -1021,6 +1056,43 @@ async function searchClearWeb(query: string): Promise<LiveSearchMatch[]> {
         }
     }
     return merged.slice(0, 8)
+}
+
+const GENERIC_LIVE_SEARCH_TOKENS = new Set([
+    'actor',
+    'actors',
+    'apt',
+    'group',
+    'threat',
+    'cyber',
+    'attack',
+    'attacks',
+    'malware',
+    'ransomware',
+    'campaign',
+    'made',
+    'unknown',
+    'random',
+    'test'
+])
+
+function filterLiveMatchesForQuery(query: string, matches: LiveSearchMatch[], knownActor: boolean): LiveSearchMatch[] {
+    if (knownActor) return matches
+    const normalized = normalizeLiveSearchText(query)
+    const distinctiveTokens = normalized
+        .split(/\s+/)
+        .filter(token => token.length >= 4 && !GENERIC_LIVE_SEARCH_TOKENS.has(token))
+
+    return matches.filter((match) => {
+        const haystack = normalizeLiveSearchText(`${match.title} ${match.snippet} ${match.url}`)
+        if (normalized.length >= 4 && haystack.includes(normalized)) return true
+        if (distinctiveTokens.length === 0) return false
+        return distinctiveTokens.some(token => haystack.includes(token))
+    })
+}
+
+function normalizeLiveSearchText(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 async function searchDuckDuckGoHtml(query: string): Promise<LiveSearchMatch[]> {

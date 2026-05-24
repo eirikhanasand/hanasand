@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "idempotent_run_reuse",
+  "description": "Duplicate requests attach to the existing run and continue from the returned cursors.",
+  "route": "POST /v1/intel/runs",
+  "runId": "run_sdk_initial_001",
+  "status": "partial",
+  "pollCursor": "poll_sdk_initial_004",
+  "deltaCursor": "delta_sdk_initial_002",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:03:00.000Z",
+  "warningCodes": ["duplicate_run_reuse"],
+  "idempotencyKey": "idem_sdk_apt29_001",
+  "reuse": {
+    "attachedToExistingRun": true,
+    "originalRequestHash": "sha256:request-body-hash",
+    "clientBehavior": "continue polling with the returned cursors"
+  }
+}

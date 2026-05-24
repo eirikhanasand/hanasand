@@ -113,8 +113,10 @@ describe("mounted evidence endpoints", () => {
         claims: [expect.objectContaining({ ledgerIds: ["ledger_run_pass"], trustStatus: "trusted" })],
         certification: { status: "certified", releaseAction: "promote" }
       });
-      expect(JSON.stringify({ replay, report, ledger, claimLedger })).not.toContain("body");
-      expect(JSON.stringify({ replay, report, ledger, claimLedger })).not.toContain("object/key");
+      const serialized = JSON.stringify({ replay, report, ledger, claimLedger }).toLowerCase();
+      expect(serialized).not.toContain("raw proof payload");
+      expect(serialized).not.toContain("\"body\":");
+      expect(serialized).not.toContain("object/key");
     } finally {
       server.stop();
     }

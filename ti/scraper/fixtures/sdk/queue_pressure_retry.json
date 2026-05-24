@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "queue_pressure_retry",
+  "description": "Queue pressure preserves the last good answer and tells clients when to retry.",
+  "route": "POST /api/ti/search",
+  "runId": "run_sdk_queue_001",
+  "status": "queue_pressure",
+  "pollCursor": "poll_sdk_queue_001",
+  "deltaCursor": "delta_sdk_queue_001",
+  "refreshAfterSeconds": 5,
+  "updated": "2026-05-24T12:01:00.000Z",
+  "warningCodes": ["queue_pressure"],
+  "headers": {
+    "retry-after": "5",
+    "x-rate-limit-policy": "live_search_queue",
+    "x-request-id": "req_sdk_queue_001"
+  },
+  "error": {
+    "code": "queue_pressure",
+    "message": "Live search is under queue pressure; retry after the advertised interval.",
+    "retryable": true
+  },
+  "clientBehavior": "preserve the last good answer and retry no faster than refreshAfterSeconds"
+}

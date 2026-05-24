@@ -63,6 +63,89 @@ The storage layer exposes backend-neutral helpers for `/ti` and `/v1/intel`:
 
 Tenant scope must be applied before pagination or DTO projection. API DTO helpers reject cross-tenant access and redact sensitive bodies and object keys by default.
 
+## Search And Vector Handoff
+`buildEvidenceSearchIndexHandoff` emits the backend-neutral search/vector boundary for OpenSearch-compatible indexes and future vector backends. It builds `ti.evidence_search_index_handoff.v1` packets from captures, evidence deltas, analyst claim-ledger rows, graph relationship deltas, and source metadata without binding the scraper to a vendor.
+
+Every handoff document carries:
+- tenant scope, source/capture/claim/relationship IDs, query and normalized query;
+- title, summary, tags, freshness, confidence, replay ID, content hash where safe, and citation spans;
+- backend hints for a stable OpenSearch index, vector namespace, and tenant-scoped routing key;
+- explicit redaction flags proving raw bodies, object keys, and unsafe URLs are not included.
+
+Restricted and leak-source metadata remains searchable when it is defensive metadata such as victim/company, affected account count, dataset size, actor statement summary, claimed/observed time, source hash, retention class, and review status. It is not embedding-eligible. Public non-sensitive summaries may be embedding-eligible with an input-text hash, but metadata-only, restricted, legal-hold, and no-text documents are excluded from vector input. This lets Agent 07 quality/search index useful metadata, Agent 08 pivot graph relationships, Agent 09 expose API-safe serialization, and Agent 10 observe counts without raw leak material, credentials, private content, actor interaction, object keys, or unsafe URLs.
+
+## Index Replay Migration
+`buildEvidenceIndexReplayMigrationReport` emits `ti.evidence_index_replay_migration.v1` and is included on `/v1/evidence/cutover-report` as `indexReplayMigration`. It composes the search/vector handoff, object manifest verification, cursor replay proof, and chain-of-custody packet into the migration proof for OpenSearch/vector backend cutover.
+
+The migration report is dry-run and route-safe. It defines the backend targets, tenant-scoped routing, blue/green alias cutover, replay input checksum, rebuild/backfill plan, validation gates, consistency counts across evidence/source/capture/extraction/claim/graph/API/STIX surfaces, and rollback checkpoint. It blocks on missing or mismatched object refs, missing index documents, unsafe restricted bodies, and hash-chain failures. It holds on cursor replay gaps, parser-version drift, export-without-review, missing graph relationships, or missing API answer snapshots.
+
+Restricted/leak metadata can be indexed for defensive search fields such as company/victim, affected-account counts, dataset size, actor statement summaries, timestamps, source hashes, review state, and retention class. Those documents are held out of vector embedding and remain metadata-only. The report never includes raw bodies, object keys, unsafe URLs, credentials, restricted material, or actor-interaction content.
+
+## Search Backend Migration Readiness
+`buildEvidenceSearchBackendMigrationReadinessReport` emits `ti.evidence_search_backend_migration_readiness.v1` and is included on `/v1/evidence/cutover-report` as `searchBackendMigration`. It is the OpenSearch/pgvector-neutral readiness packet for the real backend cutover path after replay documents, object integrity, retention enforcement, and search consistency are known.
+
+The report exposes candidate backend boundaries without connecting to live services:
+- OpenSearch candidate index, read/write aliases, tenant routing key count, document count, and bulk checkpoint.
+- pgvector namespace/table, embedding-eligible count, restricted-metadata exclusion count, and hash-only input validation.
+- Postgres cursor source, replay checkpoint, retention-class count, legal-hold count, and cursor readiness.
+
+Cutover checkpoints cover source snapshot, bulk index, vector upsert, deletion replay, alias swap, API refresh, and rollback. Deletion replay uses `tombstone_then_delete_object` and legal hold blocks destructive actions. Restricted/leak metadata remains searchable as safe defensive metadata and is never embedded. Fixture rows cover clean cutover, missing object, hash mismatch, restricted metadata, legal hold, redaction/delete replay, and alias rollback. The packet never serializes raw bodies, object keys, unsafe URLs, credentials, restricted raw content, or actor-interaction material, and it never mutates indexes or databases.
+
+## Replay Benchmark
+`buildEvidenceReplayBenchmarkReport` emits `ti.evidence_replay_benchmark.v1` and is included on `/v1/evidence/cutover-report` as `replayBenchmark`. It is the deterministic scale packet for proving the evidence path can rebuild public answers, search indexes, graph relationships, and reviewed STIX descriptors from durable capture metadata without materializing a million rows in the test process.
+
+The default benchmark models 1,000,000 capture metadata records in 100 chunks of 10,000 rows. It publishes estimated source, extraction, claim, relationship, and restricted-metadata row counts; cursor checkpoint cadence; throughput budgets for metadata replay, extraction deltas, search documents, graph relationships, and STIX descriptors; and p95 budgets for public answer refresh, metadata replay, search rebuild, graph rebuild, and STIX preview generation. The report is dry-run only and uses existing replay, chain-of-custody, search consistency, retention, and backend migration gates to decide whether public answers are ready, partial, or held.
+
+Restricted/leak sources remain metadata-only during the benchmark. Defensive metadata such as victim/company, affected-account counts, dataset size, actor statement summaries, source hashes, timestamps, review state, and retention class can be indexed for search and used as safe evidence for public answer caveats, but restricted rows are never embedded and raw bodies are never loaded. Fixture rows cover one-million public metadata replay, 60k restricted metadata rows, 10k source candidates, missing-object holds, legal-hold deletion replay, cursor-gap resume, and graph/STIX rebuild behavior.
+
+## Search Consistency SLO
+`buildEvidenceSearchConsistencySloReport` emits `ti.evidence_search_consistency_slo.v1` and is included on `/v1/evidence/cutover-report` as `searchConsistencySlo`. It is the route-visible production-readiness packet for the user-facing search data path after the OpenSearch/vector handoff is built.
+
+The report checks deterministic document IDs, tenant routing, replay IDs, citation spans, capture content hashes, object manifest verification, cursor replay, custody chain readiness, retention runtime safety, vector input boundaries, graph/STIX review holds, and API answer refresh safety. It also publishes fixed SLO budgets for initial partial answer, cursor replay, index refresh, and vector upsert with deterministic local estimates so Agent 09/10 can hold release when the evidence path is drifting before a backend is live.
+
+Restricted/leak metadata remains searchable for defensive metadata and is not treated as a failure when it is excluded from vector embedding. Any restricted embedding leak, raw body/object-key/unsafe URL exposure, missing object, cursor replay gap, missing citation, or unsafe answer refresh produces a blocked or held packet with dry-run repair actions only. The packet never serializes raw bodies, object keys, unsafe URLs, credentials, restricted raw content, or actor-interaction material.
+
+## Search Read Model Adapter
+`src/storage/evidenceSearchReadModel.ts` turns `EvidenceSearchIndexHandoff` packets into an actual queryable read model. The embedded implementation is used for tests and local product measurement; production backends are represented as disabled-by-default adapter boundaries for Postgres read-model tables and OpenSearch/pgvector until an explicit feature-flagged cutover enables them.
+
+The read model accepts only safe `ti.evidence_search_index_document.v1` documents. It stores document IDs, safe summaries, replay IDs, citation counts, routing keys, retention class, and embedding input hashes for public embedding-eligible documents. Restricted/leak metadata is searchable for defensive facts but never receives an embedding input hash. Retention deletion tombstones matching read-model rows while preserving legal-hold rows, and disabled production adapters fail closed instead of shadow-writing to live backends.
+
+The same module now emits backend write sets with durable mapper rows:
+
+- `evidence_search_documents` rows round-trip full safe search documents, replay metadata, citation spans, retention class, redaction state, and backend routing hints.
+- OpenSearch documents carry only safe summaries/search text, replay IDs, routing keys, retention/review metadata, citation counts, and hash-only embedding inputs.
+- pgvector candidate rows are emitted only for public embedding-eligible documents. Restricted and metadata-only records are omitted from vector rows even when they remain searchable in full-text metadata.
+- Tombstone rows carry document ID, tenant, capture, retention class, legal hold, reason, and replay ID so deletion replay can retire search rows without losing custody history.
+
+`/v1/evidence/cutover-report.readModelCutover` exposes the route-visible cutover state for those mapper rows as `ti.evidence_search_read_model_cutover.v1`. It combines the backend write-set counts, embedded replay readiness, fail-closed Postgres/OpenSearch/pgvector adapter state, replay/tombstone/legal-hold/stale-extractor requirements, and vector policy so operators can see why the durable read path is ready locally but still held from production backend writes until explicit enablement.
+
+This is the first implementation slice behind the earlier migration/readiness packets. It does not connect to external services, mutate OpenSearch/pgvector/Postgres, or serialize raw bodies, object keys, unsafe URLs, credentials, restricted raw content, private material, or actor-interaction content.
+
+## Object Integrity Repair Runtime
+`buildEvidenceObjectIntegrityRepairReport` emits `ti.evidence_object_integrity_repair.v1` and is included on `/v1/evidence/cutover-report` as `objectIntegrityRepair`. It is the operator runbook packet for object-store integrity repair before search/vector index cutover, graph/STIX export, or public answer refresh.
+
+The report composes the search handoff, chain-of-custody report, search consistency SLO, and backup integrity manifest. It lists expected object captures, verified objects, missing objects, hash mismatches, orphan rows, legal-hold objects, metadata-only captures, and restricted captures. Per-object rows include capture/source/tenant IDs, retention class, legal-hold state, content hash, expected/actual SHA-256, replay checkpoint, blockers, and a repair action. Object references are represented only as stable hashes; object keys are never serialized.
+
+The operator runbook is dry-run only. It covers manifest verification, missing-object restore from backup or object-lock version, hash-mismatch quarantine, index/vector/graph/API replay, public-answer refresh after blockers clear, and legal-hold preservation. The report blocks or holds on missing objects, hash mismatch, orphan lineage, metadata-only object refs, legal-hold repair requirements, or search consistency drift. Restricted/leak captures remain metadata-only and can surface defensive metadata such as victim/company, claimed account counts, dataset size, actor statement summaries, source hashes, timestamps, review state, and retention class without exposing raw leaked rows, credentials, unsafe URLs, private material, object keys, or actor-interaction content.
+
+## Retention Runtime Enforcement
+`buildEvidenceRetentionRuntimeReport` emits `ti.evidence_retention_runtime_enforcement.v1` and is included on `/v1/evidence/cutover-report` as `retentionRuntime`. It turns retention class, legal hold, redaction, replay, object manifest, index migration, graph, STIX, and API answer state into an enforceable route-safe packet.
+
+The report covers raw captures, extracted text projections, object references, search index documents, vector index decisions, graph relationships, STIX previews, restricted metadata, and API answer refresh. Each surface exposes immutable audit fields only: ids, hashes, hashed object refs, replay checkpoint, cursor, observed time, retention transition, legal-hold state, redaction state, eligibility, blockers, and rollback action.
+
+Legal hold always wins over deletion actions and keeps capture/object/index state preserved. Restricted/leak metadata remains searchable for defensive metadata fields but is excluded from vector embedding and held for graph/STIX export until review gates pass. Redaction repair, restricted raw bodies, missing objects, hash mismatch, cursor replay gaps, parser drift, and export-without-review move API answer refresh to partial/hold and block graph or STIX promotion as needed. The report never serializes raw bodies, object keys, unsafe URLs, credentials, private material, restricted raw content, or actor-interaction content.
+
+## Chain Of Custody
+`buildEvidenceChainOfCustodyReport` emits `ti.evidence_chain_of_custody.v1` and is included on `/v1/evidence/cutover-report` as `chainOfCustody`. It is the compact route-visible proof that a user-facing answer or export candidate can be traced from source governance through scheduler/run context, immutable capture/object references, extraction deltas, claim ledger review, graph relationships, API search snapshots, and STIX export previews.
+
+Each custody stage exposes only safe operational proof fields:
+- ids for source, run, capture, claim ledger entry, relationship, and stage;
+- timestamps, content hashes, hashed object-reference identifiers, parser versions, confidence, review state, retention class, and replay cursor;
+- redaction flags proving metadata-only restricted handling and proving raw bodies, object keys, unsafe URLs, restricted material, secrets, and actor interaction are absent;
+- previous/next stage links for replay and incident investigation.
+
+The verification section fails closed for missing captures, missing object references, broken object/hash chains, missing relationship captures, missing claim captures, or restricted bodies. It holds for parser-version drift, cursor replay gaps, export/STIX eligibility without trusted review, missing claim ledger coverage, missing graph relationships, missing API snapshots, or redaction repair needs. Restricted/leak sources may contribute defensive metadata to custody stages, but they remain metadata-only and review-held until an analyst explicitly promotes safe claims.
+
 ## Repository Boundary
 Production implementations should satisfy the same contracts used by the in-memory store:
 - `CaptureMetadataStore` for Postgres-backed captures, discovery evidence, live snapshots, evidence deltas, replay jobs, and retention metadata.

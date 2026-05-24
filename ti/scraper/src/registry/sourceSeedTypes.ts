@@ -355,6 +355,109 @@ export interface SourcePortfolioQuerySummary {
   extractionYieldGroups: SourcePortfolioGroup[];
 }
 
+export type SourceReliabilityDecision = "trusted" | "throttled" | "paused" | "retired" | "promote_candidate" | "needs_review";
+
+export interface SourceReliabilityScoreInputs {
+  freshness: number;
+  usefulAnswerYield: number;
+  parserHealth: number;
+  legalReviewAge: number;
+  robotsReviewAge: number;
+  duplicateRate: number;
+  evidenceReplaySuccess: number;
+  analystOverrideHistory: number;
+  falsePositiveHistory: number;
+  familyDiversityValue: number;
+  schedulerCostEfficiency: number;
+}
+
+export interface SourceReliabilityEconomicsRow {
+  sourceId: string;
+  sourceName: string;
+  sourceType: SourceType;
+  sourceFamily: string;
+  runtimeStatus: SourceRecord["status"];
+  safePublicEligible: boolean;
+  decision: SourceReliabilityDecision;
+  reliabilityScore: number;
+  scoreInputs: SourceReliabilityScoreInputs;
+  economics: {
+    marginalValue: number;
+    expectedUsefulEvidenceItemsPerDay: number;
+    costPerUsefulEvidenceItem: number;
+    estimatedTasksPerDay: number;
+    activationWaveReady: boolean;
+    staleSuppressed: boolean;
+    duplicateSuppressed: boolean;
+  };
+  reasons: string[];
+  handoffs: {
+    agent02SchedulerPriority: "high" | "normal" | "low" | "suppress";
+    agent03ParserCapability: "supported" | "needs_parser_repair" | "restricted_metadata_handoff";
+    agent04SourcePackRecommendation: "promote" | "dedupe" | "fill_family_gap" | "hold";
+    agent06EvidenceReplay: "ready" | "needs_replay_proof" | "suppressed";
+    agent07QualityConfidence: "confidence_input_ready" | "false_positive_watch" | "quality_hold";
+    agent09ApiContract: "source_reliability_fields_ready";
+    agent10SloRunbook: "slo_ready" | "watch" | "release_hold";
+  };
+  guardrails: {
+    dryRun: true;
+    willMutate: false;
+    willStartCrawling: false;
+    noRestrictedActivation: true;
+    noLeakedDataAccess: true;
+  };
+}
+
+export interface SourceReliabilityEconomicsPacket {
+  schemaVersion: "ti.source_reliability_economics.v1";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  query: string;
+  queryClass: SourceCoverageSloQueryClass;
+  summary: {
+    sourceCount: number;
+    trusted: number;
+    throttled: number;
+    paused: number;
+    retired: number;
+    promoteCandidates: number;
+    needsReview: number;
+    averageReliabilityScore: number;
+    sourceFamilyCoverage: number;
+    marginalValueOfProposedSources: number;
+    costPerUsefulEvidenceItem: number;
+    staleSourceSuppression: number;
+    duplicateSuppression: number;
+    activationWaveReady: number;
+  };
+  sources: SourceReliabilityEconomicsRow[];
+  portfolioEconomics: {
+    familyCoverage: Array<{ family: string; sourceCount: number; activeCount: number; averageReliabilityScore: number }>;
+    marginalValueLeaders: string[];
+    staleSuppressedSourceIds: string[];
+    duplicateSuppressedSourceIds: string[];
+    activationWaveReadySourceIds: string[];
+  };
+  governance: {
+    approvalMode: "explicit_operator_approval";
+    noSilentActivation: true;
+    restrictedSourcesMetadataOnly: true;
+    forbiddenSourceClasses: string[];
+  };
+  coordination: {
+    agent02Fields: string[];
+    agent03Fields: string[];
+    agent04Fields: string[];
+    agent06Fields: string[];
+    agent07Fields: string[];
+    agent09Fields: string[];
+    agent10Fields: string[];
+  };
+}
+
 export interface SourcePackOnboardingPlan {
   packName: string;
   dryRun: true;
@@ -412,6 +515,326 @@ export interface SourceCoverageBurnDownReport {
   blockedUnsafeSourceIds: string[];
 }
 
+export type SourcePortfolioMigrationState = "candidate" | "sandbox" | "canary" | "active" | "degraded" | "retired";
+
+export interface SourcePortfolioMigrationLane {
+  state: SourcePortfolioMigrationState;
+  sourceCount: number;
+  sourceIds: string[];
+  approvalRequired: boolean;
+  rollbackAction: "remove_candidate" | "return_to_sandbox" | "pause_canary" | "quarantine_or_degrade" | "restore_previous_cadence" | "none";
+  parserCapability: "supported" | "needs_repair" | "metadata_only_handoff";
+  sourceFamilies: string[];
+  averageReliability: number;
+  legalReview: "current" | "stale" | "missing" | "mixed";
+  robotsReview: "current" | "stale" | "missing" | "not_required" | "mixed";
+  cadenceImpact: {
+    estimatedTasksPerDay: number;
+    maxCadenceSeconds: number;
+    budgetClasses: string[];
+  };
+}
+
+export interface SourcePortfolioMigrationQueryClassReadiness {
+  queryClass: SourceCoverageSloQueryClass;
+  readiness: "ready" | "partial" | "hold";
+  activeSafePublicSources: number;
+  candidateSources: number;
+  canarySources: number;
+  missingFamilies: string[];
+  representativeQueries: string[];
+  recommendedAction: "promote_to_canary" | "add_source_pack" | "repair_parser" | "legal_review" | "hold_restricted";
+}
+
+export interface SourcePortfolioMigrationReadiness {
+  schemaVersion: "ti.source_portfolio_migration_readiness.v1";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  tenantId?: string;
+  summary: {
+    sourceCount: number;
+    safePublicEligible: number;
+    candidate: number;
+    sandbox: number;
+    canary: number;
+    active: number;
+    degraded: number;
+    retired: number;
+    restrictedMetadataOnly: number;
+    recommendedCanaryPromotions: number;
+  };
+  lanes: SourcePortfolioMigrationLane[];
+  queryClasses: SourcePortfolioMigrationQueryClassReadiness[];
+  recommendedActions: Array<{
+    action: "promote_candidate_to_sandbox" | "promote_sandbox_to_canary" | "restore_degraded_source" | "retire_duplicate" | "request_legal_review" | "request_parser_repair";
+    sourceIds: string[];
+    reason: string;
+    approvalRequired: boolean;
+    dryRun: true;
+    willMutate: false;
+    willStartCrawling: false;
+    rollback: string;
+  }>;
+  guardrails: {
+    approvalMode: "explicit_operator_approval";
+    restrictedMetadataOnly: true;
+    noSilentActivation: true;
+    forbiddenSourceClasses: string[];
+  };
+  handoffs: {
+    agent02FreshnessSlo: string[];
+    agent03AdapterRepair: string[];
+    agent04SourceExpansion: string[];
+    agent06EvidenceChain: string[];
+    agent07ActorFreshness: string[];
+    agent09ApiFields: string[];
+    agent10ReleaseGate: string[];
+  };
+}
+
+export type SourceSloBurnRateSignal =
+  | "freshness"
+  | "parser_failure"
+  | "low_evidence_yield"
+  | "duplicate_rate"
+  | "outage_wave"
+  | "retirement_risk"
+  | "approval_expiry"
+  | "query_coverage_gap";
+
+export type SourceSloBurnRateSeverity = "healthy" | "watch" | "burning" | "critical";
+
+export type SourceSloBurnRateRemediationAction =
+  | "lower_cadence"
+  | "raise_cadence"
+  | "quarantine"
+  | "retire"
+  | "request_parser_repair"
+  | "request_source_pack_expansion"
+  | "request_evidence_replay"
+  | "request_analyst_approval"
+  | "hold_restricted_metadata";
+
+export type SourceSloBurnRateOwner =
+  | "agent_01"
+  | "agent_02"
+  | "agent_03"
+  | "agent_04"
+  | "agent_06"
+  | "agent_07"
+  | "agent_09"
+  | "agent_10";
+
+export interface SourceSloBurnRateRow {
+  id: string;
+  signal: SourceSloBurnRateSignal;
+  severity: SourceSloBurnRateSeverity;
+  burnRate: number;
+  window: {
+    short: "1h";
+    long: "24h";
+    ratio: number;
+  };
+  sourceFamily: string;
+  queryClass: SourceCoverageCloseoutQueryClass;
+  sourceIds: string[];
+  sourceCount: number;
+  reason: string;
+  recommendedAction: SourceSloBurnRateRemediationAction;
+  owner: SourceSloBurnRateOwner;
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  noLeakBoundary: {
+    rawUrlsExposed: false;
+    restrictedMaterialExposed: false;
+    automaticRestrictedActivation: false;
+  };
+}
+
+export interface SourceSloBurnRateRemediationQueueItem {
+  id: string;
+  priority: "critical" | "high" | "medium" | "low";
+  action: SourceSloBurnRateRemediationAction;
+  owner: SourceSloBurnRateOwner;
+  groupKey: string;
+  sourceFamily: string;
+  queryClass: SourceCoverageCloseoutQueryClass;
+  sourceIds: string[];
+  reasons: string[];
+  rollback: string;
+  approvalRequired: boolean;
+  routeHint: "/v1/sources/portfolio" | "/v1/sources/runtime-sla" | "/v1/sources/activation-batches" | "/v1/analyst/source-activation-packets";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+}
+
+export interface SourceSloBurnRatePacket {
+  schemaVersion: "ti.source_slo_burn_rate.v1";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  tenantId?: string;
+  summary: {
+    totalSignals: number;
+    critical: number;
+    burning: number;
+    watch: number;
+    healthy: number;
+    remediationItems: number;
+    worstBurnRate: number;
+  };
+  signals: SourceSloBurnRateRow[];
+  remediationQueue: SourceSloBurnRateRemediationQueueItem[];
+  groupedByFamily: Array<{
+    sourceFamily: string;
+    critical: number;
+    burning: number;
+    watch: number;
+    sourceIds: string[];
+  }>;
+  groupedByQueryClass: Array<{
+    queryClass: SourceCoverageCloseoutQueryClass;
+    critical: number;
+    burning: number;
+    watch: number;
+    sourceIds: string[];
+  }>;
+  guardrails: {
+    dryRunOnly: true;
+    noAutomaticRestrictedActivation: true;
+    noRawUnsafeUrls: true;
+    forbiddenSourceClasses: string[];
+  };
+  handoffs: {
+    agent02: string[];
+    agent03: string[];
+    agent04: string[];
+    agent06: string[];
+    agent07: string[];
+    agent09: string[];
+    agent10: string[];
+  };
+}
+
+export type SourceTenantActivationDecision =
+  | "activate"
+  | "stage"
+  | "hold"
+  | "retire"
+  | "hold_restricted_metadata";
+
+export type SourceTenantActivationSourceClass =
+  | "public_rss_blog"
+  | "advisory_api"
+  | "public_channel"
+  | "dynamic_browser_candidate"
+  | "report_pdf"
+  | "restricted_metadata_only";
+
+export interface SourceTenantActivationApprovalPacket {
+  id: string;
+  tenantId: string;
+  queryClass: SourceCoverageCloseoutQueryClass;
+  sourceFamily: string;
+  sourceClass: SourceTenantActivationSourceClass;
+  decision: SourceTenantActivationDecision;
+  sourceIds: string[];
+  sourceCount: number;
+  approvalState: "not_required" | "approved" | "pending" | "expired" | "blocked";
+  approvalRequired: boolean;
+  reasons: string[];
+  blockers: Array<"policy_hold" | "parser_certification" | "legal_review" | "robots_review" | "freshness_debt" | "duplicate" | "low_evidence_yield" | "tenant_scope" | "restricted_metadata">;
+  expectedEffect: {
+    coverageGap: "closes_gap" | "improves_gap" | "no_effect";
+    freshnessDebt: "reduces" | "unchanged" | "held";
+    publicSearchResponsive: true;
+  };
+  safetyPolicy: {
+    metadataOnly: boolean;
+    noRawUnsafeUrls: true;
+    noRestrictedAutoActivation: true;
+    noMutationWithoutApproval: true;
+  };
+  rollback: string;
+  routeHint: "/v1/sources/portfolio" | "/v1/sources/activation-batches" | "/v1/analyst/source-activation-packets";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+}
+
+export interface SourceTenantActivationGroup {
+  tenantId: string;
+  queryClass: SourceCoverageCloseoutQueryClass;
+  sourceFamily: string;
+  sourceClass: SourceTenantActivationSourceClass;
+  decision: SourceTenantActivationDecision;
+  sourceIds: string[];
+  approvalPacketIds: string[];
+  schedulerBudgetClass: SourceCollectionSla["budgetClass"];
+  reason: string;
+}
+
+export interface SourceTenantActivationPacket {
+  schemaVersion: "ti.tenant_source_activation.v1";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  tenantId?: string;
+  summary: {
+    tenantCount: number;
+    approvalPacketCount: number;
+    activate: number;
+    stage: number;
+    hold: number;
+    retire: number;
+    restrictedMetadataHeld: number;
+    pendingApproval: number;
+    expiredApproval: number;
+  };
+  approvalPackets: SourceTenantActivationApprovalPacket[];
+  groups: SourceTenantActivationGroup[];
+  tenantIsolation: Array<{
+    tenantId: string;
+    sourceCount: number;
+    sourceIds: string[];
+    defaultTenantIncluded: boolean;
+    crossTenantSourcesExcluded: boolean;
+  }>;
+  queryClassReadiness: Array<{
+    tenantId: string;
+    queryClass: SourceCoverageCloseoutQueryClass;
+    activeSafePublicSources: number;
+    stagedSourceIds: string[];
+    heldSourceIds: string[];
+    restrictedMetadataSourceIds: string[];
+    readiness: "ready" | "needs_approval" | "needs_expansion" | "held";
+  }>;
+  guardrails: {
+    dryRunOnly: true;
+    noSilentActivation: true;
+    noCrawlingFromApprovalPackets: true;
+    noRestrictedAutoActivation: true;
+    noRawUnsafeUrls: true;
+    forbiddenSourceClasses: string[];
+  };
+  handoffs: {
+    agent02SchedulerBudgets: string[];
+    agent03AdapterCertification: string[];
+    agent04PublicExpansion: string[];
+    agent05RestrictedPolicyHolds: string[];
+    agent06EvidenceRetention: string[];
+    agent07QualityGates: string[];
+    agent09ApiContracts: string[];
+    agent10CapacityReleaseGates: string[];
+  };
+}
+
 export interface SourcePortfolioApiResponse {
   endpoint: "/v1/sources/portfolio";
   dryRun: true;
@@ -421,6 +844,11 @@ export interface SourcePortfolioApiResponse {
   generatedAt: string;
   portfolio: SourcePortfolioQuerySummary;
   queries: SourcePortfolioQuerySummary[];
+  reliabilityEconomics: SourceReliabilityEconomicsPacket;
+  migrationReadiness: SourcePortfolioMigrationReadiness;
+  sloBurnRate: SourceSloBurnRatePacket;
+  tenantActivation: SourceTenantActivationPacket;
+  sourceImportCanary: SourceImportCanaryPacket;
   onboardingPlans: SourcePackOnboardingPlan[];
   burnDown: SourceCoverageBurnDownReport[];
   promotionPacket: {
@@ -428,6 +856,487 @@ export interface SourcePortfolioApiResponse {
     value: string;
     gate: "source_portfolio_ready";
     ready: boolean;
+  };
+}
+
+export type SourceImportCanaryFixtureClass =
+  | "actor_intelligence"
+  | "ransomware_leak_metadata"
+  | "vulnerability_advisory"
+  | "malware_report"
+  | "public_cert_feed"
+  | "vendor_blog"
+  | "public_channel_descriptor";
+
+export type SourceImportCanaryResultDimension =
+  | "tenant"
+  | "query_class"
+  | "source_family"
+  | "source_policy"
+  | "adapter_certification"
+  | "scheduler_impact"
+  | "evidence_store_impact"
+  | "quality_gate_impact"
+  | "graph_stix_impact"
+  | "api_public_answer_effect";
+
+export interface SourceImportCanaryRolloutSource {
+  sourceId: string;
+  sourceName: string;
+  sourceHash: string;
+  sourceFamily: SourceActivationWaveCategory;
+  sourceType: SourceType;
+  canaryOrder?: number;
+  rolloutOrder: number;
+  approvalScope: SourceCatalogMetadata["approvalScope"];
+  parserCertified: boolean;
+  policy: "safe_public" | "metadata_only_hold" | "blocked_unsafe";
+  schedulerImpact: {
+    budgetClass: SourceCollectionSla["budgetClass"];
+    estimatedDailyTasks: number;
+  };
+  expectedEvidenceYield: number;
+  rollbackPlanId: string;
+}
+
+export interface SourceImportCanaryActivationResult {
+  dimension: SourceImportCanaryResultDimension;
+  key: string;
+  decision: "pass" | "hold" | "watch";
+  sourceIds: string[];
+  summary: string;
+  nextAction: "approve_canary" | "request_parser_certification" | "hold_restricted_metadata" | "retire_duplicate" | "watch_slo" | "rollback_ready";
+}
+
+export interface SourceImportCanaryFixture {
+  fixtureClass: SourceImportCanaryFixtureClass;
+  queryClass: SourceCoverageCloseoutQueryClass;
+  sourceIds: string[];
+  coverageReady: boolean;
+  metadataOnly: boolean;
+  notes: string[];
+}
+
+export interface SourceImportCanaryPacket {
+  schemaVersion: "ti.source_import_canary.v1";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  tenantId?: string;
+  sourcePackIds: string[];
+  summary: {
+    first10Count: 10;
+    first50Count: 50;
+    activationResultCount: number;
+    restrictedMetadataHoldCount: number;
+    parserCertificationHoldCount: number;
+    duplicateSuppressionCount: number;
+    staleRetirementCandidateCount: number;
+    rollbackPlanCount: number;
+    releaseDecision: "promote_canary_then_expand" | "hold";
+  };
+  first10SourceRollout: SourceImportCanaryRolloutSource[];
+  first50SourceRollout: SourceImportCanaryRolloutSource[];
+  activationResults: SourceImportCanaryActivationResult[];
+  fixtures: SourceImportCanaryFixture[];
+  lifecycle: {
+    retirements: SourceActivationExecutionReadiness["sourceRetirement"];
+    duplicateSuppression: SourceActivationExecutionReadiness["duplicateSuppression"];
+    staleSourceDetection: {
+      dryRun: true;
+      willMutate: false;
+      sourceIds: string[];
+      reason: string;
+    };
+    parserCertificationDependencies: SourceActivationExecutionReadiness["parserGapHandoff"];
+    restrictedMetadataHoldPropagation: {
+      dryRun: true;
+      willMutate: false;
+      sourceIds: string[];
+      routeHint: "/v1/analyst/source-activation-packets";
+      reason: string;
+    };
+  };
+  rollbackPlans: Array<{
+    rollbackPlanId: string;
+    sourceIds: string[];
+    trigger: string;
+    action: string;
+    owner: "agent_01" | "agent_02" | "agent_03" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
+  }>;
+  guardrails: {
+    approvalMode: "dry_run_packet_then_explicit_operator_approval";
+    noSilentActivation: true;
+    noSourcePackImport: true;
+    noCrawlingFromCanary: true;
+    noUnsafeRawUrls: true;
+    restrictedMetadataOnly: true;
+    forbiddenSourceClasses: string[];
+  };
+  handoffs: {
+    agent02SchedulerImpact: string[];
+    agent03ParserCertification: string[];
+    agent04SourcePackCoverage: string[];
+    agent05RestrictedMetadataPolicy: string[];
+    agent06EvidenceStoreImpact: string[];
+    agent07QualityGates: string[];
+    agent08GraphStixImpact: string[];
+    agent09ApiContracts: string[];
+    agent10ReleaseRollback: string[];
+  };
+}
+
+export type TiSourceAtlasFamily =
+  | "vendor_threat_blog"
+  | "cert_government"
+  | "cve_advisory"
+  | "malware_researcher"
+  | "ransomware_tracker"
+  | "exploit_intelligence"
+  | "github_security_advisory"
+  | "package_advisory"
+  | "public_dataset"
+  | "regional_cyber_agency"
+  | "ics_ot"
+  | "cloud_saas_security"
+  | "phishing_brand_abuse"
+  | "public_channel_descriptor";
+
+export type TiSourceAtlasDiscoveryMethod =
+  | "curated_list"
+  | "public_report"
+  | "github_repository"
+  | "awesome_list"
+  | "opml_rss"
+  | "vendor_page"
+  | "analyst_import"
+  | "existing_source_pack";
+
+export interface TiSourceAtlasRecord {
+  id: string;
+  url: string;
+  domain: string;
+  feedUrl?: string;
+  sourceName: string;
+  family: TiSourceAtlasFamily;
+  discoveryMethod: TiSourceAtlasDiscoveryMethod;
+  queryClassCoverage: SourceCoverageCloseoutQueryClass[];
+  language: string;
+  region: string[];
+  sector: string[];
+  reliability: number;
+  freshness: number;
+  evidenceYield: number;
+  uniqueness: number;
+  downstreamPublicAnswerImpact: number;
+  sourceValueScore: number;
+  parserCapability: {
+    profile: SourceMarketplaceParserProfile;
+    owner: "agent_03";
+    certified: boolean;
+    certificationRequired: boolean;
+  };
+  legalRobotsState: {
+    legalReview: "current" | "missing" | "stale";
+    robotsReview: "current" | "missing" | "stale" | "not_required";
+    notes: string[];
+  };
+  duplicate: {
+    duplicateOf?: string;
+    mirrorOf?: string;
+    contentSimilarity: number;
+    suppressed: boolean;
+  };
+  schedulerEstimate: {
+    budgetClass: SourceCollectionSla["budgetClass"];
+    cadenceSeconds: number;
+    estimatedDailyTasks: number;
+  };
+  evidenceEstimate: {
+    expectedItemsPerDay: number;
+    storageMbPerDay: number;
+    retentionClass: SourceCatalogMetadata["retentionClass"];
+  };
+  activationReadiness: {
+    state: "ready_for_dry_run" | "needs_parser_certification" | "legal_review_hold" | "duplicate_suppressed" | "descriptor_only_hold";
+    approvalRequired: true;
+    autoActivationAllowed: false;
+    reasons: string[];
+  };
+  safety: {
+    publicOnly: true;
+    privateInviteAuthCaptcha: false;
+    rawPayloadTarget: false;
+    autoActivate: false;
+  };
+}
+
+export interface TiSourceAtlasImportPlan {
+  planId: string;
+  label: "first_100" | "first_1000" | "future_10k";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  sourceCount: number;
+  sourceIds: string[];
+  familyCoverage: Array<{ family: TiSourceAtlasFamily; sourceCount: number }>;
+  schedulerEstimate: {
+    estimatedDailyTasks: number;
+    budgetClasses: SourceCollectionSla["budgetClass"][];
+  };
+  evidenceEstimate: {
+    expectedItemsPerDay: number;
+    storageMbPerDay: number;
+  };
+  approvalPacket: {
+    routeHint: "/v1/analyst/source-activation-packets";
+    approvalRequired: true;
+    allowedActions: Array<"approve_canary" | "request_parser_certification" | "mark_duplicate" | "hold_descriptor" | "rollback_batch">;
+    forbiddenActions: Array<"auto_activate" | "start_crawl" | "import_without_review" | "add_private_source" | "bypass_captcha_or_auth">;
+  };
+  rollbackPacket: {
+    rollbackPlanId: string;
+    trigger: string;
+    action: string;
+  };
+}
+
+export interface TiSourceAtlasCoverageMatrixRow {
+  queryClass: string;
+  requiredFamilies: TiSourceAtlasFamily[];
+  coveredFamilies: TiSourceAtlasFamily[];
+  candidateSourceCount: number;
+  highValueSourceIds: string[];
+  gapFamilies: TiSourceAtlasFamily[];
+  downstreamPublicAnswerImpact: number;
+}
+
+export interface TiSourceAtlasRegistryActivationHandoff {
+  routeHint: "/v1/analyst/source-activation-packets";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  approvalRequired: true;
+  sourceRegistryMutationAllowed: false;
+  candidateCount: number;
+  canarySourceIds: string[];
+  parserCertificationRequiredSourceIds: string[];
+  descriptorOnlyHeldSourceIds: string[];
+  proposedSourceRecords: Array<{
+    atlasSourceId: string;
+    proposedSourceId: string;
+    name: string;
+    type: SourceType;
+    accessMethod: AccessMethod;
+    risk: Exclude<SourceRisk, "restricted">;
+    url: string;
+    domain: string;
+    crawlFrequencySeconds: number;
+    statusPreview: "candidate";
+    metadata: {
+      atlasFamily: TiSourceAtlasFamily;
+      sourceValueScore: number;
+      queryClassCoverage: SourceCoverageCloseoutQueryClass[];
+      sourceHash: string;
+      provenance: "ti_source_atlas";
+    };
+    governance: {
+      legalReview: TiSourceAtlasRecord["legalRobotsState"]["legalReview"];
+      robotsReview: TiSourceAtlasRecord["legalRobotsState"]["robotsReview"];
+      approvalRequired: true;
+      autoActivationAllowed: false;
+    };
+  }>;
+  schedulerPreview: {
+    owner: "agent_02";
+    queuePartition: "source_atlas_canary";
+    maxConcurrentCanaries: number;
+    initialCadenceSeconds: number;
+    estimatedDailyTasks: number;
+    leaseMode: "dry_run_preview_only";
+  };
+  prerequisites: string[];
+  forbiddenOperations: Array<
+    | "registry_mutation"
+    | "source_pack_import"
+    | "crawl_enqueue"
+    | "source_auto_activation"
+    | "restricted_fetch"
+    | "auth_or_captcha_bypass"
+    | "payload_download"
+  >;
+  rollbackPacket: {
+    rollbackPlanIds: string[];
+    action: string;
+  };
+  downstreamHandoffs: {
+    agent01RegistryReview: string[];
+    agent02SchedulerDryRun: string[];
+    agent03ParserCertification: string[];
+    agent06EvidenceReadiness: string[];
+    agent07QualityGate: string[];
+    agent09ApiContract: string[];
+    agent10ReleaseGate: string[];
+  };
+}
+
+export interface TiSourceAtlasApiResponse {
+  endpoint: "/v1/sources/atlas";
+  schemaVersion: "ti.source_atlas.v1";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  tenantId?: string;
+  generatedAt: string;
+  summary: {
+    recordCount: number;
+    syntheticScaleCandidateCount: 10_000;
+    first100Count: 100;
+    first1000Count: 1000;
+    readyForDryRun: number;
+    parserCertificationHolds: number;
+    duplicateSuppressed: number;
+    descriptorOnlyHolds: number;
+    averageSourceValueScore: number;
+  };
+  records: TiSourceAtlasRecord[];
+  importPlans: TiSourceAtlasImportPlan[];
+  coverageMatrix: TiSourceAtlasCoverageMatrixRow[];
+  activationCanary: {
+    dryRun: true;
+    willMutate: false;
+    willStartCrawling: false;
+    first100SourceIds: string[];
+    first1000SourceIds: string[];
+    parserCertificationRequiredSourceIds: string[];
+    descriptorOnlySourceIds: string[];
+    rollbackPlanIds: string[];
+    registryActivationHandoff: TiSourceAtlasRegistryActivationHandoff;
+  };
+  discoveryInputs: Array<{
+    method: TiSourceAtlasDiscoveryMethod;
+    sourceCount: number;
+    refreshCadence: "daily" | "weekly" | "monthly";
+    owner: "agent_01";
+  }>;
+  exportImportSchema: {
+    schemaVersion: "ti.source_atlas_export.v1";
+    primaryKey: "id";
+    requiredFields: Array<keyof Pick<TiSourceAtlasRecord, "id" | "url" | "domain" | "family" | "queryClassCoverage" | "sourceValueScore" | "activationReadiness">>;
+    noUnsafeSourceClasses: string[];
+  };
+  guardrails: {
+    publicOnly: true;
+    noPrivateInviteAuthCaptcha: true;
+    noSilentActivation: true;
+    noSourcePackImport: true;
+    noCrawlingFromAtlas: true;
+    descriptorOnlyPublicChannels: true;
+  };
+  handoffs: {
+    agent02SchedulerBudgets: string[];
+    agent03ParserCertification: string[];
+    agent04CoverageFreshness: string[];
+    agent06EvidenceEstimates: string[];
+    agent07QualityScorecards: string[];
+    agent09ApiContracts: string[];
+    agent10ReleaseGates: string[];
+  };
+}
+
+export type TiSourceAtlasReviewDecision =
+  | "stage_for_canary"
+  | "request_parser_certification"
+  | "hold_duplicate"
+  | "hold_descriptor_only"
+  | "legal_review_required";
+
+export interface TiSourceAtlasExportManifestRow {
+  atlasSourceId: string;
+  sourceHash: string;
+  sourceName: string;
+  url: string;
+  domain: string;
+  family: TiSourceAtlasFamily;
+  queryClassCoverage: SourceCoverageCloseoutQueryClass[];
+  sourceValueScore: number;
+  parserProfile: SourceMarketplaceParserProfile;
+  schedulerCadenceSeconds: number;
+  expectedItemsPerDay: number;
+  legalReview: TiSourceAtlasRecord["legalRobotsState"]["legalReview"];
+  robotsReview: TiSourceAtlasRecord["legalRobotsState"]["robotsReview"];
+  approvalRequired: true;
+  autoActivationAllowed: false;
+}
+
+export interface TiSourceAtlasReviewQueueRow {
+  reviewId: string;
+  atlasSourceId: string;
+  sourceName: string;
+  family: TiSourceAtlasFamily;
+  domain: string;
+  sourceHash: string;
+  decision: TiSourceAtlasReviewDecision;
+  reasons: string[];
+  approvalRoute: "/v1/analyst/source-activation-packets";
+  parserOwner: "agent_03";
+  schedulerOwner: "agent_02";
+  qualityOwner: "agent_07";
+  releaseOwner: "agent_10";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+}
+
+export interface TiSourceAtlasExportManifestApiResponse {
+  endpoint: "/v1/sources/atlas/export";
+  schemaVersion: "ti.source_atlas_export_manifest.v1";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  tenantId?: string;
+  generatedAt: string;
+  requestedPlan: TiSourceAtlasImportPlan["label"];
+  summary: {
+    plannedSourceCount: number;
+    manifestRowCount: number;
+    stagedForCanary: number;
+    parserCertificationRequired: number;
+    duplicateHolds: number;
+    descriptorOnlyHolds: number;
+    legalReviewRequired: number;
+  };
+  reviewQueue: TiSourceAtlasReviewQueueRow[];
+  exportManifest: {
+    schemaVersion: "ti.source_atlas_export.v1";
+    format: "source_pack_import_dry_run_json";
+    hashAlgorithm: "stable_sha256";
+    primaryKey: "atlasSourceId";
+    rows: TiSourceAtlasExportManifestRow[];
+  };
+  approvalPacket: {
+    routeHint: "/v1/analyst/source-activation-packets";
+    approvalRequired: true;
+    allowedActions: Array<"approve_canary" | "request_parser_certification" | "mark_duplicate" | "hold_descriptor" | "rollback_batch" | "export_manifest">;
+    forbiddenActions: Array<"auto_activate" | "start_crawl" | "import_without_review" | "add_private_source" | "bypass_captcha_or_auth" | "download_payload">;
+  };
+  rollbackPacket: {
+    rollbackPlanId: string;
+    trigger: string;
+    action: string;
+  };
+  guardrails: TiSourceAtlasApiResponse["guardrails"] & {
+    noManifestImport: true;
+    explicitApprovalRequired: true;
+  };
+  handoffs: TiSourceAtlasApiResponse["handoffs"] & {
+    agent01RegistryImport: string[];
   };
 }
 

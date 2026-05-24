@@ -26,17 +26,26 @@ import {
   restrictedMetadataComplianceSummaryForSearch,
   restrictedMetadataConnectorCertificationContract,
   restrictedMetadataConnectorFixtures,
+  restrictedMetadataCapacityIsolationContract,
+  restrictedMetadataCapacitySloContract,
+  restrictedMetadataDarkCanaryContract,
   restrictedMetadataEmergencyStopCertificationContract,
+  restrictedMetadataEvidenceHoldReleaseDrillContract,
   restrictedMetadataEvidenceDeltasFromCapture,
   restrictedMetadataEvidenceHandoffSafetyProof,
   restrictedMetadataEvidenceHandoffFromCapture,
   restrictedMetadataIntelSearchPartialSemantics,
   restrictedMetadataIsolationHarnessContract,
   restrictedMetadataKillSwitchDrillContract,
+  restrictedMetadataLegalEthicsAuditExportContract,
   restrictedMetadataNonBlockingSearchContract,
+  restrictedMetadataOperatorGovernanceContract,
   restrictedMetadataOperationalPlaybooksContract,
   restrictedMetadataPolicyDelta,
+  restrictedMetadataPolicyAuditExportContract,
   restrictedMetadataProductionAuditEvents,
+  restrictedMetadataQualityEvaluationContract,
+  restrictedMetadataReviewHealthContract,
   restrictedMetadataProductionBoundaryContracts,
   restrictedMetadataRedactionDtoFromCapture,
   restrictedMetadataRetentionExpiryDelta,
@@ -48,9 +57,17 @@ import {
   type DarknetMetadataSourceType,
   type DarknetNetwork,
   type RestrictedMetadataAnalystOperationScenario,
+  type RestrictedMetadataCapacityIsolationScenario,
+  type RestrictedMetadataCapacitySloScenario,
+  type RestrictedMetadataDarkCanaryScenario,
+  type RestrictedMetadataEvidenceHoldReleaseDrillScenario,
   type RestrictedMetadataIsolationHarnessScenario,
+  type RestrictedMetadataLegalEthicsAuditScenario,
   type RestrictedMetadataNonBlockingSearchScenario,
+  type RestrictedMetadataOperatorGovernanceScenario,
   type RestrictedMetadataOperationalPlaybookScenario,
+  type RestrictedMetadataQualityEvaluationScenario,
+  type RestrictedMetadataReviewHealthScenario,
   type RestrictedMetadataVictimClaimWorkflowScenario,
   type RestrictedMetadataSourcePack
 } from "../adapters/darknetMetadata.ts";
@@ -148,6 +165,97 @@ const OPERATIONAL_PLAYBOOK_SCENARIOS: RestrictedMetadataOperationalPlaybookScena
   "false_claim_review",
   "duplicate_claim_review"
 ] as const;
+
+const QUALITY_EVALUATION_SCENARIOS: RestrictedMetadataQualityEvaluationScenario[] = [
+  "false_claim",
+  "actor_impersonation",
+  "duplicate_announcement",
+  "stale_repost",
+  "noisy_mirror",
+  "source_takedown",
+  "unavailable_source",
+  "source_family_bias",
+  "contradictory_counts",
+  "contradictory_dates",
+  "victim_name_ambiguity"
+] as const;
+
+const CAPACITY_ISOLATION_SCENARIOS: RestrictedMetadataCapacityIsolationScenario[] = [
+  "proxy_outage",
+  "timeout_spike",
+  "legal_hold_load",
+  "retention_backlog",
+  "approval_backlog",
+  "emergency_stop_drain",
+  "public_search_pressure"
+] as const;
+
+const CAPACITY_SLO_SCENARIOS: RestrictedMetadataCapacitySloScenario[] = [
+  "worker_capacity",
+  "legal_hold_slo",
+  "approval_expiry_slo",
+  "emergency_stop_slo",
+  "retention_window_slo",
+  "source_quarantine_slo",
+  "analyst_review_queue_slo",
+  "proxy_outage_hold",
+  "unsafe_source_discovery_hold",
+  "duplicate_stale_claim_hold",
+  "false_claim_review_hold",
+  "over_capacity_hold"
+] as const;
+
+const OPERATOR_GOVERNANCE_SCENARIOS: RestrictedMetadataOperatorGovernanceScenario[] = [
+  "ransomware_leak_claim_review_hold",
+  "public_channel_rumor_rejected",
+  "source_approval_expired",
+  "legal_hold_active",
+  "retention_expired",
+  "capacity_exceeded",
+  "source_quarantined_unsafe_target",
+  "duplicate_victim_claim_suppressed",
+  "false_claim_disputed",
+  "emergency_stop_active"
+] as const;
+
+const DARK_CANARY_SCENARIOS: RestrictedMetadataDarkCanaryScenario[] = [
+  "tor_metadata_canary",
+  "i2p_metadata_canary",
+  "freenet_metadata_canary",
+  "ransomware_leak_site_claim",
+  "marketplace_forum_descriptor",
+  "private_invite_target_blocked",
+  "raw_payload_blocked",
+  "credential_target_blocked",
+  "legal_hold",
+  "source_approval_expired",
+  "emergency_stop",
+  "false_claim_dispute"
+] as const;
+
+const LEGAL_ETHICS_AUDIT_SCENARIOS: RestrictedMetadataLegalEthicsAuditScenario[] = [
+  "metadata_only_collection",
+  "unsafe_target_blocked",
+  "approval_review",
+  "legal_hold_review",
+  "emergency_stop_review",
+  "false_claim_review",
+  "retention_review",
+  "operator_thesis_export"
+] as const;
+
+const REVIEW_HEALTH_SCENARIOS: RestrictedMetadataReviewHealthScenario[] = [
+  "restricted_source_approval",
+  "victim_claim_review",
+  "legal_hold_review",
+  "duplicate_stale_repost_review",
+  "false_claim_review",
+  "emergency_stop_review",
+  "retention_expiry_review",
+  "notification_draft_review"
+] as const;
+
+const EVIDENCE_HOLD_RELEASE_DRILL_SCENARIOS: RestrictedMetadataEvidenceHoldReleaseDrillScenario[] = REVIEW_HEALTH_SCENARIOS;
 
 function source(input: Partial<SourceRecord> = {}): SourceRecord {
   return {
@@ -2993,10 +3101,571 @@ describe("darknet metadata adapter", () => {
       playbook.forbiddenAlternatives.includes("payload download remains prohibited") &&
       playbook.noLeakSerialization.passed
     )).toBe(true);
+    expect(status.qualityEvaluation).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.qualityEvaluation.observedScenarios).toEqual(expect.arrayContaining(QUALITY_EVALUATION_SCENARIOS));
+    expect(status.qualityEvaluation.publicAnswerHoldCount).toBe(status.qualityEvaluation.packets.length);
+    expect(status.qualityEvaluation.graphStixHoldCount).toBe(status.qualityEvaluation.packets.length);
+    expect(status.qualityEvaluation.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.publicAnswerGate === "hold_not_public_fact" &&
+      packet.graphStixPromotionEligibility === "blocked_until_review" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.qualityEvaluation" &&
+      packet.handoffs.agent10ReleaseGate === "hold" &&
+      packet.proof.falsePositiveSuppressed &&
+      packet.proof.publicFactPromotionBlocked &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.capacityIsolation).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      schedulerHandoffField: "restrictedMetadata.capacityIsolation",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.capacityIsolation.observedScenarios).toEqual(expect.arrayContaining(CAPACITY_ISOLATION_SCENARIOS));
+    expect(status.capacityIsolation.networkBudgets.map((budget) => budget.network).sort()).toEqual(["freenet", "i2p", "tor"]);
+    expect(status.capacityIsolation.networkBudgets.every((budget) =>
+      budget.directEgressAllowed === false &&
+      budget.metadataOnlyWorkerCap >= 0 &&
+      budget.timeoutBudgetMs > 0 &&
+      budget.memoryCeilingMb > 0 &&
+      budget.diskCeilingMb > 0
+    )).toBe(true);
+    expect(status.capacityIsolation.publicSearchHoldCount).toBe(status.capacityIsolation.packets.length);
+    expect(status.capacityIsolation.emergencyDrainCount).toBeGreaterThan(0);
+    expect(status.capacityIsolation.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.publicSearchProtection === "preserve_public_headroom" &&
+      packet.schedulerBackpressure === "agent02_hold_restricted_partition" &&
+      packet.publicAnswerCaveat === "agent07_restricted_context_delayed" &&
+      packet.graphHold === "agent08_hold_restricted_edges" &&
+      packet.apiField === "restrictedMetadata.capacityIsolation" &&
+      packet.proof.publicSearchCannotBeStarved &&
+      packet.proof.restrictedWorkersCapped &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.capacityIsolation.packets.find((packet) => packet.scenario === "proxy_outage")).toMatchObject({
+      queueDecision: "pause_restricted",
+      proof: {
+        proxyOutageFailsClosed: true
+      }
+    });
+    expect(status.capacityIsolation.packets.find((packet) => packet.scenario === "emergency_stop_drain")).toMatchObject({
+      queueDecision: "drain_restricted",
+      releaseGate: "agent10_drain_capacity",
+      proof: {
+        emergencyStopDrainsQueue: true
+      }
+    });
+    expect(status.capacitySlo).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      summary: {
+        publicSearchBehavior: "non_blocking_public_summary"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.capacitySlo.observedScenarios).toEqual(expect.arrayContaining(CAPACITY_SLO_SCENARIOS));
+    expect(status.capacitySlo.summary.packetCount).toBe(status.capacitySlo.packets.length);
+    expect(status.capacitySlo.summary.warningCount).toBeGreaterThan(0);
+    expect(status.capacitySlo.summary.holdCount).toBeGreaterThan(0);
+    expect(status.capacitySlo.summary.rollbackOnlyCount).toBeGreaterThan(0);
+    expect(status.capacitySlo.summary.emergencyStopCount).toBeGreaterThan(0);
+    expect(status.capacitySlo.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.tenantIsolation.tenantScopedQueues &&
+      packet.tenantIsolation.workspaceScopedProxyBudget &&
+      packet.tenantIsolation.crossTenantDataJoinAllowed === false &&
+      packet.tenantIsolation.queuePartition === "restricted_metadata" &&
+      packet.capacity.directEgressAllowed === false &&
+      packet.publicSearchSemantics === "non_blocking_public_summary" &&
+      packet.graphStixExportHold === "hold_until_slo_and_review_pass" &&
+      packet.apiCaveat === "restricted_capacity_slo_pending" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.capacitySlo" &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.publicSearchNotBlocked &&
+      packet.proof.graphStixHeld &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.capacitySlo.packets.find((packet) => packet.scenario === "emergency_stop_slo")).toMatchObject({
+      slo: { releaseGate: "emergency_stop" },
+      capacity: {
+        torWorkerCap: 0,
+        i2pWorkerCap: 0,
+        freenetWorkerCap: 0
+      }
+    });
+    expect(status.capacitySlo.packets.find((packet) => packet.scenario === "proxy_outage_hold")).toMatchObject({
+      failureMode: "proxy_outage",
+      capacity: {
+        directEgressAllowed: false,
+        torWorkerCap: 0
+      }
+    });
+    expect(status.capacitySlo.packets.find((packet) => packet.scenario === "false_claim_review_hold")).toMatchObject({
+      failureMode: "false_claim_review",
+      slo: { releaseGate: "rollback_only" }
+    });
+    expect(status.capacitySlo.packets.find((packet) => packet.scenario === "retention_window_slo")).toMatchObject({
+      failureMode: "retention_backlog",
+      graphStixExportHold: "hold_until_slo_and_review_pass"
+    });
+    expect(status.operatorGovernance).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      operatorVisible: true,
+      summary: {
+        publicSearchBehavior: "non_blocking"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.operatorGovernance.observedScenarios).toEqual(expect.arrayContaining(OPERATOR_GOVERNANCE_SCENARIOS));
+    expect(status.operatorGovernance.summary.packetCount).toBe(status.operatorGovernance.packets.length);
+    expect(status.operatorGovernance.summary.heldCount).toBeGreaterThan(0);
+    expect(status.operatorGovernance.summary.suppressedCount).toBeGreaterThan(0);
+    expect(status.operatorGovernance.summary.emergencyStopCount).toBeGreaterThan(0);
+    expect(status.operatorGovernance.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.operatorVisible &&
+      packet.sourceHashOnly &&
+      packet.tenantId.length > 0 &&
+      packet.sourceHash.length > 0 &&
+      packet.policyReason.length > 0 &&
+      packet.allowedActions.includes("view_metadata_only_packet") &&
+      packet.forbiddenActions.includes("download_stolen_files") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.rollbackPath.includes("restore_review_hold") &&
+      packet.auditId.startsWith("restricted-governance-audit_") &&
+      packet.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.handoffs.agent06RetentionLegalHold === "restricted_governance_retention_hold" &&
+      packet.handoffs.agent07QualityGate === "restricted_governance_quality_gate" &&
+      packet.handoffs.agent08GraphHold === "restricted_governance_graph_hold" &&
+      packet.handoffs.agent09ApiCopy === "restrictedMetadata.operatorGovernance" &&
+      packet.handoffs.agent10ReleaseGate === "restricted_governance_release_gate" &&
+      packet.proof.noRawOnionUrls &&
+      packet.proof.noStolenFileNames &&
+      packet.proof.noLeakedRows &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateChannelContent &&
+      packet.proof.noActorInteractionText &&
+      packet.proof.metadataOnlyEvidence &&
+      packet.proof.sourceHashOnly &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.operatorGovernance.packets.find((packet) => packet.scenario === "ransomware_leak_claim_review_hold")).toMatchObject({
+      policyReason: "restricted_claim_requires_operator_review",
+      graphStixApiEffect: {
+        graph: "pivot_only",
+        api: "caveat_only"
+      }
+    });
+    expect(status.operatorGovernance.packets.find((packet) => packet.scenario === "public_channel_rumor_rejected")).toMatchObject({
+      policyReason: "public_rumor_rejected_for_restricted_context",
+      graphStixApiEffect: {
+        graph: "suppress",
+        api: "suppressed"
+      }
+    });
+    expect(status.operatorGovernance.packets.find((packet) => packet.scenario === "source_quarantined_unsafe_target")).toMatchObject({
+      policyReason: "unsafe_target_detected_source_quarantined",
+      rollbackPath: expect.arrayContaining(["keep_source_quarantined"])
+    });
+    expect(status.operatorGovernance.packets.find((packet) => packet.scenario === "emergency_stop_active")).toMatchObject({
+      policyReason: "restricted_emergency_stop_active",
+      allowedActions: expect.arrayContaining(["activate_kill_switch", "pause_restricted_metadata_workers"])
+    });
+    expect(status.darkMetadataCanary).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      fixtureBacked: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.darkMetadataCanary.observedScenarios).toEqual(expect.arrayContaining(DARK_CANARY_SCENARIOS));
+    expect(status.darkMetadataCanary.networks).toEqual(expect.arrayContaining(["tor", "i2p", "freenet"]));
+    expect(status.darkMetadataCanary.emergencyStopPacketIds.length).toBeGreaterThan(0);
+    expect(status.darkMetadataCanary.blockedUnsafePacketIds.length).toBeGreaterThan(0);
+    expect(status.darkMetadataCanary.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.fixtureBacked &&
+      packet.sourceHashOnly &&
+      packet.safeSourceHash.length > 0 &&
+      packet.urlHash.length > 0 &&
+      packet.publicGraphStixEffects.publicSearch === "non_blocking" &&
+      packet.publicGraphStixEffects.stix === "blocked" &&
+      packet.publicGraphStixEffects.api === "restrictedMetadata.darkMetadataCanary" &&
+      packet.proxyIsolationBoundary.approvedProxyRequired &&
+      packet.proxyIsolationBoundary.directEgressAllowed === false &&
+      packet.proxyIsolationBoundary.credentialsAllowed === false &&
+      packet.proxyIsolationBoundary.formsAllowed === false &&
+      packet.proxyIsolationBoundary.captchaSolvingAllowed === false &&
+      packet.proxyIsolationBoundary.privateCommunityAccessAllowed === false &&
+      packet.proxyIsolationBoundary.fileDownloadsAllowed === false &&
+      packet.proxyIsolationBoundary.threatActorInteractionAllowed === false &&
+      packet.proxyIsolationBoundary.rawUnsafeUrlExposureAllowed === false &&
+      packet.emergencyStopPropagation.scheduler === "pause_restricted_partition" &&
+      packet.emergencyStopPropagation.evidence === "metadata_only_no_object_download" &&
+      packet.emergencyStopPropagation.graph === "hold_restricted_edges" &&
+      packet.emergencyStopPropagation.api === "safe_metadata_only" &&
+      packet.operatorProofPacket.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.operatorProofPacket.forbiddenActions.includes("download_stolen_files") &&
+      packet.noLeakProof.noRawOnionUrls &&
+      packet.noLeakProof.noRawUnsafeUrls &&
+      packet.noLeakProof.noRawPayloads &&
+      packet.noLeakProof.noStolenFileDownloads &&
+      packet.noLeakProof.noCredentialValues &&
+      packet.noLeakProof.noCaptchaSolving &&
+      packet.noLeakProof.noPrivateAccess &&
+      packet.noLeakProof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.darkMetadataCanary.packets.find((packet) => packet.scenario === "emergency_stop")).toMatchObject({
+      policyState: "emergency_stop",
+      reviewState: "emergency_stop",
+      emergencyStopPropagation: {
+        releaseGate: "rollback"
+      }
+    });
+    expect(status.darkMetadataCanary.packets.find((packet) => packet.scenario === "credential_target_blocked")).toMatchObject({
+      policyState: "blocked",
+      reviewState: "blocked_unsafe_target",
+      publicGraphStixEffects: {
+        graph: "suppress",
+        publicAnswer: "suppressed"
+      }
+    });
+    expect(status.legalEthicsAuditExport).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      thesisReady: true,
+      enterpriseReady: true,
+      summary: {
+        publicSearchBehavior: "non_blocking"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.legalEthicsAuditExport.observedScenarios).toEqual(expect.arrayContaining(LEGAL_ETHICS_AUDIT_SCENARIOS));
+    expect(status.legalEthicsAuditExport.summary.packetCount).toBe(status.legalEthicsAuditExport.packets.length);
+    expect(status.legalEthicsAuditExport.summary.blockedOperationCount).toBeGreaterThan(0);
+    expect(status.legalEthicsAuditExport.summary.holdCount).toBeGreaterThan(0);
+    expect(status.legalEthicsAuditExport.summary.rollbackCount).toBeGreaterThan(0);
+    expect(status.legalEthicsAuditExport.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.thesisReady &&
+      packet.enterpriseReady &&
+      packet.collected.evidenceType === "restricted_metadata_hashes_and_claim_fields_only" &&
+      packet.collected.fields.includes("actor") &&
+      packet.collected.sourceHashIds.length > 0 &&
+      packet.collected.urlHashIds.length > 0 &&
+      packet.blocked.operations.includes("download_stolen_files") &&
+      packet.blocked.operations.includes("interact_with_threat_actor") &&
+      packet.approval.policyVersion === "restricted_metadata_policy_v1" &&
+      packet.whatWasNotAccessed.includes("leaked rows") &&
+      packet.whatWasNotAccessed.includes("threat actor communications") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.api === "metadata_only_audit" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.legalEthicsAuditExport" &&
+      packet.noLeakValidation.noRawLeakMaterial &&
+      packet.noLeakValidation.noUnsafeUrls &&
+      packet.noLeakValidation.noCredentials &&
+      packet.noLeakValidation.noScreenshots &&
+      packet.noLeakValidation.noPayloads &&
+      packet.noLeakValidation.noStolenFileNames &&
+      packet.noLeakValidation.noPrivateChannelMaterial &&
+      packet.noLeakValidation.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.legalEthicsAuditExport.packets.find((packet) => packet.scenario === "emergency_stop_review")).toMatchObject({
+      approval: {
+        approvalState: "emergency_stop",
+        approverRole: "release_owner"
+      },
+      releaseInterpretation: "rollback"
+    });
+    expect(status.legalEthicsAuditExport.packets.find((packet) => packet.scenario === "operator_thesis_export")).toMatchObject({
+      thesisReady: true,
+      enterpriseReady: true,
+      releaseInterpretation: "review_only"
+    });
+    expect(status.reviewHealth).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      publicSearchBehavior: "non_blocking_public_summary",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.reviewHealth.observedScenarios).toEqual(expect.arrayContaining(REVIEW_HEALTH_SCENARIOS));
+    expect(status.reviewHealth.queueTotals.pendingCount).toBeGreaterThan(0);
+    expect(status.reviewHealth.queueTotals.oldestPendingAgeHours).toBeGreaterThan(0);
+    expect(status.reviewHealth.queueTotals.breachedCount).toBeGreaterThan(0);
+    expect(status.reviewHealth.queueTotals.releaseBlockerCount).toBeGreaterThan(0);
+    expect(status.reviewHealth.graphStixExportBlockCount).toBe(status.reviewHealth.packets.length);
+    expect(status.reviewHealth.holdReasonDistribution.false_claim_hold).toBeGreaterThan(0);
+    expect(status.reviewHealth.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.publicSearchBehavior === "non_blocking_public_summary" &&
+      packet.publicAnswerCaveat === "restricted_context_pending_review" &&
+      packet.graphStixExportBlock === "blocked_until_review" &&
+      packet.handoffs.agent02SchedulingIsolation === "hold_restricted_partition_only" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.reviewHealth" &&
+      packet.proof.publicSearchNotBlocked &&
+      packet.proof.graphStixBlockedUntilReview &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.reviewHealth.packets.find((packet) => packet.scenario === "emergency_stop_review")).toMatchObject({
+      sla: {
+        safeEscalationStatus: "incident_runbook"
+      },
+      releaseBlocker: true
+    });
+    expect(status.policyAuditExport).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      exportMode: "dry_run_compliance_export",
+      jsonPacketSchema: "ti.restricted_policy_audit_export.v1",
+      releaseGateInterpretation: "hold",
+      noLeakValidation: {
+        passed: true,
+        noRawLeakedData: true,
+        noRawOnionUrls: true,
+        noCredentials: true,
+        noScreenshots: true,
+        noPayloads: true,
+        noStolenFileNamesOrContent: true,
+        noPrivateChannelMaterial: true,
+        noJoinInteractOrBypassAutomation: true
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.policyAuditExport.observedScenarios).toEqual(expect.arrayContaining(REVIEW_HEALTH_SCENARIOS));
+    expect(status.policyAuditExport.compactSummary.exportPacketCount).toBe(status.policyAuditExport.packets.length);
+    expect(status.policyAuditExport.compactSummary.releaseHoldCount).toBeGreaterThan(0);
+    expect(status.policyAuditExport.compactSummary.escalationCount).toBeGreaterThan(0);
+    expect(status.policyAuditExport.compactSummary.publicSearchBehavior).toBe("non_blocking_public_summary");
+    expect(status.policyAuditExport.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.policyDecisionHistory.includes("metadata_only_required") &&
+      packet.actorClaimId.startsWith("restricted-actor-claim_") &&
+      packet.victimClaimId.startsWith("restricted-victim-claim_") &&
+      packet.sourceHashId.startsWith("restricted-source-hash_") &&
+      packet.redactionState === "redacted_hashes_only" &&
+      packet.graphStixApiHolds.graph === "hold_until_review" &&
+      packet.graphStixApiHolds.stix === "hold_until_review" &&
+      packet.graphStixApiHolds.api === "safe_metadata_only" &&
+      packet.publicSearchBehavior === "non_blocking_public_summary" &&
+      packet.jsonPacket.schemaVersion === "ti.restricted_policy_audit_export.v1" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.policyAuditExport" &&
+      packet.noLeakValidation.passed &&
+      packet.noLeakValidation.noRawLeakedData &&
+      packet.noLeakValidation.noRawOnionUrls &&
+      packet.noLeakValidation.noCredentials &&
+      packet.noLeakValidation.noScreenshots &&
+      packet.noLeakValidation.noPayloads &&
+      packet.noLeakValidation.noStolenFileNamesOrContent &&
+      packet.noLeakValidation.noPrivateChannelMaterial &&
+      packet.noLeakValidation.noJoinInteractOrBypassAutomation &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.policyAuditExport.packets.find((packet) => packet.scenario === "legal_hold_review")).toMatchObject({
+      retentionClass: "legal_hold",
+      releaseBlockers: ["legal_hold_active"]
+    });
+    expect(status.policyAuditExport.packets.find((packet) => packet.scenario === "retention_expiry_review")).toMatchObject({
+      retentionClass: "short",
+      releaseBlockers: ["retention_expiry_pending"]
+    });
+    expect(status.evidenceHoldReleaseDrill).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      drillMode: "dry_run_release_rollback",
+      noLeakValidation: {
+        passed: true,
+        sourceHashOnly: true,
+        noRawLeakedData: true,
+        noRawOnionUrls: true,
+        noCredentials: true,
+        noScreenshots: true,
+        noPayloads: true,
+        noStolenFileNamesOrContent: true,
+        noPrivateChannelMaterial: true,
+        noJoinInteractOrBypassAutomation: true,
+        noMutationOrDelivery: true
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.evidenceHoldReleaseDrill.observedScenarios).toEqual(expect.arrayContaining(EVIDENCE_HOLD_RELEASE_DRILL_SCENARIOS));
+    expect(status.evidenceHoldReleaseDrill.releasePaths).toEqual(expect.arrayContaining([
+      "remain_held",
+      "public_caveat_only",
+      "graph_pivot_only",
+      "evidence_replay_required",
+      "analyst_approval_required",
+      "stix_export_blocked",
+      "rollback_only"
+    ]));
+    expect(status.evidenceHoldReleaseDrill.summary.packetCount).toBe(status.evidenceHoldReleaseDrill.packets.length);
+    expect(status.evidenceHoldReleaseDrill.summary.publicCaveatOnlyCount).toBeGreaterThan(0);
+    expect(status.evidenceHoldReleaseDrill.summary.graphPivotOnlyCount).toBeGreaterThan(0);
+    expect(status.evidenceHoldReleaseDrill.summary.evidenceReplayRequiredCount).toBeGreaterThan(0);
+    expect(status.evidenceHoldReleaseDrill.summary.rollbackOnlyCount).toBeGreaterThan(0);
+    expect(status.evidenceHoldReleaseDrill.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.actorClaimId.startsWith("restricted-actor-claim_") &&
+      packet.victimClaimId.startsWith("restricted-victim-claim_") &&
+      packet.sourceHashId.startsWith("restricted-source-hash_") &&
+      packet.auditFields.policyAuditExportId.startsWith("restricted-policy-audit-export_") &&
+      packet.auditFields.redactionState === "redacted_hashes_only" &&
+      packet.constraints.retentionLegalHoldRespected &&
+      packet.constraints.sourceHashOnlyReferences &&
+      packet.constraints.publicSearchNonBlocking &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.api === "safe_metadata_only" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.evidenceHoldReleaseDrill" &&
+      packet.noLeakValidation.passed &&
+      packet.noLeakValidation.noMutationOrDelivery &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.evidenceHoldReleaseDrill.packets.find((packet) => packet.scenario === "legal_hold_review")).toMatchObject({
+      releasePath: "remain_held",
+      auditFields: {
+        retentionClass: "legal_hold",
+        legalHold: true
+      },
+      constraints: {
+        stixExportBlocked: true
+      }
+    });
+    expect(status.evidenceHoldReleaseDrill.packets.find((packet) => packet.scenario === "false_claim_review")).toMatchObject({
+      releasePath: "rollback_only",
+      releaseInterpretation: "rollback",
+      graphStixApiEffect: {
+        publicAnswer: "no_public_fact",
+        graph: "hold",
+        stix: "blocked"
+      }
+    });
+    expect(status.evidenceHoldReleaseDrill.packets.find((packet) => packet.scenario === "duplicate_stale_repost_review")).toMatchObject({
+      releasePath: "evidence_replay_required",
+      constraints: {
+        evidenceReplayRequired: true
+      }
+    });
+    expect(status.evidenceHoldReleaseDrill.packets.find((packet) => packet.scenario === "notification_draft_review")).toMatchObject({
+      releasePath: "graph_pivot_only",
+      graphStixApiEffect: {
+        graph: "pivot_only",
+        stix: "blocked"
+      }
+    });
     expect(status.agent09SearchFields).toContain("analystOperations");
     expect(status.agent09SearchFields).toContain("operationalPlaybooks");
+    expect(status.agent09SearchFields).toContain("qualityEvaluation");
+    expect(status.agent09SearchFields).toContain("capacityIsolation");
+    expect(status.agent09SearchFields).toContain("capacitySlo");
+    expect(status.agent09SearchFields).toContain("operatorGovernance");
+    expect(status.agent09SearchFields).toContain("darkMetadataCanary");
+    expect(status.agent09SearchFields).toContain("legalEthicsAuditExport");
+    expect(status.agent09SearchFields).toContain("reviewHealth");
+    expect(status.agent09SearchFields).toContain("policyAuditExport");
+    expect(status.agent09SearchFields).toContain("evidenceHoldReleaseDrill");
     expect(status.agent10SoakFields).toContain("analystOperations");
     expect(status.agent10SoakFields).toContain("operationalPlaybooks");
+    expect(status.agent10SoakFields).toContain("qualityEvaluation");
+    expect(status.agent10SoakFields).toContain("capacityIsolation");
+    expect(status.agent10SoakFields).toContain("capacitySlo");
+    expect(status.agent10SoakFields).toContain("operatorGovernance");
+    expect(status.agent10SoakFields).toContain("darkMetadataCanary");
+    expect(status.agent10SoakFields).toContain("legalEthicsAuditExport");
+    expect(status.agent10SoakFields).toContain("reviewHealth");
+    expect(status.agent10SoakFields).toContain("policyAuditExport");
+    expect(status.agent10SoakFields).toContain("evidenceHoldReleaseDrill");
     expect(status.isolationHarness).toMatchObject({
       metadataOnly: true,
       safeForApi: true,
@@ -3665,6 +4334,732 @@ describe("darknet metadata adapter", () => {
     )).toBe(true);
     const serialized = JSON.stringify(playbooks).toLowerCase();
     for (const forbidden of ["http://", ".onion", "customer-dump", "password", "raw leak", "captcha bypass"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted quality evaluation without unsafe serialization", () => {
+    const quality = restrictedMetadataQualityEvaluationContract();
+    expect(quality).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(quality.fixtureScenarios).toEqual(QUALITY_EVALUATION_SCENARIOS);
+    expect(quality.observedScenarios).toEqual(expect.arrayContaining(QUALITY_EVALUATION_SCENARIOS));
+    expect(quality.publicAnswerHoldCount).toBe(quality.packets.length);
+    expect(quality.graphStixHoldCount).toBe(quality.packets.length);
+    expect(quality.falsePositiveSuppressionCount).toBe(quality.packets.length);
+    expect(quality.duplicateSuppressionCount).toBeGreaterThan(0);
+    expect(quality.staleReplaySuppressionCount).toBeGreaterThan(0);
+    expect(quality.agent09ApiFields).toContain("restrictedMetadata.qualityEvaluation");
+    expect(quality.packets.find((packet) => packet.scenario === "duplicate_announcement")).toMatchObject({
+      duplicateStatus: "duplicate",
+      reviewState: "hold_duplicate",
+      proof: {
+        duplicateSuppressed: true,
+        publicFactPromotionBlocked: true
+      }
+    });
+    expect(quality.packets.find((packet) => packet.scenario === "stale_repost")).toMatchObject({
+      staleStatus: "stale",
+      retentionState: "expiring",
+      proof: {
+        staleReplaySuppressed: true
+      }
+    });
+    expect(quality.packets.find((packet) => packet.scenario === "actor_impersonation")).toMatchObject({
+      actorReliability: "impersonation_suspected",
+      handoffs: {
+        agent07AnswerCaveat: "actor_impersonation",
+        agent08GraphHold: "hold_quality_review"
+      }
+    });
+    expect(quality.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.publicAnswerGate === "hold_not_public_fact" &&
+      packet.graphStixPromotionEligibility === "blocked_until_review" &&
+      packet.proof.falsePositiveSuppressed &&
+      packet.proof.publicFactPromotionBlocked &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(quality).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted capacity isolation budget without unsafe serialization", () => {
+    const capacity = restrictedMetadataCapacityIsolationContract();
+    expect(capacity).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      schedulerHandoffField: "restrictedMetadata.capacityIsolation",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(capacity.fixtureScenarios).toEqual(CAPACITY_ISOLATION_SCENARIOS);
+    expect(capacity.observedScenarios).toEqual(expect.arrayContaining(CAPACITY_ISOLATION_SCENARIOS));
+    expect(capacity.networkBudgets.map((budget) => budget.network).sort()).toEqual(["freenet", "i2p", "tor"]);
+    expect(capacity.networkBudgets.every((budget) =>
+      budget.directEgressAllowed === false &&
+      budget.proxyPoolHealthy &&
+      budget.metadataOnlyWorkerCap >= 1 &&
+      budget.timeoutBudgetMs === 30_000
+    )).toBe(true);
+    expect(capacity.publicSearchHoldCount).toBe(capacity.packets.length);
+    expect(capacity.emergencyDrainCount).toBe(1);
+    expect(capacity.agent09ApiFields).toContain("restrictedMetadata.capacityIsolation");
+    expect(capacity.agent10ReleaseFields).toContain("publicSearchHeadroom");
+    expect(capacity.packets.find((packet) => packet.scenario === "timeout_spike")).toMatchObject({
+      queueDecision: "pause_restricted",
+      proof: {
+        timeoutSpikeFailsClosed: true,
+        publicSearchCannotBeStarved: true
+      }
+    });
+    expect(capacity.packets.find((packet) => packet.scenario === "public_search_pressure")).toMatchObject({
+      queueDecision: "pause_restricted",
+      releaseGate: "agent10_warn_capacity"
+    });
+    expect(capacity.packets.find((packet) => packet.scenario === "approval_backlog")).toMatchObject({
+      approvalReviewLoad: "backlog",
+      queueDecision: "hold_restricted"
+    });
+    expect(capacity.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.networkBudgets.every((budget) => budget.directEgressAllowed === false) &&
+      packet.publicSearchProtection === "preserve_public_headroom" &&
+      packet.schedulerBackpressure === "agent02_hold_restricted_partition" &&
+      packet.evidenceRetentionImpact.startsWith("agent06_") &&
+      packet.publicAnswerCaveat === "agent07_restricted_context_delayed" &&
+      packet.graphHold === "agent08_hold_restricted_edges" &&
+      packet.apiField === "restrictedMetadata.capacityIsolation" &&
+      packet.proof.publicSearchCannotBeStarved &&
+      packet.proof.restrictedWorkersCapped &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(capacity).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted capacity SLOs without unsafe serialization", () => {
+    const slo = restrictedMetadataCapacitySloContract();
+    expect(slo).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      summary: {
+        packetCount: CAPACITY_SLO_SCENARIOS.length,
+        publicSearchBehavior: "non_blocking_public_summary"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(slo.fixtureScenarios).toEqual(CAPACITY_SLO_SCENARIOS);
+    expect(slo.observedScenarios).toEqual(expect.arrayContaining(CAPACITY_SLO_SCENARIOS));
+    expect(slo.agent09ApiFields).toEqual(expect.arrayContaining([
+      "restrictedMetadata.capacitySlo",
+      "restrictedMetadata.capacitySlo.packets",
+      "restrictedMetadata.capacitySlo.summary"
+    ]));
+    expect(slo.agent10ReleaseGateFields).toEqual(expect.arrayContaining(["releaseGate", "tenantIsolation", "graphStixExportHold", "publicSearchSemantics"]));
+    expect(slo.summary.warningCount).toBeGreaterThan(0);
+    expect(slo.summary.holdCount).toBeGreaterThan(0);
+    expect(slo.summary.rollbackOnlyCount).toBeGreaterThan(0);
+    expect(slo.summary.emergencyStopCount).toBe(1);
+    expect(slo.packets.find((packet) => packet.scenario === "worker_capacity")).toMatchObject({
+      slo: { releaseGate: "promote", state: "pass" },
+      capacity: {
+        torWorkerCap: 2,
+        i2pWorkerCap: 1,
+        freenetWorkerCap: 1,
+        directEgressAllowed: false
+      }
+    });
+    expect(slo.packets.find((packet) => packet.scenario === "unsafe_source_discovery_hold")).toMatchObject({
+      failureMode: "unsafe_source_discovery",
+      slo: { releaseGate: "rollback_only", state: "hold" }
+    });
+    expect(slo.packets.find((packet) => packet.scenario === "over_capacity_hold")).toMatchObject({
+      failureMode: "over_capacity",
+      capacity: {
+        restrictedQueueMaxDepth: 0,
+        directEgressAllowed: false
+      }
+    });
+    expect(slo.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.tenantIsolation.tenantScopedQueues &&
+      packet.tenantIsolation.workspaceScopedProxyBudget &&
+      packet.tenantIsolation.crossTenantDataJoinAllowed === false &&
+      packet.capacity.directEgressAllowed === false &&
+      packet.publicSearchSemantics === "non_blocking_public_summary" &&
+      packet.graphStixExportHold === "hold_until_slo_and_review_pass" &&
+      packet.apiCaveat === "restricted_capacity_slo_pending" &&
+      packet.handoffs.agent01Governance === "restricted_source_slo_governance" &&
+      packet.handoffs.agent02Scheduler === "restricted_partition_budget" &&
+      packet.handoffs.agent06EvidenceRetention === "restricted_retention_legal_hold_slo" &&
+      packet.handoffs.agent07Caveat === "restricted_capacity_caveat" &&
+      packet.handoffs.agent08GraphStixHold === "restricted_capacity_export_hold" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.capacitySlo" &&
+      packet.handoffs.agent10ReleaseGate === "restricted_capacity_release_gate" &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.proof.publicSearchNotBlocked &&
+      packet.proof.graphStixHeld &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(slo).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak", "payload bytes", "stolen file", "private channel"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted operator governance packets without unsafe serialization", () => {
+    const governance = restrictedMetadataOperatorGovernanceContract();
+    expect(governance).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      operatorVisible: true,
+      summary: {
+        packetCount: OPERATOR_GOVERNANCE_SCENARIOS.length,
+        publicSearchBehavior: "non_blocking"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(governance.fixtureScenarios).toEqual(OPERATOR_GOVERNANCE_SCENARIOS);
+    expect(governance.observedScenarios).toEqual(expect.arrayContaining(OPERATOR_GOVERNANCE_SCENARIOS));
+    expect(governance.agent09ApiFields).toEqual(expect.arrayContaining([
+      "restrictedMetadata.operatorGovernance",
+      "restrictedMetadata.operatorGovernance.packets",
+      "restrictedMetadata.operatorGovernance.summary"
+    ]));
+    expect(governance.agent10ReleaseGateFields).toEqual(expect.arrayContaining(["policyReason", "allowedActions", "forbiddenActions", "graphStixApiEffect", "rollbackPath", "proofCommands"]));
+    expect(governance.summary.heldCount).toBeGreaterThan(0);
+    expect(governance.summary.suppressedCount).toBeGreaterThan(0);
+    expect(governance.summary.emergencyStopCount).toBe(1);
+    expect(governance.packets.find((packet) => packet.scenario === "legal_hold_active")).toMatchObject({
+      policyReason: "legal_hold_preserves_metadata_and_blocks_release",
+      graphStixApiEffect: {
+        graph: "hold",
+        stix: "blocked",
+        api: "safe_metadata_only",
+        publicSearch: "non_blocking"
+      }
+    });
+    expect(governance.packets.find((packet) => packet.scenario === "duplicate_victim_claim_suppressed")).toMatchObject({
+      policyReason: "duplicate_victim_claim_suppressed",
+      graphStixApiEffect: {
+        graph: "suppress",
+        api: "suppressed"
+      }
+    });
+    expect(governance.packets.find((packet) => packet.scenario === "false_claim_disputed")).toMatchObject({
+      policyReason: "actor_victim_false_positive_dispute"
+    });
+    expect(governance.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.operatorVisible &&
+      packet.sourceHashOnly &&
+      packet.sourceHash.length > 0 &&
+      packet.tenantId === "tenant_restricted_governance" &&
+      Array.isArray(packet.allowedActions) &&
+      packet.allowedActions.includes("keep_public_search_non_blocking") &&
+      Array.isArray(packet.forbiddenActions) &&
+      packet.forbiddenActions.includes("download_stolen_files") &&
+      packet.forbiddenActions.includes("interact_with_threat_actor") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.rollbackPath.includes("rerun_restricted_metadata_status_check") &&
+      packet.auditId.startsWith("restricted-governance-audit_") &&
+      packet.proofCommands.length === 3 &&
+      packet.handoffs.agent09ApiCopy === "restrictedMetadata.operatorGovernance" &&
+      packet.proof.noRawOnionUrls &&
+      packet.proof.noStolenFileNames &&
+      packet.proof.noLeakedRows &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateChannelContent &&
+      packet.proof.noActorInteractionText &&
+      packet.proof.metadataOnlyEvidence &&
+      packet.proof.sourceHashOnly &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(governance).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak", "payload bytes", "stolen file", "private channel", "actor-interaction text", "leaked row"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes dark metadata canary simulation without unsafe serialization", () => {
+    const canary = restrictedMetadataDarkCanaryContract();
+    expect(canary).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      fixtureBacked: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(canary.fixtureScenarios).toEqual(DARK_CANARY_SCENARIOS);
+    expect(canary.observedScenarios).toEqual(expect.arrayContaining(DARK_CANARY_SCENARIOS));
+    expect(canary.networks).toEqual(expect.arrayContaining(["tor", "i2p", "freenet"]));
+    expect(canary.agent09ApiFields).toEqual(expect.arrayContaining([
+      "restrictedMetadata.darkMetadataCanary",
+      "restrictedMetadata.darkMetadataCanary.packets",
+      "restrictedMetadata.darkMetadataCanary.noLeakSerialization"
+    ]));
+    expect(canary.agent10ReleaseGateFields).toEqual(expect.arrayContaining(["emergencyStopPropagation", "operatorProofPacket", "blockedUnsafePacketIds", "noLeakProof"]));
+    expect(canary.emergencyStopPacketIds).toHaveLength(1);
+    expect(canary.blockedUnsafePacketIds.length).toBeGreaterThanOrEqual(3);
+    expect(canary.packets.find((packet) => packet.scenario === "ransomware_leak_site_claim")).toMatchObject({
+      network: "tor",
+      actor: "CanaryLocker",
+      publicGraphStixEffects: {
+        publicAnswer: "caveat_only",
+        graph: "pivot_only",
+        stix: "blocked"
+      }
+    });
+    expect(canary.packets.find((packet) => packet.scenario === "marketplace_forum_descriptor")).toMatchObject({
+      network: "i2p",
+      screenshotHash: undefined,
+      claimedDataType: "marketplace descriptor metadata"
+    });
+    expect(canary.packets.find((packet) => packet.scenario === "freenet_metadata_canary")).toMatchObject({
+      network: "freenet",
+      sector: "Healthcare",
+      country: "SE"
+    });
+    expect(canary.packets.find((packet) => packet.scenario === "emergency_stop")).toMatchObject({
+      policyState: "emergency_stop",
+      reviewState: "emergency_stop",
+      emergencyStopPropagation: {
+        restrictedStatus: "emergency_stop",
+        scheduler: "pause_restricted_partition",
+        releaseGate: "rollback"
+      }
+    });
+    expect(canary.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.fixtureBacked &&
+      packet.sourceHashOnly &&
+      packet.safeSourceHash.length > 0 &&
+      packet.urlHash.length > 0 &&
+      packet.proxyIsolationBoundary.approvedProxyRequired &&
+      packet.proxyIsolationBoundary.directEgressAllowed === false &&
+      packet.proxyIsolationBoundary.credentialsAllowed === false &&
+      packet.proxyIsolationBoundary.formsAllowed === false &&
+      packet.proxyIsolationBoundary.captchaSolvingAllowed === false &&
+      packet.proxyIsolationBoundary.privateCommunityAccessAllowed === false &&
+      packet.proxyIsolationBoundary.fileDownloadsAllowed === false &&
+      packet.proxyIsolationBoundary.threatActorInteractionAllowed === false &&
+      packet.proxyIsolationBoundary.rawUnsafeUrlExposureAllowed === false &&
+      packet.publicGraphStixEffects.publicSearch === "non_blocking" &&
+      packet.publicGraphStixEffects.stix === "blocked" &&
+      packet.operatorProofPacket.allowedFields.includes("actor") &&
+      packet.operatorProofPacket.forbiddenActions.includes("download_stolen_files") &&
+      packet.noLeakProof.noRawOnionUrls &&
+      packet.noLeakProof.noRawUnsafeUrls &&
+      packet.noLeakProof.noRawPayloads &&
+      packet.noLeakProof.noStolenFileDownloads &&
+      packet.noLeakProof.noCredentialValues &&
+      packet.noLeakProof.noCaptchaSolving &&
+      packet.noLeakProof.noPrivateAccess &&
+      packet.noLeakProof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(canary).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "freenet:", "user:pass", "customer-dump", "password=", "payload bytes", "stolen file contents", "private channel", "actor-interaction text"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes legal ethics audit export without unsafe serialization", () => {
+    const audit = restrictedMetadataLegalEthicsAuditExportContract();
+    expect(audit).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      thesisReady: true,
+      enterpriseReady: true,
+      summary: {
+        packetCount: LEGAL_ETHICS_AUDIT_SCENARIOS.length,
+        publicSearchBehavior: "non_blocking"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(audit.fixtureScenarios).toEqual(LEGAL_ETHICS_AUDIT_SCENARIOS);
+    expect(audit.observedScenarios).toEqual(expect.arrayContaining(LEGAL_ETHICS_AUDIT_SCENARIOS));
+    expect(audit.summary.blockedOperationCount).toBeGreaterThan(0);
+    expect(audit.summary.approvalRequiredCount).toBeGreaterThan(0);
+    expect(audit.summary.holdCount).toBeGreaterThan(0);
+    expect(audit.summary.rollbackCount).toBeGreaterThan(0);
+    expect(audit.agent09ApiFields).toEqual(expect.arrayContaining([
+      "restrictedMetadata.legalEthicsAuditExport",
+      "restrictedMetadata.legalEthicsAuditExport.packets",
+      "restrictedMetadata.legalEthicsAuditExport.summary"
+    ]));
+    expect(audit.packets.find((packet) => packet.scenario === "unsafe_target_blocked")).toMatchObject({
+      releaseInterpretation: "rollback",
+      graphStixApiEffect: {
+        graph: "suppress",
+        stix: "blocked",
+        api: "metadata_only_audit"
+      }
+    });
+    expect(audit.packets.find((packet) => packet.scenario === "legal_hold_review")).toMatchObject({
+      approval: {
+        approvalState: "legal_hold",
+        approverRole: "legal"
+      },
+      releaseInterpretation: "hold"
+    });
+    expect(audit.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.thesisReady &&
+      packet.enterpriseReady &&
+      packet.collected.fields.includes("actor") &&
+      packet.collected.evidenceType === "restricted_metadata_hashes_and_claim_fields_only" &&
+      packet.blocked.operations.includes("download_stolen_files") &&
+      packet.blocked.operations.includes("solve_captcha") &&
+      packet.approval.auditTrailIds.length > 0 &&
+      packet.whatWasNotAccessed.includes("leaked rows") &&
+      packet.whatWasNotAccessed.includes("credential values") &&
+      packet.whatWasNotAccessed.includes("threat actor communications") &&
+      packet.proofCommands.includes("bun run check:contract-index") &&
+      packet.handoffs.agent06EvidenceLedger === "legal_ethics_metadata_only_evidence" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.legalEthicsAuditExport" &&
+      packet.noLeakValidation.noRawLeakMaterial &&
+      packet.noLeakValidation.noUnsafeUrls &&
+      packet.noLeakValidation.noCredentials &&
+      packet.noLeakValidation.noScreenshots &&
+      packet.noLeakValidation.noPayloads &&
+      packet.noLeakValidation.noStolenFileNames &&
+      packet.noLeakValidation.noPrivateChannelMaterial &&
+      packet.noLeakValidation.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(audit).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password=", "payload bytes", "screenshot bytes", "private channel transcript", "actor-interaction text"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted review health without unsafe serialization", () => {
+    const health = restrictedMetadataReviewHealthContract();
+    expect(health).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      publicSearchBehavior: "non_blocking_public_summary",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(health.fixtureScenarios).toEqual(REVIEW_HEALTH_SCENARIOS);
+    expect(health.observedScenarios).toEqual(expect.arrayContaining(REVIEW_HEALTH_SCENARIOS));
+    expect(health.queueTotals.pendingCount).toBeGreaterThan(0);
+    expect(health.queueTotals.breachedCount).toBeGreaterThan(0);
+    expect(health.queueTotals.releaseBlockerCount).toBeGreaterThan(0);
+    expect(health.analystWorkloadBand).toBe("critical");
+    expect(health.graphStixExportBlockCount).toBe(health.packets.length);
+    expect(health.agent09ApiFields).toContain("restrictedMetadata.reviewHealth");
+    expect(health.agent10RunbookFields).toContain("safeEscalationStatus");
+    expect(health.packets.find((packet) => packet.scenario === "false_claim_review")).toMatchObject({
+      queue: {
+        holdReason: "false_claim_hold"
+      },
+      publicSearchBehavior: "non_blocking_public_summary",
+      releaseBlocker: true
+    });
+    expect(health.packets.find((packet) => packet.scenario === "notification_draft_review")).toMatchObject({
+      queue: {
+        holdReason: "notification_draft"
+      },
+      graphStixExportBlock: "blocked_until_review"
+    });
+    expect(health.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.queue.pendingCount > 0 &&
+      packet.sla.oldestPendingItem.startsWith("restricted-review-item_") &&
+      packet.publicSearchBehavior === "non_blocking_public_summary" &&
+      packet.publicAnswerCaveat === "restricted_context_pending_review" &&
+      packet.graphStixExportBlock === "blocked_until_review" &&
+      packet.handoffs.agent01Governance === "restricted_review_queue_health" &&
+      packet.handoffs.agent02SchedulingIsolation === "hold_restricted_partition_only" &&
+      packet.handoffs.agent06ClaimEvidenceLedger === "metadata_review_state" &&
+      packet.handoffs.agent07AnswerCaveat === "restricted_context_caveat" &&
+      packet.handoffs.agent08GraphHold === "hold_graph_stix_export" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.reviewHealth" &&
+      packet.handoffs.agent10IncidentRunbook === "hold_or_escalate" &&
+      packet.proof.publicSearchNotBlocked &&
+      packet.proof.graphStixBlockedUntilReview &&
+      packet.proof.noRawLeakMaterial &&
+      packet.proof.noUnsafeUrls &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(health).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted policy audit export without unsafe serialization", () => {
+    const audit = restrictedMetadataPolicyAuditExportContract();
+    expect(audit).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      exportMode: "dry_run_compliance_export",
+      jsonPacketSchema: "ti.restricted_policy_audit_export.v1",
+      releaseGateInterpretation: "hold",
+      noLeakValidation: {
+        passed: true,
+        noRawLeakedData: true,
+        noRawOnionUrls: true,
+        noCredentials: true,
+        noScreenshots: true,
+        noPayloads: true,
+        noStolenFileNamesOrContent: true,
+        noPrivateChannelMaterial: true,
+        noJoinInteractOrBypassAutomation: true
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(audit.fixtureScenarios).toEqual(REVIEW_HEALTH_SCENARIOS);
+    expect(audit.observedScenarios).toEqual(expect.arrayContaining(REVIEW_HEALTH_SCENARIOS));
+    expect(audit.compactSummary.exportPacketCount).toBe(REVIEW_HEALTH_SCENARIOS.length);
+    expect(audit.compactSummary.releaseHoldCount).toBeGreaterThan(0);
+    expect(audit.compactSummary.escalationCount).toBeGreaterThan(0);
+    expect(audit.agent09ApiFields).toContain("restrictedMetadata.policyAuditExport");
+    expect(audit.noLeakValidation.checkedPacketCount).toBe(audit.packets.length);
+    expect(audit.noLeakValidation.forbiddenFieldsAbsent).toEqual(expect.arrayContaining([
+      "rawLeakData",
+      "rawOnionUrl",
+      "credentials",
+      "screenshotBytes",
+      "payload",
+      "stolenFileName",
+      "privateChannelMaterial",
+      "joinInteractBypassAutomation"
+    ]));
+    expect(audit.packets.find((packet) => packet.scenario === "false_claim_review")).toMatchObject({
+      reviewState: "escalated",
+      releaseGateInterpretation: "escalate",
+      releaseBlockers: ["false_claim_review_required"]
+    });
+    expect(audit.packets.find((packet) => packet.scenario === "emergency_stop_review")).toMatchObject({
+      reviewState: "escalated",
+      releaseGateInterpretation: "escalate",
+      releaseBlockers: ["emergency_stop_active"]
+    });
+    expect(audit.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.policyDecisionHistory.includes("public_search_non_blocking") &&
+      packet.actorClaimId.startsWith("restricted-actor-claim_") &&
+      packet.victimClaimId.startsWith("restricted-victim-claim_") &&
+      packet.sourceHashId.startsWith("restricted-source-hash_") &&
+      packet.reviewState !== undefined &&
+      packet.releaseBlockers.length > 0 &&
+      packet.redactionState === "redacted_hashes_only" &&
+      packet.graphStixApiHolds.graph === "hold_until_review" &&
+      packet.graphStixApiHolds.stix === "hold_until_review" &&
+      packet.graphStixApiHolds.api === "safe_metadata_only" &&
+      packet.publicSearchBehavior === "non_blocking_public_summary" &&
+      packet.jsonPacket.schemaVersion === "ti.restricted_policy_audit_export.v1" &&
+      packet.jsonPacket.sourceHashId === packet.sourceHashId &&
+      packet.compactSummary.includes("metadata-only") &&
+      packet.handoffs.agent01Governance === "policy_audit_packet" &&
+      packet.handoffs.agent06EvidenceChain === "metadata_only_chain_of_custody" &&
+      packet.handoffs.agent07Caveat === "restricted_policy_audit_caveat" &&
+      packet.handoffs.agent08GraphStixHold === "hold_export_until_review" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.policyAuditExport" &&
+      packet.handoffs.agent10AuditRunbook === "restricted_policy_audit" &&
+      packet.noLeakValidation.passed &&
+      packet.noLeakValidation.noRawLeakedData &&
+      packet.noLeakValidation.noRawOnionUrls &&
+      packet.noLeakValidation.noCredentials &&
+      packet.noLeakValidation.noScreenshots &&
+      packet.noLeakValidation.noPayloads &&
+      packet.noLeakValidation.noStolenFileNamesOrContent &&
+      packet.noLeakValidation.noPrivateChannelMaterial &&
+      packet.noLeakValidation.noJoinInteractOrBypassAutomation &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    const serialized = JSON.stringify(audit).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak", "payload bytes", "stolen file"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  test("freezes restricted evidence-hold release drill without unsafe serialization", () => {
+    const drill = restrictedMetadataEvidenceHoldReleaseDrillContract();
+    expect(drill).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      drillMode: "dry_run_release_rollback",
+      noLeakValidation: {
+        passed: true,
+        sourceHashOnly: true,
+        noRawLeakedData: true,
+        noRawOnionUrls: true,
+        noCredentials: true,
+        noScreenshots: true,
+        noPayloads: true,
+        noStolenFileNamesOrContent: true,
+        noPrivateChannelMaterial: true,
+        noJoinInteractOrBypassAutomation: true,
+        noMutationOrDelivery: true
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(drill.fixtureScenarios).toEqual(EVIDENCE_HOLD_RELEASE_DRILL_SCENARIOS);
+    expect(drill.observedScenarios).toEqual(expect.arrayContaining(EVIDENCE_HOLD_RELEASE_DRILL_SCENARIOS));
+    expect(drill.releasePaths).toEqual(expect.arrayContaining([
+      "remain_held",
+      "public_caveat_only",
+      "graph_pivot_only",
+      "evidence_replay_required",
+      "analyst_approval_required",
+      "stix_export_blocked",
+      "rollback_only"
+    ]));
+    expect(drill.summary.packetCount).toBe(EVIDENCE_HOLD_RELEASE_DRILL_SCENARIOS.length);
+    expect(drill.summary.remainHeldCount).toBeGreaterThan(0);
+    expect(drill.summary.publicCaveatOnlyCount).toBeGreaterThan(0);
+    expect(drill.summary.graphPivotOnlyCount).toBeGreaterThan(0);
+    expect(drill.summary.evidenceReplayRequiredCount).toBeGreaterThan(0);
+    expect(drill.summary.analystApprovalRequiredCount).toBeGreaterThan(0);
+    expect(drill.summary.stixExportBlockedCount).toBeGreaterThan(0);
+    expect(drill.summary.rollbackOnlyCount).toBeGreaterThan(0);
+    expect(drill.agent09ApiFields).toContain("restrictedMetadata.evidenceHoldReleaseDrill");
+    expect(drill.agent10ReleaseGateFields).toContain("compensatingRollbackActions");
+    expect(drill.noLeakValidation.checkedPacketCount).toBe(drill.packets.length);
+    const packets = drill.packets.map((packet) => ({
+      ...packet,
+      compensatingRollbackActions: Array.from(packet.compensatingRollbackActions)
+    }));
+    expect(packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.sourceHashOnly &&
+      packet.actorClaimId.startsWith("restricted-actor-claim_") &&
+      packet.victimClaimId.startsWith("restricted-victim-claim_") &&
+      packet.sourceHashId.startsWith("restricted-source-hash_") &&
+      packet.releaseBlockers.length > 0 &&
+      packet.compensatingRollbackActions.includes("restore_review_hold") &&
+      packet.auditFields.policyAuditExportId.startsWith("restricted-policy-audit-export_") &&
+      packet.auditFields.graphRelationshipId.startsWith("restricted-graph-relationship_") &&
+      packet.auditFields.evidenceReplayId.startsWith("restricted-evidence-replay_") &&
+      packet.auditFields.redactionState === "redacted_hashes_only" &&
+      packet.constraints.retentionLegalHoldRespected &&
+      packet.constraints.sourceHashOnlyReferences &&
+      packet.constraints.publicSearchNonBlocking &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.api === "safe_metadata_only" &&
+      packet.handoffs.agent06EvidenceChain === "release_drill_chain_of_custody" &&
+      packet.handoffs.agent07Caveat === "restricted_release_caveat" &&
+      packet.handoffs.agent08GraphDriftHold === "restricted_graph_pivot_or_hold" &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.evidenceHoldReleaseDrill" &&
+      packet.handoffs.agent10IncidentReleaseGate === "restricted_release_or_rollback_drill" &&
+      packet.noLeakValidation.passed &&
+      packet.noLeakValidation.noMutationOrDelivery &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(packets.find((packet) => packet.scenario === "restricted_source_approval")).toMatchObject({
+      releasePath: "analyst_approval_required",
+      constraints: {
+        analystApprovalRequired: true,
+        stixExportBlocked: true
+      }
+    });
+    expect(packets.find((packet) => packet.scenario === "victim_claim_review")).toMatchObject({
+      releasePath: "public_caveat_only",
+      releaseInterpretation: "caveated_public_context",
+      graphStixApiEffect: {
+        publicAnswer: "caveat_only",
+        graph: "hold",
+        stix: "blocked"
+      }
+    });
+    expect(packets.find((packet) => packet.scenario === "emergency_stop_review")).toMatchObject({
+      reviewState: "escalated",
+      releasePath: "rollback_only",
+      compensatingRollbackActions: expect.arrayContaining(["keep_kill_switch_active", "drain_restricted_metadata_queue"])
+    });
+    const serialized = JSON.stringify(drill).toLowerCase();
+    for (const forbidden of ["http://", ".onion", "customer-dump", "password", "screenshot bytes", "raw leak", "payload bytes", "stolen file", "private channel"]) {
       expect(serialized).not.toContain(forbidden);
     }
   });

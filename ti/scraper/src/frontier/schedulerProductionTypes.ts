@@ -747,6 +747,106 @@ export interface SchedulerWorkerSoakMigrationDto {
   };
 }
 
+export type SchedulerLeaseSoakScenarioName =
+  | "apt29_actor_burst"
+  | "public_channel_fanout"
+  | "restricted_metadata_holds"
+  | "evidence_replay_backlog"
+  | "graph_export_wave"
+  | "source_outage_wave"
+  | "parser_failure_storm"
+  | "low_value_sweep_pressure";
+
+export interface SchedulerLeaseSoakWorkloadSlice {
+  scenario: SchedulerLeaseSoakScenarioName;
+  workload: SchedulerWorkerWorkload;
+  taskCount: number;
+  workerPartitionId: string;
+  leaseAttempts: number;
+  expectedCompletions: number;
+  retryBudget: number;
+  deadLetterBudget: number;
+  requestDeadlineSeconds: number;
+  queueAgeP95Seconds: number;
+  expectedPressure: LiveSearchBackpressureState;
+  fairnessGroup: string;
+}
+
+export interface SchedulerLeaseSoakWorkerPartition {
+  partitionId: string;
+  workload: SchedulerWorkerWorkload;
+  workerCount: number;
+  maxConcurrentLeases: number;
+  leaseTtlSeconds: number;
+  checkpointEverySeconds: number;
+  maxQueueAgeSeconds: number;
+  estimatedTasks: number;
+  expectedDrainedWithinMinutes: number;
+  concurrencyPolicy: "reserved_capacity" | "bounded_shared_capacity" | "held_for_review";
+  backpressurePolicy: SchedulerWorkerQueuePartition["backpressurePolicy"];
+  drainBehavior: SchedulerLiveRunDrainAction;
+}
+
+export interface SchedulerWorkerLeaseSoakHarnessDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/frontier/status" | "/v1/frontier/apply-plan" | "/v1/intel/search.scheduler" | "/v1/contracts" | "agent10_capacity_release_gate">;
+  dryRun: true;
+  willMutate: false;
+  replay: {
+    fixtureName: "agent02_10k_multi_worker_lease_replay";
+    totalTasks: 10000;
+    durationHours: 24;
+    workerCount: number;
+    simulatedTenants: number;
+    simulatedSources: number;
+    duplicateRunReuseRequired: true;
+    cursorReplayRequired: true;
+    restrictedMetadataPolicy: "metadata_only_approval_hold";
+  };
+  workloadSlices: SchedulerLeaseSoakWorkloadSlice[];
+  workerPartitions: SchedulerLeaseSoakWorkerPartition[];
+  leaseSemantics: {
+    exclusiveLeases: true;
+    heartbeatExpiryRecovery: "retry_with_checkpoint_cursor";
+    retryBackoff: "deterministic_exponential_with_jitter";
+    deadLetters: "operator_visible_isolated_lane";
+    requestDeadlines: "deadline_checked_before_lease_and_before_ack";
+    perSourceConcurrency: "never_bypassed_by_priority_aging";
+  };
+  fairnessProof: {
+    dimensions: Array<"tenant" | "query_class" | "source_family" | "workload" | "restricted_policy_state">;
+    worstShare: number;
+    ok: boolean;
+    priorityAgingEverySeconds: number;
+    lowValueSweepsDeferred: boolean;
+    publicPollingProtected: boolean;
+    workloadShares: Array<{
+      workload: SchedulerWorkerWorkload;
+      taskShare: number;
+      reservedWorkerSlots: number;
+      maxQueueAgeSeconds: number;
+    }>;
+  };
+  pressureFixtures: Array<{
+    scenario: SchedulerLeaseSoakScenarioName;
+    trigger: "actor_burst" | "fanout" | "approval_hold" | "replay_backlog" | "export_wave" | "source_outage" | "parser_failure" | "capacity_pressure";
+    expectedSchedulerAction: "reuse_active_run" | "reserve_interactive_capacity" | "hold_restricted_metadata" | "drain_replay" | "drain_graph_export" | "source_backoff" | "retry_then_dead_letter" | "defer_low_value_sweeps";
+    agent09VisibleStatus: LiveSearchBackpressureState;
+    agent10ReleaseImpact: "none" | "watch" | "hold";
+  }>;
+  routeContracts: {
+    frontierStatusField: "scheduler.workerLeaseSoakHarness";
+    frontierApplyPlanField: "applyPlan.workerLeaseSoakHarness";
+    searchSchedulerField: "scheduler.workerLeaseSoakHarness";
+    contractsField: "surfaces.frontier.contracts.worker_lease_soak_harness";
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+}
+
 export type SchedulerProductionAdapterImplementation =
   | "embedded_memory"
   | "postgres_advisory_queue"
@@ -876,6 +976,576 @@ export interface SchedulerCanaryControlPlaneDto {
   agent10ReleaseDecision: {
     decision: "canary-ready" | "canary-with-warnings" | "hold" | "rollback";
     fields: string[];
+    proofCommands: string[];
+  };
+}
+
+export type SchedulerDurableBackendKind =
+  | "embedded_memory"
+  | SchedulerQueueBackendCandidate;
+
+export interface SchedulerDurableBackendContract {
+  backend: SchedulerDurableBackendKind;
+  mode: "active" | "shadow" | "candidate";
+  dryRun: true;
+  willMutate: false;
+  primitives: Array<
+    | "enqueue"
+    | "lease"
+    | "heartbeat"
+    | "checkpoint"
+    | "acknowledge"
+    | "retry"
+    | "dead_letter"
+    | "cancel"
+    | "reuse_run"
+    | "drain"
+    | "rollback"
+  >;
+  leaseSemantics: string;
+  retryBackoffSemantics: string;
+  deadLetterSemantics: string;
+  cursorContinuity: "preserved";
+  duplicateRunReuse: "required";
+  drainSemantics: string;
+  rollbackSemantics: string;
+}
+
+export interface SchedulerDurableFairnessLane {
+  workload: SchedulerWorkerWorkload;
+  partitionId: string;
+  reservedWorkerSlots: number;
+  maxConcurrentLeases: number;
+  maxQueueAgeSeconds: number;
+  agingBoostEverySeconds: number;
+  fairnessKeys: string[];
+  backpressurePolicy: SchedulerWorkerQueuePartition["backpressurePolicy"];
+  drainBehavior: SchedulerLiveRunDrainAction;
+  retryBudget: {
+    maxAttempts: number;
+    retryBaseSeconds: number;
+    retryMaxSeconds: number;
+    deadLetterAfterAttempts: number;
+  };
+}
+
+export interface SchedulerDurableBackendReadinessDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/frontier/status" | "/v1/frontier/apply-plan" | "/v1/intel/search.scheduler" | "/v1/contracts" | "agent09_public_wrapper" | "agent10_release_train">;
+  dryRun: true;
+  willMutate: false;
+  backendContracts: SchedulerDurableBackendContract[];
+  fairnessLanes: SchedulerDurableFairnessLane[];
+  semanticInvariants: string[];
+  pollingContract: {
+    nextPollSeconds: 3;
+    cursorContinuity: SchedulerRuntimeExecutionDto["pollingDeltas"]["cursorContinuity"] | "preserved";
+    publicWrapperCursorSemantics: "stable_since_cursor_with_delta_replay";
+  };
+  runReuse: {
+    contract: "duplicate_public_polling_attaches_to_active_run";
+    activeRunReuseRatio: number;
+    duplicatePublicPollingRatio: number;
+  };
+  drainPlan: {
+    state: "not_needed" | "planned" | "in_progress" | "blocked";
+    preservesCursorReplayState: true;
+    actions: SchedulerLiveRunDrainAction[];
+    abandonClientPolicy: "cancel_or_reuse_without_losing_run_cursor";
+  };
+  emergencyBrake: {
+    state: "clear" | "armed" | "engaged";
+    preservesCursorReplayState: true;
+    releaseCriteria: string[];
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.durableBackendReadiness";
+    frontierApplyPlanField: "applyPlan.durableBackendReadiness";
+    searchSchedulerField: "scheduler.durableBackendReadiness";
+    contractsField: "surfaces.frontier.contracts.durable_backend_readiness";
+  };
+}
+
+export type SchedulerFreshnessQueryClass =
+  | "actor"
+  | "ransomware"
+  | "cve_advisory"
+  | "campaign"
+  | "malware_tool"
+  | "sector"
+  | "country"
+  | "victim_company"
+  | "infrastructure"
+  | "unknown";
+
+export interface SchedulerSourceCadenceHint {
+  sourceId: string;
+  sourceType: CollectionTask["sourceType"];
+  queryClass: SchedulerFreshnessQueryClass;
+  reliability: number;
+  parserHealth: number;
+  evidenceYield: number;
+  analystPriority: number;
+  sourceFreshnessTargetSeconds: number;
+  recommendedCadenceSeconds: number;
+  nextEligibleAt: string;
+  freshnessDebtSeconds: number;
+  priorityAgingBoost: number;
+  budgetClass: SchedulerWorkClass;
+  queueAction: "collect_now" | "schedule_next" | "defer_pressure" | "hold_backoff" | "dead_letter_review" | "emergency_hold";
+  reason: string;
+}
+
+export interface SchedulerFreshnessSloEngineDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/intel/search.scheduler" | "/v1/frontier/status" | "/v1/intel/runs/{id}" | "/v1/contracts" | "agent10_slo_runbooks">;
+  dryRun: true;
+  willMutate: false;
+  queryClass: SchedulerFreshnessQueryClass;
+  slo: {
+    targetFreshnessSeconds: number;
+    staleAfterSeconds: number;
+    emergencyStaleAfterSeconds: number;
+    maxQueueAgeSeconds: number;
+  };
+  cadence: {
+    minCadenceSeconds: number;
+    recommendedCadenceSeconds: number;
+    maxCadenceSeconds: number;
+    analystPriority: number;
+    sourceHintCount: number;
+  };
+  sourceCadenceHints: SchedulerSourceCadenceHint[];
+  queuePressureBehavior: {
+    state: "normal" | "degraded" | "emergency_brake";
+    retryAfterSeconds: number;
+    preservesThreeSecondPolling: true;
+    duplicateRunReuse: "required";
+    cursorContinuity: SchedulerRuntimeExecutionDto["pollingDeltas"]["cursorContinuity"] | "preserved";
+    degradeActions: Array<"raise_high_value_stale_items" | "defer_low_yield_sources" | "hold_dead_letters" | "preserve_active_run_reuse" | "pause_new_leases" | "emergency_brake">;
+  };
+  fairnessAging: Array<{
+    workload: SchedulerWorkerWorkload;
+    agingBoostEverySeconds: number;
+    maxBoost: number;
+    preservesPerSourceConcurrency: true;
+  }>;
+  handoffs: {
+    agent01SourceGovernance: string[];
+    agent04PublicCoverage: string[];
+    agent06EvidenceYield: string[];
+    agent07ActorFreshness: string[];
+    agent09ApiPolling: string[];
+    agent10Runbooks: string[];
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.freshnessSloEngine";
+    searchSchedulerField: "scheduler.freshnessSloEngine";
+    runStatusField: "scheduler.freshnessSloEngine";
+    contractsField: "surfaces.frontier.contracts.freshness_slo_engine";
+  };
+}
+
+export interface SchedulerFreshnessSloDashboardActor {
+  actor: "APT29" | "APT42" | "Sandworm" | "Volt Typhoon" | "Lazarus" | "LockBit" | "Akira" | "Scattered Spider";
+  priority: "daily" | "weekly";
+  queryClass: "actor" | "ransomware";
+  state: "fresh" | "aging" | "stale" | "blocked";
+  targetFreshnessSeconds: number;
+  observedFreshnessSeconds: number;
+  queueAgeSeconds: number;
+  retryDebt: number;
+  deadLetters: number;
+  nextPollSeconds: 3;
+  duplicateRunReuse: "required";
+  schedulerAction: "collect_now" | "raise_priority" | "reuse_active_run" | "defer_low_value_work" | "hold_for_review" | "emergency_brake";
+  workerPartition: SchedulerWorkerWorkload;
+  cadenceReason: string;
+}
+
+export interface SchedulerFreshnessSloDashboardDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "agent10_slo_dashboard">;
+  dryRun: true;
+  willMutate: false;
+  schemaVersion: "ti.scheduler_freshness_slo_dashboard.v1";
+  summary: {
+    actorCount: number;
+    staleCount: number;
+    blockedCount: number;
+    dailyDueCount: number;
+    weeklyDueCount: number;
+    queueAgeP95Seconds: number;
+    retryDebt: number;
+    deadLetters: number;
+    publicPollingProtected: true;
+  };
+  actors: SchedulerFreshnessSloDashboardActor[];
+  workloadActions: Array<{
+    workload: SchedulerWorkerWorkload;
+    action: "reserve_capacity" | "raise_priority_aging" | "drain_background" | "hold_restricted_metadata" | "dead_letter_review" | "no_action";
+    reason: string;
+    reservedWorkerSlots: number;
+    maxQueueAgeSeconds: number;
+  }>;
+  runbook: {
+    publicApiBehavior: "return_status_with_three_second_polling";
+    duplicateRunReuse: "required_before_enqueue";
+    lowValueSweeps: "defer_before_actor_starvation";
+    restrictedMetadata: "metadata_only_holds_do_not_block_clear_web";
+    emergencyBrake: "pause_new_leases_preserve_cursors";
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.freshnessSloDashboard";
+    searchSchedulerField: "scheduler.freshnessSloDashboard";
+    runStatusField: "scheduler.freshnessSloDashboard";
+    contractsField: "surfaces.frontier.contracts.scheduler_freshness_slo_dashboard";
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+}
+
+export interface SchedulerInteractiveSearchFreshnessDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "frontend_ti_progressive_update">;
+  dryRun: true;
+  willMutate: false;
+  schemaVersion: "ti.scheduler_interactive_search_freshness.v1";
+  currentQuery: {
+    query: string;
+    queryClass: SchedulerFreshnessQueryClass;
+    knownHighValueActor: boolean;
+    priorityBand: "urgent_actor" | "high_value_actor" | "normal_interactive" | "unknown_searching";
+    targetFreshnessSeconds: number;
+    observedFreshnessSeconds: number;
+    freshnessState: "fresh" | "aging" | "stale" | "held";
+  };
+  queueDecision: {
+    decision: "reuse_active_run" | "enqueue_interactive_refresh" | "raise_priority" | "serve_partial_and_poll" | "metadata_review_hold" | "emergency_hold";
+    reason: string;
+    nextPollSeconds: 3;
+    retryAfterSeconds: number;
+    duplicateRunReuse: "required_before_enqueue";
+    attachedToActiveRun: boolean;
+    runId?: string;
+    interactiveReservedWorkerSlots: number;
+    maxInteractiveQueueAgeSeconds: number;
+    deferredBackgroundWorkloads: SchedulerWorkerWorkload[];
+  };
+  actorTargets: Array<{
+    actor: SchedulerFreshnessSloDashboardActor["actor"] | "configured_actor";
+    priority: "daily" | "weekly" | "on_demand";
+    state: SchedulerFreshnessSloDashboardActor["state"] | "unknown_searching";
+    targetFreshnessSeconds: number;
+    observedFreshnessSeconds: number;
+    schedulerAction: SchedulerFreshnessSloDashboardActor["schedulerAction"] | "keep_searching";
+  }>;
+  fairnessGuards: {
+    preservesThreeSecondPolling: true;
+    preservesDuplicateRunReuse: true;
+    preservesCursorContinuity: true;
+    backgroundWorkStillAges: true;
+    lowValueSweepsDeferredBeforeActorStarvation: true;
+    restrictedMetadataDoesNotBlockClearWeb: true;
+    perSourceConcurrencyStillApplies: true;
+  };
+  uiSignals: {
+    state: "searching" | "partial" | "ready" | "metadata_review" | "degraded";
+    badges: Array<"queue_age" | "source_freshness" | "active_run_reuse" | "priority_aging" | "retry_backoff" | "dead_letter_review" | "restricted_metadata_hold" | "background_deferred">;
+    visibleSchedulerFields: Array<"freshness_state" | "queue_decision" | "next_poll_seconds" | "retry_after_seconds" | "duplicate_run_reuse" | "deferred_background_workloads" | "actor_targets">;
+  };
+  handoffs: {
+    agent04Coverage: string[];
+    agent06EvidenceReplay: string[];
+    agent07QualityFreshness: string[];
+    agent09FrontendContract: string[];
+    agent10Capacity: string[];
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.interactiveSearchFreshness";
+    searchSchedulerField: "scheduler.interactiveSearchFreshness";
+    runStatusField: "scheduler.interactiveSearchFreshness";
+    contractsField: "surfaces.frontier.contracts.scheduler_interactive_search_freshness";
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+}
+
+export interface SchedulerProductionQueueLeasePhase {
+  phase:
+    | "shadow_mirror"
+    | "dual_write_audit"
+    | "postgres_lease_canary"
+    | "worker_drain"
+    | "cutover"
+    | "rollback";
+  targetBackend: "postgres_advisory_queue";
+  dryRun: true;
+  willMutate: false;
+  willLeaseTasks: false;
+  requiredChecks: string[];
+  expectedQueueEffect: {
+    queuedDelta: number;
+    leasedDelta: number;
+    retryDebtDelta: number;
+    deadLetterDelta: number;
+  };
+  rollback: string;
+}
+
+export interface SchedulerProductionLeaseSemanticsDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/intel/search.scheduler" | "/v1/frontier/status" | "/v1/frontier/apply-plan" | "/v1/contracts" | "agent10_release_artifacts">;
+  dryRun: true;
+  willMutate: false;
+  currentBackend: "embedded_memory";
+  primaryTargetBackend: "postgres_advisory_queue";
+  futureBackends: Array<"redis_streams" | "nats_jetstream">;
+  postgresContract: {
+    tables: Array<"frontier_tasks" | "frontier_leases" | "frontier_events" | "crawl_budgets" | "run_reuse_keys" | "frontier_dead_letters">;
+    enqueue: string;
+    lease: string;
+    heartbeat: string;
+    acknowledge: string;
+    retry: string;
+    deadLetter: string;
+    duplicateRunReuse: string;
+    cursorReplay: "frontier_events_cursor_replay_required";
+    emergencyBrake: string;
+    workerShutdown: string;
+  };
+  leaseLifecycle: Array<{
+    step: "enqueue" | "lease" | "heartbeat" | "checkpoint" | "ack" | "retry" | "dead_letter" | "expire" | "drain" | "shutdown";
+    semantics: string;
+    idempotencyKey: string;
+    cursorVisible: boolean;
+  }>;
+  cutoverPhases: SchedulerProductionQueueLeasePhase[];
+  fairness: {
+    tenantIsolation: "tenant_then_reuse_key_then_source_family";
+    noisySourcePolicy: "cap_and_age_without_starving_live_search";
+    lowValueSweepPolicy: "bounded_under_pressure";
+    priorityAging: Array<{ workload: SchedulerWorkerWorkload; agingBoostEverySeconds: number; maxBoost: number }>;
+  };
+  safety: {
+    preservesThreeSecondPolling: true;
+    duplicateActorQueryRunsSuppressed: true;
+    cursorContinuity: "preserved";
+    dryRunApplyPlanOnly: true;
+    restrictedMetadataRemainsApprovalGated: true;
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.productionLeaseSemantics";
+    frontierApplyPlanField: "applyPlan.productionLeaseSemantics";
+    contractsField: "surfaces.frontier.contracts.production_queue_lease_semantics";
+  };
+}
+
+export interface SchedulerTenantBudgetLane {
+  tenantId: string;
+  queryClass: SchedulerFreshnessQueryClass;
+  workClass: SchedulerWorkClass;
+  reservedWorkerSlots: number;
+  maxConcurrentLeases: number;
+  maxQueuedTasks: number;
+  maxQueueAgeSeconds: number;
+  maxRetryDebt: number;
+  agingBoostEverySeconds: number;
+  retryAfterSeconds: number;
+  state: "within_budget" | "pressure" | "throttled" | "emergency_hold";
+  actions: Array<"preserve_live_polling" | "reserve_interactive_capacity" | "age_priority" | "defer_sweeps" | "reuse_duplicate_run" | "hold_dead_letters" | "pause_new_leases">;
+}
+
+export interface SchedulerFairnessGovernanceDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/intel/search.scheduler" | "/v1/frontier/status" | "/v1/frontier/apply-plan" | "/v1/intel/runs/{id}" | "/v1/contracts" | "agent10_capacity_artifacts">;
+  dryRun: true;
+  willMutate: false;
+  tenants: {
+    defaultTenantId: string;
+    isolationKey: "tenant:queryClass:reuseKey:sourceFamily";
+    crossTenantBorrowing: "disabled_until_budget_headroom";
+    noisyTenantPolicy: "cap_retry_debt_and_preserve_live_polling";
+  };
+  queryClassBudgets: SchedulerTenantBudgetLane[];
+  workloadFairness: Array<{
+    workload: SchedulerWorkerWorkload;
+    reservedWorkerSlots: number;
+    maxConcurrentLeases: number;
+    agingBoostEverySeconds: number;
+    queuePressureAction: "serve_now" | "reserve_capacity" | "defer_low_value_sweeps" | "hold_restricted_metadata" | "pause_new_leases";
+    preservesThreeSecondPolling: true;
+  }>;
+  priorityAging: Array<{
+    queryClass: SchedulerFreshnessQueryClass;
+    workClass: SchedulerWorkClass;
+    agingBoostEverySeconds: number;
+    maxBoost: number;
+    neverBypassPerSourceConcurrency: true;
+  }>;
+  pressurePolicy: {
+    publicPolling: "always_return_status_with_three_second_hint";
+    duplicateRunReuse: "required_before_enqueue";
+    retryBackoff: "deterministic_per_tenant_query_source";
+    deadLetterReuse: "dead_letters_do_not_consume_interactive_budget";
+    emergencyBrake: "pause_new_leases_preserve_cursors_and_reuse";
+    lowValueSweeps: "bounded_and_deferred_before_interactive_starvation";
+    workerDrain: "drain_noninteractive_first_preserve_replay";
+  };
+  fairnessSlo: {
+    worstSourceShare: number;
+    maxAllowedSourceShare: number;
+    ok: boolean;
+    noisySources: string[];
+    retryAfterSeconds: number;
+  };
+  handoffs: {
+    agent01SourceActivation: string[];
+    agent03AdapterCertification: string[];
+    agent04PublicExpansion: string[];
+    agent06EvidenceReplay: string[];
+    agent07Quality: string[];
+    agent09ApiContracts: string[];
+    agent10Capacity: string[];
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.fairnessGovernance";
+    frontierApplyPlanField: "applyPlan.fairnessGovernance";
+    runStatusField: "scheduler.fairnessGovernance";
+    contractsField: "surfaces.frontier.contracts.multi_tenant_fairness_governance";
+  };
+}
+
+export interface SchedulerPersistenceReplayFixture {
+  name:
+    | "queued_actor_search_restart"
+    | "leased_heartbeat_expiry"
+    | "restricted_metadata_hold"
+    | "dead_letter_retry_replay"
+    | "duplicate_public_run_reuse"
+    | "worker_drain_restart"
+    | "emergency_brake_restart";
+  dryRun: true;
+  willMutate: false;
+  persistedRows: Array<"runs" | "frontier_tasks" | "frontier_leases" | "worker_heartbeats" | "checkpoints" | "cursor_events" | "retry_dead_letters" | "fairness_budget_snapshots" | "worker_drain_state">;
+  replayExpectation: string;
+  preservesThreeSecondPolling: boolean;
+  preservesCursorContinuity: boolean;
+  duplicateRunReuseRequired: boolean;
+  expectedStatus: RunStatus | "metadata_review" | "searching";
+}
+
+export interface SchedulerPersistenceReplayCutoverDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/intel/search.scheduler" | "/v1/frontier/status" | "/v1/frontier/apply-plan" | "/v1/intel/runs/{id}" | "/v1/contracts" | "agent09_public_api_fields" | "agent10_capacity_release_gate">;
+  dryRun: true;
+  willMutate: false;
+  currentBackend: "embedded_memory";
+  primaryTargetBackend: "postgres_scheduler_store";
+  descriptorBackends: Array<"redis_streams" | "nats_jetstream">;
+  postgresContracts: Array<{
+    table: "scheduler_runs" | "frontier_tasks" | "frontier_leases" | "worker_heartbeats" | "scheduler_checkpoints" | "scheduler_cursor_events" | "scheduler_retry_dead_letters" | "scheduler_fairness_budget_snapshots" | "scheduler_worker_drain_state";
+    purpose: string;
+    keyFields: string[];
+    replayRole: string;
+  }>;
+  replaySemantics: {
+    duplicatePublicActorSearch: "tenant_query_reuse_key_reattaches_to_active_run";
+    refreshAfterSeconds: 3;
+    pollCursor: "restored_from_scheduler_cursor_events";
+    deltaCursor: "restored_from_latest_safe_delta";
+    statusTransitions: Array<"queued" | "running" | "metadata_review" | "partial" | "completed" | "failed" | "cancelled">;
+    unknownActorPolicy: "searching_only_until_query_matched_evidence";
+    noDefaultActorFallback: true;
+    noStaleCacheReady: true;
+    noGenericLivePromotion: true;
+  };
+  restartFixtures: SchedulerPersistenceReplayFixture[];
+  cutoverPhases: Array<{
+    phase: "snapshot_embedded" | "shadow_write_postgres" | "restart_replay_rehearsal" | "duplicate_reuse_canary" | "worker_drain_replay" | "cutover_hold_or_promote" | "rollback";
+    dryRun: true;
+    willMutate: false;
+    requiredChecks: string[];
+    rollback: string;
+  }>;
+  routeContracts: {
+    frontierStatusField: "scheduler.persistenceReplayCutover";
+    frontierApplyPlanField: "applyPlan.persistenceReplayCutover";
+    runStatusField: "scheduler.persistenceReplayCutover";
+    contractsField: "surfaces.frontier.contracts.scheduler_persistence_replay_cutover";
+  };
+  handoffs: {
+    agent09PublicApiFields: string[];
+    agent10CapacityReleaseGate: string[];
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+}
+
+export interface SchedulerPostgresQueueAdapterReadinessDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/frontier/status" | "/v1/frontier/apply-plan" | "/v1/intel/search.scheduler" | "/v1/contracts" | "agent10_capacity_release_gate">;
+  backendSelection: {
+    activeBackend: "embedded_memory" | "postgres_scheduler_store";
+    requestedBackend: "embedded_memory" | "postgres_scheduler_store";
+    postgresEnabled: boolean;
+    postgresDsnConfigured: boolean;
+    shadowWritesEnabled: boolean;
+    leaseMode: "disabled" | "shadow" | "active";
+    effectiveLeaseOwner: "embedded_memory" | "postgres_scheduler_store";
+  };
+  safety: {
+    disabledByDefault: true;
+    failClosedWithoutDsn: true;
+    failClosedWithoutExecutor: true;
+    noImplicitNetworkDependency: true;
+    embeddedMemoryRemainsAuthoritative: boolean;
+    publicSearchPollingProtected: boolean;
+  };
+  operationContracts: Array<{
+    operation: "enqueueTasks" | "leaseNext" | "heartbeatLease" | "checkpointTask" | "acknowledge" | "cancelRun" | "findOrRegisterRun" | "gcActiveRuns" | "pressure" | "deltasSince" | "runs" | "tasks";
+    postgresTableContracts: SchedulerPersistenceReplayCutoverDto["postgresContracts"][number]["table"][];
+    transactionBoundary: string;
+    disabledBehavior: "uses_embedded_memory" | "throws_fail_closed";
+  }>;
+  preparedStatements: Array<{
+    name: string;
+    purpose: string;
+    tables: SchedulerPersistenceReplayCutoverDto["postgresContracts"][number]["table"][];
+    idempotencyKeyFields: string[];
+  }>;
+  routeContracts: {
+    frontierStatusField: "scheduler.postgresQueueAdapter";
+    frontierApplyPlanField: "applyPlan.postgresQueueAdapter";
+    contractsField: "surfaces.frontier.contracts.scheduler_postgres_queue_adapter";
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
     proofCommands: string[];
   };
 }

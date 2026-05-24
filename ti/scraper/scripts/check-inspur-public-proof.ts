@@ -24,7 +24,7 @@ const containerNames = (process.env.TI_INSPUR_CONTAINERS ?? "hanasand_ti_scraper
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);
-const actors = (process.env.TI_PUBLIC_PROOF_ACTORS ?? "Lazarus,FIN7,Mustang Panda,Sandworm,Kimsuky")
+const actors = (process.env.TI_PUBLIC_PROOF_ACTORS ?? "Random Actor,Made Up Actor,Lazarus,FIN7,Mustang Panda,Sandworm,Kimsuky")
   .split(",")
   .map((item) => item.trim())
   .filter(Boolean);
@@ -43,7 +43,7 @@ const ok = containers.every((item) => item.ok) && queryProofs.every((item) => it
 console.log(JSON.stringify({
   ok,
   command: "bun run check:inspur-public-proof",
-  expectedOutput: "ok=true; containers healthy/running; public /ti and API search return live partial run proof for APT29 plus configured non-seeded actors/CVEs",
+  expectedOutput: "ok=true; containers healthy/running; public /ti and API search return live partial run proof for APT29, Random Actor, Made Up Actor, and configured non-seeded actors/CVEs",
   containers,
   queries: queryProofs
 }, null, 2));

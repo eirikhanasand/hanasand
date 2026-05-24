@@ -361,6 +361,7 @@ export type PlanningBudgetClass =
   | "interactive_live_search"
   | "interactive_search"
   | "analyst_deep_dive"
+  | "public_channel_window"
   | "background_refresh"
   | "broad_daily_sweep"
   | "source_health_probe"
@@ -1540,6 +1541,46 @@ export interface GraphDeltaStreamContractDto {
   routeBindings: Array<"/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts">;
 }
 
+export interface GraphDeltaClientContractDto {
+  mode: "graph_delta_client_contract";
+  transport: "polling_primary_sse_future";
+  routeBindings: Array<"/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts">;
+  polling: {
+    primary: true;
+    intervalSeconds: 3;
+    cursorField: "graph.deltas[].cursor";
+    requestFields: Array<"runId" | "query" | "cursor" | "deltaCursor" | "focusNodeId" | "maxRelationships">;
+    responseFields: Array<"graph.deltas" | "graph.runtime.liveUpdate" | "graph.investigationWorkspace.notebookExport" | "graph.reviewQueue" | "graph.exportReadiness">;
+  };
+  clientStates: Array<{
+    state: "empty_poll" | "new_relationships" | "review_hold" | "export_ready" | "stix_hold" | "rollback_required";
+    eventTypes: Array<"graph.relationship.added" | "graph.relationship.updated" | "graph.relationship.review_hold" | "graph.relationship.export_ready" | "graph.relationship.export_hold" | "graph.notebook.export_ready" | "graph.rollback.required">;
+    publicAnswerEffect: "none" | "caveat" | "fact_candidate" | "hold" | "remove";
+    stixEffect: "none" | "eligible" | "held" | "blocked";
+  }>;
+  notebookBinding: {
+    exportPacketField: "graph.investigationWorkspace.notebookExport.exportPacketId";
+    previewOnly: true;
+    boundedNodeLimit: 75;
+    boundedEdgeLimit: 50;
+    caveatPolicy: "carry_relationship_explanations_and_export_holds";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  fixtureNames: GraphDeltaStreamFixtureName[];
+  safety: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+  handoffs: {
+    agent06EvidenceReplay: "cursor_deltas_must_replay_to_capture_and_ledger_ids";
+    agent07QualityCaveats: "client_must_render_hold_caveat_before_public_fact";
+    agent09FrontendContract: "poll_graph_deltas_every_3_seconds_with_stable_cursor_fields";
+    agent10ReleaseGate: "rollback_on_missing_cursor_unsafe_payload_or_export_hold_drift";
+  };
+}
+
 export interface GraphLiveSearchUpdateDto {
   endpoint: "/v1/intel/search.graph" | "/v1/graph/query" | "/v1/graph/review-plan" | "/v1/exports/stix" | "/v1/contracts";
   generatedAt: string;
@@ -1551,6 +1592,7 @@ export interface GraphLiveSearchUpdateDto {
   deltaCounts: Record<RelationshipDeltaKind, number>;
   scenarioCoverage: GraphLiveSearchUpdateScenarioDto[];
   deltaStream: GraphDeltaStreamContractDto;
+  clientContract: GraphDeltaClientContractDto;
   weakDiscoveryPolicy: "pivots_and_caveats_only";
   publicChannelPolicy: "hint_until_corroborated_or_reviewed";
   restrictedEvidencePolicy: "held_context_no_public_fact";
@@ -1636,6 +1678,391 @@ export interface RelationshipConfidenceLedgerEntryDto {
   provenanceComplete: boolean;
 }
 
+export type GraphReviewPersistenceAction =
+  | "promote"
+  | "hold"
+  | "reject"
+  | "mark_stale"
+  | "mark_contradicted"
+  | "merge_duplicate"
+  | "split_alias"
+  | "mark_export_ready";
+
+export interface GraphReviewPersistenceDecisionDto {
+  decisionId: string;
+  relationshipId: string;
+  action: GraphReviewPersistenceAction;
+  persistedReviewState: GraphRelationshipReviewState;
+  reviewerId: "analyst_required" | "system_policy";
+  reason: string;
+  decidedAt: string;
+  sourceIds: string[];
+  evidenceIds: string[];
+  captureIds: string[];
+  ledgerIds: string[];
+  qualityCorrectionIds: string[];
+  appendOnly: true;
+  exportEligibleAfterDecision: boolean;
+  rollbackDecisionId: string;
+}
+
+export interface GraphReviewPersistenceLedgerDto {
+  mode: "graph_review_persistence_contract";
+  generatedAt: string;
+  decisionActions: GraphReviewPersistenceAction[];
+  decisions: GraphReviewPersistenceDecisionDto[];
+  reviewStateCounts: Array<{ reviewState: GraphRelationshipReviewState; count: number }>;
+  cursorContinuity: {
+    cursorField: "graph.deltas[].cursor";
+    latestCursor?: string;
+    replayableRelationshipIds: string[];
+    replayProof: "decision_rows_replay_before_export_subset_generation";
+  };
+  rollbackPlan: {
+    strategy: "append_compensating_review_decision";
+    rollbackOnlyActions: GraphReviewPersistenceAction[];
+    willDeleteAuditRows: false;
+    willRewriteEvidence: false;
+  };
+  apiDtoStability: {
+    relationshipIdStable: true;
+    decisionIdStable: true;
+    exportSubsetCursorStable: true;
+    dtoFields: Array<"decisionId" | "relationshipId" | "action" | "persistedReviewState" | "ledgerIds" | "evidenceIds" | "exportEligibleAfterDecision">;
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphReviewedExportSubsetGovernanceDto {
+  mode: "reviewed_export_subset_governance";
+  generatedAt: string;
+  subsetId: string;
+  mediaType: "application/stix+json;version=2.1";
+  eligibleRelationshipIds: string[];
+  heldRelationshipIds: string[];
+  excludedRelationshipIds: string[];
+  decisionIds: string[];
+  cursor: string;
+  governanceChecks: {
+    stixEligibility: "reviewed_provenance_backed_relationships_only";
+    attackFreshness: "deprecated_revoked_or_stale_attack_mappings_hold_export";
+    campaignTimelineReview: "campaign_ttp_rows_require_review_board_clearance";
+    sourceClaimProvenance: "source_capture_ledger_ids_required";
+    restrictedMetadataHolds: "metadata_only_edges_remain_descriptor_context";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  counts: {
+    eligible: number;
+    held: number;
+    excluded: number;
+    restrictedHeld: number;
+    staleHeld: number;
+    contradictedHeld: number;
+    missingProvenanceHeld: number;
+  };
+  agentHandoffs: {
+    agent06ClaimLedgerIds: string[];
+    agent07QualityCorrectionIds: string[];
+    agent09ApiFields: Array<"subsetId" | "eligibleRelationshipIds" | "heldRelationshipIds" | "cursor" | "taxiiBoundary">;
+    agent10ReleaseGate: "promote_when_eligible_nonzero_and_holds_explained";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphTaxiiDescriptorStixBundleGovernanceDto {
+  mode: "taxii_descriptor_stix_bundle_governance";
+  generatedAt: string;
+  descriptorOnly: true;
+  serverImplemented: false;
+  collectionId: "ti-graph-reviewed-stix-21";
+  mediaType: "application/stix+json;version=2.1";
+  subset: {
+    subsetId: string;
+    cursor: string;
+    eligibleRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    excludedRelationshipIds: string[];
+    decisionIds: string[];
+    estimatedStixObjectCount: number;
+    maxObjectsPerPage: 100;
+    stableOrdering: "identity_markings_nodes_relationships";
+  };
+  descriptorCollections: TaxiiCollectionDescriptor[];
+  bundleGates: {
+    validatesStix21: true;
+    reviewedRelationshipsOnly: true;
+    evidenceProvenanceRequired: true;
+    defaultDiscoveryEvidenceExcluded: true;
+    deprecatedAttackRequiresReplacementReview: true;
+    restrictedMetadataDescriptorOnly: true;
+  };
+  futureTaxiiInterface: {
+    providerInterface: "TaxiiExportProvider";
+    listCollections: "descriptor_only";
+    getObjects: "future_page_contract";
+    requestFields: Array<"collectionId" | "addedAfter" | "limit" | "next">;
+    responseFields: Array<"collectionId" | "objects" | "more" | "next">;
+    cursorField: "taxiiCollections[].readiness.nextCursor";
+    mountedRoutes: [];
+  };
+  releaseGate: {
+    status: "ready" | "hold" | "rollback";
+    readyCount: number;
+    blockedCount: number;
+    promoteWhen: "ready_relationships_nonzero_and_holds_explained";
+    rollbackWhen: Array<"unsafe_material_requested" | "unreviewed_relationship_exported" | "descriptor_claimed_as_server" | "stix_validation_failed">;
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export type GraphRelationshipDriftAction =
+  | "keep_promoted"
+  | "demote_to_review"
+  | "mark_stale"
+  | "mark_contradicted"
+  | "split_alias"
+  | "merge_duplicate"
+  | "block_stix_export"
+  | "request_evidence_replay"
+  | "request_source_expansion"
+  | "preserve_historical";
+
+export type GraphRelationshipDriftSignalKind =
+  | "fresh_public_advisory"
+  | "source_pack_expansion"
+  | "public_channel_hint"
+  | "restricted_metadata_review"
+  | "evidence_replay_failure"
+  | "analyst_correction"
+  | "source_retirement"
+  | "campaign_membership_change"
+  | "attack_mapping_change"
+  | "victim_claim_change"
+  | "infrastructure_hint_change"
+  | "dataset_metadata_hold";
+
+export interface GraphRelationshipDriftMonitorDto {
+  mode: "campaign_relationship_drift_monitor";
+  generatedAt: string;
+  tenant: {
+    tenantId: string;
+    workspaceId: string;
+    workspaceKind: GraphQueryCostControlsDto["tenant"]["workspaceKind"];
+    budgetState: GraphQueryCostControlsDto["queuePressure"]["state"];
+    budgetPolicy: "respect_graph_query_cost_controls";
+  };
+  summary: {
+    rowCount: number;
+    keepPromoted: number;
+    reviewRequired: number;
+    stale: number;
+    contradicted: number;
+    stixBlocked: number;
+    evidenceReplayRequested: number;
+    sourceExpansionRequested: number;
+    historicalPreserved: number;
+  };
+  rows: Array<{
+    rowId: string;
+    relationshipId: string;
+    relationshipKind: GraphCursorRelationshipKind;
+    relationshipType: IntelligenceRelationshipType;
+    sourceRef: string;
+    targetRef: string;
+    sourceType: IntelligenceNodeType;
+    targetType: IntelligenceNodeType;
+    driftSignals: GraphRelationshipDriftSignalKind[];
+    action: GraphRelationshipDriftAction;
+    previousReviewState: GraphRelationshipReviewState;
+    nextReviewState: GraphRelationshipReviewState;
+    confidenceBefore: number;
+    confidenceAfter: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    sourceIds: string[];
+    evidenceIds: string[];
+    ledgerIds: string[];
+    exportEligibleBefore: boolean;
+    exportEligibleAfter: boolean;
+    exportBlockers: GraphIntegrityFindingCode[];
+    budgetBounded: boolean;
+    reason: string;
+  }>;
+  heldFacts: {
+    weakDiscoveryRelationshipIds: string[];
+    publicChannelOnlyRelationshipIds: string[];
+    restrictedMetadataRelationshipIds: string[];
+    staleRelationshipIds: string[];
+    contradictedRelationshipIds: string[];
+    missingLedgerRelationshipIds: string[];
+    budgetBoundedRelationshipIds: string[];
+    policy: "drift_monitor_never_promotes_held_or_budget_truncated_rows";
+  };
+  deltaContract: {
+    cursorField: "graph.deltas[].cursor";
+    nextPollSeconds: 3;
+    changedRelationshipIds: string[];
+    eventTypes: Array<"graph.relationship.drift" | "graph.relationship.stale" | "graph.relationship.contradicted" | "graph.relationship.export_hold">;
+  };
+  agentHandoffs: {
+    agent06ChainOfCustody: "request_evidence_replay_for_missing_or_failed_ledger_rows";
+    agent07ContradictionWorkbench: "contradicted_and_alias_split_rows_require_quality_review";
+    agent09PollingDeltas: "emit_relationship_drift_events_with_3_second_polling";
+    agent10ReleaseGate: "block_release_when_unexplained_drift_rows_remain";
+    agent01Agent04SourceGaps: "request_source_expansion_for_weak_or_source_biased_rows";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphRelationshipExplainabilityDto {
+  mode: "graph_relationship_explainability";
+  generatedAt: string;
+  rows: Array<{
+    explanationId: string;
+    relationshipId: string;
+    relationshipKind: GraphCursorRelationshipKind;
+    relationshipType: IntelligenceRelationshipType;
+    source: Pick<CorrelationGraphNodeDto, "nodeId" | "type" | "value">;
+    target: Pick<CorrelationGraphNodeDto, "nodeId" | "type" | "value">;
+    status: "promoted" | "held" | "stale" | "contradicted" | "split" | "merged" | "export_ready" | "export_blocked";
+    summary: string;
+    why: string[];
+    sourceIds: string[];
+    evidenceIds: string[];
+    claimLedgerRefs: string[];
+    reviewDecisionIds: string[];
+    confidence: {
+      current: number;
+      trend: "new" | "rising" | "stable" | "falling" | "stale" | "contradicted";
+      historyPoints: number;
+    };
+    drift: {
+      action: GraphRelationshipDriftAction;
+      signals: GraphRelationshipDriftSignalKind[];
+      confidenceAfter: number;
+    };
+    attackCampaignContext: {
+      attackIds: string[];
+      campaignIds: string[];
+      techniqueIds: string[];
+      actorIds: string[];
+    };
+    exportEligibility: {
+      eligible: boolean;
+      blockers: GraphIntegrityFindingCode[];
+      reviewedSubsetEligible: boolean;
+      taxiiBoundary: "descriptor_only_no_server";
+    };
+    caveats: string[];
+    agentHandoffs: {
+      agent06EvidenceReplay: string[];
+      agent07QualityReview: string[];
+      agent09DeltaFields: Array<"relationshipId" | "drift.action" | "exportEligibility" | "confidence.trend">;
+      agent10ReleaseArtifact: "relationship_explanation_row";
+    };
+    noLeak: {
+      rawRestrictedMaterialIncluded: false;
+      objectKeysIncluded: false;
+      unsafeUrlsIncluded: false;
+      metadataOnly: true;
+    };
+  }>;
+  summary: {
+    rowCount: number;
+    promoted: number;
+    held: number;
+    stale: number;
+    contradicted: number;
+    exportReady: number;
+    exportBlocked: number;
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphInvestigationNotebookExportDto {
+  mode: "metadata_only_graph_investigation_notebook_export";
+  generatedAt: string;
+  query: string;
+  investigationId: string;
+  exportPacketId: string;
+  boundedNodes: Array<Pick<GraphInvestigationWorkspaceNodeDto, "nodeId" | "type" | "value" | "relationshipIds" | "reviewStates" | "exportReadyRelationshipCount" | "heldRelationshipCount">>;
+  boundedEdges: Array<{
+    relationshipId: string;
+    sourceRef: string;
+    targetRef: string;
+    relationshipKind: GraphCursorRelationshipKind;
+    reviewState: GraphRelationshipReviewState;
+    driftAction: GraphRelationshipDriftAction;
+    exportEligible: boolean;
+    caveats: string[];
+  }>;
+  pivotRecommendations: Array<{
+    query: string;
+    nodeId: string;
+    nodeValue: string;
+    sourceRelationshipIds: string[];
+    priority: "high" | "medium" | "low";
+    reason: string;
+  }>;
+  caveats: string[];
+  relationshipExplanations: GraphRelationshipExplainabilityDto["rows"];
+  stixPreviewDescriptor: {
+    mediaType: "application/stix+json;version=2.1";
+    eligibleRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    taxiiBoundary: "descriptor_only_no_server";
+    previewOnly: true;
+  };
+  costBudget: {
+    tenantId: string;
+    workspaceId: string;
+    budgetState: GraphQueryCostControlsDto["queuePressure"]["state"];
+    boundedRelationshipIds: string[];
+    truncatedDimensions: GraphQueryBudgetDimension[];
+    nextPollSeconds: 3;
+  };
+  deltaClientContract: GraphDeltaClientContractDto;
+  handoffs: {
+    agent06EvidenceReplay: string[];
+    agent07QualityReview: string[];
+    agent09ApiSseDeltas: Array<"graph.relationship.explanation" | "graph.notebook.export_ready" | "graph.relationship.export_hold">;
+    agent10ReleaseArtifacts: Array<"relationship_explanations" | "metadata_only_notebook_export">;
+    agent01SourceGaps: string[];
+    agent04PublicSourceBenchmarks: string[];
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
 export interface GraphInvestigationWorkspaceDto {
   endpoint: "/v1/graph/query";
   mode: "read_only_investigation_workspace";
@@ -1651,12 +2078,61 @@ export interface GraphInvestigationWorkspaceDto {
   }>;
   nodes: GraphInvestigationWorkspaceNodeDto[];
   relationshipConfidenceLedger: RelationshipConfidenceLedgerEntryDto[];
+  reviewPersistence: GraphReviewPersistenceLedgerDto;
+  exportGovernance: GraphReviewedExportSubsetGovernanceDto;
+  taxiiStixGovernance: GraphTaxiiDescriptorStixBundleGovernanceDto;
+  costControls: GraphQueryCostControlsDto;
+  driftMonitor: GraphRelationshipDriftMonitorDto;
+  relationshipExplanations: GraphRelationshipExplainabilityDto;
+  notebookExport: GraphInvestigationNotebookExportDto;
+  backendMigrationCertification: GraphBackendMigrationCertificationDto;
   reviewActions: Array<{
     action: GraphInvestigationWorkspaceReviewAction;
     relationshipIds: string[];
     requiresHumanApproval: boolean;
     reason: string;
   }>;
+  workflowContracts: {
+    openInvestigation: {
+      endpoint: "/v1/graph/investigations";
+      method: "POST";
+      mode: "contract_only_dry_run";
+      requestFields: Array<"runId" | "query" | "focusNodeId" | "tenantId" | "maxPivotRelationships" | "cursor">;
+      responseFields: Array<"investigationId" | "nodeIds" | "relationshipIds" | "nextCursor" | "reviewQueue" | "exportEligibility">;
+      investigationId: string;
+      boundedRelationshipIds: string[];
+      nextCursor?: string;
+      tenantScoped: true;
+    };
+    savePivotSet: {
+      endpoint: "/v1/graph/investigations/{investigationId}/pivots";
+      method: "POST";
+      mode: "dry_run_until_persistent_review_store";
+      maxPivotRelationships: number;
+      pivotRelationshipIds: string[];
+      cursorStable: true;
+      willMutate: false;
+    };
+    reviewRelationship: {
+      endpoint: "/v1/graph/relationships/{relationshipId}/review";
+      method: "POST";
+      mode: "dry_run_or_existing_review_state_only";
+      allowedActions: GraphInvestigationWorkspaceReviewAction[];
+      relationshipIds: string[];
+      resultingReviewStates: GraphRelationshipReviewState[];
+      requiredProvenanceFields: Array<"relationshipId" | "evidenceIds" | "ledgerIds" | "sourceIds" | "reviewedBy" | "reviewReason">;
+      willMutateWithoutApproval: false;
+    };
+    exportReviewedSubset: {
+      endpoint: "/v1/graph/investigations/{investigationId}/exports/stix";
+      method: "POST";
+      mode: "contract_only_export_preview";
+      eligibleRelationshipIds: string[];
+      heldRelationshipIds: string[];
+      mediaType: "application/stix+json;version=2.1";
+      taxiiBoundary: "descriptor_only_no_server";
+    };
+  };
   deltaPolling: {
     cursorField: "graph.deltas[].cursor";
     nextPollSeconds: 3;
@@ -1714,6 +2190,160 @@ export interface GraphCampaignGraphEdgeDto {
   exportBlockers: GraphIntegrityFindingCode[];
 }
 
+export interface GraphCampaignTimelineReviewBoardDto {
+  mode: "enterprise_campaign_timeline_review_board";
+  generatedAt: string;
+  lanes: Array<{
+    lane:
+      | "ready_for_public_fact"
+      | "needs_evidence"
+      | "stale_or_contradicted"
+      | "restricted_or_policy_hold"
+      | "export_blocked";
+    relationshipIds: string[];
+    count: number;
+    recommendedAction: GraphInvestigationWorkspaceReviewAction | "request_evidence" | "hold_public_fact";
+    releaseImpact: "promote" | "watch" | "hold" | "rollback";
+  }>;
+  rows: Array<{
+    rowId: string;
+    relationshipIds: string[];
+    campaignIds: string[];
+    actorNodeIds: string[];
+    techniqueNodeIds: string[];
+    techniqueNames: string[];
+    attackIds: string[];
+    firstSeenAt: string;
+    lastSeenAt: string;
+    confidence: number;
+    confidenceTrend: GraphAttackTechniqueTimelineEventDto["confidenceTrend"];
+    reviewState: GraphRelationshipReviewState;
+    workflowState: AnalystGraphWorkflowState;
+    sourceIds: string[];
+    evidenceIds: string[];
+    ledgerIds: string[];
+    exportEligible: boolean;
+    exportBlockers: GraphIntegrityFindingCode[];
+    recommendedAction: GraphInvestigationWorkspaceReviewAction | "request_evidence" | "hold_public_fact";
+    releaseImpact: "promote" | "watch" | "hold" | "rollback";
+  }>;
+  summary: {
+    rowCount: number;
+    readyRows: number;
+    holdRows: number;
+    rollbackRows: number;
+    staleOrContradictedRows: number;
+    restrictedOrPolicyRows: number;
+    publicFactPolicy: "promote_reviewed_only_hold_everything_else";
+  };
+  safety: {
+    metadataOnly: true;
+    rawRestrictedMaterialIncluded: false;
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+}
+
+export interface GraphAttackCampaignFreshnessSloDto {
+  mode: "attack_campaign_freshness_slo";
+  generatedAt: string;
+  policy: {
+    defaultTargetDays: number;
+    warningRatio: number;
+    breachRatio: number;
+    publicFactPolicy: "hold_stale_or_unreviewed_campaign_ttp_rows";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  summary: {
+    rowCount: number;
+    currentRows: number;
+    warningRows: number;
+    breachRows: number;
+    heldRows: number;
+    deprecatedTechniqueRows: number;
+    aliasDriftRows: number;
+    contradictionRows: number;
+    exportEligibleRows: number;
+    sourceExpansionRequests: number;
+    evidenceReplayRequests: number;
+  };
+  rows: Array<{
+    rowId: string;
+    relationshipIds: string[];
+    campaignIds: string[];
+    actorNodeIds: string[];
+    techniqueNodeIds: string[];
+    attackIds: string[];
+    tactic: AttackTactic;
+    lastSeenAt: string;
+    ageDays: number;
+    targetDays: number;
+    freshnessState: "current" | "warning" | "breach" | "held";
+    confidenceTrend: GraphAttackTechniqueTimelineEventDto["confidenceTrend"];
+    techniqueLifecycle: {
+      state: "current" | "deprecated_or_revoked" | "unknown";
+      replacementRequired: boolean;
+      reviewReason?: string;
+    };
+    aliasDrift: {
+      state: "none" | "needs_review" | "split_required";
+      actorNodeIds: string[];
+      actorValues: string[];
+      reasonCodes: GraphIntegrityFindingCode[];
+    };
+    contradictionState: "none" | "suspected" | "contradicted";
+    reviewState: GraphRelationshipReviewState;
+    exportEligible: boolean;
+    exportEligibilityDecision:
+      | "eligible_current_reviewed"
+      | "hold_stale_or_breached"
+      | "hold_deprecated_attack_mapping"
+      | "hold_alias_drift"
+      | "hold_contradiction"
+      | "hold_missing_evidence"
+      | "hold_unreviewed_or_blocked";
+    exportBlockers: GraphIntegrityFindingCode[];
+    recommendedAction:
+      | "keep_current"
+      | "raise_cadence"
+      | "request_evidence_replay"
+      | "mark_stale"
+      | "hold_export"
+      | "request_source_expansion";
+    releaseImpact: "promote" | "watch" | "hold" | "rollback";
+    sourceIds: string[];
+    evidenceIds: string[];
+    ledgerIds: string[];
+  }>;
+  sourceCadenceRequests: Array<{
+    requestId: string;
+    relationshipIds: string[];
+    sourceIds: string[];
+    reason: "freshness_warning" | "freshness_breach" | "missing_evidence_replay" | "source_gap";
+    owner: "agent_01" | "agent_02" | "agent_04" | "agent_06";
+    dryRun: true;
+  }>;
+  deltaContract: {
+    cursorField: "graph.deltas[].cursor";
+    nextPollSeconds: 3;
+    eventTypes: Array<"graph.attack_campaign.freshness_warning" | "graph.attack_campaign.freshness_breach" | "graph.attack_campaign.freshness_hold">;
+  };
+  handoffs: {
+    agent01SourceActivation: "review_source_pack_freshness_debt";
+    agent02SchedulerCadence: "raise_campaign_ttp_collection_cadence_dry_run";
+    agent04CoverageRadar: "expand_safe_public_campaign_sources";
+    agent06EvidenceReplay: "replay_missing_or_stale_campaign_ttp_evidence";
+    agent07QualityReview: "keep_stale_or_contradicted_rows_out_of_public_facts";
+    agent09ApiCompatibility: "stable_3_second_polling_freshness_slo_packet";
+    agent10ReleaseGate: "hold_release_when_campaign_freshness_breaches_lack_review";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
 export interface GraphAttackCampaignWorkspaceDto {
   endpoint: "/v1/graph/query";
   mode: "attack_technique_timeline_campaign_graph";
@@ -1759,6 +2389,27 @@ export interface GraphAttackCampaignWorkspaceDto {
     nextPageCursor?: string;
     queryPlan: "bounded_single_hop_campaign_ttp_pivots";
   };
+  searchPivotRecommendations: Array<{
+    query: string;
+    pivotType: Extract<IntelligenceNodeType, "actor" | "campaign" | "attack-pattern" | "malware" | "tool" | "victim" | "infrastructure" | "vulnerability">;
+    nodeId: string;
+    nodeValue: string;
+    sourceRelationshipIds: string[];
+    confidence: number;
+    priority: "high" | "medium" | "low";
+    reason: string;
+    expectedSearchEffect: "open_graph_neighborhood" | "request_more_evidence" | "corroborate_hold" | "promote_reviewed_fact";
+    safety: {
+      willStartCrawling: false;
+      willFetchRestrictedMaterial: false;
+      metadataOnly: true;
+      taxiiBoundary: "descriptor_only_no_server";
+    };
+  }>;
+  reviewBoard: GraphCampaignTimelineReviewBoardDto;
+  freshnessSlo: GraphAttackCampaignFreshnessSloDto;
+  costControls: GraphQueryCostControlsDto;
+  driftMonitor: GraphRelationshipDriftMonitorDto;
   deltaPolling: {
     cursorField: "graph.deltas[].cursor";
     nextPollSeconds: 3;
@@ -1979,6 +2630,384 @@ export interface GraphBackendCutoverRehearsalDto {
   };
 }
 
+export interface GraphBackendPerformanceSoakDto {
+  mode: "graph_backend_performance_soak";
+  generatedAt: string;
+  targetBackends: GraphRepositoryBackendKind[];
+  queryCost: {
+    queryPlan: "bounded_single_hop_relationship_scan";
+    relationshipCount: number;
+    nodeCount: number;
+    evidenceSupportCount: number;
+    cursorDeltaCount: number;
+    reviewHoldCount: number;
+    exportReadyCount: number;
+    estimatedCostUnits: number;
+    costBand: "low" | "medium" | "high" | "rollback";
+  };
+  budgets: {
+    maxRelationshipsPerPage: 50;
+    maxNodesPerPage: 75;
+    maxEvidenceSupportRows: 150;
+    maxCursorDeltas: 100;
+    maxCostUnits: 250;
+    publicPollSeconds: 3;
+  };
+  latencyTargets: Array<{
+    backend: GraphRepositoryBackendKind;
+    p95Ms: number;
+    p99Ms: number;
+    status: "pass" | "watch" | "hold" | "rollback";
+    reason: string;
+  }>;
+  queuePressure: {
+    graphExportQueued: number;
+    reviewHoldQueued: number;
+    cursorReplayQueued: number;
+    state: "pass" | "watch" | "hold" | "rollback";
+  };
+  soakScenarios: Array<{
+    name: "actor_query" | "campaign_timeline" | "stix_export_preview" | "cursor_replay" | "review_hold_burst";
+    relationshipIds: string[];
+    expectedState: "pass" | "watch" | "hold" | "rollback";
+    rollbackThreshold: string;
+  }>;
+  safety: {
+    tenantScoped: true;
+    restrictedMaterialPolicy: "metadata_only_review_hold";
+    rawRestrictedMaterialIncluded: false;
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  releasePacket: {
+    owner: "Agent 08";
+    status: "pass" | "warning" | "hold" | "rollback";
+    proofCommand: "bun test src/tests/graphViews.test.ts";
+    agent10Field: "graphBackendPerformanceSoak";
+    rollbackPath: string;
+  };
+}
+
+export type GraphBackendMigrationCertificationDataset =
+  | "nodes"
+  | "relationships"
+  | "evidence_provenance"
+  | "relationship_reviews"
+  | "confidence_history"
+  | "cursor_deltas"
+  | "attack_campaign_timeline"
+  | "graph_pivots"
+  | "notebook_exports"
+  | "stix_preview_subsets";
+
+export interface GraphBackendMigrationCertificationDto {
+  mode: "graph_backend_production_migration_certification";
+  generatedAt: string;
+  targetBackends: GraphRepositoryBackendKind[];
+  certificationState: "pass" | "warning" | "hold" | "rollback";
+  summary: {
+    nodeCount: number;
+    edgeCount: number;
+    provenanceRowCount: number;
+    reviewDecisionCount: number;
+    confidenceHistoryCount: number;
+    cursorDeltaCount: number;
+    attackCampaignTimelineRows: number;
+    graphPivotCount: number;
+    notebookExportRows: number;
+    stixPreviewRows: number;
+    heldRelationshipCount: number;
+    exportEligibleCount: number;
+  };
+  migrationOrder: Array<{
+    order: number;
+    dataset: GraphBackendMigrationCertificationDataset;
+    sourceContract: string;
+    target: string;
+    prerequisite: string;
+    replayProof: string;
+    rollbackCheckpoint: string;
+    requiredIndexes: string[];
+  }>;
+  replayPrerequisites: {
+    source: "agent06_retention_replay_and_claim_ledger";
+    requiresDurableCaptures: true;
+    requiresClaimLedgerRows: true;
+    requiresReviewAuditRows: true;
+    requiresCursorReplay: true;
+    requiredRelationshipIds: string[];
+    missingLedgerRelationshipIds: string[];
+    retentionBoundary: "hashes_ids_redaction_state_and_metadata_only";
+  };
+  indexRequirements: Array<{
+    name: string;
+    fields: string[];
+    purpose: string;
+    requiredBeforePromotion: boolean;
+  }>;
+  cursorContinuity: {
+    cursorField: "graph.deltas[].cursor";
+    latestCursor?: string;
+    replayableRelationshipIds: string[];
+    changedRelationshipIds: string[];
+    nextPollSeconds: 3;
+    policy: "preserve_cursor_order_across_backend_replay";
+  };
+  tenantScoping: {
+    tenantId: string;
+    workspaceId: string;
+    isolation: "tenant_and_workspace_required_on_all_graph_rows";
+    crossTenantJoinsAllowed: false;
+  };
+  exportRecomputation: {
+    eligibleRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    blockers: GraphIntegrityFindingCode[];
+    policy: "recompute_after_replay_before_stix_preview_or_taxii_descriptor";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  holdPolicy: {
+    weakDiscoveryRelationshipIds: string[];
+    publicChannelOnlyRelationshipIds: string[];
+    restrictedMetadataRelationshipIds: string[];
+    staleRelationshipIds: string[];
+    contradictedRelationshipIds: string[];
+    missingLedgerRelationshipIds: string[];
+    budgetBoundedRelationshipIds: string[];
+    policy: "held_relationships_remain_non_exportable_until_review_and_replay_pass";
+  };
+  rollbackCheckpoints: Array<{
+    name: string;
+    checkpoint: string;
+    action: string;
+  }>;
+  agentHandoffs: {
+    agent06RetentionReplay: "prove_captures_claim_ledgers_review_audit_and_cursor_replay_before_import";
+    agent07QualityGate: "certify_contradictions_stale_edges_and_entity_splits_before_export_recompute";
+    agent09ApiContract: "serve_existing_graph_runtime_workspace_and_stix_fields_without_shape_changes";
+    agent10ReleaseGate: "consume_graph_backend_migration_certification_for_promote_hold_or_rollback";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphNeo4jMigrationAdapterBenchmarkDto {
+  mode: "neo4j_migration_adapter_contract_benchmark";
+  generatedAt: string;
+  status: "pass" | "warning" | "hold" | "rollback";
+  adapterBoundary: {
+    targetBackend: "neo4j";
+    implementationState: "contract_only_no_live_driver";
+    primaryCutoverBackend: "postgres_graph_tables";
+    apiShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  nodeLabelProjection: Array<{
+    label: string;
+    sourceNodeTypes: IntelligenceNodeType[];
+    count: number;
+    requiredProperties: Array<"tenant_id" | "workspace_id" | "node_id" | "type" | "value" | "confidence" | "first_seen_at" | "last_seen_at">;
+  }>;
+  relationshipProjection: Array<{
+    relationshipType: IntelligenceRelationshipType;
+    count: number;
+    requiredProperties: Array<"tenant_id" | "workspace_id" | "relationship_id" | "review_state" | "confidence" | "first_seen_at" | "last_seen_at" | "export_eligible">;
+    exportEligibleCount: number;
+    heldCount: number;
+  }>;
+  constraints: Array<{
+    name: string;
+    cypher: string;
+    requiredBeforePromotion: boolean;
+  }>;
+  benchmarkScenarios: Array<{
+    name: "actor_one_hop" | "campaign_two_hop" | "attack_matrix" | "stix_preview_subset" | "cursor_replay";
+    cypherShape: string;
+    relationshipIds: string[];
+    expectedRows: number;
+    p95MsTarget: number;
+    p99MsTarget: number;
+    status: "pass" | "warning" | "hold" | "rollback";
+    rollbackThreshold: string;
+  }>;
+  parityChecks: {
+    nodeCountMatchesSnapshot: boolean;
+    relationshipCountMatchesSnapshot: boolean;
+    evidenceSupportCountMatchesSnapshot: boolean;
+    cursorOrderPreserved: boolean;
+    reviewStateParity: boolean;
+    exportEligibilityParity: boolean;
+    heldRowsRemainNonExportable: boolean;
+  };
+  cutoverReadiness: {
+    decision: "pass" | "warning" | "hold" | "rollback";
+    blockers: string[];
+    fallback: "keep_postgres_graph_tables_or_memory_snapshot_authoritative";
+    proofCommand: "bun test src/tests/graphViews.test.ts";
+  };
+  handoffs: {
+    agent06Replay: "load_nodes_relationships_provenance_reviews_confidence_and_cursor_deltas_before_benchmark";
+    agent07Quality: "compare_alias_split_contradiction_and_review_state_parity";
+    agent09Api: "keep_graph_query_and_stix_runtime_dto_shapes_stable";
+    agent10Release: "consume_neo4j_adapter_benchmark_for_promote_hold_or_rollback";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphBackendAdapterCutoverContractDto {
+  mode: "neo4j_postgres_graph_backend_adapter_contract";
+  generatedAt: string;
+  status: "pass" | "warning" | "hold" | "rollback";
+  adapterStrategy: {
+    primaryBackend: "postgres_graph_tables";
+    compatibleBackends: GraphRepositoryBackendKind[];
+    neo4jState: "contract_only_no_live_driver";
+    routeShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  interfaces: Array<{
+    name: GraphRepositoryOperationKind;
+    postgresTarget: string;
+    neo4jTarget: string;
+    idField: string;
+    requiredFields: string[];
+    tenantScoped: boolean;
+    appendOnly: boolean;
+    replayRequired: boolean;
+  }>;
+  migrations: Array<{
+    backend: Extract<GraphRepositoryBackendKind, "postgres_graph_tables" | "neo4j">;
+    schemaName: string;
+    tablesOrLabels: string[];
+    requiredIndexes: string[];
+    migrationProof: "dry_run_contract_only";
+    rollbackUnit: "snapshot_generation";
+  }>;
+  cursorReplay: {
+    cursorField: "graph.deltas[].cursor";
+    cursorDeltaCount: number;
+    replayableRelationshipIds: string[];
+    latestCursor?: string;
+    orderPolicy: "preserve_delta_cursor_order_across_backends";
+  };
+  reviewHoldParity: {
+    heldRelationshipIds: string[];
+    missingLedgerRelationshipIds: string[];
+    staleRelationshipIds: string[];
+    contradictedRelationshipIds: string[];
+    weakDiscoveryRelationshipIds: string[];
+    policy: "held_relationships_remain_non_exportable_until_review_replay_and_recompute_pass";
+  };
+  performanceSlo: {
+    queryPlan: GraphBackendPerformanceSoakDto["queryCost"]["queryPlan"];
+    costBand: GraphBackendPerformanceSoakDto["queryCost"]["costBand"];
+    latencyTargets: GraphBackendPerformanceSoakDto["latencyTargets"];
+    benchmarkScenarios: GraphNeo4jMigrationAdapterBenchmarkDto["benchmarkScenarios"];
+    releaseStatus: GraphBackendPerformanceSoakDto["releasePacket"]["status"];
+  };
+  cutoverReadiness: {
+    decision: "pass" | "warning" | "hold" | "rollback";
+    blockers: string[];
+    fallback: "keep_memory_snapshot_or_postgres_graph_tables_authoritative";
+    proofCommands: [
+      "bun run check",
+      "bun test src/tests/graphViews.test.ts src/tests/graphReviewRoutes.test.ts",
+      "bun run check:graph-review-mounted"
+    ];
+  };
+  handoffs: {
+    agent06PersistenceReplay: "load_graph_rows_from_evidence_claim_ledger_and_cursor_replay_before_cutover";
+    agent07QualityParity: "compare_alias_split_contradiction_stale_and_review_state_parity";
+    agent09ApiCompatibility: "keep_graph_query_runtime_and_stix_response_shapes_stable";
+    agent10ReleaseGate: "consume_adapter_cutover_contract_for_promote_hold_or_rollback";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export type GraphQueryBudgetDimension =
+  | "nodes"
+  | "edges"
+  | "relationship_review_rows"
+  | "technique_timeline_events"
+  | "campaign_pivots"
+  | "evidence_joins"
+  | "stix_preview_rows"
+  | "cursor_continuation"
+  | "export_eligibility_recomputation";
+
+export interface GraphQueryCostControlsDto {
+  mode: "graph_query_cost_controls_tenant_budget";
+  generatedAt: string;
+  tenant: {
+    tenantId: string;
+    workspaceId: string;
+    workspaceKind: "investigation" | "campaign_timeline" | "stix_preview" | "runtime_delta";
+    isolation: "tenant_and_workspace_scoped_budget";
+  };
+  budgets: Array<{
+    dimension: GraphQueryBudgetDimension;
+    observed: number;
+    softLimit: number;
+    hardLimit: number;
+    state: "pass" | "watch" | "hold" | "rollback";
+    degradation: "none" | "truncate_with_cursor" | "hold_expansion" | "hold_export" | "rollback_to_summary";
+  }>;
+  continuation: {
+    cursorField: "graph.deltas[].cursor";
+    nextCursor?: string;
+    boundedRelationshipIds: string[];
+    truncatedDimensions: GraphQueryBudgetDimension[];
+  };
+  queuePressure: {
+    state: "pass" | "watch" | "hold" | "rollback";
+    schedulerBudgetClass: "interactive_graph_query" | "graph_export_preview" | "graph_delta_poll";
+    maxRuntimeMs: number;
+    nextPollSeconds: 3;
+    holdReasons: string[];
+  };
+  heldFacts: {
+    weakDiscoveryRelationshipIds: string[];
+    publicChannelOnlyRelationshipIds: string[];
+    restrictedMetadataRelationshipIds: string[];
+    staleRelationshipIds: string[];
+    contradictedRelationshipIds: string[];
+    missingLedgerRelationshipIds: string[];
+    policy: "held_facts_never_promote_because_of_budget_truncation";
+  };
+  stixPreviewLimits: {
+    maxPreviewRelationships: number;
+    eligibleRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    recomputeExportEligibility: "bounded_to_selected_relationship_ids";
+  };
+  agentHandoffs: {
+    agent02SchedulerBudget: "interactive_graph_query_budget";
+    agent06EvidenceChain: "evidence_join_rows_bounded_by_ledger_ids";
+    agent07QualityConfidence: "held_relationships_keep_quality_caveats";
+    agent09ApiCompatibility: "stable_fields_with_cursor_degradation";
+    agent10CapacityRunbook: "hold_or_rollback_on_budget_breach";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
 export type GraphExportSlaState = "pass" | "warning" | "hold" | "rollback";
 
 export type GraphExportSlaBucket =
@@ -2069,6 +3098,15 @@ export interface GraphRuntimeApiDto {
   liveUpdate: GraphLiveSearchUpdateDto;
   backendContract: GraphBackendRepositoryContractDto;
   backendCutover: GraphBackendCutoverRehearsalDto;
+  backendPerformance: GraphBackendPerformanceSoakDto;
+  backendMigrationCertification: GraphBackendMigrationCertificationDto;
+  neo4jMigrationAdapter: GraphNeo4jMigrationAdapterBenchmarkDto;
+  backendAdapterCutover: GraphBackendAdapterCutoverContractDto;
+  queryCostControls: GraphQueryCostControlsDto;
+  driftMonitor: GraphRelationshipDriftMonitorDto;
+  reviewPersistence: GraphReviewPersistenceLedgerDto;
+  reviewedExportSubset: GraphReviewedExportSubsetGovernanceDto;
+  taxiiStixGovernance: GraphTaxiiDescriptorStixBundleGovernanceDto;
   relationships: GraphRuntimeRelationshipDto[];
   reviewQueue: GraphReviewQueueSummaryDto;
 }
@@ -2168,6 +3206,8 @@ export type GraphIntegrityFindingCode =
   | "weak_discovery_only_edge"
   | "contradicted_edge"
   | "stale_accepted_edge"
+  | "deprecated_attack_technique"
+  | "attack_alias_drift"
   | "orphan_relationship"
   | "missing_provenance"
   | "export_blocking_issue";
@@ -2358,6 +3398,8 @@ export interface GraphReviewPlanApiDto {
   exportSla: GraphExportSlaDto;
   enforcement: GraphExportEnforcementDto;
   certification: GraphExportCertificationDto;
+  persistence: GraphReviewPersistenceLedgerDto;
+  exportGovernance: GraphReviewedExportSubsetGovernanceDto;
   actions: GraphReviewApplyPlanItemDto[];
 }
 
@@ -2383,6 +3425,11 @@ export interface StixExportReadinessApiDto {
   exportSla: GraphExportSlaDto;
   enforcement: GraphExportEnforcementDto;
   certification: GraphExportCertificationDto;
+  persistence: GraphReviewPersistenceLedgerDto;
+  exportGovernance: GraphReviewedExportSubsetGovernanceDto;
+  taxiiStixGovernance: GraphTaxiiDescriptorStixBundleGovernanceDto;
+  driftMonitor: GraphRelationshipDriftMonitorDto;
+  backendMigrationCertification: GraphBackendMigrationCertificationDto;
   preview: StixExportPreviewDto;
   taxiiCollections: TaxiiCollectionDescriptor[];
 }

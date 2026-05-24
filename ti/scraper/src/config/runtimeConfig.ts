@@ -5,6 +5,7 @@ export interface RuntimeConfig {
   environment: "local" | "development" | "staging" | "production";
   limits: ResourceLimits;
   collection: CollectionDefaults;
+  scheduler: SchedulerRuntimeDefaults;
 }
 
 export interface ResourceLimits {
@@ -24,7 +25,24 @@ export interface CollectionDefaults {
   darknetMetadataOnly: boolean;
 }
 
+export interface SchedulerRuntimeDefaults {
+  queueBackend: "embedded_memory" | "postgres_scheduler_store";
+  postgresQueueEnabled: boolean;
+  postgresDsnConfigured: boolean;
+  postgresShadowWritesEnabled: boolean;
+  postgresLeaseMode: "disabled" | "shadow" | "active";
+}
+
 export function loadRuntimeConfig(env: Record<string, string | undefined> = Bun.env): RuntimeConfig {
+  const postgresQueueEnabled = readBoolean(env.SCRAPER_SCHEDULER_POSTGRES_QUEUE_ENABLED, false);
+  const postgresShadowWritesEnabled = readBoolean(env.SCRAPER_SCHEDULER_POSTGRES_SHADOW_WRITES_ENABLED, false);
+  const postgresDsnConfigured = Boolean(env.SCRAPER_SCHEDULER_POSTGRES_DSN);
+  const requestedBackend = env.SCRAPER_SCHEDULER_QUEUE_BACKEND === "postgres_scheduler_store"
+    ? "postgres_scheduler_store"
+    : "embedded_memory";
+  const postgresLeaseMode = postgresQueueEnabled
+    ? postgresShadowWritesEnabled ? "shadow" : "active"
+    : "disabled";
   return {
     serviceName: "ti-scraper",
     apiVersion: "v1",
@@ -44,6 +62,13 @@ export function loadRuntimeConfig(env: Record<string, string | undefined> = Bun.
       defaultTimeoutMs: readInt(env.SCRAPER_DEFAULT_TIMEOUT_MS, 30_000),
       highRiskRequiresApproval: readBoolean(env.SCRAPER_HIGH_RISK_REQUIRES_APPROVAL, true),
       darknetMetadataOnly: readBoolean(env.SCRAPER_DARKNET_METADATA_ONLY, true)
+    },
+    scheduler: {
+      queueBackend: requestedBackend,
+      postgresQueueEnabled,
+      postgresDsnConfigured,
+      postgresShadowWritesEnabled,
+      postgresLeaseMode
     }
   };
 }

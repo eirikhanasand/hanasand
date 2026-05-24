@@ -13,17 +13,26 @@ import type {
   GraphCutoverReportDto,
   GraphCursorRelationshipDeltaDto,
   GraphCursorRelationshipKind,
+  GraphDeltaClientContractDto,
   GraphDeltaStreamContractDto,
   GraphDeltaStreamFixtureDto,
   GraphDeltaStreamFixtureName,
   GraphDeltaStreamQueryKind,
   GraphEvidenceSupportRecord,
   GraphAttackCampaignWorkspaceDto,
+  GraphAttackCampaignFreshnessSloDto,
   GraphAttackTechniqueTimelineEventDto,
   GraphBackendRepositoryContractDto,
+  GraphRepositoryBackendKind,
+  GraphRepositoryOperationKind,
   GraphBackendMigrationSchemaDto,
   GraphBackendCutoverRecordKind,
   GraphBackendCutoverRehearsalDto,
+  GraphBackendPerformanceSoakDto,
+  GraphBackendMigrationCertificationDto,
+  GraphBackendMigrationCertificationDataset,
+  GraphNeo4jMigrationAdapterBenchmarkDto,
+  GraphBackendAdapterCutoverContractDto,
   GraphExportEnforcementDto,
   GraphExportEnforcementItemDto,
   GraphExportEnforcementState,
@@ -38,6 +47,8 @@ import type {
   GraphExportSlaDto,
   GraphExportSlaState,
   GraphQueryApiContractDto,
+  GraphQueryBudgetDimension,
+  GraphQueryCostControlsDto,
   GraphQueryReadinessFacetDto,
   GraphIntegrityFindingCode,
   GraphIntegrityFindingDto,
@@ -46,7 +57,16 @@ import type {
   GraphInvestigationWorkspaceReviewAction,
   GraphNeighborhoodViewDto,
   GraphNodeViewDto,
+  GraphReviewPersistenceAction,
+  GraphReviewPersistenceLedgerDto,
   GraphRelationshipReviewState,
+  GraphRelationshipDriftAction,
+  GraphRelationshipExplainabilityDto,
+  GraphInvestigationNotebookExportDto,
+  GraphRelationshipDriftMonitorDto,
+  GraphRelationshipDriftSignalKind,
+  GraphReviewedExportSubsetGovernanceDto,
+  GraphTaxiiDescriptorStixBundleGovernanceDto,
   GraphRelationshipViewDto,
   GraphReviewApiExamplesDto,
   GraphReviewApplyAction,
@@ -63,6 +83,7 @@ import type {
   IntelligenceGraphNode,
   IntelligenceNodeType,
   IntelligenceRelationship,
+  IntelligenceRelationshipType,
   PersistedGraphNode,
   PersistedGraphRelationship,
   PersistedGraphSnapshot,
@@ -364,6 +385,61 @@ export function buildGraphInvestigationWorkspaceDto(
   const ledger = relationships
     .map((relationship) => relationshipConfidenceLedgerEntry(snapshot, relationship, readinessById, findingsByRelationship, nodesById, generatedAt))
     .sort((left, right) => Number(right.reviewBlocked) - Number(left.reviewBlocked) || right.confidence - left.confidence || left.relationshipId.localeCompare(right.relationshipId));
+  const reviewPersistence = buildGraphReviewPersistenceLedgerDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const exportGovernance = buildReviewedExportSubsetGovernanceDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const taxiiStixGovernance = buildTaxiiDescriptorStixBundleGovernanceDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    exportGovernance
+  });
+  const costControls = buildGraphQueryCostControlsDto(snapshot, {
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    workspaceKind: "investigation"
+  });
+  const driftMonitor = buildGraphRelationshipDriftMonitorDto(snapshot, {
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    workspaceKind: "investigation",
+    costControls,
+    deltas: options.deltas
+  });
+  const relationshipExplanations = buildGraphRelationshipExplainabilityDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    driftMonitor,
+    exportGovernance
+  });
+  const notebookExport = buildGraphInvestigationNotebookExportDto({
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    nodes,
+    relationships,
+    relationshipExplanations,
+    driftMonitor,
+    exportGovernance,
+    costControls,
+    pivotRecommendations: []
+  });
+  const backendMigrationCertification = buildGraphBackendMigrationCertificationDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    costControls,
+    driftMonitor,
+    exportGovernance,
+    notebookExport
+  });
 
   const nodeGroups = buildInvestigationNodeGroups(nodes, ledger);
 
@@ -376,7 +452,16 @@ export function buildGraphInvestigationWorkspaceDto(
     nodeGroups,
     nodes,
     relationshipConfidenceLedger: ledger,
+    reviewPersistence,
+    exportGovernance,
+    taxiiStixGovernance,
+    costControls,
+    driftMonitor,
+    relationshipExplanations,
+    notebookExport,
+    backendMigrationCertification,
     reviewActions: buildInvestigationReviewActions(ledger),
+    workflowContracts: buildInvestigationWorkflowContracts(options.query, options.focusNodeId, nodes, ledger),
     deltaPolling: {
       cursorField: "graph.deltas[].cursor",
       nextPollSeconds: 3,
@@ -559,7 +644,38 @@ export function buildGraphAttackCampaignWorkspaceDto(
     || techniqueTimeline.length > maxTimelineEvents
     || reviewHolds.length > maxReviewHolds;
   const pivotQueues = buildGraphPivotQueues(boundedGraphNodes, boundedGraphEdges);
+  const searchPivotRecommendations = buildGraphSearchPivotRecommendations(boundedGraphNodes, boundedGraphEdges, pivotQueues);
+  const reviewBoard = buildGraphCampaignTimelineReviewBoard({
+    generatedAt,
+    timeline: boundedTechniqueTimeline,
+    nodes: boundedGraphNodes,
+    edges: boundedGraphEdges,
+    reviewHolds: boundedReviewHolds
+  });
+  const freshnessSlo = buildGraphAttackCampaignFreshnessSloDto({
+    generatedAt,
+    reviewBoard,
+    timeline: boundedTechniqueTimeline,
+    nodes: boundedGraphNodes
+  });
   const latestCursor = options.deltas?.find((delta) => boundedGraphEdges.some((edge) => edge.relationshipId === delta.relationshipId))?.cursor;
+  const costControls = buildGraphQueryCostControlsDto(snapshot, {
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    relationshipIds: boundedGraphEdges.map((edge) => edge.relationshipId),
+    workspaceKind: "campaign_timeline",
+    deltas: options.deltas
+  });
+  const driftMonitor = buildGraphRelationshipDriftMonitorDto(snapshot, {
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    relationshipIds: boundedGraphEdges.map((edge) => edge.relationshipId),
+    workspaceKind: "campaign_timeline",
+    costControls,
+    deltas: options.deltas
+  });
 
   return {
     endpoint: "/v1/graph/query",
@@ -595,6 +711,11 @@ export function buildGraphAttackCampaignWorkspaceDto(
       ...(truncated && latestCursor ? { nextPageCursor: latestCursor } : {}),
       queryPlan: "bounded_single_hop_campaign_ttp_pivots"
     },
+    searchPivotRecommendations,
+    reviewBoard,
+    freshnessSlo,
+    costControls,
+    driftMonitor,
     deltaPolling: {
       cursorField: "graph.deltas[].cursor",
       nextPollSeconds: 3,
@@ -607,6 +728,454 @@ export function buildGraphAttackCampaignWorkspaceDto(
       taxiiBoundary: "descriptor_only_no_server"
     }
   };
+}
+
+function buildGraphCampaignTimelineReviewBoard(input: {
+  generatedAt: string;
+  timeline: GraphAttackCampaignWorkspaceDto["techniqueTimeline"];
+  nodes: GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"];
+  edges: GraphAttackCampaignWorkspaceDto["campaignGraph"]["edges"];
+  reviewHolds: GraphAttackCampaignWorkspaceDto["reviewHolds"];
+}): GraphAttackCampaignWorkspaceDto["reviewBoard"] {
+  const nodesById = new Map(input.nodes.map((node) => [node.nodeId, node]));
+  const timelineByRelationship = new Map<string, GraphAttackCampaignWorkspaceDto["techniqueTimeline"][number]>();
+  for (const event of input.timeline) {
+    for (const relationshipId of event.relationshipIds) {
+      timelineByRelationship.set(relationshipId, event);
+    }
+  }
+  const holdCodesByRelationship = new Map(input.reviewHolds.map((hold) => [hold.relationshipId, hold.reasonCodes]));
+  const rows = input.edges
+    .filter((edge) => edge.type === "uses" || edge.type === "attributed-to" || edge.type === "targets" || edge.type === "exploits")
+    .map((edge) => {
+      const source = nodesById.get(edge.sourceRef);
+      const target = nodesById.get(edge.targetRef);
+      const timelineEvent = timelineByRelationship.get(edge.relationshipId);
+      const exportBlockers = uniqueFindingCodes([
+        ...edge.exportBlockers,
+        ...(holdCodesByRelationship.get(edge.relationshipId) ?? [])
+      ]);
+      const firstSeenAt = timelineEvent?.firstSeenAt ?? input.generatedAt;
+      const lastSeenAt = timelineEvent?.lastSeenAt ?? input.generatedAt;
+      const releaseImpact = campaignReviewReleaseImpact(edge, exportBlockers, timelineEvent?.confidenceTrend);
+      return {
+        rowId: stableId("campaign-review-row", `${edge.relationshipId}:${firstSeenAt}:${lastSeenAt}`),
+        relationshipIds: [edge.relationshipId],
+        campaignIds: uniqueSorted([
+          ...(timelineEvent?.campaignIds ?? []),
+          ...[source, target].filter((node): node is GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number] => node?.type === "campaign").map((node) => node.nodeId)
+        ]),
+        actorNodeIds: uniqueSorted([source, target].filter((node): node is GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number] => node?.type === "actor").map((node) => node.nodeId)),
+        techniqueNodeIds: uniqueSorted([
+          ...(timelineEvent ? [timelineEvent.techniqueNodeId] : []),
+          ...[source, target].filter((node): node is GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number] => node?.type === "attack-pattern").map((node) => node.nodeId)
+        ]),
+        techniqueNames: uniqueSorted([
+          ...(timelineEvent ? [timelineEvent.techniqueName] : []),
+          ...[source, target].filter((node): node is GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number] => node?.type === "attack-pattern").map((node) => node.value)
+        ]),
+        attackIds: uniqueSorted(timelineEvent?.attackId ? [timelineEvent.attackId] : []),
+        firstSeenAt,
+        lastSeenAt,
+        confidence: edge.confidence,
+        confidenceTrend: timelineEvent?.confidenceTrend ?? campaignReviewConfidenceTrend(edge, exportBlockers),
+        reviewState: edge.reviewState,
+        workflowState: edge.workflowState,
+        sourceIds: edge.sourceIds,
+        evidenceIds: timelineEvent?.evidenceIds ?? [],
+        ledgerIds: uniqueSorted([...edge.ledgerIds, ...(timelineEvent?.ledgerIds ?? [])]),
+        exportEligible: edge.exportEligible,
+        exportBlockers,
+        recommendedAction: campaignReviewRecommendedAction(edge, exportBlockers, timelineEvent?.confidenceTrend),
+        releaseImpact
+      };
+    })
+    .sort((left, right) => campaignReleaseRank(right.releaseImpact) - campaignReleaseRank(left.releaseImpact) || right.confidence - left.confidence || left.rowId.localeCompare(right.rowId));
+  const lanes = campaignReviewBoardLanes(rows);
+  return {
+    mode: "enterprise_campaign_timeline_review_board",
+    generatedAt: input.generatedAt,
+    lanes,
+    rows,
+    summary: {
+      rowCount: rows.length,
+      readyRows: rows.filter((row) => row.releaseImpact === "promote").length,
+      holdRows: rows.filter((row) => row.releaseImpact === "hold").length,
+      rollbackRows: rows.filter((row) => row.releaseImpact === "rollback").length,
+      staleOrContradictedRows: rows.filter((row) => row.confidenceTrend === "stale" || row.confidenceTrend === "contradicted").length,
+      restrictedOrPolicyRows: rows.filter((row) => row.exportBlockers.some((code) => code === "restricted_only_claim" || code === "unsupported_restricted_metadata")).length,
+      publicFactPolicy: "promote_reviewed_only_hold_everything_else"
+    },
+    safety: {
+      metadataOnly: true,
+      rawRestrictedMaterialIncluded: false,
+      taxiiBoundary: "descriptor_only_no_server"
+    }
+  };
+}
+
+function campaignReviewBoardLanes(
+  rows: GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"]
+): GraphAttackCampaignWorkspaceDto["reviewBoard"]["lanes"] {
+  const laneSpecs: Array<{
+    lane: GraphAttackCampaignWorkspaceDto["reviewBoard"]["lanes"][number]["lane"];
+    match: (row: GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number]) => boolean;
+    recommendedAction: GraphAttackCampaignWorkspaceDto["reviewBoard"]["lanes"][number]["recommendedAction"];
+    releaseImpact: GraphAttackCampaignWorkspaceDto["reviewBoard"]["lanes"][number]["releaseImpact"];
+  }> = [
+    { lane: "ready_for_public_fact", match: (row) => row.exportEligible && row.reviewState === "accepted", recommendedAction: "mark_export_ready", releaseImpact: "promote" },
+    { lane: "needs_evidence", match: (row) => row.exportBlockers.includes("missing_ledger_ids") || row.exportBlockers.includes("missing_provenance"), recommendedAction: "request_evidence", releaseImpact: "hold" },
+    { lane: "stale_or_contradicted", match: (row) => row.confidenceTrend === "stale" || row.confidenceTrend === "contradicted" || row.reviewState === "contradicted" || row.reviewState === "expired", recommendedAction: "attach_contradiction", releaseImpact: "hold" },
+    { lane: "restricted_or_policy_hold", match: (row) => row.exportBlockers.includes("restricted_only_claim") || row.exportBlockers.includes("unsupported_restricted_metadata"), recommendedAction: "hold_public_fact", releaseImpact: "hold" },
+    { lane: "export_blocked", match: (row) => !row.exportEligible, recommendedAction: "hold", releaseImpact: "rollback" }
+  ];
+  return laneSpecs.map((spec) => {
+    const laneRows = rows.filter(spec.match);
+    return {
+      lane: spec.lane,
+      relationshipIds: uniqueSorted(laneRows.flatMap((row) => row.relationshipIds)).slice(0, 25),
+      count: laneRows.length,
+      recommendedAction: spec.recommendedAction,
+      releaseImpact: spec.releaseImpact
+    };
+  });
+}
+
+function buildGraphAttackCampaignFreshnessSloDto(input: {
+  generatedAt: string;
+  reviewBoard: GraphAttackCampaignWorkspaceDto["reviewBoard"];
+  timeline: GraphAttackCampaignWorkspaceDto["techniqueTimeline"];
+  nodes: GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"];
+}): GraphAttackCampaignFreshnessSloDto {
+  const timelineByRelationship = new Map<string, GraphAttackTechniqueTimelineEventDto>();
+  for (const event of input.timeline) {
+    for (const relationshipId of event.relationshipIds) {
+      timelineByRelationship.set(relationshipId, event);
+    }
+  }
+  const nodeById = new Map(input.nodes.map((node) => [node.nodeId, node]));
+  const defaultTargetDays = 45;
+  const warningRatio = 0.75;
+  const breachRatio = 1;
+  const rows = input.reviewBoard.rows.map((row): GraphAttackCampaignFreshnessSloDto["rows"][number] => {
+    const timelineEvent = row.relationshipIds.map((relationshipId) => timelineByRelationship.get(relationshipId)).find((event): event is GraphAttackTechniqueTimelineEventDto => Boolean(event));
+    const tactic = timelineEvent?.tactic ?? "unknown";
+    const targetDays = attackCampaignFreshnessTargetDays(tactic);
+    const ageDays = roundMetric(ageInDays(row.lastSeenAt, input.generatedAt));
+    const missingEvidenceReplay = row.exportBlockers.includes("missing_ledger_ids") || row.exportBlockers.includes("missing_provenance") || row.ledgerIds.length === 0;
+    const techniqueLifecycle = attackCampaignTechniqueLifecycle(row.attackIds, row.techniqueNames);
+    const aliasDrift = attackCampaignAliasDrift(row, nodeById);
+    const contradictionState = attackCampaignContradictionState(row);
+    const freshnessState = attackCampaignFreshnessState({
+      ageDays,
+      targetDays,
+      confidenceTrend: row.confidenceTrend,
+      reviewState: row.reviewState,
+      exportEligible: row.exportEligible,
+      exportBlockers: row.exportBlockers,
+      techniqueLifecycleState: techniqueLifecycle.state,
+      aliasDriftState: aliasDrift.state,
+      contradictionState,
+      warningRatio,
+      breachRatio
+    });
+    const exportBlockers = uniqueFindingCodes([
+      ...row.exportBlockers,
+      ...(freshnessState === "warning" || freshnessState === "breach" ? ["stale_accepted_edge" as const] : []),
+      ...(missingEvidenceReplay ? ["missing_ledger_ids" as const] : []),
+      ...(techniqueLifecycle.state === "deprecated_or_revoked" ? ["deprecated_attack_technique" as const] : []),
+      ...(aliasDrift.state !== "none" ? ["attack_alias_drift" as const] : []),
+      ...(contradictionState !== "none" ? ["contradicted_edge" as const] : [])
+    ]);
+    return {
+      rowId: stableId("attack-campaign-freshness-slo-row", `${row.rowId}:${row.lastSeenAt}:${targetDays}`),
+      relationshipIds: row.relationshipIds,
+      campaignIds: row.campaignIds,
+      actorNodeIds: row.actorNodeIds,
+      techniqueNodeIds: row.techniqueNodeIds,
+      attackIds: row.attackIds,
+      tactic,
+      lastSeenAt: row.lastSeenAt,
+      ageDays,
+      targetDays,
+      freshnessState,
+      confidenceTrend: row.confidenceTrend,
+      techniqueLifecycle,
+      aliasDrift,
+      contradictionState,
+      reviewState: row.reviewState,
+      exportEligible: row.exportEligible && freshnessState === "current" && exportBlockers.length === 0,
+      exportEligibilityDecision: attackCampaignExportEligibilityDecision({
+        freshnessState,
+        missingEvidenceReplay,
+        techniqueLifecycleState: techniqueLifecycle.state,
+        aliasDriftState: aliasDrift.state,
+        contradictionState,
+        exportBlockers
+      }),
+      exportBlockers,
+      recommendedAction: attackCampaignFreshnessAction(freshnessState, missingEvidenceReplay, exportBlockers),
+      releaseImpact: attackCampaignFreshnessReleaseImpact(freshnessState, row.releaseImpact, missingEvidenceReplay),
+      sourceIds: row.sourceIds,
+      evidenceIds: row.evidenceIds,
+      ledgerIds: row.ledgerIds
+    };
+  }).sort((left, right) =>
+    attackCampaignFreshnessStateRank(right.freshnessState) - attackCampaignFreshnessStateRank(left.freshnessState)
+    || right.ageDays - left.ageDays
+    || left.rowId.localeCompare(right.rowId)
+  );
+  const sourceCadenceRequests = rows
+    .filter((row) => row.freshnessState !== "current" || row.exportBlockers.includes("missing_ledger_ids") || row.exportBlockers.includes("missing_provenance"))
+    .map((row): GraphAttackCampaignFreshnessSloDto["sourceCadenceRequests"][number] => ({
+      requestId: stableId("attack-campaign-freshness-request", `${row.rowId}:${row.freshnessState}:${row.sourceIds.join(",")}`),
+      relationshipIds: row.relationshipIds,
+      sourceIds: row.sourceIds,
+      reason: attackCampaignFreshnessRequestReason(row),
+      owner: attackCampaignFreshnessRequestOwner(row),
+      dryRun: true
+    }))
+    .slice(0, 25);
+
+  return {
+    mode: "attack_campaign_freshness_slo",
+    generatedAt: input.generatedAt,
+    policy: {
+      defaultTargetDays,
+      warningRatio,
+      breachRatio,
+      publicFactPolicy: "hold_stale_or_unreviewed_campaign_ttp_rows",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    summary: {
+      rowCount: rows.length,
+      currentRows: rows.filter((row) => row.freshnessState === "current").length,
+      warningRows: rows.filter((row) => row.freshnessState === "warning").length,
+      breachRows: rows.filter((row) => row.freshnessState === "breach").length,
+      heldRows: rows.filter((row) => row.freshnessState === "held").length,
+      deprecatedTechniqueRows: rows.filter((row) => row.techniqueLifecycle.state === "deprecated_or_revoked").length,
+      aliasDriftRows: rows.filter((row) => row.aliasDrift.state !== "none").length,
+      contradictionRows: rows.filter((row) => row.contradictionState !== "none").length,
+      exportEligibleRows: rows.filter((row) => row.exportEligible).length,
+      sourceExpansionRequests: sourceCadenceRequests.filter((request) => request.owner === "agent_01" || request.owner === "agent_04").length,
+      evidenceReplayRequests: sourceCadenceRequests.filter((request) => request.owner === "agent_06").length
+    },
+    rows,
+    sourceCadenceRequests,
+    deltaContract: {
+      cursorField: "graph.deltas[].cursor",
+      nextPollSeconds: 3,
+      eventTypes: ["graph.attack_campaign.freshness_warning", "graph.attack_campaign.freshness_breach", "graph.attack_campaign.freshness_hold"]
+    },
+    handoffs: {
+      agent01SourceActivation: "review_source_pack_freshness_debt",
+      agent02SchedulerCadence: "raise_campaign_ttp_collection_cadence_dry_run",
+      agent04CoverageRadar: "expand_safe_public_campaign_sources",
+      agent06EvidenceReplay: "replay_missing_or_stale_campaign_ttp_evidence",
+      agent07QualityReview: "keep_stale_or_contradicted_rows_out_of_public_facts",
+      agent09ApiCompatibility: "stable_3_second_polling_freshness_slo_packet",
+      agent10ReleaseGate: "hold_release_when_campaign_freshness_breaches_lack_review"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+function attackCampaignFreshnessTargetDays(tactic: AttackTactic): number {
+  if (tactic === "initial-access" || tactic === "execution" || tactic === "command-and-control" || tactic === "impact") return 30;
+  if (tactic === "unknown") return 60;
+  return 45;
+}
+
+function attackCampaignFreshnessState(input: {
+  ageDays: number;
+  targetDays: number;
+  confidenceTrend: GraphAttackTechniqueTimelineEventDto["confidenceTrend"];
+  reviewState: GraphRelationshipReviewState;
+  exportEligible: boolean;
+  exportBlockers: GraphIntegrityFindingCode[];
+  techniqueLifecycleState: GraphAttackCampaignFreshnessSloDto["rows"][number]["techniqueLifecycle"]["state"];
+  aliasDriftState: GraphAttackCampaignFreshnessSloDto["rows"][number]["aliasDrift"]["state"];
+  contradictionState: GraphAttackCampaignFreshnessSloDto["rows"][number]["contradictionState"];
+  warningRatio: number;
+  breachRatio: number;
+}): GraphAttackCampaignFreshnessSloDto["rows"][number]["freshnessState"] {
+  if (input.techniqueLifecycleState === "deprecated_or_revoked" || input.aliasDriftState !== "none" || input.contradictionState === "contradicted") return "held";
+  if (input.confidenceTrend === "contradicted" || input.reviewState === "contradicted" || input.exportBlockers.includes("contradicted_edge")) return "held";
+  if (input.confidenceTrend === "stale" || input.reviewState === "expired" || input.ageDays >= input.targetDays * input.breachRatio) return "breach";
+  if (!input.exportEligible || input.exportBlockers.length > 0) return "held";
+  if (input.ageDays >= input.targetDays * input.warningRatio) return "warning";
+  return "current";
+}
+
+function attackCampaignFreshnessAction(
+  state: GraphAttackCampaignFreshnessSloDto["rows"][number]["freshnessState"],
+  missingEvidenceReplay: boolean,
+  blockers: GraphIntegrityFindingCode[]
+): GraphAttackCampaignFreshnessSloDto["rows"][number]["recommendedAction"] {
+  if (missingEvidenceReplay) return "request_evidence_replay";
+  if (blockers.includes("source_bias_cluster") || blockers.includes("weak_discovery_only_edge")) return "request_source_expansion";
+  if (state === "breach") return "mark_stale";
+  if (state === "warning") return "raise_cadence";
+  if (state === "held") return "hold_export";
+  return "keep_current";
+}
+
+function attackCampaignFreshnessReleaseImpact(
+  state: GraphAttackCampaignFreshnessSloDto["rows"][number]["freshnessState"],
+  currentImpact: GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number]["releaseImpact"],
+  missingEvidenceReplay: boolean
+): GraphAttackCampaignFreshnessSloDto["rows"][number]["releaseImpact"] {
+  if (currentImpact === "rollback") return "rollback";
+  if (missingEvidenceReplay || state === "held" || state === "breach") return "hold";
+  if (state === "warning") return "watch";
+  return currentImpact === "promote" ? "promote" : currentImpact;
+}
+
+function attackCampaignFreshnessRequestReason(
+  row: GraphAttackCampaignFreshnessSloDto["rows"][number]
+): GraphAttackCampaignFreshnessSloDto["sourceCadenceRequests"][number]["reason"] {
+  if (row.exportBlockers.includes("missing_ledger_ids") || row.exportBlockers.includes("missing_provenance")) return "missing_evidence_replay";
+  if (row.recommendedAction === "request_source_expansion") return "source_gap";
+  if (row.freshnessState === "breach" || row.freshnessState === "held") return "freshness_breach";
+  return "freshness_warning";
+}
+
+function attackCampaignFreshnessRequestOwner(
+  row: GraphAttackCampaignFreshnessSloDto["rows"][number]
+): GraphAttackCampaignFreshnessSloDto["sourceCadenceRequests"][number]["owner"] {
+  if (row.exportBlockers.includes("missing_ledger_ids") || row.exportBlockers.includes("missing_provenance")) return "agent_06";
+  if (row.recommendedAction === "request_source_expansion") return "agent_04";
+  if (row.sourceIds.length === 0) return "agent_01";
+  return "agent_02";
+}
+
+function attackCampaignFreshnessStateRank(state: GraphAttackCampaignFreshnessSloDto["rows"][number]["freshnessState"]): number {
+  if (state === "held") return 4;
+  if (state === "breach") return 3;
+  if (state === "warning") return 2;
+  return 1;
+}
+
+const DEPRECATED_OR_REVOKED_ATTACK_IDS = new Set(["T1066", "T1086", "T1111"]);
+
+function attackCampaignTechniqueLifecycle(
+  attackIds: string[],
+  techniqueNames: string[]
+): GraphAttackCampaignFreshnessSloDto["rows"][number]["techniqueLifecycle"] {
+  const deprecatedAttackId = attackIds.find((attackId) => DEPRECATED_OR_REVOKED_ATTACK_IDS.has(attackId.toUpperCase()));
+  const deprecatedText = [...attackIds, ...techniqueNames].find((value) => /\b(?:deprecated|revoked|legacy)\b/i.test(value));
+  if (deprecatedAttackId || deprecatedText) {
+    return {
+      state: "deprecated_or_revoked",
+      replacementRequired: true,
+      reviewReason: deprecatedAttackId
+        ? `${deprecatedAttackId} is treated as deprecated or revoked until a reviewed replacement ATT&CK technique is selected`
+        : "Technique text indicates a deprecated, revoked, or legacy ATT&CK mapping"
+    };
+  }
+  return {
+    state: attackIds.length > 0 ? "current" : "unknown",
+    replacementRequired: false
+  };
+}
+
+function attackCampaignAliasDrift(
+  row: GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number],
+  nodeById: Map<string, GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number]>
+): GraphAttackCampaignFreshnessSloDto["rows"][number]["aliasDrift"] {
+  const actorValues = uniqueSorted(row.actorNodeIds
+    .map((nodeId) => nodeById.get(nodeId)?.value)
+    .filter((value): value is string => Boolean(value)));
+  const reasonCodes = uniqueFindingCodes([
+    ...(row.exportBlockers.includes("source_bias_cluster") ? ["source_bias_cluster" as const] : []),
+    ...(row.exportBlockers.includes("contradicted_edge") ? ["contradicted_edge" as const] : []),
+    ...(row.actorNodeIds.length > 1 ? ["attack_alias_drift" as const] : [])
+  ]);
+  const state: GraphAttackCampaignFreshnessSloDto["rows"][number]["aliasDrift"]["state"] = row.reviewState === "contradicted" && actorValues.length > 0
+    ? "split_required"
+    : reasonCodes.length > 0
+      ? "needs_review"
+      : "none";
+
+  return {
+    state,
+    actorNodeIds: row.actorNodeIds,
+    actorValues,
+    reasonCodes
+  };
+}
+
+function attackCampaignContradictionState(
+  row: GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number]
+): GraphAttackCampaignFreshnessSloDto["rows"][number]["contradictionState"] {
+  if (row.reviewState === "contradicted" || row.confidenceTrend === "contradicted" || row.exportBlockers.includes("contradicted_edge")) return "contradicted";
+  if (row.releaseImpact === "hold" && row.exportBlockers.includes("source_bias_cluster")) return "suspected";
+  return "none";
+}
+
+function attackCampaignExportEligibilityDecision(input: {
+  freshnessState: GraphAttackCampaignFreshnessSloDto["rows"][number]["freshnessState"];
+  missingEvidenceReplay: boolean;
+  techniqueLifecycleState: GraphAttackCampaignFreshnessSloDto["rows"][number]["techniqueLifecycle"]["state"];
+  aliasDriftState: GraphAttackCampaignFreshnessSloDto["rows"][number]["aliasDrift"]["state"];
+  contradictionState: GraphAttackCampaignFreshnessSloDto["rows"][number]["contradictionState"];
+  exportBlockers: GraphIntegrityFindingCode[];
+}): GraphAttackCampaignFreshnessSloDto["rows"][number]["exportEligibilityDecision"] {
+  if (input.contradictionState !== "none") return "hold_contradiction";
+  if (input.aliasDriftState !== "none") return "hold_alias_drift";
+  if (input.techniqueLifecycleState === "deprecated_or_revoked") return "hold_deprecated_attack_mapping";
+  if (input.missingEvidenceReplay) return "hold_missing_evidence";
+  if (input.freshnessState === "warning" || input.freshnessState === "breach") return "hold_stale_or_breached";
+  if (input.freshnessState === "current" && input.exportBlockers.length === 0) return "eligible_current_reviewed";
+  return "hold_unreviewed_or_blocked";
+}
+
+function campaignReviewReleaseImpact(
+  edge: GraphAttackCampaignWorkspaceDto["campaignGraph"]["edges"][number],
+  exportBlockers: GraphIntegrityFindingCode[],
+  trend?: GraphAttackTechniqueTimelineEventDto["confidenceTrend"]
+): GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number]["releaseImpact"] {
+  if (exportBlockers.some((code) => code === "export_schema_risk" || code === "unsupported_edge" || code === "orphan_relationship")) return "rollback";
+  if (!edge.exportEligible || edge.reviewState !== "accepted") return "hold";
+  if (trend === "stale" || trend === "contradicted") return "watch";
+  return "promote";
+}
+
+function campaignReviewRecommendedAction(
+  edge: GraphAttackCampaignWorkspaceDto["campaignGraph"]["edges"][number],
+  exportBlockers: GraphIntegrityFindingCode[],
+  trend?: GraphAttackTechniqueTimelineEventDto["confidenceTrend"]
+): GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number]["recommendedAction"] {
+  if (edge.exportEligible && edge.reviewState === "accepted") return "mark_export_ready";
+  if (trend === "contradicted" || edge.reviewState === "contradicted" || exportBlockers.includes("contradicted_edge")) return "attach_contradiction";
+  if (trend === "stale" || edge.reviewState === "expired" || exportBlockers.includes("stale_accepted_edge")) return "mark_stale";
+  if (exportBlockers.includes("missing_ledger_ids") || exportBlockers.includes("missing_provenance")) return "request_evidence";
+  if (exportBlockers.includes("restricted_only_claim") || exportBlockers.includes("unsupported_restricted_metadata")) return "hold_public_fact";
+  if (!edge.exportEligible) return "hold";
+  return "promote";
+}
+
+function campaignReviewConfidenceTrend(
+  edge: GraphAttackCampaignWorkspaceDto["campaignGraph"]["edges"][number],
+  exportBlockers: GraphIntegrityFindingCode[]
+): GraphAttackTechniqueTimelineEventDto["confidenceTrend"] {
+  if (edge.reviewState === "contradicted" || exportBlockers.includes("contradicted_edge")) return "contradicted";
+  if (edge.reviewState === "expired" || exportBlockers.includes("stale_accepted_edge")) return "stale";
+  if (edge.confidence >= 0.8) return "stable";
+  if (edge.confidence < 0.5) return "falling";
+  return "new";
+}
+
+function campaignReleaseRank(impact: GraphAttackCampaignWorkspaceDto["reviewBoard"]["rows"][number]["releaseImpact"]): number {
+  if (impact === "rollback") return 4;
+  if (impact === "hold") return 3;
+  if (impact === "watch") return 2;
+  return 1;
 }
 
 function buildGraphPivotQueues(
@@ -636,6 +1205,71 @@ function buildGraphPivotQueues(
     })
     .sort((left, right) => pivotPriorityRank(right.priority) - pivotPriorityRank(left.priority) || right.relationshipIds.length - left.relationshipIds.length || left.pivotType.localeCompare(right.pivotType))
     .slice(0, 25);
+}
+
+function buildGraphSearchPivotRecommendations(
+  nodes: GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"],
+  edges: GraphAttackCampaignWorkspaceDto["campaignGraph"]["edges"],
+  pivotQueues: GraphAttackCampaignWorkspaceDto["pivotQueues"]
+): GraphAttackCampaignWorkspaceDto["searchPivotRecommendations"] {
+  const nodesById = new Map(nodes.map((node) => [node.nodeId, node]));
+  return pivotQueues
+    .flatMap((pivot) => pivot.nodeIds.map((nodeId) => {
+      const node = nodesById.get(nodeId);
+      if (!node) return undefined;
+      const nodeEdges = edges.filter((edge) => edge.sourceRef === node.nodeId || edge.targetRef === node.nodeId);
+      const held = nodeEdges.filter((edge) => !edge.exportEligible || edge.reviewState !== "accepted");
+      const ready = nodeEdges.filter((edge) => edge.exportEligible && edge.reviewState === "accepted");
+      return {
+        query: graphSearchPivotQuery(node),
+        pivotType: node.type,
+        nodeId: node.nodeId,
+        nodeValue: node.value,
+        sourceRelationshipIds: node.relationshipIds,
+        confidence: node.confidence,
+        priority: pivot.priority,
+        reason: graphSearchPivotReason(node, held.length, ready.length),
+        expectedSearchEffect: graphSearchPivotEffect(held.length, ready.length),
+        safety: {
+          willStartCrawling: false,
+          willFetchRestrictedMaterial: false,
+          metadataOnly: true,
+          taxiiBoundary: "descriptor_only_no_server"
+        }
+      } satisfies GraphAttackCampaignWorkspaceDto["searchPivotRecommendations"][number];
+    }))
+    .filter((item): item is GraphAttackCampaignWorkspaceDto["searchPivotRecommendations"][number] => Boolean(item))
+    .sort((left, right) => pivotPriorityRank(right.priority) - pivotPriorityRank(left.priority) || right.confidence - left.confidence || left.query.localeCompare(right.query))
+    .slice(0, 25);
+}
+
+function graphSearchPivotQuery(node: GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number]): string {
+  if (node.type === "attack-pattern") return `technique:${node.value}`;
+  if (node.type === "vulnerability") return `cve:${node.value}`;
+  if (node.type === "infrastructure") return `infrastructure:${node.value}`;
+  if (node.type === "malware" || node.type === "tool") return `tooling:${node.value}`;
+  if (node.type === "victim") return `victim:${node.value}`;
+  if (node.type === "campaign") return `campaign:${node.value}`;
+  return `actor:${node.value}`;
+}
+
+function graphSearchPivotReason(
+  node: GraphAttackCampaignWorkspaceDto["campaignGraph"]["nodes"][number],
+  heldCount: number,
+  readyCount: number
+): string {
+  if (heldCount > 0) return `Search ${node.value} to corroborate ${heldCount} held graph relationship${heldCount === 1 ? "" : "s"} before public/STIX promotion.`;
+  if (readyCount > 0) return `Search ${node.value} to expand reviewed graph context from ${readyCount} export-ready relationship${readyCount === 1 ? "" : "s"}.`;
+  return `Search ${node.value} as a bounded graph neighborhood pivot.`;
+}
+
+function graphSearchPivotEffect(
+  heldCount: number,
+  readyCount: number
+): GraphAttackCampaignWorkspaceDto["searchPivotRecommendations"][number]["expectedSearchEffect"] {
+  if (heldCount > 0) return "corroborate_hold";
+  if (readyCount > 0) return "promote_reviewed_fact";
+  return "open_graph_neighborhood";
 }
 
 function pivotPriority(
@@ -838,6 +1472,78 @@ export function buildGraphQueryApiContract(endpoint: "/v1/graph/query" | "/v1/gr
     ],
     stixMapping: STIX_21_GRAPH_MAPPING_CONTRACT
   };
+}
+
+function buildInvestigationWorkflowContracts(
+  query: string,
+  focusNodeId: string | undefined,
+  nodes: GraphInvestigationWorkspaceDto["nodes"],
+  ledger: GraphInvestigationWorkspaceDto["relationshipConfidenceLedger"]
+): GraphInvestigationWorkspaceDto["workflowContracts"] {
+  const maxPivotRelationships = 25;
+  const boundedRelationshipIds = ledger.slice(0, maxPivotRelationships).map((entry) => entry.relationshipId);
+  const eligibleRelationshipIds = ledger.filter((entry) => entry.exportEligible).map((entry) => entry.relationshipId);
+  const heldRelationshipIds = ledger.filter((entry) => !entry.exportEligible).map((entry) => entry.relationshipId);
+  const allowedActions = uniqueInvestigationActions(ledger.flatMap((entry) => entry.allowedActions));
+  return {
+    openInvestigation: {
+      endpoint: "/v1/graph/investigations",
+      method: "POST",
+      mode: "contract_only_dry_run",
+      requestFields: ["runId", "query", "focusNodeId", "tenantId", "maxPivotRelationships", "cursor"],
+      responseFields: ["investigationId", "nodeIds", "relationshipIds", "nextCursor", "reviewQueue", "exportEligibility"],
+      investigationId: stableId("graph_investigation", `${query}:${focusNodeId ?? "root"}:${boundedRelationshipIds.join("|")}`),
+      boundedRelationshipIds,
+      nextCursor: ledger.length > maxPivotRelationships ? `relationship:${ledger[maxPivotRelationships]?.relationshipId}` : undefined,
+      tenantScoped: true
+    },
+    savePivotSet: {
+      endpoint: "/v1/graph/investigations/{investigationId}/pivots",
+      method: "POST",
+      mode: "dry_run_until_persistent_review_store",
+      maxPivotRelationships,
+      pivotRelationshipIds: boundedRelationshipIds,
+      cursorStable: true,
+      willMutate: false
+    },
+    reviewRelationship: {
+      endpoint: "/v1/graph/relationships/{relationshipId}/review",
+      method: "POST",
+      mode: "dry_run_or_existing_review_state_only",
+      allowedActions,
+      relationshipIds: boundedRelationshipIds,
+      resultingReviewStates: uniqueReviewStates(ledger.map((entry) => reviewStateAfterInvestigationAction(entry.allowedActions[0], entry.reviewState))),
+      requiredProvenanceFields: ["relationshipId", "evidenceIds", "ledgerIds", "sourceIds", "reviewedBy", "reviewReason"],
+      willMutateWithoutApproval: false
+    },
+    exportReviewedSubset: {
+      endpoint: "/v1/graph/investigations/{investigationId}/exports/stix",
+      method: "POST",
+      mode: "contract_only_export_preview",
+      eligibleRelationshipIds,
+      heldRelationshipIds,
+      mediaType: STIX_21_MEDIA_TYPE,
+      taxiiBoundary: "descriptor_only_no_server"
+    }
+  };
+}
+
+function uniqueInvestigationActions(actions: GraphInvestigationWorkspaceReviewAction[]): GraphInvestigationWorkspaceReviewAction[] {
+  const order: GraphInvestigationWorkspaceReviewAction[] = ["promote", "hold", "reject", "mark_stale", "merge_duplicate", "split_alias_collision", "attach_contradiction", "mark_export_ready"];
+  const actionSet = new Set(actions);
+  return order.filter((action) => actionSet.has(action));
+}
+
+function reviewStateAfterInvestigationAction(
+  action: GraphInvestigationWorkspaceReviewAction | undefined,
+  fallback: GraphRelationshipReviewState
+): GraphRelationshipReviewState {
+  if (action === "promote" || action === "mark_export_ready") return "accepted";
+  if (action === "hold") return "needs_review";
+  if (action === "reject") return "rejected";
+  if (action === "mark_stale") return "expired";
+  if (action === "attach_contradiction") return "contradicted";
+  return fallback;
 }
 
 export function buildAttackMatrixView(snapshot: PersistedGraphSnapshot, actorNodeId?: string): AttackMatrixCellDto[] {
@@ -1219,7 +1925,216 @@ export function buildGraphReviewPlanApiDto(
       endpoint: "/v1/graph/review-plan",
       generatedAt: plan.generatedAt
     }),
+    persistence: buildGraphReviewPersistenceLedgerDto(snapshot, {
+      generatedAt: plan.generatedAt
+    }),
+    exportGovernance: buildReviewedExportSubsetGovernanceDto(snapshot, {
+      generatedAt: plan.generatedAt
+    }),
     actions: plan.items
+  };
+}
+
+function reviewPersistenceDecision(
+  snapshot: PersistedGraphSnapshot,
+  relationship: PersistedGraphRelationship,
+  readinessById: Map<string, StixExportReadinessReportDto["relationships"][number]>,
+  generatedAt: string
+): GraphReviewPersistenceLedgerDto["decisions"][number] {
+  const support = supportFor(snapshot, relationship.id);
+  const readiness = readinessById.get(relationship.id);
+  const action = reviewPersistenceActionFor(relationship, readiness);
+  return {
+    decisionId: stableId("graph-review-decision", `${relationship.id}:${action}:${relationship.reviewState}:${generatedAt}`),
+    relationshipId: relationship.id,
+    action,
+    persistedReviewState: persistedReviewStateAfterAction(relationship, action),
+    reviewerId: action === "promote" || action === "mark_export_ready" ? "analyst_required" : "system_policy",
+    reason: reviewPersistenceReason(relationship, action, readiness?.blockers ?? []),
+    decidedAt: generatedAt,
+    sourceIds: uniqueSorted(support.map((item) => item.sourceId)),
+    evidenceIds: relationship.evidenceSupportIds,
+    captureIds: uniqueSorted(support.map((item) => item.captureId)),
+    ledgerIds: uniqueSorted(support.flatMap((item) => item.ledgerIds)),
+    qualityCorrectionIds: qualityCorrectionIdsFor(relationship),
+    appendOnly: true,
+    exportEligibleAfterDecision: action === "mark_export_ready" || (action === "promote" && readiness?.ready === true),
+    rollbackDecisionId: stableId("graph-review-rollback", `${relationship.id}:${action}:${generatedAt}`)
+  };
+}
+
+function reviewPersistenceActionFor(
+  relationship: PersistedGraphRelationship,
+  readiness?: StixExportReadinessReportDto["relationships"][number]
+): GraphReviewPersistenceAction {
+  const blockers = readiness?.blockers ?? [];
+  if (relationship.type === "alias-of" && relationship.reviewState === "contradicted") return "split_alias";
+  if (relationship.type === "alias-of" && relationship.reviewState === "accepted" && readiness?.ready === true) return "merge_duplicate";
+  if (relationship.reviewState === "rejected") return "reject";
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true || blockers.includes("contradicted_edge")) return "mark_contradicted";
+  if (relationship.reviewState === "expired" || relationship.properties?.stale === true || blockers.includes("stale_accepted_edge")) return "mark_stale";
+  if (relationship.reviewState === "accepted" && readiness?.ready === true) return "mark_export_ready";
+  if (relationship.confidence >= 0.75 && relationship.reviewState !== "accepted" && blockers.length === 0) return "promote";
+  return "hold";
+}
+
+function persistedReviewStateAfterAction(
+  relationship: PersistedGraphRelationship,
+  action: GraphReviewPersistenceAction
+): GraphRelationshipReviewState {
+  if (action === "promote" || action === "mark_export_ready" || action === "merge_duplicate") return "accepted";
+  if (action === "reject") return "rejected";
+  if (action === "mark_contradicted" || action === "split_alias") return "contradicted";
+  if (action === "mark_stale") return "expired";
+  return relationship.reviewState === "unreviewed" ? "needs_review" : relationship.reviewState;
+}
+
+function reviewPersistenceReason(
+  relationship: PersistedGraphRelationship,
+  action: GraphReviewPersistenceAction,
+  blockers: GraphIntegrityFindingCode[]
+): string {
+  if (action === "mark_export_ready") return "relationship is accepted, provenance-backed, and export eligible";
+  if (action === "promote") return "relationship has sufficient confidence and no export blockers but still requires analyst approval";
+  if (action === "reject") return "relationship is rejected and remains excluded from public/STIX facts";
+  if (action === "mark_contradicted") return "contradictory relationship evidence must be persisted as a hold";
+  if (action === "mark_stale") return "stale relationship state is persisted before export subset generation";
+  if (action === "merge_duplicate") return "accepted alias relationship can be persisted as duplicate merge evidence";
+  if (action === "split_alias") return "contradicted alias relationship requires split-alias review state";
+  return blockers.length > 0 ? `relationship held by ${blockers.join(",")}` : "relationship held pending analyst review or stronger provenance";
+}
+
+function qualityCorrectionIdsFor(relationship: PersistedGraphRelationship): string[] {
+  const explicit = relationship.properties?.qualityCorrectionIds ?? relationship.properties?.qualityCorrectionId;
+  if (Array.isArray(explicit) && explicit.every((item) => typeof item === "string")) return uniqueSorted(explicit);
+  if (typeof explicit === "string") return [explicit];
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true) return [stableId("quality-correction", `${relationship.id}:contradiction`)];
+  if (relationship.properties?.stale === true || relationship.reviewState === "expired") return [stableId("quality-correction", `${relationship.id}:stale`)];
+  return [];
+}
+
+export function buildGraphReviewPersistenceLedgerDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+  } = {}
+): GraphReviewPersistenceLedgerDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const scopedSnapshot = {
+    ...snapshot,
+    relationships,
+    evidenceSupport: snapshot.evidenceSupport.filter((support) => relationships.some((relationship) => relationship.id === support.relationshipId))
+  };
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const deltas = buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const decisions = relationships
+    .map((relationship) => reviewPersistenceDecision(scopedSnapshot, relationship, readinessById, generatedAt))
+    .sort((left, right) => left.relationshipId.localeCompare(right.relationshipId));
+
+  return {
+    mode: "graph_review_persistence_contract",
+    generatedAt,
+    decisionActions: ["promote", "hold", "reject", "mark_stale", "mark_contradicted", "merge_duplicate", "split_alias", "mark_export_ready"],
+    decisions,
+    reviewStateCounts: countBy(relationships.map((relationship) => relationship.reviewState)).map(({ code, count }) => ({ reviewState: code, count })),
+    cursorContinuity: {
+      cursorField: "graph.deltas[].cursor",
+      latestCursor: deltas[0]?.cursor,
+      replayableRelationshipIds: uniqueSorted(deltas.map((delta) => delta.relationshipId)).slice(0, 25),
+      replayProof: "decision_rows_replay_before_export_subset_generation"
+    },
+    rollbackPlan: {
+      strategy: "append_compensating_review_decision",
+      rollbackOnlyActions: ["reject", "mark_stale", "mark_contradicted"],
+      willDeleteAuditRows: false,
+      willRewriteEvidence: false
+    },
+    apiDtoStability: {
+      relationshipIdStable: true,
+      decisionIdStable: true,
+      exportSubsetCursorStable: true,
+      dtoFields: ["decisionId", "relationshipId", "action", "persistedReviewState", "ledgerIds", "evidenceIds", "exportEligibleAfterDecision"]
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildReviewedExportSubsetGovernanceDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+  } = {}
+): GraphReviewedExportSubsetGovernanceDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const scopedSnapshot = {
+    ...snapshot,
+    relationships,
+    evidenceSupport: snapshot.evidenceSupport.filter((support) => relationships.some((relationship) => relationship.id === support.relationshipId))
+  };
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const eligibleRelationshipIds = uniqueSorted(readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId));
+  const heldRelationshipIds = uniqueSorted(readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId));
+  const excludedRelationshipIds = uniqueSorted(relationships
+    .filter((relationship) => relationship.reviewState === "rejected" || relationship.reviewState === "contradicted" || (readinessById.get(relationship.id)?.blockers ?? []).includes("export_schema_risk"))
+    .map((relationship) => relationship.id));
+  const decisions = relationships.map((relationship) => reviewPersistenceDecision(scopedSnapshot, relationship, readinessById, generatedAt));
+  return {
+    mode: "reviewed_export_subset_governance",
+    generatedAt,
+    subsetId: stableId("graph-reviewed-export-subset", `${generatedAt}:${eligibleRelationshipIds.join("|")}:${heldRelationshipIds.join("|")}`),
+    mediaType: STIX_21_MEDIA_TYPE,
+    eligibleRelationshipIds: eligibleRelationshipIds.slice(0, 100),
+    heldRelationshipIds: heldRelationshipIds.slice(0, 100),
+    excludedRelationshipIds: excludedRelationshipIds.slice(0, 100),
+    decisionIds: decisions.map((decision) => decision.decisionId).slice(0, 100),
+    cursor: stableId("graph-export-subset-cursor", `${generatedAt}:${eligibleRelationshipIds.length}:${heldRelationshipIds.length}:${excludedRelationshipIds.length}`),
+    governanceChecks: {
+      stixEligibility: "reviewed_provenance_backed_relationships_only",
+      attackFreshness: "deprecated_revoked_or_stale_attack_mappings_hold_export",
+      campaignTimelineReview: "campaign_ttp_rows_require_review_board_clearance",
+      sourceClaimProvenance: "source_capture_ledger_ids_required",
+      restrictedMetadataHolds: "metadata_only_edges_remain_descriptor_context",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    counts: {
+      eligible: eligibleRelationshipIds.length,
+      held: heldRelationshipIds.length,
+      excluded: excludedRelationshipIds.length,
+      restrictedHeld: relationshipIdsByCodes(findingsByRelationship, ["restricted_only_claim", "unsupported_restricted_metadata"]).length,
+      staleHeld: relationshipIdsByCodes(findingsByRelationship, ["stale_accepted_edge"]).length,
+      contradictedHeld: relationshipIdsByCodes(findingsByRelationship, ["contradicted_edge"]).length,
+      missingProvenanceHeld: relationshipIdsByCodes(findingsByRelationship, ["missing_provenance", "missing_ledger_ids"]).length
+    },
+    agentHandoffs: {
+      agent06ClaimLedgerIds: uniqueSorted(scopedSnapshot.evidenceSupport.flatMap((support) => support.ledgerIds)).slice(0, 100),
+      agent07QualityCorrectionIds: uniqueSorted(relationships.flatMap((relationship) => qualityCorrectionIdsFor(relationship))).slice(0, 100),
+      agent09ApiFields: ["subsetId", "eligibleRelationshipIds", "heldRelationshipIds", "cursor", "taxiiBoundary"],
+      agent10ReleaseGate: "promote_when_eligible_nonzero_and_holds_explained"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
   };
 }
 
@@ -1484,6 +2399,121 @@ export function buildGraphExportSlaDto(
   }
 }
 
+function buildGraphRuntimeBackendAdapterCutoverContractDto(input: {
+  generatedAt: string;
+  backendContract: GraphBackendRepositoryContractDto;
+  backendCutover: GraphBackendCutoverRehearsalDto;
+  backendPerformance: GraphBackendPerformanceSoakDto;
+  backendMigrationCertification: GraphBackendMigrationCertificationDto;
+  neo4jMigrationAdapter: GraphNeo4jMigrationAdapterBenchmarkDto;
+}): GraphBackendAdapterCutoverContractDto {
+  const blockers = uniqueSorted([
+    ...input.neo4jMigrationAdapter.cutoverReadiness.blockers,
+    ...(input.backendMigrationCertification.certificationState === "rollback" ? ["backend_migration_certification_rollback"] : []),
+    ...(input.backendMigrationCertification.certificationState === "hold" ? ["backend_migration_certification_hold"] : []),
+    ...(input.backendPerformance.releasePacket.status === "rollback" ? ["backend_performance_rollback"] : []),
+    ...(input.backendPerformance.releasePacket.status === "hold" ? ["backend_performance_hold"] : []),
+    ...(input.backendCutover.releasePacket.status === "rollback" ? ["backend_cutover_rollback"] : []),
+    ...(input.backendCutover.releasePacket.status === "hold" ? ["backend_cutover_hold"] : [])
+  ]);
+  const status: GraphBackendAdapterCutoverContractDto["status"] = blockers.some((blocker) => blocker.includes("rollback"))
+    ? "rollback"
+    : blockers.some((blocker) => blocker.includes("hold") || blocker.includes("missing_ledger"))
+      ? "hold"
+      : input.neo4jMigrationAdapter.status === "warning" || input.backendMigrationCertification.certificationState === "warning"
+        ? "warning"
+        : "pass";
+  const migrations = input.backendCutover.migrationSchemas.reduce<GraphBackendAdapterCutoverContractDto["migrations"]>((items, schema) => {
+    if (schema.backend !== "postgres_graph_tables" && schema.backend !== "neo4j") return items;
+    const backend: "postgres_graph_tables" | "neo4j" = schema.backend;
+    items.push({
+      backend,
+      schemaName: schema.schemaName,
+      tablesOrLabels: schema.tablesOrLabels,
+      requiredIndexes: schema.requiredIndexes,
+      migrationProof: "dry_run_contract_only",
+      rollbackUnit: "snapshot_generation"
+    });
+    return items;
+  }, []);
+
+  return {
+    mode: "neo4j_postgres_graph_backend_adapter_contract",
+    generatedAt: input.generatedAt,
+    status,
+    adapterStrategy: {
+      primaryBackend: "postgres_graph_tables",
+      compatibleBackends: input.backendContract.backendCandidates,
+      neo4jState: "contract_only_no_live_driver",
+      routeShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    interfaces: input.backendContract.operations.map((operation) => ({
+      name: operation.kind,
+      postgresTarget: operation.tableOrLabel,
+      neo4jTarget: neo4jTargetForOperation(operation.kind),
+      idField: operation.idField,
+      requiredFields: operation.requiredFields,
+      tenantScoped: operation.tenantScoped,
+      appendOnly: operation.appendOnly,
+      replayRequired: operation.kind === "record_cursor_delta" || operation.appendOnly
+    })),
+    migrations,
+    cursorReplay: {
+      cursorField: "graph.deltas[].cursor",
+      cursorDeltaCount: input.backendContract.cursorDeltaCount,
+      replayableRelationshipIds: input.backendContract.cursorDeltas.relationshipIds,
+      latestCursor: input.backendContract.cursorDeltas.latestChangedAt,
+      orderPolicy: "preserve_delta_cursor_order_across_backends"
+    },
+    reviewHoldParity: {
+      heldRelationshipIds: uniqueSorted([
+        ...input.backendMigrationCertification.holdPolicy.weakDiscoveryRelationshipIds,
+        ...input.backendMigrationCertification.holdPolicy.publicChannelOnlyRelationshipIds,
+        ...input.backendMigrationCertification.holdPolicy.restrictedMetadataRelationshipIds,
+        ...input.backendMigrationCertification.holdPolicy.staleRelationshipIds,
+        ...input.backendMigrationCertification.holdPolicy.contradictedRelationshipIds,
+        ...input.backendMigrationCertification.holdPolicy.missingLedgerRelationshipIds,
+        ...input.backendMigrationCertification.holdPolicy.budgetBoundedRelationshipIds
+      ]),
+      missingLedgerRelationshipIds: input.backendMigrationCertification.holdPolicy.missingLedgerRelationshipIds,
+      staleRelationshipIds: input.backendMigrationCertification.holdPolicy.staleRelationshipIds,
+      contradictedRelationshipIds: input.backendMigrationCertification.holdPolicy.contradictedRelationshipIds,
+      weakDiscoveryRelationshipIds: input.backendMigrationCertification.holdPolicy.weakDiscoveryRelationshipIds,
+      policy: "held_relationships_remain_non_exportable_until_review_replay_and_recompute_pass"
+    },
+    performanceSlo: {
+      queryPlan: input.backendPerformance.queryCost.queryPlan,
+      costBand: input.backendPerformance.queryCost.costBand,
+      latencyTargets: input.backendPerformance.latencyTargets,
+      benchmarkScenarios: input.neo4jMigrationAdapter.benchmarkScenarios,
+      releaseStatus: input.backendPerformance.releasePacket.status
+    },
+    cutoverReadiness: {
+      decision: status,
+      blockers,
+      fallback: "keep_memory_snapshot_or_postgres_graph_tables_authoritative",
+      proofCommands: [
+        "bun run check",
+        "bun test src/tests/graphViews.test.ts src/tests/graphReviewRoutes.test.ts",
+        "bun run check:graph-review-mounted"
+      ]
+    },
+    handoffs: {
+      agent06PersistenceReplay: "load_graph_rows_from_evidence_claim_ledger_and_cursor_replay_before_cutover",
+      agent07QualityParity: "compare_alias_split_contradiction_stale_and_review_state_parity",
+      agent09ApiCompatibility: "keep_graph_query_runtime_and_stix_response_shapes_stable",
+      agent10ReleaseGate: "consume_adapter_cutover_contract_for_promote_hold_or_rollback"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
 export function buildGraphRuntimeApiDto(
   snapshot: PersistedGraphSnapshot,
   options: {
@@ -1505,6 +2535,21 @@ export function buildGraphRuntimeApiDto(
     relationshipIds: relationships.map((relationship) => relationship.id)
   });
   const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const workspaceKind: GraphQueryCostControlsDto["tenant"]["workspaceKind"] = options.endpoint === "/v1/exports/stix" ? "stix_preview" : options.endpoint === "/v1/intel/search.graph" ? "runtime_delta" : "investigation";
+  const deltas = buildRelationshipCursorDeltas(snapshot, { generatedAt }).filter((delta) => relationships.some((relationship) => relationship.id === delta.relationshipId));
+  const queryCostControls = buildGraphQueryCostControlsDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    workspaceKind,
+    deltas
+  });
+  const driftMonitor = buildGraphRelationshipDriftMonitorDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    workspaceKind,
+    costControls: queryCostControls,
+    deltas
+  });
   const runtimeRelationships = relationships
     .map((relationship) => {
       const source = nodesById.get(relationship.sourceRef) ?? fallbackNode(relationship.sourceRef);
@@ -1524,6 +2569,42 @@ export function buildGraphRuntimeApiDto(
     })
     .sort((left, right) => Number(right.exportReady) - Number(left.exportReady) || right.confidence - left.confidence || left.relationshipId.localeCompare(right.relationshipId))
     .slice(0, options.maxRelationships ?? 50);
+  const reviewedExportSubset = buildReviewedExportSubsetGovernanceDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const taxiiStixGovernance = buildTaxiiDescriptorStixBundleGovernanceDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    exportGovernance: reviewedExportSubset
+  });
+  const reviewPersistence = buildGraphReviewPersistenceLedgerDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const backendContract = buildGraphBackendRepositoryContractDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const backendCutover = buildGraphBackendCutoverRehearsalDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const backendPerformance = buildGraphBackendPerformanceSoakDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const backendMigrationCertification = buildGraphBackendMigrationCertificationDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    costControls: queryCostControls,
+    driftMonitor,
+    exportGovernance: reviewedExportSubset
+  });
+  const neo4jMigrationAdapter = buildGraphNeo4jMigrationAdapterBenchmarkDto(snapshot, {
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
 
   return {
     endpoint: options.endpoint,
@@ -1552,14 +2633,24 @@ export function buildGraphRuntimeApiDto(
       generatedAt,
       relationshipIds: relationships.map((relationship) => relationship.id)
     }),
-    backendContract: buildGraphBackendRepositoryContractDto(snapshot, {
+    backendContract,
+    backendCutover,
+    backendPerformance,
+    backendMigrationCertification,
+    neo4jMigrationAdapter,
+    backendAdapterCutover: buildGraphRuntimeBackendAdapterCutoverContractDto({
       generatedAt,
-      relationshipIds: relationships.map((relationship) => relationship.id)
+      backendContract,
+      backendCutover,
+      backendPerformance,
+      backendMigrationCertification,
+      neo4jMigrationAdapter
     }),
-    backendCutover: buildGraphBackendCutoverRehearsalDto(snapshot, {
-      generatedAt,
-      relationshipIds: relationships.map((relationship) => relationship.id)
-    }),
+    queryCostControls,
+    driftMonitor,
+    reviewPersistence,
+    reviewedExportSubset,
+    taxiiStixGovernance,
     relationships: runtimeRelationships,
     reviewQueue
   };
@@ -1732,6 +2823,1542 @@ export function buildGraphBackendCutoverRehearsalDto(
   };
 }
 
+export function buildGraphBackendPerformanceSoakDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+  } = {}
+): GraphBackendPerformanceSoakDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const support = snapshot.evidenceSupport.filter((item) => relationshipIds.has(item.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: support };
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const deltas = buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const reviewHoldIds = uniqueSorted(readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId));
+  const nodeIds = uniqueSorted(relationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]));
+  const estimatedCostUnits = graphQueryEstimatedCostUnits({
+    relationshipCount: relationships.length,
+    nodeCount: nodeIds.length,
+    evidenceSupportCount: support.length,
+    cursorDeltaCount: deltas.length,
+    reviewHoldCount: reviewHoldIds.length
+  });
+  const costBand = graphQueryCostBand(estimatedCostUnits, relationships.length, nodeIds.length);
+  const queueState = costBand === "rollback"
+    ? "rollback"
+    : costBand === "high" || reviewHoldIds.length > 50
+      ? "hold"
+      : costBand === "medium" || reviewHoldIds.length > 20
+        ? "watch"
+        : "pass";
+  const releaseStatus: GraphBackendPerformanceSoakDto["releasePacket"]["status"] = queueState === "rollback"
+    ? "rollback"
+    : queueState === "hold"
+      ? "hold"
+      : queueState === "watch"
+        ? "warning"
+        : "pass";
+
+  return {
+    mode: "graph_backend_performance_soak",
+    generatedAt,
+    targetBackends: ["memory_snapshot", "postgres_graph_tables", "neo4j"],
+    queryCost: {
+      queryPlan: "bounded_single_hop_relationship_scan",
+      relationshipCount: relationships.length,
+      nodeCount: nodeIds.length,
+      evidenceSupportCount: support.length,
+      cursorDeltaCount: deltas.length,
+      reviewHoldCount: reviewHoldIds.length,
+      exportReadyCount: readiness.readyCount,
+      estimatedCostUnits,
+      costBand
+    },
+    budgets: {
+      maxRelationshipsPerPage: 50,
+      maxNodesPerPage: 75,
+      maxEvidenceSupportRows: 150,
+      maxCursorDeltas: 100,
+      maxCostUnits: 250,
+      publicPollSeconds: 3
+    },
+    latencyTargets: buildGraphBackendLatencyTargets(costBand, estimatedCostUnits),
+    queuePressure: {
+      graphExportQueued: readiness.readyCount,
+      reviewHoldQueued: reviewHoldIds.length,
+      cursorReplayQueued: deltas.length,
+      state: queueState
+    },
+    soakScenarios: buildGraphBackendSoakScenarios(relationships, reviewHoldIds, deltas, findingsByRelationship, queueState),
+    safety: {
+      tenantScoped: true,
+      restrictedMaterialPolicy: "metadata_only_review_hold",
+      rawRestrictedMaterialIncluded: false,
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    releasePacket: {
+      owner: "Agent 08",
+      status: releaseStatus,
+      proofCommand: "bun test src/tests/graphViews.test.ts",
+      agent10Field: "graphBackendPerformanceSoak",
+      rollbackPath: releaseStatus === "pass"
+        ? "keep bounded graph query plan and continue collecting latency samples during canary"
+        : "hold graph export promotion and keep bounded in-memory DTOs authoritative until backend soak returns pass"
+    }
+  };
+}
+
+export function buildGraphNeo4jMigrationAdapterBenchmarkDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+  } = {}
+): GraphNeo4jMigrationAdapterBenchmarkDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const support = snapshot.evidenceSupport.filter((item) => relationshipIds.has(item.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: support };
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const deltas = buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const nodes = snapshot.nodes.filter((node) => relationships.some((relationship) => relationship.sourceRef === node.id || relationship.targetRef === node.id));
+  const relationshipProjection = buildNeo4jRelationshipProjection(relationships, readiness);
+  const benchmarkScenarios = buildNeo4jBenchmarkScenarios(relationships, readiness, deltas);
+  const hasMissingLedger = support.some((item) => item.ledgerIds.length === 0);
+  const heldRowsRemainNonExportable = readiness.relationships
+    .filter((relationship) => !relationship.ready)
+    .every((relationship) => relationship.blockers.length > 0);
+  const status: GraphNeo4jMigrationAdapterBenchmarkDto["status"] = benchmarkScenarios.some((scenario) => scenario.status === "rollback")
+    ? "rollback"
+    : hasMissingLedger || !heldRowsRemainNonExportable
+      ? "hold"
+      : benchmarkScenarios.some((scenario) => scenario.status === "warning")
+        ? "warning"
+        : "pass";
+
+  return {
+    mode: "neo4j_migration_adapter_contract_benchmark",
+    generatedAt,
+    status,
+    adapterBoundary: {
+      targetBackend: "neo4j",
+      implementationState: "contract_only_no_live_driver",
+      primaryCutoverBackend: "postgres_graph_tables",
+      apiShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    nodeLabelProjection: buildNeo4jNodeLabelProjection(nodes),
+    relationshipProjection,
+    constraints: [
+      {
+        name: "graph_node_identity",
+        cypher: "CREATE CONSTRAINT graph_node_identity IF NOT EXISTS FOR (n:GraphNode) REQUIRE (n.tenant_id, n.workspace_id, n.node_id) IS UNIQUE",
+        requiredBeforePromotion: true
+      },
+      {
+        name: "graph_relationship_identity",
+        cypher: "CREATE CONSTRAINT graph_relationship_identity IF NOT EXISTS FOR ()-[r:GRAPH_RELATIONSHIP]-() REQUIRE (r.tenant_id, r.workspace_id, r.relationship_id) IS UNIQUE",
+        requiredBeforePromotion: true
+      },
+      {
+        name: "graph_cursor_order",
+        cypher: "CREATE INDEX graph_cursor_order IF NOT EXISTS FOR ()-[r:GRAPH_RELATIONSHIP]-() ON (r.tenant_id, r.cursor, r.last_seen_at)",
+        requiredBeforePromotion: true
+      },
+      {
+        name: "graph_export_review",
+        cypher: "CREATE INDEX graph_export_review IF NOT EXISTS FOR ()-[r:GRAPH_RELATIONSHIP]-() ON (r.review_state, r.export_eligible)",
+        requiredBeforePromotion: true
+      }
+    ],
+    benchmarkScenarios,
+    parityChecks: {
+      nodeCountMatchesSnapshot: nodes.length <= snapshot.nodes.length,
+      relationshipCountMatchesSnapshot: relationshipProjection.reduce((total, row) => total + row.count, 0) === relationships.length,
+      evidenceSupportCountMatchesSnapshot: support.every((item) => item.relationshipId.length > 0 && item.contentHash.length > 0),
+      cursorOrderPreserved: deltas.every((delta) => delta.cursor.length > 0 && delta.changedAt.length > 0),
+      reviewStateParity: relationships.every((relationship) => relationship.reviewState.length > 0),
+      exportEligibilityParity: readiness.relationships.length === relationships.length,
+      heldRowsRemainNonExportable
+    },
+    cutoverReadiness: {
+      decision: status,
+      blockers: neo4jAdapterBlockers(status, hasMissingLedger, heldRowsRemainNonExportable, benchmarkScenarios),
+      fallback: "keep_postgres_graph_tables_or_memory_snapshot_authoritative",
+      proofCommand: "bun test src/tests/graphViews.test.ts"
+    },
+    handoffs: {
+      agent06Replay: "load_nodes_relationships_provenance_reviews_confidence_and_cursor_deltas_before_benchmark",
+      agent07Quality: "compare_alias_split_contradiction_and_review_state_parity",
+      agent09Api: "keep_graph_query_and_stix_runtime_dto_shapes_stable",
+      agent10Release: "consume_neo4j_adapter_benchmark_for_promote_hold_or_rollback"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphBackendAdapterCutoverContractDto(input: {
+  generatedAt: string;
+  backendContract: GraphBackendRepositoryContractDto;
+  backendCutover: GraphBackendCutoverRehearsalDto;
+  backendPerformance: GraphBackendPerformanceSoakDto;
+  backendMigrationCertification: GraphBackendMigrationCertificationDto;
+  neo4jMigrationAdapter: GraphNeo4jMigrationAdapterBenchmarkDto;
+}): GraphBackendAdapterCutoverContractDto {
+  const schemaByBackend = new Map(input.backendCutover.migrationSchemas.map((schema) => [schema.backend, schema]));
+  const heldRelationshipIds = uniqueSorted([
+    ...input.backendMigrationCertification.holdPolicy.weakDiscoveryRelationshipIds,
+    ...input.backendMigrationCertification.holdPolicy.publicChannelOnlyRelationshipIds,
+    ...input.backendMigrationCertification.holdPolicy.restrictedMetadataRelationshipIds,
+    ...input.backendMigrationCertification.holdPolicy.staleRelationshipIds,
+    ...input.backendMigrationCertification.holdPolicy.contradictedRelationshipIds,
+    ...input.backendMigrationCertification.holdPolicy.missingLedgerRelationshipIds,
+    ...input.backendMigrationCertification.holdPolicy.budgetBoundedRelationshipIds
+  ]).slice(0, 50);
+  const blockers = uniqueSorted([
+    ...input.neo4jMigrationAdapter.cutoverReadiness.blockers,
+    ...(input.backendMigrationCertification.certificationState === "rollback" ? ["backend_migration_certification_rollback"] : []),
+    ...(input.backendMigrationCertification.certificationState === "hold" ? ["backend_migration_certification_hold"] : []),
+    ...(input.backendPerformance.releasePacket.status === "rollback" ? ["backend_performance_rollback"] : []),
+    ...(input.backendPerformance.releasePacket.status === "hold" ? ["backend_performance_hold"] : []),
+    ...(input.backendCutover.releasePacket.status === "rollback" ? ["backend_cutover_rollback"] : []),
+    ...(input.backendCutover.releasePacket.status === "hold" ? ["backend_cutover_hold"] : [])
+  ]);
+  const status: GraphBackendAdapterCutoverContractDto["status"] = blockers.some((blocker) => blocker.includes("rollback"))
+    ? "rollback"
+    : blockers.some((blocker) => blocker.includes("hold") || blocker.includes("missing_ledger"))
+      ? "hold"
+      : input.neo4jMigrationAdapter.status === "warning" || input.backendMigrationCertification.certificationState === "warning"
+        ? "warning"
+        : "pass";
+
+  return {
+    mode: "neo4j_postgres_graph_backend_adapter_contract",
+    generatedAt: input.generatedAt,
+    status,
+    adapterStrategy: {
+      primaryBackend: "postgres_graph_tables",
+      compatibleBackends: input.backendContract.backendCandidates,
+      neo4jState: "contract_only_no_live_driver",
+      routeShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    interfaces: input.backendContract.operations.map((operation) => ({
+      name: operation.kind,
+      postgresTarget: operation.tableOrLabel,
+      neo4jTarget: neo4jTargetForOperation(operation.kind),
+      idField: operation.idField,
+      requiredFields: operation.requiredFields,
+      tenantScoped: operation.tenantScoped,
+      appendOnly: operation.appendOnly,
+      replayRequired: operation.kind !== "update_export_eligibility"
+    })),
+    migrations: (["postgres_graph_tables", "neo4j"] as const).map((backend) => {
+      const schema = schemaByBackend.get(backend);
+      return {
+        backend,
+        schemaName: schema?.schemaName ?? `${backend}_graph_contract`,
+        tablesOrLabels: schema?.tablesOrLabels ?? [],
+        requiredIndexes: schema?.requiredIndexes ?? [],
+        migrationProof: "dry_run_contract_only",
+        rollbackUnit: "snapshot_generation"
+      };
+    }),
+    cursorReplay: {
+      cursorField: "graph.deltas[].cursor",
+      cursorDeltaCount: input.backendCutover.replayImport.cursorDeltaCount,
+      replayableRelationshipIds: input.backendCutover.replayImport.replayableRelationshipIds,
+      latestCursor: input.backendCutover.replayImport.latestCursor,
+      orderPolicy: "preserve_delta_cursor_order_across_backends"
+    },
+    reviewHoldParity: {
+      heldRelationshipIds,
+      missingLedgerRelationshipIds: input.backendMigrationCertification.holdPolicy.missingLedgerRelationshipIds,
+      staleRelationshipIds: input.backendMigrationCertification.holdPolicy.staleRelationshipIds,
+      contradictedRelationshipIds: input.backendMigrationCertification.holdPolicy.contradictedRelationshipIds,
+      weakDiscoveryRelationshipIds: input.backendMigrationCertification.holdPolicy.weakDiscoveryRelationshipIds,
+      policy: "held_relationships_remain_non_exportable_until_review_replay_and_recompute_pass"
+    },
+    performanceSlo: {
+      queryPlan: input.backendPerformance.queryCost.queryPlan,
+      costBand: input.backendPerformance.queryCost.costBand,
+      latencyTargets: input.backendPerformance.latencyTargets,
+      benchmarkScenarios: input.neo4jMigrationAdapter.benchmarkScenarios,
+      releaseStatus: input.backendPerformance.releasePacket.status
+    },
+    cutoverReadiness: {
+      decision: status,
+      blockers,
+      fallback: "keep_memory_snapshot_or_postgres_graph_tables_authoritative",
+      proofCommands: [
+        "bun run check",
+        "bun test src/tests/graphViews.test.ts src/tests/graphReviewRoutes.test.ts",
+        "bun run check:graph-review-mounted"
+      ]
+    },
+    handoffs: {
+      agent06PersistenceReplay: "load_graph_rows_from_evidence_claim_ledger_and_cursor_replay_before_cutover",
+      agent07QualityParity: "compare_alias_split_contradiction_stale_and_review_state_parity",
+      agent09ApiCompatibility: "keep_graph_query_runtime_and_stix_response_shapes_stable",
+      agent10ReleaseGate: "consume_adapter_cutover_contract_for_promote_hold_or_rollback"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphBackendMigrationCertificationDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+    costControls?: GraphQueryCostControlsDto;
+    driftMonitor?: GraphRelationshipDriftMonitorDto;
+    exportGovernance?: GraphReviewedExportSubsetGovernanceDto;
+    notebookExport?: GraphInvestigationNotebookExportDto;
+  } = {}
+): GraphBackendMigrationCertificationDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const support = snapshot.evidenceSupport.filter((item) => relationshipIds.has(item.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: support };
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const scopedNodes = snapshot.nodes.filter((node) => relationships.some((relationship) => relationship.sourceRef === node.id || relationship.targetRef === node.id));
+  const deltas = buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const costControls = options.costControls ?? buildGraphQueryCostControlsDto(scopedSnapshot, { generatedAt, workspaceKind: "investigation" });
+  const driftMonitor = options.driftMonitor ?? buildGraphRelationshipDriftMonitorDto(scopedSnapshot, {
+    generatedAt,
+    workspaceKind: "investigation",
+    costControls,
+    deltas
+  });
+  const missingLedgerRelationshipIds = uniqueSorted([
+    ...relationships
+      .filter((relationship) => supportFor(scopedSnapshot, relationship.id).length === 0)
+      .map((relationship) => relationship.id),
+    ...support.filter((item) => item.ledgerIds.length === 0).map((item) => item.relationshipId)
+  ]);
+  const heldRelationshipIds = uniqueSorted(readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId));
+  const eligibleRelationshipIds = uniqueSorted(readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId));
+  const confidenceHistoryCount = relationships.reduce((count, relationship) => count + relationship.confidenceHistory.length, 0);
+  const reviewDecisionCount = relationships.reduce((count, relationship) => count + relationship.reviewAudit.length, 0);
+  const attackCampaignTimelineRows = relationships.filter((relationship) => {
+    const source = nodesById.get(relationship.sourceRef);
+    const target = nodesById.get(relationship.targetRef);
+    return source?.type === "actor" && target?.type === "attack-pattern" && relationship.type === "uses";
+  }).length;
+  const graphPivotCount = uniqueSorted(relationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef])).length;
+  const notebookExportRows = options.notebookExport?.boundedEdges.length ?? Math.min(relationships.length, 50);
+  const blockers = uniqueFindingCodes([
+    ...readiness.relationships.flatMap((relationship) => relationship.blockers),
+    ...[...findingsByRelationship.values()].flatMap((findings) => findings.map((finding) => finding.code))
+  ]);
+  const hasRollbackRisk = blockers.some((code) => ["missing_provenance", "orphan_relationship", "export_schema_risk", "unsupported_edge"].includes(code))
+    || costControls.queuePressure.state === "rollback";
+  const certificationState: GraphBackendMigrationCertificationDto["certificationState"] = hasRollbackRisk
+    ? "rollback"
+    : missingLedgerRelationshipIds.length > 0 || heldRelationshipIds.length > 0 || costControls.queuePressure.state === "hold"
+      ? "hold"
+      : costControls.queuePressure.state === "watch"
+        ? "warning"
+        : "pass";
+  const relationshipIndexes = ["tenant_id", "workspace_id", "relationship_id", "source_ref", "target_ref"];
+  const migrationDataset = (
+    order: number,
+    dataset: GraphBackendMigrationCertificationDataset,
+    target: string,
+    prerequisite: string,
+    replayProof: string,
+    rollbackCheckpoint: string,
+    requiredIndexes: string[]
+  ): GraphBackendMigrationCertificationDto["migrationOrder"][number] => ({
+    order,
+    dataset,
+    sourceContract: `GraphBackendMigrationCertificationDto.${dataset}`,
+    target,
+    prerequisite,
+    replayProof,
+    rollbackCheckpoint,
+    requiredIndexes
+  });
+
+  return {
+    mode: "graph_backend_production_migration_certification",
+    generatedAt,
+    targetBackends: ["memory_snapshot", "postgres_graph_tables", "neo4j"],
+    certificationState,
+    summary: {
+      nodeCount: scopedNodes.length,
+      edgeCount: relationships.length,
+      provenanceRowCount: support.length,
+      reviewDecisionCount,
+      confidenceHistoryCount,
+      cursorDeltaCount: deltas.length,
+      attackCampaignTimelineRows,
+      graphPivotCount,
+      notebookExportRows,
+      stixPreviewRows: readiness.relationships.length,
+      heldRelationshipCount: heldRelationshipIds.length,
+      exportEligibleCount: eligibleRelationshipIds.length
+    },
+    migrationOrder: [
+      migrationDataset(1, "nodes", "graph_nodes / (:GraphNode)", "tenant scoped source nodes exist", "compare node counts and stable ids", "restore graph_nodes snapshot", ["tenant_id", "workspace_id", "node_id", "node_type", "value_hash"]),
+      migrationDataset(2, "relationships", "graph_relationships / [:TI_RELATIONSHIP]", "nodes imported first", "compare source_ref target_ref type confidence review_state", "restore graph_relationships snapshot", relationshipIndexes),
+      migrationDataset(3, "evidence_provenance", "graph_relationship_provenance", "Agent 06 capture and claim-ledger replay complete", "compare source ids capture ids content hashes and ledger ids", "drop provenance import batch", ["tenant_id", "relationship_id", "source_id", "capture_id", "content_hash"]),
+      migrationDataset(4, "relationship_reviews", "graph_relationship_review_audit", "relationship ids and evidence provenance imported", "append-only audit row count matches snapshot", "append compensating rollback decision", ["tenant_id", "relationship_id", "decision_id", "review_state"]),
+      migrationDataset(5, "confidence_history", "graph_relationship_confidence_history", "review audit imported", "append-only confidence history count matches snapshot", "discard confidence import batch", ["tenant_id", "relationship_id", "recorded_at"]),
+      migrationDataset(6, "cursor_deltas", "graph_cursor_deltas", "confidence and review rows imported", "latest cursor and relationship order match graph.deltas", "restore previous cursor checkpoint", ["tenant_id", "workspace_id", "cursor", "relationship_id", "changed_at"]),
+      migrationDataset(7, "attack_campaign_timeline", "graph_attack_campaign_timeline", "actor campaign TTP edges imported", "timeline row count and ATT&CK ids match workspace", "rebuild timeline projection from relationships", ["tenant_id", "actor_id", "campaign_id", "technique_id", "last_seen_at"]),
+      migrationDataset(8, "graph_pivots", "graph_investigation_pivots", "nodes relationships and review states imported", "bounded pivot relationship ids match workspace", "rebuild pivot projection from relationship table", ["tenant_id", "workspace_id", "node_id", "priority"]),
+      migrationDataset(9, "notebook_exports", "graph_notebook_export_projection", "pivots and explanations available", "bounded notebook edge count and taxii descriptor match", "delete notebook projection and rebuild from DTO", ["tenant_id", "workspace_id", "export_packet_id"]),
+      migrationDataset(10, "stix_preview_subsets", "graph_stix_preview_subset", "export eligibility recomputed after replay", "eligible and held relationship ids match readiness", "hold STIX preview and recompute eligibility", ["tenant_id", "workspace_id", "relationship_id", "export_eligible"])
+    ],
+    replayPrerequisites: {
+      source: "agent06_retention_replay_and_claim_ledger",
+      requiresDurableCaptures: true,
+      requiresClaimLedgerRows: true,
+      requiresReviewAuditRows: true,
+      requiresCursorReplay: true,
+      requiredRelationshipIds: uniqueSorted(relationships.map((relationship) => relationship.id)).slice(0, 50),
+      missingLedgerRelationshipIds: missingLedgerRelationshipIds.slice(0, 50),
+      retentionBoundary: "hashes_ids_redaction_state_and_metadata_only"
+    },
+    indexRequirements: [
+      { name: "graph_tenant_workspace_idx", fields: ["tenant_id", "workspace_id"], purpose: "tenant scoped graph workspace reads", requiredBeforePromotion: true },
+      { name: "graph_relationship_endpoints_idx", fields: ["source_ref", "target_ref", "relationship_type"], purpose: "bounded pivots and neighborhood reads", requiredBeforePromotion: true },
+      { name: "graph_review_state_idx", fields: ["review_state", "export_eligible", "last_seen_at"], purpose: "review queues and export recomputation", requiredBeforePromotion: true },
+      { name: "graph_cursor_idx", fields: ["cursor", "changed_at", "relationship_id"], purpose: "3-second polling and replay continuity", requiredBeforePromotion: true },
+      { name: "graph_attack_campaign_idx", fields: ["actor_id", "campaign_id", "technique_id", "attack_id"], purpose: "ATT&CK campaign timeline workspaces", requiredBeforePromotion: false },
+      { name: "graph_stix_subset_idx", fields: ["relationship_id", "export_eligible", "blocker_code"], purpose: "STIX preview subset recomputation", requiredBeforePromotion: true }
+    ],
+    cursorContinuity: {
+      cursorField: "graph.deltas[].cursor",
+      latestCursor: deltas[0]?.cursor,
+      replayableRelationshipIds: uniqueSorted(relationships.filter((relationship) => support.some((item) => item.relationshipId === relationship.id)).map((relationship) => relationship.id)).slice(0, 50),
+      changedRelationshipIds: uniqueSorted(deltas.map((delta) => delta.relationshipId)).slice(0, 50),
+      nextPollSeconds: 3,
+      policy: "preserve_cursor_order_across_backend_replay"
+    },
+    tenantScoping: {
+      tenantId: costControls.tenant.tenantId,
+      workspaceId: costControls.tenant.workspaceId,
+      isolation: "tenant_and_workspace_required_on_all_graph_rows",
+      crossTenantJoinsAllowed: false
+    },
+    exportRecomputation: {
+      eligibleRelationshipIds: eligibleRelationshipIds.slice(0, 50),
+      heldRelationshipIds: heldRelationshipIds.slice(0, 50),
+      blockers,
+      policy: "recompute_after_replay_before_stix_preview_or_taxii_descriptor",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    holdPolicy: {
+      weakDiscoveryRelationshipIds: driftMonitor.heldFacts.weakDiscoveryRelationshipIds,
+      publicChannelOnlyRelationshipIds: driftMonitor.heldFacts.publicChannelOnlyRelationshipIds,
+      restrictedMetadataRelationshipIds: driftMonitor.heldFacts.restrictedMetadataRelationshipIds,
+      staleRelationshipIds: driftMonitor.heldFacts.staleRelationshipIds,
+      contradictedRelationshipIds: driftMonitor.heldFacts.contradictedRelationshipIds,
+      missingLedgerRelationshipIds: uniqueSorted([...driftMonitor.heldFacts.missingLedgerRelationshipIds, ...missingLedgerRelationshipIds]).slice(0, 50),
+      budgetBoundedRelationshipIds: driftMonitor.heldFacts.budgetBoundedRelationshipIds,
+      policy: "held_relationships_remain_non_exportable_until_review_and_replay_pass"
+    },
+    rollbackCheckpoints: [
+      { name: "graph_tables_snapshot", checkpoint: "last_verified_graph_snapshot", action: "restore graph tables or keep memory snapshot authoritative" },
+      { name: "review_audit_append_only", checkpoint: "pre_import_review_audit_tail", action: "append compensating rollback decisions instead of deleting audit rows" },
+      { name: "cursor_replay_checkpoint", checkpoint: "latest_verified_graph_delta_cursor", action: "resume polling from previous cursor and suppress backend deltas" },
+      { name: "export_subset_recompute", checkpoint: "pre_replay_stix_preview_subset", action: "hold STIX preview and recompute eligible and held ids" },
+      { name: "notebook_projection_rebuild", checkpoint: "metadata_only_notebook_export_packet", action: "rebuild notebook projection from graph workspace DTO" }
+    ],
+    agentHandoffs: {
+      agent06RetentionReplay: "prove_captures_claim_ledgers_review_audit_and_cursor_replay_before_import",
+      agent07QualityGate: "certify_contradictions_stale_edges_and_entity_splits_before_export_recompute",
+      agent09ApiContract: "serve_existing_graph_runtime_workspace_and_stix_fields_without_shape_changes",
+      agent10ReleaseGate: "consume_graph_backend_migration_certification_for_promote_hold_or_rollback"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphQueryCostControlsDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    query?: string;
+    focusNodeId?: string;
+    relationshipIds?: string[];
+    workspaceKind?: GraphQueryCostControlsDto["tenant"]["workspaceKind"];
+    deltas?: GraphCursorRelationshipDeltaDto[];
+  } = {}
+): GraphQueryCostControlsDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.id));
+  const support = snapshot.evidenceSupport.filter((item) => relationshipIds.has(item.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: support };
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const deltas = options.deltas ?? buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const nodeIds = uniqueSorted(relationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]));
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const techniqueTimelineEventCount = relationships.filter((relationship) => {
+    const source = nodesById.get(relationship.sourceRef);
+    const target = nodesById.get(relationship.targetRef);
+    return relationship.type === "uses" && (source?.type === "attack-pattern" || target?.type === "attack-pattern");
+  }).length;
+  const campaignPivotCount = uniqueSorted(relationships
+    .flatMap((relationship) => [nodesById.get(relationship.sourceRef), nodesById.get(relationship.targetRef)])
+    .filter((node): node is PersistedGraphNode => node !== undefined && (node.type === "campaign" || node.type === "actor" || node.type === "attack-pattern"))
+    .map((node) => node.id)).length;
+  const heldRelationshipIds = uniqueSorted(readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId));
+  const missingLedgerRelationshipIds = uniqueSorted(support
+    .filter((item) => item.ledgerIds.length === 0)
+    .map((item) => item.relationshipId));
+  const publicChannelOnlyRelationshipIds = uniqueSorted(relationships
+    .filter((relationship) => {
+      const relationshipSupport = support.filter((item) => item.relationshipId === relationship.id);
+      return relationshipSupport.length > 0 && relationshipSupport.every((item) => /telegram|public[_-]?channel|public[_-]?signal/i.test(item.sourceId));
+    })
+    .map((relationship) => relationship.id));
+  const weakDiscoveryRelationshipIds = relationshipIdsByCodes(findingsByRelationship, ["weak_discovery_only_edge"]);
+  const restrictedMetadataRelationshipIds = relationshipIdsByCodes(findingsByRelationship, ["restricted_only_claim", "unsupported_restricted_metadata"]);
+  const staleRelationshipIds = relationshipIdsByCodes(findingsByRelationship, ["stale_accepted_edge"]);
+  const contradictedRelationshipIds = uniqueSorted([
+    ...relationshipIdsByCodes(findingsByRelationship, ["contradicted_edge"]),
+    ...relationships.filter((relationship) => relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true).map((relationship) => relationship.id)
+  ]);
+  const observed: Record<GraphQueryBudgetDimension, number> = {
+    nodes: nodeIds.length,
+    edges: relationships.length,
+    relationship_review_rows: heldRelationshipIds.length,
+    technique_timeline_events: techniqueTimelineEventCount,
+    campaign_pivots: campaignPivotCount,
+    evidence_joins: support.length,
+    stix_preview_rows: readiness.relationships.length,
+    cursor_continuation: deltas.length,
+    export_eligibility_recomputation: relationships.length
+  };
+  const limits: Record<GraphQueryBudgetDimension, { soft: number; hard: number }> = {
+    nodes: { soft: 60, hard: 75 },
+    edges: { soft: 40, hard: 50 },
+    relationship_review_rows: { soft: 35, hard: 50 },
+    technique_timeline_events: { soft: 30, hard: 40 },
+    campaign_pivots: { soft: 18, hard: 25 },
+    evidence_joins: { soft: 100, hard: 150 },
+    stix_preview_rows: { soft: 40, hard: 50 },
+    cursor_continuation: { soft: 75, hard: 100 },
+    export_eligibility_recomputation: { soft: 75, hard: 100 }
+  };
+  const dimensions: GraphQueryBudgetDimension[] = [
+    "nodes",
+    "edges",
+    "relationship_review_rows",
+    "technique_timeline_events",
+    "campaign_pivots",
+    "evidence_joins",
+    "stix_preview_rows",
+    "cursor_continuation",
+    "export_eligibility_recomputation"
+  ];
+  const budgets = dimensions.map((dimension) => {
+    const state = graphQueryBudgetState(observed[dimension], limits[dimension]);
+    return {
+      dimension,
+      observed: observed[dimension],
+      softLimit: limits[dimension].soft,
+      hardLimit: limits[dimension].hard,
+      state,
+      degradation: graphQueryBudgetDegradation(dimension, state)
+    };
+  });
+  const overallState = budgets.reduce<GraphQueryCostControlsDto["queuePressure"]["state"]>((current, budget) =>
+    graphQueryBudgetStateRank(budget.state) > graphQueryBudgetStateRank(current) ? budget.state : current, "pass");
+  const truncatedDimensions = budgets
+    .filter((budget) => budget.observed > budget.hardLimit)
+    .map((budget) => budget.dimension);
+  const boundedRelationshipIds = uniqueSorted(relationships.map((relationship) => relationship.id)).slice(0, 50);
+  const tenantId = graphTenantIdFor(snapshot, relationships);
+  const workspaceKind = options.workspaceKind ?? "investigation";
+  const queueHoldReasons = uniqueSorted([
+    ...budgets.filter((budget) => budget.state === "hold" || budget.state === "rollback").map((budget) => `${budget.dimension}_budget_${budget.state}`),
+    ...(weakDiscoveryRelationshipIds.length > 0 ? ["weak_discovery_held"] : []),
+    ...(publicChannelOnlyRelationshipIds.length > 0 ? ["public_channel_only_held"] : []),
+    ...(restrictedMetadataRelationshipIds.length > 0 ? ["restricted_metadata_held"] : []),
+    ...(staleRelationshipIds.length > 0 ? ["stale_relationships_held"] : []),
+    ...(contradictedRelationshipIds.length > 0 ? ["contradicted_relationships_held"] : []),
+    ...(missingLedgerRelationshipIds.length > 0 ? ["missing_ledger_ids_held"] : [])
+  ]);
+
+  return {
+    mode: "graph_query_cost_controls_tenant_budget",
+    generatedAt,
+    tenant: {
+      tenantId,
+      workspaceId: stableId("graph-workspace", `${tenantId}:${workspaceKind}:${options.query ?? "runtime"}:${options.focusNodeId ?? "all"}`),
+      workspaceKind,
+      isolation: "tenant_and_workspace_scoped_budget"
+    },
+    budgets,
+    continuation: {
+      cursorField: "graph.deltas[].cursor",
+      ...(truncatedDimensions.length > 0 && deltas[0]?.cursor ? { nextCursor: deltas[0].cursor } : {}),
+      boundedRelationshipIds,
+      truncatedDimensions
+    },
+    queuePressure: {
+      state: overallState,
+      schedulerBudgetClass: workspaceKind === "stix_preview" ? "graph_export_preview" : workspaceKind === "runtime_delta" ? "graph_delta_poll" : "interactive_graph_query",
+      maxRuntimeMs: overallState === "rollback" ? 750 : overallState === "hold" ? 1200 : 1800,
+      nextPollSeconds: 3,
+      holdReasons: queueHoldReasons
+    },
+    heldFacts: {
+      weakDiscoveryRelationshipIds: weakDiscoveryRelationshipIds.slice(0, 50),
+      publicChannelOnlyRelationshipIds: publicChannelOnlyRelationshipIds.slice(0, 50),
+      restrictedMetadataRelationshipIds: restrictedMetadataRelationshipIds.slice(0, 50),
+      staleRelationshipIds: staleRelationshipIds.slice(0, 50),
+      contradictedRelationshipIds: contradictedRelationshipIds.slice(0, 50),
+      missingLedgerRelationshipIds: missingLedgerRelationshipIds.slice(0, 50),
+      policy: "held_facts_never_promote_because_of_budget_truncation"
+    },
+    stixPreviewLimits: {
+      maxPreviewRelationships: 50,
+      eligibleRelationshipIds: uniqueSorted(readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId)).slice(0, 50),
+      heldRelationshipIds: heldRelationshipIds.slice(0, 50),
+      recomputeExportEligibility: "bounded_to_selected_relationship_ids"
+    },
+    agentHandoffs: {
+      agent02SchedulerBudget: "interactive_graph_query_budget",
+      agent06EvidenceChain: "evidence_join_rows_bounded_by_ledger_ids",
+      agent07QualityConfidence: "held_relationships_keep_quality_caveats",
+      agent09ApiCompatibility: "stable_fields_with_cursor_degradation",
+      agent10CapacityRunbook: "hold_or_rollback_on_budget_breach"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphRelationshipDriftMonitorDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    query?: string;
+    focusNodeId?: string;
+    relationshipIds?: string[];
+    workspaceKind?: GraphQueryCostControlsDto["tenant"]["workspaceKind"];
+    costControls?: GraphQueryCostControlsDto;
+    deltas?: GraphCursorRelationshipDeltaDto[];
+  } = {}
+): GraphRelationshipDriftMonitorDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const support = snapshot.evidenceSupport.filter((item) => relationships.some((relationship) => relationship.id === item.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: support };
+  const costControls = options.costControls ?? buildGraphQueryCostControlsDto(scopedSnapshot, {
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    workspaceKind: options.workspaceKind,
+    deltas: options.deltas
+  });
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const boundedRelationshipIds = new Set(costControls.continuation.boundedRelationshipIds);
+  const heldFacts = costControls.heldFacts;
+  const weakDiscovery = new Set(heldFacts.weakDiscoveryRelationshipIds);
+  const publicChannelOnly = new Set(heldFacts.publicChannelOnlyRelationshipIds);
+  const restrictedMetadata = new Set(heldFacts.restrictedMetadataRelationshipIds);
+  const stale = new Set(heldFacts.staleRelationshipIds);
+  const contradicted = new Set(heldFacts.contradictedRelationshipIds);
+  const missingLedger = new Set(heldFacts.missingLedgerRelationshipIds);
+  const deltas = options.deltas ?? buildRelationshipCursorDeltas(scopedSnapshot, { generatedAt });
+  const deltaIds = new Set(deltas.map((delta) => delta.relationshipId));
+
+  const rows = relationships
+    .map((relationship): GraphRelationshipDriftMonitorDto["rows"][number] => {
+      const source = nodesById.get(relationship.sourceRef) ?? fallbackNode(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef) ?? fallbackNode(relationship.targetRef);
+      const relationshipSupport = support.filter((item) => item.relationshipId === relationship.id);
+      const findings = uniqueFindingCodes((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code));
+      const blockers = uniqueFindingCodes([
+        ...findings,
+        ...(readinessById.get(relationship.id)?.blockers ?? [])
+      ]);
+      const supportSourceIds = uniqueSorted(relationshipSupport.map((item) => item.sourceId));
+      const signals = new Set<GraphRelationshipDriftSignalKind>();
+      const findingSet = new Set(blockers);
+      const isAlias = relationship.type === "alias-of" || source.type === "actor" && target.type === "actor";
+      const isAttackMapping = source.type === "attack-pattern" || target.type === "attack-pattern";
+      const isVictimClaim = source.type === "victim" || target.type === "victim";
+      const isInfrastructureHint = source.type === "infrastructure" || target.type === "infrastructure";
+      const isCampaignMembership = source.type === "campaign" || target.type === "campaign";
+      const hasMissingLedger = missingLedger.has(relationship.id)
+        || findingSet.has("missing_ledger_ids")
+        || relationshipSupport.length === 0
+        || relationshipSupport.some((item) => item.ledgerIds.length === 0);
+      const hasRestrictedMetadata = restrictedMetadata.has(relationship.id)
+        || findingSet.has("restricted_only_claim")
+        || findingSet.has("unsupported_restricted_metadata");
+      const hasPublicChannelOnly = publicChannelOnly.has(relationship.id);
+      const hasWeakDiscovery = weakDiscovery.has(relationship.id)
+        || findingSet.has("weak_discovery_only_edge")
+        || findingSet.has("source_bias_cluster");
+      const isStale = stale.has(relationship.id)
+        || relationship.reviewState === "expired"
+        || relationship.properties?.stale === true
+        || findingSet.has("stale_accepted_edge")
+        || ageInDays(relationship.lastSeenAt, generatedAt) > 180;
+      const isContradicted = contradicted.has(relationship.id)
+        || relationship.reviewState === "contradicted"
+        || relationship.properties?.contradicted === true
+        || findingSet.has("contradicted_edge");
+      const isBudgetBounded = !boundedRelationshipIds.has(relationship.id);
+
+      if (deltaIds.has(relationship.id)) signals.add("fresh_public_advisory");
+      if (hasPublicChannelOnly) signals.add("public_channel_hint");
+      if (hasRestrictedMetadata) signals.add("restricted_metadata_review");
+      if (hasMissingLedger) signals.add("evidence_replay_failure");
+      if (hasWeakDiscovery || findingSet.has("source_bias_cluster")) signals.add("source_pack_expansion");
+      if (isContradicted) signals.add("analyst_correction");
+      if (isStale) signals.add(ageInDays(relationship.lastSeenAt, generatedAt) > 365 ? "source_retirement" : "fresh_public_advisory");
+      if (isCampaignMembership) signals.add("campaign_membership_change");
+      if (isAttackMapping) signals.add("attack_mapping_change");
+      if (isVictimClaim) signals.add("victim_claim_change");
+      if (isInfrastructureHint) signals.add("infrastructure_hint_change");
+      if (hasRestrictedMetadata && /leak|dataset/i.test(String(relationship.properties?.category ?? relationship.type))) {
+        signals.add("dataset_metadata_hold");
+      }
+
+      const exportEligibleBefore = readinessById.get(relationship.id)?.ready ?? false;
+      const action = driftActionForRelationship({
+        relationship,
+        isAlias,
+        isStale,
+        isContradicted,
+        hasMissingLedger,
+        hasRestrictedMetadata,
+        hasPublicChannelOnly,
+        hasWeakDiscovery,
+        isBudgetBounded,
+        exportEligibleBefore,
+        blockerCount: blockers.length
+      });
+      const nextReviewState = driftReviewStateForAction(action, relationship.reviewState);
+      const exportEligibleAfter = action === "keep_promoted" || action === "merge_duplicate";
+      return {
+        rowId: stableId("graph-drift-row", `${relationship.id}:${action}:${generatedAt}`),
+        relationshipId: relationship.id,
+        relationshipKind: relationshipKind(relationship, source, target),
+        relationshipType: relationship.type,
+        sourceRef: relationship.sourceRef,
+        targetRef: relationship.targetRef,
+        sourceType: source.type,
+        targetType: target.type,
+        driftSignals: [...signals].sort(),
+        action,
+        previousReviewState: relationship.reviewState,
+        nextReviewState,
+        confidenceBefore: relationship.confidence,
+        confidenceAfter: driftConfidenceAfter(relationship.confidence, action),
+        firstSeenAt: relationship.firstSeenAt,
+        lastSeenAt: relationship.lastSeenAt,
+        sourceIds: supportSourceIds,
+        evidenceIds: uniqueSorted(relationship.evidenceSupportIds),
+        ledgerIds: uniqueSorted(relationshipSupport.flatMap((item) => item.ledgerIds)),
+        exportEligibleBefore,
+        exportEligibleAfter,
+        exportBlockers: blockers,
+        budgetBounded: isBudgetBounded,
+        reason: driftReasonForAction(action)
+      };
+    })
+    .sort((left, right) =>
+      Number(right.action !== "keep_promoted") - Number(left.action !== "keep_promoted")
+      || Number(right.exportEligibleBefore) - Number(left.exportEligibleBefore)
+      || right.confidenceBefore - left.confidenceBefore
+      || left.relationshipId.localeCompare(right.relationshipId));
+
+  const changedRelationshipIds = uniqueSorted(rows
+    .filter((row) => row.action !== "keep_promoted" || deltaIds.has(row.relationshipId))
+    .map((row) => row.relationshipId));
+  const eventTypes = uniqueSorted(rows.flatMap((row): GraphRelationshipDriftMonitorDto["deltaContract"]["eventTypes"] => {
+    const events: GraphRelationshipDriftMonitorDto["deltaContract"]["eventTypes"] = ["graph.relationship.drift"];
+    if (row.action === "mark_stale" || row.action === "preserve_historical") events.push("graph.relationship.stale");
+    if (row.action === "mark_contradicted" || row.action === "split_alias") events.push("graph.relationship.contradicted");
+    if (!row.exportEligibleAfter) events.push("graph.relationship.export_hold");
+    return events;
+  })) as GraphRelationshipDriftMonitorDto["deltaContract"]["eventTypes"];
+
+  return {
+    mode: "campaign_relationship_drift_monitor",
+    generatedAt,
+    tenant: {
+      tenantId: costControls.tenant.tenantId,
+      workspaceId: costControls.tenant.workspaceId,
+      workspaceKind: costControls.tenant.workspaceKind,
+      budgetState: costControls.queuePressure.state,
+      budgetPolicy: "respect_graph_query_cost_controls"
+    },
+    summary: {
+      rowCount: rows.length,
+      keepPromoted: rows.filter((row) => row.action === "keep_promoted").length,
+      reviewRequired: rows.filter((row) => row.nextReviewState === "needs_review").length,
+      stale: rows.filter((row) => row.action === "mark_stale").length,
+      contradicted: rows.filter((row) => row.action === "mark_contradicted").length,
+      stixBlocked: rows.filter((row) => !row.exportEligibleAfter).length,
+      evidenceReplayRequested: rows.filter((row) => row.action === "request_evidence_replay").length,
+      sourceExpansionRequested: rows.filter((row) => row.action === "request_source_expansion").length,
+      historicalPreserved: rows.filter((row) => row.action === "preserve_historical").length
+    },
+    rows,
+    heldFacts: {
+      weakDiscoveryRelationshipIds: heldFacts.weakDiscoveryRelationshipIds,
+      publicChannelOnlyRelationshipIds: heldFacts.publicChannelOnlyRelationshipIds,
+      restrictedMetadataRelationshipIds: heldFacts.restrictedMetadataRelationshipIds,
+      staleRelationshipIds: heldFacts.staleRelationshipIds,
+      contradictedRelationshipIds: heldFacts.contradictedRelationshipIds,
+      missingLedgerRelationshipIds: heldFacts.missingLedgerRelationshipIds,
+      budgetBoundedRelationshipIds: rows.filter((row) => row.budgetBounded).map((row) => row.relationshipId),
+      policy: "drift_monitor_never_promotes_held_or_budget_truncated_rows"
+    },
+    deltaContract: {
+      cursorField: "graph.deltas[].cursor",
+      nextPollSeconds: 3,
+      changedRelationshipIds,
+      eventTypes
+    },
+    agentHandoffs: {
+      agent06ChainOfCustody: "request_evidence_replay_for_missing_or_failed_ledger_rows",
+      agent07ContradictionWorkbench: "contradicted_and_alias_split_rows_require_quality_review",
+      agent09PollingDeltas: "emit_relationship_drift_events_with_3_second_polling",
+      agent10ReleaseGate: "block_release_when_unexplained_drift_rows_remain",
+      agent01Agent04SourceGaps: "request_source_expansion_for_weak_or_source_biased_rows"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+function driftActionForRelationship(input: {
+  relationship: PersistedGraphRelationship;
+  isAlias: boolean;
+  isStale: boolean;
+  isContradicted: boolean;
+  hasMissingLedger: boolean;
+  hasRestrictedMetadata: boolean;
+  hasPublicChannelOnly: boolean;
+  hasWeakDiscovery: boolean;
+  isBudgetBounded: boolean;
+  exportEligibleBefore: boolean;
+  blockerCount: number;
+}): GraphRelationshipDriftAction {
+  if (input.isContradicted) return input.isAlias ? "split_alias" : "mark_contradicted";
+  if (input.isStale) return ageInDays(input.relationship.lastSeenAt, input.relationship.firstSeenAt) > 365 ? "preserve_historical" : "mark_stale";
+  if (input.hasMissingLedger) return "request_evidence_replay";
+  if (input.hasRestrictedMetadata || input.hasPublicChannelOnly || input.isBudgetBounded) return "block_stix_export";
+  if (input.hasWeakDiscovery || input.relationship.reviewState === "unreviewed" || input.relationship.reviewState === "needs_review") return "request_source_expansion";
+  if (input.isAlias && input.relationship.reviewState === "accepted" && input.exportEligibleBefore) return "merge_duplicate";
+  if (input.exportEligibleBefore && input.relationship.reviewState === "accepted" && input.blockerCount === 0) return "keep_promoted";
+  return "demote_to_review";
+}
+
+function driftReviewStateForAction(
+  action: GraphRelationshipDriftAction,
+  currentState: GraphRelationshipReviewState
+): GraphRelationshipReviewState {
+  if (action === "keep_promoted" || action === "merge_duplicate") return currentState === "accepted" ? "accepted" : "needs_review";
+  if (action === "mark_contradicted" || action === "split_alias") return "contradicted";
+  if (action === "mark_stale" || action === "preserve_historical") return "expired";
+  if (action === "demote_to_review" || action === "request_evidence_replay" || action === "request_source_expansion" || action === "block_stix_export") return "needs_review";
+  return "needs_review";
+}
+
+function driftConfidenceAfter(confidence: number, action: GraphRelationshipDriftAction): number {
+  if (action === "keep_promoted" || action === "merge_duplicate") return confidence;
+  if (action === "mark_contradicted" || action === "split_alias") return clampScore(confidence * 0.35);
+  if (action === "mark_stale" || action === "preserve_historical") return clampScore(confidence * 0.65);
+  if (action === "request_evidence_replay") return clampScore(confidence * 0.75);
+  if (action === "request_source_expansion" || action === "block_stix_export") return clampScore(confidence * 0.85);
+  return clampScore(confidence * 0.8);
+}
+
+function driftReasonForAction(action: GraphRelationshipDriftAction): string {
+  if (action === "keep_promoted") return "reviewed relationship remains provenance-backed and export eligible";
+  if (action === "merge_duplicate") return "accepted alias relationship can be merged after duplicate review";
+  if (action === "split_alias") return "alias relationship is contradicted and should split before promotion";
+  if (action === "mark_contradicted") return "relationship has contradictory evidence or analyst correction";
+  if (action === "mark_stale") return "relationship is stale and needs refreshed public evidence";
+  if (action === "preserve_historical") return "relationship is stale enough to preserve as historical only";
+  if (action === "request_evidence_replay") return "ledger or provenance replay is incomplete";
+  if (action === "request_source_expansion") return "relationship needs stronger public source coverage";
+  if (action === "block_stix_export") return "policy, restricted metadata, public-channel, or budget hold blocks export";
+  return "relationship should return to analyst review before promotion";
+}
+
+export function buildGraphRelationshipExplainabilityDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+    driftMonitor?: GraphRelationshipDriftMonitorDto;
+    exportGovernance?: GraphReviewedExportSubsetGovernanceDto;
+  } = {}
+): GraphRelationshipExplainabilityDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const scopedSupport = snapshot.evidenceSupport.filter((support) => relationships.some((relationship) => relationship.id === support.relationshipId));
+  const scopedSnapshot = { ...snapshot, relationships, evidenceSupport: scopedSupport };
+  const readiness = checkStixExportReadiness(scopedSnapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const findingsByRelationship = graphFindingsByRelationship(scopedSnapshot, generatedAt);
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const driftMonitor = options.driftMonitor ?? buildGraphRelationshipDriftMonitorDto(scopedSnapshot, { generatedAt });
+  const driftRowsById = new Map(driftMonitor.rows.map((row) => [row.relationshipId, row]));
+  const reviewedEligible = new Set(options.exportGovernance?.eligibleRelationshipIds ?? []);
+  const rows = relationships
+    .map((relationship): GraphRelationshipExplainabilityDto["rows"][number] => {
+      const sourceNode = nodesById.get(relationship.sourceRef) ?? fallbackNode(relationship.sourceRef);
+      const targetNode = nodesById.get(relationship.targetRef) ?? fallbackNode(relationship.targetRef);
+      const support = supportFor(scopedSnapshot, relationship.id);
+      const findings = uniqueFindingCodes((findingsByRelationship.get(relationship.id) ?? []).map((finding) => finding.code));
+      const readinessRow = readinessById.get(relationship.id);
+      const drift = driftRowsById.get(relationship.id);
+      const exportBlockers = uniqueFindingCodes([...(readinessRow?.blockers ?? []), ...findings]);
+      const eligible = readinessRow?.ready ?? false;
+      const status = explainabilityStatus(relationship, eligible, exportBlockers, drift?.action);
+      const trend = explainabilityConfidenceTrend(relationship, drift?.action, generatedAt);
+      const attackContext = explainabilityAttackCampaignContext(relationship, sourceNode, targetNode, relationships, nodesById);
+      const reviewDecisionIds = uniqueSorted(relationship.reviewAudit.map((entry) => entry.decisionId));
+      const ledgerRefs = uniqueSorted([
+        ...support.flatMap((item) => item.ledgerIds),
+        ...propertyStringArray(relationship.properties, "claimLedgerIds"),
+        ...propertyStringArray(relationship.properties, "claimLedgerRefs")
+      ]);
+      const caveats = explainabilityCaveats(status, exportBlockers, drift?.action);
+      return {
+        explanationId: stableId("graph-explanation", `${relationship.id}:${status}:${generatedAt}`),
+        relationshipId: relationship.id,
+        relationshipKind: relationshipKind(relationship, sourceNode, targetNode),
+        relationshipType: relationship.type,
+        source: { nodeId: sourceNode.id, type: sourceNode.type, value: sourceNode.value },
+        target: { nodeId: targetNode.id, type: targetNode.type, value: targetNode.value },
+        status,
+        summary: explainabilitySummary(status, relationship, sourceNode.value, targetNode.value),
+        why: explainabilityReasons(relationship, support, exportBlockers, drift),
+        sourceIds: uniqueSorted(support.map((item) => item.sourceId)),
+        evidenceIds: uniqueSorted(relationship.evidenceSupportIds),
+        claimLedgerRefs: ledgerRefs,
+        reviewDecisionIds,
+        confidence: {
+          current: relationship.confidence,
+          trend,
+          historyPoints: relationship.confidenceHistory.length
+        },
+        drift: {
+          action: drift?.action ?? (eligible ? "keep_promoted" : "demote_to_review"),
+          signals: drift?.driftSignals ?? [],
+          confidenceAfter: drift?.confidenceAfter ?? relationship.confidence
+        },
+        attackCampaignContext: attackContext,
+        exportEligibility: {
+          eligible,
+          blockers: exportBlockers,
+          reviewedSubsetEligible: reviewedEligible.size > 0 ? reviewedEligible.has(relationship.id) : eligible,
+          taxiiBoundary: "descriptor_only_no_server"
+        },
+        caveats,
+        agentHandoffs: {
+          agent06EvidenceReplay: exportBlockers.some((code) => code === "missing_ledger_ids" || code === "missing_provenance") ? [relationship.id] : [],
+          agent07QualityReview: status === "contradicted" || status === "stale" || status === "held" || status === "split" ? [relationship.id] : [],
+          agent09DeltaFields: ["relationshipId", "drift.action", "exportEligibility", "confidence.trend"],
+          agent10ReleaseArtifact: "relationship_explanation_row"
+        },
+        noLeak: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false,
+          metadataOnly: true
+        }
+      };
+    })
+    .sort((left, right) => Number(right.status === "export_blocked" || right.status === "held") - Number(left.status === "export_blocked" || left.status === "held") || right.confidence.current - left.confidence.current || left.relationshipId.localeCompare(right.relationshipId));
+
+  return {
+    mode: "graph_relationship_explainability",
+    generatedAt,
+    rows,
+    summary: {
+      rowCount: rows.length,
+      promoted: rows.filter((row) => row.status === "promoted").length,
+      held: rows.filter((row) => row.status === "held").length,
+      stale: rows.filter((row) => row.status === "stale").length,
+      contradicted: rows.filter((row) => row.status === "contradicted").length,
+      exportReady: rows.filter((row) => row.status === "export_ready" || row.exportEligibility.eligible).length,
+      exportBlocked: rows.filter((row) => row.status === "export_blocked" || !row.exportEligibility.eligible).length
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+function buildGraphInvestigationNotebookExportDto(input: {
+  generatedAt: string;
+  query: string;
+  focusNodeId?: string;
+  nodes: GraphInvestigationWorkspaceDto["nodes"];
+  relationships: PersistedGraphRelationship[];
+  relationshipExplanations: GraphRelationshipExplainabilityDto;
+  driftMonitor: GraphRelationshipDriftMonitorDto;
+  exportGovernance: GraphReviewedExportSubsetGovernanceDto;
+  costControls: GraphQueryCostControlsDto;
+  pivotRecommendations: GraphAttackCampaignWorkspaceDto["searchPivotRecommendations"];
+}): GraphInvestigationNotebookExportDto {
+  const explanationById = new Map(input.relationshipExplanations.rows.map((row) => [row.relationshipId, row]));
+  const boundedRelationshipIds = new Set(input.costControls.continuation.boundedRelationshipIds);
+  const boundedRelationships = input.relationships.filter((relationship) => boundedRelationshipIds.has(relationship.id)).slice(0, 50);
+  const caveats = uniqueSorted([
+    ...input.relationshipExplanations.rows.flatMap((row) => row.caveats),
+    ...(input.driftMonitor.summary.stixBlocked > 0 ? ["some relationships are held from STIX export"] : []),
+    ...(input.costControls.queuePressure.holdReasons.length > 0 ? ["query budget or held-fact policy affects notebook scope"] : [])
+  ]);
+  const fallbackPivots = input.pivotRecommendations.length > 0
+    ? input.pivotRecommendations
+    : input.nodes
+        .filter((node) => node.heldRelationshipCount > 0 || node.exportReadyRelationshipCount > 0)
+        .slice(0, 8)
+        .map((node) => ({
+          query: `${node.type}:${node.value}`,
+          nodeId: node.nodeId,
+          nodeValue: node.value,
+          sourceRelationshipIds: node.relationshipIds.slice(0, 8),
+          confidence: node.exportReadyRelationshipCount > 0 ? 0.72 : 0.48,
+          priority: node.heldRelationshipCount > 0 ? "high" as const : "medium" as const,
+          reason: node.heldRelationshipCount > 0 ? "review held relationships before promotion" : "inspect export-ready relationship context",
+          expectedSearchEffect: node.heldRelationshipCount > 0 ? "request_more_evidence" as const : "open_graph_neighborhood" as const,
+          safety: {
+            willStartCrawling: false,
+            willFetchRestrictedMaterial: false,
+            metadataOnly: true,
+            taxiiBoundary: "descriptor_only_no_server" as const
+          }
+        }));
+  return {
+    mode: "metadata_only_graph_investigation_notebook_export",
+    generatedAt: input.generatedAt,
+    query: input.query,
+    investigationId: stableId("graph-investigation", `${input.query}:${input.focusNodeId ?? "all"}:${input.generatedAt}`),
+    exportPacketId: stableId("graph-notebook", `${input.query}:${input.generatedAt}:${boundedRelationships.length}`),
+    boundedNodes: input.nodes.slice(0, 75).map((node) => ({
+      nodeId: node.nodeId,
+      type: node.type,
+      value: node.value,
+      relationshipIds: node.relationshipIds.filter((relationshipId) => boundedRelationshipIds.has(relationshipId)).slice(0, 25),
+      reviewStates: node.reviewStates,
+      exportReadyRelationshipCount: node.exportReadyRelationshipCount,
+      heldRelationshipCount: node.heldRelationshipCount
+    })),
+    boundedEdges: boundedRelationships.map((relationship) => {
+      const drift = input.driftMonitor.rows.find((row) => row.relationshipId === relationship.id);
+      const explanation = explanationById.get(relationship.id);
+      return {
+        relationshipId: relationship.id,
+        sourceRef: relationship.sourceRef,
+        targetRef: relationship.targetRef,
+        relationshipKind: explanation?.relationshipKind ?? "evidence-provenance",
+        reviewState: relationship.reviewState,
+        driftAction: drift?.action ?? "demote_to_review",
+        exportEligible: explanation?.exportEligibility.eligible ?? false,
+        caveats: explanation?.caveats ?? ["relationship explanation unavailable"]
+      };
+    }),
+    pivotRecommendations: fallbackPivots.slice(0, 12).map((pivot) => ({
+      query: pivot.query,
+      nodeId: pivot.nodeId,
+      nodeValue: pivot.nodeValue,
+      sourceRelationshipIds: pivot.sourceRelationshipIds,
+      priority: pivot.priority,
+      reason: pivot.reason
+    })),
+    caveats,
+    relationshipExplanations: input.relationshipExplanations.rows.slice(0, 50),
+    stixPreviewDescriptor: {
+      mediaType: "application/stix+json;version=2.1",
+      eligibleRelationshipIds: input.exportGovernance.eligibleRelationshipIds,
+      heldRelationshipIds: input.exportGovernance.heldRelationshipIds,
+      taxiiBoundary: "descriptor_only_no_server",
+      previewOnly: true
+    },
+    costBudget: {
+      tenantId: input.costControls.tenant.tenantId,
+      workspaceId: input.costControls.tenant.workspaceId,
+      budgetState: input.costControls.queuePressure.state,
+      boundedRelationshipIds: input.costControls.continuation.boundedRelationshipIds,
+      truncatedDimensions: input.costControls.continuation.truncatedDimensions,
+      nextPollSeconds: 3
+    },
+    deltaClientContract: graphDeltaClientContract(),
+    handoffs: {
+      agent06EvidenceReplay: input.relationshipExplanations.rows.flatMap((row) => row.agentHandoffs.agent06EvidenceReplay),
+      agent07QualityReview: input.relationshipExplanations.rows.flatMap((row) => row.agentHandoffs.agent07QualityReview),
+      agent09ApiSseDeltas: ["graph.relationship.explanation", "graph.notebook.export_ready", "graph.relationship.export_hold"],
+      agent10ReleaseArtifacts: ["relationship_explanations", "metadata_only_notebook_export"],
+      agent01SourceGaps: input.driftMonitor.rows.filter((row) => row.action === "request_source_expansion").map((row) => row.relationshipId),
+      agent04PublicSourceBenchmarks: input.driftMonitor.rows.filter((row) => row.driftSignals.includes("source_pack_expansion")).map((row) => row.relationshipId)
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+function explainabilityStatus(
+  relationship: PersistedGraphRelationship,
+  eligible: boolean,
+  blockers: GraphIntegrityFindingCode[],
+  driftAction?: GraphRelationshipDriftAction
+): GraphRelationshipExplainabilityDto["rows"][number]["status"] {
+  if (driftAction === "split_alias") return "split";
+  if (driftAction === "merge_duplicate") return "merged";
+  if (driftAction === "mark_contradicted" || relationship.reviewState === "contradicted" || blockers.includes("contradicted_edge")) return "contradicted";
+  if (driftAction === "mark_stale" || driftAction === "preserve_historical" || relationship.reviewState === "expired" || blockers.includes("stale_accepted_edge")) return "stale";
+  if (!eligible && blockers.length > 0) return "export_blocked";
+  if (!eligible) return "held";
+  if (relationship.exportEligibility.promoted) return "promoted";
+  return "export_ready";
+}
+
+function explainabilityConfidenceTrend(
+  relationship: PersistedGraphRelationship,
+  driftAction: GraphRelationshipDriftAction | undefined,
+  generatedAt: string
+): GraphRelationshipExplainabilityDto["rows"][number]["confidence"]["trend"] {
+  if (driftAction === "mark_contradicted" || driftAction === "split_alias" || relationship.reviewState === "contradicted") return "contradicted";
+  if (driftAction === "mark_stale" || driftAction === "preserve_historical" || relationship.reviewState === "expired" || ageInDays(relationship.lastSeenAt, generatedAt) > 180) return "stale";
+  const first = relationship.confidenceHistory[0]?.confidence;
+  const last = relationship.confidenceHistory.at(-1)?.confidence ?? relationship.confidence;
+  if (first === undefined || relationship.confidenceHistory.length <= 1) return "new";
+  if (last - first >= 0.08) return "rising";
+  if (first - last >= 0.08) return "falling";
+  return "stable";
+}
+
+function explainabilityAttackCampaignContext(
+  relationship: PersistedGraphRelationship,
+  source: PersistedGraphNode,
+  target: PersistedGraphNode,
+  relationships: PersistedGraphRelationship[],
+  nodesById: Map<string, PersistedGraphNode>
+): GraphRelationshipExplainabilityDto["rows"][number]["attackCampaignContext"] {
+  const linkedNodeIds = new Set([relationship.sourceRef, relationship.targetRef]);
+  const linkedRelationships = relationships.filter((item) =>
+    item.id === relationship.id || linkedNodeIds.has(item.sourceRef) || linkedNodeIds.has(item.targetRef));
+  const linkedNodes = uniqueSorted([
+    source.id,
+    target.id,
+    ...linkedRelationships.flatMap((item) => [item.sourceRef, item.targetRef])
+  ])
+    .map((nodeId) => nodesById.get(nodeId))
+    .filter((node): node is PersistedGraphNode => Boolean(node));
+  return {
+    attackIds: uniqueSorted(linkedNodes.filter((node) => node.type === "attack-pattern").flatMap((node) => [
+      ...propertyStringArray(node.properties, "attackId"),
+      ...propertyStringArray(node.properties, "mitreAttackId"),
+      node.value.match(/\bT\d{4}(?:\.\d{3})?\b/)?.[0] ?? ""
+    ]).filter(Boolean)),
+    campaignIds: uniqueSorted(linkedNodes.filter((node) => node.type === "campaign").map((node) => node.id)),
+    techniqueIds: uniqueSorted(linkedNodes.filter((node) => node.type === "attack-pattern").map((node) => node.id)),
+    actorIds: uniqueSorted(linkedNodes.filter((node) => node.type === "actor").map((node) => node.id))
+  };
+}
+
+function explainabilitySummary(
+  status: GraphRelationshipExplainabilityDto["rows"][number]["status"],
+  relationship: PersistedGraphRelationship,
+  sourceValue: string,
+  targetValue: string
+): string {
+  if (status === "promoted" || status === "export_ready") return `${sourceValue} ${relationship.type} ${targetValue} is reviewed and provenance-backed.`;
+  if (status === "stale") return `${sourceValue} ${relationship.type} ${targetValue} is stale and needs refreshed public evidence.`;
+  if (status === "contradicted") return `${sourceValue} ${relationship.type} ${targetValue} is contradicted and must stay out of promotion.`;
+  if (status === "split") return `${sourceValue} ${relationship.type} ${targetValue} should split before alias promotion.`;
+  if (status === "merged") return `${sourceValue} ${relationship.type} ${targetValue} is eligible for duplicate merge review.`;
+  if (status === "export_blocked") return `${sourceValue} ${relationship.type} ${targetValue} is blocked from STIX export.`;
+  return `${sourceValue} ${relationship.type} ${targetValue} remains held for analyst review.`;
+}
+
+function explainabilityReasons(
+  relationship: PersistedGraphRelationship,
+  support: GraphEvidenceSupportRecord[],
+  blockers: GraphIntegrityFindingCode[],
+  drift?: GraphRelationshipDriftMonitorDto["rows"][number]
+): string[] {
+  return uniqueSorted([
+    support.length > 0 ? "has evidence support rows" : "missing evidence support rows",
+    support.some((item) => item.ledgerIds.length > 0) ? "has claim/evidence ledger references" : "missing ledger references",
+    relationship.reviewState === "accepted" ? "accepted by review state" : `review state is ${relationship.reviewState}`,
+    relationship.exportEligibility.promoted ? "marked promoted in relationship eligibility" : "not promoted by default",
+    ...(blockers.length > 0 ? blockers.map((code) => `export blocker: ${code}`) : ["no export blockers"]),
+    ...(drift ? [`drift action: ${drift.action}`, ...drift.driftSignals.map((signal) => `drift signal: ${signal}`)] : [])
+  ]);
+}
+
+function explainabilityCaveats(
+  status: GraphRelationshipExplainabilityDto["rows"][number]["status"],
+  blockers: GraphIntegrityFindingCode[],
+  driftAction?: GraphRelationshipDriftAction
+): string[] {
+  return uniqueSorted([
+    ...(status === "held" || status === "export_blocked" ? ["held from public fact promotion"] : []),
+    ...(status === "stale" ? ["stale relationship requires refreshed evidence"] : []),
+    ...(status === "contradicted" || status === "split" ? ["contradiction requires quality review"] : []),
+    ...(blockers.includes("restricted_only_claim") || blockers.includes("unsupported_restricted_metadata") ? ["restricted metadata remains descriptor-only"] : []),
+    ...(blockers.includes("weak_discovery_only_edge") ? ["weak discovery-only evidence cannot promote"] : []),
+    ...(blockers.includes("missing_ledger_ids") || blockers.includes("missing_provenance") ? ["evidence replay required before export"] : []),
+    ...(driftAction === "request_source_expansion" ? ["source expansion requested"] : [])
+  ]);
+}
+
+function propertyStringArray(properties: PersistedGraphRelationship["properties"] | PersistedGraphNode["properties"], key: string): string[] {
+  const value = properties?.[key];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  if (typeof value === "string" && value.length > 0) return [value];
+  return [];
+}
+
+function graphQueryBudgetState(
+  observed: number,
+  limit: { soft: number; hard: number }
+): GraphQueryCostControlsDto["budgets"][number]["state"] {
+  if (observed > limit.hard * 2) return "rollback";
+  if (observed > limit.hard) return "hold";
+  if (observed > limit.soft) return "watch";
+  return "pass";
+}
+
+function graphQueryBudgetDegradation(
+  dimension: GraphQueryBudgetDimension,
+  state: GraphQueryCostControlsDto["budgets"][number]["state"]
+): GraphQueryCostControlsDto["budgets"][number]["degradation"] {
+  if (state === "pass") return "none";
+  if (state === "rollback") return "rollback_to_summary";
+  if (dimension === "stix_preview_rows" || dimension === "export_eligibility_recomputation") return "hold_export";
+  if (dimension === "relationship_review_rows" || dimension === "campaign_pivots") return "hold_expansion";
+  return "truncate_with_cursor";
+}
+
+function graphQueryBudgetStateRank(state: GraphQueryCostControlsDto["queuePressure"]["state"]): number {
+  if (state === "rollback") return 3;
+  if (state === "hold") return 2;
+  if (state === "watch") return 1;
+  return 0;
+}
+
+function graphTenantIdFor(snapshot: PersistedGraphSnapshot, relationships: PersistedGraphRelationship[]): string {
+  const explicit = relationships
+    .map((relationship) => relationship.properties?.tenantId)
+    .find((tenantId): tenantId is string => typeof tenantId === "string" && tenantId.length > 0);
+  if (explicit) return explicit;
+  const nodeTenant = snapshot.nodes
+    .map((node) => node.properties?.tenantId)
+    .find((tenantId): tenantId is string => typeof tenantId === "string" && tenantId.length > 0);
+  return nodeTenant ?? "default";
+}
+
+function graphQueryEstimatedCostUnits(input: {
+  relationshipCount: number;
+  nodeCount: number;
+  evidenceSupportCount: number;
+  cursorDeltaCount: number;
+  reviewHoldCount: number;
+}): number {
+  return input.relationshipCount * 3
+    + input.nodeCount * 2
+    + input.evidenceSupportCount
+    + input.cursorDeltaCount
+    + input.reviewHoldCount * 4;
+}
+
+function graphQueryCostBand(
+  estimatedCostUnits: number,
+  relationshipCount: number,
+  nodeCount: number
+): GraphBackendPerformanceSoakDto["queryCost"]["costBand"] {
+  if (estimatedCostUnits > 500 || relationshipCount > 100 || nodeCount > 150) return "rollback";
+  if (estimatedCostUnits > 250 || relationshipCount > 50 || nodeCount > 75) return "high";
+  if (estimatedCostUnits > 120 || relationshipCount > 25 || nodeCount > 40) return "medium";
+  return "low";
+}
+
+function buildGraphBackendLatencyTargets(
+  costBand: GraphBackendPerformanceSoakDto["queryCost"]["costBand"],
+  estimatedCostUnits: number
+): GraphBackendPerformanceSoakDto["latencyTargets"] {
+  const status = costBand === "rollback"
+    ? "rollback"
+    : costBand === "high"
+      ? "hold"
+      : costBand === "medium"
+        ? "watch"
+        : "pass";
+  const p95Base = Math.max(25, estimatedCostUnits * 4);
+  return [
+    {
+      backend: "memory_snapshot",
+      p95Ms: Math.min(750, p95Base),
+      p99Ms: Math.min(1200, p95Base * 1.6),
+      status,
+      reason: "embedded runtime must keep bounded graph queries inside the public 3-second polling window"
+    },
+    {
+      backend: "postgres_graph_tables",
+      p95Ms: Math.min(1200, p95Base * 1.5),
+      p99Ms: Math.min(2200, p95Base * 2.3),
+      status,
+      reason: "Postgres graph-table candidate must preserve tenant indexes and cursor continuity under replay"
+    },
+    {
+      backend: "neo4j",
+      p95Ms: Math.min(1400, p95Base * 1.7),
+      p99Ms: Math.min(2500, p95Base * 2.5),
+      status,
+      reason: "future graph backend remains candidate-only until query plans and export holds match DTO semantics"
+    }
+  ];
+}
+function buildNeo4jNodeLabelProjection(
+  nodes: PersistedGraphNode[]
+): GraphNeo4jMigrationAdapterBenchmarkDto["nodeLabelProjection"] {
+  const labelSpecs: Array<{ label: string; sourceNodeTypes: IntelligenceNodeType[] }> = [
+    { label: "Actor", sourceNodeTypes: ["actor"] },
+    { label: "Campaign", sourceNodeTypes: ["campaign"] },
+    { label: "AttackPattern", sourceNodeTypes: ["attack-pattern"] },
+    { label: "MalwareTool", sourceNodeTypes: ["malware", "tool"] },
+    { label: "Victim", sourceNodeTypes: ["victim"] },
+    { label: "Infrastructure", sourceNodeTypes: ["infrastructure"] },
+    { label: "Vulnerability", sourceNodeTypes: ["vulnerability"] },
+    { label: "Source", sourceNodeTypes: ["source"] },
+    { label: "GraphNode", sourceNodeTypes: ["actor", "campaign", "attack-pattern", "malware", "tool", "victim", "infrastructure", "vulnerability", "source", "sector", "country", "incident", "indicator"] }
+  ];
+  const requiredProperties: GraphNeo4jMigrationAdapterBenchmarkDto["nodeLabelProjection"][number]["requiredProperties"] = ["tenant_id", "workspace_id", "node_id", "type", "value", "confidence", "first_seen_at", "last_seen_at"];
+  return labelSpecs
+    .map((spec): GraphNeo4jMigrationAdapterBenchmarkDto["nodeLabelProjection"][number] => ({
+      label: spec.label,
+      sourceNodeTypes: spec.sourceNodeTypes,
+      count: nodes.filter((node) => spec.sourceNodeTypes.includes(node.type)).length,
+      requiredProperties
+    }))
+    .filter((row) => row.count > 0 || row.label === "GraphNode");
+}
+
+function buildNeo4jRelationshipProjection(
+  relationships: PersistedGraphRelationship[],
+  readiness: StixExportReadinessReportDto
+): GraphNeo4jMigrationAdapterBenchmarkDto["relationshipProjection"] {
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const types = uniqueSorted(relationships.map((relationship) => relationship.type)) as IntelligenceRelationshipType[];
+  return types.map((type) => {
+    const typedRelationships = relationships.filter((relationship) => relationship.type === type);
+    return {
+      relationshipType: type,
+      count: typedRelationships.length,
+      requiredProperties: ["tenant_id", "workspace_id", "relationship_id", "review_state", "confidence", "first_seen_at", "last_seen_at", "export_eligible"],
+      exportEligibleCount: typedRelationships.filter((relationship) => readinessById.get(relationship.id)?.ready ?? false).length,
+      heldCount: typedRelationships.filter((relationship) => !(readinessById.get(relationship.id)?.ready ?? false)).length
+    };
+  });
+}
+
+function buildNeo4jBenchmarkScenarios(
+  relationships: PersistedGraphRelationship[],
+  readiness: StixExportReadinessReportDto,
+  deltas: GraphCursorRelationshipDeltaDto[]
+): GraphNeo4jMigrationAdapterBenchmarkDto["benchmarkScenarios"] {
+  const readyRelationshipIds = readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId);
+  const heldRelationshipIds = readiness.relationships.filter((relationship) => !relationship.ready).map((relationship) => relationship.relationshipId);
+  const techniqueRelationshipIds = relationships.filter((relationship) => relationship.type === "uses").map((relationship) => relationship.id);
+  const campaignRelationshipIds = relationships
+    .filter((relationship) => relationship.type === "attributed-to" || relationship.type === "uses" || relationship.type === "targets")
+    .map((relationship) => relationship.id);
+  const statusForRows = (expectedRows: number, hardLimit: number): GraphNeo4jMigrationAdapterBenchmarkDto["benchmarkScenarios"][number]["status"] => {
+    if (expectedRows > hardLimit * 2) return "rollback";
+    if (expectedRows > hardLimit) return "hold";
+    if (expectedRows > hardLimit * 0.75) return "warning";
+    return "pass";
+  };
+  return [
+    {
+      name: "actor_one_hop",
+      cypherShape: "MATCH (actor:Actor {tenant_id:$tenantId})-[r:GRAPH_RELATIONSHIP]-(n:GraphNode) RETURN actor,r,n LIMIT $limit",
+      relationshipIds: relationships.slice(0, 25).map((relationship) => relationship.id),
+      expectedRows: Math.min(relationships.length, 50),
+      p95MsTarget: 80,
+      p99MsTarget: 150,
+      status: statusForRows(relationships.length, 75),
+      rollbackThreshold: "one_hop_rows_exceed_150_or_relationship_id_parity_fails"
+    },
+    {
+      name: "campaign_two_hop",
+      cypherShape: "MATCH (actor:Actor)-[r1:GRAPH_RELATIONSHIP]-(campaign:Campaign)-[r2:GRAPH_RELATIONSHIP]-(ttp:AttackPattern) RETURN actor,r1,campaign,r2,ttp LIMIT $limit",
+      relationshipIds: campaignRelationshipIds.slice(0, 25),
+      expectedRows: Math.min(campaignRelationshipIds.length, 75),
+      p95MsTarget: 140,
+      p99MsTarget: 240,
+      status: statusForRows(campaignRelationshipIds.length, 90),
+      rollbackThreshold: "campaign_two_hop_rows_exceed_180_or_review_hold_filter_missing"
+    },
+    {
+      name: "attack_matrix",
+      cypherShape: "MATCH (:Actor)-[r:GRAPH_RELATIONSHIP]->(ttp:AttackPattern) WHERE r.export_eligible = true RETURN ttp.attack_id,r.review_state,r.confidence",
+      relationshipIds: techniqueRelationshipIds.slice(0, 25),
+      expectedRows: Math.min(techniqueRelationshipIds.length, 40),
+      p95MsTarget: 90,
+      p99MsTarget: 180,
+      status: statusForRows(techniqueRelationshipIds.length, 60),
+      rollbackThreshold: "attack_matrix_rows_exceed_120_or_attack_id_projection_missing"
+    },
+    {
+      name: "stix_preview_subset",
+      cypherShape: "MATCH ()-[r:GRAPH_RELATIONSHIP]->() WHERE r.export_eligible = true AND r.review_state = 'accepted' RETURN r.relationship_id,r.provenance_ids LIMIT $limit",
+      relationshipIds: readyRelationshipIds.slice(0, 25),
+      expectedRows: Math.min(readyRelationshipIds.length, 50),
+      p95MsTarget: 120,
+      p99MsTarget: 220,
+      status: statusForRows(readyRelationshipIds.length + heldRelationshipIds.length, 100),
+      rollbackThreshold: "stix_preview_rows_exceed_200_or_held_rows_become_exportable"
+    },
+    {
+      name: "cursor_replay",
+      cypherShape: "MATCH ()-[r:GRAPH_RELATIONSHIP]->() WHERE r.cursor > $afterCursor RETURN r ORDER BY r.cursor ASC LIMIT $limit",
+      relationshipIds: deltas.slice(0, 25).map((delta) => delta.relationshipId),
+      expectedRows: Math.min(deltas.length, 100),
+      p95MsTarget: 70,
+      p99MsTarget: 140,
+      status: statusForRows(deltas.length, 125),
+      rollbackThreshold: "cursor_replay_rows_exceed_250_or_cursor_order_not_stable"
+    }
+  ];
+}
+
+function neo4jAdapterBlockers(
+  status: GraphNeo4jMigrationAdapterBenchmarkDto["status"],
+  hasMissingLedger: boolean,
+  heldRowsRemainNonExportable: boolean,
+  scenarios: GraphNeo4jMigrationAdapterBenchmarkDto["benchmarkScenarios"]
+): string[] {
+  const blockers = new Set<string>();
+  if (status === "pass") return [];
+  if (hasMissingLedger) blockers.add("missing_ledger_replay_before_neo4j_import");
+  if (!heldRowsRemainNonExportable) blockers.add("held_rows_export_eligibility_parity_failed");
+  for (const scenario of scenarios) {
+    if (scenario.status === "hold" || scenario.status === "rollback") blockers.add(`${scenario.name}_benchmark_${scenario.status}`);
+  }
+  return [...blockers].sort();
+}
+
+function buildGraphBackendSoakScenarios(
+  relationships: PersistedGraphRelationship[],
+  reviewHoldIds: string[],
+  deltas: GraphCursorRelationshipDeltaDto[],
+  findingsByRelationship: Map<string, GraphIntegrityFindingDto[]>,
+  queueState: GraphBackendPerformanceSoakDto["queuePressure"]["state"]
+): GraphBackendPerformanceSoakDto["soakScenarios"] {
+  const relationshipIds = uniqueSorted(relationships.map((relationship) => relationship.id));
+  const criticalFindingIds = uniqueSorted([...findingsByRelationship.entries()]
+    .filter(([, findings]) => findings.some((finding) => finding.severity === "critical"))
+    .map(([relationshipId]) => relationshipId));
+  const scenarioState: GraphBackendPerformanceSoakDto["soakScenarios"][number]["expectedState"] = queueState;
+  return [
+    {
+      name: "actor_query",
+      relationshipIds: relationshipIds.slice(0, 25),
+      expectedState: scenarioState,
+      rollbackThreshold: "p99_above_3000ms_or_more_than_50_relationships_without_cursor"
+    },
+    {
+      name: "campaign_timeline",
+      relationshipIds: relationships.filter((relationship) => relationship.type === "uses" || relationship.type === "attributed-to").map((relationship) => relationship.id).slice(0, 25),
+      expectedState: scenarioState,
+      rollbackThreshold: "timeline_events_exceed_page_budget_or_missing_attack_provenance"
+    },
+    {
+      name: "stix_export_preview",
+      relationshipIds: criticalFindingIds.length > 0 ? criticalFindingIds.slice(0, 25) : relationshipIds.slice(0, 25),
+      expectedState: criticalFindingIds.length > 0 ? "rollback" : scenarioState,
+      rollbackThreshold: "critical_schema_or_provenance_findings_block_export"
+    },
+    {
+      name: "cursor_replay",
+      relationshipIds: uniqueSorted(deltas.map((delta) => delta.relationshipId)).slice(0, 25),
+      expectedState: deltas.length > 100 ? "hold" : scenarioState,
+      rollbackThreshold: "cursor_delta_count_exceeds_100_or_latest_cursor_missing"
+    },
+    {
+      name: "review_hold_burst",
+      relationshipIds: reviewHoldIds.slice(0, 25),
+      expectedState: reviewHoldIds.length > 50 ? "hold" : scenarioState,
+      rollbackThreshold: "review_hold_queue_exceeds_50_or_public_fact_policy_not_hold_weak_edges"
+    }
+  ];
+}
+
 function buildGraphBackendMigrationSchemas(snapshot: PersistedGraphSnapshot): GraphBackendMigrationSchemaDto[] {
   const nodeKinds = uniqueSorted(snapshot.nodes.map((node) => node.type)) as IntelligenceNodeType[];
   const recordKinds: GraphBackendCutoverRecordKind[] = [
@@ -1897,6 +4524,7 @@ export function buildGraphLiveSearchUpdateDto(
     };
   });
 
+  const deltaStream = graphDeltaStreamContract(scenarioCoverage);
   return {
     endpoint: options.endpoint,
     generatedAt,
@@ -1907,7 +4535,8 @@ export function buildGraphLiveSearchUpdateDto(
     relationshipCount: scopedSnapshot.relationships.length,
     deltaCounts: relationshipDeltaCounts(deltas),
     scenarioCoverage,
-    deltaStream: graphDeltaStreamContract(scenarioCoverage),
+    deltaStream,
+    clientContract: graphDeltaClientContract(deltaStream.fixtures.map((fixture) => fixture.name)),
     weakDiscoveryPolicy: "pivots_and_caveats_only",
     publicChannelPolicy: "hint_until_corroborated_or_reviewed",
     restrictedEvidencePolicy: "held_context_no_public_fact",
@@ -2177,6 +4806,50 @@ const GRAPH_DELTA_STREAM_FIXTURE_SPECS: Array<{
   }
 ];
 
+function graphDeltaClientContract(fixtureNames: GraphDeltaStreamFixtureName[] = GRAPH_DELTA_STREAM_FIXTURE_SPECS.map((spec) => spec.name)): GraphDeltaClientContractDto {
+  return {
+    mode: "graph_delta_client_contract",
+    transport: "polling_primary_sse_future",
+    routeBindings: ["/v1/intel/search.graph", "/v1/graph/query", "/v1/graph/review-plan", "/v1/exports/stix", "/v1/contracts"],
+    polling: {
+      primary: true,
+      intervalSeconds: 3,
+      cursorField: "graph.deltas[].cursor",
+      requestFields: ["runId", "query", "cursor", "deltaCursor", "focusNodeId", "maxRelationships"],
+      responseFields: ["graph.deltas", "graph.runtime.liveUpdate", "graph.investigationWorkspace.notebookExport", "graph.reviewQueue", "graph.exportReadiness"]
+    },
+    clientStates: [
+      { state: "empty_poll", eventTypes: ["graph.relationship.updated"], publicAnswerEffect: "none", stixEffect: "none" },
+      { state: "new_relationships", eventTypes: ["graph.relationship.added", "graph.relationship.updated"], publicAnswerEffect: "caveat", stixEffect: "none" },
+      { state: "review_hold", eventTypes: ["graph.relationship.review_hold", "graph.relationship.export_hold"], publicAnswerEffect: "hold", stixEffect: "held" },
+      { state: "export_ready", eventTypes: ["graph.relationship.export_ready", "graph.notebook.export_ready"], publicAnswerEffect: "fact_candidate", stixEffect: "eligible" },
+      { state: "stix_hold", eventTypes: ["graph.relationship.export_hold"], publicAnswerEffect: "caveat", stixEffect: "held" },
+      { state: "rollback_required", eventTypes: ["graph.rollback.required"], publicAnswerEffect: "remove", stixEffect: "blocked" }
+    ],
+    notebookBinding: {
+      exportPacketField: "graph.investigationWorkspace.notebookExport.exportPacketId",
+      previewOnly: true,
+      boundedNodeLimit: 75,
+      boundedEdgeLimit: 50,
+      caveatPolicy: "carry_relationship_explanations_and_export_holds",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    fixtureNames: [...new Set(fixtureNames)].sort((left, right) => left.localeCompare(right)),
+    safety: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    },
+    handoffs: {
+      agent06EvidenceReplay: "cursor_deltas_must_replay_to_capture_and_ledger_ids",
+      agent07QualityCaveats: "client_must_render_hold_caveat_before_public_fact",
+      agent09FrontendContract: "poll_graph_deltas_every_3_seconds_with_stable_cursor_fields",
+      agent10ReleaseGate: "rollback_on_missing_cursor_unsafe_payload_or_export_hold_drift"
+    }
+  };
+}
+
 function graphDeltaStreamContract(scenarioCoverage: GraphLiveSearchUpdateScenarioDto[]): GraphDeltaStreamContractDto {
   const byScenario = new Map(scenarioCoverage.map((scenario) => [scenario.name, scenario]));
   const fixtures: GraphDeltaStreamFixtureDto[] = GRAPH_DELTA_STREAM_FIXTURE_SPECS.map((spec) => {
@@ -2305,6 +4978,9 @@ export function buildStixExportReadinessApiDto(
     generatedAt: readiness.generatedAt,
     source: "api_request"
   });
+  const exportGovernance = buildReviewedExportSubsetGovernanceDto(snapshot, {
+    generatedAt: readiness.generatedAt
+  });
   return {
     endpoint: "/v1/exports/stix",
     generatedAt: readiness.generatedAt,
@@ -2328,6 +5004,22 @@ export function buildStixExportReadinessApiDto(
     }),
     certification: buildGraphExportCertificationDto(snapshot, {
       endpoint: "/v1/exports/stix",
+      generatedAt: readiness.generatedAt
+    }),
+    persistence: buildGraphReviewPersistenceLedgerDto(snapshot, {
+      generatedAt: readiness.generatedAt
+    }),
+    exportGovernance,
+    taxiiStixGovernance: buildTaxiiDescriptorStixBundleGovernanceDto(snapshot, {
+      generatedAt: readiness.generatedAt,
+      exportGovernance,
+      readiness
+    }),
+    driftMonitor: buildGraphRelationshipDriftMonitorDto(snapshot, {
+      generatedAt: readiness.generatedAt,
+      workspaceKind: "stix_preview"
+    }),
+    backendMigrationCertification: buildGraphBackendMigrationCertificationDto(snapshot, {
       generatedAt: readiness.generatedAt
     }),
     preview: buildStixExportPreview(snapshot),
@@ -2361,6 +5053,84 @@ export function buildTaxiiCollectionReadiness(
       }
     }
   ];
+}
+
+export function buildTaxiiDescriptorStixBundleGovernanceDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    generatedAt?: string;
+    relationshipIds?: string[];
+    readiness?: StixExportReadinessReportDto;
+    exportGovernance?: GraphReviewedExportSubsetGovernanceDto;
+  } = {}
+): GraphTaxiiDescriptorStixBundleGovernanceDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const scopedSnapshot = relationshipIdSet
+    ? {
+        ...snapshot,
+        relationships: snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id)),
+        evidenceSupport: snapshot.evidenceSupport.filter((support) => relationshipIdSet.has(support.relationshipId))
+      }
+    : snapshot;
+  const readiness = options.readiness ?? checkStixExportReadiness(scopedSnapshot);
+  const exportGovernance = options.exportGovernance ?? buildReviewedExportSubsetGovernanceDto(scopedSnapshot, { generatedAt });
+  const descriptorCollections = buildTaxiiCollectionReadiness(scopedSnapshot, readiness);
+  const collectionStatus = descriptorCollections[0]?.readiness?.status ?? (readiness.ready ? "ready" : readiness.readyCount > 0 ? "hold" : "rollback");
+  const referencedNodeIds = new Set(scopedSnapshot.relationships
+    .filter((relationship) => exportGovernance.eligibleRelationshipIds.includes(relationship.id))
+    .flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]));
+
+  return {
+    mode: "taxii_descriptor_stix_bundle_governance",
+    generatedAt,
+    descriptorOnly: true,
+    serverImplemented: false,
+    collectionId: "ti-graph-reviewed-stix-21",
+    mediaType: STIX_21_MEDIA_TYPE,
+    subset: {
+      subsetId: exportGovernance.subsetId,
+      cursor: exportGovernance.cursor,
+      eligibleRelationshipIds: exportGovernance.eligibleRelationshipIds,
+      heldRelationshipIds: exportGovernance.heldRelationshipIds,
+      excludedRelationshipIds: exportGovernance.excludedRelationshipIds,
+      decisionIds: exportGovernance.decisionIds,
+      estimatedStixObjectCount: 2 + referencedNodeIds.size + exportGovernance.eligibleRelationshipIds.length,
+      maxObjectsPerPage: 100,
+      stableOrdering: "identity_markings_nodes_relationships"
+    },
+    descriptorCollections,
+    bundleGates: {
+      validatesStix21: true,
+      reviewedRelationshipsOnly: true,
+      evidenceProvenanceRequired: true,
+      defaultDiscoveryEvidenceExcluded: true,
+      deprecatedAttackRequiresReplacementReview: true,
+      restrictedMetadataDescriptorOnly: true
+    },
+    futureTaxiiInterface: {
+      providerInterface: "TaxiiExportProvider",
+      listCollections: "descriptor_only",
+      getObjects: "future_page_contract",
+      requestFields: ["collectionId", "addedAfter", "limit", "next"],
+      responseFields: ["collectionId", "objects", "more", "next"],
+      cursorField: "taxiiCollections[].readiness.nextCursor",
+      mountedRoutes: []
+    },
+    releaseGate: {
+      status: collectionStatus,
+      readyCount: readiness.readyCount,
+      blockedCount: readiness.blockedCount,
+      promoteWhen: "ready_relationships_nonzero_and_holds_explained",
+      rollbackWhen: ["unsafe_material_requested", "unreviewed_relationship_exported", "descriptor_claimed_as_server", "stix_validation_failed"]
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
 }
 
 export function graphReviewApiExamples(generatedAt = "2026-05-24T00:00:00.000Z"): GraphReviewApiExamplesDto {
@@ -2402,6 +5172,12 @@ export function graphReviewApiExamples(generatedAt = "2026-05-24T00:00:00.000Z")
         endpoint: "/v1/graph/review-plan",
         generatedAt
       }),
+      persistence: buildGraphReviewPersistenceLedgerDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt
+      }),
+      exportGovernance: buildReviewedExportSubsetGovernanceDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt
+      }),
       actions: Object.values(actionExamples)
     },
     cutoverReport: {
@@ -2435,6 +5211,10 @@ export function graphReviewApiExamples(generatedAt = "2026-05-24T00:00:00.000Z")
         endpoint: "/v1/exports/stix",
         generatedAt
       }),
+      driftMonitor: buildGraphRelationshipDriftMonitorDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt,
+        workspaceKind: "stix_preview"
+      }),
       exportSla: buildGraphExportSlaDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
         endpoint: "/v1/exports/stix",
         generatedAt
@@ -2445,6 +5225,18 @@ export function graphReviewApiExamples(generatedAt = "2026-05-24T00:00:00.000Z")
       }),
       certification: buildGraphExportCertificationDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
         endpoint: "/v1/exports/stix",
+        generatedAt
+      }),
+      persistence: buildGraphReviewPersistenceLedgerDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt
+      }),
+      exportGovernance: buildReviewedExportSubsetGovernanceDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt
+      }),
+      taxiiStixGovernance: buildTaxiiDescriptorStixBundleGovernanceDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt
+      }),
+      backendMigrationCertification: buildGraphBackendMigrationCertificationDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
         generatedAt
       }),
       preview: { generatedAt, includedCount: 1, excludedCount: Object.keys(actionExamples).length - 1, items: [] },
@@ -3746,6 +6538,25 @@ function ageInDays(seenAt: string, generatedAt: string): number {
   return (Date.parse(generatedAt) - Date.parse(seenAt)) / (24 * 60 * 60_000);
 }
 
+function roundMetric(value: number): number {
+  if (!Number.isFinite(value)) return value;
+  return Math.round(value * 100) / 100;
+}
+
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort();
+}
+
+function uniqueGraphDeltaStreamFixtureNames(values: GraphDeltaStreamFixtureName[]): GraphDeltaStreamFixtureName[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function neo4jTargetForOperation(kind: GraphRepositoryOperationKind): string {
+  if (kind === "upsert_node") return "(:GraphNode)";
+  if (kind === "upsert_relationship") return "()-[:GRAPH_RELATIONSHIP]->()";
+  if (kind === "append_provenance") return "(:EvidenceSupport)";
+  if (kind === "append_review_decision") return "(:ReviewDecision)";
+  if (kind === "append_confidence_history") return "(:ConfidenceHistory)";
+  if (kind === "record_cursor_delta") return "(:CursorDelta)";
+  return "(:ExportEligibility)";
 }

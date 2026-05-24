@@ -6,6 +6,7 @@ import {
   buildGraphBackendCutoverRehearsalDto,
   buildGraphAttackCampaignWorkspaceDto,
   buildGraphBackendRepositoryContractDto,
+  buildGraphBackendMigrationCertificationDto,
   buildCorrelationGraphQuery,
   buildCorrelationTimeline,
   buildGraphExportEnforcementDto,
@@ -21,6 +22,7 @@ import {
   buildRelationshipCursorDeltas,
   buildStixExportPreview,
   buildStixExportReadinessApiDto,
+  buildTaxiiDescriptorStixBundleGovernanceDto,
   buildVictimProfileGraphView,
   checkStixExportReadiness,
   downgradeAndExpireStaleRelationships,
@@ -38,6 +40,7 @@ const voltTyphoon = { type: "actor" as const, value: "Volt Typhoon", confidence:
 const randomActor = { type: "actor" as const, value: "Random Panda", confidence: 0.28 };
 const phishing = { type: "attack-pattern" as const, value: "T1566 Phishing", confidence: 0.78, properties: { tactic: "initial-access" } };
 const credentialDumping = { type: "attack-pattern" as const, value: "T1003 OS Credential Dumping", confidence: 0.73, properties: { tactic: "credential-access" } };
+const deprecatedPowerShell = { type: "attack-pattern" as const, value: "T1086 PowerShell", confidence: 0.68, properties: { tactic: "execution" } };
 const helpDeskSocial = { type: "attack-pattern" as const, value: "Help desk social engineering", confidence: 0.72, properties: { tactic: "initial-access" } };
 const livingOffLand = { type: "attack-pattern" as const, value: "T1218 System Binary Proxy Execution", confidence: 0.77, properties: { tactic: "defense-evasion" } };
 const simSwap = { type: "tool" as const, value: "SIM swapping", confidence: 0.72 };
@@ -226,6 +229,14 @@ describe("CTI graph persistence and query views", () => {
         observedAt: "2025-01-01T00:00:00.000Z",
         ledgerIds: ["ledger_stale_ttp"],
         relationships: [{ source: apt29, target: credentialDumping, type: "uses", confidence: 0.82 }]
+      }),
+      evidence({
+        id: "apt29_deprecated_attack_mapping",
+        stage: "reviewed",
+        sourceId: "legacy_attack_mapping",
+        observedAt: "2026-05-22T00:00:00.000Z",
+        ledgerIds: ["ledger_deprecated_attack"],
+        relationships: [{ source: apt29, target: deprecatedPowerShell, type: "uses", confidence: 0.68 }]
       })
     ], { generatedAt: "2026-05-21T00:00:00.000Z" });
     const graph = downgradeAndExpireStaleRelationships(dto.graph, {
@@ -264,6 +275,79 @@ describe("CTI graph persistence and query views", () => {
       queryPlan: "bounded_single_hop_campaign_ttp_pivots"
     });
     expect(workspace.performanceBudget.edgeCount).toBe(workspace.campaignGraph.edges.length);
+    expect(workspace.searchPivotRecommendations.some((recommendation) =>
+      recommendation.query === "technique:T1003 OS Credential Dumping" &&
+      recommendation.expectedSearchEffect === "corroborate_hold" &&
+      recommendation.safety.willStartCrawling === false &&
+      recommendation.safety.willFetchRestrictedMaterial === false
+    )).toBe(true);
+    expect(workspace.reviewBoard).toMatchObject({
+      mode: "enterprise_campaign_timeline_review_board",
+      summary: {
+        publicFactPolicy: "promote_reviewed_only_hold_everything_else"
+      },
+      safety: {
+        metadataOnly: true,
+        rawRestrictedMaterialIncluded: false,
+        taxiiBoundary: "descriptor_only_no_server"
+      }
+    });
+    expect(workspace.reviewBoard.rows.some((row) =>
+      row.techniqueNames.includes("T1003 OS Credential Dumping") &&
+      row.confidenceTrend === "stale" &&
+      row.recommendedAction === "mark_stale" &&
+      row.releaseImpact === "hold"
+    )).toBe(true);
+    expect(workspace.reviewBoard.lanes.find((lane) => lane.lane === "stale_or_contradicted")?.count).toBeGreaterThanOrEqual(1);
+    expect(workspace.reviewBoard.lanes.find((lane) => lane.lane === "ready_for_public_fact")?.releaseImpact).toBe("promote");
+    expect(workspace.freshnessSlo).toMatchObject({
+      mode: "attack_campaign_freshness_slo",
+      policy: {
+        publicFactPolicy: "hold_stale_or_unreviewed_campaign_ttp_rows",
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      deltaContract: {
+        cursorField: "graph.deltas[].cursor",
+        nextPollSeconds: 3,
+        eventTypes: expect.arrayContaining([
+          "graph.attack_campaign.freshness_warning",
+          "graph.attack_campaign.freshness_breach",
+          "graph.attack_campaign.freshness_hold"
+        ])
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(workspace.freshnessSlo.rows.some((row) =>
+      row.attackIds.includes("T1003") &&
+      row.freshnessState === "breach" &&
+      row.recommendedAction === "mark_stale" &&
+      row.releaseImpact === "hold" &&
+      row.exportEligible === false
+    )).toBe(true);
+    expect(workspace.freshnessSlo.summary.deprecatedTechniqueRows).toBeGreaterThanOrEqual(1);
+    expect(workspace.freshnessSlo.rows.some((row) =>
+      row.attackIds.includes("T1086") &&
+      row.techniqueLifecycle.state === "deprecated_or_revoked" &&
+      row.techniqueLifecycle.replacementRequired &&
+      row.exportEligibilityDecision === "hold_deprecated_attack_mapping" &&
+      row.exportBlockers.includes("deprecated_attack_technique") &&
+      row.exportEligible === false
+    )).toBe(true);
+    expect(workspace.freshnessSlo.rows.every((row) =>
+      row.aliasDrift.state === "none" ||
+      row.exportEligibilityDecision === "hold_alias_drift" ||
+      row.exportEligibilityDecision === "hold_contradiction"
+    )).toBe(true);
+    expect(workspace.freshnessSlo.sourceCadenceRequests.some((request) =>
+      request.reason === "freshness_breach" &&
+      request.owner === "agent_02" &&
+      request.dryRun === true
+    )).toBe(true);
     expect(workspace.safety.taxiiBoundary).toBe("descriptor_only_no_server");
   });
 
@@ -599,6 +683,60 @@ describe("CTI graph persistence and query views", () => {
     expect(backendCutover.exportEligibility.policy).toBe("weak_public_channel_and_restricted_edges_remain_pivots_or_review_holds_until_promoted");
     expect(query.runtime.backendCutover.mode).toBe("graph_backend_cutover_rehearsal");
     expect(query.runtime.backendCutover.repositoryContract.operations.every((operation) => operation.tenantScoped)).toBe(true);
+    const backendMigration = buildGraphBackendMigrationCertificationDto(snapshot, { generatedAt: "2026-05-24T00:15:00.000Z" });
+    expect(backendMigration).toMatchObject({
+      mode: "graph_backend_production_migration_certification",
+      targetBackends: expect.arrayContaining(["memory_snapshot", "postgres_graph_tables", "neo4j"]),
+      replayPrerequisites: {
+        source: "agent06_retention_replay_and_claim_ledger",
+        retentionBoundary: "hashes_ids_redaction_state_and_metadata_only"
+      },
+      cursorContinuity: {
+        cursorField: "graph.deltas[].cursor",
+        nextPollSeconds: 3,
+        policy: "preserve_cursor_order_across_backend_replay"
+      },
+      tenantScoping: {
+        isolation: "tenant_and_workspace_required_on_all_graph_rows",
+        crossTenantJoinsAllowed: false
+      },
+      exportRecomputation: {
+        policy: "recompute_after_replay_before_stix_preview_or_taxii_descriptor",
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      holdPolicy: {
+        policy: "held_relationships_remain_non_exportable_until_review_and_replay_pass"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(backendMigration.migrationOrder.map((row) => row.dataset)).toEqual([
+      "nodes",
+      "relationships",
+      "evidence_provenance",
+      "relationship_reviews",
+      "confidence_history",
+      "cursor_deltas",
+      "attack_campaign_timeline",
+      "graph_pivots",
+      "notebook_exports",
+      "stix_preview_subsets"
+    ]);
+    expect(backendMigration.indexRequirements.map((index) => index.name)).toEqual(expect.arrayContaining([
+      "graph_tenant_workspace_idx",
+      "graph_cursor_idx",
+      "graph_stix_subset_idx"
+    ]));
+    expect(backendMigration.holdPolicy.weakDiscoveryRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendMigration.holdPolicy.missingLedgerRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendMigration.exportRecomputation.eligibleRelationshipIds.length).toBeGreaterThan(0);
+    expect(backendMigration.exportRecomputation.heldRelationshipIds.length).toBeGreaterThan(0);
+    expect(query.runtime.backendMigrationCertification.mode).toBe("graph_backend_production_migration_certification");
+    expect(query.investigationWorkspace.backendMigrationCertification.migrationOrder.at(-1)?.dataset).toBe("stix_preview_subsets");
   });
 
   test("reports noisy co-mentions and actor alias collisions as integrity and export blockers", () => {
@@ -1361,6 +1499,403 @@ describe("CTI graph persistence and query views", () => {
     expect(query.relationships.some((relationship) => relationship.sourceFamilyBias)).toBe(true);
     expect(query.relationships.find((relationship) => relationship.target.value === "Rumored Akira Victim")?.answerCaveats).toEqual(expect.arrayContaining(["restricted_only_claim", "unreviewed_victim_claim"]));
     expect(query.runtime.endpoint).toBe("/v1/graph/query");
+    expect(query.runtime.backendPerformance).toMatchObject({
+      mode: "graph_backend_performance_soak",
+      targetBackends: expect.arrayContaining(["memory_snapshot", "postgres_graph_tables", "neo4j"]),
+      budgets: {
+        maxRelationshipsPerPage: 50,
+        maxNodesPerPage: 75,
+        maxEvidenceSupportRows: 150,
+        maxCursorDeltas: 100,
+        maxCostUnits: 250,
+        publicPollSeconds: 3
+      },
+      safety: {
+        tenantScoped: true,
+        rawRestrictedMaterialIncluded: false,
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      releasePacket: {
+        owner: "Agent 08",
+        agent10Field: "graphBackendPerformanceSoak"
+      }
+    });
+    expect(query.runtime.backendPerformance.queryCost.estimatedCostUnits).toBeGreaterThan(0);
+    expect(query.runtime.backendPerformance.latencyTargets.map((target) => target.backend)).toEqual(["memory_snapshot", "postgres_graph_tables", "neo4j"]);
+    expect(query.runtime.backendPerformance.soakScenarios.map((scenario) => scenario.name)).toEqual([
+      "actor_query",
+      "campaign_timeline",
+      "stix_export_preview",
+      "cursor_replay",
+      "review_hold_burst"
+    ]);
+    expect(query.runtime.neo4jMigrationAdapter).toMatchObject({
+      mode: "neo4j_migration_adapter_contract_benchmark",
+      adapterBoundary: {
+        targetBackend: "neo4j",
+        implementationState: "contract_only_no_live_driver",
+        primaryCutoverBackend: "postgres_graph_tables",
+        apiShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes",
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      cutoverReadiness: {
+        fallback: "keep_postgres_graph_tables_or_memory_snapshot_authoritative",
+        proofCommand: "bun test src/tests/graphViews.test.ts"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.runtime.neo4jMigrationAdapter.nodeLabelProjection.map((row) => row.label)).toEqual(expect.arrayContaining([
+      "GraphNode",
+      "Actor",
+      "AttackPattern"
+    ]));
+    expect(query.runtime.neo4jMigrationAdapter.constraints.every((constraint) => constraint.cypher.includes("IF NOT EXISTS"))).toBe(true);
+    expect(query.runtime.neo4jMigrationAdapter.relationshipProjection.reduce((total, row) => total + row.count, 0)).toBe(snapshot.relationships.length);
+    expect(query.runtime.neo4jMigrationAdapter.benchmarkScenarios.map((scenario) => scenario.name)).toEqual([
+      "actor_one_hop",
+      "campaign_two_hop",
+      "attack_matrix",
+      "stix_preview_subset",
+      "cursor_replay"
+    ]);
+    expect(query.runtime.neo4jMigrationAdapter.parityChecks).toMatchObject({
+      relationshipCountMatchesSnapshot: true,
+      cursorOrderPreserved: true,
+      reviewStateParity: true,
+      exportEligibilityParity: true,
+      heldRowsRemainNonExportable: true
+    });
+    expect(query.runtime.backendAdapterCutover).toMatchObject({
+      mode: "neo4j_postgres_graph_backend_adapter_contract",
+      adapterStrategy: {
+        primaryBackend: "postgres_graph_tables",
+        neo4jState: "contract_only_no_live_driver",
+        routeShapePolicy: "serve_existing_graph_runtime_dtos_without_route_shape_changes",
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      cursorReplay: {
+        cursorField: "graph.deltas[].cursor",
+        orderPolicy: "preserve_delta_cursor_order_across_backends"
+      },
+      reviewHoldParity: {
+        policy: "held_relationships_remain_non_exportable_until_review_replay_and_recompute_pass"
+      },
+      cutoverReadiness: {
+        fallback: "keep_memory_snapshot_or_postgres_graph_tables_authoritative",
+        proofCommands: expect.arrayContaining([
+          "bun run check",
+          "bun test src/tests/graphViews.test.ts src/tests/graphReviewRoutes.test.ts",
+          "bun run check:graph-review-mounted"
+        ])
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.runtime.backendAdapterCutover.interfaces.map((adapter) => adapter.name)).toEqual(expect.arrayContaining([
+      "upsert_node",
+      "upsert_relationship",
+      "append_provenance",
+      "record_cursor_delta",
+      "update_export_eligibility"
+    ]));
+    expect(query.runtime.backendAdapterCutover.interfaces.every((adapter) => adapter.tenantScoped)).toBe(true);
+    expect(query.runtime.backendAdapterCutover.migrations.map((migration) => migration.backend)).toEqual(["postgres_graph_tables", "neo4j"]);
+    expect(query.runtime.backendAdapterCutover.performanceSlo.benchmarkScenarios.map((scenario) => scenario.name)).toContain("cursor_replay");
+    expect(query.runtime.backendMigrationCertification).toMatchObject({
+      mode: "graph_backend_production_migration_certification",
+      targetBackends: expect.arrayContaining(["memory_snapshot", "postgres_graph_tables", "neo4j"]),
+      replayPrerequisites: {
+        source: "agent06_retention_replay_and_claim_ledger",
+        retentionBoundary: "hashes_ids_redaction_state_and_metadata_only"
+      },
+      cursorContinuity: {
+        cursorField: "graph.deltas[].cursor",
+        nextPollSeconds: 3,
+        policy: "preserve_cursor_order_across_backend_replay"
+      },
+      tenantScoping: {
+        tenantId: "default",
+        workspaceId: query.runtime.queryCostControls.tenant.workspaceId,
+        isolation: "tenant_and_workspace_required_on_all_graph_rows",
+        crossTenantJoinsAllowed: false
+      },
+      exportRecomputation: {
+        policy: "recompute_after_replay_before_stix_preview_or_taxii_descriptor",
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.runtime.backendMigrationCertification.summary.edgeCount).toBe(snapshot.relationships.length);
+    expect(query.runtime.backendMigrationCertification.summary.attackCampaignTimelineRows).toBeGreaterThan(0);
+    expect(query.runtime.backendMigrationCertification.summary.stixPreviewRows).toBe(snapshot.relationships.length);
+    expect(query.runtime.backendMigrationCertification.migrationOrder.map((row) => row.dataset)).toEqual([
+      "nodes",
+      "relationships",
+      "evidence_provenance",
+      "relationship_reviews",
+      "confidence_history",
+      "cursor_deltas",
+      "attack_campaign_timeline",
+      "graph_pivots",
+      "notebook_exports",
+      "stix_preview_subsets"
+    ]);
+    expect(query.runtime.backendMigrationCertification.holdPolicy.restrictedMetadataRelationshipIds.length).toBeGreaterThan(0);
+    expect(query.runtime.backendMigrationCertification.holdPolicy.staleRelationshipIds.length).toBeGreaterThan(0);
+    expect(query.runtime.backendMigrationCertification.exportRecomputation.blockers).toEqual(expect.arrayContaining([
+      "unsupported_restricted_metadata",
+      "stale_accepted_edge"
+    ]));
+    expect(query.runtime.backendMigrationCertification.holdPolicy.policy).toBe("held_relationships_remain_non_exportable_until_review_and_replay_pass");
+    expect(query.runtime.queryCostControls).toMatchObject({
+      mode: "graph_query_cost_controls_tenant_budget",
+      tenant: {
+        tenantId: "default",
+        workspaceKind: "investigation",
+        isolation: "tenant_and_workspace_scoped_budget"
+      },
+      queuePressure: {
+        schedulerBudgetClass: "interactive_graph_query",
+        nextPollSeconds: 3
+      },
+      heldFacts: {
+        policy: "held_facts_never_promote_because_of_budget_truncation"
+      },
+      stixPreviewLimits: {
+        recomputeExportEligibility: "bounded_to_selected_relationship_ids"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false
+      }
+    });
+    expect(query.runtime.queryCostControls.budgets.map((budget) => budget.dimension)).toEqual([
+      "nodes",
+      "edges",
+      "relationship_review_rows",
+      "technique_timeline_events",
+      "campaign_pivots",
+      "evidence_joins",
+      "stix_preview_rows",
+      "cursor_continuation",
+      "export_eligibility_recomputation"
+    ]);
+    expect(query.runtime.queryCostControls.continuation.boundedRelationshipIds.length).toBeLessThanOrEqual(50);
+    expect(query.runtime.queryCostControls.queuePressure.holdReasons).toEqual(expect.arrayContaining([
+      "restricted_metadata_held",
+      "stale_relationships_held",
+      "weak_discovery_held"
+    ]));
+    expect(query.runtime.queryCostControls.heldFacts.restrictedMetadataRelationshipIds.length).toBeGreaterThan(0);
+    expect(query.runtime.queryCostControls.heldFacts.staleRelationshipIds.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.costControls.tenant.workspaceKind).toBe("investigation");
+    expect(query.runtime.driftMonitor).toMatchObject({
+      mode: "campaign_relationship_drift_monitor",
+      tenant: {
+        tenantId: "default",
+        workspaceKind: "investigation",
+        budgetPolicy: "respect_graph_query_cost_controls"
+      },
+      heldFacts: {
+        policy: "drift_monitor_never_promotes_held_or_budget_truncated_rows"
+      },
+      deltaContract: {
+        cursorField: "graph.deltas[].cursor",
+        nextPollSeconds: 3,
+        eventTypes: expect.arrayContaining(["graph.relationship.drift", "graph.relationship.export_hold"])
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.runtime.driftMonitor.rows.length).toBeGreaterThan(0);
+    expect(query.runtime.driftMonitor.summary.stixBlocked).toBeGreaterThan(0);
+    expect(query.runtime.driftMonitor.rows.map((row) => row.action)).toEqual(expect.arrayContaining([
+      "keep_promoted",
+      "block_stix_export",
+      "request_source_expansion"
+    ]));
+    expect(query.runtime.driftMonitor.heldFacts.staleRelationshipIds.length).toBeGreaterThan(0);
+    expect(query.runtime.driftMonitor.rows
+      .filter((row) =>
+        query.runtime.driftMonitor.heldFacts.weakDiscoveryRelationshipIds.includes(row.relationshipId)
+        || query.runtime.driftMonitor.heldFacts.publicChannelOnlyRelationshipIds.includes(row.relationshipId)
+        || query.runtime.driftMonitor.heldFacts.restrictedMetadataRelationshipIds.includes(row.relationshipId)
+        || query.runtime.driftMonitor.heldFacts.staleRelationshipIds.includes(row.relationshipId)
+        || query.runtime.driftMonitor.heldFacts.contradictedRelationshipIds.includes(row.relationshipId)
+        || query.runtime.driftMonitor.heldFacts.missingLedgerRelationshipIds.includes(row.relationshipId)
+        || row.budgetBounded)
+      .every((row) => row.exportEligibleAfter === false)).toBe(true);
+    expect(query.investigationWorkspace.driftMonitor.tenant.workspaceKind).toBe("investigation");
+    expect(query.attackCampaignWorkspace.driftMonitor.tenant.workspaceKind).toBe("campaign_timeline");
+    expect(readiness.driftMonitor.tenant.workspaceKind).toBe("stix_preview");
+    expect(readiness.driftMonitor.rows.every((row) => row.exportEligibleAfter || row.nextReviewState !== "accepted")).toBe(true);
+    expect(query.investigationWorkspace.relationshipExplanations).toMatchObject({
+      mode: "graph_relationship_explainability",
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.investigationWorkspace.relationshipExplanations.rows.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.relationshipExplanations.rows.map((row) => row.status)).toEqual(expect.arrayContaining([
+      "export_ready",
+      "export_blocked"
+    ]));
+    expect(query.investigationWorkspace.relationshipExplanations.rows.every((row) =>
+      row.why.length > 0
+      && row.drift.action
+      && row.exportEligibility.taxiiBoundary === "descriptor_only_no_server"
+      && row.agentHandoffs.agent09DeltaFields.includes("drift.action")
+    )).toBe(true);
+    expect(query.investigationWorkspace.relationshipExplanations.rows
+      .filter((row) => !row.exportEligibility.eligible)
+      .every((row) => row.caveats.length > 0 && row.exportEligibility.blockers.length > 0)).toBe(true);
+    expect(query.investigationWorkspace.notebookExport).toMatchObject({
+      mode: "metadata_only_graph_investigation_notebook_export",
+      query: "production fixtures",
+      stixPreviewDescriptor: {
+        mediaType: "application/stix+json;version=2.1",
+        taxiiBoundary: "descriptor_only_no_server",
+        previewOnly: true
+      },
+      costBudget: {
+        nextPollSeconds: 3
+      },
+      deltaClientContract: {
+        mode: "graph_delta_client_contract",
+        transport: "polling_primary_sse_future",
+        polling: {
+          intervalSeconds: 3,
+          cursorField: "graph.deltas[].cursor"
+        },
+        notebookBinding: {
+          exportPacketField: "graph.investigationWorkspace.notebookExport.exportPacketId",
+          previewOnly: true,
+          taxiiBoundary: "descriptor_only_no_server"
+        },
+        safety: {
+          rawRestrictedMaterialIncluded: false,
+          objectKeysIncluded: false,
+          unsafeUrlsIncluded: false,
+          metadataOnly: true
+        }
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.investigationWorkspace.notebookExport.boundedNodes.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.notebookExport.boundedEdges.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.notebookExport.relationshipExplanations.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.notebookExport.pivotRecommendations.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.notebookExport.handoffs.agent09ApiSseDeltas).toEqual(expect.arrayContaining([
+      "graph.relationship.explanation",
+      "graph.notebook.export_ready",
+      "graph.relationship.export_hold"
+    ]));
+    expect(query.runtime.liveUpdate.clientContract).toMatchObject({
+      mode: "graph_delta_client_contract",
+      polling: {
+        intervalSeconds: 3,
+        cursorField: "graph.deltas[].cursor",
+        responseFields: expect.arrayContaining([
+          "graph.deltas",
+          "graph.runtime.liveUpdate",
+          "graph.investigationWorkspace.notebookExport"
+        ])
+      },
+      handoffs: {
+        agent09FrontendContract: "poll_graph_deltas_every_3_seconds_with_stable_cursor_fields"
+      }
+    });
+    expect(query.runtime.liveUpdate.clientContract.clientStates.map((state) => state.state)).toEqual(expect.arrayContaining([
+      "review_hold",
+      "export_ready",
+      "rollback_required"
+    ]));
+    expect(query.investigationWorkspace.backendMigrationCertification.summary.notebookExportRows).toBe(query.investigationWorkspace.notebookExport.boundedEdges.length);
+    expect(query.investigationWorkspace.backendMigrationCertification.cursorContinuity.nextPollSeconds).toBe(3);
+    expect(readiness.backendMigrationCertification.mode).toBe("graph_backend_production_migration_certification");
+    expect(readiness.backendMigrationCertification.exportRecomputation.taxiiBoundary).toBe("descriptor_only_no_server");
+    expect(query.attackCampaignWorkspace.freshnessSlo).toMatchObject({
+      mode: "attack_campaign_freshness_slo",
+      policy: {
+        publicFactPolicy: "hold_stale_or_unreviewed_campaign_ttp_rows",
+        taxiiBoundary: "descriptor_only_no_server"
+      },
+      handoffs: {
+        agent02SchedulerCadence: "raise_campaign_ttp_collection_cadence_dry_run",
+        agent06EvidenceReplay: "replay_missing_or_stale_campaign_ttp_evidence",
+        agent09ApiCompatibility: "stable_3_second_polling_freshness_slo_packet"
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(query.attackCampaignWorkspace.freshnessSlo.rows.every((row) =>
+      row.exportEligible === (row.freshnessState === "current" && row.exportBlockers.length === 0)
+      || row.exportEligible === false
+    )).toBe(true);
+    expect(query.attackCampaignWorkspace.freshnessSlo.sourceCadenceRequests.every((request) => request.dryRun)).toBe(true);
+    expect(query.investigationWorkspace.costControls.agentHandoffs).toMatchObject({
+      agent02SchedulerBudget: "interactive_graph_query_budget",
+      agent06EvidenceChain: "evidence_join_rows_bounded_by_ledger_ids",
+      agent07QualityConfidence: "held_relationships_keep_quality_caveats",
+      agent09ApiCompatibility: "stable_fields_with_cursor_degradation",
+      agent10CapacityRunbook: "hold_or_rollback_on_budget_breach"
+    });
+    expect(query.attackCampaignWorkspace.costControls.tenant.workspaceKind).toBe("campaign_timeline");
+    expect(query.attackCampaignWorkspace.costControls.continuation.boundedRelationshipIds.length).toBeLessThanOrEqual(50);
+    expect(query.investigationWorkspace.workflowContracts.openInvestigation).toMatchObject({
+      endpoint: "/v1/graph/investigations",
+      method: "POST",
+      mode: "contract_only_dry_run",
+      tenantScoped: true
+    });
+    expect(query.investigationWorkspace.workflowContracts.savePivotSet).toMatchObject({
+      endpoint: "/v1/graph/investigations/{investigationId}/pivots",
+      cursorStable: true,
+      willMutate: false
+    });
+    expect(query.investigationWorkspace.workflowContracts.reviewRelationship).toMatchObject({
+      endpoint: "/v1/graph/relationships/{relationshipId}/review",
+      willMutateWithoutApproval: false,
+      requiredProvenanceFields: expect.arrayContaining(["relationshipId", "evidenceIds", "ledgerIds", "sourceIds", "reviewedBy", "reviewReason"])
+    });
+    expect(query.investigationWorkspace.workflowContracts.exportReviewedSubset).toMatchObject({
+      endpoint: "/v1/graph/investigations/{investigationId}/exports/stix",
+      mediaType: "application/stix+json;version=2.1",
+      taxiiBoundary: "descriptor_only_no_server"
+    });
+    expect(query.investigationWorkspace.workflowContracts.openInvestigation.boundedRelationshipIds.length).toBeLessThanOrEqual(25);
+    expect(query.investigationWorkspace.workflowContracts.exportReviewedSubset.heldRelationshipIds.length).toBeGreaterThan(0);
     expect(query.runtime.exportSla.endpoint).toBe("/v1/graph/query");
     expect(query.runtime.exportSla.publicAnswerImpact).toBe("hold_graph_facts");
     expect(query.runtime.enforcement.releaseGate.publicAnswers).toBe("hold");
@@ -1466,9 +2001,84 @@ describe("CTI graph persistence and query views", () => {
         blockedCount: readiness.blockedCount
       }
     });
+    expect(readiness.taxiiStixGovernance).toMatchObject({
+      mode: "taxii_descriptor_stix_bundle_governance",
+      descriptorOnly: true,
+      serverImplemented: false,
+      collectionId: "ti-graph-reviewed-stix-21",
+      mediaType: "application/stix+json;version=2.1",
+      bundleGates: {
+        validatesStix21: true,
+        reviewedRelationshipsOnly: true,
+        evidenceProvenanceRequired: true,
+        defaultDiscoveryEvidenceExcluded: true,
+        deprecatedAttackRequiresReplacementReview: true,
+        restrictedMetadataDescriptorOnly: true
+      },
+      futureTaxiiInterface: {
+        providerInterface: "TaxiiExportProvider",
+        listCollections: "descriptor_only",
+        getObjects: "future_page_contract",
+        mountedRoutes: []
+      },
+      noLeak: {
+        rawRestrictedMaterialIncluded: false,
+        objectKeysIncluded: false,
+        unsafeUrlsIncluded: false,
+        metadataOnly: true
+      }
+    });
+    expect(readiness.taxiiStixGovernance.subset.eligibleRelationshipIds).toEqual(readiness.exportGovernance.eligibleRelationshipIds);
+    expect(readiness.taxiiStixGovernance.subset.heldRelationshipIds).toEqual(readiness.exportGovernance.heldRelationshipIds);
+    expect(readiness.taxiiStixGovernance.releaseGate).toMatchObject({
+      status: "hold",
+      readyCount: readiness.readyCount,
+      blockedCount: readiness.blockedCount
+    });
+    expect(query.runtime.taxiiStixGovernance.futureTaxiiInterface.mountedRoutes).toEqual([]);
+    expect(query.investigationWorkspace.taxiiStixGovernance.descriptorOnly).toBe(true);
     expect(readiness.runtime.relationships.some((relationship) => relationship.exportHolds.includes("unreviewed_cve_exploitation"))).toBe(true);
     expect(readiness.relationships.some((relationship) => relationship.ready)).toBe(true);
     expect(readiness.relationships.some((relationship) => relationship.blockers.includes("unsupported_restricted_metadata"))).toBe(true);
+  });
+
+  test("builds descriptor-only TAXII and STIX subset governance without server claims", () => {
+    const snapshot = buildPersistedGraphSnapshot({ nodes: [
+      { ...apt29, id: "node--actor--apt29", provenance: [] },
+      { ...phishing, id: "node--attack-pattern--t1566-phishing", provenance: [] }
+    ], relationships: [{
+      id: "rel--apt29-phishing-reviewed",
+      sourceRef: "node--actor--apt29",
+      targetRef: "node--attack-pattern--t1566-phishing",
+      type: "uses",
+      confidence: 0.82,
+      firstSeenAt: "2026-05-24T00:00:00.000Z",
+      lastSeenAt: "2026-05-24T00:00:00.000Z",
+      provenance: [{
+        sourceId: "public_report",
+        captureId: "capture_public_report",
+        url: "https://example.test/report",
+        collectedAt: "2026-05-24T00:00:00.000Z",
+        contentHash: "hash_public_report",
+        extractorVersion: "graph-view-test"
+      }],
+      properties: { reviewState: "accepted", stage: "reviewed", evidenceLedgerIds: ["ledger_public_report"] }
+    }] }, { generatedAt: "2026-05-24T00:00:00.000Z" });
+
+    const governance = buildTaxiiDescriptorStixBundleGovernanceDto(snapshot);
+
+    expect(governance.descriptorOnly).toBe(true);
+    expect(governance.serverImplemented).toBe(false);
+    expect(governance.descriptorCollections[0]).toMatchObject({
+      id: "ti-graph-reviewed-stix-21",
+      canRead: true,
+      canWrite: false
+    });
+    expect(governance.subset.eligibleRelationshipIds).toContain("rel--apt29-phishing-reviewed");
+    expect(governance.subset.estimatedStixObjectCount).toBeGreaterThanOrEqual(4);
+    expect(governance.futureTaxiiInterface.requestFields).toEqual(["collectionId", "addedAfter", "limit", "next"]);
+    expect(governance.releaseGate.status).toBe("ready");
+    expect(governance.releaseGate.rollbackWhen).toContain("descriptor_claimed_as_server");
   });
 
   test("enforces ledger-id and schema-risk promotion holds before public answer or STIX export", () => {

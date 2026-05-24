@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "repeated_poll_empty_delta",
+  "description": "Repeated poll with no new evidence keeps the last visible answer and advances no unsafe state.",
+  "route": "GET /v1/intel/search?runId=run_sdk_initial_001&deltaCursor=delta_sdk_initial_001",
+  "runId": "run_sdk_initial_001",
+  "status": "partial",
+  "pollCursor": "poll_sdk_initial_002",
+  "deltaCursor": "delta_sdk_initial_001",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:00:03.000Z",
+  "warningCodes": ["waiting_for_deltas"],
+  "publicWrapperDelta": {
+    "changed": false,
+    "clientBehavior": "keep current answer, schedule the next poll, and do not clear evidence sections"
+  }
+}

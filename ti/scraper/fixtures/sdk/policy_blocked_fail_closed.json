@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "policy_blocked_fail_closed",
+  "description": "Policy-blocked requests fail closed without exposing unsafe material.",
+  "route": "POST /api/ti/search",
+  "runId": "run_sdk_blocked_001",
+  "status": "blocked",
+  "pollCursor": "poll_sdk_blocked_001",
+  "deltaCursor": "delta_sdk_blocked_001",
+  "refreshAfterSeconds": 0,
+  "updated": "2026-05-24T12:02:00.000Z",
+  "warningCodes": ["policy_blocked"],
+  "error": {
+    "code": "policy_blocked",
+    "message": "The request requires analyst review before any collection can proceed.",
+    "retryable": false
+  },
+  "reviewGates": ["restricted_metadata_review", "source_approval_required"],
+  "publicWrapperDelta": {
+    "changed": true,
+    "sections": ["reviewGates"]
+  }
+}

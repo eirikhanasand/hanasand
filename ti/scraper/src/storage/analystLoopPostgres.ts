@@ -3,8 +3,13 @@ import type {
   AnalystLoopSnapshot,
   AnalystMetadataReviewTask,
   AnalystSourceActivationPacket,
-  AnalystVictimNotificationPacket
+  AnalystVictimNotificationPacket,
+  CollectionPlan,
+  CollectionRun,
+  CollectionTask,
+  AnalystLoopResultState
 } from "../types.ts";
+import { buildSourceRegistryPersistenceReadinessPacket } from "./sourceRegistryPostgres.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -18,6 +23,83 @@ const FORBIDDEN_PROVENANCE_KEYS = new Set([
   "cookie",
   "authorization"
 ]);
+
+export type AnalystCollectionTaskState =
+  | "queued"
+  | "leased"
+  | "completed"
+  | "failed"
+  | "review_required"
+  | "blocked"
+  | "rejected";
+
+export type AnalystCollectionTaskTargetKind =
+  | "safe_public"
+  | "metadata_only"
+  | "source_activation_gap"
+  | "blocked_unsafe_target";
+
+export interface AnalystCollectionPlanRow {
+  id: string;
+  tenant_id?: string;
+  request_id: string;
+  query: string;
+  normalized_query: string;
+  entity_type: CollectionPlan["request"]["entityType"];
+  budget_class?: CollectionPlan["request"]["budgetClass"];
+  created_at: string;
+  requester_id?: string;
+  result_state: AnalystLoopResultState;
+  queued_task_count: number;
+  review_required_count: number;
+  rejected_source_count: number;
+  request: JsonObject;
+  explanations: CollectionPlan["explanations"];
+  audit: CollectionPlan["audit"];
+}
+
+export interface AnalystCollectionTaskRow {
+  id: string;
+  tenant_id?: string;
+  plan_id: string;
+  run_id?: string;
+  source_id: string;
+  task_state: AnalystCollectionTaskState;
+  target_kind: AnalystCollectionTaskTargetKind;
+  source_type: CollectionTask["sourceType"];
+  target_url: string;
+  priority: number;
+  reason: string;
+  queued_at: string;
+  available_at?: string;
+  deadline_at?: string;
+  max_bytes?: number;
+  retry_count: number;
+  planning: JsonObject;
+  metadata: JsonObject;
+}
+
+export interface AnalystCollectionRunRow {
+  id: string;
+  tenant_id?: string;
+  plan_id: string;
+  request_id: string;
+  status: CollectionRun["status"];
+  created_at: string;
+  updated_at: string;
+  started_at?: string;
+  completed_at?: string;
+  idempotency_key?: string;
+  request_hash?: string;
+  task_count: number;
+  review_task_count: number;
+  rejected_source_count: number;
+  capture_count: number;
+  incident_count: number;
+  result_state: AnalystLoopResultState;
+  error?: string;
+  summary: JsonObject;
+}
 
 export interface AnalystMetadataReviewTaskRow {
   id: string;
@@ -142,11 +224,170 @@ export interface AnalystLoopSnapshotRow {
 }
 
 export interface AnalystLoopPostgresRows {
+  collection_plans: AnalystCollectionPlanRow[];
+  collection_tasks: AnalystCollectionTaskRow[];
+  collection_runs: AnalystCollectionRunRow[];
   metadata_review_tasks: AnalystMetadataReviewTaskRow[];
   source_activation_packets: AnalystSourceActivationPacketRow[];
   victim_notification_packets: AnalystVictimNotificationPacketRow[];
   claim_ledger_entries: AnalystClaimLedgerEntryRow[];
   analyst_loop_snapshots: AnalystLoopSnapshotRow[];
+}
+
+export function analystCollectionPlanToPostgresRow(
+  plan: CollectionPlan,
+  resultState: AnalystLoopResultState = plan.reviewRequired.length > 0 ? "metadata_review" : plan.rejected.length > 0 ? "needs_source_activation" : "queued"
+): AnalystCollectionPlanRow {
+  return {
+    id: plan.id,
+    tenant_id: plan.tenantId,
+    request_id: plan.request.id,
+    query: plan.request.query,
+    normalized_query: normalizeQuery(plan.request.query),
+    entity_type: plan.request.entityType,
+    budget_class: plan.request.budgetClass,
+    created_at: plan.request.createdAt,
+    requester_id: plan.request.requesterId,
+    result_state: resultState,
+    queued_task_count: plan.tasks.length,
+    review_required_count: plan.reviewRequired.length,
+    rejected_source_count: plan.rejected.length,
+    request: safeJsonObject(plan.request, plan.id),
+    explanations: safeJsonArray(plan.explanations ?? [], plan.id) as CollectionPlan["explanations"],
+    audit: safeJsonArray(plan.audit, plan.id) as CollectionPlan["audit"]
+  };
+}
+
+export function analystCollectionPlanFromPostgresRow(
+  row: AnalystCollectionPlanRow,
+  tasks: CollectionTask[] = [],
+  reviewRequired: CollectionTask[] = [],
+  rejected: CollectionPlan["rejected"] = []
+): CollectionPlan {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    request: safeJsonObject(row.request, row.id) as CollectionPlan["request"],
+    tasks,
+    reviewRequired,
+    rejected,
+    explanations: safeJsonArray(row.explanations ?? [], row.id) as CollectionPlan["explanations"],
+    queryTerms: queryTermsFromExplanations(row.explanations ?? []),
+    audit: safeJsonArray(row.audit, row.id) as CollectionPlan["audit"]
+  };
+}
+
+export function analystCollectionTaskToPostgresRow(
+  task: CollectionTask,
+  input: {
+    planId: string;
+    taskState?: AnalystCollectionTaskState;
+    targetKind?: AnalystCollectionTaskTargetKind;
+    metadata?: Record<string, unknown>;
+  }
+): AnalystCollectionTaskRow {
+  return {
+    id: task.id,
+    tenant_id: task.tenantId,
+    plan_id: input.planId,
+    run_id: task.runId,
+    source_id: task.sourceId,
+    task_state: input.taskState ?? collectionTaskState(task),
+    target_kind: input.targetKind ?? collectionTaskTargetKind(task),
+    source_type: task.sourceType,
+    target_url: task.targetUrl,
+    priority: task.priority,
+    reason: task.reason,
+    queued_at: task.queuedAt,
+    available_at: task.availableAt,
+    deadline_at: task.deadlineAt,
+    max_bytes: task.maxBytes,
+    retry_count: task.retryCount,
+    planning: safeJsonObject((task.planning ?? {}) as unknown as Record<string, unknown>, task.id),
+    metadata: safeJsonObject({ ...collectionTaskOptionalMetadata(task), ...(input.metadata ?? {}) }, task.id)
+  };
+}
+
+export function analystCollectionTaskFromPostgresRow(row: AnalystCollectionTaskRow): CollectionTask {
+  const task: CollectionTask = {
+    id: row.id,
+    tenantId: row.tenant_id,
+    sourceId: row.source_id,
+    targetUrl: row.target_url,
+    sourceType: row.source_type,
+    queuedAt: row.queued_at,
+    priority: row.priority,
+    reason: row.reason,
+    retryCount: row.retry_count,
+    runId: row.run_id,
+    planning: Object.keys(row.planning).length > 0 ? safeJsonObject(row.planning, row.id) as unknown as CollectionTask["planning"] : undefined
+  };
+  if (row.deadline_at !== undefined) task.deadlineAt = row.deadline_at;
+  if (row.max_bytes !== undefined) task.maxBytes = row.max_bytes;
+  if (row.available_at !== undefined) task.availableAt = row.available_at;
+  if (typeof row.metadata.intelRequestId === "string") task.intelRequestId = row.metadata.intelRequestId;
+  if (typeof row.metadata.parentUrl === "string") task.parentUrl = row.metadata.parentUrl;
+  if (typeof row.metadata.attemptDeadlineAt === "string") task.attemptDeadlineAt = row.metadata.attemptDeadlineAt;
+  if (typeof row.metadata.crawlBudgetKey === "string") task.crawlBudgetKey = row.metadata.crawlBudgetKey;
+  if (typeof row.metadata.maxRetries === "number") task.maxRetries = row.metadata.maxRetries;
+  if (typeof row.metadata.sourceConcurrencyKey === "string") task.sourceConcurrencyKey = row.metadata.sourceConcurrencyKey;
+  if (typeof row.metadata.fairnessKey === "string") task.fairnessKey = row.metadata.fairnessKey;
+  if (row.metadata.scoreBreakdown && typeof row.metadata.scoreBreakdown === "object" && !Array.isArray(row.metadata.scoreBreakdown)) {
+    task.scoreBreakdown = row.metadata.scoreBreakdown as CollectionTask["scoreBreakdown"];
+  }
+  return task;
+}
+
+export function analystCollectionRunToPostgresRow(
+  run: CollectionRun,
+  input: {
+    resultState?: AnalystLoopResultState;
+    summary?: Record<string, unknown>;
+  } = {}
+): AnalystCollectionRunRow {
+  return {
+    id: run.id,
+    tenant_id: run.tenantId,
+    plan_id: run.planId,
+    request_id: run.requestId,
+    status: run.status,
+    created_at: run.createdAt,
+    updated_at: run.updatedAt,
+    started_at: run.startedAt,
+    completed_at: run.completedAt,
+    idempotency_key: run.idempotencyKey,
+    request_hash: run.requestHash,
+    task_count: run.taskCount,
+    review_task_count: run.reviewTaskCount,
+    rejected_source_count: run.rejectedSourceCount,
+    capture_count: run.captureCount,
+    incident_count: run.incidentCount,
+    result_state: input.resultState ?? collectionRunResultState(run),
+    error: run.error,
+    summary: safeJsonObject(input.summary ?? {}, run.id)
+  };
+}
+
+export function analystCollectionRunFromPostgresRow(row: AnalystCollectionRunRow): CollectionRun {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    planId: row.plan_id,
+    requestId: row.request_id,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    idempotencyKey: row.idempotency_key,
+    requestHash: row.request_hash,
+    taskCount: row.task_count,
+    reviewTaskCount: row.review_task_count,
+    rejectedSourceCount: row.rejected_source_count,
+    captureCount: row.capture_count,
+    incidentCount: row.incident_count,
+    error: row.error
+  };
 }
 
 export function analystMetadataReviewTaskToPostgresRow(task: AnalystMetadataReviewTask): AnalystMetadataReviewTaskRow {
@@ -416,6 +657,15 @@ export function analystLoopSnapshotFromPostgresRow(row: AnalystLoopSnapshotRow):
 }
 
 export function analystLoopSnapshotToPostgresRows(input: {
+  collectionPlans?: CollectionPlan[];
+  collectionTasks?: Array<{
+    task: CollectionTask;
+    planId: string;
+    taskState?: AnalystCollectionTaskState;
+    targetKind?: AnalystCollectionTaskTargetKind;
+    metadata?: Record<string, unknown>;
+  }>;
+  collectionRuns?: CollectionRun[];
   metadataReviewTasks: AnalystMetadataReviewTask[];
   sourceActivationPackets: AnalystSourceActivationPacket[];
   victimNotificationPackets: AnalystVictimNotificationPacket[];
@@ -423,6 +673,9 @@ export function analystLoopSnapshotToPostgresRows(input: {
   loopSnapshots: AnalystLoopSnapshot[];
 }): AnalystLoopPostgresRows {
   return {
+    collection_plans: (input.collectionPlans ?? []).map((plan) => analystCollectionPlanToPostgresRow(plan)),
+    collection_tasks: (input.collectionTasks ?? []).map((entry) => analystCollectionTaskToPostgresRow(entry.task, entry)),
+    collection_runs: (input.collectionRuns ?? []).map((run) => analystCollectionRunToPostgresRow(run)),
     metadata_review_tasks: input.metadataReviewTasks.map(analystMetadataReviewTaskToPostgresRow),
     source_activation_packets: input.sourceActivationPackets.map(analystSourceActivationPacketToPostgresRow),
     victim_notification_packets: input.victimNotificationPackets.map(analystVictimNotificationPacketToPostgresRow),
@@ -433,12 +686,262 @@ export function analystLoopSnapshotToPostgresRows(input: {
 
 export function analystLoopSnapshotFromPostgresRows(rows: AnalystLoopPostgresRows) {
   return {
+    collectionPlans: rows.collection_plans.map((row) => analystCollectionPlanFromPostgresRow(row)),
+    collectionTasks: rows.collection_tasks.map(analystCollectionTaskFromPostgresRow),
+    collectionRuns: rows.collection_runs.map(analystCollectionRunFromPostgresRow),
     metadataReviewTasks: rows.metadata_review_tasks.map(analystMetadataReviewTaskFromPostgresRow),
     sourceActivationPackets: rows.source_activation_packets.map(analystSourceActivationPacketFromPostgresRow),
     victimNotificationPackets: rows.victim_notification_packets.map(analystVictimNotificationPacketFromPostgresRow),
     claimLedgerEntries: rows.claim_ledger_entries.map(analystClaimLedgerEntryFromPostgresRow),
     loopSnapshots: rows.analyst_loop_snapshots.map(analystLoopSnapshotFromPostgresRow)
   };
+}
+
+export interface AnalystLoopPersistenceReadinessPacket {
+  endpoint: "/v1/analyst/persistence-readiness";
+  schemaVersion: "ti.analyst_loop_persistence_readiness.v1";
+  generatedAt: string;
+  dryRun: true;
+  willMutate: false;
+  willConnectToDatabase: false;
+  migration: {
+    path: "migrations/004_analyst_loop.sql";
+    purpose: string;
+  };
+  dependencies: Array<{
+    table: string;
+    migration: string;
+    purpose: string;
+  }>;
+  sourceRegistryPersistence: {
+    schemaVersion: "ti.source_registry_persistence_readiness.v1";
+    migration: "migrations/001_source_registry.sql";
+    dryRun: true;
+    willMutate: false;
+    willConnectToDatabase: false;
+    workflowTables: Array<{
+      table: string;
+      mapper: string;
+      requiredForCutover: boolean;
+    }>;
+    replayOrder: string[];
+    guardrails: string[];
+    cutoverRole: string;
+  };
+  workflowTables: Array<{
+    table: keyof AnalystLoopPostgresRows;
+    mapper: string;
+    replayRole: string;
+    safetyBoundary: string;
+  }>;
+  replayOrder: Array<keyof AnalystLoopPostgresRows>;
+  readiness: {
+    state: "ready";
+    mappedTableCount: number;
+    blockers: string[];
+  };
+  noLeakGuardrails: {
+    forbiddenPersistedFields: string[];
+    enforcedChecks: string[];
+    forbiddenOperations: string[];
+  };
+  operatorUse: {
+    route: "/v1/analyst/persistence-readiness";
+    recommendedNextStep: string;
+    proofCommands: string[];
+  };
+}
+
+export function buildAnalystLoopPersistenceReadinessPacket(generatedAt: string): AnalystLoopPersistenceReadinessPacket {
+  const workflowTables: AnalystLoopPersistenceReadinessPacket["workflowTables"] = [
+    {
+      table: "collection_plans",
+      mapper: "analystCollectionPlanToPostgresRow / analystCollectionPlanFromPostgresRow",
+      replayRole: "rebuild original analyst request, query normalization, queued/review/rejected counts, planner explanations, and audit events",
+      safetyBoundary: "request/explanation/audit JSON is recursively checked for raw leak, credential, payload, and downloaded dataset keys"
+    },
+    {
+      table: "collection_tasks",
+      mapper: "analystCollectionTaskToPostgresRow / analystCollectionTaskFromPostgresRow",
+      replayRole: "replay safe-public tasks, metadata-only review holds, activation gaps, and blocked unsafe target state without leasing work",
+      safetyBoundary: "planning and metadata JSON are recursively checked; task target_kind distinguishes safe metadata from blocked unsafe targets"
+    },
+    {
+      table: "collection_runs",
+      mapper: "analystCollectionRunToPostgresRow / analystCollectionRunFromPostgresRow",
+      replayRole: "restore run status, counters, idempotency linkage, and analyst-loop result state after restart",
+      safetyBoundary: "summary JSON is recursively checked and does not store raw captures, object keys, credentials, or restricted content"
+    },
+    {
+      table: "metadata_review_tasks",
+      mapper: "analystMetadataReviewTaskToPostgresRow / analystMetadataReviewTaskFromPostgresRow",
+      replayRole: "restore the analyst inbox for company/victim, affected accounts, dataset size, actor statement, provenance, allowed actions, and source hash",
+      safetyBoundary: "unsafe_material_accessed must be false and provenance is recursively checked"
+    },
+    {
+      table: "source_activation_packets",
+      mapper: "analystSourceActivationPacketToPostgresRow / analystSourceActivationPacketFromPostgresRow",
+      replayRole: "restore dry-run operator/legal approval packets for metadata-only source activation",
+      safetyBoundary: "dry_run must remain true; packets do not activate sources or enqueue collection"
+    },
+    {
+      table: "victim_notification_packets",
+      mapper: "analystVictimNotificationPacketToPostgresRow / analystVictimNotificationPacketFromPostgresRow",
+      replayRole: "restore redacted victim/company notification packets and external-delivery audit state",
+      safetyBoundary: "packets contain claim summaries and what-was-not-accessed text only; the scraper never sends notifications"
+    },
+    {
+      table: "claim_ledger_entries",
+      mapper: "analystClaimLedgerEntryToPostgresRow / analystClaimLedgerEntryFromPostgresRow",
+      replayRole: "restore reviewed, duplicate, held, contradicted, and graph/STIX eligibility state for safe claims",
+      safetyBoundary: "provenance is checked and claim summaries exclude raw leaked rows, credential values, and private material"
+    },
+    {
+      table: "analyst_loop_snapshots",
+      mapper: "analystLoopSnapshotToPostgresRow / analystLoopSnapshotFromPostgresRow",
+      replayRole: "restore /ti result state, next steps, meaningful work counts, and packet/task references without rerunning collection",
+      safetyBoundary: "snapshots reference safe workflow IDs and analyst-loop states only"
+    }
+  ];
+  const sourceRegistryPersistence = buildSourceRegistryPersistenceReadinessPacket(generatedAt);
+  return {
+    endpoint: "/v1/analyst/persistence-readiness",
+    schemaVersion: "ti.analyst_loop_persistence_readiness.v1",
+    generatedAt,
+    dryRun: true,
+    willMutate: false,
+    willConnectToDatabase: false,
+    migration: {
+      path: "migrations/004_analyst_loop.sql",
+      purpose: "Durable safe workflow state for /ti analyst-loop review, source activation approvals, notification packets, claim ledger, and restart replay."
+    },
+    dependencies: [
+      {
+        table: "sources",
+        migration: "migrations/001_source_registry.sql",
+        purpose: "source registry and lifecycle records referenced by collection tasks, review tasks, activation packets, and claim ledger entries"
+      },
+      {
+        table: "raw_captures",
+        migration: "migrations/003_evidence_store.sql",
+        purpose: "safe capture references and hashes only; analyst-loop packets must never expose raw capture bodies or object keys"
+      }
+    ],
+    sourceRegistryPersistence: {
+      schemaVersion: "ti.source_registry_persistence_readiness.v1",
+      migration: "migrations/001_source_registry.sql",
+      dryRun: true,
+      willMutate: false,
+      willConnectToDatabase: false,
+      workflowTables: sourceRegistryPersistence.workflowTables,
+      replayOrder: sourceRegistryPersistence.replayOrder,
+      guardrails: sourceRegistryPersistence.guardrails,
+      cutoverRole: "restore source records, governance approvals, legal notes, health, scoring inputs, crawl state, and lifecycle history before replaying analyst-loop tasks"
+    },
+    workflowTables,
+    replayOrder: [
+      "collection_plans",
+      "collection_runs",
+      "collection_tasks",
+      "metadata_review_tasks",
+      "source_activation_packets",
+      "victim_notification_packets",
+      "claim_ledger_entries",
+      "analyst_loop_snapshots"
+    ],
+    readiness: {
+      state: "ready",
+      mappedTableCount: workflowTables.length,
+      blockers: []
+    },
+    noLeakGuardrails: {
+      forbiddenPersistedFields: [...FORBIDDEN_PROVENANCE_KEYS],
+      enforcedChecks: [
+        "metadata_review_tasks.unsafe_material_accessed must be false",
+        "source_activation_packets.dry_run must be true",
+        "review, notification, claim, plan, task, and run JSON payloads reject forbidden raw material keys",
+        "analyst snapshots store states, counts, and safe packet ids rather than raw data"
+      ],
+      forbiddenOperations: [
+        "download leaked datasets",
+        "persist credential values",
+        "expose private-access material",
+        "bypass CAPTCHA or authenticated areas",
+        "interact with threat actors",
+        "activate restricted sources silently",
+        "enqueue collection from the readiness endpoint",
+        "send victim notifications from the scraper"
+      ]
+    },
+    operatorUse: {
+      route: "/v1/analyst/persistence-readiness",
+      recommendedNextStep: "Use this packet as the preflight proof before wiring a real Postgres adapter or replay worker.",
+      proofCommands: [
+        "bun run check",
+        "bun test src/tests/storageCutover.test.ts src/tests/api.test.ts",
+        "bun run check:route-inventory",
+        "bun run check:contract-index"
+      ]
+    }
+  };
+}
+
+function normalizeQuery(query: string): string {
+  return query.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function queryTermsFromExplanations(explanations: CollectionPlan["explanations"]): string[] | undefined {
+  const terms = new Set<string>();
+  for (const explanation of explanations ?? []) {
+    for (const term of explanation.queryTerms ?? []) terms.add(term);
+  }
+  return terms.size > 0 ? [...terms] : undefined;
+}
+
+function collectionTaskOptionalMetadata(task: CollectionTask): JsonObject {
+  const metadata: JsonObject = {};
+  if (task.intelRequestId) metadata.intelRequestId = task.intelRequestId;
+  if (task.parentUrl) metadata.parentUrl = task.parentUrl;
+  if (task.attemptDeadlineAt) metadata.attemptDeadlineAt = task.attemptDeadlineAt;
+  if (task.crawlBudgetKey) metadata.crawlBudgetKey = task.crawlBudgetKey;
+  if (task.maxRetries !== undefined) metadata.maxRetries = task.maxRetries;
+  if (task.sourceConcurrencyKey) metadata.sourceConcurrencyKey = task.sourceConcurrencyKey;
+  if (task.fairnessKey) metadata.fairnessKey = task.fairnessKey;
+  if (task.scoreBreakdown) metadata.scoreBreakdown = task.scoreBreakdown;
+  return metadata;
+}
+
+function collectionTaskState(task: CollectionTask): AnalystCollectionTaskState {
+  if (task.planning?.decision === "blocked-by-policy") return "blocked";
+  if (task.planning?.decision === "blocked-by-approval") return "review_required";
+  if (task.planning?.decision === "skipped" || task.planning?.decision === "duplicate-suppressed") return "rejected";
+  return "queued";
+}
+
+function collectionTaskTargetKind(task: CollectionTask): AnalystCollectionTaskTargetKind {
+  if (task.planning?.decision === "blocked-by-policy") return "blocked_unsafe_target";
+  if (task.planning?.decision === "blocked-by-approval") return "source_activation_gap";
+  if (task.planning?.safetyEnvelope?.metadataOnlyRestricted || task.planning?.selectedFor === "metadata") return "metadata_only";
+  return "safe_public";
+}
+
+function collectionRunResultState(run: CollectionRun): AnalystLoopResultState {
+  if (run.reviewTaskCount > 0) return "metadata_review";
+  if (run.rejectedSourceCount > 0) return "needs_source_activation";
+  if (run.status === "completed") return "ready";
+  return "queued";
+}
+
+function safeJsonObject(value: unknown, id: string): JsonObject {
+  assertSafeProvenance(value, id);
+  return { ...(value as Record<string, unknown>) };
+}
+
+function safeJsonArray(value: unknown[], id: string): unknown[] {
+  for (const nested of value) {
+    if (nested && typeof nested === "object") assertSafeProvenance(nested, id);
+  }
+  return value.map((entry) => entry && typeof entry === "object" && !Array.isArray(entry) ? { ...entry } : entry);
 }
 
 function safeProvenance(value: Record<string, unknown>, id: string): JsonObject {
@@ -450,6 +953,12 @@ function assertSafeProvenance(value: unknown, id: string): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Analyst provenance must be an object: ${id}`);
   for (const [key, nested] of Object.entries(value)) {
     if (FORBIDDEN_PROVENANCE_KEYS.has(key)) throw new Error(`Unsafe analyst provenance key cannot be persisted: ${key}`);
+    if (Array.isArray(nested)) {
+      for (const entry of nested) {
+        if (entry && typeof entry === "object" && !Array.isArray(entry)) assertSafeProvenance(entry, id);
+      }
+      continue;
+    }
     if (nested && typeof nested === "object" && !Array.isArray(nested)) assertSafeProvenance(nested, id);
   }
 }

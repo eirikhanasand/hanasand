@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "initial_public_search",
+  "description": "Initial public TI search returns an immediate partial answer and stable polling cursors.",
+  "route": "POST /api/ti/search",
+  "runId": "run_sdk_initial_001",
+  "status": "partial",
+  "pollCursor": "poll_sdk_initial_001",
+  "deltaCursor": "delta_sdk_initial_001",
+  "nextCursor": "results_sdk_initial_001",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:00:00.000Z",
+  "warningCodes": ["partial_public_evidence"],
+  "publicTiAnswer": {
+    "query": "APT29",
+    "summary": "APT29 has public evidence available and live collection is still expanding coverage.",
+    "confidence": "medium",
+    "sourceCoverage": {
+      "state": "partial",
+      "visibleSourceFamilies": ["public_reports", "advisories"],
+      "whyPartial": ["live collection still running", "graph review pending"]
+    }
+  },
+  "publicWrapperDelta": {
+    "changed": true,
+    "sections": ["summary", "sources", "graph"]
+  }
+}

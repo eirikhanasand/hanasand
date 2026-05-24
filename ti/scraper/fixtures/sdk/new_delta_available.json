@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "new_delta_available",
+  "description": "New safe evidence is available and can be merged into the current answer by delta cursor.",
+  "route": "GET /v1/intel/search?runId=run_sdk_initial_001&deltaCursor=delta_sdk_initial_001",
+  "runId": "run_sdk_initial_001",
+  "status": "partial",
+  "pollCursor": "poll_sdk_initial_003",
+  "deltaCursor": "delta_sdk_initial_002",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:00:06.000Z",
+  "warningCodes": ["new_public_evidence"],
+  "publicWrapperDelta": {
+    "changed": true,
+    "sections": ["sources", "evidence", "provenance"],
+    "evidence": [
+      {
+        "captureId": "cap_sdk_public_001",
+        "sourceId": "src_public_report_001",
+        "contentHash": "sha256:public-evidence-hash",
+        "confidence": "medium",
+        "provenance": "public report metadata and extracted CTI fields"
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "ti.sdk_fixture.v1",
+  "fixtureName": "future_event_delta_available",
+  "description": "Future SSE or webhook event payload carries identifiers and cursors only.",
+  "route": "GET /v1/events/search-stream",
+  "eventType": "delta.available",
+  "runId": "run_sdk_initial_001",
+  "status": "partial",
+  "pollCursor": "poll_sdk_initial_005",
+  "deltaCursor": "delta_sdk_initial_003",
+  "refreshAfterSeconds": 3,
+  "updated": "2026-05-24T12:06:00.000Z",
+  "warningCodes": ["new_public_evidence"],
+  "event": {
+    "id": "evt_sdk_delta_001",
+    "type": "delta.available",
+    "delivery": "future_contract_only",
+    "changedSections": ["sources", "graph"],
+    "sourceIds": ["src_public_report_001"],
+    "captureIds": ["cap_sdk_public_001"]
+  }
+}

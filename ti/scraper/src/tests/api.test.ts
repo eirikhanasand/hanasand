@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { handleApiRequest, startApiServer } from "../api/server.ts";
 import { loadRuntimeConfig } from "../config/runtimeConfig.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
+import { activatePublicCanarySources, buildCanaryOperatorSummary, runCanaryCollectionCycle, startCanaryCollectionLoop } from "../ops/canaryCollection.ts";
 import { createLogger } from "../ops/logger.ts";
 import { MetricsRegistry } from "../ops/metrics.ts";
 import { WorkerSupervisor } from "../ops/supervisor.ts";
@@ -37,10 +38,41 @@ type CanaryOperatorViewForTest = {
     retryScheduledCount: number;
     retryExhaustedCount: number;
   };
+  runtime: {
+    schemaVersion: string;
+    supervisorAttached: boolean;
+    enabled: boolean;
+    running: boolean;
+    intervalSeconds: number;
+    nextCycleAt?: string;
+    cycleCount: number;
+    successCount: number;
+    errorCount: number;
+    consecutiveErrorCount: number;
+    maxSources: number;
+    maxTasks: number;
+    queueLimit: number;
+    activateSources: boolean;
+    controls: {
+      canaryPortfolioOnly: boolean;
+      activationRequiresHumanApproval: boolean;
+      continuousLoopAutoActivation: boolean;
+      nativeFetchDefault: boolean;
+      objectBoundaryConfigured: boolean;
+      boundedQueueRequired: boolean;
+      dedupeBeforeWrite: boolean;
+      retriesBounded: boolean;
+      restrictedSourcesExcluded: boolean;
+    };
+  };
   evidenceStorage: {
+    productionEvidenceMode: string;
     externalObjectCaptureCount: number;
     inlineCaptureCount: number;
     missingObjectReferenceCount: number;
+    nativeLiveHttpCaptureCount: number;
+    injectedProofFetchCaptureCount: number;
+    unknownFetchModeCaptureCount: number;
   };
   blockedOrHeldItems: unknown[];
   publicAnswerReadiness: Array<{ query: string; captureCount: number; whyPartial?: string[] }>;
@@ -48,6 +80,63 @@ type CanaryOperatorViewForTest = {
 
 type CanaryOperatorResponseForTest = {
   operatorView: CanaryOperatorViewForTest;
+};
+
+type CanaryReadinessResponseForTest = {
+  readiness: {
+    schemaVersion: string;
+    decision: string;
+    evidence: {
+      activeSourceCount: number;
+      externalObjectCaptureCount: number;
+      missingObjectReferenceCount: number;
+      nativeLiveHttpCaptureCount: number;
+      injectedProofFetchCaptureCount: number;
+      promotionYield: number;
+    };
+    queryReadiness: Array<{ query: string; captureCount: number; readyForPublicAnswer: boolean }>;
+    blockers: string[];
+    controls: {
+      activationRequiresHumanApproval: boolean;
+      continuousLoopAutoActivation: boolean;
+      restrictedSourcesExcluded: boolean;
+      reversiblePauseAvailable: boolean;
+      liveFetchProvenanceAvailable: boolean;
+      nativeLiveHttpRequired: boolean;
+    };
+    proofCommands: string[];
+  };
+};
+
+type CanarySoakResponseForTest = {
+  soak: {
+    schemaVersion: string;
+    decision: string;
+    cycles: Array<{ runId: string; status: string; taskCount: number; captureCount: number; incidentCount: number }>;
+    metrics: {
+      cycleCount: number;
+      totalCaptureCount: number;
+      totalIncidentCount: number;
+      activeSourceCount: number;
+      externalObjectCaptureCount: number;
+      missingObjectReferenceCount: number;
+      nativeLiveHttpCaptureCount: number;
+      injectedProofFetchCaptureCount: number;
+      promotionYield: number;
+    };
+    blockers: string[];
+    controls: {
+      canaryPortfolioOnly: boolean;
+      activationRequiresHumanApproval: boolean;
+      continuousLoopAutoActivation: boolean;
+      boundedQueueRequired: boolean;
+      objectBoundaryRequired: boolean;
+      fetchProvenanceRequired: boolean;
+      nativeLiveHttpRequired: boolean;
+      restrictedSourcesExcluded: boolean;
+    };
+    proofCommands: string[];
+  };
 };
 
 describe("api v1", () => {
@@ -256,6 +345,15 @@ describe("api v1", () => {
     expect(captures[0]?.objectRef).toBeDefined();
     expect(captures[0]?.body).toBeUndefined();
     expect(String(captures[0]?.metadata.safeExcerpt)).toContain("APT42");
+    expect(captures[0]?.metadata.fetchMode).toBe("injected_proof_fetch");
+    expect(captures[0]?.metadata.fetchProvenance).toMatchObject({
+      mode: "injected_proof_fetch",
+      adapterVersion: "public_canary_fetcher:v1",
+      httpStatus: 200,
+      bounded: true,
+      truncated: false
+    });
+    expect(captures[0]?.metadata.finalUrlHash).toEqual(expect.any(String));
     expect(store.listIncidents().length).toBeGreaterThanOrEqual(1);
     expect(objectStore.getObject(captures[0]!.objectRef!)).toBeDefined();
     const canaryRunRecord = store.listRuns()[0];
@@ -273,7 +371,30 @@ describe("api v1", () => {
     expect(operatorView.latestRun).toMatchObject({ runId: canaryRunRecord?.id, status: "running", taskCount: 2, captureCount: 1, incidentCount: 1 });
     expect(operatorView.latestCaptures).toHaveLength(1);
     expect(operatorView.schedulerHealth).toMatchObject({ errorRate: 0, promotionYield: 1, duplicateRate: 0, retryScheduledCount: 0, retryExhaustedCount: 0 });
-    expect(operatorView.evidenceStorage).toMatchObject({ externalObjectCaptureCount: 1, inlineCaptureCount: 0, missingObjectReferenceCount: 0 });
+    expect(operatorView.runtime).toMatchObject({
+      schemaVersion: "ti.public_canary_loop_runtime.v1",
+      supervisorAttached: false,
+      enabled: false,
+      activateSources: false,
+      controls: {
+        canaryPortfolioOnly: true,
+        activationRequiresHumanApproval: true,
+        continuousLoopAutoActivation: false,
+        boundedQueueRequired: true,
+        dedupeBeforeWrite: true,
+        retriesBounded: true,
+        restrictedSourcesExcluded: true
+      }
+    });
+    expect(operatorView.evidenceStorage).toMatchObject({
+      productionEvidenceMode: "injected_proof_only",
+      externalObjectCaptureCount: 1,
+      inlineCaptureCount: 0,
+      missingObjectReferenceCount: 0,
+      nativeLiveHttpCaptureCount: 0,
+      injectedProofFetchCaptureCount: 1,
+      unknownFetchModeCaptureCount: 0
+    });
     expect(operatorView.blockedOrHeldItems).toEqual([]);
     expect(operatorView.publicAnswerReadiness.find((item) => item.query === "APT42")?.captureCount).toBe(1);
 
@@ -283,6 +404,8 @@ describe("api v1", () => {
     expect(consoleHtml).toContain("TI Canary Ops");
     expect(consoleHtml).toContain("Active Sources");
     expect(consoleHtml).toContain("Queued work");
+    expect(consoleHtml).toContain("Runtime Loop");
+    expect(consoleHtml).toContain("Evidence mode");
     expect(consoleHtml).toContain("Public Answer Readiness");
     expect(consoleHtml).toContain("Why Partial");
     expect(consoleHtml).toContain("APT42");
@@ -303,6 +426,156 @@ describe("api v1", () => {
     }), options));
     expect((pause.pause as { paused: unknown[] }).paused.length).toBeGreaterThanOrEqual(8);
     expect(store.listSources().filter((item) => item.metadata?.canaryPortfolio === true).every((item) => item.status === "paused")).toBe(true);
+  });
+
+  test("records native live HTTP provenance for canary captures", async () => {
+    const store = new InMemoryScraperStore();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const frontier = new FocusedFrontier();
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => new Response(`
+        <rss><channel><item>
+          <title>APT42 native canary HTTP evidence</title>
+          <link>https://example.test/native/apt42</link>
+          <description>APT42 targeted energy sector victims with phishing infrastructure and malware. Indicator 203.0.113.88 observed.</description>
+          <pubDate>Sun, 24 May 2026 10:03:00 GMT</pubDate>
+        </item></channel></rss>
+      `, { status: 200, headers: { "content-type": "application/rss+xml" } })
+    });
+    try {
+      store.saveSource(source({
+        id: "src_native_canary_http",
+        name: "Native HTTP Canary",
+        type: "rss",
+        url: server.url.toString(),
+        status: "active",
+        metadata: { canaryPortfolio: true },
+        governance: {
+          approvalState: "approved",
+          approvalRequired: false,
+          metadataOnly: false,
+          approvedAt: "2026-05-24T10:00:00.000Z",
+          approvedBy: "operator",
+          policyVersion: "collection-policy:v1"
+        }
+      }));
+
+      const run = await runCanaryCollectionCycle({
+        store,
+        frontier,
+        objectStore,
+        maxSources: 1,
+        maxTasks: 1,
+        now: () => "2026-05-24T10:03:00.000Z"
+      });
+      expect(run).toMatchObject({
+        activationApplied: false,
+        completedTaskCount: 1,
+        failedTaskCount: 0,
+        insertedCaptureCount: 1,
+        incidentCount: 1
+      });
+      const capture = store.listCaptures()[0];
+      expect(capture?.storageKind).toBe("external_object");
+      expect(capture?.metadata.fetchMode).toBe("native_live_http");
+      expect(capture?.metadata.fetchProvenance).toMatchObject({
+        mode: "native_live_http",
+        adapterVersion: "public_canary_fetcher:v1",
+        httpStatus: 200,
+        bounded: true,
+        userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+      });
+      expect(capture?.metadata.finalUrlHash).toEqual(expect.any(String));
+      expect(capture?.metadata.responseBytes).toEqual(expect.any(Number));
+      expect(store.getSource("src_native_canary_http")?.metadata?.lastCanaryFetchMode).toBe("native_live_http");
+      const operator = buildCanaryOperatorSummary({ store, frontier, generatedAt: "2026-05-24T10:03:00.000Z" });
+      expect(operator.evidenceStorage).toMatchObject({
+        productionEvidenceMode: "native_live_http",
+        nativeLiveHttpCaptureCount: 1,
+        injectedProofFetchCaptureCount: 0,
+        unknownFetchModeCaptureCount: 0,
+        externalObjectCaptureCount: 1
+      });
+      expect(operator.latestCaptures[0]).toMatchObject({
+        fetchProvenance: {
+          mode: "native_live_http",
+          httpStatus: 200,
+          finalUrlHash: expect.any(String),
+          bytesReceived: expect.any(Number)
+        }
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("publishes attached background canary loop runtime state", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const canaryLoop = startCanaryCollectionLoop({
+      store,
+      frontier,
+      objectStore,
+      enabled: false,
+      intervalSeconds: 120,
+      maxSources: 7,
+      maxTasks: 2,
+      maxBytes: 64_000,
+      timeoutMs: 5_000,
+      queueLimit: 42,
+      operatorId: "runtime-proof",
+      activateSources: false,
+      now: () => "2026-05-24T10:04:00.000Z"
+    });
+    try {
+      const operator = await body(await handleApiRequest(api("/v1/ops/canary"), {
+        store,
+        frontier,
+        objectStore,
+        canaryLoop
+      })) as CanaryOperatorResponseForTest;
+      expect(operator.operatorView.runtime).toMatchObject({
+        schemaVersion: "ti.public_canary_loop_runtime.v1",
+        supervisorAttached: true,
+        enabled: false,
+        running: false,
+        startedAt: "2026-05-24T10:04:00.000Z",
+        intervalSeconds: 120,
+        cycleCount: 0,
+        successCount: 0,
+        errorCount: 0,
+        consecutiveErrorCount: 0,
+        maxSources: 7,
+        maxTasks: 2,
+        queueLimit: 42,
+        activateSources: false,
+        controls: {
+          canaryPortfolioOnly: true,
+          activationRequiresHumanApproval: true,
+          continuousLoopAutoActivation: false,
+          nativeFetchDefault: true,
+          objectBoundaryConfigured: true,
+          boundedQueueRequired: true,
+          dedupeBeforeWrite: true,
+          retriesBounded: true,
+          restrictedSourcesExcluded: true
+        }
+      });
+      const consoleResponse = await handleApiRequest(api("/v1/ops/canary/console"), {
+        store,
+        frontier,
+        objectStore,
+        canaryLoop
+      });
+      const html = await consoleResponse.text();
+      expect(html).toContain("Runtime Loop");
+      expect(html).toContain("Supervisor");
+      expect(html).toContain("120s");
+    } finally {
+      canaryLoop.stop();
+    }
   });
 
   test("promotes fresh multi-actor canary captures into public intel answers", async () => {
@@ -389,6 +662,231 @@ describe("api v1", () => {
       expect(search.actorProfile.provenance.every((item: { evidenceStage: string }) => item.evidenceStage === "captured_page")).toBe(true);
       expect(JSON.stringify(search.publicTiAnswer)).toContain(query);
     }
+
+    const readinessProof = await body(await handleApiRequest(api("/v1/ops/canary/readiness?requiredQueries=APT42,Turla&generatedAt=2026-05-24T10:07:00.000Z"), options)) as CanaryReadinessResponseForTest;
+    const activeSourceCount = readinessProof.readiness.evidence.activeSourceCount;
+    expect(readinessProof.readiness).toMatchObject({
+      schemaVersion: "ti.public_canary_readiness.v1",
+      decision: "promote",
+      evidence: {
+        activeSourceCount: 10,
+        externalObjectCaptureCount: 4,
+        missingObjectReferenceCount: 0,
+        promotionYield: 1
+      },
+      controls: {
+        activationRequiresHumanApproval: true,
+        continuousLoopAutoActivation: false,
+        restrictedSourcesExcluded: true,
+        reversiblePauseAvailable: true,
+        nativeLiveHttpRequired: false
+      }
+    });
+    expect(activeSourceCount).toBeGreaterThanOrEqual(8);
+    expect(readinessProof.readiness.queryReadiness).toEqual(expect.arrayContaining([
+      expect.objectContaining({ query: "APT42", captureCount: 1, readyForPublicAnswer: true }),
+      expect.objectContaining({ query: "Turla", captureCount: 1, readyForPublicAnswer: true })
+    ]));
+    expect(readinessProof.readiness.blockers).toEqual([]);
+    expect(readinessProof.readiness.proofCommands).toContain("bun run check:canary-proof-path");
+
+    const productionReadiness = await body(await handleApiRequest(api("/v1/ops/canary/readiness?requiredQueries=APT42,Turla&requireNativeLiveHttp=true&generatedAt=2026-05-24T10:07:00.000Z"), options)) as CanaryReadinessResponseForTest;
+    expect(productionReadiness.readiness.decision).toBe("hold");
+    expect(productionReadiness.readiness.controls.nativeLiveHttpRequired).toBe(true);
+    expect(productionReadiness.readiness.blockers).toContain("no native live HTTP canary captures are available for production readiness");
+  });
+
+  test("accepts human-approved canary console form actions without weakening API gates", async () => {
+    const store = new InMemoryScraperStore();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const frontier = new FocusedFrontier();
+    const canaryFetch = async () => new Response(`
+      <rss><channel><item>
+        <title>APT42 public canary form action proof</title>
+        <link>https://example.test/forms/apt42</link>
+        <description>APT42 targeted public sector victims with phishing infrastructure and malware. Indicator 203.0.113.55 observed.</description>
+        <pubDate>Sun, 24 May 2026 10:08:00 GMT</pubDate>
+      </item></channel></rss>
+    `, { status: 200, headers: { "content-type": "application/rss+xml" } });
+    const options = { store, frontier, objectStore, canaryFetch };
+    const form = (fields: Record<string, string>) => new URLSearchParams(fields).toString();
+    const formHeaders = { "content-type": "application/x-www-form-urlencoded" };
+
+    const activate = await handleApiRequest(api("/v1/sources/canary-activation", {
+      method: "POST",
+      headers: formHeaders,
+      body: form({ operatorApproval: "true", approvedBy: "console-test", generatedAt: "2026-05-24T10:08:00.000Z" })
+    }), options);
+    expect(activate.status).toBe(303);
+    expect(activate.headers.get("location")).toContain("/v1/ops/canary/console?status=activated");
+    expect(store.listSources().filter((item) => item.metadata?.canaryPortfolio === true && item.status === "active").length).toBeGreaterThanOrEqual(8);
+
+    const run = await handleApiRequest(api("/v1/ops/canary/run", {
+      method: "POST",
+      headers: formHeaders,
+      body: form({ operatorApproval: "true", approvedBy: "console-test", maxSources: "1", maxTasks: "1", generatedAt: "2026-05-24T10:09:00.000Z" })
+    }), options);
+    expect(run.status).toBe(303);
+    expect(run.headers.get("location")).toContain("/v1/ops/canary/console?status=ran");
+    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listCaptures()[0]?.storageKind).toBe("external_object");
+
+    const pause = await handleApiRequest(api("/v1/sources/canary-pause", {
+      method: "POST",
+      headers: formHeaders,
+      body: form({ operatorApproval: "true", approvedBy: "console-test", generatedAt: "2026-05-24T10:10:00.000Z" })
+    }), options);
+    expect(pause.status).toBe(303);
+    expect(pause.headers.get("location")).toContain("/v1/ops/canary/console?status=paused");
+    expect(store.listSources().filter((item) => item.metadata?.canaryPortfolio === true).every((item) => item.status === "paused")).toBe(true);
+  });
+
+  test("keeps continuous canary collection separate from source activation approval", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    store.saveSource(source({
+      id: "src_non_canary_public",
+      status: "active",
+      type: "rss",
+      url: "https://non-canary.example.test/feed.xml",
+      metadata: { canaryPortfolio: false }
+    }));
+    const canaryFetch = async () => new Response(`
+      <rss><channel><item>
+        <title>Turla public canary continuous collection proof</title>
+        <link>https://example.test/canary/turla</link>
+        <description>Turla operators used Snake malware and command infrastructure. Indicator 198.51.100.88 observed.</description>
+        <pubDate>Sun, 24 May 2026 10:12:00 GMT</pubDate>
+      </item></channel></rss>
+    `, { status: 200, headers: { "content-type": "application/rss+xml" } });
+
+    const unapprovedRun = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      objectStore,
+      fetch: canaryFetch,
+      activateSources: false,
+      maxSources: 2,
+      maxTasks: 2,
+      operatorId: "background-loop",
+      now: () => "2026-05-24T10:11:00.000Z"
+    });
+    expect(unapprovedRun).toMatchObject({
+      activationApplied: false,
+      activatedSourceCount: 0,
+      activeSourceCount: 0,
+      queuedTaskCount: 0,
+      completedTaskCount: 0
+    });
+    expect(store.listSources()).toHaveLength(1);
+    expect(store.listCaptures()).toHaveLength(0);
+
+    const activation = activatePublicCanarySources({
+      store,
+      operatorId: "operator-approved",
+      now: "2026-05-24T10:12:00.000Z"
+    });
+    expect(activation.activated.length).toBeGreaterThanOrEqual(8);
+
+    const approvedRun = await runCanaryCollectionCycle({
+      store,
+      frontier,
+      objectStore,
+      fetch: canaryFetch,
+      activateSources: false,
+      maxSources: 1,
+      maxTasks: 1,
+      operatorId: "background-loop",
+      now: () => "2026-05-24T10:13:00.000Z"
+    });
+    expect(approvedRun).toMatchObject({
+      activationApplied: false,
+      activatedSourceCount: 0,
+      activeSourceCount: 1,
+      queuedTaskCount: 1,
+      completedTaskCount: 1,
+      insertedCaptureCount: 1,
+      incidentCount: 1
+    });
+    expect(store.listCaptures()[0]?.storageKind).toBe("external_object");
+    expect(store.listCaptures().every((capture) => capture.sourceId !== "src_non_canary_public")).toBe(true);
+    expect(store.listSources().filter((item) => item.metadata?.canaryPortfolio === true && item.status === "active").length).toBeGreaterThanOrEqual(8);
+  });
+
+  test("publishes canary soak health across repeated portfolio-only cycles", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const canaryFetch = async (url: string) => {
+      const title = url.includes("microsoft.com")
+        ? "APT42 public canary soak proof"
+        : "Turla public canary soak proof";
+      const description = title.includes("APT42")
+        ? "APT42 targeted public sector victims with phishing infrastructure and malware."
+        : "Turla used Snake malware and command infrastructure against government victims.";
+      return new Response(`
+        <rss><channel><item>
+          <title>${title}</title>
+          <link>https://example.test/canary-soak/${encodeURIComponent(title)}</link>
+          <description>${description}</description>
+          <pubDate>Sun, 24 May 2026 10:30:00 GMT</pubDate>
+        </item></channel></rss>
+      `, { status: 200, headers: { "content-type": "application/rss+xml" } });
+    };
+    const options = { store, frontier, objectStore, canaryFetch };
+    store.saveSource(source({
+      id: "src_non_canary_soak",
+      status: "active",
+      type: "rss",
+      url: "https://non-canary.example.test/feed.xml",
+      metadata: { canaryPortfolio: false }
+    }));
+
+    await body(await handleApiRequest(api("/v1/sources/canary-activation", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "soak-proof", generatedAt: "2026-05-24T10:20:00.000Z" })
+    }), options));
+    await body(await handleApiRequest(api("/v1/ops/canary/run", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "soak-proof", maxSources: 1, maxTasks: 1, generatedAt: "2026-05-24T10:21:00.000Z" })
+    }), options));
+    await body(await handleApiRequest(api("/v1/ops/canary/run", {
+      method: "POST",
+      body: JSON.stringify({ operatorApproval: true, approvedBy: "soak-proof", maxSources: 2, maxTasks: 1, generatedAt: "2026-05-24T10:22:00.000Z" })
+    }), options));
+
+    const soak = await body(await handleApiRequest(api("/v1/ops/canary/soak?minCycles=2&generatedAt=2026-05-24T10:22:00.000Z"), options)) as CanarySoakResponseForTest;
+    expect(soak.soak).toMatchObject({
+      schemaVersion: "ti.public_canary_soak.v1",
+      decision: "promote",
+      metrics: {
+        cycleCount: 2,
+        totalCaptureCount: 2,
+        totalIncidentCount: 2,
+        activeSourceCount: 10,
+        externalObjectCaptureCount: 2,
+        missingObjectReferenceCount: 0,
+        promotionYield: 1
+      },
+      controls: {
+        canaryPortfolioOnly: true,
+        activationRequiresHumanApproval: true,
+        continuousLoopAutoActivation: false,
+        boundedQueueRequired: true,
+        objectBoundaryRequired: true,
+        nativeLiveHttpRequired: false,
+        restrictedSourcesExcluded: true
+      }
+    });
+    const productionSoak = await body(await handleApiRequest(api("/v1/ops/canary/soak?minCycles=2&requireNativeLiveHttp=true&generatedAt=2026-05-24T10:22:00.000Z"), options)) as CanarySoakResponseForTest;
+    expect(productionSoak.soak.decision).toBe("hold");
+    expect(productionSoak.soak.controls.nativeLiveHttpRequired).toBe(true);
+    expect(productionSoak.soak.blockers).toContain("no native live HTTP canary captures are available in the soak window");
+    expect(soak.soak.cycles).toHaveLength(2);
+    expect(soak.soak.blockers).toEqual([]);
+    expect(soak.soak.proofCommands).toContain("bun run check:canary-proof-path");
+    expect(store.listCaptures().every((capture) => capture.sourceId !== "src_non_canary_soak")).toBe(true);
   });
 
   test("persists canary metadata through the file-backed scraper store boundary", async () => {
@@ -577,17 +1075,53 @@ describe("api v1", () => {
         schemaVersion: string;
         mode: string;
         requiredForwardedHeaders: string[];
+        optionalForwardedHeaders: string[];
+        serviceTokenContext: { header: string; validationOwner: string; scraperStoresToken: boolean; auditField: string };
         authzModel: { scopes: string[]; adminOnlyRoutes: string[] };
+        roleContracts: {
+          analystRoles: string[];
+          sourceApprovalRoles: string[];
+          readWriteSeparation: { readScopes: string[]; writeScopes: string[]; rule: string };
+        };
         tenantContract: { header: string; requiredForProduction: boolean; isolationRule: string };
         requesterContract: { header: string; requiredForProduction: boolean; auditOnlyHere: boolean };
+        auditLogging: { requiredFields: string[]; mutationDecisions: string[]; noSecretRule: string };
         secretHandling: { bearerTokensAcceptedHere: boolean; logRedaction: string[] };
       };
       identity: { tenantHeader: string; requesterHeader: string; requestIdHeader: string };
       idempotency: { header: string; requiredOn: string[]; conflictCode: string; retryRule: string };
       pagination: { style: string; requestFields: string[]; responseFields: string[]; maxLimit: number; paginatedRoutes: string[] };
-      rateLimits: { model: string; responseHeaders: string[]; overloadCodes: string[]; burstSensitiveRoutes: Array<{ route: string; retryAfterSeconds: number }> };
+      tenantBoundary: { schemaVersion: string; appliedBefore: string[]; fallbackMode: string; crossTenantFailureCode: string; projectionRule: string };
+      versioning: {
+        schemaVersion: string;
+        currentVersion: string;
+        routePrefix: string;
+        compatibilityStatus: string;
+        versionHeader: string;
+        responseHeaders: string[];
+        deprecationHeaders: string[];
+        minimumDeprecationNoticeDays: number;
+        breakingChangeRequires: string[];
+        additiveAllowedWithoutNewMajor: string[];
+        removalBlockedFor: string[];
+        legacyAliases: Array<{ route: string; canonicalRoute: string; status: string; removalPolicy: string }>;
+        sunsetWorkflow: { states: string[]; requiredAuditFields: string[]; safeClientBehavior: string };
+        examples: Array<{ name: string; route: string; headers: Record<string, string>; body: { error: { code: string; message: string; details: Record<string, unknown> } } }>;
+      };
+      rateLimits: {
+        model: string;
+        responseHeaders: string[];
+        overloadCodes: string[];
+        burstSensitiveRoutes: Array<{ route: string; retryAfterSeconds: number }>;
+        perRouteHints: Array<{ route: string; policy: string; retryAfterSeconds: number; queuePressureCode: string; publicWrapperThrottle?: boolean; safeClientBehavior: string }>;
+      };
       auditFields: { requiredOnMutations: string[]; requiredOnEvidenceBearingResponses: string[]; redactedAlways: string[] };
-      errors: { codes: string[]; retryableCodes: string[]; failClosedCodes: string[] };
+      errors: {
+        codes: string[];
+        retryableCodes: string[];
+        failClosedCodes: string[];
+        safeExamples: Array<{ name: string; status: number; headers: Record<string, string>; body: { error: { code: string; message: string; details: Record<string, unknown> } } }>;
+      };
       openapi: { schemaVersion: string; openapi: string; paths: Record<string, unknown>; components: { schemas: Record<string, unknown> } };
       examples: Array<{ name: string; request: { method: string; path: string; headers: Record<string, string> }; responseKeys: string[] }>;
       noLeakGuarantee: string;
@@ -609,6 +1143,23 @@ describe("api v1", () => {
       backoff: { preferHeaders: string[]; fallbackSeconds: number; maxClientPollSeconds: number; jitter: string };
       eventBoundary: { delivery: string; allowedModes: string[]; eventTypes: string[]; payloadRule: string; forbiddenPayloadFields: string[]; replayRule: string };
       examples: Array<{ name: string; client: string; steps: string[]; responseKeys: string[] }>;
+      fixturePack: {
+        schemaVersion: string;
+        status: string;
+        fixtureNames: string[];
+        requiredFiles: string[];
+        invariantFields: string[];
+        noLeakAssertions: string[];
+        generationRule: string;
+      };
+      compatibilityCi: {
+        schemaVersion: string;
+        status: string;
+        requiredCommands: string[];
+        gates: Array<{ name: string; proof: string; failureAction: string }>;
+        clientMatrix: string[];
+        artifactRule: string;
+      };
       openapi: { schemaVersion: string; components: string[]; xSdkPollingContract: { intervalSeconds: number; cursorFields: string[]; retryHeaders: string[] } };
       noLeakGuarantee: string;
     };
@@ -639,6 +1190,179 @@ describe("api v1", () => {
         forbiddenPayloadFields?: string[];
       }>;
       proof: { contractIndex: string; apiTests: string; noLeakSerialization: string };
+    };
+    const streamingWebhookCompatibility = contract.streamingWebhookCompatibility as {
+      schemaVersion: string;
+      status: string;
+      deliveryModes: Array<{ mode: string; route: string; status: string }>;
+      pollingCompatibility: { pollingPrimary: boolean; intervalSeconds: number; sameFields: string[]; sameStates: string[]; migrationRule: string };
+      eventEnvelope: { schemaVersion: string; requiredFields: string[]; optionalSafeFields: string[] };
+      eventTypes: Array<{ type: string; payloadFields: string[]; pollingEquivalent: string; noLeakRule: string }>;
+      authAndGateway: { requiredForwardedHeaders: string[]; rateLimitHeaders: string[]; noSecretForwardingRule: string };
+      webhooks: { failureBehavior: { maxAttempts: number; fallback: string }; auditFields: string[]; nonActions: string[] };
+      integrations: Record<string, string[]>;
+      examples: Array<{ name: string; event: Record<string, unknown> }>;
+      noLeak: { guarantee: string; forbiddenPayloadFields: string[] };
+      proofCommands: string[];
+    };
+    const publicWrapperCutoverReadiness = contract.publicWrapperCutoverReadiness as {
+      schemaVersion: string;
+      status: string;
+      stableFieldAgreement: {
+        requiredFields: string[];
+        publicWrapperRoute: string;
+        scraperNativeRoute: string;
+        runPollingRoutes: string[];
+        agreeingSurfaces: string[];
+        requiredInCompatibilityFields: boolean;
+        pollingSeconds: number;
+        cursorRule: string;
+        runIdRule: string;
+      };
+      fallbackWatch: {
+        unknownQueryRule: string;
+        allowedUnknownStates: string[];
+        bannedFallbackCodes: string[];
+        bannedTextPatterns: string[];
+        watchTargets: string[];
+        requiredCopyForNoResult: string;
+      };
+      deprecationWatch: {
+        aliasRoute: string;
+        canonicalRoute: string;
+        state: string;
+        headersWhenScheduled: string[];
+        minimumNoticeDays: number;
+        noSunsetBefore: string[];
+        rollbackTriggers: string[];
+        safeRollbackActions: string[];
+      };
+      gatewayWatch: {
+        requiredForwardedHeaders: string[];
+        tenantHeader: string;
+        requesterHeader: string;
+        requestIdHeader: string;
+        rateLimitHeaders: string[];
+      };
+      compatibilityHandoffs: Record<string, string[]>;
+      sdkAndStreamingCompatibility: { clientMatrixStatus: string; sdkFixtureSchemaVersion: string; pollingPrimary: boolean; futureDeliveryModes: string[]; eventTypes: string[] };
+      proofCommands: string[];
+      noLeakGuarantee: string;
+    };
+    const realtimeDeliveryPrototype = contract.realtimeDeliveryPrototype as {
+      schemaVersion: string;
+      status: string;
+      featureFlags: {
+        enabledByDefault: boolean;
+        sseFlag: string;
+        webhookFlag: string;
+        deliveryWritesFlag: string;
+        routeMountFlag: string;
+        productionDefault: string;
+      };
+      deliveryModes: Array<{ mode: string; prototypeRoute: string; mounted: boolean; enabled: boolean; idempotencyKeyRequired?: boolean; registrationDryRunOnly?: boolean; failureFallback: string }>;
+      eventEnvelope: { schemaVersion: string; requiredFields: string[]; optionalSafeFields: string[]; cursorGapBehavior: string };
+      eventPrototypes: Array<{ type: string; source: string; enabled: boolean; payloadFields: string[]; pollingEquivalent: string; noLeakRule: string }>;
+      authAndIdentity: { requiredForwardedHeaders: string[]; tenantHeader: string; requesterHeader: string; requestIdHeader: string; noSecretForwardingRule: string };
+      idempotencyAndReplay: { runCreationHeader: string; webhookRegistrationHeader: string; replayCursors: string[]; duplicateRule: string; conflictCode: string };
+      fallbackToPolling: { pollingPrimary: boolean; intervalSeconds: number; sameFields: string[]; sameStates: string[]; retryHeaders: string[]; clientBehavior: string };
+      publicWrapperGuardrails: { noDefaultActor: boolean; noDemoOrStaleCacheCopy: boolean; unknownQueryCopy: string; stableRunIds: boolean; stableCursors: string[]; bannedFallbackCodes: string[] };
+      errorSemantics: { retryableCodes: string[]; failClosedCodes: string[]; realtimeSpecificCodes: string[]; fallbackRule: string };
+      handoffs: Record<string, string[]>;
+      noLeak: { guarantee: string; forbiddenPayloadFields: string[] };
+      proofCommands: string[];
+    };
+    const realtimeDeliverySoak = contract.realtimeDeliverySoak as {
+      schemaVersion: string;
+      status: string;
+      mode: string;
+      deliveryFlags: { enabledByDefault: boolean; requiredDisabledFlags: string[]; releaseRule: string; canaryRule: string };
+      soakScenarios: Array<{ name: string; mode: string; decision: string; requiredFields: string[]; realtimeEnabled: boolean; mountedRouteAllowed: boolean; pollingFallbackRequired: boolean; noUnsafePayload: boolean }>;
+      webhookOutbox: { schemaVersion: string; enabled: boolean; dryRunOnly: boolean; states: string[]; maxAttempts: number; retryableStatuses: number[]; idempotencyHeader: string; fallback: string; nonActions: string[] };
+      cursorGapReplay: { schemaVersion: string; replayCursors: string[]; replayWindowSeconds: number; actions: string[]; errorCodes: string[]; clientRule: string };
+      pollingFallback: { pollingPrimary: boolean; intervalSeconds: number; sameFields: string[]; sameStates: string[]; keepLastSafeAnswerOn: string[]; publicWrapperRoute: string; scraperNativeRoute: string };
+      eventEnvelopeSoak: { schemaVersion: string; requiredFields: string[]; optionalSafeFields: string[]; eventTypes: string[]; ordering: string; dedupe: string; noPromotionRule: string };
+      noLeak: { forbiddenPayloadFields: string[]; rule: string; rollbackOn: string[] };
+      releaseGate: { decision: string; promotionBlockers: string[]; rollbackActions: string[] };
+      proofCommands: string[];
+    };
+    const clientGenerationFreeze = contract.clientGenerationFreeze as {
+      schemaVersion: string;
+      status: string;
+      mode: string;
+      openapiManifest: { openapi: string; routeCount: number; source: string; operationIdRule: string; generatedArtifactRule: string };
+      operationManifest: { requiredOperationIds: string[]; requiredPublicCompatibilityRoutes: string[]; requiredRunRoutes: string[]; futureDisabledRoutes: string[]; missingOperationBehavior: string };
+      schemaManifest: { requiredSchemas: string[]; requiredSemantics: string[]; stableFieldSets: Record<string, string[]>; forbiddenBreakingChanges: string[] };
+      generatedClients: Array<{ target: string; language: string; status: string; primaryRoutes: string[]; requiredSchemas: string[]; requiredFixtures: string[]; releaseGate: string }>;
+      fixtureManifest: { schemaVersion: string; status: string; requiredFixtures: string[]; invariantFields: string[]; noLeakAssertions: string[]; fixtureRefreshRule: string };
+      changelogGate: {
+        schemaVersion: string;
+        status: string;
+        releasePolicy: string;
+        semverPolicy: Record<string, string[]>;
+        requiredChangeClasses: string[];
+        breakingChangeBlockers: string[];
+        deprecationPolicy: { minimumNoticeDays: number; publicWrapperAlias: string; canonicalRoute: string; releaseBoardRequired: boolean };
+        fixtureGate: { requiredFiles: string[]; noLeakAssertions: string[] };
+        generatedClientReleaseChecklist: string[];
+        changelogEntries: Array<{ id: string; type: string; summary: string }>;
+      };
+      driftPolicy: { status: string; failClosedChecks: string[]; rollback: string; releaseBoardHandoff: string[] };
+      noLeak: { forbiddenPayloadFields: string[]; rule: string };
+      proofCommands: string[];
+    };
+    const frontendProgressiveUpdateContract = contract.frontendProgressiveUpdateContract as {
+      schemaVersion: string;
+      status: string;
+      routes: { publicPost: string; scraperNativeGet: string; runStatus: string; runResults: string };
+      polling: { primary: boolean; intervalSeconds: number; keepLastSafeAnswerOn: string[] };
+      requiredFields: string[];
+      stateMapping: Record<string, { uiState: string; copy: string; merge: string }>;
+      mergeSemantics: { identityFields: string[]; cursorFields: string[]; rules: string[]; staleResponseBehavior: string };
+      uiProofMatrix: Array<{ scenario: string; query: string; expectedUiState: string; requiredKeys: string[]; copyRule: string; noDefaultActor: boolean; noDemoCopy: boolean }>;
+      noLeak: { forbiddenUiPayloadFields: string[]; copyRule: string };
+      proofCommands: string[];
+    };
+    const scraperNativeReplacementReadiness = contract.scraperNativeReplacementReadiness as {
+      schemaVersion: string;
+      status: string;
+      decision: string;
+      routes: { frontend: string; publicPost: string; scraperNative: string; runStatus: string; runResults: string; contracts: string };
+      promotionCriteria: string[];
+      proofMatrix: Array<{ case: string; query: string; expectedState: string; decision: string; noDefaultActor: boolean; noDemoCopy: boolean; noUnsafePayload: boolean }>;
+      blockers: string[];
+      dependencies: { publicWrapperCutoverStatus: string; frontendProgressiveStatus: string; clientGenerationStatus: string; sdkFixtureStatus: string; pollingPrimary: boolean; pollingSeconds: number };
+      noLeak: { forbiddenPayloadFields: string[]; rule: string };
+      proofCommands: string[];
+    };
+    const darkwebIndexFrontendContract = contract.darkwebIndexFrontendContract as {
+      schemaVersion: string;
+      status: string;
+      route: string;
+      publicRoute: string;
+      apiRoutes: { status: string; search: string; contracts: string };
+      sdkOpenapi: { operationIds: string[]; responseFields: string[]; pagination: { requestFields: string[]; responseFields: string[]; limitMax: number }; schemaRefs: string[] };
+      table: { searchBox: { param: string; placeholderCopy: string; emptyDeltaCopy: string; noResultCopy: string }; filters: string[]; columns: string[]; chips: Record<string, string[]>; sort: { default: string; allowed: string[] } };
+      safeDetailDrawer: { sections: string[]; fields: string[]; graphLinks: { allowed: string[]; holdRule: string }; stixTaxii: { exportState: string; rule: string } };
+      copyRules: { legalTriageDisclaimer: string; compactCopy: boolean; blockedCopy: string; requiresReviewCopy: string; whatWasNotAccessedLabel: string; bannedPhrases: string[] };
+      noLeak: { metadataOnly: boolean; rawUnsafeUrlPublicOutputAllowed: boolean; forbiddenUiPayloadFields: string[]; forbiddenOperations: string[]; serializationRule: string };
+      releaseGate: { decision: string; blockers: string[]; proofCommands: string[] };
+      proofCommands: string[];
+    };
+    const sourceAtlasFrontendContract = contract.sourceAtlasFrontendContract as {
+      schemaVersion: string;
+      status: string;
+      route: string;
+      publicRoute: string;
+      apiRoutes: { atlas: string; export: string; contracts: string; approvalQueue: string };
+      sdkOpenapi: { operationIds: string[]; responseFields: string[]; requestFields: string[]; schemaRefs: string[] };
+      table: { searchBox: { param: string; placeholderCopy: string; emptyDeltaCopy: string; noResultCopy: string }; filters: string[]; columns: string[]; chips: Record<string, string[]>; sort: { default: string; allowed: string[] } };
+      safeDetailDrawer: { sections: string[]; fields: string[]; approvalActions: string[]; nonActions: string[] };
+      importPlans: { labels: string[]; planFields: string[]; canaryFields: string[]; exportFields: string[]; canaryRule: string };
+      copyRules: { dryRunBanner: string; approvalCopy: string; descriptorHoldCopy: string; duplicateCopy: string; whatWillNotHappenLabel: string; bannedPhrases: string[] };
+      noLeak: { publicOnly: boolean; dryRunOnly: boolean; rawUnsafeUrlPublicOutputAllowed: boolean; forbiddenUiPayloadFields: string[]; forbiddenOperations: string[]; serializationRule: string };
+      releaseGate: { decision: string; blockers: string[]; proofCommands: string[] };
+      proofCommands: string[];
     };
     const openapi = contract.openapi as typeof enterpriseApiSurface.openapi;
     const semantics = contract.semantics as {
@@ -672,9 +1396,29 @@ describe("api v1", () => {
       };
       publicWrapperResponsiveAudit: typeof publicWrapperResponsiveAudit;
       publicWrapperDeltaAudit: typeof publicWrapperDeltaAudit;
+      publicWrapperCutoverReadiness: typeof publicWrapperCutoverReadiness;
+      realtimeDeliveryPrototype: typeof realtimeDeliveryPrototype;
+      realtimeDeliverySoak: typeof realtimeDeliverySoak;
+      clientGenerationFreeze: typeof clientGenerationFreeze;
+      frontendProgressiveUpdateContract: typeof frontendProgressiveUpdateContract;
+      scraperNativeReplacementReadiness: typeof scraperNativeReplacementReadiness;
+      darkwebIndexFrontendContract: typeof darkwebIndexFrontendContract;
+      sourceAtlasFrontendContract: typeof sourceAtlasFrontendContract;
+      publicCanaryControlPlane: {
+        schemaVersion: string;
+        routes: string[];
+        portfolio: { minimumSourceCount: number; bundledSourceCount: number; forbiddenSourceClasses: string[] };
+        activation: { executableRoute: string; requiresHumanApproval: boolean; approvalField: string; reversibleRoutes: string[] };
+        collection: { executableRoute: string; continuousLoopAutoActivation: boolean; boundedControls: string[] };
+        readiness: { route: string; schemaVersion: string; decisions: string[]; requiredQueries: string[]; requiredEvidenceChecks: string[] };
+        operatorView: { routes: string[]; fields: string[] };
+        proofCommands: string[];
+        guarantee: string;
+      };
       enterpriseApiSurface: typeof enterpriseApiSurface;
       sdkIntegration: typeof sdkIntegration;
       clientCompatibilityMatrix: typeof clientCompatibilityMatrix;
+      streamingWebhookCompatibility: typeof streamingWebhookCompatibility;
       authBoundary: typeof enterpriseApiSurface.authBoundary;
       pagination: typeof enterpriseApiSurface.pagination;
       rateLimits: typeof enterpriseApiSurface.rateLimits;
@@ -692,6 +1436,8 @@ describe("api v1", () => {
       restrictedMetadataNonBlockingSearch: { routes: string[]; scenarios: string[]; packetFields: string[]; guarantee: string };
       restrictedMetadataAnalystOperations: { routes: string[]; scenarios: string[]; packetFields: string[]; guarantee: string };
       restrictedMetadataIsolationHarness: { routes: string[]; scenarios: string[]; packetFields: string[]; guarantee: string };
+      darkwebIndex: { field: string; routes: string[]; targetRecordCount: number; fixtureRecordCount: number; recordFields: string[]; searchFilters: string[]; guarantee: string };
+      schedulerWorkerLeaseSoakHarness: { field: string; fixture: string; totalTasks: number; scenarios: string[]; fields: string[]; guarantee: string };
       graphExportCertification: { routes: string[]; scenarios: string[]; packetFields: string[]; guarantee: string };
       graphLiveSearchUpdate: { routes: string[]; scenarios: string[]; packetFields: string[]; guarantee: string };
       graphBackendRepository: { routes: string[]; backendCandidates: string[]; operations: string[]; packetFields: string[]; guarantee: string };
@@ -732,6 +1478,9 @@ describe("api v1", () => {
       count: routeInventory.routes.length
     });
     expect(routeInventory.count).toBeGreaterThanOrEqual(40);
+    expect(routeInventory.routes.map((route) => `${route.method} ${route.path}`)).toEqual(expect.arrayContaining([
+      "GET /v1/ops/canary/readiness"
+    ]));
     expect(routeTruthAudit).toMatchObject({
       schemaVersion: "ti.route_truth_audit.v1",
       owner: "Agent 09",
@@ -806,6 +1555,44 @@ describe("api v1", () => {
       }
     });
     expect(semantics.publicWrapperResponsiveAudit).toEqual(publicWrapperResponsiveAudit);
+    expect(semantics.publicCanaryControlPlane).toMatchObject({
+      schemaVersion: "ti.public_canary_control_plane.v1",
+      routes: expect.arrayContaining([
+        "/v1/sources/canary-activation",
+        "/v1/ops/canary/run",
+        "/v1/ops/canary/readiness",
+        "/v1/ops/canary/console",
+        "/v1/sources/canary-pause"
+      ]),
+      portfolio: {
+        minimumSourceCount: 8,
+        bundledSourceCount: 10,
+        forbiddenSourceClasses: expect.arrayContaining(["darknet", "restricted_metadata", "private_channel", "credentialed_source"])
+      },
+      activation: {
+        executableRoute: "/v1/sources/canary-activation",
+        requiresHumanApproval: true,
+        approvalField: "operatorApproval=true",
+        reversibleRoutes: expect.arrayContaining(["/v1/sources/canary-pause"])
+      },
+      collection: {
+        executableRoute: "/v1/ops/canary/run",
+        continuousLoopAutoActivation: false,
+        boundedControls: expect.arrayContaining(["maxSources", "maxTasks", "maxBytes", "timeoutMs"])
+      },
+      readiness: {
+        route: "/v1/ops/canary/readiness",
+        schemaVersion: "ti.public_canary_readiness.v1",
+        decisions: expect.arrayContaining(["promote", "canary-with-warnings", "hold"]),
+        requiredQueries: expect.arrayContaining(["APT42", "Turla"]),
+        requiredEvidenceChecks: expect.arrayContaining(["externalObjectCaptureCount", "queryReadiness"])
+      },
+      operatorView: {
+        fields: expect.arrayContaining(["activeSources", "queue", "latestCaptures", "publicAnswerReadiness"])
+      },
+      proofCommands: expect.arrayContaining(["bun run check:canary-proof-path"])
+    });
+    expect(semantics.publicCanaryControlPlane.guarantee).toContain("keeps activation separate from collection");
     expect(publicWrapperResponsiveAudit.publicWrapper.updatedSemantics).toContain("lastSeen is shown only when evidence supplies");
     expect(publicWrapperResponsiveAudit.publicWrapper.stableFields).toEqual(expect.arrayContaining(["runId", "cursor", "nextCursor", "refreshAfterSeconds", "publicTiAnswer"]));
     expect(publicWrapperResponsiveAudit.fixtures.map((fixture) => fixture.name)).toEqual(expect.arrayContaining([
@@ -976,6 +1763,49 @@ describe("api v1", () => {
       "sources:write",
       "scraper:admin"
     ]));
+    expect(enterpriseApiSurface.authBoundary.optionalForwardedHeaders).toEqual(expect.arrayContaining([
+      "x-service-token-context",
+      "x-analyst-role",
+      "x-source-approval-role"
+    ]));
+    expect(enterpriseApiSurface.authBoundary.serviceTokenContext).toMatchObject({
+      header: "x-service-token-context",
+      validationOwner: "cti_gateway",
+      scraperStoresToken: false,
+      auditField: "servicePrincipalId"
+    });
+    expect(enterpriseApiSurface.authBoundary.roleContracts.analystRoles).toEqual(expect.arrayContaining([
+      "analyst:reader",
+      "analyst:reviewer",
+      "analyst:exporter"
+    ]));
+    expect(enterpriseApiSurface.authBoundary.roleContracts.sourceApprovalRoles).toEqual(expect.arrayContaining([
+      "source:approver",
+      "source:publisher"
+    ]));
+    expect(enterpriseApiSurface.authBoundary.roleContracts.readWriteSeparation.readScopes).toEqual(expect.arrayContaining([
+      "intel:read",
+      "evidence:read",
+      "graph:read"
+    ]));
+    expect(enterpriseApiSurface.authBoundary.roleContracts.readWriteSeparation.writeScopes).toEqual(expect.arrayContaining([
+      "intel:run",
+      "sources:write",
+      "scraper:admin"
+    ]));
+    expect(enterpriseApiSurface.authBoundary.auditLogging.requiredFields).toEqual(expect.arrayContaining([
+      "tenantId",
+      "requesterId",
+      "requestId",
+      "traceId",
+      "servicePrincipalId",
+      "decision"
+    ]));
+    expect(enterpriseApiSurface.authBoundary.auditLogging.mutationDecisions).toEqual(expect.arrayContaining([
+      "operator_approval_required",
+      "policy_blocked",
+      "idempotency_conflict"
+    ]));
     expect(enterpriseApiSurface.identity).toMatchObject({
       tenantHeader: "x-tenant-id",
       requesterHeader: "x-actor-id",
@@ -994,17 +1824,126 @@ describe("api v1", () => {
     expect(enterpriseApiSurface.pagination.requestFields).toEqual(expect.arrayContaining(["cursor", "limit"]));
     expect(enterpriseApiSurface.pagination.responseFields).toContain("nextCursor");
     expect(enterpriseApiSurface.pagination.paginatedRoutes).toEqual(expect.arrayContaining(["GET /v1/sources", "GET /v1/intel/runs/{id}/results"]));
+    expect(enterpriseApiSurface.tenantBoundary).toMatchObject({
+      schemaVersion: "ti.tenant_boundary.v1",
+      fallbackMode: "single_tenant_dev_only",
+      crossTenantFailureCode: "not_found"
+    });
+    expect(enterpriseApiSurface.tenantBoundary.appliedBefore).toEqual(expect.arrayContaining([
+      "pagination",
+      "evidence_lookup",
+      "graph_export",
+      "source_admin",
+      "claim_ledger",
+      "restricted_metadata_review"
+    ]));
+    expect(enterpriseApiSurface.versioning).toMatchObject({
+      schemaVersion: "ti.api_versioning_policy.v1",
+      currentVersion: "v1",
+      routePrefix: "/v1",
+      compatibilityStatus: "additive_changes_only",
+      versionHeader: "x-api-version",
+      minimumDeprecationNoticeDays: 90
+    });
+    expect(enterpriseApiSurface.versioning.deprecationHeaders).toEqual(expect.arrayContaining([
+      "deprecation",
+      "sunset",
+      "link",
+      "x-api-version",
+      "x-request-id"
+    ]));
+    expect(enterpriseApiSurface.versioning.breakingChangeRequires).toEqual(expect.arrayContaining([
+      "new major route prefix",
+      "clientCompatibilityMatrix entry",
+      "contract-index proof",
+      "public-wrapper proof"
+    ]));
+    expect(enterpriseApiSurface.versioning.removalBlockedFor).toEqual(expect.arrayContaining([
+      "required response fields",
+      "error envelope shape",
+      "idempotency semantics",
+      "cursor field names",
+      "public wrapper stable fields"
+    ]));
+    expect(enterpriseApiSurface.versioning.legacyAliases).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        route: "POST /api/ti/search",
+        canonicalRoute: "GET /v1/intel/search",
+        status: "compatibility_wrapper"
+      })
+    ]));
+    expect(enterpriseApiSurface.versioning.sunsetWorkflow.requiredAuditFields).toEqual(expect.arrayContaining([
+      "route",
+      "replacementRoute",
+      "deprecatedAt",
+      "sunsetAt",
+      "clientImpact",
+      "owner"
+    ]));
+    expect(enterpriseApiSurface.versioning.examples.find((example) => example.name === "deprecated_compatibility_wrapper")).toMatchObject({
+      route: "POST /api/ti/search",
+      headers: {
+        deprecation: "true",
+        "x-api-version": "v1"
+      },
+      body: {
+        error: {
+          code: "deprecated_route",
+          details: {
+            replacementRoute: "GET /v1/intel/search"
+          }
+        }
+      }
+    });
+    expect(JSON.stringify(enterpriseApiSurface.versioning.examples)).not.toMatch(/authorization|cookie|password|bearer|secret|raw_body|raw_url/i);
     expect(enterpriseApiSurface.rateLimits).toMatchObject({
       model: "gateway_enforced_with_route_hints"
     });
     expect(enterpriseApiSurface.rateLimits.responseHeaders).toEqual(expect.arrayContaining(["retry-after", "x-rate-limit-policy", "x-request-id"]));
     expect(enterpriseApiSurface.rateLimits.overloadCodes).toEqual(expect.arrayContaining(["queue_pressure", "provider_unavailable", "scraper_unavailable"]));
+    expect(enterpriseApiSurface.rateLimits.perRouteHints.map((hint) => hint.route)).toEqual(expect.arrayContaining([
+      "GET /v1/intel/search",
+      "POST /api/ti/search",
+      "POST /v1/intel/runs",
+      "GET /v1/intel/runs/{id}/results",
+      "POST /v1/sources/apply-plan",
+      "POST /v1/public-channels/apply-plan",
+      "POST /v1/restricted-metadata/apply-plan",
+      "POST /v1/exports/stix"
+    ]));
+    expect(enterpriseApiSurface.rateLimits.perRouteHints.find((hint) => hint.route === "POST /api/ti/search")).toMatchObject({
+      policy: "public_wrapper_live_search",
+      retryAfterSeconds: 3,
+      queuePressureCode: "queue_pressure",
+      publicWrapperThrottle: true
+    });
     expect(enterpriseApiSurface.auditFields.requiredOnMutations).toEqual(expect.arrayContaining(["tenantId", "requesterId", "requestId", "idempotencyKey"]));
     expect(enterpriseApiSurface.auditFields.requiredOnEvidenceBearingResponses).toEqual(expect.arrayContaining(["sourceId", "captureId", "contentHash", "ledgerIds"]));
     expect(enterpriseApiSurface.auditFields.redactedAlways).toEqual(expect.arrayContaining(["authorization", "cookie", "object_key", "credential"]));
     expect(enterpriseApiSurface.errors.codes).toEqual(expect.arrayContaining(["bad_request", "idempotency_conflict", "queue_pressure", "policy_blocked"]));
     expect(enterpriseApiSurface.errors.retryableCodes).toContain("queue_pressure");
     expect(enterpriseApiSurface.errors.failClosedCodes).toContain("policy_blocked");
+    expect(enterpriseApiSurface.errors.safeExamples.map((example) => example.name)).toEqual(expect.arrayContaining([
+      "queue_pressure",
+      "policy_blocked",
+      "idempotency_conflict"
+    ]));
+    expect(enterpriseApiSurface.errors.safeExamples.find((example) => example.name === "queue_pressure")).toMatchObject({
+      status: 429,
+      headers: {
+        "retry-after": "5",
+        "x-rate-limit-policy": "live_search_queue"
+      },
+      body: {
+        error: {
+          code: "queue_pressure",
+          details: {
+            retryAfterSeconds: 5
+          }
+        }
+      }
+    });
+    expect(JSON.stringify(enterpriseApiSurface.errors.safeExamples)).not.toMatch(/authorization|cookie|password|bearer|secret|raw_body|raw_url/i);
     expect(enterpriseApiSurface.openapi.paths).toHaveProperty("/v1/intel/search");
     expect(enterpriseApiSurface.openapi.paths).toHaveProperty("/v1/intel/runs/{id}/results");
     expect(Object.keys(enterpriseApiSurface.openapi.components.schemas)).toEqual(expect.arrayContaining(["ErrorEnvelope", "CursorPage", "IdempotentRunRequest", "PublicSearchResponse"]));
@@ -1043,7 +1982,7 @@ describe("api v1", () => {
       delivery: "future_contract_only",
       allowedModes: expect.arrayContaining(["sse", "webhook"])
     });
-    expect(sdkIntegration.eventBoundary.eventTypes).toEqual(expect.arrayContaining(["delta.available", "run.ready", "review.required"]));
+    expect(sdkIntegration.eventBoundary.eventTypes).toEqual(expect.arrayContaining(["delta.available", "evidence.promoted", "graph.review_hold", "restricted_metadata.hold", "run.ready", "review.required"]));
     expect(sdkIntegration.eventBoundary.forbiddenPayloadFields).toEqual(expect.arrayContaining(["raw_body", "restricted_raw_url", "credential", "object_reference", "leaked_row"]));
     expect(sdkIntegration.examples.map((example) => example.name)).toEqual(expect.arrayContaining([
       "browser_poll_loop",
@@ -1051,6 +1990,62 @@ describe("api v1", () => {
       "analyst_automation_review_hold",
       "future_webhook_registration"
     ]));
+    expect(sdkIntegration.fixturePack).toMatchObject({
+      schemaVersion: "ti.sdk_fixture_pack.v1",
+      status: "contract_frozen_for_client_ci"
+    });
+    expect(sdkIntegration.fixturePack.fixtureNames).toEqual(expect.arrayContaining([
+      "initial_public_search",
+      "repeated_poll_empty_delta",
+      "new_delta_available",
+      "queue_pressure_retry",
+      "policy_blocked_fail_closed",
+      "idempotent_run_reuse",
+      "cursor_results_page",
+      "metadata_review_required",
+      "future_event_delta_available"
+    ]));
+    expect(sdkIntegration.fixturePack.requiredFiles.every((file) => file.startsWith("fixtures/sdk/") && file.endsWith(".json"))).toBe(true);
+    expect(sdkIntegration.fixturePack.invariantFields).toEqual(expect.arrayContaining([
+      "runId",
+      "status",
+      "pollCursor",
+      "deltaCursor",
+      "refreshAfterSeconds",
+      "updated"
+    ]));
+    expect(sdkIntegration.fixturePack.noLeakAssertions).toEqual(expect.arrayContaining([
+      "no raw_body",
+      "no restricted_raw_url",
+      "no credential",
+      "no object_reference",
+      "no leaked_row"
+    ]));
+    expect(sdkIntegration.compatibilityCi).toMatchObject({
+      schemaVersion: "ti.sdk_compatibility_ci.v1",
+      status: "contract_only_required_before_sdk_release"
+    });
+    expect(sdkIntegration.compatibilityCi.requiredCommands).toEqual(expect.arrayContaining([
+      "bun run check:contract-index",
+      "bun run check:route-inventory",
+      "bun test src/tests/api.test.ts",
+      "bun test",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search"
+    ]));
+    expect(sdkIntegration.compatibilityCi.gates.map((gate) => gate.name)).toEqual(expect.arrayContaining([
+      "openapi_schema_available",
+      "polling_contract_stable",
+      "error_envelope_stable",
+      "public_wrapper_compatible",
+      "no_leak_fixtures"
+    ]));
+    expect(sdkIntegration.compatibilityCi.clientMatrix).toEqual(expect.arrayContaining([
+      "typescript_fetch",
+      "node_service",
+      "browser_ti",
+      "analyst_automation"
+    ]));
+    expect(JSON.stringify({ fixtures: sdkIntegration.fixturePack, ci: sdkIntegration.compatibilityCi })).not.toMatch(/authorization header|cookie header|password|bearer|raw_body_value|raw_url_value/i);
     expect(sdkIntegration.openapi).toMatchObject({
       schemaVersion: "ti.sdk_openapi_extension.v1",
       components: expect.arrayContaining(["SdkPollingEnvelope", "SdkSubscriptionRegistration"]),
@@ -1060,6 +2055,315 @@ describe("api v1", () => {
     });
     expect(sdkIntegration.openapi.xSdkPollingContract.cursorFields).toEqual(expect.arrayContaining(["pollCursor", "deltaCursor", "nextCursor"]));
     expect(sdkIntegration.noLeakGuarantee).toContain("never push raw bodies");
+    expect(streamingWebhookCompatibility).toMatchObject({
+      schemaVersion: "ti.streaming_webhook_compatibility.v1",
+      status: "contract_only_polling_remains_primary",
+      pollingCompatibility: {
+        pollingPrimary: true,
+        intervalSeconds: 3
+      }
+    });
+    expect(streamingWebhookCompatibility.deliveryModes.map((mode) => mode.mode)).toEqual(expect.arrayContaining(["sse", "webhook"]));
+    expect(streamingWebhookCompatibility.pollingCompatibility.sameFields).toEqual(expect.arrayContaining([
+      "runId",
+      "status",
+      "pollCursor",
+      "deltaCursor",
+      "refreshAfterSeconds",
+      "updated",
+      "warningCodes"
+    ]));
+    expect(streamingWebhookCompatibility.eventTypes.map((event) => event.type)).toEqual(expect.arrayContaining([
+      "run.status",
+      "answer.delta",
+      "evidence.promoted",
+      "source.gap",
+      "graph.review_hold",
+      "restricted_metadata.hold",
+      "error.retry_hint",
+      "run.terminal"
+    ]));
+    expect(streamingWebhookCompatibility.authAndGateway.requiredForwardedHeaders).toEqual(expect.arrayContaining(["x-tenant-id", "x-actor-id"]));
+    expect(streamingWebhookCompatibility.webhooks.failureBehavior).toMatchObject({
+      maxAttempts: 6,
+      fallback: expect.stringContaining("polling")
+    });
+    expect(streamingWebhookCompatibility.noLeak.forbiddenPayloadFields).toEqual(expect.arrayContaining([
+      "raw_body",
+      "restricted_raw_url",
+      "credential",
+      "object_reference",
+      "webhook_secret"
+    ]));
+    expect(JSON.stringify(streamingWebhookCompatibility.examples)).not.toMatch(/authorization|cookie|password|bearer|raw_body_value|raw_url_value|webhook_secret_value/i);
+    expect(publicWrapperCutoverReadiness).toMatchObject({
+      schemaVersion: "ti.public_wrapper_cutover_readiness.v1",
+      status: "watch_ready_polling_compatible"
+    });
+    expect(publicWrapperCutoverReadiness.stableFieldAgreement).toMatchObject({
+      publicWrapperRoute: "POST /api/ti/search",
+      scraperNativeRoute: "GET /v1/intel/search",
+      requiredInCompatibilityFields: true,
+      pollingSeconds: 3
+    });
+    expect(publicWrapperCutoverReadiness.stableFieldAgreement.requiredFields).toEqual(expect.arrayContaining([
+      "status",
+      "runId",
+      "pollCursor",
+      "deltaCursor",
+      "refreshAfterSeconds",
+      "updated",
+      "publicTiAnswer",
+      "publicWrapperDelta"
+    ]));
+    expect(publicWrapperCutoverReadiness.stableFieldAgreement.runPollingRoutes).toEqual(expect.arrayContaining([
+      "GET /v1/intel/runs/{id}",
+      "GET /v1/intel/runs/{id}/results"
+    ]));
+    expect(publicWrapperCutoverReadiness.stableFieldAgreement.agreeingSurfaces).toEqual(expect.arrayContaining([
+      "publicCompatibility.stableFields",
+      "sdkIntegration.polling.responseFields",
+      "streamingWebhookCompatibility.pollingCompatibility.sameFields"
+    ]));
+    expect(publicWrapperCutoverReadiness.fallbackWatch).toMatchObject({
+      requiredCopyForNoResult: "Searching"
+    });
+    expect(publicWrapperCutoverReadiness.fallbackWatch.unknownQueryRule).toContain("must not become ready");
+    expect(publicWrapperCutoverReadiness.fallbackWatch.allowedUnknownStates).toEqual(expect.arrayContaining(["searching", "queued", "partial"]));
+    expect(publicWrapperCutoverReadiness.fallbackWatch.bannedFallbackCodes).toEqual(expect.arrayContaining([
+      "default_actor_fallback",
+      "demo_copy",
+      "stale_cache_copy",
+      "implicit_apt29_example",
+      "unknown_ready_without_evidence",
+      "outer_wrapper_run_id_synthesis"
+    ]));
+    expect(publicWrapperCutoverReadiness.fallbackWatch.bannedTextPatterns).toEqual(expect.arrayContaining([
+      "default APT29",
+      "cached demo",
+      "stale local cache"
+    ]));
+    expect(publicWrapperCutoverReadiness.deprecationWatch).toMatchObject({
+      aliasRoute: "POST /api/ti/search",
+      canonicalRoute: "GET /v1/intel/search",
+      state: "compatibility_wrapper_until_cutover",
+      minimumNoticeDays: 90
+    });
+    expect(publicWrapperCutoverReadiness.deprecationWatch.headersWhenScheduled).toEqual(expect.arrayContaining([
+      "deprecation",
+      "sunset",
+      "link",
+      "x-api-version",
+      "x-request-id"
+    ]));
+    expect(publicWrapperCutoverReadiness.deprecationWatch.noSunsetBefore).toEqual(expect.arrayContaining([
+      expect.stringContaining("public proof matrix"),
+      expect.stringContaining("Agent 10 release board")
+    ]));
+    expect(publicWrapperCutoverReadiness.deprecationWatch.rollbackTriggers).toEqual(expect.arrayContaining([
+      "public_wrapper_post_failure",
+      "default_actor_detected",
+      "demo_copy_detected",
+      "missing_cursor",
+      "unstable_run_id",
+      "rate_limit_header_missing",
+      "error_envelope_drift",
+      "tenant_boundary_failure",
+      "unsafe_payload_leak",
+      "streaming_contract_drift"
+    ]));
+    expect(publicWrapperCutoverReadiness.gatewayWatch.requiredForwardedHeaders).toEqual(expect.arrayContaining(["x-tenant-id", "x-actor-id"]));
+    expect(publicWrapperCutoverReadiness.gatewayWatch.rateLimitHeaders).toEqual(expect.arrayContaining(["retry-after", "x-rate-limit-policy", "x-request-id"]));
+    expect(publicWrapperCutoverReadiness.compatibilityHandoffs.agent02Scheduler).toEqual(expect.arrayContaining(["stable run ids", "3-second polling"]));
+    expect(publicWrapperCutoverReadiness.compatibilityHandoffs.agent07Quality).toContain("unknown says Searching");
+    expect(publicWrapperCutoverReadiness.compatibilityHandoffs.agent10Release).toContain("public proof packet");
+    expect(publicWrapperCutoverReadiness.sdkAndStreamingCompatibility).toMatchObject({
+      clientMatrixStatus: "contract_frozen_for_client_generation",
+      sdkFixtureSchemaVersion: "ti.sdk_fixture_pack.v1",
+      pollingPrimary: true
+    });
+    expect(publicWrapperCutoverReadiness.sdkAndStreamingCompatibility.futureDeliveryModes).toEqual(expect.arrayContaining(["sse", "webhook"]));
+    expect(publicWrapperCutoverReadiness.proofCommands).toEqual(expect.arrayContaining([
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:api-gateway",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ]));
+    expect(JSON.stringify(publicWrapperCutoverReadiness)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value/i);
+    expect(realtimeDeliveryPrototype).toMatchObject({
+      schemaVersion: "ti.realtime_delivery_prototype.v1",
+      status: "disabled_by_default_polling_primary",
+      mode: "contract_first_prototype_no_mounted_delivery"
+    });
+    expect(realtimeDeliveryPrototype.featureFlags).toMatchObject({
+      enabledByDefault: false,
+      sseFlag: "TI_REALTIME_SSE_ENABLED=false",
+      webhookFlag: "TI_REALTIME_WEBHOOKS_ENABLED=false",
+      deliveryWritesFlag: "TI_REALTIME_DELIVERY_WRITES_ENABLED=false",
+      routeMountFlag: "TI_REALTIME_ROUTES_ENABLED=false"
+    });
+    expect(realtimeDeliveryPrototype.deliveryModes.map((mode) => mode.mode)).toEqual(expect.arrayContaining(["sse", "webhook"]));
+    expect(realtimeDeliveryPrototype.deliveryModes.every((mode) => mode.enabled === false && mode.mounted === false)).toBe(true);
+    expect(realtimeDeliveryPrototype.deliveryModes.find((mode) => mode.mode === "webhook")).toMatchObject({
+      registrationDryRunOnly: true,
+      idempotencyKeyRequired: true
+    });
+    expect(realtimeDeliveryPrototype.eventEnvelope).toMatchObject({
+      schemaVersion: "ti.realtime_event_envelope.v1"
+    });
+    expect(realtimeDeliveryPrototype.eventEnvelope.requiredFields).toEqual(expect.arrayContaining([
+      "eventId",
+      "eventType",
+      "runId",
+      "tenantId",
+      "pollCursor",
+      "deltaCursor",
+      "sequence",
+      "createdAt"
+    ]));
+    expect(realtimeDeliveryPrototype.eventEnvelope.cursorGapBehavior).toContain("polling fallback");
+    expect(realtimeDeliveryPrototype.eventPrototypes.map((event) => event.type)).toEqual(expect.arrayContaining([
+      "run.status",
+      "answer.delta",
+      "evidence.promoted",
+      "source.gap",
+      "graph.review_hold",
+      "restricted_metadata.hold",
+      "quality.caveat",
+      "error.retry_hint",
+      "run.terminal"
+    ]));
+    expect(realtimeDeliveryPrototype.eventPrototypes.every((event) => event.enabled === false && event.payloadFields.includes("runId"))).toBe(true);
+    expect(realtimeDeliveryPrototype.authAndIdentity.requiredForwardedHeaders).toEqual(expect.arrayContaining(["x-tenant-id", "x-actor-id"]));
+    expect(realtimeDeliveryPrototype.idempotencyAndReplay).toMatchObject({
+      runCreationHeader: "idempotency-key",
+      webhookRegistrationHeader: "idempotency-key",
+      conflictCode: "idempotency_conflict"
+    });
+    expect(realtimeDeliveryPrototype.idempotencyAndReplay.replayCursors).toEqual(expect.arrayContaining(["Last-Event-ID", "pollCursor", "deltaCursor"]));
+    expect(realtimeDeliveryPrototype.fallbackToPolling).toMatchObject({
+      pollingPrimary: true,
+      intervalSeconds: 3
+    });
+    expect(realtimeDeliveryPrototype.fallbackToPolling.sameFields).toEqual(expect.arrayContaining([
+      "runId",
+      "status",
+      "pollCursor",
+      "deltaCursor",
+      "refreshAfterSeconds",
+      "updated",
+      "warningCodes"
+    ]));
+    expect(realtimeDeliveryPrototype.fallbackToPolling.retryHeaders).toEqual(expect.arrayContaining(["retry-after", "x-rate-limit-policy", "x-request-id"]));
+    expect(realtimeDeliveryPrototype.publicWrapperGuardrails).toMatchObject({
+      noDefaultActor: true,
+      noDemoOrStaleCacheCopy: true,
+      unknownQueryCopy: "Searching",
+      stableRunIds: true
+    });
+    expect(realtimeDeliveryPrototype.publicWrapperGuardrails.bannedFallbackCodes).toEqual(expect.arrayContaining([
+      "default_actor_fallback",
+      "demo_copy",
+      "unknown_ready_without_evidence"
+    ]));
+    expect(realtimeDeliveryPrototype.errorSemantics.realtimeSpecificCodes).toEqual(expect.arrayContaining([
+      "stream_disabled",
+      "webhook_disabled",
+      "replay_cursor_gap",
+      "delivery_retry_scheduled",
+      "subscription_policy_blocked"
+    ]));
+    expect(realtimeDeliveryPrototype.handoffs.agent07Quality).toEqual(expect.arrayContaining(["quality.caveat", "unknown Searching guardrail"]));
+    expect(realtimeDeliveryPrototype.handoffs.agent10Release).toContain("feature flags remain off");
+    expect(realtimeDeliveryPrototype.noLeak.forbiddenPayloadFields).toEqual(expect.arrayContaining([
+      "raw_body",
+      "restricted_raw_url",
+      "credential",
+      "object_reference",
+      "webhook_secret",
+      "private_channel_material"
+    ]));
+    expect(realtimeDeliveryPrototype.proofCommands).toEqual(expect.arrayContaining([
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:sdk-fixtures",
+      "bun run check:route-inventory",
+      "bun run check:contract-index"
+    ]));
+    expect(JSON.stringify(realtimeDeliveryPrototype)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
+    expect(realtimeDeliverySoak).toMatchObject({
+      schemaVersion: "ti.realtime_delivery_soak.v1",
+      status: "disabled_soak_contract_ready_polling_primary",
+      mode: "disabled_delivery_soak_no_mounted_realtime_routes"
+    });
+    expect(realtimeDeliverySoak.deliveryFlags).toMatchObject({
+      enabledByDefault: false
+    });
+    expect(realtimeDeliverySoak.deliveryFlags.requiredDisabledFlags).toEqual(expect.arrayContaining([
+      "TI_REALTIME_SSE_ENABLED=false",
+      "TI_REALTIME_WEBHOOKS_ENABLED=false",
+      "TI_REALTIME_DELIVERY_WRITES_ENABLED=false",
+      "TI_REALTIME_ROUTES_ENABLED=false"
+    ]));
+    expect(realtimeDeliverySoak.soakScenarios.map((scenario) => scenario.name)).toEqual(expect.arrayContaining([
+      "disabled_sse_replay",
+      "disabled_webhook_registration",
+      "webhook_outbox_retry",
+      "cursor_gap_replay",
+      "fallback_to_polling",
+      "unsafe_payload_block"
+    ]));
+    expect(realtimeDeliverySoak.soakScenarios.every((scenario) =>
+      scenario.realtimeEnabled === false
+      && scenario.mountedRouteAllowed === false
+      && scenario.pollingFallbackRequired === true
+      && scenario.noUnsafePayload === true
+    )).toBe(true);
+    expect(realtimeDeliverySoak.webhookOutbox).toMatchObject({
+      schemaVersion: "ti.webhook_outbox_soak.v1",
+      enabled: false,
+      dryRunOnly: true,
+      maxAttempts: 6,
+      idempotencyHeader: "idempotency-key"
+    });
+    expect(realtimeDeliverySoak.webhookOutbox.states).toEqual(expect.arrayContaining(["retry_scheduled", "dead_lettered", "disabled"]));
+    expect(realtimeDeliverySoak.webhookOutbox.nonActions).toEqual(expect.arrayContaining(["do not deliver callbacks", "do not store webhook secrets", "do not block public polling"]));
+    expect(realtimeDeliverySoak.cursorGapReplay).toMatchObject({
+      schemaVersion: "ti.realtime_cursor_gap_replay.v1",
+      replayWindowSeconds: 900
+    });
+    expect(realtimeDeliverySoak.cursorGapReplay.actions).toEqual(expect.arrayContaining(["preserve runId", "preserve pollCursor", "preserve deltaCursor", "fallback_to_polling"]));
+    expect(realtimeDeliverySoak.pollingFallback).toMatchObject({
+      pollingPrimary: true,
+      intervalSeconds: 3,
+      publicWrapperRoute: "POST /api/ti/search",
+      scraperNativeRoute: "GET /v1/intel/search"
+    });
+    expect(realtimeDeliverySoak.pollingFallback.sameFields).toEqual(expect.arrayContaining(["runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "warningCodes"]));
+    expect(realtimeDeliverySoak.eventEnvelopeSoak.eventTypes).toEqual(expect.arrayContaining(["run.status", "answer.delta", "graph.review_hold", "restricted_metadata.hold", "run.terminal"]));
+    expect(realtimeDeliverySoak.eventEnvelopeSoak.noPromotionRule).toContain("public fact promotion");
+    expect(realtimeDeliverySoak.noLeak.forbiddenPayloadFields).toEqual(expect.arrayContaining([
+      "raw_body",
+      "restricted_raw_url",
+      "credential",
+      "object_key",
+      "leaked_row",
+      "webhook_secret",
+      "private_channel_material"
+    ]));
+    expect(realtimeDeliverySoak.releaseGate).toMatchObject({
+      decision: "hold_realtime_polling_primary"
+    });
+    expect(realtimeDeliverySoak.releaseGate.promotionBlockers).toEqual(expect.arrayContaining([
+      "feature_flag_enabled_by_default",
+      "mounted_realtime_route_detected",
+      "cursor_gap_without_polling_fallback",
+      "unsafe_payload_field_detected"
+    ]));
+    expect(realtimeDeliverySoak.proofCommands).toEqual(expect.arrayContaining(["bun run check:api-regression", "bun run check:contract-index", "bun test"]));
+    expect(JSON.stringify(realtimeDeliverySoak)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
     expect(clientCompatibilityMatrix.contractFreeze).toMatchObject({
       schemaVersion: "ti.openapi_contract_freeze.v1",
       openapi: "3.1.0",
@@ -1115,10 +2419,260 @@ describe("api v1", () => {
       contractIndex: "bun run check:contract-index",
       apiTests: "bun test src/tests/api.test.ts src/tests/ops.test.ts"
     });
+    expect(clientGenerationFreeze).toMatchObject({
+      schemaVersion: "ti.client_generation_freeze.v1",
+      status: "frozen_contract_ready_for_codegen",
+      mode: "contract_only_no_generated_artifacts_committed"
+    });
+    expect(clientGenerationFreeze.openapiManifest).toMatchObject({
+      openapi: "3.1.0",
+      routeCount: Object.keys(openapi.paths).length,
+      source: "/v1/contracts.openapi"
+    });
+    expect(clientGenerationFreeze.openapiManifest.operationIdRule).toContain("operationId is stable");
+    expect(clientGenerationFreeze.openapiManifest.generatedArtifactRule).toContain("/v1/contracts only");
+    expect(clientGenerationFreeze.operationManifest.requiredOperationIds).toEqual(expect.arrayContaining([
+      "contracts_get_v1_contracts",
+      "intel_get_v1_intel_search",
+      "intel_post_v1_intel_runs",
+      "intel_get_v1_intel_runs_id_results"
+    ]));
+    expect(clientGenerationFreeze.operationManifest.requiredPublicCompatibilityRoutes).toEqual(expect.arrayContaining(["POST /api/ti/search", "GET /v1/intel/search"]));
+    expect(clientGenerationFreeze.operationManifest.futureDisabledRoutes).toEqual(expect.arrayContaining(["GET /v1/events/search-stream", "POST /v1/webhooks/subscriptions"]));
+    expect(clientGenerationFreeze.schemaManifest.requiredSchemas).toEqual(expect.arrayContaining([
+      "ClientGenerationFreeze",
+      "GeneratedClientTarget",
+      "PublicSearchResponse",
+      "SdkPollingEnvelope",
+      "RealtimeDeliveryPrototype",
+      "WebhookDeliveryAttempt"
+    ]));
+    expect(clientGenerationFreeze.schemaManifest.stableFieldSets.publicWrapper).toEqual(expect.arrayContaining(["runId", "pollCursor", "deltaCursor", "publicTiAnswer", "publicWrapperDelta"]));
+    expect(clientGenerationFreeze.schemaManifest.forbiddenBreakingChanges).toEqual(expect.arrayContaining([
+      "rename operationId",
+      "remove runId or cursor fields",
+      "change error envelope",
+      "add raw payload fields to generated DTOs"
+    ]));
+    expect(clientGenerationFreeze.generatedClients.map((client) => client.target)).toEqual(expect.arrayContaining([
+      "typescript_fetch_browser",
+      "typescript_node_service",
+      "analyst_automation_types",
+      "future_realtime_types"
+    ]));
+    expect(clientGenerationFreeze.generatedClients.find((client) => client.target === "future_realtime_types")).toMatchObject({
+      status: "disabled_until_feature_flags_enabled",
+      primaryRoutes: expect.arrayContaining(["GET /v1/events/search-stream", "POST /v1/webhooks/subscriptions"])
+    });
+    expect(clientGenerationFreeze.fixtureManifest.requiredFixtures).toEqual(expect.arrayContaining(["fixtures/sdk/initial_public_search.json", "fixtures/sdk/future_event_delta_available.json"]));
+    expect(clientGenerationFreeze.changelogGate).toMatchObject({
+      schemaVersion: "ti.generated_client_changelog_gate.v1",
+      status: "ready_for_generated_client_release_gate",
+      releasePolicy: "contract_only_no_artifact_publish"
+    });
+    expect(clientGenerationFreeze.changelogGate.semverPolicy.major).toEqual(expect.arrayContaining([
+      "remove or rename operationId",
+      "change error envelope",
+      "enable realtime delivery by default"
+    ]));
+    expect(clientGenerationFreeze.changelogGate.requiredChangeClasses).toEqual(expect.arrayContaining([
+      "fixture_added",
+      "deprecation_notice_added",
+      "realtime_type_added_disabled"
+    ]));
+    expect(clientGenerationFreeze.changelogGate.breakingChangeBlockers).toEqual(expect.arrayContaining([
+      "operation_id_removed",
+      "required_schema_removed",
+      "cursor_field_removed",
+      "unsafe_payload_field_added"
+    ]));
+    expect(clientGenerationFreeze.changelogGate.deprecationPolicy).toMatchObject({
+      minimumNoticeDays: 90,
+      publicWrapperAlias: "POST /api/ti/search",
+      canonicalRoute: "GET /v1/intel/search",
+      releaseBoardRequired: true
+    });
+    expect(clientGenerationFreeze.changelogGate.fixtureGate.requiredFiles).toEqual(clientGenerationFreeze.fixtureManifest.requiredFixtures);
+    expect(clientGenerationFreeze.changelogGate.fixtureGate.noLeakAssertions).toEqual(expect.arrayContaining(["no raw_body", "no restricted_raw_url"]));
+    expect(clientGenerationFreeze.changelogGate.generatedClientReleaseChecklist).toEqual(expect.arrayContaining([
+      "bun run check:sdk-fixtures",
+      "bun run check:contract-index",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ]));
+    expect(clientGenerationFreeze.changelogGate.changelogEntries.map((entry) => entry.id)).toEqual(expect.arrayContaining([
+      "client_generation_freeze_added",
+      "realtime_types_disabled",
+      "public_wrapper_cutover_watch"
+    ]));
+    expect(clientGenerationFreeze.driftPolicy.failClosedChecks).toEqual(expect.arrayContaining([
+      "operation_id_drift",
+      "required_schema_missing",
+      "public_wrapper_field_drift",
+      "unsafe_payload_field_detected"
+    ]));
+    expect(clientGenerationFreeze.noLeak.forbiddenPayloadFields).toEqual(expect.arrayContaining(["raw_body", "restricted_raw_url", "credential", "webhook_secret", "authorization", "cookie"]));
+    expect(clientGenerationFreeze.proofCommands).toEqual(expect.arrayContaining(["bun run check:api-regression", "bun run check:sdk-fixtures", "bun run check:contract-index"]));
+    expect(JSON.stringify(clientGenerationFreeze)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
+    expect(frontendProgressiveUpdateContract).toMatchObject({
+      schemaVersion: "ti.frontend_progressive_update_contract.v1",
+      status: "frozen_ui_polling_contract"
+    });
+    expect(frontendProgressiveUpdateContract.routes).toMatchObject({
+      publicPost: "POST /api/ti/search",
+      scraperNativeGet: "GET /v1/intel/search"
+    });
+    expect(frontendProgressiveUpdateContract.polling).toMatchObject({
+      primary: true,
+      intervalSeconds: 3
+    });
+    expect(frontendProgressiveUpdateContract.requiredFields).toEqual(expect.arrayContaining([
+      "status",
+      "runId",
+      "pollCursor",
+      "deltaCursor",
+      "publicTiAnswer",
+      "publicWrapperDelta"
+    ]));
+    expect(frontendProgressiveUpdateContract.stateMapping).toMatchObject({
+      empty_delta: { uiState: "waiting" },
+      no_result: { uiState: "searching", copy: "Searching" },
+      ready: { uiState: "ready" }
+    });
+    expect(frontendProgressiveUpdateContract.mergeSemantics.rules).toEqual(expect.arrayContaining([
+      "merge by runId and deltaCursor",
+      "preserve previous publicTiAnswer on empty deltas",
+      "never backfill default actor/demo copy"
+    ]));
+    expect(frontendProgressiveUpdateContract.uiProofMatrix.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "first_response",
+      "repeated_poll_empty_delta",
+      "new_delta_available",
+      "made_up_actor_searching",
+      "metadata_review_hold",
+      "final_ready"
+    ]));
+    expect(frontendProgressiveUpdateContract.uiProofMatrix.find((fixture) => fixture.scenario === "made_up_actor_searching")).toMatchObject({
+      query: "Made Up Actor",
+      expectedUiState: "searching",
+      copyRule: "Searching",
+      noDefaultActor: true,
+      noDemoCopy: true
+    });
+    expect(frontendProgressiveUpdateContract.noLeak.forbiddenUiPayloadFields).toEqual(expect.arrayContaining(["raw_body", "restricted_raw_url", "credential", "webhook_secret"]));
+    expect(frontendProgressiveUpdateContract.proofCommands).toEqual(expect.arrayContaining(["bun run check:api-regression", "bun run check:contract-index", "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"]));
+    expect(JSON.stringify(frontendProgressiveUpdateContract)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
+    expect(scraperNativeReplacementReadiness).toMatchObject({
+      schemaVersion: "ti.scraper_native_replacement_readiness.v1",
+      status: "replacement_board_ready_polling_primary",
+      decision: "watch_ready"
+    });
+    expect(scraperNativeReplacementReadiness.routes).toMatchObject({
+      publicPost: "POST /api/ti/search",
+      scraperNative: "GET /v1/intel/search"
+    });
+    expect(scraperNativeReplacementReadiness.proofMatrix.map((row) => row.case)).toEqual(expect.arrayContaining([
+      "known_actor",
+      "random_actor",
+      "made_up_actor",
+      "cve_advisory",
+      "sector_country",
+      "victim_company",
+      "restricted_metadata_hold",
+      "graph_hold",
+      "empty_delta"
+    ]));
+    expect(scraperNativeReplacementReadiness.proofMatrix.find((row) => row.case === "made_up_actor")).toMatchObject({
+      query: "Made Up Actor",
+      expectedState: "searching",
+      noDefaultActor: true,
+      noDemoCopy: true,
+      noUnsafePayload: true
+    });
+    expect(scraperNativeReplacementReadiness.blockers).toEqual(expect.arrayContaining([
+      "default_actor_detected",
+      "unknown_ready_without_evidence",
+      "unsafe_payload_field_detected"
+    ]));
+    expect(scraperNativeReplacementReadiness.dependencies).toMatchObject({
+      frontendProgressiveStatus: "frozen_ui_polling_contract",
+      pollingPrimary: true,
+      pollingSeconds: 3
+    });
+    expect(scraperNativeReplacementReadiness.noLeak.forbiddenPayloadFields).toEqual(expect.arrayContaining(["raw_body", "restricted_raw_url", "credential", "webhook_secret"]));
+    expect(scraperNativeReplacementReadiness.proofCommands).toEqual(expect.arrayContaining([
+      "bun run check:api-regression",
+      "bun run check:contract-index",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ]));
+    expect(JSON.stringify(scraperNativeReplacementReadiness)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
+    expect(darkwebIndexFrontendContract).toMatchObject({
+      schemaVersion: "ti.darkweb_index_frontend_contract.v1",
+      status: "frozen_metadata_only_frontend_contract",
+      route: "/ti/darkweb/index",
+      publicRoute: "hanasand.com/ti/darkweb/index",
+      apiRoutes: {
+        status: "/v1/darkweb/status",
+        search: "/v1/darkweb/search",
+        contracts: "/v1/contracts"
+      }
+    });
+    expect(darkwebIndexFrontendContract.table.columns).toEqual(expect.arrayContaining(["redactedDisplayUrl", "category", "legalTriage", "safeSummary", "lastSeen", "liveness", "provenance", "reviewState"]));
+    expect(darkwebIndexFrontendContract.table.filters).toEqual(expect.arrayContaining(["q", "category", "legalTriage", "liveness", "network", "reviewState", "cursor", "limit"]));
+    expect(darkwebIndexFrontendContract.safeDetailDrawer.sections).toEqual(expect.arrayContaining(["summary", "classification", "whatWasNotAccessed", "sourceProvenance", "refreshHistory", "graphLinks", "reviewState"]));
+    expect(darkwebIndexFrontendContract.copyRules.legalTriageDisclaimer).toBe("Risk labels are triage labels, not legal advice.");
+    expect(darkwebIndexFrontendContract.copyRules.bannedPhrases).toEqual(expect.arrayContaining(["full onion URL", "credential sample"]));
+    expect(darkwebIndexFrontendContract.noLeak).toMatchObject({
+      metadataOnly: true,
+      rawUnsafeUrlPublicOutputAllowed: false
+    });
+    expect(darkwebIndexFrontendContract.noLeak.forbiddenUiPayloadFields).toEqual(expect.arrayContaining(["rawUnsafeUrl", "fullOnionUrl", "credential", "object_key", "leaked_row", "payload_download"]));
+    expect(darkwebIndexFrontendContract.releaseGate.blockers).toEqual(expect.arrayContaining(["what_was_not_accessed_missing", "legal_triage_copy_implies_advice"]));
+    expect(darkwebIndexFrontendContract.proofCommands).toEqual(expect.arrayContaining(["bun run check:api-regression", "bun run check:contract-index", "bun test"]));
+    expect(JSON.stringify(darkwebIndexFrontendContract)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
+    expect(sourceAtlasFrontendContract).toMatchObject({
+      schemaVersion: "ti.source_atlas_frontend_contract.v1",
+      status: "frozen_dry_run_source_discovery_frontend_contract",
+      route: "/ti/sources/atlas",
+      publicRoute: "hanasand.com/ti/sources/atlas",
+      apiRoutes: {
+        atlas: "/v1/sources/atlas",
+        export: "/v1/sources/atlas/export",
+        contracts: "/v1/contracts",
+        approvalQueue: "/v1/analyst/source-activation-packets"
+      }
+    });
+    expect(sourceAtlasFrontendContract.sdkOpenapi.operationIds).toEqual(expect.arrayContaining(["sources_post_v1_sources_atlas", "sources_post_v1_sources_atlas_export", "contracts_get_v1_contracts"]));
+    expect(sourceAtlasFrontendContract.table.columns).toEqual(expect.arrayContaining(["id", "domain", "family", "queryClassCoverage", "sourceValueScore", "parserCapability", "legalRobotsState", "activationReadiness", "approvalRequired"]));
+    expect(sourceAtlasFrontendContract.table.filters).toEqual(expect.arrayContaining(["queryClass", "family", "parserState", "legalRobotsState", "activationReadiness", "recordLimit"]));
+    expect(sourceAtlasFrontendContract.safeDetailDrawer.sections).toEqual(expect.arrayContaining(["sourceSummary", "coverage", "parserCapability", "legalRobots", "activationReadiness", "approvalPacket", "rollbackPacket", "canaryPlan", "whatWillNotHappen"]));
+    expect(sourceAtlasFrontendContract.safeDetailDrawer.nonActions).toEqual(expect.arrayContaining(["import source pack", "mutate registry", "enqueue crawl", "activate candidate", "fetch restricted target"]));
+    expect(sourceAtlasFrontendContract.importPlans.labels).toEqual(["first_100", "first_1000", "future_10k"]);
+    expect(sourceAtlasFrontendContract.copyRules.dryRunBanner).toBe("Dry run only. No sources are imported or crawled from this view.");
+    expect(sourceAtlasFrontendContract.copyRules.bannedPhrases).toEqual(expect.arrayContaining(["activate now", "crawl now", "CAPTCHA bypass", "credentialed access"]));
+    expect(sourceAtlasFrontendContract.noLeak).toMatchObject({
+      publicOnly: true,
+      dryRunOnly: true,
+      rawUnsafeUrlPublicOutputAllowed: false
+    });
+    expect(sourceAtlasFrontendContract.noLeak.forbiddenUiPayloadFields).toEqual(expect.arrayContaining(["rawRestrictedUrl", "privateInviteUrl", "credential", "raw_payload", "object_key", "download_url"]));
+    expect(sourceAtlasFrontendContract.noLeak.forbiddenOperations).toEqual(expect.arrayContaining(["source pack import", "registry mutation", "crawl enqueue", "silent activation", "private/invite/auth/CAPTCHA activation"]));
+    expect(sourceAtlasFrontendContract.releaseGate.blockers).toEqual(expect.arrayContaining(["will_mutate_true", "auto_activation_allowed", "private_auth_captcha_source_detected"]));
+    expect(sourceAtlasFrontendContract.proofCommands).toEqual(expect.arrayContaining(["bun run check:api-regression", "bun run check:contract-index", "bun test"]));
+    expect(JSON.stringify(sourceAtlasFrontendContract)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
     expect(openapi).toEqual(enterpriseApiSurface.openapi);
+    expect(Object.keys(openapi.components.schemas)).toEqual(expect.arrayContaining(["StreamingEventEnvelope", "WebhookDeliveryAttempt"]));
     expect(semantics.enterpriseApiSurface).toEqual(enterpriseApiSurface);
     expect(semantics.sdkIntegration).toEqual(sdkIntegration);
     expect(semantics.clientCompatibilityMatrix).toEqual(clientCompatibilityMatrix);
+    expect(semantics.streamingWebhookCompatibility).toEqual(streamingWebhookCompatibility);
+    expect(semantics.publicWrapperCutoverReadiness).toEqual(publicWrapperCutoverReadiness);
+    expect(semantics.realtimeDeliveryPrototype).toEqual(realtimeDeliveryPrototype);
+    expect(semantics.realtimeDeliverySoak).toEqual(realtimeDeliverySoak);
+    expect(semantics.clientGenerationFreeze).toEqual(clientGenerationFreeze);
+    expect(semantics.frontendProgressiveUpdateContract).toEqual(frontendProgressiveUpdateContract);
+    expect(semantics.scraperNativeReplacementReadiness).toEqual(scraperNativeReplacementReadiness);
+    expect(semantics.darkwebIndexFrontendContract).toEqual(darkwebIndexFrontendContract);
+    expect(semantics.sourceAtlasFrontendContract).toEqual(sourceAtlasFrontendContract);
     expect(semantics.authBoundary).toEqual(enterpriseApiSurface.authBoundary);
     expect(semantics.pagination).toEqual(enterpriseApiSurface.pagination);
     expect(semantics.rateLimits).toEqual(enterpriseApiSurface.rateLimits);
@@ -1435,7 +2989,8 @@ describe("api v1", () => {
       "/v1/graph/*",
       "/v1/exports/stix",
       "/v1/public-channels/*",
-      "/v1/restricted-metadata/*"
+      "/v1/restricted-metadata/*",
+      "/v1/darkweb/*"
     ]));
     expect(surfaces.find((surface) => surface.path === "/v1/intel/search")?.responseKeys).toEqual(expect.arrayContaining([
       "sla",
@@ -1449,6 +3004,24 @@ describe("api v1", () => {
     expect(surfaces.find((surface) => surface.path === "/v1/intel/search")?.guarantees).toContain("delta_polling");
     expect(surfaces.find((surface) => surface.path === "/v1/public-channels/*")?.responseKeys).toEqual(expect.arrayContaining(["canaryRollout"]));
     expect(surfaces.find((surface) => surface.path === "/v1/restricted-metadata/*")?.responseKeys).toEqual(expect.arrayContaining(["connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch"]));
+    expect(surfaces.find((surface) => surface.path === "/v1/darkweb/*")?.responseKeys).toEqual(expect.arrayContaining(["status", "darkwebIndex", "records", "counts", "latestRefreshRun", "storageReadiness", "uiContract", "frontendContract"]));
+    expect(surfaces.find((surface) => surface.path === "/v1/darkweb/*")?.guarantees).toEqual(expect.arrayContaining([
+      "darkweb_metadata_index",
+      "darkweb_index_frontend_contract",
+      "isolated_collector_contract",
+      "hash_only_records",
+      "60k_scale_target",
+      "no_leak_serialization"
+    ]));
+    expect(semantics.darkwebIndex).toMatchObject({
+      field: "darkwebIndex",
+      routes: expect.arrayContaining(["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),
+      targetRecordCount: 60000,
+      fixtureRecordCount: 100,
+      recordFields: expect.arrayContaining(["rawUrlHash", "hostHash", "pathHash", "redactedDisplayUrl", "whatWasNotAccessed", "isolationBoundary"]),
+      searchFilters: expect.arrayContaining(["q", "category", "legalTriage", "liveness", "network", "cursor", "limit"])
+    });
+    expect(semantics.darkwebIndex.guarantee).toContain("no raw unsafe URL");
     expect(surfaces.find((surface) => surface.path === "/v1/graph/*")?.guarantees).toContain("graph_export_certification");
     expect(surfaces.find((surface) => surface.path === "/v1/graph/*")?.guarantees).toContain("graph_live_update");
     expect(surfaces.find((surface) => surface.path === "/v1/graph/*")?.guarantees).toContain("graph_stix_rc_gate");
@@ -1476,7 +3049,58 @@ describe("api v1", () => {
     });
     expect(semantics.restrictedMetadataIsolationHarness.guarantee).toContain("non-networked");
     expect(surfaces.find((surface) => surface.path === "/v1/frontier/*")?.guarantees).toContain("worker_soak_migration");
+    expect(surfaces.find((surface) => surface.path === "/v1/frontier/*")?.guarantees).toContain("worker_lease_soak_harness");
     expect(surfaces.find((surface) => surface.path === "/v1/frontier/*")?.guarantees).toContain("scheduler_adapter_telemetry");
+    expect(surfaces.find((surface) => surface.path === "/v1/frontier/*")?.guarantees).toContain("scheduler_freshness_slo_dashboard");
+    expect(surfaces.find((surface) => surface.path === "/v1/frontier/*")?.guarantees).toContain("scheduler_interactive_search_freshness");
+    const schedulerFreshnessSloDashboard = (semantics as typeof semantics & {
+      schedulerFreshnessSloDashboard: {
+        field: string;
+        schemaVersion: string;
+        actors: string[];
+        fields: string[];
+        guarantee: string;
+      };
+    }).schedulerFreshnessSloDashboard;
+    expect(schedulerFreshnessSloDashboard).toMatchObject({
+      field: "scheduler.freshnessSloDashboard",
+      schemaVersion: "ti.scheduler_freshness_slo_dashboard.v1",
+      actors: expect.arrayContaining(["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira", "Scattered Spider"]),
+      fields: expect.arrayContaining(["summary", "actors", "workloadActions", "runbook", "releaseGate"])
+    });
+    expect(schedulerFreshnessSloDashboard.guarantee).toContain("daily/weekly high-priority actor freshness");
+    const schedulerInteractiveSearchFreshness = (semantics as typeof semantics & {
+      schedulerInteractiveSearchFreshness: {
+        field: string;
+        schemaVersion: string;
+        decisions: string[];
+        guarantee: string;
+      };
+    }).schedulerInteractiveSearchFreshness;
+    expect(schedulerInteractiveSearchFreshness).toMatchObject({
+      field: "scheduler.interactiveSearchFreshness",
+      schemaVersion: "ti.scheduler_interactive_search_freshness.v1"
+    });
+    expect(schedulerInteractiveSearchFreshness.decisions).toEqual(expect.arrayContaining(["reuse_active_run", "raise_priority", "metadata_review_hold"]));
+    expect(schedulerInteractiveSearchFreshness.guarantee).toContain("UI-visible");
+    const schedulerWorkerLeaseSoakHarness = (semantics as typeof semantics & {
+      schedulerWorkerLeaseSoakHarness: {
+        field: string;
+        fixture: string;
+        totalTasks: number;
+        scenarios: string[];
+        fields: string[];
+        guarantee: string;
+      };
+    }).schedulerWorkerLeaseSoakHarness;
+    expect(schedulerWorkerLeaseSoakHarness).toMatchObject({
+      field: "scheduler.workerLeaseSoakHarness",
+      fixture: "agent02_10k_multi_worker_lease_replay",
+      totalTasks: 10000,
+      scenarios: expect.arrayContaining(["apt29_actor_burst", "source_outage_wave", "parser_failure_storm", "low_value_sweep_pressure"]),
+      fields: expect.arrayContaining(["replay", "workloadSlices", "workerPartitions", "fairnessProof", "pressureFixtures"])
+    });
+    expect(schedulerWorkerLeaseSoakHarness.guarantee).toContain("10k-task scheduler lease soak harness");
     expect(surfaces.every((surface) => surface.guarantees.length > 0)).toBe(true);
     expect(semantics.noLeakGuarantees).toEqual(expect.arrayContaining(["no raw Telegram message bodies", "no object storage keys"]));
     expect(contract.examples).toMatchObject({
@@ -1493,7 +3117,7 @@ describe("api v1", () => {
     ]));
     expect(validation.contractIndexProof).toContain("GET /v1/contracts");
     const serialized = JSON.stringify(contract).toLowerCase();
-    for (const forbidden of ["cookie=", "authorization:", "set-cookie", "password=", "objectkey", "raw proof payload"]) {
+    for (const forbidden of ["cookie=", "authorization:", "set-cookie", "password=", "object_key_value", "raw proof payload"]) {
       expect(serialized).not.toContain(forbidden);
     }
   });
@@ -1721,7 +3345,17 @@ describe("api v1", () => {
         graphExportBlocker: { readiness: "hold", blocker: "export_blockers" }
       }
     });
-    expect(cutoverResponse.cutoverReport).toMatchObject({
+    const cutoverReport = cutoverResponse.cutoverReport as {
+      chainOfCustody: unknown;
+      indexReplayMigration: unknown;
+      objectIntegrityRepair: unknown;
+      replayBenchmark: unknown;
+      searchBackendMigration: unknown;
+      retentionRuntime: unknown;
+      searchConsistencySlo: unknown;
+      readModelCutover: unknown;
+    };
+    expect(cutoverReport).toMatchObject({
       endpoint: "/v1/evidence/cutover-report",
       readiness: { overall: "ready" },
       redaction: {
@@ -1731,6 +3365,223 @@ describe("api v1", () => {
       promotionGate: {
         agent09Fields: { cursorReplayReady: true },
         agent10Fields: { objectIntegrityReady: true }
+      }
+    });
+    expect(cutoverReport.chainOfCustody).toMatchObject({
+      schemaVersion: "ti.evidence_chain_of_custody.v1",
+      verification: {
+        checks: {
+          rawCapture: true,
+          extraction: true,
+          graphRelationship: true,
+          replayable: true
+        }
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        secretMaterialExposed: false,
+        restrictedMaterialExposed: false
+      }
+    });
+    expect(cutoverReport.indexReplayMigration).toMatchObject({
+      schemaVersion: "ti.evidence_index_replay_migration.v1",
+      targetBackends: {
+        openSearchIndex: "ti-evidence-v1",
+        vectorNamespace: "ti-evidence",
+        aliasCutover: "blue_green_alias_swap"
+      },
+      validation: {
+        checks: {
+          cursorReplayComplete: true,
+          redactionSafe: true,
+          rollbackReady: true
+        }
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedMaterialExposed: false
+      }
+    });
+    expect(cutoverReport.objectIntegrityRepair).toMatchObject({
+      schemaVersion: "ti.evidence_object_integrity_repair.v1",
+      summary: {
+        rollbackReady: true
+      },
+      validation: {
+        checks: {
+          noObjectKeysExposed: true,
+          noRawBodiesExposed: true,
+          replayAfterRepairReady: true
+        }
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false
+      }
+    });
+    expect(cutoverReport.searchBackendMigration).toMatchObject({
+      schemaVersion: "ti.evidence_search_backend_migration_readiness.v1",
+      summary: {
+        rollbackReady: true
+      },
+      backends: {
+        openSearch: {
+          candidateIndex: "ti-evidence-v1-candidate",
+          readAlias: "ti-evidence-read",
+          writeAlias: "ti-evidence-write-candidate"
+        },
+        pgvector: {
+          namespace: "ti-evidence",
+          candidateTable: "evidence_vector_candidate",
+          inputHashOnly: true
+        },
+        postgres: {
+          cursorSource: "evidence_delta_cursor"
+        }
+      },
+      policy: {
+        restrictedMetadataEmbedded: false,
+        deletionReplayMode: "tombstone_then_delete_object",
+        metadataOnlyRestrictedMode: "index_safe_metadata_only"
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false
+      }
+    });
+    expect(cutoverReport.replayBenchmark).toMatchObject({
+      schemaVersion: "ti.evidence_replay_benchmark.v1",
+      summary: {
+        simulatedCaptureMetadataRecords: 1_000_000,
+        chunks: 100,
+        chunkSize: 10_000,
+        replayable: true,
+        publicAnswerRebuild: "partial"
+      },
+      scaleModel: {
+        metadataOnlyRowsIndexed: true,
+        restrictedRowsEmbedded: false,
+        replayCursorCheckpointEveryRows: 10_000
+      },
+      rebuildBehavior: {
+        searchIndexAlias: "blue_green_alias_swap",
+        publicAnswer: {
+          sourceEvidenceRequired: true,
+          restrictedMetadataCanSupportDefensiveFacts: true
+        },
+        graph: {
+          relationshipDeltaReplay: true,
+          reviewHoldsRespected: true
+        },
+        stix: {
+          descriptorOnlyRestrictedMetadata: true,
+          reviewedExportRequired: true
+        }
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(cutoverReport.retentionRuntime).toMatchObject({
+      schemaVersion: "ti.evidence_retention_runtime_enforcement.v1",
+      validation: {
+        checks: {
+          objectManifestVerified: true,
+          legalHoldPreserved: true,
+          replayReady: true,
+          retentionTransitionsAudited: true
+        }
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false
+      }
+    });
+    expect(cutoverReport.searchConsistencySlo).toMatchObject({
+      schemaVersion: "ti.evidence_search_consistency_slo.v1",
+      latencyBudget: {
+        initialPartialP95Ms: 3000,
+        cursorReplayP95Ms: 3000,
+        indexRefreshP95Ms: 30000,
+        vectorUpsertP95Ms: 30000
+      },
+      consistency: {
+        checks: {
+          documentsPresent: true,
+          replayIdsPresent: true,
+          citationSpansPresent: true,
+          restrictedMetadataSearchableNotEmbedded: true,
+          vectorInputsHashOnly: true,
+          apiAnswerRefreshSafe: true
+        }
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false
+      }
+    });
+    expect(cutoverReport.readModelCutover).toMatchObject({
+      schemaVersion: "ti.evidence_search_read_model_cutover.v1",
+      status: "hold_for_explicit_backend_enablement",
+      canCutoverToProductionBackend: false,
+      embeddedReplayReady: true,
+      productionBackendsFailClosed: true,
+      writeSet: {
+        schemaVersion: "ti.evidence_search_read_model_backend_write_set.v1",
+        unsafeDocumentsSkipped: 0
+      },
+      readiness: {
+        embedded: {
+          backend: "embedded_memory",
+          canWrite: true,
+          canSearch: true
+        },
+        postgres: {
+          backend: "postgres_read_model",
+          enabled: false,
+          failClosedWithoutExplicitEnable: true
+        },
+        openSearchPgvector: {
+          backend: "opensearch_pgvector",
+          enabled: false,
+          failClosedWithoutExplicitEnable: true
+        }
+      },
+      vectorPolicy: {
+        restrictedMetadataSearchable: true,
+        restrictedMetadataEmbedded: false,
+        restrictedMetadataVectorRows: 0,
+        vectorRowsHashOnly: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
       }
     });
     const serialized = JSON.stringify(cutoverResponse);
@@ -2157,6 +4008,325 @@ describe("api v1", () => {
         ]),
         handoffs: expect.objectContaining({
           agent09ApiFields: ["publicSignalFusion.analystSourceWorkbench"]
+        })
+      }),
+      coverageRadar: expect.objectContaining({
+        schemaVersion: "ti.enterprise_source_coverage_radar.v1",
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          safePublicOnly: true,
+          restrictedMetadataReviewHeldOnly: true,
+          dryRunOnly: true,
+          unsafeUrlsExposed: false
+        }),
+        queryClassUsefulAnswer: expect.objectContaining({
+          selectedSourceCount: expect.any(Number),
+          familyDiversity: expect.any(Number)
+        }),
+        sourcePackRecommendations: expect.any(Array),
+        conflictIndicators: expect.any(Array),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.coverageRadar"]
+        })
+      }),
+      sourcePackExpansion: expect.objectContaining({
+        schemaVersion: "ti.public_source_pack_expansion.v1",
+        candidates: expect.any(Array),
+        suppressed: expect.objectContaining({
+          staleSourceIds: expect.any(Array),
+          duplicateDedupeKeys: expect.any(Array),
+          blockedSourceIds: expect.any(Array),
+          unsafeUrlHashes: expect.any(Array)
+        }),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.sourcePackExpansion"]
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          dryRunOnly: true,
+          noPrivateChannelAccess: true,
+          noAccountAutomation: true,
+          unsafeUrlsExposed: false
+        })
+      }),
+      advisoryCorrelation: expect.objectContaining({
+        schemaVersion: "ti.public_advisory_correlation.v1",
+        correlatedEvidence: expect.any(Array),
+        conflicts: expect.any(Array),
+        summary: expect.objectContaining({
+          correlatedEntityCount: expect.any(Number),
+          conflictCount: expect.any(Number),
+          familyDiversity: expect.any(Number)
+        }),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.advisoryCorrelation"]
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          noRawRestrictedMaterial: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noUnsafeUrlsExposed: true
+        })
+      }),
+      sourceFamilyBenchmarks: expect.objectContaining({
+        schemaVersion: "ti.public_source_family_benchmarks.v1",
+        rows: expect.any(Array),
+        queryClassCoverage: expect.objectContaining({
+          requiredFamilies: expect.any(Array),
+          coveredFamilies: expect.any(Array),
+          missingFamilies: expect.any(Array),
+          unknownQuerySearching: expect.any(Boolean)
+        }),
+        expansionRecommendations: expect.any(Array),
+        unknownQueryHandling: expect.objectContaining({
+          noDefaultActorAssumption: true,
+          staleCacheProseAllowed: false
+        }),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.sourceFamilyBenchmarks"]
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          dryRunOnly: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noUnsafeUrlsExposed: true,
+          noDemoDefaults: true,
+          noDefaultActorAssumption: true
+        })
+      }),
+      publicIntelligenceCoveragePlan: expect.objectContaining({
+        schemaVersion: "ti.public_intelligence_coverage_plan.v1",
+        queryClassSourceMap: expect.any(Array),
+        blindSpots: expect.any(Array),
+        safeSourcePackRecommendations: expect.any(Array),
+        responsiveness: expect.objectContaining({
+          refreshAfterSeconds: 3,
+          staleCacheCopyAllowed: false,
+          demoFallbackAllowed: false,
+          defaultActorAssumptionAllowed: false
+        }),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.publicIntelligenceCoveragePlan"]
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          dryRunOnly: true,
+          approvedPublicSourcesPrioritized: true,
+          metadataOnlyPublicChannelHandoffs: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noRawUrlsExposed: true,
+          noDemoDefaults: true,
+          noDefaultActorAssumption: true,
+          noStaleCacheCopy: true
+        })
+      }),
+      freshnessGapRemediation: expect.objectContaining({
+        schemaVersion: "ti.public_freshness_gap_remediation.v1",
+        answerState: expect.objectContaining({
+          refreshAfterSeconds: 3,
+          staleOnlyRecentActivityRejected: expect.any(Boolean)
+        }),
+        highVolumeActorFreshness: expect.objectContaining({
+          trackedActors: expect.arrayContaining(["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira"]),
+          staleRecentActivityPromotionAllowed: false
+        }),
+        remediationActions: expect.any(Array),
+        queryFixtures: expect.arrayContaining([
+          expect.objectContaining({ query: "APT29", staleRecentActivityAllowed: false, defaultActorFallbackAllowed: false }),
+          expect.objectContaining({ query: "Made Up Actor", expectedState: "searching", defaultActorFallbackAllowed: false })
+        ]),
+        apiFields: expect.objectContaining({
+          publicSignalFusionField: "publicSignalFusion.freshnessGapRemediation"
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          dryRunOnly: true,
+          noDefaultActorAssumption: true,
+          noDemoFallback: true,
+          noStaleCacheCopy: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noAuthBypass: true,
+          noCaptchaSolving: true,
+          noRestrictedRawCollection: true,
+          noRawUrlsExposed: true
+        })
+      }),
+      publicIntelligenceQueryMatrix: expect.objectContaining({
+        schemaVersion: "ti.public_intelligence_query_matrix.v1",
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            queryClass: expect.any(String),
+            sourceFamilies: expect.objectContaining({
+              required: expect.any(Array),
+              covered: expect.any(Array),
+              missing: expect.any(Array)
+            }),
+            scores: expect.objectContaining({
+              publicAnswerReadiness: expect.any(Number),
+              analystActionability: expect.any(Number)
+            }),
+            staleRecentActivityAllowed: false,
+            defaultActorFallbackAllowed: false
+          })
+        ]),
+        apiFields: expect.objectContaining({
+          publicSignalFusionField: "publicSignalFusion.publicIntelligenceQueryMatrix"
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          noDefaultActorAssumption: true,
+          noDemoFallback: true,
+          noStaleCacheCopy: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noAuthBypass: true,
+          noCaptchaSolving: true,
+          noRestrictedRawCollection: true,
+          noRawUrlsExposed: true
+        })
+      }),
+      publicConflictContradictionResolver: expect.objectContaining({
+        schemaVersion: "ti.public_conflict_contradiction_resolver.v1",
+        rows: expect.any(Array),
+        summary: expect.objectContaining({
+          releaseGate: expect.any(String),
+          affectedQueryClasses: expect.any(Array)
+        }),
+        apiFields: expect.objectContaining({
+          publicSignalFusionField: "publicSignalFusion.publicConflictContradictionResolver",
+          compactRowFields: expect.arrayContaining(["contradictionType", "publicAnswerEffect", "graphStixEffect", "releaseGate"])
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          noRawUrlsExposed: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noAuthBypass: true,
+          noCaptchaSolving: true,
+          noDefaultActorAssumption: true,
+          noStaleCacheCopy: true
+        })
+      }),
+      publicSignalLiveCollectionLoop: expect.objectContaining({
+        schemaVersion: "ti.public_signal_live_collection_loop.v1",
+        status: expect.any(String),
+        intakeContract: expect.objectContaining({
+          normalizedPayloadOnly: true,
+          collectedItemProvenanceRequired: true,
+          acceptedFamilies: expect.arrayContaining(["public_channel", "source_atlas", "darkweb_metadata"]),
+          unsafePayloadFieldsRejected: expect.arrayContaining(["rawText", "payload", "credential", "onionUrl"])
+        }),
+        normalizedIntake: expect.any(Array),
+        score: expect.objectContaining({
+          overall: expect.any(Number),
+          freshness: expect.any(Number),
+          familyDiversity: expect.any(Number),
+          provenanceStrength: expect.any(Number),
+          penalties: expect.any(Array)
+        }),
+        playbook: expect.objectContaining({
+          requiredFamilies: expect.any(Array),
+          cadenceHints: expect.any(Array),
+          parserExpectations: expect.any(Array),
+          evidenceRequirements: expect.any(Array),
+          publicUiStateBehavior: expect.any(String)
+        }),
+        nextSafeCollectionTasks: expect.arrayContaining([
+          expect.objectContaining({
+            dryRunOnly: true,
+            willMutate: false,
+            willStartCrawling: false,
+            noUnsafePayload: true
+          })
+        ]),
+        queryFixtures: expect.arrayContaining([
+          expect.objectContaining({ name: "high_value_known_actor", query: "APT29" }),
+          expect.objectContaining({ name: "darkweb_metadata_only_held", expectedState: "held" })
+        ]),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.publicSignalLiveCollectionLoop"]
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          safeDarkwebMetadataOnly: true,
+          noRawUnsafeUrls: true,
+          noCredentials: true,
+          noPayloadLinks: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noDefaultActorAssumption: true,
+          noStaleCacheCopy: true
+        })
+      }),
+      publicSignalValueImpact: expect.objectContaining({
+        schemaVersion: "ti.public_signal_value_impact.v1",
+        status: expect.any(String),
+        answerImpact: expect.objectContaining({
+          currentReadiness: expect.any(Number),
+          projectedWithSourceAtlas: expect.any(Number),
+          projectedWithDarkwebMetadata: expect.any(Number),
+          projectedWithBoth: expect.any(Number),
+          bestLift: expect.any(Number)
+        }),
+        sourceAtlasImpact: expect.any(Array),
+        darkwebIndexImpact: expect.any(Array),
+        gapClosure: expect.any(Array),
+        nextBestActions: expect.arrayContaining([
+          expect.objectContaining({
+            dryRunOnly: true,
+            willMutate: false,
+            noUnsafePayload: true
+          })
+        ]),
+        guardrails: expect.objectContaining({
+          publicOnlyAnswerPromotion: true,
+          darkwebMetadataNeverPromotesPublicAnswer: true,
+          noRawUnsafeUrls: true,
+          noCredentials: true,
+          noPayloadLinks: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noDefaultActorAssumption: true,
+          noStaleCacheCopy: true
+        })
+      }),
+      publicCoverageFreshnessValue: expect.objectContaining({
+        schemaVersion: "ti.public_coverage_freshness_value.v1",
+        status: expect.any(String),
+        summary: expect.objectContaining({
+          coverageFreshnessScore: expect.any(Number),
+          currentAnswerReadiness: expect.any(Number),
+          expectedAnswerLift: expect.any(Number),
+          staleFamilyCount: expect.any(Number),
+          missingFamilyCount: expect.any(Number)
+        }),
+        familyFreshness: expect.any(Array),
+        queryClassFreshness: expect.any(Array),
+        sourceAtlasFreshnessImpact: expect.any(Array),
+        highValueCoverage: expect.any(Array),
+        staleRisk: expect.objectContaining({
+          staleOnlyRecentActivityRejected: expect.any(Boolean),
+          staleFamilies: expect.any(Array),
+          noEvidenceFamilies: expect.any(Array),
+          metadataOnlyFamilies: expect.any(Array)
+        }),
+        handoffs: expect.objectContaining({
+          agent09ApiFields: ["publicSignalFusion.publicCoverageFreshnessValue"]
+        }),
+        guardrails: expect.objectContaining({
+          publicOnly: true,
+          darkwebMetadataTriageOnly: true,
+          noRawUnsafeUrls: true,
+          noCredentials: true,
+          noPayloadLinks: true,
+          noPrivateChannels: true,
+          noAccountAutomation: true,
+          noDefaultActorAssumption: true,
+          noStaleCacheCopy: true
         })
       })
     });
@@ -3151,6 +5321,9 @@ describe("api v1", () => {
       enforcement: { level: string; metadataOnly: boolean; safeForApi: boolean; activeRules: Array<{ rule: string }>; emergencyStop: { state: string; dryRunOnly: boolean; workerAction: string }; agent09WarningCodes: string[] };
       auditTrail: { metadataOnly: boolean; safeForApi: boolean; unsafeFieldsExposed: boolean; rejectedFields: string[] };
       governancePackets: Array<{ metadataOnly: boolean; safeForApi: boolean; networks: string[]; proof: Record<string, boolean>; redactionPolicy: Record<string, boolean> }>;
+      operatorGovernance: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; sourceHashOnly: boolean; sourceHash: string; policyReason: string; allowedActions: string[]; forbiddenActions: string[]; graphStixApiEffect: { stix: string; publicSearch: string }; rollbackPath: string[]; auditId: string; proofCommands: string[]; proof: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
+      darkMetadataCanary: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; fixtureBacked: boolean; observedScenarios: string[]; networks: string[]; emergencyStopPacketIds: string[]; blockedUnsafePacketIds: string[]; packets: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; fixtureBacked: boolean; sourceHashOnly: boolean; safeSourceHash: string; urlHash: string; policyState: string; reviewState: string; publicGraphStixEffects: { publicSearch: string; stix: string; api: string }; proxyIsolationBoundary: Record<string, boolean>; emergencyStopPropagation: { scheduler: string; evidence: string; graph: string; api: string; releaseGate: string }; operatorProofPacket: { proofCommands: string[]; forbiddenActions: string[] }; noLeakProof: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
+      legalEthicsAuditExport: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; thesisReady: boolean; enterpriseReady: boolean; observedScenarios: string[]; summary: { packetCount: number; blockedOperationCount: number; holdCount: number; rollbackCount: number }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; thesisReady: boolean; enterpriseReady: boolean; collected: { fields: string[]; sourceHashIds: string[]; urlHashIds: string[]; evidenceType: string }; blocked: { operations: string[]; reason: string }; approval: { approvalState: string; policyVersion: string; auditTrailIds: string[] }; whatWasNotAccessed: string[]; releaseInterpretation: string; graphStixApiEffect: { stix: string; api: string; publicSearch: string }; proofCommands: string[]; handoffs: { agent09ApiField: string }; noLeakValidation: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
       auditReplay: { metadataOnly: boolean; safeForApi: boolean; observedScenarios: string[]; scenarios: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean }> };
       connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
       connectorCertifications: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: Record<string, boolean>; noLeakSerialization: { passed: boolean } }>;
@@ -3216,6 +5389,151 @@ describe("api v1", () => {
       packet.proof.noStolenFilesStored &&
       packet.proof.noRawPayloadsStored &&
       packet.redactionPolicy.rawUrlRedacted
+    )).toBe(true);
+    expect(status.operatorGovernance).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      operatorVisible: true
+    });
+    expect(status.operatorGovernance.observedScenarios).toEqual(expect.arrayContaining([
+      "ransomware_leak_claim_review_hold",
+      "source_quarantined_unsafe_target",
+      "emergency_stop_active"
+    ]));
+    expect(status.operatorGovernance.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.operatorVisible &&
+      packet.sourceHashOnly &&
+      packet.sourceHash.length > 0 &&
+      packet.policyReason.length > 0 &&
+      packet.allowedActions.includes("keep_public_search_non_blocking") &&
+      packet.forbiddenActions.includes("download_stolen_files") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.rollbackPath.includes("restore_review_hold") &&
+      packet.auditId.startsWith("restricted-governance-audit_") &&
+      packet.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.proof.noRawOnionUrls &&
+      packet.proof.noStolenFileNames &&
+      packet.proof.noLeakedRows &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateChannelContent &&
+      packet.proof.noActorInteractionText &&
+      packet.proof.metadataOnlyEvidence &&
+      packet.proof.sourceHashOnly &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.darkMetadataCanary).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      fixtureBacked: true
+    });
+    expect(status.darkMetadataCanary.observedScenarios).toEqual(expect.arrayContaining([
+      "tor_metadata_canary",
+      "i2p_metadata_canary",
+      "freenet_metadata_canary",
+      "ransomware_leak_site_claim",
+      "emergency_stop"
+    ]));
+    expect(status.darkMetadataCanary.networks).toEqual(expect.arrayContaining(["tor", "i2p", "freenet"]));
+    expect(status.darkMetadataCanary.emergencyStopPacketIds.length).toBeGreaterThan(0);
+    expect(status.darkMetadataCanary.blockedUnsafePacketIds.length).toBeGreaterThan(0);
+    expect(status.darkMetadataCanary.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.fixtureBacked &&
+      packet.sourceHashOnly &&
+      packet.safeSourceHash.length > 0 &&
+      packet.urlHash.length > 0 &&
+      packet.publicGraphStixEffects.publicSearch === "non_blocking" &&
+      packet.publicGraphStixEffects.stix === "blocked" &&
+      packet.publicGraphStixEffects.api === "restrictedMetadata.darkMetadataCanary" &&
+      packet.proxyIsolationBoundary.approvedProxyRequired &&
+      packet.proxyIsolationBoundary.directEgressAllowed === false &&
+      packet.proxyIsolationBoundary.credentialsAllowed === false &&
+      packet.proxyIsolationBoundary.formsAllowed === false &&
+      packet.proxyIsolationBoundary.captchaSolvingAllowed === false &&
+      packet.proxyIsolationBoundary.privateCommunityAccessAllowed === false &&
+      packet.proxyIsolationBoundary.fileDownloadsAllowed === false &&
+      packet.proxyIsolationBoundary.threatActorInteractionAllowed === false &&
+      packet.proxyIsolationBoundary.rawUnsafeUrlExposureAllowed === false &&
+      packet.emergencyStopPropagation.scheduler === "pause_restricted_partition" &&
+      packet.emergencyStopPropagation.evidence === "metadata_only_no_object_download" &&
+      packet.emergencyStopPropagation.graph === "hold_restricted_edges" &&
+      packet.emergencyStopPropagation.api === "safe_metadata_only" &&
+      packet.operatorProofPacket.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.operatorProofPacket.forbiddenActions.includes("download_stolen_files") &&
+      packet.noLeakProof.noRawOnionUrls &&
+      packet.noLeakProof.noRawUnsafeUrls &&
+      packet.noLeakProof.noRawPayloads &&
+      packet.noLeakProof.noStolenFileDownloads &&
+      packet.noLeakProof.noCredentialValues &&
+      packet.noLeakProof.noCaptchaSolving &&
+      packet.noLeakProof.noPrivateAccess &&
+      packet.noLeakProof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(status.darkMetadataCanary.packets.find((packet) => packet.scenario === "emergency_stop")).toMatchObject({
+      policyState: "emergency_stop",
+      reviewState: "emergency_stop",
+      emergencyStopPropagation: {
+        releaseGate: "rollback"
+      }
+    });
+    expect(status.legalEthicsAuditExport).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      thesisReady: true,
+      enterpriseReady: true
+    });
+    expect(status.legalEthicsAuditExport.observedScenarios).toEqual(expect.arrayContaining([
+      "metadata_only_collection",
+      "unsafe_target_blocked",
+      "approval_review",
+      "emergency_stop_review",
+      "operator_thesis_export"
+    ]));
+    expect(status.legalEthicsAuditExport.summary.packetCount).toBe(status.legalEthicsAuditExport.packets.length);
+    expect(status.legalEthicsAuditExport.summary.blockedOperationCount).toBeGreaterThan(0);
+    expect(status.legalEthicsAuditExport.summary.holdCount).toBeGreaterThan(0);
+    expect(status.legalEthicsAuditExport.summary.rollbackCount).toBeGreaterThan(0);
+    expect(status.legalEthicsAuditExport.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.thesisReady &&
+      packet.enterpriseReady &&
+      packet.collected.fields.includes("actor") &&
+      packet.collected.sourceHashIds.length > 0 &&
+      packet.collected.urlHashIds.length > 0 &&
+      packet.collected.evidenceType === "restricted_metadata_hashes_and_claim_fields_only" &&
+      packet.blocked.operations.includes("download_stolen_files") &&
+      packet.blocked.operations.includes("interact_with_threat_actor") &&
+      packet.approval.policyVersion === "restricted_metadata_policy_v1" &&
+      packet.approval.auditTrailIds.length > 0 &&
+      packet.whatWasNotAccessed.includes("leaked rows") &&
+      packet.whatWasNotAccessed.includes("credential values") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.api === "metadata_only_audit" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.legalEthicsAuditExport" &&
+      packet.noLeakValidation.noRawLeakMaterial &&
+      packet.noLeakValidation.noUnsafeUrls &&
+      packet.noLeakValidation.noCredentials &&
+      packet.noLeakValidation.noScreenshots &&
+      packet.noLeakValidation.noPayloads &&
+      packet.noLeakValidation.noStolenFileNames &&
+      packet.noLeakValidation.noPrivateChannelMaterial &&
+      packet.noLeakValidation.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
     )).toBe(true);
     expect(status.auditReplay).toMatchObject({
       metadataOnly: true,
@@ -3338,6 +5656,288 @@ describe("api v1", () => {
     expect(serialized).not.toContain(".onion");
     expect(serialized).not.toContain("customer-dump");
     expect(serialized).not.toContain("user:pass");
+  });
+
+  test("routes darkweb metadata index status and search without unsafe leaks", async () => {
+    const statusResponse = (await body(await handleApiRequest(api("/v1/darkweb/status"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    }))) as {
+      status: {
+        endpoint: string;
+        metadataOnly: boolean;
+        targetRecordCount: number;
+        fixtureRecordCount: number;
+        indexedRecordEstimate: number;
+        latestRefreshRun: { dryRunOnly: boolean };
+        storageReadiness: {
+          migrationMode: string;
+          agent06Handoff: string;
+          handoff: {
+            schemaVersion: string;
+            migrationMode: string;
+            willConnectToDatabase: boolean;
+            willMutate: boolean;
+            tables: Array<{ table: string; forbiddenColumns: string[] }>;
+            indexes: Array<{ name: string }>;
+            hashLookup: { publicLookupAllowed: boolean; operatorOnlyFutureRoute: string };
+          };
+        };
+        sourceIngestReadiness: {
+          sources: Array<{ sourceHash: string; forbiddenOperations: string[]; isolationBoundary: { payloadFollowingAllowed: boolean } }>;
+          ingestPreviews: Array<{ dryRunOnly: boolean; willFetchNetwork: boolean; noFetchReasons: string[] }>;
+        };
+        schedulerReadiness: {
+          schemaVersion: string;
+          mode: string;
+          willScheduleLiveWork: boolean;
+          willMutateQueue: boolean;
+          schedulerId: string;
+          lanes: Array<{ lane: string; maxRecordsPerRun: number; action: string }>;
+          noScheduleGuarantees: string[];
+        };
+        parserRuntimeReadiness: {
+          schemaVersion: string;
+          mode: string;
+          willFetchNetwork: boolean;
+          parserProfiles: Array<{ profile: string; blockedFields: string[] }>;
+          runtime: { hostNetworkAllowed: boolean; output: string };
+          blockedActions: string[];
+        };
+      };
+      contract: {
+        field: string;
+        routes: string[];
+        targetRecordCount: number;
+        safety: Record<string, boolean>;
+        sourceIngest: {
+          runtimeMode: string;
+          sourceTypes: string[];
+          approvalStates: string[];
+          dedupeKeys: string[];
+        };
+        storageHandoff: {
+          schemaVersion: string;
+          tables: string[];
+          indexes: string[];
+          migrationMode: string;
+          hashLookup: string;
+        };
+        schedulerParserHandoff: {
+          schedulerSchemaVersion: string;
+          parserSchemaVersion: string;
+          schedulerMode: string;
+          parserMode: string;
+          schedulerId: string;
+          parserProfiles: string[];
+        };
+      };
+    };
+    expect(statusResponse.status).toMatchObject({
+      endpoint: "/v1/darkweb/status",
+      metadataOnly: true,
+      targetRecordCount: 60000,
+      fixtureRecordCount: 100,
+      indexedRecordEstimate: 60000,
+      latestRefreshRun: {
+        dryRunOnly: true
+      },
+      storageReadiness: {
+        migrationMode: "contract_only",
+        agent06Handoff: "darkweb_index_records_refresh_runs_classification_history"
+      },
+      sourceIngestReadiness: {
+        collectorRuntime: {
+          mode: "contract_only_no_network",
+          dryRunOnly: true,
+          approvedProxyRequired: true,
+          hostNetworkAllowed: false,
+          sharedCredentialMountAllowed: false,
+          writableHostMountAllowed: false,
+          quarantineArtifactDescriptorsOnly: true
+        },
+        dedupePlan: {
+          strategy: "host_path_title_redirect_content_hash",
+          mirrorPolicy: "cluster_by_hashes_without_following_redirect_payloads"
+        }
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(statusResponse.status.schedulerReadiness).toMatchObject({
+      schemaVersion: "ti.darkweb_index_scheduler_handoff.v1",
+      mode: "contract_only_no_worker_leases",
+      willScheduleLiveWork: false,
+      willMutateQueue: false,
+      schedulerId: "darkweb_index_refresh"
+    });
+    expect(statusResponse.status.schedulerReadiness.lanes.map((lane) => lane.lane)).toEqual(expect.arrayContaining([
+      "high_risk_leak_metadata",
+      "standard_directory_refresh",
+      "blocked_unsafe"
+    ]));
+    expect(statusResponse.status.schedulerReadiness.lanes.find((lane) => lane.lane === "blocked_unsafe")).toMatchObject({
+      maxRecordsPerRun: 0,
+      action: "skip_blocked"
+    });
+    expect(statusResponse.status.schedulerReadiness.noScheduleGuarantees).toEqual(expect.arrayContaining([
+      "no_live_worker_leases_until_proxy_and_legal_approval",
+      "no_payload_download_tasks",
+      "no_threat_actor_interaction_tasks"
+    ]));
+    expect(statusResponse.status.parserRuntimeReadiness).toMatchObject({
+      schemaVersion: "ti.darkweb_index_parser_runtime.v1",
+      mode: "isolated_landing_page_metadata_parser_contract",
+      willFetchNetwork: false,
+      runtime: {
+        hostNetworkAllowed: false,
+        output: "quarantine_descriptor_only"
+      }
+    });
+    expect(statusResponse.status.parserRuntimeReadiness.parserProfiles.map((profile) => profile.profile)).toEqual(expect.arrayContaining([
+      "tor_landing_metadata",
+      "directory_listing_metadata",
+      "blocked_unsafe_stub"
+    ]));
+    expect(statusResponse.status.parserRuntimeReadiness.parserProfiles.every((profile) =>
+      ["rawUrl", "body", "payloadBytes", "credentialValues", "privateMessages", "actorInteractionText"].every((field) => profile.blockedFields.includes(field))
+    )).toBe(true);
+    expect(statusResponse.status.parserRuntimeReadiness.blockedActions).toEqual(expect.arrayContaining([
+      "stolen-file download",
+      "credential dump download",
+      "CAPTCHA solving",
+      "threat actor interaction"
+    ]));
+    expect(statusResponse.status.storageReadiness.handoff).toMatchObject({
+      schemaVersion: "ti.darkweb_index_storage_handoff.v1",
+      migrationMode: "contract_only_no_database_connection",
+      willConnectToDatabase: false,
+      willMutate: false,
+      hashLookup: {
+        publicLookupAllowed: false,
+        operatorOnlyFutureRoute: "/v1/darkweb/hash-lookup"
+      }
+    });
+    expect(statusResponse.status.storageReadiness.handoff.tables.map((table) => table.table)).toEqual(expect.arrayContaining([
+      "darkweb_index_records",
+      "darkweb_index_sources",
+      "darkweb_index_refresh_runs",
+      "darkweb_index_classification_history"
+    ]));
+    expect(statusResponse.status.storageReadiness.handoff.tables.every((table) =>
+      ["raw_url", "body", "payload", "credential", "private_message", "actor_interaction"].every((column) => table.forbiddenColumns.includes(column))
+    )).toBe(true);
+    expect(statusResponse.status.storageReadiness.handoff.indexes.map((index) => index.name)).toEqual(expect.arrayContaining([
+      "darkweb_index_hash_lookup",
+      "darkweb_index_safe_summary_text_idx"
+    ]));
+    expect(statusResponse.contract).toMatchObject({
+      field: "darkwebIndex",
+      routes: expect.arrayContaining(["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),
+      targetRecordCount: 60000,
+      safety: {
+        metadataOnly: true,
+        isolatedCollectorOnly: true,
+        noPayloadFollowing: true,
+        noCredentialDownloads: true,
+        noPrivateAccess: true,
+        noCaptchaSolving: true,
+        noThreatActorInteraction: true,
+        noRawUnsafeUrlPublicOutput: true
+      }
+    });
+    expect(statusResponse.contract.storageHandoff).toMatchObject({
+      schemaVersion: "ti.darkweb_index_storage_handoff.v1",
+      tables: expect.arrayContaining(["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs"]),
+      indexes: expect.arrayContaining(["darkweb_index_hash_lookup", "darkweb_index_category_liveness_review_idx"]),
+      migrationMode: "contract_only_no_database_connection",
+      hashLookup: "operator_only_future_route"
+    });
+    expect(statusResponse.contract.schedulerParserHandoff).toMatchObject({
+      schedulerSchemaVersion: "ti.darkweb_index_scheduler_handoff.v1",
+      parserSchemaVersion: "ti.darkweb_index_parser_runtime.v1",
+      schedulerMode: "contract_only_no_worker_leases",
+      parserMode: "isolated_landing_page_metadata_parser_contract",
+      schedulerId: "darkweb_index_refresh",
+      parserProfiles: expect.arrayContaining(["tor_landing_metadata", "blocked_unsafe_stub"])
+    });
+    expect(statusResponse.contract.sourceIngest).toMatchObject({
+      runtimeMode: "contract_only_no_network",
+      sourceTypes: expect.arrayContaining(["directory", "seed_list", "analyst_import", "public_report"]),
+      approvalStates: expect.arrayContaining(["approved_metadata_only", "pending_legal_review", "disabled_kill_switch", "blocked_unsafe"]),
+      dedupeKeys: expect.arrayContaining(["rawUrlHash", "hostHash", "pathHash", "titleHash", "contentHash", "sourceHash"])
+    });
+    expect(statusResponse.status.sourceIngestReadiness.sources.every((source: { sourceHash: string; forbiddenOperations: string[]; isolationBoundary: { payloadFollowingAllowed: boolean } }) =>
+      source.sourceHash.length > 0 &&
+      source.forbiddenOperations.includes("threat actor interaction") &&
+      source.isolationBoundary.payloadFollowingAllowed === false
+    )).toBe(true);
+    expect(statusResponse.status.sourceIngestReadiness.ingestPreviews.every((preview: { dryRunOnly: boolean; willFetchNetwork: boolean; noFetchReasons: string[] }) =>
+      preview.dryRunOnly &&
+      preview.willFetchNetwork === false &&
+      preview.noFetchReasons.includes("synthetic_preview_no_network")
+    )).toBe(true);
+
+    const searchResponse = await body(await handleApiRequest(api("/v1/darkweb/search?q=akira&network=tor&limit=5"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    }));
+    const darkwebIndex = searchResponse.darkwebIndex as {
+      metadataOnly: boolean;
+      query: { q?: string; network?: string; limit: number };
+      records: Array<{
+        network: string;
+        redactedDisplayUrl: string;
+        rawUrlHash: string;
+        hostHash: string;
+        pathHash: string;
+        actorHints: string[];
+        isolationBoundary: Record<string, boolean>;
+        whatWasNotAccessed: string[];
+      }>;
+      uiContract: { route: string };
+      noLeakSerialization: { passed: boolean };
+    };
+    expect(darkwebIndex).toMatchObject({
+      metadataOnly: true,
+      query: {
+        q: "akira",
+        network: "tor",
+        limit: 5
+      },
+      uiContract: {
+        route: "/ti/darkweb/index"
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(darkwebIndex.records.length).toBeGreaterThan(0);
+    expect(darkwebIndex.records.length).toBeLessThanOrEqual(5);
+    expect(darkwebIndex.records.every((record) =>
+      record.network === "tor" &&
+      record.actorHints.includes("akira") &&
+      record.redactedDisplayUrl.includes("host-") &&
+      record.rawUrlHash.length > 0 &&
+      record.hostHash.length > 0 &&
+      record.pathHash.length > 0 &&
+      record.isolationBoundary.sharedCredentialsAllowed === false &&
+      record.isolationBoundary.payloadFollowingAllowed === false &&
+      record.isolationBoundary.credentialDumpDownloadsAllowed === false &&
+      record.isolationBoundary.malwareExecutionAllowed === false &&
+      record.isolationBoundary.privateAccessAllowed === false &&
+      record.isolationBoundary.captchaSolvingAllowed === false &&
+      record.isolationBoundary.threatActorInteractionAllowed === false &&
+      record.isolationBoundary.rawUnsafeUrlPublicOutputAllowed === false &&
+      record.whatWasNotAccessed.includes("credential values") &&
+      record.whatWasNotAccessed.includes("threat actor communications")
+    )).toBe(true);
+
+    const serialized = JSON.stringify({ statusResponse, searchResponse }).toLowerCase();
+    for (const forbidden of ["http://", "https://", ".onion", ".i2p", "password=", "cookie=", "authorization:", "customer-dump", "private message transcript", "actor-interaction text"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
   });
 
   test("routes restricted metadata nested apply-plan and rejects invalid actions", async () => {
@@ -4123,6 +6723,35 @@ describe("api v1", () => {
       willStartCrawling: boolean;
       portfolio: { familyGroups: Array<{ key: string }>; legalReviewAgeGroups: Array<{ key: string }> };
       queries: Array<{ query: string; actorGroups: Array<{ key: string }> }>;
+      reliabilityEconomics: { schemaVersion: string; dryRun: boolean; willMutate: boolean; willStartCrawling: boolean; summary: { sourceCount: number; activationWaveReady: number }; sources: Array<{ decision: string; handoffs: { agent02SchedulerPriority: string; agent09ApiContract: string }; guardrails: { noLeakedDataAccess: boolean } }>; governance: { noSilentActivation: boolean; restrictedSourcesMetadataOnly: boolean } };
+      tenantActivation: {
+      schemaVersion: string;
+      dryRun: boolean;
+      willMutate: boolean;
+      willStartCrawling: boolean;
+      tenantId: string;
+        guardrails: { noSilentActivation: boolean; noCrawlingFromApprovalPackets: boolean; noRestrictedAutoActivation: boolean; noRawUnsafeUrls: boolean; dryRunOnly: boolean };
+        approvalPackets: Array<{ dryRun: boolean; willMutate: boolean; willStartCrawling: boolean; sourceId: string; decision: string; sourceClass: string; approvalRequired: boolean; routeHint: string }>;
+        tenantIsolation: Array<{ tenantId: string; crossTenantSourcesExcluded: boolean }>;
+        handoffs: { agent09ApiContracts: string[] };
+      };
+      sourceImportCanary: {
+        schemaVersion: string;
+        dryRun: boolean;
+        willMutate: boolean;
+        willImportSourcePacks: boolean;
+        willStartCrawling: boolean;
+        tenantId: string;
+        summary: { first10Count: number; first50Count: number; releaseDecision: string; restrictedMetadataHoldCount: number };
+        first10SourceRollout: Array<{ sourceId: string; canaryOrder?: number; sourceHash: string; rollbackPlanId: string }>;
+        first50SourceRollout: Array<{ sourceId: string; sourceHash: string }>;
+        activationResults: Array<{ dimension: string; key: string; decision: string; nextAction: string }>;
+        fixtures: Array<{ fixtureClass: string; metadataOnly: boolean }>;
+        lifecycle: { restrictedMetadataHoldPropagation: { routeHint: string; dryRun: boolean; willMutate: boolean }; duplicateSuppression: { dryRun: boolean; willMutate: boolean } };
+        rollbackPlans: Array<{ rollbackPlanId: string; owner: string }>;
+        guardrails: { noSilentActivation: boolean; noSourcePackImport: boolean; noCrawlingFromCanary: boolean; noUnsafeRawUrls: boolean; restrictedMetadataOnly: boolean };
+        handoffs: { agent09ApiContracts: string[]; agent10ReleaseRollback: string[] };
+      };
       onboardingPlans: Array<{ dryRun: boolean; willMutate: boolean; willStartCrawling: boolean; schedulerCost: { estimatedTasksPerDay: number } }>;
       burnDown: Array<{ query: string; sourceAdditions: string[] }>;
       promotionPacket: { field: string; gate: string };
@@ -4143,6 +6772,78 @@ describe("api v1", () => {
       activationReadiness: { readyForDryRun: number; needsParserSupport: number; blockedUnsafe: number };
       unsupportedSourceClasses: Array<{ sourceClass: string; activationAllowed: boolean }>;
       governance: { noSilentActivation: boolean; noCrawlingFromMarketplace: boolean };
+    };
+    const atlasResponse = await body(await handleApiRequest(api("/v1/sources/atlas", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-tenant-id": "tenant_source_coverage" },
+      body: JSON.stringify({
+        queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Norway"],
+        recordLimit: 500
+      })
+    }), options)) as {
+      endpoint: string;
+      schemaVersion: string;
+      dryRun: boolean;
+      willMutate: boolean;
+      willImportSourcePacks: boolean;
+      willStartCrawling: boolean;
+      tenantId: string;
+      summary: { recordCount: number; syntheticScaleCandidateCount: number; first100Count: number; first1000Count: number; readyForDryRun: number };
+      records: Array<{ id: string; family: string; sourceValueScore: number; parserCapability: { certificationRequired: boolean }; activationReadiness: { state: string; autoActivationAllowed: boolean }; safety: { publicOnly: boolean; privateInviteAuthCaptcha: boolean; rawPayloadTarget: boolean; autoActivate: boolean } }>;
+      importPlans: Array<{ label: string; sourceCount: number; sourceIds: string[]; dryRun: boolean; willMutate: boolean; willImportSourcePacks: boolean; willStartCrawling: boolean; approvalPacket: { forbiddenActions: string[] }; rollbackPacket: { rollbackPlanId: string } }>;
+      coverageMatrix: Array<{ queryClass: string; candidateSourceCount: number; downstreamPublicAnswerImpact: number }>;
+	      activationCanary: {
+	        first100SourceIds: string[];
+	        first1000SourceIds: string[];
+	        descriptorOnlySourceIds: string[];
+	        dryRun: boolean;
+	        willMutate: boolean;
+	        willStartCrawling: boolean;
+	        registryActivationHandoff: {
+	          routeHint: string;
+	          dryRun: boolean;
+	          willMutate: boolean;
+	          willImportSourcePacks: boolean;
+	          willStartCrawling: boolean;
+	          approvalRequired: boolean;
+	          sourceRegistryMutationAllowed: boolean;
+	          candidateCount: number;
+	          canarySourceIds: string[];
+	          proposedSourceRecords: Array<{ proposedSourceId: string; statusPreview: string; metadata: { provenance: string; sourceHash: string }; governance: { autoActivationAllowed: boolean } }>;
+	          schedulerPreview: { owner: string; queuePartition: string; leaseMode: string; estimatedDailyTasks: number };
+	          prerequisites: string[];
+	          forbiddenOperations: string[];
+	          downstreamHandoffs: { agent09ApiContract: string[]; agent10ReleaseGate: string[] };
+	        };
+	      };
+      discoveryInputs: Array<{ method: string }>;
+      guardrails: { publicOnly: boolean; noPrivateInviteAuthCaptcha: boolean; noSilentActivation: boolean; noSourcePackImport: boolean; noCrawlingFromAtlas: boolean };
+      handoffs: { agent03ParserCertification: string[]; agent09ApiContracts: string[]; agent10ReleaseGates: string[] };
+    };
+    const atlasExportResponse = await body(await handleApiRequest(api("/v1/sources/atlas/export", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-tenant-id": "tenant_source_coverage" },
+      body: JSON.stringify({
+        queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234"],
+        planLabel: "first_100",
+        recordLimit: 500
+      })
+    }), options)) as {
+      endpoint: string;
+      schemaVersion: string;
+      dryRun: boolean;
+      willMutate: boolean;
+      willImportSourcePacks: boolean;
+      willStartCrawling: boolean;
+      tenantId: string;
+      requestedPlan: string;
+      summary: { plannedSourceCount: number; manifestRowCount: number; stagedForCanary: number; descriptorOnlyHolds: number };
+      reviewQueue: Array<{ decision: string; approvalRoute: string; dryRun: boolean; willMutate: boolean; willStartCrawling: boolean }>;
+      exportManifest: { rows: Array<{ sourceHash: string; approvalRequired: boolean; autoActivationAllowed: boolean }> };
+      approvalPacket: { forbiddenActions: string[] };
+      rollbackPacket: { rollbackPlanId: string };
+      guardrails: { noManifestImport: boolean; explicitApprovalRequired: boolean; noSilentActivation: boolean };
+      handoffs: { agent01RegistryImport: string[]; agent09ApiContracts: string[] };
     };
     const activationBatchResponse = await body(await handleApiRequest(api("/v1/sources/activation-batches", {
       method: "POST",
@@ -4179,7 +6880,7 @@ describe("api v1", () => {
       method: "POST",
       headers: { "content-type": "application/json", "x-tenant-id": "tenant_source_coverage" },
       body: JSON.stringify({
-        queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "campaign infrastructure"]
+        queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Operation Dream Job campaign", "campaign infrastructure"]
       })
     }), options)) as {
       endpoint: string;
@@ -4274,6 +6975,85 @@ describe("api v1", () => {
     expect(portfolioResponse.willStartCrawling).toBe(false);
     expect(portfolioResponse.onboardingPlans[0]!.schedulerCost.estimatedTasksPerDay).toBeGreaterThan(0);
     expect(portfolioResponse.onboardingPlans.every((plan) => plan.dryRun && plan.willMutate === false && plan.willStartCrawling === false)).toBe(true);
+    expect(portfolioResponse.reliabilityEconomics).toMatchObject({
+      schemaVersion: "ti.source_reliability_economics.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      governance: { noSilentActivation: true, restrictedSourcesMetadataOnly: true }
+    });
+    expect(portfolioResponse.reliabilityEconomics.summary.sourceCount).toBeGreaterThan(0);
+    expect(portfolioResponse.reliabilityEconomics.sources.every((source) => source.guardrails.noLeakedDataAccess && source.handoffs.agent09ApiContract === "source_reliability_fields_ready")).toBe(true);
+    expect(portfolioResponse.reliabilityEconomics.sources.map((source) => source.handoffs.agent02SchedulerPriority)).toEqual(expect.arrayContaining(["low"]));
+    expect(portfolioResponse.tenantActivation).toMatchObject({
+      schemaVersion: "ti.tenant_source_activation.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      tenantId: "tenant_source_coverage",
+      guardrails: {
+        noSilentActivation: true,
+        noCrawlingFromApprovalPackets: true,
+        noRestrictedAutoActivation: true,
+        noRawUnsafeUrls: true,
+        dryRunOnly: true
+      }
+    });
+    expect(portfolioResponse.tenantActivation.approvalPackets.length).toBeGreaterThan(0);
+    expect(portfolioResponse.tenantActivation.approvalPackets.every((packet) => packet.dryRun && packet.willMutate === false && packet.willStartCrawling === false)).toBe(true);
+    expect(portfolioResponse.tenantActivation.approvalPackets.map((packet) => packet.routeHint)).toEqual(expect.arrayContaining(["/v1/analyst/source-activation-packets"]));
+    expect(portfolioResponse.tenantActivation.approvalPackets.map((packet) => packet.decision)).toContain("hold");
+    expect(portfolioResponse.tenantActivation.tenantIsolation.find((item) => item.tenantId === "tenant_source_coverage")).toBeDefined();
+    expect(portfolioResponse.tenantActivation.handoffs.agent09ApiContracts).toContain("tenantActivation.schemaVersion");
+    expect(JSON.stringify(portfolioResponse.tenantActivation)).not.toContain("https://");
+    expect(portfolioResponse.sourceImportCanary).toMatchObject({
+      schemaVersion: "ti.source_import_canary.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      tenantId: "tenant_source_coverage",
+      summary: {
+        first10Count: 10,
+        first50Count: 50
+      },
+      guardrails: {
+        noSilentActivation: true,
+        noSourcePackImport: true,
+        noCrawlingFromCanary: true,
+        noUnsafeRawUrls: true,
+        restrictedMetadataOnly: true
+      }
+    });
+    expect(portfolioResponse.sourceImportCanary.first10SourceRollout).toHaveLength(10);
+    expect(portfolioResponse.sourceImportCanary.first50SourceRollout).toHaveLength(50);
+    expect(portfolioResponse.sourceImportCanary.first10SourceRollout.map((source) => source.canaryOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(portfolioResponse.sourceImportCanary.activationResults.map((result) => result.dimension)).toEqual(expect.arrayContaining([
+      "tenant",
+      "query_class",
+      "source_family",
+      "source_policy",
+      "adapter_certification",
+      "scheduler_impact",
+      "evidence_store_impact",
+      "quality_gate_impact",
+      "graph_stix_impact",
+      "api_public_answer_effect"
+    ]));
+    expect(portfolioResponse.sourceImportCanary.fixtures.map((fixture) => fixture.fixtureClass)).toEqual(expect.arrayContaining([
+      "actor_intelligence",
+      "ransomware_leak_metadata",
+      "vulnerability_advisory",
+      "malware_report",
+      "public_cert_feed",
+      "vendor_blog",
+      "public_channel_descriptor"
+    ]));
+    expect(portfolioResponse.sourceImportCanary.lifecycle.restrictedMetadataHoldPropagation.routeHint).toBe("/v1/analyst/source-activation-packets");
+    expect(portfolioResponse.sourceImportCanary.rollbackPlans.length).toBeGreaterThanOrEqual(3);
+    expect(portfolioResponse.sourceImportCanary.handoffs.agent09ApiContracts).toContain("sourceImportCanary.schemaVersion");
+    expect(portfolioResponse.sourceImportCanary.handoffs.agent10ReleaseRollback).toContain("rollbackPlans");
+    expect(JSON.stringify(portfolioResponse.sourceImportCanary)).not.toContain("https://");
     expect(portfolioResponse.burnDown.find((item) => item.query === "unknown actor")?.sourceAdditions.length ?? 0).toBeGreaterThanOrEqual(0);
     expect(portfolioResponse.promotionPacket).toMatchObject({ field: "sourcePortfolioId", gate: "source_portfolio_ready" });
     expect(marketplaceResponse.endpoint).toBe("/v1/sources/marketplace");
@@ -4291,6 +7071,98 @@ describe("api v1", () => {
     expect(marketplaceResponse.unsupportedSourceClasses.map((item) => item.sourceClass)).toEqual(expect.arrayContaining(["restricted_raw_payload", "credentialed_or_auth_gated", "public_chat_source"]));
     expect(marketplaceResponse.unsupportedSourceClasses.every((item) => item.activationAllowed === false)).toBe(true);
     expect(marketplaceResponse.governance).toMatchObject({ noSilentActivation: true, noCrawlingFromMarketplace: true });
+    expect(atlasResponse).toMatchObject({
+      endpoint: "/v1/sources/atlas",
+      schemaVersion: "ti.source_atlas.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      tenantId: "tenant_source_coverage",
+      summary: {
+        recordCount: 500,
+        syntheticScaleCandidateCount: 10000,
+        first100Count: 100,
+        first1000Count: 1000
+      },
+      guardrails: {
+        publicOnly: true,
+        noPrivateInviteAuthCaptcha: true,
+        noSilentActivation: true,
+        noSourcePackImport: true,
+        noCrawlingFromAtlas: true
+      }
+    });
+    expect(atlasResponse.records.length).toBeGreaterThanOrEqual(500);
+    expect(atlasResponse.records.map((record) => record.family)).toEqual(expect.arrayContaining(["vendor_threat_blog", "cert_government", "cve_advisory", "ransomware_tracker", "public_channel_descriptor"]));
+    expect(atlasResponse.records.every((record) => record.safety.publicOnly && record.safety.privateInviteAuthCaptcha === false && record.safety.rawPayloadTarget === false && record.safety.autoActivate === false && record.activationReadiness.autoActivationAllowed === false)).toBe(true);
+    expect(atlasResponse.importPlans.map((plan) => plan.label)).toEqual(["first_100", "first_1000", "future_10k"]);
+    expect(atlasResponse.importPlans.find((plan) => plan.label === "first_100")?.sourceIds).toHaveLength(100);
+    expect(atlasResponse.importPlans.find((plan) => plan.label === "first_1000")?.sourceIds).toHaveLength(1000);
+    expect(atlasResponse.importPlans.every((plan) => plan.dryRun && plan.willMutate === false && plan.willImportSourcePacks === false && plan.willStartCrawling === false && plan.approvalPacket.forbiddenActions.includes("auto_activate"))).toBe(true);
+    expect(atlasResponse.coverageMatrix.map((row) => row.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware_victim", "cve", "country"]));
+	    expect(atlasResponse.activationCanary.first100SourceIds).toHaveLength(100);
+	    expect(atlasResponse.activationCanary.first1000SourceIds).toHaveLength(1000);
+	    expect(atlasResponse.activationCanary.descriptorOnlySourceIds.length).toBeGreaterThan(0);
+	    expect(atlasResponse.activationCanary.registryActivationHandoff).toMatchObject({
+	      routeHint: "/v1/analyst/source-activation-packets",
+	      dryRun: true,
+	      willMutate: false,
+	      willImportSourcePacks: false,
+	      willStartCrawling: false,
+	      approvalRequired: true,
+	      sourceRegistryMutationAllowed: false,
+	      candidateCount: 100,
+	      schedulerPreview: {
+	        owner: "agent_02",
+	        queuePartition: "source_atlas_canary",
+	        leaseMode: "dry_run_preview_only"
+	      }
+	    });
+	    expect(atlasResponse.activationCanary.registryActivationHandoff.canarySourceIds).toEqual(atlasResponse.activationCanary.first100SourceIds);
+	    expect(atlasResponse.activationCanary.registryActivationHandoff.proposedSourceRecords).toHaveLength(10);
+	    expect(atlasResponse.activationCanary.registryActivationHandoff.proposedSourceRecords.every((record) =>
+	      record.proposedSourceId.startsWith("src_atlas_canary_") &&
+	      record.statusPreview === "candidate" &&
+	      record.metadata.provenance === "ti_source_atlas" &&
+	      record.metadata.sourceHash.startsWith("ti_source_atlas_source_") &&
+	      record.governance.autoActivationAllowed === false
+	    )).toBe(true);
+	    expect(atlasResponse.activationCanary.registryActivationHandoff.prerequisites).toEqual(expect.arrayContaining(["operator_legal_approval_packet_approved", "rollback_packet_ready"]));
+	    expect(atlasResponse.activationCanary.registryActivationHandoff.forbiddenOperations).toEqual(expect.arrayContaining(["registry_mutation", "source_pack_import", "crawl_enqueue", "source_auto_activation", "payload_download"]));
+	    expect(atlasResponse.activationCanary.registryActivationHandoff.downstreamHandoffs.agent09ApiContract).toContain("activationCanary.registryActivationHandoff");
+	    expect(atlasResponse.discoveryInputs.map((input) => input.method)).toEqual(expect.arrayContaining(["curated_list", "public_report", "github_repository", "awesome_list", "opml_rss", "vendor_page", "analyst_import", "existing_source_pack"]));
+    expect(atlasResponse.handoffs.agent03ParserCertification).toContain("activationCanary.parserCertificationRequiredSourceIds");
+    expect(atlasResponse.handoffs.agent09ApiContracts).toContain("sourceAtlas");
+    expect(atlasResponse.handoffs.agent10ReleaseGates).toContain("importPlans.rollbackPacket");
+    expect(JSON.stringify(atlasResponse).toLowerCase()).not.toContain("invite-only");
+    expect(atlasExportResponse).toMatchObject({
+      endpoint: "/v1/sources/atlas/export",
+      schemaVersion: "ti.source_atlas_export_manifest.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      tenantId: "tenant_source_coverage",
+      requestedPlan: "first_100",
+      summary: {
+        plannedSourceCount: 100,
+        manifestRowCount: 100
+      },
+      guardrails: {
+        noManifestImport: true,
+        explicitApprovalRequired: true,
+        noSilentActivation: true
+      }
+    });
+    expect(atlasExportResponse.reviewQueue).toHaveLength(100);
+    expect(atlasExportResponse.exportManifest.rows).toHaveLength(100);
+    expect(atlasExportResponse.reviewQueue.every((row) => row.approvalRoute === "/v1/analyst/source-activation-packets" && row.dryRun && row.willMutate === false && row.willStartCrawling === false)).toBe(true);
+    expect(atlasExportResponse.exportManifest.rows.every((row) => row.sourceHash.startsWith("ti_source_atlas_source_") && row.approvalRequired && row.autoActivationAllowed === false)).toBe(true);
+    expect(atlasExportResponse.approvalPacket.forbiddenActions).toEqual(expect.arrayContaining(["auto_activate", "start_crawl", "import_without_review", "download_payload"]));
+    expect(atlasExportResponse.handoffs.agent01RegistryImport).toContain("exportManifest.rows");
+    expect(atlasExportResponse.handoffs.agent09ApiContracts).toContain("sourceAtlas");
+    expect(JSON.stringify(atlasExportResponse).toLowerCase()).not.toContain("\"willmutate\":true");
     expect(activationBatchResponse.endpoint).toBe("/v1/sources/activation-batches");
     expect(activationBatchResponse.dryRun).toBe(true);
     expect(activationBatchResponse.willMutate).toBe(false);
@@ -4454,6 +7326,28 @@ describe("api v1", () => {
       runStatusClarity: { queuedTasks: number; reviewTasks: number; meaningfulWorkCount: number };
       victimNotificationPacket: { company: string; affectedAccounts: string; datasetSize: string; sourceHash: string };
       metadataReviewInbox: unknown[];
+      workQueue: Array<{
+        kind: string;
+        title: string;
+        claimHeadline?: string;
+        route: string;
+        actionRoute?: string;
+        allowedActions: string[];
+        noLeakBoundary: { rawLeakMaterialAccessed: boolean; notificationDeliveredExternally: boolean; sourceActivationPerformed: boolean };
+      }>;
+      activityTimeline: Array<{
+        kind: string;
+        title: string;
+        route?: string;
+        subjectIds: { sourceHash?: string; reviewTaskId?: string };
+        noLeakBoundary: { rawLeakMaterialAccessed: boolean; notificationDeliveredByScraper: boolean; sourceActivationPerformed: boolean };
+      }>;
+      readinessChecklist: Array<{
+        code: string;
+        state: string;
+        route?: string;
+        noLeakBoundary: { rawLeakMaterialAccessed: boolean; doesNotImplyVerification: boolean };
+      }>;
     } }).analystLoop;
     expect(analystLoop.resultState).toBe("metadata_review");
     expect(analystLoop.runStatusClarity.queuedTasks).toBe(0);
@@ -4473,23 +7367,116 @@ describe("api v1", () => {
         sourceHash: "urlhash"
       })
     ]));
-    expect(response.analystLoop).toMatchObject({
+    expect(analystLoop.workQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "metadata_review",
+        title: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+        route: "/v1/analyst/metadata-review-tasks",
+        allowedActions: expect.arrayContaining(["notify_company", "mark_duplicate", "request_approval", "escalate"]),
+        noLeakBoundary: expect.objectContaining({
+          rawLeakMaterialAccessed: false,
+          notificationDeliveredExternally: false,
+          sourceActivationPerformed: false
+        })
+      }),
+      expect.objectContaining({
+        kind: "victim_notification",
+        route: "/v1/analyst/victim-notification-packets",
+        claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB"
+      }),
+      expect.objectContaining({
+        kind: "claim_ledger",
+        route: "/v1/analyst/claim-ledger"
+      })
+    ]));
+    expect(analystLoop.activityTimeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "metadata_capture",
+        title: "Metadata-only leak claim captured",
+        route: "/v1/analyst/metadata-review-tasks",
+        subjectIds: expect.objectContaining({ sourceHash: "urlhash" }),
+        noLeakBoundary: expect.objectContaining({
+          rawLeakMaterialAccessed: false,
+          notificationDeliveredByScraper: false,
+          sourceActivationPerformed: false
+        })
+      }),
+      expect.objectContaining({
+        kind: "notification_packet",
+        title: "Victim notification draft prepared"
+      })
+    ]));
+    expect(analystLoop.readinessChecklist).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "metadata_captured", state: "pass", route: "/v1/analyst/metadata-review-tasks" }),
+      expect.objectContaining({ code: "analyst_review_complete", state: "pending", route: "/v1/analyst/metadata-review-tasks" }),
+      expect.objectContaining({ code: "reviewed_evidence_sufficient", state: "pending", route: "/v1/analyst/loop" })
+    ]));
+    expect(analystLoop.readinessChecklist.every((item) =>
+      item.noLeakBoundary.rawLeakMaterialAccessed === false &&
+      item.noLeakBoundary.doesNotImplyVerification === true
+    )).toBe(true);
+    const responseAnalystLoop = response.analystLoop as {
+      resultState: string;
+      runStatusClarity: { reviewTasks: number; meaningfulWorkCount: number; emptyQueueDoesNotMeanNoWork?: boolean };
+    };
+    expect(responseAnalystLoop).toMatchObject({
       resultState: "metadata_review",
       runStatusClarity: {
         reviewTasks: 1,
-        meaningfulWorkCount: 1
+        emptyQueueDoesNotMeanNoWork: true
       }
     });
+    expect(responseAnalystLoop.runStatusClarity.meaningfulWorkCount).toBeGreaterThan(1);
     const tiExperience = (response as {
       tiExperience: {
         visibleStates: string[];
         reviewCards: unknown[];
+        workQueue: Array<{
+          kind: string;
+          state: string;
+          title: string;
+          route: string;
+          actionRoute?: string;
+          noLeakBoundary: { metadataOnly: boolean; rawLeakMaterialAccessed: boolean; wording: string };
+        }>;
+        activityTimeline: Array<{
+          kind: string;
+          title: string;
+          subjectIds: { sourceHash?: string };
+          noLeakBoundary: { rawLeakMaterialAccessed: boolean; notificationDeliveredByScraper: boolean };
+        }>;
+        readinessChecklist: Array<{
+          code: string;
+          state: string;
+          route?: string;
+          noLeakBoundary: { rawLeakMaterialAccessed: boolean; doesNotImplyVerification: boolean };
+        }>;
+        runStatusClarity: {
+          queuedTasks: number;
+          reviewTasks: number;
+          meaningfulWorkCount: number;
+          emptyQueueDoesNotMeanNoWork?: boolean;
+        };
         notificationPacket: {
+          claimHeadline: string;
           company: string;
           affectedAccounts: string;
           datasetSize: string;
+          redactedNotification: {
+            subject: string;
+            recipientOrganization: string;
+            claimedImpact: { affectedAccounts: string; datasetSize: string };
+            deliveryBoundary: { externalDeliveryPerformed: boolean; deliveryMustHappenOutsideScraper: boolean };
+          };
           externalDeliveryPerformed: boolean;
           safeToSendWithoutReview: boolean;
+        };
+        sourceActivationWorkflow: {
+          approvalWorkflows: Array<{
+            requestedAction: string;
+            deliveryBoundary: { sourceMutationPerformed: boolean; crawlingStarted: boolean; restrictedFetchEnabled: boolean };
+            forbiddenOperations: string[];
+          }>;
         };
       };
     }).tiExperience;
@@ -4511,32 +7498,95 @@ describe("api v1", () => {
       runStatusClarity: {
         queuedTasks: 0,
         reviewTasks: 1,
-        meaningfulWorkCount: 1
+        emptyQueueDoesNotMeanNoWork: true
       },
       sourceActivationWorkflow: {
-        silentAutoActivationAllowed: false
+        silentAutoActivationAllowed: false,
+        approvalWorkflows: []
       },
       guarantees: {
         metadataOnly: true,
         rawLeakMaterialAccessed: false,
         notificationDeliveredExternally: false,
-        doesNotImplyVerification: true
+        doesNotImplyVerification: true,
+        credentialsAccessed: false,
+        privateAccessAttempted: false,
+        threatActorInteractionPerformed: false
       }
     });
+    expect(tiExperience.runStatusClarity.meaningfulWorkCount).toBeGreaterThan(1);
+    expect(tiExperience.runStatusClarity.meaningfulWorkCount).toBeGreaterThanOrEqual(1);
     expect(tiExperience.visibleStates).toEqual(["queued", "metadata_review", "blocked_unsafe_target", "needs_source_activation", "ready"]);
+    expect(tiExperience.workQueue.map((item) => item.kind)).toEqual(expect.arrayContaining(["metadata_review", "victim_notification", "claim_ledger"]));
+    expect(tiExperience.workQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "metadata_review",
+        state: "metadata_review",
+        title: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+        route: "/v1/analyst/metadata-review-tasks",
+        noLeakBoundary: expect.objectContaining({
+          metadataOnly: true,
+          rawLeakMaterialAccessed: false,
+          wording: "This queue item contains safe metadata and workflow state only; the scraper did not verify, download, or expose leaked contents."
+        })
+      })
+    ]));
+    expect(tiExperience.activityTimeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "metadata_capture",
+        title: "Metadata-only leak claim captured",
+        subjectIds: expect.objectContaining({ sourceHash: "urlhash" }),
+        noLeakBoundary: expect.objectContaining({
+          rawLeakMaterialAccessed: false,
+          notificationDeliveredByScraper: false
+        })
+      })
+    ]));
+    expect(tiExperience.readinessChecklist).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "metadata_captured", state: "pass" }),
+      expect.objectContaining({ code: "claim_ledger_trusted", state: "pending", route: "/v1/analyst/claim-ledger" }),
+      expect.objectContaining({ code: "reviewed_evidence_sufficient", state: "pending" })
+    ]));
+    expect(tiExperience.readinessChecklist.every((item) =>
+      item.noLeakBoundary.rawLeakMaterialAccessed === false &&
+      item.noLeakBoundary.doesNotImplyVerification === true
+    )).toBe(true);
     expect(tiExperience.reviewCards).toEqual(expect.arrayContaining([
       expect.objectContaining({
+        claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB",
         company: "Fjord Energy AS",
         affectedAccounts: "50k accounts",
         datasetSize: "20 GB",
         sourceHash: "urlhash",
-        unsafeMaterialAccessed: false
+        unsafeMaterialAccessed: false,
+        verificationBoundary: expect.objectContaining({
+          claimMetadataOnly: true,
+          leakedDatasetAccessed: false,
+          wording: "This is safe claim metadata for review; the scraper did not verify or download leaked contents."
+        }),
+        whatWasNotAccessed: expect.arrayContaining([
+          "No restricted dataset was downloaded or opened.",
+          "No threat actor interaction was performed."
+        ])
       })
     ]));
     expect(tiExperience.notificationPacket).toMatchObject({
+      claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB",
       company: "Fjord Energy AS",
       affectedAccounts: "50k accounts",
       datasetSize: "20 GB",
+      redactedNotification: {
+        subject: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+        recipientOrganization: "Fjord Energy AS",
+        claimedImpact: {
+          affectedAccounts: "50k accounts",
+          datasetSize: "20 GB"
+        },
+        deliveryBoundary: {
+          externalDeliveryPerformed: false,
+          deliveryMustHappenOutsideScraper: true
+        }
+      },
       externalDeliveryPerformed: false,
       safeToSendWithoutReview: false
     });
@@ -4572,9 +7622,11 @@ describe("api v1", () => {
     expect(store.listAnalystLoopSnapshots()[0]).toMatchObject({
       resultState: "metadata_review",
       queuedTasks: 0,
-      reviewTasks: 1,
-      meaningfulWorkCount: 1
+      reviewTasks: 1
     });
+    const persistedMeaningfulWorkCount = store.listAnalystLoopSnapshots()[0]?.meaningfulWorkCount;
+    expect(persistedMeaningfulWorkCount).toEqual(expect.any(Number));
+    expect(persistedMeaningfulWorkCount as number).toBeGreaterThan(1);
     const inbox = await body(await handleApiRequest(api("/v1/analyst/metadata-review-tasks"), {
       store,
       frontier: new FocusedFrontier()
@@ -4593,16 +7645,73 @@ describe("api v1", () => {
         meaningfulWorkCount: 2
       }
     });
-    const inboxTask = (inbox.tasks as Array<{ company: string; affectedAccounts: string; datasetSize: string; sourceHash: string; allowedActions: string[] }>)[0];
+    const inboxTask = (inbox.tasks as Array<{ claimHeadline: string; company: string; affectedAccounts: string; datasetSize: string; sourceHash: string; allowedActions: string[]; verificationBoundary: { leakedDatasetAccessed: boolean; wording: string } }>)[0];
     expect(inboxTask).toMatchObject({
+      claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB",
       company: "Fjord Energy AS",
       affectedAccounts: "50k accounts",
       datasetSize: "20 GB",
-      sourceHash: "urlhash"
+      sourceHash: "urlhash",
+      verificationBoundary: {
+        leakedDatasetAccessed: false,
+        wording: "This is safe claim metadata for review; the scraper did not verify or download leaked contents."
+      }
     });
     expect(inboxTask.allowedActions).toEqual(expect.arrayContaining(["notify_company", "mark_duplicate", "request_approval", "escalate"]));
     expect(JSON.stringify(inbox)).not.toContain("customer-dump");
     expect(JSON.stringify(inbox)).not.toContain("password");
+    const persistenceReadiness = await body(await handleApiRequest(api("/v1/analyst/persistence-readiness"), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    expect(persistenceReadiness).toMatchObject({
+      endpoint: "/v1/analyst/persistence-readiness",
+      dryRun: true,
+      willMutate: false,
+      willConnectToDatabase: false,
+      readiness: {
+        state: "ready",
+        mappedTableCount: 8,
+        blockers: []
+      },
+      noLeakGuardrails: {
+        forbiddenOperations: expect.arrayContaining(["download leaked datasets", "activate restricted sources silently", "send victim notifications from the scraper"])
+      }
+    });
+    expect((persistenceReadiness.workflowTables as Array<{ table: string }>).map((table) => table.table)).toEqual(expect.arrayContaining([
+      "collection_plans",
+      "collection_tasks",
+      "collection_runs",
+      "metadata_review_tasks",
+      "claim_ledger_entries",
+      "analyst_loop_snapshots"
+    ]));
+    expect(persistenceReadiness.dependencies).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        table: "sources",
+        migration: "migrations/001_source_registry.sql"
+      })
+    ]));
+    const sourceRegistryPersistence = (persistenceReadiness as { sourceRegistryPersistence: unknown }).sourceRegistryPersistence as {
+      workflowTables: Array<{ table: string }>;
+    };
+    expect(sourceRegistryPersistence).toMatchObject({
+      schemaVersion: "ti.source_registry_persistence_readiness.v1",
+      migration: "migrations/001_source_registry.sql",
+      dryRun: true,
+      willMutate: false,
+      willConnectToDatabase: false,
+      cutoverRole: "restore source records, governance approvals, legal notes, health, scoring inputs, crawl state, and lifecycle history before replaying analyst-loop tasks"
+    });
+    expect(sourceRegistryPersistence.workflowTables.map((table) => table.table)).toEqual(expect.arrayContaining([
+      "sources",
+      "source_governance",
+      "source_health",
+      "source_scoring_inputs",
+      "source_crawl_state",
+      "source_lifecycle_events"
+    ]));
+    expect(JSON.stringify(persistenceReadiness)).not.toContain("customer-dump");
     const reviewTaskId = (inbox.tasks as Array<{ id: string }>)[0].id;
     const action = await body(await handleApiRequest(api(`/v1/analyst/metadata-review-tasks/${encodeURIComponent(reviewTaskId)}/actions`, {
       method: "POST",
@@ -4647,14 +7756,68 @@ describe("api v1", () => {
       runStatusClarity: {
         reviewTasks: 1,
         metadataReviewTasks: 1,
-        notificationDrafts: 1,
-        meaningfulWorkCount: 1
+        notificationDrafts: 1
       },
       persistence: {
         replayableFromStore: true,
         survivesFileBackedRestart: true
       }
     });
+    const readModelMeaningfulWorkCount = (readModel.runStatusClarity as { meaningfulWorkCount?: unknown }).meaningfulWorkCount;
+    expect(readModelMeaningfulWorkCount).toEqual(expect.any(Number));
+    expect(readModelMeaningfulWorkCount as number).toBeGreaterThan(1);
+    expect((readModel.workQueue as Array<{ kind: string; title: string; actionRoute?: string; noLeakBoundary: { rawLeakMaterialAccessed: boolean } }>)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "metadata_review",
+        title: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+        actionRoute: `/v1/analyst/metadata-review-tasks/${encodeURIComponent(reviewTaskId)}/actions`,
+        noLeakBoundary: expect.objectContaining({ rawLeakMaterialAccessed: false })
+      }),
+      expect.objectContaining({
+        kind: "victim_notification",
+        title: "Review victim notification draft"
+      }),
+      expect.objectContaining({
+        kind: "claim_ledger"
+      })
+    ]));
+    expect((readModel.activityTimeline as Array<{ kind: string; title: string; route?: string; subjectIds: { reviewTaskId?: string; sourceHash?: string }; noLeakBoundary: { rawLeakMaterialAccessed: boolean; notificationDeliveredByScraper: boolean } }>)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "metadata_review_action",
+        title: "Review action: notify company",
+        route: `/v1/analyst/metadata-review-tasks/${encodeURIComponent(reviewTaskId)}/actions`,
+        subjectIds: expect.objectContaining({
+          reviewTaskId,
+          sourceHash: "urlhash"
+        }),
+        noLeakBoundary: expect.objectContaining({
+          rawLeakMaterialAccessed: false,
+          notificationDeliveredByScraper: false
+        })
+      }),
+      expect.objectContaining({
+        kind: "notification_packet",
+        title: "Notification draft prepared"
+      }),
+      expect.objectContaining({
+        kind: "claim_ledger_action"
+      })
+    ]));
+    const readModelChecklist = readModel.readinessChecklist as Array<{
+      code: string;
+      state: string;
+      route?: string;
+      noLeakBoundary: { rawLeakMaterialAccessed: boolean; doesNotImplyVerification: boolean };
+    }>;
+    expect(readModelChecklist).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "metadata_captured", state: "pass" }),
+      expect.objectContaining({ code: "claim_ledger_trusted", state: "pending", route: "/v1/analyst/claim-ledger" }),
+      expect.objectContaining({ code: "reviewed_evidence_sufficient", state: "pending" })
+    ]));
+    expect(readModelChecklist.every((item) =>
+      item.noLeakBoundary.rawLeakMaterialAccessed === false &&
+      item.noLeakBoundary.doesNotImplyVerification === true
+    )).toBe(true);
     expect((readModel.reviewTasks as Array<{ company: string; datasetSize: string; sourceHash: string }>)[0]).toMatchObject({
       company: "Fjord Energy AS",
       datasetSize: "20 GB",
@@ -4697,7 +7860,37 @@ describe("api v1", () => {
         meaningfulWorkCount: 1
       }
     });
-    const activationPacketId = (sourceActivationPackets.packets as Array<{ id: string; execution: string; dryRun: boolean }>)[0].id;
+    const activationPacket = (sourceActivationPackets.packets as Array<{
+      id: string;
+      execution: string;
+      dryRun: boolean;
+      approvalWorkflow: {
+        requestedAction: string;
+        approval: { required: boolean; approved: boolean; safeToExecuteMetadataOnly: boolean };
+        deliveryBoundary: { dryRunOnly: boolean; sourceMutationPerformed: boolean; crawlingStarted: boolean; restrictedFetchEnabled: boolean };
+        forbiddenOperations: string[];
+      };
+    }>)[0];
+    expect(activationPacket).toMatchObject({
+      execution: "approval_required",
+      dryRun: true,
+      approvalWorkflow: {
+        requestedAction: "request_operator_approval",
+        approval: {
+          required: true,
+          approved: false,
+          safeToExecuteMetadataOnly: false
+        },
+        deliveryBoundary: {
+          dryRunOnly: true,
+          sourceMutationPerformed: false,
+          crawlingStarted: false,
+          restrictedFetchEnabled: false
+        },
+        forbiddenOperations: expect.arrayContaining(["automatic_source_activation", "raw_leak_download", "threat_actor_contact"])
+      }
+    });
+    const activationPacketId = activationPacket.id;
     const activationAction = await body(await handleApiRequest(api(`/v1/analyst/source-activation-packets/${encodeURIComponent(activationPacketId)}/actions`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-actor-id": "operator-1" },
@@ -4721,7 +7914,28 @@ describe("api v1", () => {
       },
       packet: {
         approvedBy: "operator-1",
-        dryRun: true
+        dryRun: true,
+        approvalWorkflow: expect.objectContaining({
+          approval: expect.objectContaining({
+            approved: true,
+            approvedBy: "operator-1",
+            safeToExecuteMetadataOnly: true
+          }),
+          deliveryBoundary: expect.objectContaining({
+            sourceMutationPerformed: false,
+            crawlingStarted: false,
+            restrictedFetchEnabled: false
+          })
+        })
+      },
+      approvalWorkflow: {
+        approval: expect.objectContaining({
+          approved: true,
+          approvedBy: "operator-1",
+          safeToExecuteMetadataOnly: true
+        }),
+        allowedOperatorActions: expect.arrayContaining(["approve_metadata_only", "keep_blocked", "request_legal_review"]),
+        forbiddenOperations: expect.arrayContaining(["restricted_fetch_enablement", "raw_leak_download"])
       }
     });
     expect(store.listAnalystSourceActivationPackets()[0]).toMatchObject({
@@ -4751,7 +7965,33 @@ describe("api v1", () => {
       packet: {
         id: activationPacketId,
         dryRun: true,
-        approvedBy: "operator-1"
+        approvedBy: "operator-1",
+        approvalWorkflow: expect.objectContaining({
+          expectedMetadataOnlyEffect: "Queue safe metadata only after explicit approval.",
+          rollback: "Keep source disabled.",
+          approval: expect.objectContaining({
+            approved: true,
+            safeToExecuteMetadataOnly: true
+          })
+        })
+      },
+      approvalWorkflow: {
+        requestedAction: "request_operator_approval",
+        approval: expect.objectContaining({
+          approved: true,
+          approvedBy: "operator-1",
+          safeToExecuteMetadataOnly: true
+        }),
+        requiredBeforeExecution: [],
+        deliveryBoundary: expect.objectContaining({
+          dryRunOnly: true,
+          sourceMutationPerformed: false,
+          crawlingStarted: false,
+          restrictedFetchEnabled: false,
+          unsafeTargetConvertedToRunnableWork: false,
+          externalGovernanceHandoffRequired: true
+        }),
+        forbiddenOperations: expect.arrayContaining(["automatic_source_activation", "raw_leak_download", "threat_actor_contact"])
       },
       executionPreview: {
         expectedEffect: "Queue safe metadata only after explicit approval.",
@@ -4786,7 +8026,38 @@ describe("api v1", () => {
         meaningfulWorkCount: 1
       }
     });
-    const notificationPacketId = (notificationQueue.packets as Array<{ id: string }>)[0].id;
+    const notificationPacket = (notificationQueue.packets as Array<{
+      id: string;
+      claimHeadline: string;
+      verificationBoundary: { claimMetadataOnly: boolean; leakedDatasetAccessed: boolean; wording: string };
+      redactedNotification: {
+        subject: string;
+        recipientOrganization: string;
+        claimedImpact: { affectedAccounts: string; datasetSize: string };
+        deliveryBoundary: { externalDeliveryPerformed: boolean; deliveryMustHappenOutsideScraper: boolean };
+      };
+    }>)[0];
+    expect(notificationPacket).toMatchObject({
+      claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+      verificationBoundary: {
+        claimMetadataOnly: true,
+        leakedDatasetAccessed: false,
+        wording: "This is safe claim metadata for review; the scraper did not verify or download leaked contents."
+      },
+      redactedNotification: {
+        subject: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+        recipientOrganization: "Fjord Energy AS",
+        claimedImpact: {
+          affectedAccounts: "50k accounts",
+          datasetSize: "20 GB"
+        },
+        deliveryBoundary: {
+          externalDeliveryPerformed: false,
+          deliveryMustHappenOutsideScraper: true
+        }
+      }
+    });
+    const notificationPacketId = notificationPacket.id;
     const notificationApproval = await body(await handleApiRequest(api(`/v1/analyst/victim-notification-packets/${encodeURIComponent(notificationPacketId)}/actions`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-actor-id": "analyst-2" },
@@ -4808,6 +8079,20 @@ describe("api v1", () => {
         externalDeliveryPerformed: false
       },
       packet: {
+        claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+        verificationBoundary: expect.objectContaining({
+          claimMetadataOnly: true,
+          leakedDatasetAccessed: false,
+          threatActorInteractionPerformed: false
+        }),
+        redactedNotification: expect.objectContaining({
+          subject: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+          sourceHash: "urlhash",
+          deliveryBoundary: expect.objectContaining({
+            externalDeliveryPerformed: false,
+            safeToSendAfterApproval: true
+          })
+        }),
         approvedBy: "analyst-2",
         safeToSend: true,
         status: "approved"
@@ -4833,6 +8118,7 @@ describe("api v1", () => {
         approvedBy: "analyst-2"
       },
       packet: {
+        claimHeadline: "Fjord Energy AS leaked, 50k accounts, 20 GB",
         company: "Fjord Energy AS",
         affectedAccounts: "50k accounts",
         datasetSize: "20 GB",
@@ -4841,7 +8127,33 @@ describe("api v1", () => {
           expect.objectContaining({ claimKind: "victim_claim", ledgerStatus: "notified" }),
           expect.objectContaining({ claimKind: "dataset_size_claim", ledgerStatus: "notified" })
         ]),
-        whatWasNotAccessed: expect.arrayContaining(["No restricted dataset was downloaded or opened."])
+        whatWasNotAccessed: expect.arrayContaining(["No restricted dataset was downloaded or opened."]),
+        verificationBoundary: expect.objectContaining({
+          claimMetadataOnly: true,
+          leakedDatasetAccessed: false,
+          credentialsAccessed: false,
+          threatActorInteractionPerformed: false
+        }),
+        redactedNotification: expect.objectContaining({
+          subject: "Fjord Energy AS leaked, 50k accounts, 20 GB",
+          recipientOrganization: "Fjord Energy AS",
+          claimedImpact: {
+            affectedAccounts: "50k accounts",
+            datasetSize: "20 GB"
+          },
+          sourceHash: "urlhash",
+          whatWasNotAccessed: expect.arrayContaining(["No restricted dataset was downloaded or opened."]),
+          verificationBoundary: expect.objectContaining({
+            leakedDatasetAccessed: false,
+            credentialsAccessed: false
+          }),
+          deliveryBoundary: expect.objectContaining({
+            externalDeliveryPerformed: false,
+            deliveryMustHappenOutsideScraper: true,
+            transportCredentialsIncluded: false,
+            safeToSendAfterApproval: true
+          })
+        })
       },
       delivery: {
         externalDeliveryPerformed: false,
@@ -5412,6 +8724,24 @@ describe("api v1", () => {
       releaseImpact: { publicAnswerState: string; holdsReadyPromotion: boolean; caveats: string[] };
       safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; preservesUncertainty: boolean };
     };
+    const highPriorityActorFreshnessDashboard = response.highPriorityActorFreshnessDashboard as {
+      schemaVersion: string;
+      actors: Array<{
+        id: string;
+        actor: string;
+        priority: string;
+        cadence: { expected: string; targetMaxAgeDays: number; nextReviewDueAt: string };
+        states: { overall: string; publicAnswerState: string; blocksReadyPromotion: boolean };
+        evidenceIds: string[];
+        sourceIds: string[];
+        handoffs: { agent02SchedulerCadence?: string; agent09ApiField?: string; agent10ReleaseGate?: string };
+      }>;
+      summary: { actorCount: number; dailyDueCount: number; weeklyDueCount: number; readyPromotionHoldCount: number };
+      queues: { dailyRefresh: string[]; weeklyRefresh: string[]; staleAnswerHolds: string[]; sourceGapReview: string[] };
+      routing: { agent02SchedulerCadence: string[]; agent04FreshnessSourceGaps: string[]; agent09ApiFields: string[]; agent10ReleaseGates: string[] };
+      policy: { staleCannotBeLatest: boolean; unknownActorSearchingOnly: boolean; noAutomaticPromotion: boolean; noAutonomousScraping: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    };
     const attackMappingQuality = response.attackMappingQuality as {
       schemaVersion: string;
       summary: { candidateCount: number; mappedAttackIdCount: number };
@@ -5426,6 +8756,156 @@ describe("api v1", () => {
       routing: { qualityGate: string[]; entityResolution: string[]; publicAnswerCaveats: string[]; parserRepair: string[] };
       policy: { modelSelfMutationAllowed: boolean; analystApprovalRequired: boolean; preservesProvenance: boolean };
       safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean };
+    };
+    const actorProfileReviewWorkbench = response.actorProfileReviewWorkbench as {
+      schemaVersion: string;
+      fields: Array<{
+        field: string;
+        state: string;
+        evidenceIds: string[];
+        uncertainty: { preservesUncertainty: boolean; reviewReasons: string[] };
+        correctionActions: Array<{ kind: string; manualOnly: boolean; appliesAutomatically: boolean; handoffs: { agent09ApiContracts?: string } }>;
+      }>;
+      summary: { fieldCount: number; reviewRequiredCount: number; actionCount: number };
+      queues: { missing: string[]; underconfident: string[]; needsEvidence: string[] };
+      routing: { agent01SourceGaps: string[]; agent06ClaimLedger: string[]; agent09ApiContracts: string[]; agent10ReleaseGates: string[] };
+      policy: { modelSelfMutationAllowed: boolean; analystApprovalRequired: boolean; preservesProvenance: boolean; manualCorrectionsOnly: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean };
+    };
+    const evaluationDatasetGovernance = response.evaluationDatasetGovernance as {
+      schemaVersion: string;
+      summary: { labelCount: number; caseKinds: string[]; releaseGate: string; auditHoldCount: number };
+      labels: Array<{
+        id: string;
+        caseKind: string;
+        subject: string;
+        expectedPublicState: string;
+        evidenceIds: string[];
+        claimLedgerRefs: string[];
+        sourceFamily: string;
+        confidence: number;
+        freshness: string;
+        allowedDownstreamUse: string[];
+        publicSemantics: { unknownActorSearchingOnly: boolean; noDefaultActor: boolean; noDemoOrCacheProse: boolean; preservesUncertainty: boolean };
+        provenance: { redacted: boolean; evidenceIds: string[]; claimLedgerRefs: string[] };
+      }>;
+      auditChecks: Array<{ code: string; status: string; labelIds: string[]; downstreamOwners: string[] }>;
+      routing: {
+        agent01SourceGaps: string[];
+        agent04PublicBenchmarks: string[];
+        agent06EvidenceReplay: string[];
+        agent08GraphDrift: string[];
+        agent09ApiRegressionFixtures: string[];
+        agent10ReleaseGates: string[];
+      };
+      policy: { labelsAreImmutable: boolean; analystApprovalRequired: boolean; preservesUncertainty: boolean; noAutomaticPromotion: boolean; unknownActorSearchingOnly: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    };
+    const ctiEvaluationDatasetPack = response.ctiEvaluationDatasetPack as {
+      schemaVersion: string;
+      fixtures: Array<{
+        scenario: string;
+        expectedPublicState: string;
+        evidenceIds: string[];
+        claimLedgerRefs: string[];
+        immutable: boolean;
+        appliesAutomatically: boolean;
+        noLeak: boolean;
+        metrics: {
+          provenanceRequired: boolean;
+          staleAnswerRejectionRequired: boolean;
+          unknownSearchingRequired: boolean;
+          restrictedNoLeakRequired: boolean;
+          contradictionHoldRequired: boolean;
+        };
+      }>;
+      metrics: { fixtureCount: number; actorExtractionCount: number; victimExtractionCount: number; ttpExtractionCount: number; iocExtractionCount: number; staleAnswerRejectionCount: number; unknownSearchingCount: number; restrictedNoLeakCount: number; contradictionHandlingCount: number; provenanceCompletenessTarget: number };
+      routing: { agent03ParserCertification: string[]; agent06EvidenceReplay: string[]; agent08GraphHolds: string[]; agent09ApiRegression: string[]; agent10ReleaseGates: string[] };
+      policy: { fixturesAreImmutable: boolean; analystApprovalRequired: boolean; noAutomaticPromotion: boolean; noModelSelfMutation: boolean; unknownActorSearchingOnly: boolean; staleEvidenceCannotBeLatest: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    };
+    const analystQualityReviewQueue = response.analystQualityReviewQueue as {
+      schemaVersion: string;
+      items: Array<{
+        field: string;
+        state: string;
+        evidenceIds: string[];
+        ledgerIds: string[];
+        labelIds: string[];
+        requiredActions: string[];
+        releaseImpact: { blocksReadyPromotion: boolean; publicAnswerState: string; apiSignal: string; agent10Signal: string };
+        immutable: boolean;
+        appliesAutomatically: boolean;
+      }>;
+      releaseGate: {
+        decision: string;
+        requiredChecks: Array<{ code: string; status: string; itemIds: string[] }>;
+        publicAnswerState: string;
+        blocksReadyPromotion: boolean;
+      };
+      qualityReleaseSignals: { agent09PublicApi: string[]; agent10ReleaseBoard: string[]; regressionFixtures: string[]; staleAnswerPrevention: string[] };
+      routing: { actorSummary: string[]; recentActivity: string[]; victims: string[]; ttps: string[]; infrastructure: string[]; malwareTools: string[]; cves: string[]; sourceGaps: string[]; unknownQuery: string[] };
+      policy: { analystApprovalRequired: boolean; modelSelfMutationAllowed: boolean; preservesUncertainty: boolean; manualReviewOnly: boolean; unknownActorSearchingOnly: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    };
+    const analystFeedbackLearningLoop = response.analystFeedbackLearningLoop as {
+      schemaVersion: string;
+      records: Array<{
+        type: string;
+        immutable: boolean;
+        appliesAutomatically: boolean;
+        prohibitedEffects: string[];
+        replay: { requiresHumanApproval: boolean };
+      }>;
+      scorecards: Array<{ metric: string; status: string; score: number; eventIds: string[] }>;
+      fixtures: Array<{ scenario: string; expectedPublicState: string; noLeak: boolean }>;
+      persistence: { mode: string; appendOnly: boolean; replayOrder: string[]; importSemantics: string[]; mutationBoundary: string };
+      routeState: { explainsPartial: boolean; explainsSearching: boolean; explainsHeld: boolean; explainsReady: boolean };
+      routing: {
+        agent03ParserRepair: string[];
+        agent04SourceCoverage: string[];
+        agent08GraphCorrections: string[];
+        agent09PublicApiFields: string[];
+        agent10ReleaseGates: string[];
+      };
+      policy: { analystApprovalRequired: boolean; modelSelfMutationAllowed: boolean; autonomousScrapingAllowed: boolean; silentSourceActivationAllowed: boolean; preservesUncertainty: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    };
+    const activeLearningCandidateQueue = response.activeLearningCandidateQueue as {
+      schemaVersion: string;
+      candidates: Array<{
+        type: string;
+        immutable: boolean;
+        appliesAutomatically: boolean;
+        noAutonomousChangeGuarantee: boolean;
+        humanApproval: { required: boolean; forbiddenActions: string[] };
+      }>;
+      workflow: { appendOnly: boolean; humanApprovalRequired: boolean; fixtureRequiredBeforeApproval: boolean; replayRequiredBeforePromotion: boolean; mutationBoundary: string };
+      scorecards: Array<{ metric: string; before: number; expectedAfter: number; delta: number }>;
+      fixturePack: Array<{ scenario: string; noLeak: boolean }>;
+      routing: {
+        agent03ParserCertification: string[];
+        agent04FreshnessSourceGaps: string[];
+        agent06EvidenceReplay: string[];
+        agent08GraphCorrections: string[];
+        agent09ApiFields: string[];
+        agent10ReleaseGates: string[];
+      };
+      policy: { analystApprovalRequired: boolean; modelSelfMutationAllowed: boolean; autonomousScrapingAllowed: boolean; silentSourceActivationAllowed: boolean; preservesUncertainty: boolean; unknownActorSearchingOnly: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    };
+    const qualityRuntimeValueGates = response.qualityRuntimeValueGates as {
+      schemaVersion: string;
+      queryClass: string;
+      summary: { gateCount: number; analystUsefulnessScore: number; decision: string; warningCount: number; holdCount: number };
+      gates: Array<{ name: string; status: string; score: number; publicAnswerEffect: string; remediationOwners: string[]; reasons: string[] }>;
+      darkwebMetadataRules: { metadataMayImproveHints: boolean; publicPromotionRequiresCorroboration: boolean; heldStates: string[]; forbiddenFields: string[] };
+      sourceAtlasFeedback: Array<{ signal: string; status: string; expectedAnswerImpact: string }>;
+      fixtureCorpus: Array<{ id: string; queryClass: string; expectedPublicState: string; noLeak: boolean }>;
+      remediationHandoffs: { agent01SourceActivation: string[]; agent05RestrictedReview: string[]; agent10ReleaseRollback: string[] };
+      releaseGate: { decision: string; blocksReadyPromotion: boolean; proofCommands: string[] };
+      policy: { analystApprovalRequired: boolean; noAutomaticPromotion: boolean; unknownActorSearchingOnly: boolean; staleEvidenceCannotBeLatest: boolean; metadataOnlyDarkwebCannotStandAlone: boolean };
+      safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean; unsafeDarkwebTargetsExposed: boolean };
     };
     const publicTiAnswer = response.publicTiAnswer as { schemaVersion: string; displayState: string; waitReasons: Array<{ code: string }> };
     const examples = response.examples as Array<{ quality: { status: string }; dashboard: { schemaVersion: string } }>;
@@ -5469,6 +8949,27 @@ describe("api v1", () => {
       sourceUrlsExposed: false,
       preservesUncertainty: true
     });
+    expect(highPriorityActorFreshnessDashboard.schemaVersion).toBe("ti.high_priority_actor_freshness_dashboard.v1");
+    expect(highPriorityActorFreshnessDashboard.summary.actorCount).toBeGreaterThanOrEqual(8);
+    expect(highPriorityActorFreshnessDashboard.actors.map((actor) => actor.actor)).toEqual(expect.arrayContaining(["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira"]));
+    expect(highPriorityActorFreshnessDashboard.actors.every((actor) => ["daily", "weekly"].includes(actor.cadence.expected) && actor.cadence.nextReviewDueAt)).toBe(true);
+    expect(highPriorityActorFreshnessDashboard.actors.every((actor) => ["current", "aging", "stale", "unknown"].includes(actor.states.overall))).toBe(true);
+    expect(highPriorityActorFreshnessDashboard.summary.dailyDueCount + highPriorityActorFreshnessDashboard.summary.weeklyDueCount).toBeGreaterThan(0);
+    expect(highPriorityActorFreshnessDashboard.routing.agent02SchedulerCadence.length).toBeGreaterThan(0);
+    expect(highPriorityActorFreshnessDashboard.routing.agent04FreshnessSourceGaps.length).toBeGreaterThan(0);
+    expect(highPriorityActorFreshnessDashboard.routing.agent09ApiFields.length).toBeGreaterThan(0);
+    expect(highPriorityActorFreshnessDashboard.policy).toMatchObject({
+      staleCannotBeLatest: true,
+      unknownActorSearchingOnly: true,
+      noAutomaticPromotion: true,
+      noAutonomousScraping: true
+    });
+    expect(highPriorityActorFreshnessDashboard.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
     expect(attackMappingQuality.schemaVersion).toBe("ti.attack_mapping_quality.v1");
     expect(attackMappingQuality.summary.candidateCount).toBeGreaterThan(0);
     expect(attackMappingQuality.summary.mappedAttackIdCount).toBeGreaterThanOrEqual(0);
@@ -5492,6 +8993,288 @@ describe("api v1", () => {
       sourceUrlsExposed: false,
       restrictedPayloadsExposed: false
     });
+    expect(actorProfileReviewWorkbench.schemaVersion).toBe("ti.actor_profile_review_workbench.v1");
+    expect(actorProfileReviewWorkbench.summary.fieldCount).toBeGreaterThanOrEqual(13);
+    expect(actorProfileReviewWorkbench.summary.actionCount).toBeGreaterThan(0);
+    expect(actorProfileReviewWorkbench.fields.map((field) => field.field)).toEqual(expect.arrayContaining(["summary", "aliases", "recent_activity", "victims", "ttps", "malware_tools", "vulnerabilities", "datasets"]));
+    expect(actorProfileReviewWorkbench.fields.every((field) => field.uncertainty.preservesUncertainty)).toBe(true);
+    expect(actorProfileReviewWorkbench.fields.flatMap((field) => field.correctionActions).every((action) => action.manualOnly && action.appliesAutomatically === false)).toBe(true);
+    expect(actorProfileReviewWorkbench.routing.agent09ApiContracts.length).toBeGreaterThan(0);
+    expect(actorProfileReviewWorkbench.policy).toMatchObject({
+      modelSelfMutationAllowed: false,
+      analystApprovalRequired: true,
+      preservesProvenance: true,
+      manualCorrectionsOnly: true
+    });
+    expect(actorProfileReviewWorkbench.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false
+    });
+    expect(evaluationDatasetGovernance.schemaVersion).toBe("ti.evaluation_dataset_governance.v1");
+    expect(evaluationDatasetGovernance.summary.labelCount).toBeGreaterThanOrEqual(16);
+    expect(evaluationDatasetGovernance.summary.caseKinds).toEqual(expect.arrayContaining(["actor_profile", "unknown_actor", "cve", "malware_tool", "victim_company", "stale", "contradicted", "low_confidence"]));
+    expect(evaluationDatasetGovernance.labels.map((label) => label.subject)).toEqual(expect.arrayContaining(["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "random actor", "unknown actor"]));
+    expect(evaluationDatasetGovernance.labels.every((label) => label.evidenceIds.length > 0 && label.claimLedgerRefs.length > 0 && label.provenance.redacted)).toBe(true);
+    expect(evaluationDatasetGovernance.labels.find((label) => label.caseKind === "unknown_actor")).toMatchObject({
+      expectedPublicState: "searching",
+      publicSemantics: {
+        unknownActorSearchingOnly: true,
+        noDefaultActor: true,
+        noDemoOrCacheProse: true,
+        preservesUncertainty: true
+      }
+    });
+    expect(evaluationDatasetGovernance.auditChecks.map((check) => check.code)).toEqual(expect.arrayContaining(["stale_label", "missing_provenance", "restricted_metadata_hold", "unknown_searching_only"]));
+    expect(evaluationDatasetGovernance.auditChecks.find((check) => check.code === "restricted_metadata_hold")?.status).toBe("hold");
+    expect(evaluationDatasetGovernance.routing.agent09ApiRegressionFixtures.length).toBeGreaterThan(0);
+    expect(evaluationDatasetGovernance.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(evaluationDatasetGovernance.policy).toMatchObject({
+      labelsAreImmutable: true,
+      analystApprovalRequired: true,
+      preservesUncertainty: true,
+      noAutomaticPromotion: true,
+      unknownActorSearchingOnly: true
+    });
+    expect(evaluationDatasetGovernance.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(ctiEvaluationDatasetPack.schemaVersion).toBe("ti.cti_evaluation_dataset_pack.v1");
+    expect(ctiEvaluationDatasetPack.fixtures.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "actor_extraction",
+      "victim_extraction",
+      "ttp_extraction",
+      "ioc_extraction",
+      "stale_answer_rejection",
+      "unknown_actor_searching_only",
+      "restricted_no_leak",
+      "contradiction_handling"
+    ]));
+    expect(ctiEvaluationDatasetPack.fixtures.every((fixture) => fixture.immutable && fixture.appliesAutomatically === false && fixture.noLeak && fixture.metrics.provenanceRequired)).toBe(true);
+    expect(ctiEvaluationDatasetPack.fixtures.find((fixture) => fixture.scenario === "unknown_actor_searching_only")).toMatchObject({
+      expectedPublicState: "searching",
+      metrics: { unknownSearchingRequired: true }
+    });
+    expect(ctiEvaluationDatasetPack.metrics).toMatchObject({
+      fixtureCount: 8,
+      actorExtractionCount: 1,
+      victimExtractionCount: 1,
+      ttpExtractionCount: 1,
+      iocExtractionCount: 1,
+      staleAnswerRejectionCount: 1,
+      unknownSearchingCount: 1,
+      restrictedNoLeakCount: 1,
+      contradictionHandlingCount: 1,
+      provenanceCompletenessTarget: 1
+    });
+    expect(ctiEvaluationDatasetPack.routing.agent06EvidenceReplay.length).toBe(8);
+    expect(ctiEvaluationDatasetPack.routing.agent09ApiRegression.length).toBe(8);
+    expect(ctiEvaluationDatasetPack.policy).toMatchObject({
+      fixturesAreImmutable: true,
+      analystApprovalRequired: true,
+      noAutomaticPromotion: true,
+      noModelSelfMutation: true,
+      unknownActorSearchingOnly: true,
+      staleEvidenceCannotBeLatest: true
+    });
+    expect(ctiEvaluationDatasetPack.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(analystQualityReviewQueue.schemaVersion).toBe("ti.analyst_quality_review_queue.v1");
+    expect(analystQualityReviewQueue.items.map((item) => item.field)).toEqual(expect.arrayContaining(["actor_summary", "recent_activity", "victims", "ttps", "infrastructure", "malware_tools", "cves", "source_gaps"]));
+    expect(analystQualityReviewQueue.items.every((item) => item.immutable && item.appliesAutomatically === false)).toBe(true);
+    expect(analystQualityReviewQueue.releaseGate.requiredChecks.map((check) => check.code)).toEqual(expect.arrayContaining(["freshness", "provenance", "source_diversity", "contradiction_state", "evidence_retention", "restricted_holds", "unknown_searching_semantics", "label_governance"]));
+    expect(["hold", "partial", "promote"]).toContain(analystQualityReviewQueue.releaseGate.decision);
+    expect(typeof analystQualityReviewQueue.releaseGate.blocksReadyPromotion).toBe("boolean");
+    expect(analystQualityReviewQueue.qualityReleaseSignals.agent09PublicApi.length).toBeGreaterThan(0);
+    expect(analystQualityReviewQueue.qualityReleaseSignals.agent10ReleaseBoard.length).toBeGreaterThan(0);
+    expect(analystQualityReviewQueue.qualityReleaseSignals.regressionFixtures.length).toBeGreaterThan(0);
+    expect(analystQualityReviewQueue.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      preservesUncertainty: true,
+      manualReviewOnly: true,
+      unknownActorSearchingOnly: true
+    });
+    expect(analystQualityReviewQueue.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(analystFeedbackLearningLoop.schemaVersion).toBe("ti.analyst_feedback_learning_loop.v1");
+    expect(analystFeedbackLearningLoop.records.map((record) => record.type)).toEqual(expect.arrayContaining([
+      "actor_alias_correction",
+      "victim_false_positive",
+      "ttp_mapping_correction",
+      "stale_activity_rejection",
+      "source_reliability_downgrade",
+      "contradiction_merge_split",
+      "restricted_hold_confirmation",
+      "unknown_query_searching_approval"
+    ]));
+    expect(analystFeedbackLearningLoop.records.every((record) => record.immutable && record.appliesAutomatically === false && record.replay.requiresHumanApproval)).toBe(true);
+    expect(analystFeedbackLearningLoop.records.every((record) => record.prohibitedEffects.includes("autonomous_scraping") && record.prohibitedEffects.includes("silent_source_activation") && record.prohibitedEffects.includes("model_self_mutation"))).toBe(true);
+    expect(analystFeedbackLearningLoop.scorecards.map((scorecard) => scorecard.metric)).toEqual(expect.arrayContaining([
+      "extraction_precision",
+      "extraction_recall",
+      "source_diversity",
+      "freshness",
+      "contradiction_handling",
+      "unknown_actor_behavior",
+      "restricted_no_leak_handling",
+      "public_answer_latency"
+    ]));
+    expect(analystFeedbackLearningLoop.fixtures.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "apt29_daily_activity_freshness",
+      "apt42_instant_summary",
+      "made_up_actor_searching_only",
+      "stale_2025_only_answer_rejection",
+      "public_channel_rumor_demotion",
+      "restricted_metadata_hold",
+      "graph_contradiction"
+    ]));
+    expect(analystFeedbackLearningLoop.fixtures.every((fixture) => fixture.noLeak)).toBe(true);
+    expect(analystFeedbackLearningLoop.persistence).toMatchObject({
+      mode: "readiness_contract_append_only",
+      appendOnly: true,
+      mutationBoundary: "no_runtime_mutation_until_persistence_adapter_is_enabled"
+    });
+    expect(analystFeedbackLearningLoop.persistence.replayOrder.length).toBeGreaterThan(0);
+    expect(analystFeedbackLearningLoop.persistence.importSemantics.length).toBeGreaterThan(0);
+    expect(typeof analystFeedbackLearningLoop.routeState.explainsPartial).toBe("boolean");
+    expect(typeof analystFeedbackLearningLoop.routeState.explainsSearching).toBe("boolean");
+    expect(typeof analystFeedbackLearningLoop.routeState.explainsHeld).toBe("boolean");
+    expect(typeof analystFeedbackLearningLoop.routeState.explainsReady).toBe("boolean");
+    expect(analystFeedbackLearningLoop.routing.agent03ParserRepair.length).toBeGreaterThan(0);
+    expect(analystFeedbackLearningLoop.routing.agent04SourceCoverage.length).toBeGreaterThan(0);
+    expect(analystFeedbackLearningLoop.routing.agent08GraphCorrections.length).toBeGreaterThan(0);
+    expect(analystFeedbackLearningLoop.routing.agent09PublicApiFields.length).toBeGreaterThan(0);
+    expect(analystFeedbackLearningLoop.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(analystFeedbackLearningLoop.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      autonomousScrapingAllowed: false,
+      silentSourceActivationAllowed: false,
+      preservesUncertainty: true
+    });
+    expect(analystFeedbackLearningLoop.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(activeLearningCandidateQueue.schemaVersion).toBe("ti.active_learning_candidate_queue.v1");
+    expect(activeLearningCandidateQueue.candidates.map((candidate) => candidate.type)).toEqual(expect.arrayContaining([
+      "parser_prompt_model_improvement",
+      "source_ranking_adjustment",
+      "ttp_mapping_rule_update",
+      "actor_alias_merge_split",
+      "victim_false_positive_suppression",
+      "ioc_false_positive_suppression",
+      "source_reliability_downgrade",
+      "freshness_rule_update",
+      "contradiction_resolution"
+    ]));
+    expect(activeLearningCandidateQueue.candidates.every((candidate) => candidate.immutable && candidate.appliesAutomatically === false && candidate.noAutonomousChangeGuarantee)).toBe(true);
+    expect(activeLearningCandidateQueue.candidates.every((candidate) => candidate.humanApproval.required && candidate.humanApproval.forbiddenActions.includes("activate_source") && candidate.humanApproval.forbiddenActions.includes("start_crawl") && candidate.humanApproval.forbiddenActions.includes("change_model_weights"))).toBe(true);
+    expect(activeLearningCandidateQueue.workflow).toMatchObject({
+      appendOnly: true,
+      humanApprovalRequired: true,
+      fixtureRequiredBeforeApproval: true,
+      replayRequiredBeforePromotion: true,
+      mutationBoundary: "no_runtime_or_model_change_until_human_approved_fixture_replay"
+    });
+    expect(activeLearningCandidateQueue.scorecards.map((scorecard) => scorecard.metric)).toEqual(expect.arrayContaining([
+      "extraction_precision",
+      "extraction_recall",
+      "source_diversity",
+      "freshness",
+      "contradiction_handling",
+      "restricted_no_leak_handling",
+      "public_answer_latency",
+      "provenance_completeness",
+      "stale_answer_rejection"
+    ]));
+    expect(activeLearningCandidateQueue.fixturePack.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "apt29_daily_activity_freshness",
+      "apt42_instant_summary",
+      "made_up_actor_searching_only",
+      "stale_2025_only_answer_rejection",
+      "public_channel_rumor_demotion",
+      "restricted_metadata_hold",
+      "graph_contradiction"
+    ]));
+    expect(activeLearningCandidateQueue.fixturePack.every((fixture) => fixture.noLeak)).toBe(true);
+    expect(activeLearningCandidateQueue.routing.agent03ParserCertification.length).toBeGreaterThan(0);
+    expect(activeLearningCandidateQueue.routing.agent04FreshnessSourceGaps.length).toBeGreaterThan(0);
+    expect(activeLearningCandidateQueue.routing.agent06EvidenceReplay.length).toBeGreaterThan(0);
+    expect(activeLearningCandidateQueue.routing.agent08GraphCorrections.length).toBeGreaterThan(0);
+    expect(activeLearningCandidateQueue.routing.agent09ApiFields.length).toBeGreaterThan(0);
+    expect(activeLearningCandidateQueue.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(activeLearningCandidateQueue.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      autonomousScrapingAllowed: false,
+      silentSourceActivationAllowed: false,
+      preservesUncertainty: true,
+      unknownActorSearchingOnly: true
+    });
+    expect(activeLearningCandidateQueue.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(qualityRuntimeValueGates.schemaVersion).toBe("ti.quality_runtime_value_gates.v1");
+    expect(["actor", "malware_tool"]).toContain(qualityRuntimeValueGates.queryClass);
+    expect(qualityRuntimeValueGates.summary.gateCount).toBeGreaterThanOrEqual(10);
+    expect(qualityRuntimeValueGates.summary.analystUsefulnessScore).toBeGreaterThanOrEqual(0);
+    expect(["ready", "partial", "hold", "searching"]).toContain(qualityRuntimeValueGates.summary.decision);
+    expect(qualityRuntimeValueGates.gates.map((gate) => gate.name)).toEqual(expect.arrayContaining([
+      "timeliness",
+      "specificity",
+      "source_diversity",
+      "provenance_completeness",
+      "contradiction_state",
+      "darkweb_metadata_caveat",
+      "source_atlas_value",
+      "unknown_query_honesty"
+    ]));
+    expect(qualityRuntimeValueGates.gates.every((gate) => gate.reasons.length > 0 && gate.remediationOwners.length > 0)).toBe(true);
+    expect(qualityRuntimeValueGates.darkwebMetadataRules).toMatchObject({
+      metadataMayImproveHints: true,
+      publicPromotionRequiresCorroboration: true
+    });
+    expect(qualityRuntimeValueGates.darkwebMetadataRules.forbiddenFields).toEqual(expect.arrayContaining(["unsafe_locator", "unsafe_url", "credential_marker", "payload_marker", "object_reference_marker"]));
+    expect(qualityRuntimeValueGates.sourceAtlasFeedback.map((row) => row.signal)).toEqual(expect.arrayContaining(["low_yield_source_family", "stale_only_pack", "activation_candidate"]));
+    expect(qualityRuntimeValueGates.fixtureCorpus.map((fixture) => fixture.id)).toEqual(expect.arrayContaining(["fresh_high_activity_actor", "made_up_actor_no_result", "darkweb_metadata_only_hold", "contradictory_source_cluster"]));
+    expect(qualityRuntimeValueGates.fixtureCorpus.every((fixture) => fixture.noLeak)).toBe(true);
+    expect(qualityRuntimeValueGates.remediationHandoffs.agent01SourceActivation.length).toBeGreaterThan(0);
+    expect(qualityRuntimeValueGates.remediationHandoffs.agent05RestrictedReview.length).toBeGreaterThan(0);
+    expect(qualityRuntimeValueGates.remediationHandoffs.agent10ReleaseRollback.length).toBeGreaterThan(0);
+    expect(["promote", "partial", "hold"]).toContain(qualityRuntimeValueGates.releaseGate.decision);
+    expect(qualityRuntimeValueGates.releaseGate.proofCommands).toContain("bun run check:contract-index");
+    expect(qualityRuntimeValueGates.policy).toMatchObject({
+      analystApprovalRequired: true,
+      noAutomaticPromotion: true,
+      unknownActorSearchingOnly: true,
+      staleEvidenceCannotBeLatest: true,
+      metadataOnlyDarkwebCannotStandAlone: true
+    });
+    expect(qualityRuntimeValueGates.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      unsafeDarkwebTargetsExposed: false
+    });
     expect(examples.every((example) => example.dashboard.schemaVersion === "ti.search_quality_dashboard.v1")).toBe(true);
     expect(publicTiAnswer.schemaVersion).toBe("ti.public_answer_contract.v1");
     expect(["partial", "review_required"]).toContain(publicTiAnswer.displayState);
@@ -5503,10 +9286,33 @@ describe("api v1", () => {
     expect(JSON.stringify(entityResolutionWorkbench)).not.toContain("https://quality.example.test");
     expect(JSON.stringify(timelinessGroundTruth)).not.toContain("Cyber gang list");
     expect(JSON.stringify(timelinessGroundTruth)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(highPriorityActorFreshnessDashboard)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(highPriorityActorFreshnessDashboard)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(highPriorityActorFreshnessDashboard)).not.toContain("https://");
     expect(JSON.stringify(attackMappingQuality)).not.toContain("Cyber gang list");
     expect(JSON.stringify(attackMappingQuality)).not.toContain("https://quality.example.test");
     expect(JSON.stringify(analystFeedbackLoop)).not.toContain("Cyber gang list");
     expect(JSON.stringify(analystFeedbackLoop)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(actorProfileReviewWorkbench)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(actorProfileReviewWorkbench)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(evaluationDatasetGovernance)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(evaluationDatasetGovernance)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(evaluationDatasetGovernance)).not.toContain("https://");
+    expect(JSON.stringify(ctiEvaluationDatasetPack)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(ctiEvaluationDatasetPack)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(ctiEvaluationDatasetPack)).not.toContain("https://");
+    expect(JSON.stringify(analystQualityReviewQueue)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(analystQualityReviewQueue)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(analystQualityReviewQueue)).not.toContain("https://");
+    expect(JSON.stringify(analystFeedbackLearningLoop)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(analystFeedbackLearningLoop)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(analystFeedbackLearningLoop)).not.toContain("https://");
+    expect(JSON.stringify(activeLearningCandidateQueue)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(activeLearningCandidateQueue)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(activeLearningCandidateQueue)).not.toContain("https://");
+    expect(JSON.stringify(qualityRuntimeValueGates)).not.toContain("Cyber gang list");
+    expect(JSON.stringify(qualityRuntimeValueGates)).not.toContain("https://quality.example.test");
+    expect(JSON.stringify(qualityRuntimeValueGates)).not.toContain("https://");
   });
 
   test("smokes mounted quality endpoints through the Bun API server", async () => {
@@ -6390,6 +10196,78 @@ describe("api v1", () => {
     expect(publicTiAnswer.safeWording.restrictedPayloadsExposed).toBe(false);
   });
 
+  test("keeps unknown actor searches searching-only when generic live results do not match the full query", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({
+      id: "src_generic_actor_feed",
+      name: "Generic actor feed",
+      type: "rss",
+      url: "https://example.test/generic-actor.xml",
+      tags: ["actor"],
+      approvedAt: "2026-05-24T00:00:00.000Z",
+      approvedBy: "test",
+      catalog: {
+        canonicalId: "generic-actor-feed",
+        publisher: { name: "Generic Actor Feed", trustBasis: "research" },
+        tier: "watchlist",
+        approvalScope: "safe_public_auto",
+        license: "test",
+        legalBasis: "public test fixture",
+        reliability: 0.5,
+        intelligenceValue: 0.2,
+        retentionClass: "public_raw",
+        coverage: {
+          topics: ["actor"],
+          actors: [],
+          aliases: [],
+          industries: [],
+          regions: [],
+          countries: [],
+          languages: ["en"],
+          queryPatterns: ["actor"]
+        },
+        collection: {
+          freshnessTargetSeconds: 3600,
+          collectionSlaSeconds: 300,
+          budgetClass: "low",
+          crawlCadenceSeconds: 3600
+        },
+        adapterCompatibility: ["rss"]
+      }
+    }));
+    const response = await body(await handleApiRequest(api("/v1/intel/search?q=Made%20Up%20Actor&entityType=actor"), {
+      store,
+      frontier: new FocusedFrontier(),
+      disableBundledSourcePack: true,
+      publicClearWebFetcher: async () => new Response(`<?xml version="1.0"?>
+        <rss><channel>
+          <item>
+            <title>Cyberattack overview</title>
+            <link>https://example.test/cyberattack</link>
+            <description>Threat actors and ransomware groups are discussed in general.</description>
+          </item>
+        </channel></rss>`, {
+        status: 200,
+        headers: { "content-type": "application/rss+xml" }
+      })
+    }));
+    const publicTiAnswer = response.publicTiAnswer as {
+      safeSummary: string[];
+      evidenceLedgerReferences: unknown[];
+      ux: { state: string; compactAnswerCopy: { heading: string; summary: string[]; statusLine: string } };
+    };
+
+    expect(publicTiAnswer.safeSummary).toEqual(["Searching"]);
+    expect(publicTiAnswer.evidenceLedgerReferences).toEqual([]);
+    expect(publicTiAnswer.ux.state).toBe("searching");
+    expect(publicTiAnswer.ux.compactAnswerCopy).toMatchObject({
+      heading: "Searching",
+      summary: ["Searching"],
+      statusLine: "Searching"
+    });
+    expect(JSON.stringify(response)).not.toMatch(/Cyberattack overview|ransomware groups are discussed/i);
+  });
+
   test("schedules continuous actor runs with run reuse and API-ready scheduler status", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source({ id: "src_apt29_rss", type: "rss", tags: ["apt29", "nobelium"], crawlFrequencySeconds: 1_800 }));
@@ -6477,6 +10355,19 @@ describe("api v1", () => {
         routeContracts: { contractsField: string };
         releaseTrain: { decision: string; proofCommands: string[]; agent10Fields: string[] };
       };
+      workerLeaseSoakHarness: {
+        apiTargets: string[];
+        dryRun: boolean;
+        willMutate: boolean;
+        replay: { fixtureName: string; totalTasks: number; duplicateRunReuseRequired: boolean; cursorReplayRequired: boolean };
+        workloadSlices: Array<{ scenario: string; taskCount: number; leaseAttempts: number; workerPartitionId: string; expectedPressure: string }>;
+        workerPartitions: Array<{ workload: string; workerCount: number; maxConcurrentLeases: number; concurrencyPolicy: string }>;
+        leaseSemantics: { exclusiveLeases: boolean; retryBackoff: string; perSourceConcurrency: string };
+        fairnessProof: { dimensions: string[]; publicPollingProtected: boolean; lowValueSweepsDeferred: boolean; workloadShares: Array<{ workload: string; taskShare: number }> };
+        pressureFixtures: Array<{ scenario: string; expectedSchedulerAction: string; agent09VisibleStatus: string; agent10ReleaseImpact: string }>;
+        releaseGate: { decision: string; proofCommands: string[] };
+        routeContracts: { contractsField: string };
+      };
       productionAdapterTelemetry: {
         apiTargets: string[];
         dryRun: boolean;
@@ -6500,6 +10391,99 @@ describe("api v1", () => {
         soakFixtures: Array<{ scenario: string; requiredTelemetry: string[]; safeDrainControls: string[] }>;
         agent09WarningCodes: string[];
         agent10RcGate: { decision: string; fields: string[]; proofCommands: string[] };
+      };
+      durableBackendReadiness: {
+        apiTargets: string[];
+        dryRun: boolean;
+        willMutate: boolean;
+        backendContracts: Array<{ backend: string; primitives: string[]; cursorContinuity: string; duplicateRunReuse: string }>;
+        fairnessLanes: Array<{ workload: string; maxConcurrentLeases: number; agingBoostEverySeconds: number; fairnessKeys: string[] }>;
+        pollingContract: { nextPollSeconds: number; publicWrapperCursorSemantics: string };
+        runReuse: { contract: string };
+        drainPlan: { preservesCursorReplayState: boolean; actions: string[] };
+        emergencyBrake: { preservesCursorReplayState: boolean; releaseCriteria: string[] };
+        releaseGate: { decision: string; proofCommands: string[] };
+        routeContracts: { contractsField: string };
+      };
+      freshnessSloEngine: {
+        apiTargets: string[];
+        dryRun: boolean;
+        willMutate: boolean;
+        queryClass: string;
+        slo: { targetFreshnessSeconds: number; maxQueueAgeSeconds: number };
+        cadence: { recommendedCadenceSeconds: number; sourceHintCount: number };
+        sourceCadenceHints: Array<{ sourceId: string; queueAction: string; recommendedCadenceSeconds: number; priorityAgingBoost: number }>;
+        queuePressureBehavior: { retryAfterSeconds: number; preservesThreeSecondPolling: boolean; duplicateRunReuse: string; degradeActions: string[] };
+        fairnessAging: Array<{ workload: string; preservesPerSourceConcurrency: boolean; agingBoostEverySeconds: number }>;
+        routeContracts: { contractsField: string };
+      };
+      freshnessSloDashboard: {
+        schemaVersion: string;
+        apiTargets: string[];
+        summary: { actorCount: number; publicPollingProtected: boolean };
+        actors: Array<{ actor: string; nextPollSeconds: number; duplicateRunReuse: string }>;
+        workloadActions: Array<{ workload: string; action: string }>;
+        runbook: { duplicateRunReuse: string };
+        routeContracts: { contractsField: string };
+      };
+      interactiveSearchFreshness: {
+        schemaVersion: string;
+        apiTargets: string[];
+        currentQuery: { query: string; queryClass: string; knownHighValueActor: boolean; priorityBand: string; freshnessState: string };
+        queueDecision: { decision: string; nextPollSeconds: number; duplicateRunReuse: string; attachedToActiveRun: boolean; deferredBackgroundWorkloads: string[] };
+        actorTargets: Array<{ actor: string; schedulerAction: string }>;
+        fairnessGuards: { preservesThreeSecondPolling: boolean; preservesDuplicateRunReuse: boolean; lowValueSweepsDeferredBeforeActorStarvation: boolean };
+        uiSignals: { state: string; badges: string[]; visibleSchedulerFields: string[] };
+        routeContracts: { contractsField: string };
+      };
+      productionLeaseSemantics: {
+        apiTargets: string[];
+        dryRun: boolean;
+        willMutate: boolean;
+        currentBackend: string;
+        primaryTargetBackend: string;
+        futureBackends: string[];
+        postgresContract: { tables: string[]; lease: string; duplicateRunReuse: string; cursorReplay: string };
+        leaseLifecycle: Array<{ step: string; cursorVisible: boolean; idempotencyKey: string }>;
+        cutoverPhases: Array<{ phase: string; dryRun: boolean; willMutate: boolean; willLeaseTasks: boolean }>;
+        safety: { preservesThreeSecondPolling: boolean; duplicateActorQueryRunsSuppressed: boolean; cursorContinuity: string };
+        routeContracts: { contractsField: string };
+      };
+      fairnessGovernance: {
+        apiTargets: string[];
+        dryRun: boolean;
+        willMutate: boolean;
+        tenants: { defaultTenantId: string; isolationKey: string; crossTenantBorrowing: string };
+        queryClassBudgets: Array<{ tenantId: string; queryClass: string; workClass: string; reservedWorkerSlots: number; maxConcurrentLeases: number; retryAfterSeconds: number; actions: string[] }>;
+        workloadFairness: Array<{ workload: string; maxConcurrentLeases: number; preservesThreeSecondPolling: boolean; queuePressureAction: string }>;
+        priorityAging: Array<{ queryClass: string; workClass: string; neverBypassPerSourceConcurrency: boolean; agingBoostEverySeconds: number }>;
+        pressurePolicy: { publicPolling: string; duplicateRunReuse: string; lowValueSweeps: string; emergencyBrake: string };
+        fairnessSlo: { retryAfterSeconds: number; ok: boolean };
+        routeContracts: { contractsField: string };
+      };
+      persistenceReplayCutover: {
+        apiTargets: string[];
+        dryRun: boolean;
+        willMutate: boolean;
+        currentBackend: string;
+        primaryTargetBackend: string;
+        descriptorBackends: string[];
+        postgresContracts: Array<{ table: string; keyFields: string[]; replayRole: string }>;
+        replaySemantics: { refreshAfterSeconds: number; pollCursor: string; deltaCursor: string; noDefaultActorFallback: boolean; noStaleCacheReady: boolean; noGenericLivePromotion: boolean; unknownActorPolicy: string };
+        restartFixtures: Array<{ name: string; preservesThreeSecondPolling: boolean; preservesCursorContinuity: boolean; duplicateRunReuseRequired: boolean }>;
+        cutoverPhases: Array<{ phase: string; dryRun: boolean; willMutate: boolean; requiredChecks: string[] }>;
+        handoffs: { agent09PublicApiFields: string[]; agent10CapacityReleaseGate: string[] };
+        releaseGate: { decision: string; proofCommands: string[] };
+        routeContracts: { contractsField: string };
+      };
+      postgresQueueAdapter: {
+        apiTargets: string[];
+        backendSelection: { activeBackend: string; requestedBackend: string; postgresEnabled: boolean; effectiveLeaseOwner: string };
+        safety: { disabledByDefault: boolean; failClosedWithoutDsn: boolean; failClosedWithoutExecutor: boolean; embeddedMemoryRemainsAuthoritative: boolean; publicSearchPollingProtected: boolean };
+        operationContracts: Array<{ operation: string; postgresTableContracts: string[]; disabledBehavior: string }>;
+        preparedStatements: Array<{ name: string }>;
+        releaseGate: { reasons: string[]; proofCommands: string[] };
+        routeContracts: { contractsField: string };
       };
       safetyEnvelope: { allowClearWeb: boolean; allowRestrictedMetadata: boolean; metadataOnlyRestricted: boolean; forbiddenOperations: string[] };
     };
@@ -6564,6 +10548,28 @@ describe("api v1", () => {
     expect(scheduler.workerSoakMigration.migrationPackets.every((packet) => packet.dryRun && packet.willMutate === false && packet.cursorContinuity === "preserved")).toBe(true);
     expect(scheduler.workerSoakMigration.routeContracts.contractsField).toBe("surfaces.frontier.contracts.worker_soak_migration");
     expect(scheduler.workerSoakMigration.releaseTrain.proofCommands).toContain("bun run rehearse:cutover examples/cutover-rehearsal-pass.json");
+    expect(scheduler.workerLeaseSoakHarness.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.workerLeaseSoakHarness.apiTargets).toContain("/v1/contracts");
+    expect(scheduler.workerLeaseSoakHarness.dryRun).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.willMutate).toBe(false);
+    expect(scheduler.workerLeaseSoakHarness.replay.fixtureName).toBe("agent02_10k_multi_worker_lease_replay");
+    expect(scheduler.workerLeaseSoakHarness.replay.totalTasks).toBe(10_000);
+    expect(scheduler.workerLeaseSoakHarness.replay.duplicateRunReuseRequired).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.replay.cursorReplayRequired).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.workloadSlices.reduce((sum, slice) => sum + slice.taskCount, 0)).toBe(10_000);
+    expect(scheduler.workerLeaseSoakHarness.workloadSlices.map((slice) => slice.scenario)).toEqual(expect.arrayContaining(["apt29_actor_burst", "source_outage_wave", "parser_failure_storm", "low_value_sweep_pressure"]));
+    expect(scheduler.workerLeaseSoakHarness.workloadSlices.every((slice) => slice.leaseAttempts >= slice.taskCount && slice.workerPartitionId.length > 0)).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.workerPartitions.map((partition) => partition.workload)).toContain("interactive_actor_search");
+    expect(scheduler.workerLeaseSoakHarness.workerPartitions.every((partition) => partition.workerCount > 0 && partition.maxConcurrentLeases > 0)).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.leaseSemantics.exclusiveLeases).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.leaseSemantics.retryBackoff).toContain("deterministic");
+    expect(scheduler.workerLeaseSoakHarness.leaseSemantics.perSourceConcurrency).toContain("never_bypassed");
+    expect(scheduler.workerLeaseSoakHarness.fairnessProof.dimensions).toEqual(["tenant", "query_class", "source_family", "workload", "restricted_policy_state"]);
+    expect(scheduler.workerLeaseSoakHarness.fairnessProof.publicPollingProtected).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.fairnessProof.lowValueSweepsDeferred).toBe(true);
+    expect(scheduler.workerLeaseSoakHarness.pressureFixtures.map((fixture) => fixture.expectedSchedulerAction)).toEqual(expect.arrayContaining(["reuse_active_run", "hold_restricted_metadata", "retry_then_dead_letter"]));
+    expect(scheduler.workerLeaseSoakHarness.routeContracts.contractsField).toBe("surfaces.frontier.contracts.worker_lease_soak_harness");
+    expect(scheduler.workerLeaseSoakHarness.releaseGate.proofCommands).toContain("bun run check:contract-index");
     expect(scheduler.productionAdapterTelemetry.apiTargets).toContain("/v1/intel/search.scheduler");
     expect(scheduler.productionAdapterTelemetry.apiTargets).toContain("agent10_rc_gates");
     expect(scheduler.productionAdapterTelemetry.dryRun).toBe(true);
@@ -6575,6 +10581,128 @@ describe("api v1", () => {
     expect(scheduler.productionAdapterTelemetry.telemetry.replayPreservation).toBe("preserved");
     expect(scheduler.productionAdapterTelemetry.soakFixtures.map((fixture) => fixture.scenario)).toContain("public_ti_traffic");
     expect(scheduler.productionAdapterTelemetry.agent10RcGate.fields).toContain("telemetry");
+    expect(scheduler.durableBackendReadiness.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.durableBackendReadiness.apiTargets).toContain("/v1/contracts");
+    expect(scheduler.durableBackendReadiness.dryRun).toBe(true);
+    expect(scheduler.durableBackendReadiness.willMutate).toBe(false);
+    expect(scheduler.durableBackendReadiness.backendContracts.map((contract) => contract.backend)).toEqual(expect.arrayContaining(["embedded_memory", "postgres_advisory_queue", "redis_streams", "nats_jetstream"]));
+    expect(scheduler.durableBackendReadiness.backendContracts.every((contract) => contract.primitives.includes("lease") && contract.primitives.includes("dead_letter") && contract.cursorContinuity === "preserved" && contract.duplicateRunReuse === "required")).toBe(true);
+    expect(scheduler.durableBackendReadiness.fairnessLanes.map((lane) => lane.workload)).toEqual(expect.arrayContaining(["interactive_actor_search", "public_channel_window", "restricted_metadata_approval", "health_probe"]));
+    expect(scheduler.durableBackendReadiness.fairnessLanes.every((lane) => lane.maxConcurrentLeases > 0 && lane.agingBoostEverySeconds > 0 && lane.fairnessKeys.length > 0)).toBe(true);
+    expect(scheduler.durableBackendReadiness.pollingContract.nextPollSeconds).toBe(3);
+    expect(scheduler.durableBackendReadiness.pollingContract.publicWrapperCursorSemantics).toBe("stable_since_cursor_with_delta_replay");
+    expect(scheduler.durableBackendReadiness.runReuse.contract).toBe("duplicate_public_polling_attaches_to_active_run");
+    expect(scheduler.durableBackendReadiness.drainPlan.preservesCursorReplayState).toBe(true);
+    expect(scheduler.durableBackendReadiness.emergencyBrake.preservesCursorReplayState).toBe(true);
+    expect(scheduler.durableBackendReadiness.releaseGate.proofCommands).toContain("bun run check");
+    expect(scheduler.durableBackendReadiness.routeContracts.contractsField).toBe("surfaces.frontier.contracts.durable_backend_readiness");
+    expect(scheduler.freshnessSloEngine.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.freshnessSloEngine.apiTargets).toContain("/v1/contracts");
+    expect(scheduler.freshnessSloEngine.dryRun).toBe(true);
+    expect(scheduler.freshnessSloEngine.willMutate).toBe(false);
+    expect(scheduler.freshnessSloEngine.queryClass).toBe("actor");
+    expect(scheduler.freshnessSloEngine.slo.targetFreshnessSeconds).toBeGreaterThan(0);
+    expect(scheduler.freshnessSloEngine.cadence.sourceHintCount).toBeGreaterThan(0);
+    expect(scheduler.freshnessSloEngine.sourceCadenceHints.every((hint) => hint.recommendedCadenceSeconds > 0 && hint.priorityAgingBoost >= 0)).toBe(true);
+    expect(scheduler.freshnessSloEngine.queuePressureBehavior.preservesThreeSecondPolling).toBe(true);
+    expect(scheduler.freshnessSloEngine.queuePressureBehavior.duplicateRunReuse).toBe("required");
+    expect(scheduler.freshnessSloEngine.fairnessAging.every((lane) => lane.preservesPerSourceConcurrency && lane.agingBoostEverySeconds > 0)).toBe(true);
+    expect(scheduler.freshnessSloEngine.routeContracts.contractsField).toBe("surfaces.frontier.contracts.freshness_slo_engine");
+    expect(scheduler.freshnessSloDashboard.schemaVersion).toBe("ti.scheduler_freshness_slo_dashboard.v1");
+    expect(scheduler.freshnessSloDashboard.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(scheduler.freshnessSloDashboard.summary.actorCount).toBe(8);
+    expect(scheduler.freshnessSloDashboard.summary.publicPollingProtected).toBe(true);
+    expect(scheduler.freshnessSloDashboard.actors.map((actor) => actor.actor)).toEqual(expect.arrayContaining(["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira", "Scattered Spider"]));
+    expect(scheduler.freshnessSloDashboard.actors.every((actor) => actor.nextPollSeconds === 3 && actor.duplicateRunReuse === "required")).toBe(true);
+    expect(scheduler.freshnessSloDashboard.workloadActions.map((action) => action.workload)).toEqual(expect.arrayContaining(["interactive_actor_search", "public_channel_window", "restricted_metadata_approval"]));
+    expect(scheduler.freshnessSloDashboard.runbook.duplicateRunReuse).toBe("required_before_enqueue");
+    expect(scheduler.freshnessSloDashboard.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_freshness_slo_dashboard");
+    expect(scheduler.interactiveSearchFreshness.schemaVersion).toBe("ti.scheduler_interactive_search_freshness.v1");
+    expect(scheduler.interactiveSearchFreshness.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"]));
+    expect(scheduler.interactiveSearchFreshness.currentQuery).toMatchObject({
+      query: "APT29",
+      queryClass: "actor",
+      knownHighValueActor: true
+    });
+    expect(scheduler.interactiveSearchFreshness.queueDecision.nextPollSeconds).toBe(3);
+    expect(scheduler.interactiveSearchFreshness.queueDecision.duplicateRunReuse).toBe("required_before_enqueue");
+    expect(["reuse_active_run", "enqueue_interactive_refresh", "raise_priority", "serve_partial_and_poll", "metadata_review_hold"]).toContain(scheduler.interactiveSearchFreshness.queueDecision.decision);
+    expect(scheduler.interactiveSearchFreshness.actorTargets.map((actor) => actor.actor)).toContain("APT29");
+    expect(scheduler.interactiveSearchFreshness.fairnessGuards).toMatchObject({
+      preservesThreeSecondPolling: true,
+      preservesDuplicateRunReuse: true,
+      lowValueSweepsDeferredBeforeActorStarvation: true
+    });
+    expect(scheduler.interactiveSearchFreshness.uiSignals.visibleSchedulerFields).toEqual(expect.arrayContaining(["freshness_state", "queue_decision", "duplicate_run_reuse", "deferred_background_workloads"]));
+    expect(scheduler.interactiveSearchFreshness.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_interactive_search_freshness");
+    expect(scheduler.productionLeaseSemantics.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.productionLeaseSemantics.apiTargets).toContain("/v1/frontier/apply-plan");
+    expect(scheduler.productionLeaseSemantics.dryRun).toBe(true);
+    expect(scheduler.productionLeaseSemantics.willMutate).toBe(false);
+    expect(scheduler.productionLeaseSemantics.currentBackend).toBe("embedded_memory");
+    expect(scheduler.productionLeaseSemantics.primaryTargetBackend).toBe("postgres_advisory_queue");
+    expect(scheduler.productionLeaseSemantics.futureBackends).toEqual(["redis_streams", "nats_jetstream"]);
+    expect(scheduler.productionLeaseSemantics.postgresContract.tables).toContain("frontier_leases");
+    expect(scheduler.productionLeaseSemantics.postgresContract.lease).toContain("SKIP LOCKED");
+    expect(scheduler.productionLeaseSemantics.postgresContract.cursorReplay).toBe("frontier_events_cursor_replay_required");
+    expect(scheduler.productionLeaseSemantics.leaseLifecycle.map((step) => step.step)).toEqual(expect.arrayContaining(["enqueue", "lease", "heartbeat", "ack", "retry", "dead_letter", "drain", "shutdown"]));
+    expect(scheduler.productionLeaseSemantics.leaseLifecycle.every((step) => step.cursorVisible && step.idempotencyKey.length > 0)).toBe(true);
+    expect(scheduler.productionLeaseSemantics.cutoverPhases.every((phase) => phase.dryRun && phase.willMutate === false && phase.willLeaseTasks === false)).toBe(true);
+    expect(scheduler.productionLeaseSemantics.safety.preservesThreeSecondPolling).toBe(true);
+    expect(scheduler.productionLeaseSemantics.safety.duplicateActorQueryRunsSuppressed).toBe(true);
+    expect(scheduler.productionLeaseSemantics.routeContracts.contractsField).toBe("surfaces.frontier.contracts.production_queue_lease_semantics");
+    expect(scheduler.fairnessGovernance.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.fairnessGovernance.apiTargets).toContain("/v1/intel/runs/{id}");
+    expect(scheduler.fairnessGovernance.dryRun).toBe(true);
+    expect(scheduler.fairnessGovernance.willMutate).toBe(false);
+    expect(scheduler.fairnessGovernance.tenants.defaultTenantId).toBe("tenant_scheduler_api");
+    expect(scheduler.fairnessGovernance.tenants.isolationKey).toBe("tenant:queryClass:reuseKey:sourceFamily");
+    expect(scheduler.fairnessGovernance.queryClassBudgets.map((lane) => lane.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware", "cve_advisory", "campaign", "malware_tool", "sector", "country", "victim_company", "infrastructure", "unknown"]));
+    expect(scheduler.fairnessGovernance.queryClassBudgets.every((lane) => lane.reservedWorkerSlots > 0 && lane.maxConcurrentLeases > 0 && lane.retryAfterSeconds >= 3)).toBe(true);
+    expect(scheduler.fairnessGovernance.queryClassBudgets.find((lane) => lane.queryClass === "actor")?.actions).toEqual(expect.arrayContaining(["preserve_live_polling", "reuse_duplicate_run"]));
+    expect(scheduler.fairnessGovernance.workloadFairness.every((lane) => lane.preservesThreeSecondPolling && lane.maxConcurrentLeases > 0)).toBe(true);
+    expect(scheduler.fairnessGovernance.priorityAging.every((lane) => lane.neverBypassPerSourceConcurrency && lane.agingBoostEverySeconds > 0)).toBe(true);
+    expect(scheduler.fairnessGovernance.pressurePolicy.publicPolling).toBe("always_return_status_with_three_second_hint");
+    expect(scheduler.fairnessGovernance.pressurePolicy.duplicateRunReuse).toBe("required_before_enqueue");
+    expect(scheduler.fairnessGovernance.pressurePolicy.lowValueSweeps).toBe("bounded_and_deferred_before_interactive_starvation");
+    expect(scheduler.fairnessGovernance.fairnessSlo.retryAfterSeconds).toBeGreaterThanOrEqual(3);
+    expect(scheduler.fairnessGovernance.routeContracts.contractsField).toBe("surfaces.frontier.contracts.multi_tenant_fairness_governance");
+    expect(scheduler.persistenceReplayCutover.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.persistenceReplayCutover.apiTargets).toContain("/v1/intel/runs/{id}");
+    expect(scheduler.persistenceReplayCutover.dryRun).toBe(true);
+    expect(scheduler.persistenceReplayCutover.willMutate).toBe(false);
+    expect(scheduler.persistenceReplayCutover.currentBackend).toBe("embedded_memory");
+    expect(scheduler.persistenceReplayCutover.primaryTargetBackend).toBe("postgres_scheduler_store");
+    expect(scheduler.persistenceReplayCutover.descriptorBackends).toEqual(["redis_streams", "nats_jetstream"]);
+    expect(scheduler.persistenceReplayCutover.postgresContracts.map((contract) => contract.table)).toEqual(expect.arrayContaining(["scheduler_runs", "frontier_leases", "scheduler_cursor_events", "scheduler_retry_dead_letters", "scheduler_fairness_budget_snapshots"]));
+    expect(scheduler.persistenceReplayCutover.postgresContracts.every((contract) => contract.keyFields.length > 0 && contract.replayRole.length > 0)).toBe(true);
+    expect(scheduler.persistenceReplayCutover.replaySemantics.refreshAfterSeconds).toBe(3);
+    expect(scheduler.persistenceReplayCutover.replaySemantics.pollCursor).toBe("restored_from_scheduler_cursor_events");
+    expect(scheduler.persistenceReplayCutover.replaySemantics.deltaCursor).toBe("restored_from_latest_safe_delta");
+    expect(scheduler.persistenceReplayCutover.replaySemantics.noDefaultActorFallback).toBe(true);
+    expect(scheduler.persistenceReplayCutover.replaySemantics.noStaleCacheReady).toBe(true);
+    expect(scheduler.persistenceReplayCutover.replaySemantics.noGenericLivePromotion).toBe(true);
+    expect(scheduler.persistenceReplayCutover.restartFixtures.map((fixture) => fixture.name)).toEqual(expect.arrayContaining(["queued_actor_search_restart", "duplicate_public_run_reuse", "emergency_brake_restart"]));
+    expect(scheduler.persistenceReplayCutover.restartFixtures.every((fixture) => fixture.preservesThreeSecondPolling && fixture.preservesCursorContinuity && fixture.duplicateRunReuseRequired)).toBe(true);
+    expect(scheduler.persistenceReplayCutover.cutoverPhases.every((phase) => phase.dryRun && phase.willMutate === false && phase.requiredChecks.length > 0)).toBe(true);
+    expect(scheduler.persistenceReplayCutover.handoffs.agent09PublicApiFields).toContain("pollCursor");
+    expect(scheduler.persistenceReplayCutover.handoffs.agent10CapacityReleaseGate).toContain("restart replay fixture pass");
+    expect(scheduler.persistenceReplayCutover.releaseGate.proofCommands).toContain("bun run check:api-regression");
+    expect(scheduler.persistenceReplayCutover.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_persistence_replay_cutover");
+    expect(scheduler.postgresQueueAdapter.apiTargets).toContain("/v1/frontier/status");
+    expect(scheduler.postgresQueueAdapter.backendSelection.activeBackend).toBe("embedded_memory");
+    expect(scheduler.postgresQueueAdapter.backendSelection.requestedBackend).toBe("embedded_memory");
+    expect(scheduler.postgresQueueAdapter.backendSelection.postgresEnabled).toBe(false);
+    expect(scheduler.postgresQueueAdapter.backendSelection.effectiveLeaseOwner).toBe("embedded_memory");
+    expect(scheduler.postgresQueueAdapter.safety.disabledByDefault).toBe(true);
+    expect(scheduler.postgresQueueAdapter.safety.failClosedWithoutDsn).toBe(true);
+    expect(scheduler.postgresQueueAdapter.safety.failClosedWithoutExecutor).toBe(true);
+    expect(scheduler.postgresQueueAdapter.safety.embeddedMemoryRemainsAuthoritative).toBe(true);
+    expect(scheduler.postgresQueueAdapter.safety.publicSearchPollingProtected).toBe(true);
+    expect(scheduler.postgresQueueAdapter.operationContracts.map((contract) => contract.operation)).toEqual(expect.arrayContaining(["enqueueTasks", "leaseNext", "findOrRegisterRun", "deltasSince"]));
+    expect(scheduler.postgresQueueAdapter.preparedStatements.map((statement) => statement.name)).toContain("frontier_tasks_lease_fair_next_v1");
+    expect(scheduler.postgresQueueAdapter.releaseGate.reasons).toContain("postgres_queue_feature_flag_disabled");
+    expect(scheduler.postgresQueueAdapter.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_postgres_queue_adapter");
     expect(scheduler.safetyEnvelope.allowClearWeb).toBe(true);
     expect(scheduler.safetyEnvelope.allowRestrictedMetadata).toBe(true);
     expect(scheduler.safetyEnvelope.metadataOnlyRestricted).toBe(true);
@@ -6636,6 +10764,33 @@ describe("api v1", () => {
     expect((frontierStatus.scheduler as { productionAdapterTelemetry: { apiTargets: string[]; dryRun: boolean; willMutate: boolean } }).productionAdapterTelemetry.apiTargets).toContain("/v1/frontier/status");
     expect((frontierStatus.scheduler as { productionAdapterTelemetry: { apiTargets: string[]; dryRun: boolean; willMutate: boolean } }).productionAdapterTelemetry.dryRun).toBe(true);
     expect((frontierStatus.scheduler as { productionAdapterTelemetry: { apiTargets: string[]; dryRun: boolean; willMutate: boolean } }).productionAdapterTelemetry.willMutate).toBe(false);
+    expect((frontierStatus.scheduler as { durableBackendReadiness: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; pollingContract: { nextPollSeconds: number } } }).durableBackendReadiness.apiTargets).toContain("/v1/frontier/status");
+    expect((frontierStatus.scheduler as { durableBackendReadiness: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; pollingContract: { nextPollSeconds: number } } }).durableBackendReadiness.dryRun).toBe(true);
+    expect((frontierStatus.scheduler as { durableBackendReadiness: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; pollingContract: { nextPollSeconds: number } } }).durableBackendReadiness.willMutate).toBe(false);
+    expect((frontierStatus.scheduler as { durableBackendReadiness: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; pollingContract: { nextPollSeconds: number } } }).durableBackendReadiness.pollingContract.nextPollSeconds).toBe(3);
+    expect((frontierStatus.scheduler as { freshnessSloEngine: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queuePressureBehavior: { preservesThreeSecondPolling: boolean } } }).freshnessSloEngine.apiTargets).toContain("/v1/frontier/status");
+    expect((frontierStatus.scheduler as { freshnessSloEngine: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queuePressureBehavior: { preservesThreeSecondPolling: boolean } } }).freshnessSloEngine.dryRun).toBe(true);
+    expect((frontierStatus.scheduler as { freshnessSloEngine: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queuePressureBehavior: { preservesThreeSecondPolling: boolean } } }).freshnessSloEngine.willMutate).toBe(false);
+    expect((frontierStatus.scheduler as { freshnessSloEngine: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queuePressureBehavior: { preservesThreeSecondPolling: boolean } } }).freshnessSloEngine.queuePressureBehavior.preservesThreeSecondPolling).toBe(true);
+    expect((frontierStatus.scheduler as { productionLeaseSemantics: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; primaryTargetBackend: string } }).productionLeaseSemantics.apiTargets).toContain("/v1/frontier/status");
+    expect((frontierStatus.scheduler as { productionLeaseSemantics: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; primaryTargetBackend: string } }).productionLeaseSemantics.dryRun).toBe(true);
+    expect((frontierStatus.scheduler as { productionLeaseSemantics: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; primaryTargetBackend: string } }).productionLeaseSemantics.willMutate).toBe(false);
+    expect((frontierStatus.scheduler as { productionLeaseSemantics: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; primaryTargetBackend: string } }).productionLeaseSemantics.primaryTargetBackend).toBe("postgres_advisory_queue");
+    expect((frontierStatus.scheduler as { fairnessGovernance: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queryClassBudgets: Array<{ queryClass: string }>; pressurePolicy: { duplicateRunReuse: string } } }).fairnessGovernance.apiTargets).toContain("/v1/frontier/status");
+    expect((frontierStatus.scheduler as { fairnessGovernance: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queryClassBudgets: Array<{ queryClass: string }>; pressurePolicy: { duplicateRunReuse: string } } }).fairnessGovernance.dryRun).toBe(true);
+    expect((frontierStatus.scheduler as { fairnessGovernance: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queryClassBudgets: Array<{ queryClass: string }>; pressurePolicy: { duplicateRunReuse: string } } }).fairnessGovernance.willMutate).toBe(false);
+    expect((frontierStatus.scheduler as { fairnessGovernance: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queryClassBudgets: Array<{ queryClass: string }>; pressurePolicy: { duplicateRunReuse: string } } }).fairnessGovernance.queryClassBudgets.map((lane) => lane.queryClass)).toContain("unknown");
+    expect((frontierStatus.scheduler as { fairnessGovernance: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; queryClassBudgets: Array<{ queryClass: string }>; pressurePolicy: { duplicateRunReuse: string } } }).fairnessGovernance.pressurePolicy.duplicateRunReuse).toBe("required_before_enqueue");
+    expect((frontierStatus.scheduler as { persistenceReplayCutover: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; replaySemantics: { refreshAfterSeconds: number; noDefaultActorFallback: boolean }; restartFixtures: Array<{ name: string }> } }).persistenceReplayCutover.apiTargets).toContain("/v1/frontier/status");
+    expect((frontierStatus.scheduler as { persistenceReplayCutover: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; replaySemantics: { refreshAfterSeconds: number; noDefaultActorFallback: boolean }; restartFixtures: Array<{ name: string }> } }).persistenceReplayCutover.dryRun).toBe(true);
+    expect((frontierStatus.scheduler as { persistenceReplayCutover: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; replaySemantics: { refreshAfterSeconds: number; noDefaultActorFallback: boolean }; restartFixtures: Array<{ name: string }> } }).persistenceReplayCutover.willMutate).toBe(false);
+    expect((frontierStatus.scheduler as { persistenceReplayCutover: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; replaySemantics: { refreshAfterSeconds: number; noDefaultActorFallback: boolean }; restartFixtures: Array<{ name: string }> } }).persistenceReplayCutover.replaySemantics.refreshAfterSeconds).toBe(3);
+    expect((frontierStatus.scheduler as { persistenceReplayCutover: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; replaySemantics: { refreshAfterSeconds: number; noDefaultActorFallback: boolean }; restartFixtures: Array<{ name: string }> } }).persistenceReplayCutover.replaySemantics.noDefaultActorFallback).toBe(true);
+    expect((frontierStatus.scheduler as { persistenceReplayCutover: { apiTargets: string[]; dryRun: boolean; willMutate: boolean; replaySemantics: { refreshAfterSeconds: number; noDefaultActorFallback: boolean }; restartFixtures: Array<{ name: string }> } }).persistenceReplayCutover.restartFixtures.map((fixture) => fixture.name)).toContain("duplicate_public_run_reuse");
+    expect((frontierStatus.scheduler as { postgresQueueAdapter: { backendSelection: { activeBackend: string; effectiveLeaseOwner: string }; safety: { publicSearchPollingProtected: boolean }; operationContracts: Array<{ operation: string; disabledBehavior: string }> } }).postgresQueueAdapter.backendSelection.activeBackend).toBe("embedded_memory");
+    expect((frontierStatus.scheduler as { postgresQueueAdapter: { backendSelection: { activeBackend: string; effectiveLeaseOwner: string }; safety: { publicSearchPollingProtected: boolean }; operationContracts: Array<{ operation: string; disabledBehavior: string }> } }).postgresQueueAdapter.backendSelection.effectiveLeaseOwner).toBe("embedded_memory");
+    expect((frontierStatus.scheduler as { postgresQueueAdapter: { backendSelection: { activeBackend: string; effectiveLeaseOwner: string }; safety: { publicSearchPollingProtected: boolean }; operationContracts: Array<{ operation: string; disabledBehavior: string }> } }).postgresQueueAdapter.safety.publicSearchPollingProtected).toBe(true);
+    expect((frontierStatus.scheduler as { postgresQueueAdapter: { backendSelection: { activeBackend: string; effectiveLeaseOwner: string }; safety: { publicSearchPollingProtected: boolean }; operationContracts: Array<{ operation: string; disabledBehavior: string }> } }).postgresQueueAdapter.operationContracts.find((contract) => contract.operation === "leaseNext")?.disabledBehavior).toBe("throws_fail_closed");
   });
 
   test("defers public live searches under background queue pressure without duplicating reuse keys", async () => {

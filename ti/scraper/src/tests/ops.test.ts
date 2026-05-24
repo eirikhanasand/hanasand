@@ -1527,6 +1527,18 @@ describe("ops controls", () => {
       deploymentProofs,
       trends
     });
+    const memoryWarning = buildCutoverSoakReleasePacket({
+      soak,
+      deploymentDrift: deployment,
+      promotionPacket,
+      workstreams,
+      runtimeProofs,
+      deploymentProofs,
+      trends: {
+        ...trends,
+        resources: { ...trends.resources, memoryRssMaxGb: 120 }
+      }
+    });
     const blocker = buildCutoverSoakReleasePacket({
       soak,
       deploymentDrift: deployment,
@@ -1547,7 +1559,10 @@ describe("ops controls", () => {
         ? { ...proof, status: "blocker", resourceBudgetStatus: "critical", message: "claim ledger route proof failed" }
         : proof),
       deploymentProofs,
-      trends
+      trends: {
+        ...trends,
+        resources: { ...trends.resources, memoryRssMaxGb: 170 }
+      }
     });
     const emergencyStop = buildCutoverSoakReleasePacket({
       soak,
@@ -2081,6 +2096,837 @@ describe("ops controls", () => {
     expect(promote.enterpriseReleaseTrain.operatorRunbook).toContain("keep browser workers disabled and do not assume GPU capacity");
     expect(promote.enterpriseReleaseTrain.proofCommands).toContain("bun run check:contract-index");
     expect(promote.enterpriseReleaseTrain.proofCommands).toContain("bun run check:deploy-hygiene && bun run check:docker-contexts");
+    expect(promote.capacitySimulation.schemaVersion).toBe("ti.capacity_cost_simulation.v1");
+    expect(promote.capacitySimulation.dryRun).toBe(true);
+    expect(promote.capacitySimulation.windowDays).toBe(30);
+    expect(promote.capacitySimulation.resourceBudget).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.capacitySimulation.scenarios.map((scenario) => scenario.name)).toEqual([
+      "baseline",
+      "high_activity_actor_burst",
+      "ransomware_victim_burst",
+      "dark_metadata_60k_refresh",
+      "source_atlas_10k_import",
+      "index_replay_backfill",
+      "source_outage_wave",
+      "parser_failure_spike",
+      "restricted_review_spike",
+      "graph_export_backlog"
+    ]);
+    expect(promote.capacitySimulation.scenarios.map((scenario) => scenario.releaseDecision)).toEqual([
+      "promote",
+      "promote-with-warnings",
+      "canary-with-warnings",
+      "promote-with-warnings",
+      "canary-with-warnings",
+      "promote-with-warnings",
+      "no-go",
+      "no-go",
+      "emergency-stop",
+      "rollback"
+    ]);
+    expect(promote.capacitySimulation.scenarios.every((scenario) => scenario.forecast.memoryRssMaxGb <= 160)).toBe(true);
+    expect(promote.capacitySimulation.scenarios.every((scenario) => scenario.forecast.ctiReserveAfterGb >= 500)).toBe(true);
+    expect(promote.capacitySimulation.scenarios.every((scenario) => scenario.noLeakExample.includes("aggregate GB"))).toBe(true);
+    expect(promote.capacitySimulation.hostBudget).toEqual({
+      hostRamGb: 1024,
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      ctiReserveGb: 500,
+      osCacheAndEmergencyGb: 364,
+      allocatableScraperBurstGb: 64,
+      approvalRequiredAboveGb: 160
+    });
+    expect(promote.capacitySimulation.workerPartitions.map((partition) => partition.name)).toEqual([
+      "interactive_live_search",
+      "public_collection",
+      "public_channel",
+      "restricted_metadata",
+      "dark_web_metadata_index",
+      "source_atlas_import",
+      "evidence_index_replay",
+      "graph_export",
+      "retention_backup"
+    ]);
+    expect(promote.capacitySimulation.workerPartitions.every((partition) =>
+      partition.memoryReservationGb <= partition.memoryCeilingGb
+      && partition.memoryCeilingGb <= 48
+      && partition.throttle.length > 0
+      && partition.queuePartition.length > 0
+    )).toBe(true);
+    expect(promote.capacitySimulation.sideToolForecasts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "dark_web_metadata_index", recordTarget: 60_000, monthlyRecords: 60_000, memoryCeilingGb: 24 }),
+      expect.objectContaining({ name: "source_atlas_discovery_import", recordTarget: 10_000, monthlyRecords: 10_000, memoryCeilingGb: 18 })
+    ]));
+    expect(promote.capacitySimulation.sideToolForecasts.every((forecast) =>
+      forecast.releaseGate === "hold"
+      && forecast.starvationGuard.includes("public search")
+      && forecast.diskGrowthGb > 0
+      && forecast.retryDeadLetterBudget > 0
+    )).toBe(true);
+    expect(promote.capacitySimulation.indexReplayBudget).toMatchObject({
+      replayWindowDays: 30,
+      maxReplayBatchesPerDay: 24,
+      maxReplayMemoryGb: 22,
+      queuePartition: "evidence_index_replay"
+    });
+    expect(promote.capacitySimulation.indexReplayBudget.noLeakProof).toContain("aggregate GB only");
+    expect(promote.capacitySimulation.monthlyCostProxy).toMatchObject({
+      currency: "capacity_units",
+      highestCostScenario: "dark_metadata_60k_refresh"
+    });
+    expect(promote.capacitySimulation.monthlyCostProxy.totalUnits).toBe(
+      promote.capacitySimulation.monthlyCostProxy.computeUnits
+      + promote.capacitySimulation.monthlyCostProxy.storageUnits
+      + promote.capacitySimulation.monthlyCostProxy.operatorReviewUnits
+    );
+    expect(promote.capacitySimulation.aggregate).toMatchObject({
+      worstDecision: "emergency-stop",
+      releaseReadyScenarioCount: 6,
+      rollbackScenarioCount: 1,
+      emergencyStopScenarioCount: 1
+    });
+    expect(promote.capacitySimulation.aggregate.memoryPeakGb).toBeLessThanOrEqual(160);
+    expect(promote.capacitySimulation.aggregate.ctiReserveMinimumGb).toBeGreaterThanOrEqual(500);
+    expect(promote.capacitySimulation.proofCommands).toContain("bun run check:route-inventory");
+    expect(promote.capacitySimulation.proofCommands).toContain("bun run check:deploy-hygiene");
+    expect(promote.capacitySimulation.proofCommands).toContain("bun run check:docker-contexts");
+    expect(promote.capacitySimulation.proofCommands).toContain("bun run check:contract-index");
+    expect(promote.capacitySimulation.operatorRunbook).toContain("treat 96 GB as warning target and 160 GB as rollback ceiling");
+    expect(promote.capacitySimulation.operatorRunbook).toContain("keep 60k dark-web metadata refresh and 10k source-atlas import in separate partitions that yield to public search");
+    expect(promote.incidentRunbooks.schemaVersion).toBe("ti.production_incident_runbooks.v1");
+    expect(promote.incidentRunbooks.dryRun).toBe(true);
+    expect(promote.incidentRunbooks.resourceBudget).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.incidentRunbooks.runbooks.map((runbook) => runbook.name)).toEqual([
+      "public_proof_failure",
+      "queue_saturation",
+      "source_outage_wave",
+      "parser_failure_spike",
+      "evidence_store_degradation",
+      "restricted_metadata_emergency_stop",
+      "api_wrapper_regression",
+      "graph_export_corruption",
+      "canary_rollback",
+      "container_rollback",
+      "multi_service_health_degradation"
+    ]);
+    expect(promote.incidentRunbooks.integrations).toEqual({
+      agent01SourceGovernance: "wired",
+      agent02SchedulerFairness: "wired",
+      agent03Adapters: "wired",
+      agent04PublicCoverage: "wired",
+      agent05RestrictedPlaybooks: "wired",
+      agent06EvidenceDr: "wired",
+      agent07QualityWorkbench: "wired",
+      agent08GraphGovernance: "wired",
+      agent09ApiCompatibility: "wired",
+      agent10ReleaseOps: "wired"
+    });
+    expect(promote.incidentRunbooks.runbooks.every((runbook) =>
+      runbook.trigger.length > 0
+      && runbook.detectionFields.length > 0
+      && runbook.expectedRouteApiProof.length > 0
+      && runbook.noLeakGuarantees.every((guarantee) => !guarantee.includes("raw leaked data") || guarantee.includes("do not"))
+    )).toBe(true);
+    expect(promote.incidentRunbooks.runbooks.find((runbook) => runbook.name === "restricted_metadata_emergency_stop")).toMatchObject({
+      releaseDecisionImpact: "emergency-stop",
+      owningSubsystem: "Agent 05 restricted metadata playbooks"
+    });
+    expect(promote.incidentRunbooks.runbooks.find((runbook) => runbook.name === "public_proof_failure")?.expectedRouteApiProof.map((proof) => proof.surface)).toContain("public POST /api/ti/search");
+    expect(promote.incidentRunbooks.runbooks.find((runbook) => runbook.name === "queue_saturation")?.expectedRouteApiProof.map((proof) => proof.surface)).toContain("/v1/frontier/status");
+    expect(promote.incidentRunbooks.runbooks.find((runbook) => runbook.name === "container_rollback")?.rollback).toBe("docker compose up -d ti-scraper api frontend --no-build");
+    expect(promote.incidentRunbooks.releaseDecisionCounts).toMatchObject({
+      "no-go": 4,
+      "rollback": 6,
+      "emergency-stop": 1
+    });
+    expect(promote.incidentRunbooks.proofCommands).toContain("bun run check:route-inventory");
+    expect(promote.incidentRunbooks.proofCommands).toContain("bun run check:contract-index");
+    expect(promote.incidentRunbooks.proofCommands).toContain("bun run check:docker-contexts");
+    expect(promote.incidentRunbooks.operatorRunbook).toContain("keep scraper under 96 GB target and treat 160 GB as rollback ceiling");
+    expect(promote.incidentSimulationPostmortems.schemaVersion).toBe("ti.production_incident_simulation_postmortem.v1");
+    expect(promote.incidentSimulationPostmortems.dryRun).toBe(true);
+    expect(promote.incidentSimulationPostmortems.resourcePolicy).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.incidentSimulationPostmortems.simulations.map((simulation) => simulation.name)).toEqual([
+      "queue_saturation",
+      "source_outage_wave",
+      "parser_failure_spike",
+      "evidence_object_degradation",
+      "graph_export_corruption",
+      "api_gateway_misrouting",
+      "public_proof_failure",
+      "canary_rollback",
+      "restricted_emergency_stop",
+      "memory_disk_pressure"
+    ]);
+    expect(promote.incidentSimulationPostmortems.simulations.every((simulation) =>
+      simulation.timeline.map((event) => event.phase).join(",") === "detect,triage,mitigate,rollback,verify,postmortem"
+      && simulation.detectionSignals.length > 0
+      && simulation.ownerAgents.length > 0
+      && simulation.rollbackAction.length > 0
+      && simulation.proofCommand.length > 0
+      && simulation.postmortemFields.map((field) => field.field).join(",") === "summary,customer_impact,root_cause,detection_gap,rollback_result,follow_up"
+      && simulation.safetyPosture.metadataOnly
+      && simulation.safetyPosture.noRawLeakMaterial
+      && simulation.safetyPosture.noCredentials
+      && simulation.safetyPosture.noUnsafeUrls
+      && simulation.safetyPosture.noActorInteraction
+      && simulation.safetyPosture.browserWorkersDisabled
+      && !simulation.noLeakProof.includes("raw bodies included")
+    )).toBe(true);
+    expect(promote.incidentSimulationPostmortems.simulations.find((simulation) => simulation.name === "api_gateway_misrouting")).toMatchObject({
+      releaseGateOutcome: "rollback-only",
+      blastRadius: {
+        publicTiState: "degraded",
+        affectedAgents: ["Agent 09", "Agent 10"],
+        dataIntegrity: "preserved"
+      }
+    });
+    expect(promote.incidentSimulationPostmortems.simulations.find((simulation) => simulation.name === "restricted_emergency_stop")).toMatchObject({
+      releaseGateOutcome: "needs-human-approval",
+      userVisibleDegradation: "restricted results remain metadata_review or blocked with safe victim/company/count summaries only"
+    });
+    expect(promote.incidentSimulationPostmortems.simulations.find((simulation) => simulation.name === "memory_disk_pressure")).toMatchObject({
+      releaseGateOutcome: "promote",
+      proofCommand: "bun test src/tests/ops.test.ts"
+    });
+    expect(memoryWarning.incidentSimulationPostmortems.simulations.find((simulation) => simulation.name === "memory_disk_pressure")).toMatchObject({
+      releaseGateOutcome: "hold",
+      blastRadius: {
+        dataIntegrity: "preserved"
+      }
+    });
+    expect(runtimeBlocker.incidentSimulationPostmortems.simulations.find((simulation) => simulation.name === "memory_disk_pressure")).toMatchObject({
+      releaseGateOutcome: "rollback-only",
+      blastRadius: {
+        dataIntegrity: "at_risk"
+      }
+    });
+    expect(promote.incidentSimulationPostmortems.ownerMatrix.find((entry) => entry.owner === "Agent 02")?.scenarios).toContain("queue_saturation");
+    expect(promote.incidentSimulationPostmortems.ownerMatrix.find((entry) => entry.owner === "Agent 06")?.scenarios).toContain("evidence_object_degradation");
+    expect(promote.incidentSimulationPostmortems.ownerMatrix.find((entry) => entry.owner === "Agent 08")?.scenarios).toContain("graph_export_corruption");
+    expect(promote.incidentSimulationPostmortems.ownerMatrix.find((entry) => entry.owner === "Agent 09")?.scenarios).toContain("api_gateway_misrouting");
+    expect(promote.incidentSimulationPostmortems.releaseGateCounts["rollback-only"]).toBeGreaterThanOrEqual(4);
+    expect(promote.incidentSimulationPostmortems.releaseGateCounts["needs-human-approval"]).toBeGreaterThanOrEqual(1);
+    expect(promote.incidentSimulationPostmortems.proofCommands).toContain("bun run check:ti-release-candidate");
+    expect(promote.incidentSimulationPostmortems.proofCommands).toContain("TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof");
+    expect(promote.incidentSimulationPostmortems.operatorRunbook).toContain("keep the scraper under 96 GB target, never exceed the 160 GB ceiling, and preserve 500 GB for the broader CTI stack");
+    expect(promote.resourceArbitration.schemaVersion).toBe("ti.multi_service_resource_arbitration.v1");
+    expect(promote.resourceArbitration.dryRun).toBe(true);
+    expect(promote.resourceArbitration.hostPolicy).toEqual({
+      hostMemoryGb: 1024,
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.resourceArbitration.lanes.map((lane) => lane.name)).toEqual([
+      "collection_workers",
+      "public_channel_workers",
+      "dynamic_browser_disabled_pool",
+      "evidence_replay",
+      "graph_search_migration",
+      "queue_backend",
+      "api_live_search_load"
+    ]);
+    expect(promote.resourceArbitration.gates.map((gate) => gate.name)).toEqual([
+      "over_capacity",
+      "memory_pressure",
+      "disk_pressure",
+      "queue_saturation",
+      "source_outage_wave",
+      "parser_failure_spike",
+      "public_proof_failure",
+      "restricted_emergency_stop",
+      "remote_deploy_drift"
+    ]);
+    expect(promote.resourceArbitration.summary.scraperReservedGb).toBeLessThanOrEqual(96);
+    expect(promote.resourceArbitration.summary.scraperCeilingGb).toBe(160);
+    expect(promote.resourceArbitration.summary.ctiReserveAfterForecastGb).toBeGreaterThanOrEqual(500);
+    expect(promote.resourceArbitration.lanes.find((lane) => lane.name === "dynamic_browser_disabled_pool")).toMatchObject({
+      memoryReservationGb: 0,
+      memoryCeilingGb: 0,
+      concurrencyLimit: 0,
+      status: "pass"
+    });
+    expect(promote.resourceArbitration.lanes.every((lane) =>
+      lane.memoryReservationGb <= lane.memoryCeilingGb
+      && lane.proofCommand.length > 0
+      && lane.throttles.length > 0
+      && lane.handoff.includes("Agent")
+    )).toBe(true);
+    expect(promote.resourceArbitration.gates.find((gate) => gate.name === "memory_pressure")).toMatchObject({
+      status: "pass",
+      releaseDecision: "promote",
+      threshold: "target <=96 GB, ceiling <=160 GB"
+    });
+    expect(memoryWarning.resourceArbitration.gates.find((gate) => gate.name === "memory_pressure")).toMatchObject({
+      status: "warning",
+      releaseDecision: "hold"
+    });
+    expect(runtimeBlocker.resourceArbitration.gates.find((gate) => gate.name === "memory_pressure")).toMatchObject({
+      status: "blocker",
+      releaseDecision: "rollback-only"
+    });
+    expect(deploymentBlocker.resourceArbitration.gates.find((gate) => gate.name === "public_proof_failure")).toMatchObject({
+      status: "blocker",
+      releaseDecision: "rollback-only"
+    });
+    expect(emergencyStop.resourceArbitration.gates.find((gate) => gate.name === "restricted_emergency_stop")).toMatchObject({
+      status: "blocker",
+      releaseDecision: "needs-human-approval"
+    });
+    expect(promote.resourceArbitration.ownerHandoffs.find((handoff) => handoff.owner === "Agent 02")?.lanes).toContain("queue_backend");
+    expect(promote.resourceArbitration.ownerHandoffs.find((handoff) => handoff.owner === "Agent 06")?.lanes).toContain("evidence_replay");
+    expect(promote.resourceArbitration.ownerHandoffs.find((handoff) => handoff.owner === "Agent 09")?.gates).toContain("public_proof_failure");
+    expect(promote.resourceArbitration.proofCommands).toContain("bun run check:ti-release-candidate");
+    expect(promote.resourceArbitration.proofCommands).toContain("bun run check:contract-index");
+    expect(promote.resourceArbitration.operatorRunbook).toContain("keep dynamic browser workers disabled by default and assume no GPU capacity");
+    expect(promote.resourceArbitration.noLeakProof).not.toContain("raw bodies included");
+    expect(promote.productionSoakDecisionBoard.schemaVersion).toBe("ti.production_soak_decision_board.v1");
+    expect(promote.productionSoakDecisionBoard.dryRun).toBe(true);
+    expect(["promote", "hold"]).toContain(promote.productionSoakDecisionBoard.decision);
+    expect(promote.productionSoakDecisionBoard.resourcePolicy).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.productionSoakDecisionBoard.signals.map((signal) => signal.name)).toEqual([
+      "scheduler_queue_leases_dead_letters",
+      "source_activation_health",
+      "adapter_parser_failure_spikes",
+      "evidence_object_index_replay_integrity",
+      "restricted_emergency_stop",
+      "quality_release_gates",
+      "graph_stix_holds",
+      "api_contract_drift",
+      "public_wrapper_proofs",
+      "memory_disk_pressure",
+      "deploy_hygiene"
+    ]);
+    expect(promote.productionSoakDecisionBoard.sideToolResourceBudgets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "dark_web_metadata_index", owner: "Agent 05/10", recordTarget: 60_000, memoryCeilingGb: 24 }),
+      expect.objectContaining({ name: "source_atlas_discovery_import", owner: "Agent 01/10", recordTarget: 10_000, memoryCeilingGb: 18 })
+    ]));
+    expect(promote.productionSoakDecisionBoard.sideToolReleaseGates.map((gate) => gate.name)).toEqual([
+      "unsafe_dark_web_target_attempt",
+      "raw_url_leakage",
+      "credential_payload_pattern",
+      "legal_review_overflow",
+      "source_atlas_auto_activation_mistake",
+      "source_discovery_flood"
+    ]);
+    expect(promote.productionSoakDecisionBoard.scenarioFixtures.map((scenario) => scenario.name)).toEqual([
+      "dark_metadata_60k_refresh",
+      "source_atlas_10k_import",
+      "source_outage_wave",
+      "parser_failure_storm",
+      "queue_runaway",
+      "object_store_failure",
+      "api_deploy_mismatch",
+      "restricted_safety_event",
+      "stale_actor_answer_regression",
+      "unknown_actor_false_ready_regression",
+      "graph_export_hold"
+    ]);
+    expect(promote.productionSoakDecisionBoard.scenarioFixtures.find((scenario) => scenario.name === "unknown_actor_false_ready_regression")).toMatchObject({
+      expectedDecision: "rollback",
+      ownerHandoff: "Agent 07/09/10"
+    });
+    expect(promote.productionSoakDecisionBoard.signals.every((signal) =>
+      signal.evidence.length > 0 && signal.proofCommand.length > 0 && signal.rollbackStep.length > 0 && signal.staleAfterMinutes > 0
+    )).toBe(true);
+    expect(promote.productionSoakDecisionBoard.ownerHandoffs.find((handoff) => handoff.owner === "Agent 10")?.signals).toContain("memory_disk_pressure");
+    expect(promote.productionSoakDecisionBoard.proofCommands).toContain("bun run check:ti-release-candidate");
+    expect(promote.productionSoakDecisionBoard.proofCommands).toContain("bun run check:deploy-hygiene");
+    expect(promote.productionSoakDecisionBoard.operatorRunbook).toContain("enforce 96 GB normal scraper target, 160 GB ceiling, 500 GB CTI reserve, browser-disabled default, bounded caches, disk-first evidence, and no GPU assumption");
+    expect(promote.productionSoakDecisionBoard.noLeakProof).not.toContain("raw evidence bodies included");
+    expect(memoryWarning.productionSoakDecisionBoard.signals.find((signal) => signal.name === "memory_disk_pressure")).toMatchObject({
+      status: "warning",
+      decisionImpact: "hold"
+    });
+    expect(runtimeBlocker.productionSoakDecisionBoard.signals.find((signal) => signal.name === "memory_disk_pressure")).toMatchObject({
+      status: "blocker",
+      decisionImpact: "rollback"
+    });
+    expect(deploymentBlocker.productionSoakDecisionBoard.signals.find((signal) => signal.name === "public_wrapper_proofs")).toMatchObject({
+      status: "blocker",
+      decisionImpact: "rollback"
+    });
+    expect(emergencyStop.productionSoakDecisionBoard.decision).toBe("needs-human-approval");
+    expect(continueSoak.productionSoakDecisionBoard.staleSignals.length).toBeGreaterThan(0);
+    expect(promote.onCallRunbookPack.schemaVersion).toBe("ti.on_call_runbook_pack.v1");
+    expect(promote.onCallRunbookPack.dryRun).toBe(true);
+    expect(promote.onCallRunbookPack.resourcePolicy).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.onCallRunbookPack.decisionStates).toEqual([
+      "promote",
+      "hold",
+      "rollback",
+      "pause_side_tool",
+      "drain_partition",
+      "emergency_stop_restricted",
+      "require_human_review",
+      "defer_background_work"
+    ]);
+    expect(promote.onCallRunbookPack.procedures.map((procedure) => procedure.name)).toEqual([
+      "deploy_release",
+      "rollback_release",
+      "pause_source_atlas_import",
+      "pause_dark_web_metadata_refresh",
+      "emergency_stop_restricted_collectors",
+      "drain_queue_partitions",
+      "restore_public_ti_responsiveness"
+    ]);
+    expect(promote.onCallRunbookPack.incidentPlaybooks.map((playbook) => playbook.name)).toEqual([
+      "unsafe_url_exposure",
+      "credential_payload_fetch_attempt_blocked",
+      "dangerous_collector_compromise_assumption",
+      "quarantine_overflow",
+      "evidence_object_corruption",
+      "route_contract_drift",
+      "stale_answer_regression",
+      "unknown_query_false_ready_regression",
+      "host_resource_pressure"
+    ]);
+    expect(promote.onCallRunbookPack.procedures.find((procedure) => procedure.name === "pause_source_atlas_import")).toMatchObject({
+      decisionState: "pause_side_tool",
+      queuePartitions: ["source_atlas_import"],
+      rollbackOrResume: "resume after no auto-activation, no flood, and public search p95 proof is green"
+    });
+    expect(promote.onCallRunbookPack.procedures.find((procedure) => procedure.name === "pause_dark_web_metadata_refresh")).toMatchObject({
+      decisionState: "pause_side_tool",
+      queuePartitions: ["dark_web_metadata_index", "restricted_metadata"]
+    });
+    expect(promote.onCallRunbookPack.procedures.find((procedure) => procedure.name === "emergency_stop_restricted_collectors")).toMatchObject({
+      decisionState: "emergency_stop_restricted",
+      queuePartitions: ["restricted_metadata", "dark_web_metadata_index"]
+    });
+    expect(promote.onCallRunbookPack.procedures.find((procedure) => procedure.name === "drain_queue_partitions")?.queuePartitions).toEqual(expect.arrayContaining([
+      "source_atlas_import",
+      "dark_web_metadata_index",
+      "evidence_index_replay",
+      "graph_export",
+      "retention_backup"
+    ]));
+    expect(promote.onCallRunbookPack.incidentPlaybooks.find((playbook) => playbook.name === "unsafe_url_exposure")).toMatchObject({
+      decisionState: "emergency_stop_restricted",
+      severity: "emergency",
+      publicTiMode: "metadata_review"
+    });
+    expect(promote.onCallRunbookPack.incidentPlaybooks.find((playbook) => playbook.name === "unknown_query_false_ready_regression")).toMatchObject({
+      decisionState: "rollback",
+      publicTiMode: "searching"
+    });
+    expect(memoryWarning.onCallRunbookPack.incidentPlaybooks.find((playbook) => playbook.name === "host_resource_pressure")).toMatchObject({
+      decisionState: "defer_background_work",
+      severity: "hold"
+    });
+    expect(runtimeBlocker.onCallRunbookPack.incidentPlaybooks.find((playbook) => playbook.name === "host_resource_pressure")).toMatchObject({
+      decisionState: "rollback",
+      severity: "rollback"
+    });
+    expect(promote.onCallRunbookPack.sideToolSafeguards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tool: "dark_web_metadata_index", pauseState: "pause_side_tool", queuePartition: "dark_web_metadata_index", maxMemoryGb: 24 }),
+      expect.objectContaining({ tool: "source_atlas_discovery_import", pauseState: "pause_side_tool", queuePartition: "source_atlas_import", maxMemoryGb: 18 }),
+      expect.objectContaining({ tool: "evidence_index_replay", pauseState: "defer_background_work", queuePartition: "evidence_index_replay", maxMemoryGb: 22 })
+    ]));
+    expect(promote.onCallRunbookPack.sideToolSafeguards.every((safeguard) =>
+      safeguard.yieldTo.includes("interactive_live_search")
+      && safeguard.resumeGate.length > 0
+    )).toBe(true);
+    expect(promote.onCallRunbookPack.publicResponsiveness).toMatchObject({
+      targetFirstResponseSeconds: 3,
+      pollSeconds: 3,
+      restoreDecisionState: "defer_background_work"
+    });
+    expect(promote.onCallRunbookPack.integrations).toEqual({
+      capacitySimulation: "wired",
+      incidentRunbooks: "wired",
+      resourceArbitration: "wired",
+      productionSoakDecisionBoard: "wired",
+      releaseArtifactBundle: "wired"
+    });
+    expect(promote.onCallRunbookPack.proofCommands).toContain("bun test src/tests/ops.test.ts src/tests/api.test.ts src/tests/schedulerProduction.test.ts");
+    expect(promote.onCallRunbookPack.proofCommands).toContain("bun run check:ti-release-candidate");
+    expect(promote.onCallRunbookPack.operatorRunbook).toContain("when public /ti responsiveness is at risk, defer background work before reducing interactive search");
+    expect(JSON.stringify(promote.onCallRunbookPack)).not.toContain("object_key");
+    expect(JSON.stringify(promote.onCallRunbookPack)).not.toContain("payload://");
+    expect(promote.releaseTrainHardening.schemaVersion).toBe("ti.release_train_hardening.v1");
+    expect(promote.releaseTrainHardening.dryRun).toBe(true);
+    expect(["promote", "hold"]).toContain(promote.releaseTrainHardening.decision);
+    expect(promote.releaseTrainHardening.resourcePolicy).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.releaseTrainHardening.signals.map((signal) => signal.name)).toEqual([
+      "seven_day_public_ti_soak",
+      "thirty_day_capacity_forecast",
+      "deploy_mismatch_detection",
+      "image_version_pinning",
+      "migration_readiness",
+      "remote_proof_commands",
+      "public_api_wrapper_rollback",
+      "scraper_backend_rollback"
+    ]);
+    expect(promote.releaseTrainHardening.soakWindows).toEqual([
+      expect.objectContaining({
+        window: "7_day",
+        requiredSignals: ["seven_day_public_ti_soak", "deploy_mismatch_detection", "public_api_wrapper_rollback"],
+        proofCommand: "bun run soak:production"
+      }),
+      expect.objectContaining({
+        window: "30_day",
+        requiredSignals: ["thirty_day_capacity_forecast", "image_version_pinning", "migration_readiness", "scraper_backend_rollback"],
+        proofCommand: "bun test src/tests/ops.test.ts"
+      })
+    ]);
+    expect(promote.releaseTrainHardening.deployMismatchDetectors.map((detector) => detector.name)).toEqual([
+      "scraper_image",
+      "public_api_wrapper_image",
+      "frontend_ti_image",
+      "route_contract",
+      "public_wrapper_semantics"
+    ]);
+    expect(promote.releaseTrainHardening.imageVersionPins.map((pin) => pin.service)).toEqual([
+      "scraper",
+      "public_api_wrapper",
+      "frontend_ti",
+      "postgres_source_registry",
+      "queue_backend"
+    ]);
+    expect(promote.releaseTrainHardening.migrationReadiness.map((migration) => migration.migration)).toEqual([
+      "source_registry",
+      "analyst_loop",
+      "evidence_search",
+      "graph_backend",
+      "queue_backend"
+    ]);
+    expect(promote.releaseTrainHardening.migrationReadiness.every((migration) =>
+      migration.dryRunOnly === true && migration.proofCommand.length > 0 && migration.rollbackAction.length > 0
+    )).toBe(true);
+    expect(promote.releaseTrainHardening.rollbackCriteria.find((criteria) => criteria.target === "public_api_wrapper")?.criteria).toEqual(expect.arrayContaining([
+      "public /ti or POST /api/ti/search proof fails",
+      "unknown query returns ready instead of Searching/queued/metadata_review",
+      "route inventory or contract index drifts"
+    ]));
+    expect(promote.releaseTrainHardening.rollbackCriteria.find((criteria) => criteria.target === "scraper_backend")?.criteria).toEqual(expect.arrayContaining([
+      "RSS reaches or exceeds 160 GB",
+      "queue runaway blocks interactive search",
+      "release candidate no-leak proof fails"
+    ]));
+    expect(promote.releaseTrainHardening.remoteProofCommands).toContain("ssh inspur 'cd /srv/hanasand/ti/scraper && bun run check:ti-release-candidate'");
+    expect(promote.releaseTrainHardening.integrations).toEqual({
+      releaseArtifactBundle: "wired",
+      productionSoakDecisionBoard: "wired",
+      onCallRunbookPack: "wired",
+      resourceArbitration: "wired",
+      capacitySimulation: "wired"
+    });
+    expect(promote.releaseTrainHardening.proofCommands).toContain("bun run check:remote-drift");
+    expect(promote.releaseTrainHardening.proofCommands).toContain("TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof");
+    expect(promote.releaseTrainHardening.operatorRunbook).toContain("rollback the public API wrapper before the scraper when only wrapper semantics drift");
+    expect(deploymentBlocker.releaseTrainHardening.signals.find((signal) => signal.name === "deploy_mismatch_detection")).toMatchObject({
+      status: "blocker",
+      decisionImpact: "rollback"
+    });
+    expect(deploymentBlocker.releaseTrainHardening.signals.find((signal) => signal.name === "public_api_wrapper_rollback")).toMatchObject({
+      status: "blocker",
+      decisionImpact: "rollback"
+    });
+    expect(memoryWarning.releaseTrainHardening.signals.find((signal) => signal.name === "thirty_day_capacity_forecast")).toMatchObject({
+      status: "warning",
+      decisionImpact: "hold"
+    });
+    expect(runtimeBlocker.releaseTrainHardening.signals.find((signal) => signal.name === "scraper_backend_rollback")).toMatchObject({
+      status: "blocker",
+      decisionImpact: "rollback"
+    });
+    expect(emergencyStop.releaseTrainHardening.decision).toBe("needs-human-approval");
+    expect(JSON.stringify(promote.releaseTrainHardening)).not.toContain("object_key");
+    expect(JSON.stringify(promote.releaseTrainHardening)).not.toContain("payload://");
+    expect(promote.valueProgramOpsSoak.schemaVersion).toBe("ti.value_program.ops_soak.v1");
+    expect(promote.valueProgramOpsSoak.dryRun).toBe(true);
+    expect(["promote", "hold"]).toContain(promote.valueProgramOpsSoak.decision);
+    expect(promote.valueProgramOpsSoak.resourcePolicy).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.valueProgramOpsSoak.sideToolBudgets.map((budget) => budget.tool)).toEqual([
+      "dark_web_metadata_index",
+      "source_atlas_discovery_import"
+    ]);
+    expect(promote.valueProgramOpsSoak.sideToolBudgets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        tool: "dark_web_metadata_index",
+        recordTarget: 60_000,
+        memoryCeilingGb: 24,
+        refreshCadence: "daily_high_value_weekly_default"
+      }),
+      expect.objectContaining({
+        tool: "source_atlas_discovery_import",
+        recordTarget: 10_000,
+        memoryCeilingGb: 18,
+        refreshCadence: "weekly_import_monthly_full_rescore"
+      })
+    ]));
+    expect(promote.valueProgramOpsSoak.sideToolBudgets.every((budget) =>
+      budget.yieldsTo.includes("interactive_live_search") && budget.memoryCeilingGb <= 24
+    )).toBe(true);
+    expect(promote.valueProgramOpsSoak.refreshSoak).toMatchObject({
+      windowHours: 24,
+      checkpointsHours: [1, 6, 12, 24]
+    });
+    expect(promote.valueProgramOpsSoak.refreshSoak.gates.map((gate) => gate.name)).toEqual([
+      "darkweb_60k_refresh_soak",
+      "source_atlas_10k_import_soak",
+      "public_search_starvation_guard",
+      "unsafe_output_guard",
+      "host_resource_guard",
+      "inspur_deployment_proof"
+    ]);
+    expect(promote.valueProgramOpsSoak.alertThresholds.map((alert) => alert.name)).toEqual([
+      "darkweb_unsafe_attempts",
+      "darkweb_raw_url_leak",
+      "darkweb_review_backlog",
+      "source_atlas_auto_activation",
+      "source_atlas_queue_flood",
+      "public_ti_latency_starvation",
+      "scraper_memory_pressure",
+      "cti_reserve_pressure"
+    ]);
+    expect(promote.valueProgramOpsSoak.safetyIncidentDrills.map((drill) => drill.name)).toEqual([
+      "unsafe_target_attempt",
+      "raw_url_leak_regression",
+      "collector_quarantine_overflow",
+      "source_atlas_auto_activation",
+      "public_search_starvation"
+    ]);
+    expect(promote.valueProgramOpsSoak.deploymentProof.inspurProofCommands).toContain("ssh inspur 'cd /srv/hanasand/ti/scraper && bun run check:deploy-hygiene'");
+    expect(promote.valueProgramOpsSoak.deploymentProof.publicProofCommand).toBe("TI_SKIP_CONTAINER_CHECKS=true bun run check:inspur-public-proof");
+    expect(promote.valueProgramOpsSoak.integrations).toEqual({
+      capacitySimulation: "wired",
+      productionSoakDecisionBoard: "wired",
+      onCallRunbookPack: "wired",
+      releaseTrainHardening: "wired"
+    });
+    expect(promote.valueProgramOpsSoak.proofCommands).toContain("bun run check:ti-release-candidate");
+    expect(promote.valueProgramOpsSoak.operatorRunbook).toContain("source-atlas import remains dry-run and must not mutate source registry, lease frontier work, or auto-activate candidates");
+    expect(memoryWarning.valueProgramOpsSoak.refreshSoak.gates.find((gate) => gate.name === "host_resource_guard")).toMatchObject({
+      status: "warning",
+      decisionImpact: "hold"
+    });
+    expect(runtimeBlocker.valueProgramOpsSoak.refreshSoak.gates.find((gate) => gate.name === "host_resource_guard")).toMatchObject({
+      status: "blocker",
+      decisionImpact: "rollback"
+    });
+    expect(emergencyStop.valueProgramOpsSoak.decision).toBe("needs-human-approval");
+    expect(JSON.stringify(promote.valueProgramOpsSoak)).not.toContain("object_key");
+    expect(JSON.stringify(promote.valueProgramOpsSoak)).not.toContain("payload://");
+    expect(promote.dependencyRollbackDrill.schemaVersion).toBe("ti.multi_service_dependency_rollback_drill.v1");
+    expect(promote.dependencyRollbackDrill.dryRun).toBe(true);
+    expect(promote.dependencyRollbackDrill.resourceBudget).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.dependencyRollbackDrill.services.map((service) => service.name)).toEqual([
+      "scraper",
+      "public_api_wrapper",
+      "frontend_ti",
+      "postgres_source_registry",
+      "evidence_object_store",
+      "opensearch_vector_handoff",
+      "graph_backend",
+      "queue_backend",
+      "canary_collection",
+      "restricted_metadata_controls"
+    ]);
+    expect(promote.dependencyRollbackDrill.scenarios.map((scenario) => scenario.name)).toEqual([
+      "queue_saturation",
+      "source_outage_wave",
+      "parser_failure_spike",
+      "evidence_object_degradation",
+      "graph_export_corruption",
+      "api_gateway_misrouting",
+      "public_proof_failure",
+      "canary_rollback",
+      "container_rollback"
+    ]);
+    expect(promote.dependencyRollbackDrill.integrations).toEqual({
+      agent01Governance: "wired",
+      agent02Scheduler: "wired",
+      agent03Adapters: "wired",
+      agent04PublicCorrelation: "wired",
+      agent05RestrictedMetadata: "wired",
+      agent06EvidenceChain: "wired",
+      agent07Quality: "wired",
+      agent08Graph: "wired",
+      agent09ApiCompatibility: "wired",
+      agent10Operations: "wired"
+    });
+    expect(promote.dependencyRollbackDrill.services.every((service) =>
+      service.healthCheck.length > 0
+      && service.failureSymptoms.length > 0
+      && service.operatorActions.length > 0
+      && service.routeProof.length > 0
+      && service.noLeakGuarantee.includes("hashes")
+    )).toBe(true);
+    expect(promote.dependencyRollbackDrill.scenarios.every((scenario) =>
+      scenario.rollbackOrder.length > 0
+      && scenario.routeProof.length > 0
+      && scenario.noLeakGuarantees.every((guarantee) => !guarantee.includes("raw leaked rows") || guarantee.includes("must not"))
+    )).toBe(true);
+    expect(promote.dependencyRollbackDrill.scenarios.find((scenario) => scenario.name === "api_gateway_misrouting")).toMatchObject({
+      affectedServices: ["public_api_wrapper", "frontend_ti", "scraper"],
+      expectedUserState: "degraded",
+      releaseDecisionImpact: "rollback"
+    });
+    expect(promote.dependencyRollbackDrill.services.find((service) => service.name === "restricted_metadata_controls")).toMatchObject({
+      rollbackAction: "keep restricted connectors disabled until approval, proxy, retention, and redaction checks pass",
+      userVisibleDegradation: "restricted results remain metadata_review or blocked with safe victim/company/count summaries only"
+    });
+    expect(promote.dependencyRollbackDrill.rollbackOrder).toEqual([
+      "restricted_metadata_controls",
+      "canary_collection",
+      "frontend_ti",
+      "public_api_wrapper",
+      "scraper",
+      "queue_backend",
+      "graph_backend",
+      "opensearch_vector_handoff",
+      "evidence_object_store",
+      "postgres_source_registry"
+    ]);
+    expect(promote.dependencyRollbackDrill.proofCommands).toContain("bun run check:canary-proof-path");
+    expect(promote.dependencyRollbackDrill.proofCommands).toContain("bun run check:deploy-hygiene");
+    expect(promote.dependencyRollbackDrill.operatorRunbook).toContain("keep browser workers disabled and do not assume GPU availability");
+    expect(promote.releaseArtifactBundle.schemaVersion).toBe("ti.enterprise_soak_release_artifact_bundle.v1");
+    expect(promote.releaseArtifactBundle.dryRun).toBe(true);
+    expect(["promote", "warning"]).toContain(promote.releaseArtifactBundle.decision);
+    expect(promote.releaseArtifactBundle.resourcePolicy).toEqual({
+      scraperTargetGb: 96,
+      scraperCeilingGb: 160,
+      preserveCtiReserveGb: 500,
+      browserPoolDisabled: true,
+      boundedCaches: true,
+      diskFirstEvidence: true,
+      assumesGpu: false
+    });
+    expect(promote.releaseArtifactBundle.gates.map((gate) => gate.name)).toEqual([
+      "route_inventory",
+      "contract_index",
+      "api_regression",
+      "sdk_fixtures",
+      "deploy_hygiene",
+      "canary_readiness_soak",
+      "public_proof",
+      "scheduler_status",
+      "restricted_metadata_audit",
+      "evidence_chain",
+      "graph_stix_readiness",
+      "source_portfolio_readiness",
+      "dependency_rollback_drill",
+      "resource_budget",
+      "public_ti_expectations"
+    ]);
+    expect(promote.releaseArtifactBundle.soakEvidence.map((dimension) => dimension.name)).toEqual([
+      "queue_health",
+      "freshness_slo",
+      "source_outage_wave",
+      "parser_failure_spike",
+      "evidence_object_durability",
+      "graph_drift_holds",
+      "api_latency_polling",
+      "memory_disk_budget",
+      "worker_saturation",
+      "incident_rollback_readiness"
+    ]);
+    expect(promote.releaseArtifactBundle.publicTiExpectations.map((item) => item.name)).toEqual([
+      "no_default_actor",
+      "unknown_searching_only",
+      "partial_updates_seconds",
+      "no_stale_demo_cache_prose"
+    ]);
+    expect(promote.releaseArtifactBundle.gates.every((gate) =>
+      gate.proofCommand.length > 0
+      && gate.evidenceSource.length > 0
+      && !gate.noLeakProof.includes("raw body")
+    )).toBe(true);
+    expect(promote.releaseArtifactBundle.artifactManifest.map((artifact) => artifact.artifact)).toEqual([
+      "route inventory",
+      "contract index",
+      "API regression",
+      "SDK fixtures",
+      "deploy hygiene",
+      "canary readiness/soak",
+      "public proof",
+      "dependency rollback drill"
+    ]);
+    expect(promote.releaseArtifactBundle.proofCommands).toContain("bun run check:ti-release-candidate");
+    expect(promote.releaseArtifactBundle.proofCommands).toContain("bun run check:api-regression");
+    expect(promote.releaseArtifactBundle.operatorRunbook).toContain("keep public /ti honest: no default actor, unknown says Searching only, partial results update in seconds, and stale demo/cache prose stays absent");
+    expect(warning.releaseArtifactBundle.decision).toBe("warning");
+    expect(blocker.releaseArtifactBundle.decision).toBe("hold");
+    expect(blocker.releaseArtifactBundle.ownerBlockers.some((blockerRow) => blockerRow.owner === "Agent 09" && blockerRow.gate === "public_ti_expectations")).toBe(true);
+    expect(deploymentBlocker.releaseArtifactBundle.decision).toBe("rollback-only");
+    expect(deploymentBlocker.releaseArtifactBundle.ownerBlockers.some((blockerRow) => blockerRow.gate === "public_proof")).toBe(true);
+    expect(emergencyStop.releaseArtifactBundle.decision).toBe("needs-human-approval");
+    expect(promote.nextProofCommands).toContain("bun run check:contract-index");
+    expect(promote.nextProofCommands).toContain("bun test src/tests/ops.test.ts");
+    expect(promote.nextProofCommands).toContain("bun run check:canary-proof-path");
+    expect(promote.nextProofCommands).toContain("bun run check:api-regression");
     expect(promote.runtimeProofs.find((proof) => proof.name === "graph_export_sla")?.graphExportSla).toMatchObject({
       endpoint: "agent10_release_packet",
       state: "pass",

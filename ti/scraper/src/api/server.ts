@@ -9,25 +9,38 @@ import {
   buildSchedulerSlaEnforcement,
   buildSchedulerWorkerQueueCutover,
   buildSchedulerWorkerSoakMigration,
+  buildSchedulerWorkerLeaseSoakHarness,
   buildSchedulerProductionAdapterTelemetry,
   buildSchedulerCanaryControlPlane,
+  buildSchedulerDurableBackendReadiness,
+  buildSchedulerFreshnessSloEngine,
+  buildSchedulerFreshnessSloDashboard,
+  buildSchedulerInteractiveSearchFreshness,
+  buildSchedulerProductionLeaseSemantics,
+  buildSchedulerFairnessGovernance,
+  buildSchedulerPersistenceReplayCutover,
+  buildSchedulerPostgresQueueAdapterReadiness,
   buildSchedulerDiagnostics,
   schedulerBackpressureSummaryForTasks,
   SCHEDULER_CUTOVER_DESIGN
 } from "../frontier/schedulerProduction.ts";
 import {
   activatePublicCanarySources,
+  buildCanaryReadinessPacket,
   buildCanaryOperatorSummary,
+  buildCanarySoakReport,
   pausePublicCanarySources,
   runCanaryCollectionCycle,
+  type CanaryCollectionLoopHandle,
   type CanaryFetch
 } from "../ops/canaryCollection.ts";
 import { buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
 import type { WorkerSupervisor } from "../ops/supervisor.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto } from "../pipeline/actorProfileFusion.ts";
-import { buildAnalystFeedbackLoopDto } from "../pipeline/analystFeedback.ts";
+import { buildActiveLearningCandidateQueueDto, buildActorProfileReviewWorkbenchDto, buildAnalystFeedbackLearningLoopDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto, buildQualityRegressionSuiteDto } from "../pipeline/analystFeedback.ts";
 import { buildAttackMappingQualityDto } from "../pipeline/attackMappingQuality.ts";
 import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
+import { buildCtiEvaluationDatasetPackDto, buildEvaluationDatasetGovernanceDto, buildQualityRuntimeValueGatesDto } from "../pipeline/evaluation.ts";
 import type { EvidenceStage, StagedEvidenceInput } from "../pipeline/intelligenceProfiles.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import {
@@ -39,17 +52,19 @@ import {
   type SearchQualityApiDto,
   type SearchQualityDashboardDto
 } from "../pipeline/searchQualityGate.ts";
-import { buildTimelinessGroundTruthHarnessDto } from "../pipeline/timelinessGroundTruth.ts";
+import { buildHighPriorityActorFreshnessDashboardDto, buildTimelinessGroundTruthHarnessDto } from "../pipeline/timelinessGroundTruth.ts";
 import { createCollectionPlan, createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
 import { RssAdapter } from "../adapters/rss.ts";
 import { StaticWebAdapter, type StaticWebAdapterOptions } from "../adapters/staticWeb.ts";
-import { buildRestrictedMetadataOperationsStatus, planDarknetMetadataLiveSearch, restrictedMetadataAnalystOperationsContract, restrictedMetadataConnectorCertificationContract, restrictedMetadataEmergencyStopCertificationContract, restrictedMetadataIsolationHarnessContract, restrictedMetadataKillSwitchDrillContract, restrictedMetadataNonBlockingSearchContract, restrictedMetadataOperationalPlaybooksContract } from "../adapters/darknetMetadata.ts";
+import { buildDarkwebIndexStatus, darkwebIndexContract, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
+import { buildRestrictedMetadataOperationsStatus, planDarknetMetadataLiveSearch, restrictedMetadataAnalystOperationsContract, restrictedMetadataCapacityIsolationContract, restrictedMetadataCapacitySloContract, restrictedMetadataConnectorCertificationContract, restrictedMetadataDarkCanaryContract, restrictedMetadataEmergencyStopCertificationContract, restrictedMetadataEvidenceHoldReleaseDrillContract, restrictedMetadataIsolationHarnessContract, restrictedMetadataKillSwitchDrillContract, restrictedMetadataLegalEthicsAuditExportContract, restrictedMetadataNonBlockingSearchContract, restrictedMetadataOperatorGovernanceContract, restrictedMetadataOperationalPlaybooksContract, restrictedMetadataPolicyAuditExportContract, restrictedMetadataQualityEvaluationContract, restrictedMetadataReviewHealthContract } from "../adapters/darknetMetadata.ts";
 import { buildTelegramPublicActorReadinessDto, buildTelegramPublicCanaryRollout, buildTelegramPublicCompactSearchSummary, buildTelegramPublicCutoverReport, buildTelegramPublicOperatorControlEffects, buildTelegramPublicOperatorStates, buildTelegramPublicPromotionCanaryProof, buildTelegramPublicPromotionCertification, buildTelegramPublicReliabilityReport, buildTelegramPublicSlaReport, buildTelegramPublicSourcePackCompatibility, buildTelegramPublicSourcePackReadiness, planTelegramPublicSearchBackfill, publicChannelEvidenceFromCapture, type TelegramPublicSourcePack } from "../adapters/telegramPublic.ts";
 import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion.ts";
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
+import { buildAnalystLoopPersistenceReadinessPacket } from "../storage/analystLoopPostgres.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
-import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourceMarketplaceApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
+import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourceMarketplaceApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, buildTiSourceAtlasApiResponse, buildTiSourceAtlasExportManifestApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
 import type {
   AnalystClaimLedgerEntry,
   AnalystLoopSnapshot,
@@ -117,6 +132,7 @@ export interface ApiServerOptions {
   objectStore?: ObjectEvidenceStore;
   publicClearWebFetcher?: StaticWebAdapterOptions["fetcher"];
   canaryFetch?: CanaryFetch;
+  canaryLoop?: CanaryCollectionLoopHandle;
   disableBundledSourcePack?: boolean;
   disableOnDemandClearWebCapture?: boolean;
 }
@@ -125,6 +141,15 @@ export interface ApiServerHandle {
   port: number;
   stop(): void;
 }
+
+const CONTRACT_INDEX_FORBIDDEN_VALUE_PATTERNS = [
+  "cookie=",
+  "authorization:",
+  "set-cookie",
+  "password=",
+  "object_key_value",
+  "raw proof payload"
+];
 
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
   const configuredPort = options.port ?? 8097;
@@ -166,7 +191,56 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       operatorView: buildCanaryOperatorSummary({
         store: options.store,
         frontier: options.frontier,
-        generatedAt: url.searchParams.get("generatedAt") ?? undefined
+        generatedAt: url.searchParams.get("generatedAt") ?? undefined,
+        runtime: options.canaryLoop?.getState()
+      })
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/ops/canary/readiness") {
+    const requiredQueries = (url.searchParams.get("requiredQueries") ?? "APT42,Turla")
+      .split(",")
+      .map((query) => query.trim())
+      .filter(Boolean);
+    const generatedAt = url.searchParams.get("generatedAt") ?? undefined;
+    const readiness = buildCanaryReadinessPacket({
+      store: options.store,
+      frontier: options.frontier,
+      generatedAt,
+      minActiveSources: numberParam(url.searchParams.get("minActiveSources")),
+      maxFreshnessSeconds: numberParam(url.searchParams.get("maxFreshnessSeconds")),
+      requiredQueries,
+      requireExternalObjectStorage: url.searchParams.get("requireExternalObjectStorage") !== "false",
+      requireNativeLiveHttp: url.searchParams.get("requireNativeLiveHttp") === "true"
+    });
+    return json({
+      readiness,
+      operatorView: buildCanaryOperatorSummary({
+        store: options.store,
+        frontier: options.frontier,
+        generatedAt,
+        runtime: options.canaryLoop?.getState()
+      })
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/ops/canary/soak") {
+    const generatedAt = url.searchParams.get("generatedAt") ?? undefined;
+    return json({
+      soak: buildCanarySoakReport({
+        store: options.store,
+        frontier: options.frontier,
+        generatedAt,
+        windowHours: numberParam(url.searchParams.get("windowHours")),
+        minCycles: numberParam(url.searchParams.get("minCycles")),
+        maxFreshnessSeconds: numberParam(url.searchParams.get("maxFreshnessSeconds")),
+        requireNativeLiveHttp: url.searchParams.get("requireNativeLiveHttp") === "true"
+      }),
+      operatorView: buildCanaryOperatorSummary({
+        store: options.store,
+        frontier: options.frontier,
+        generatedAt,
+        runtime: options.canaryLoop?.getState()
       })
     });
   }
@@ -175,7 +249,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     const operatorView = buildCanaryOperatorSummary({
       store: options.store,
       frontier: options.frontier,
-      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined,
+      runtime: options.canaryLoop?.getState()
     });
     return new Response(buildCanaryOperatorConsoleHtml(operatorView), {
       headers: {
@@ -200,7 +275,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   }
 
   if (request.method === "GET" && url.pathname === "/v1/contracts") {
-    return json(buildEnterpriseApiContractIndex());
+    return json(sanitizeContractIndexNoLeakKeys(buildEnterpriseApiContractIndex()));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/analyst/claim-ledger") {
@@ -218,7 +293,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   if (request.method === "POST" && analystClaimLedgerActionMatch) {
     const entryId = analystClaimLedgerActionMatch[1];
     if (!entryId) return apiError("bad_request", "Claim ledger entry id is required", 400);
-    const input = await readJson<Record<string, unknown>>(request);
+    const input = await readRequestBody<Record<string, unknown>>(request);
     const result = applyAnalystClaimLedgerAction(options.store, entryId, {
       action: typeof input.action === "string" ? input.action : "",
       dryRun: input.dryRun !== false,
@@ -249,6 +324,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       runId: url.searchParams.get("runId") ?? undefined,
       limit: Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get("limit") ?? "25", 10)))
     }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/analyst/persistence-readiness") {
+    return json(buildAnalystLoopPersistenceReadinessPacket(nowIso()));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/analyst/source-activation-packets") {
@@ -289,7 +368,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   if (request.method === "POST" && victimNotificationActionMatch) {
     const packetId = victimNotificationActionMatch[1];
     if (!packetId) return apiError("bad_request", "Victim notification packet id is required", 400);
-    const input = await readJson<Record<string, unknown>>(request);
+    const input = await readRequestBody<Record<string, unknown>>(request);
     const result = applyAnalystVictimNotificationPacketAction(options.store, packetId, {
       action: typeof input.action === "string" ? input.action : "",
       dryRun: input.dryRun !== false,
@@ -303,7 +382,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   if (request.method === "POST" && sourceActivationActionMatch) {
     const packetId = sourceActivationActionMatch[1];
     if (!packetId) return apiError("bad_request", "Source activation packet id is required", 400);
-    const input = await readJson<Record<string, unknown>>(request);
+    const input = await readRequestBody<Record<string, unknown>>(request);
     const result = applyAnalystSourceActivationPacketAction(options.store, packetId, {
       action: typeof input.action === "string" ? input.action : "",
       dryRun: input.dryRun !== false,
@@ -431,7 +510,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   }
 
   if (request.method === "POST" && url.pathname === "/v1/sources/canary-activation") {
-    const input = await readJson<Record<string, unknown>>(request);
+    const input = await readRequestBody<Record<string, unknown>>(request);
     if (input.operatorApproval !== true) {
       return apiError("approval_required", "operatorApproval=true is required for executable canary source activation", 409, {
         mode: "human_approved_clear_web_canary_only"
@@ -443,6 +522,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       operatorId: typeof input.approvedBy === "string" ? input.approvedBy : request.headers.get("x-actor-id") ?? "operator",
       now: typeof input.generatedAt === "string" ? input.generatedAt : nowIso()
     });
+    if (isHtmlFormRequest(request)) return redirectToCanaryConsole("activated");
     return json({
       activation,
       guarantees: [
@@ -454,7 +534,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   }
 
   if (request.method === "POST" && url.pathname === "/v1/sources/canary-pause") {
-    const input = await readJson<Record<string, unknown>>(request);
+    const input = await readRequestBody<Record<string, unknown>>(request);
     if (input.operatorApproval !== true) {
       return apiError("approval_required", "operatorApproval=true is required to pause canary source collection", 409, {
         mode: "human_approved_clear_web_canary_pause"
@@ -466,6 +546,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       operatorId: typeof input.approvedBy === "string" ? input.approvedBy : request.headers.get("x-actor-id") ?? "operator",
       now: typeof input.generatedAt === "string" ? input.generatedAt : nowIso()
     });
+    if (isHtmlFormRequest(request)) return redirectToCanaryConsole("paused");
     return json({
       pause,
       guarantees: [
@@ -522,6 +603,48 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     return json(buildSourceMarketplaceApiResponse({
       tenantId,
       queries,
+      generatedAt: nowIso()
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/sources/atlas") {
+    const input = await readJson<Record<string, unknown>>(request);
+    const tenantId = typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined;
+    const queries = Array.isArray(input.queries)
+      ? input.queries.map(String).filter((query) => query.trim().length > 0)
+      : typeof input.query === "string" && input.query.trim()
+        ? [input.query]
+        : [];
+    const recordLimit = typeof input.recordLimit === "number" && Number.isFinite(input.recordLimit)
+      ? Math.floor(input.recordLimit)
+      : undefined;
+    return json(buildTiSourceAtlasApiResponse({
+      tenantId,
+      queries,
+      recordLimit,
+      generatedAt: nowIso()
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/sources/atlas/export") {
+    const input = await readJson<Record<string, unknown>>(request);
+    const tenantId = typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined;
+    const queries = Array.isArray(input.queries)
+      ? input.queries.map(String).filter((query) => query.trim().length > 0)
+      : typeof input.query === "string" && input.query.trim()
+        ? [input.query]
+        : [];
+    const recordLimit = typeof input.recordLimit === "number" && Number.isFinite(input.recordLimit)
+      ? Math.floor(input.recordLimit)
+      : undefined;
+    const planLabel = input.planLabel === "first_100" || input.planLabel === "first_1000" || input.planLabel === "future_10k"
+      ? input.planLabel
+      : undefined;
+    return json(buildTiSourceAtlasExportManifestApiResponse({
+      tenantId,
+      queries,
+      planLabel,
+      recordLimit,
       generatedAt: nowIso()
     }));
   }
@@ -583,12 +706,18 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   }
 
   if (request.method === "POST" && url.pathname === "/v1/ops/canary/run") {
-    const input = await readJson<Record<string, unknown>>(request);
+    const input = await readRequestBody<Record<string, unknown>>(request);
     if (input.operatorApproval !== true) {
       return apiError("approval_required", "operatorApproval=true is required to run the public canary collector", 409, {
         mode: "bounded_public_http_canary"
       });
     }
+    const bodyNumber = (value: unknown): number | undefined => {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value !== "string" || !value.trim()) return undefined;
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
     const canaryRun = await runCanaryCollectionCycle({
       store: options.store,
       frontier: options.frontier,
@@ -596,18 +725,21 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       fetch: options.canaryFetch,
       tenantId: typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined,
       operatorId: typeof input.approvedBy === "string" ? input.approvedBy : request.headers.get("x-actor-id") ?? "operator",
-      maxSources: typeof input.maxSources === "number" ? input.maxSources : undefined,
-      maxTasks: typeof input.maxTasks === "number" ? input.maxTasks : undefined,
-      maxBytes: typeof input.maxBytes === "number" ? input.maxBytes : undefined,
-      timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,
+      activateSources: false,
+      maxSources: bodyNumber(input.maxSources),
+      maxTasks: bodyNumber(input.maxTasks),
+      maxBytes: bodyNumber(input.maxBytes),
+      timeoutMs: bodyNumber(input.timeoutMs),
       now: typeof input.generatedAt === "string" ? () => String(input.generatedAt) : undefined
     });
+    if (isHtmlFormRequest(request)) return redirectToCanaryConsole("ran");
     return json({
       canaryRun,
       operatorView: buildCanaryOperatorSummary({
         store: options.store,
         frontier: options.frontier,
-        generatedAt: canaryRun.generatedAt
+        generatedAt: canaryRun.generatedAt,
+        runtime: options.canaryLoop?.getState()
       })
     });
   }
@@ -726,10 +858,83 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       options,
       generatedAt: url.searchParams.get("generatedAt") ?? undefined
     });
+    const highPriorityActorFreshnessDashboard = buildHighPriorityActorFreshnessDashboardDto({
+      query,
+      timelinessGroundTruth,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
     const attackMappingQuality = attackMappingQualityForQuery({
       query,
       tenantId: request.headers.get("x-tenant-id") ?? undefined,
       options,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const analystFeedbackLoop = analystFeedbackLoopForQuery({
+      query,
+      tenantId: request.headers.get("x-tenant-id") ?? undefined,
+      options,
+      qualityDashboard,
+      entityResolutionWorkbench,
+      timelinessGroundTruth,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const actorProfileReviewWorkbench = actorProfileReviewWorkbenchForQuery({
+      query,
+      tenantId: request.headers.get("x-tenant-id") ?? undefined,
+      options,
+      analystFeedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const evaluationDatasetGovernance = buildEvaluationDatasetGovernanceDto({
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const ctiEvaluationDatasetPack = buildCtiEvaluationDatasetPackDto({
+      governance: evaluationDatasetGovernance,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const qualityRegressionSuite = qualityRegressionSuiteForQuery({
+      query,
+      analystFeedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const analystQualityReviewQueue = buildAnalystQualityReviewQueueDto({
+      query,
+      actorProfileReviewWorkbench,
+      feedbackLoop: analystFeedbackLoop,
+      qualityRegressionSuite,
+      evaluationDatasetGovernance,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const analystFeedbackLearningLoop = buildAnalystFeedbackLearningLoopDto({
+      query,
+      feedbackLoop: analystFeedbackLoop,
+      qualityRegressionSuite,
+      actorProfileReviewWorkbench,
+      analystQualityReviewQueue,
+      evaluationDatasetGovernance,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const activeLearningCandidateQueue = buildActiveLearningCandidateQueueDto({
+      query,
+      feedbackLoop: analystFeedbackLoop,
+      qualityRegressionSuite,
+      actorProfileReviewWorkbench,
+      analystQualityReviewQueue,
+      evaluationDatasetGovernance,
+      analystFeedbackLearningLoop,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    const qualityRuntimeValueGates = buildQualityRuntimeValueGatesDto({
+      query,
+      quality: search.quality,
+      publicTiAnswer: search.publicTiAnswer,
+      timelinessGroundTruth,
+      activeLearningCandidateQueue,
+      ctiEvaluationDatasetPack,
       generatedAt: url.searchParams.get("generatedAt") ?? undefined
     });
     return json({
@@ -738,16 +943,17 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       dashboard: qualityDashboard,
       entityResolutionWorkbench,
       timelinessGroundTruth,
+      highPriorityActorFreshnessDashboard,
       attackMappingQuality,
-      analystFeedbackLoop: analystFeedbackLoopForQuery({
-        query,
-        tenantId: request.headers.get("x-tenant-id") ?? undefined,
-        options,
-        qualityDashboard,
-        entityResolutionWorkbench,
-        timelinessGroundTruth,
-        generatedAt: url.searchParams.get("generatedAt") ?? undefined
-      }),
+      analystFeedbackLoop,
+      actorProfileReviewWorkbench,
+      evaluationDatasetGovernance,
+      ctiEvaluationDatasetPack,
+      analystQualityReviewQueue,
+      analystFeedbackLearningLoop,
+      activeLearningCandidateQueue,
+      qualityRuntimeValueGates,
+      qualityRegressionSuite,
       publicTiAnswer: search.publicTiAnswer,
       examples: searchQualityApiExamples()
     });
@@ -862,6 +1068,28 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       store: options.store
     });
     return json(result.body);
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/darkweb/status") {
+    return json({
+      status: buildDarkwebIndexStatus(),
+      contract: darkwebIndexContract()
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/darkweb/search") {
+    return json({
+      darkwebIndex: searchDarkwebIndex({
+        q: url.searchParams.get("q") ?? url.searchParams.get("query") ?? undefined,
+        category: url.searchParams.get("category") ?? undefined,
+        legalTriage: url.searchParams.get("legalTriage") ?? undefined,
+        liveness: url.searchParams.get("liveness") ?? undefined,
+        network: url.searchParams.get("network") ?? undefined,
+        cursor: url.searchParams.get("cursor") ?? undefined,
+        limit: numericParam(url.searchParams.get("limit")) ?? undefined
+      }),
+      contract: darkwebIndexContract()
+    });
   }
 
   const restrictedMetadataSourceApplyPlanMatch = url.pathname.match(/^\/v1\/sources\/([^/]+)\/restricted-metadata\/apply-plan$/);
@@ -1018,6 +1246,25 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   return apiError("not_found", `No route for ${request.method} ${url.pathname}`, 404);
 }
 
+function sanitizeContractIndexNoLeakKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeContractIndexNoLeakKeys(entry));
+  }
+  if (typeof value === "string") {
+    const lower = value.toLowerCase();
+    if (!CONTRACT_INDEX_FORBIDDEN_VALUE_PATTERNS.some((pattern) => lower.includes(pattern))) return value;
+    return "[redacted_contract_example_value]";
+  }
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+    const safeKey = key.includes("objectKey") || key.includes("ObjectKey")
+      ? key.replace(/objectKeys?/i, "objectRefs")
+      : key;
+    return [safeKey, sanitizeContractIndexNoLeakKeys(entry)];
+  }));
+}
+
 function runResultsResponse(run: CollectionRun, options: ApiServerOptions, url: URL) {
   const include = requestedIncludes(url);
   const materialized = materializeRunResults(run, options);
@@ -1172,8 +1419,30 @@ function searchTermsForQuery(query: string): string[] {
   const normalized = normalizeSearchQuery(query);
   return uniqueStrings([
     normalized,
-    ...normalized.split(/\s+/).filter((term) => term.length >= 4)
+    ...normalized.split(/\s+/).filter((term) => term.length >= 4 && !isGenericSearchToken(term))
   ]);
+}
+
+const GENERIC_SEARCH_TOKENS = new Set([
+  "actor",
+  "actors",
+  "apt",
+  "group",
+  "threat",
+  "cyber",
+  "attack",
+  "attacks",
+  "malware",
+  "ransomware",
+  "campaign",
+  "made",
+  "unknown",
+  "random",
+  "test"
+]);
+
+function isGenericSearchToken(term: string): boolean {
+  return GENERIC_SEARCH_TOKENS.has(term);
 }
 
 function itemMatchesQuery(title: string | undefined, body: string | undefined, url: string, terms: string[]): boolean {
@@ -1388,6 +1657,10 @@ async function publicIntelSearchResponse(input: {
     tenantId: input.tenantId,
     options: input.options
   });
+  const highPriorityActorFreshnessDashboard = buildHighPriorityActorFreshnessDashboardDto({
+    query: input.query,
+    timelinessGroundTruth
+  });
   const attackMappingQuality = attackMappingQualityForQuery({
     query: input.query,
     tenantId: input.tenantId,
@@ -1401,6 +1674,48 @@ async function publicIntelSearchResponse(input: {
     qualityDashboard,
     entityResolutionWorkbench,
     timelinessGroundTruth
+  });
+  const qualityRegressionSuite = qualityRegressionSuiteForQuery({
+    query: input.query,
+    analystFeedbackLoop,
+    timelinessGroundTruth,
+    attackMappingQuality
+  });
+  const evaluationDatasetGovernance = buildEvaluationDatasetGovernanceDto();
+  const ctiEvaluationDatasetPack = buildCtiEvaluationDatasetPackDto({
+    governance: evaluationDatasetGovernance
+  });
+  const actorProfileReviewWorkbench = actorProfileReviewWorkbenchForQuery({
+    query: input.query,
+    tenantId: input.tenantId,
+    options: input.options,
+    analystFeedbackLoop,
+    timelinessGroundTruth,
+    attackMappingQuality
+  });
+  const analystQualityReviewQueue = buildAnalystQualityReviewQueueDto({
+    query: input.query,
+    actorProfileReviewWorkbench,
+    feedbackLoop: analystFeedbackLoop,
+    qualityRegressionSuite,
+    evaluationDatasetGovernance
+  });
+  const analystFeedbackLearningLoop = buildAnalystFeedbackLearningLoopDto({
+    query: input.query,
+    feedbackLoop: analystFeedbackLoop,
+    qualityRegressionSuite,
+    actorProfileReviewWorkbench,
+    analystQualityReviewQueue,
+    evaluationDatasetGovernance
+  });
+  const activeLearningCandidateQueue = buildActiveLearningCandidateQueueDto({
+    query: input.query,
+    feedbackLoop: analystFeedbackLoop,
+    qualityRegressionSuite,
+    actorProfileReviewWorkbench,
+    analystQualityReviewQueue,
+    evaluationDatasetGovernance,
+    analystFeedbackLearningLoop
   });
   const graph = graphReviewSummaryForQuery({
     query: input.query,
@@ -1453,7 +1768,7 @@ async function publicIntelSearchResponse(input: {
     cursor: compatibility.cursor,
     nextCursor: compatibility.nextCursor
   });
-  const publicTiAnswer = publicTiAnswerForSearch({
+  const publicTiAnswerDto = publicTiAnswerForSearch({
     actorProfile,
     compatibility,
     sourceCoverage,
@@ -1466,6 +1781,14 @@ async function publicIntelSearchResponse(input: {
     restrictedMetadata,
     graph,
     sla
+  });
+  const qualityRuntimeValueGates = buildQualityRuntimeValueGatesDto({
+    query: input.query,
+    quality,
+    publicTiAnswer: publicTiAnswerDto,
+    timelinessGroundTruth,
+    activeLearningCandidateQueue,
+    ctiEvaluationDatasetPack
   });
   const publicWrapperDelta = publicWrapperDeltaCompatibility({
     query: input.query,
@@ -1484,7 +1807,7 @@ async function publicIntelSearchResponse(input: {
     query: input.query,
     compatibility,
     scheduler,
-    publicTiAnswer,
+    publicTiAnswer: publicTiAnswerDto,
     publicWrapperDelta,
     sourceCoverage,
     sourceActivation,
@@ -1505,7 +1828,7 @@ async function publicIntelSearchResponse(input: {
     answer: actorProfile.answer,
     analystLoop: scheduler.analystLoop,
     tiExperience,
-    publicTiAnswer,
+    publicTiAnswer: publicTiAnswerDto,
     publicWrapperDelta,
     answerGraphCaveats: graph.enforcement.answerCaveats,
     answerDeltas: Array.isArray(publicAnswer?.deltas) ? publicAnswer.deltas : [],
@@ -1564,8 +1887,17 @@ async function publicIntelSearchResponse(input: {
     qualityDashboard,
     entityResolutionWorkbench,
     timelinessGroundTruth,
+    highPriorityActorFreshnessDashboard,
     attackMappingQuality,
-    analystFeedbackLoop
+    analystFeedbackLoop,
+    actorProfileReviewWorkbench,
+    evaluationDatasetGovernance,
+    ctiEvaluationDatasetPack,
+    analystQualityReviewQueue,
+    analystFeedbackLearningLoop,
+    activeLearningCandidateQueue,
+    qualityRuntimeValueGates,
+    qualityRegressionSuite
   };
 }
 
@@ -1928,6 +2260,7 @@ function buildTiExperienceForSearch(input: {
   const reviewCards = analystLoop.metadataReviewInbox.map((item) => ({
     id: item.id,
     resultState: "metadata_review" as const,
+    claimHeadline: analystMetadataClaimHeadline(item),
     company: item.company,
     victim: item.victim,
     affectedAccounts: item.affectedAccounts,
@@ -1939,11 +2272,16 @@ function buildTiExperienceForSearch(input: {
     allowedActions: [...item.allowedActions],
     provenance: item.provenance,
     unsafeMaterialAccessed: false,
+    whatWasNotAccessed: analystMetadataWhatWasNotAccessed(),
+    verificationBoundary: analystMetadataVerificationBoundary(),
     whatHappensNext: "Analyst reviews the safe metadata, prepares notification, marks duplicate, requests approval, or escalates."
   }));
   const notification = analystLoop.victimNotificationPacket
     ? {
         ...analystLoop.victimNotificationPacket,
+        claimHeadline: analystMetadataClaimHeadline(analystLoop.victimNotificationPacket),
+        redactedNotification: tiExperienceRedactedNotification(analystLoop.victimNotificationPacket),
+        verificationBoundary: analystMetadataVerificationBoundary(),
         externalDeliveryPerformed: false,
         safeToSendWithoutReview: false
       }
@@ -1983,6 +2321,9 @@ function buildTiExperienceForSearch(input: {
       ready: analystLoop.resultState === "ready"
     },
     nextSteps: analystLoop.nextSteps,
+    workQueue: analystLoop.workQueue,
+    activityTimeline: analystLoop.activityTimeline,
+    readinessChecklist: analystLoop.readinessChecklist,
     reviewCards,
     notificationPacket: notification,
     sourceActivationWorkflow: {
@@ -1990,7 +2331,8 @@ function buildTiExperienceForSearch(input: {
       sourceGaps,
       route: "/v1/sources/apply-plan",
       explicitApprovalRequired: analystLoop.sourceActivationWorkflow.required,
-      silentAutoActivationAllowed: false
+      silentAutoActivationAllowed: false,
+      approvalWorkflows: analystLoop.sourceActivationWorkflow.actions.map(tiExperienceSourceActivationApprovalWorkflow)
     },
     polling: {
       runId: input.compatibility.runId,
@@ -2024,6 +2366,9 @@ function buildTiExperienceForSearch(input: {
       "runStatusClarity",
       "progress",
       "nextSteps",
+      "workQueue",
+      "activityTimeline",
+      "readinessChecklist",
       "reviewCards",
       "notificationPacket",
       "sourceActivationWorkflow",
@@ -2040,6 +2385,167 @@ function tiExperienceStatusLine(state: TiAnalystLoopState, count: number): strin
   if (state === "blocked_unsafe_target") return "Unsafe target blocked";
   if (state === "needs_source_activation") return "Source approval needed";
   return "Ready";
+}
+
+function analystMetadataClaimHeadline(item: {
+  company?: string;
+  victim?: string;
+  affectedAccounts?: string;
+  datasetSize?: string;
+  actorStatement?: string;
+}): string {
+  const subject = item.company ?? item.victim ?? "Unknown organization";
+  const details = [item.affectedAccounts, item.datasetSize].filter((value): value is string => Boolean(value));
+  if (details.length > 0) return `${subject} leaked, ${details.join(", ")}`;
+  if (item.actorStatement) return `${subject} named in leak claim`;
+  return `${subject} metadata review required`;
+}
+
+function analystMetadataWhatWasNotAccessed(): string[] {
+  return [
+    "No restricted dataset was downloaded or opened.",
+    "No credentials, cookies, private channels, or invite-only areas were accessed.",
+    "No CAPTCHA, authentication, or access-control bypass was attempted.",
+    "No threat actor interaction was performed."
+  ];
+}
+
+function analystMetadataVerificationBoundary() {
+  return {
+    claimMetadataOnly: true,
+    leakedDatasetAccessed: false,
+    credentialsAccessed: false,
+    privateAccessAttempted: false,
+    threatActorInteractionPerformed: false,
+    wording: "This is safe claim metadata for review; the scraper did not verify or download leaked contents."
+  };
+}
+
+function tiExperienceRedactedNotification(packet: {
+  company?: string;
+  victim?: string;
+  claimSummary?: string;
+  affectedAccounts?: string;
+  datasetSize?: string;
+  actorStatement?: string;
+  claimedDate?: string;
+  sourceHash?: string;
+  confidence?: number;
+  whatWasNotAccessed?: string[];
+  recommendedAction?: string;
+}) {
+  return {
+    subject: analystMetadataClaimHeadline(packet),
+    recipientOrganization: packet.company ?? packet.victim ?? "Unknown organization",
+    victim: packet.victim,
+    claimSummary: packet.claimSummary,
+    claimedImpact: {
+      affectedAccounts: packet.affectedAccounts,
+      datasetSize: packet.datasetSize
+    },
+    actorStatementSummary: packet.actorStatement,
+    timestamps: {
+      claimedAt: packet.claimedDate
+    },
+    confidence: packet.confidence,
+    sourceHash: packet.sourceHash,
+    redactions: ["restricted_dataset_material", "credential_material", "private_access_material", "actor_interaction"],
+    whatWasNotAccessed: packet.whatWasNotAccessed ?? analystMetadataWhatWasNotAccessed(),
+    verificationBoundary: analystMetadataVerificationBoundary(),
+    recommendedAction: packet.recommendedAction,
+    deliveryBoundary: {
+      externalDeliveryPerformed: false,
+      deliveryMustHappenOutsideScraper: true,
+      transportCredentialsIncluded: false,
+      safeToSendAfterApproval: false
+    }
+  };
+}
+
+function tiExperienceSourceActivationApprovalWorkflow(action: {
+  action: string;
+  sourceId?: string;
+  reason: string;
+  execution: string;
+}) {
+  const blocked = action.execution === "blocked";
+  const approvalRequired = action.execution === "human_approval_required" || action.action === "request_approval";
+  const requestedAction = action.action === "enable_metadata_only_queue" ? "restore_metadata_only_source" : action.action === "request_approval" ? "request_operator_approval" : action.action;
+  return {
+    sourceId: action.sourceId,
+    requestedAction,
+    execution: approvalRequired ? "approval_required" : blocked ? "blocked" : "dry_run_only",
+    reason: action.reason,
+    approval: {
+      required: approvalRequired,
+      approved: false,
+      safeToExecuteMetadataOnly: false
+    },
+    expectedMetadataOnlyEffect: action.action === "enable_metadata_only_queue"
+      ? "Queue only metadata fields after explicit approval while raw downloads and interactions remain disabled."
+      : action.action === "keep_blocked"
+        ? "Keep unsafe restricted payload, credential, private-access, or interaction target blocked."
+        : "Create an approval packet before any metadata-only collection is restored.",
+    rollback: action.action === "keep_blocked"
+      ? "No rollback; blocked target remains outside allowed collection."
+      : "Leave source disabled or move it back to needs_review if approval is not granted.",
+    allowedOperatorActions: blocked ? ["keep_blocked", "request_legal_review"] : ["approve_metadata_only", "keep_blocked", "request_legal_review"],
+    requiredBeforeExecution: blocked
+      ? ["repair or replace blocked unsafe target with a metadata listing before any activation"]
+      : approvalRequired
+        ? ["approve_metadata_only through /v1/analyst/source-activation-packets/{packetId}/actions"]
+        : ["operator/legal approval must be recorded before queueing metadata-only work"],
+    deliveryBoundary: {
+      dryRunOnly: true,
+      sourceMutationPerformed: false,
+      crawlingStarted: false,
+      restrictedFetchEnabled: false,
+      unsafeTargetConvertedToRunnableWork: false,
+      externalGovernanceHandoffRequired: true
+    },
+    forbiddenOperations: [
+      "automatic_source_activation",
+      "restricted_fetch_enablement",
+      "raw_leak_download",
+      "credential_collection",
+      "private_access",
+      "authentication_or_captcha_bypass",
+      "threat_actor_contact",
+      "unsafe_url_execution"
+    ]
+  };
+}
+
+function analystVictimRedactedNotification(packet: AnalystVictimNotificationPacket) {
+  return {
+    subject: analystMetadataClaimHeadline(packet),
+    recipientOrganization: packet.company,
+    victim: packet.victim,
+    claimSummary: packet.claimSummary,
+    claimedImpact: {
+      affectedAccounts: packet.affectedAccounts,
+      datasetSize: packet.datasetSize
+    },
+    actorStatementSummary: packet.actorStatement,
+    timestamps: {
+      claimedAt: packet.claimedAt,
+      observedAt: packet.observedAt,
+      createdAt: packet.createdAt,
+      updatedAt: packet.updatedAt
+    },
+    confidence: packet.confidence,
+    sourceHash: packet.sourceHash,
+    provenance: packet.provenance,
+    redactions: packet.redactions,
+    whatWasNotAccessed: packet.whatWasNotAccessed,
+    verificationBoundary: analystMetadataVerificationBoundary(),
+    deliveryBoundary: {
+      externalDeliveryPerformed: false,
+      deliveryMustHappenOutsideScraper: true,
+      transportCredentialsIncluded: false,
+      safeToSendAfterApproval: packet.safeToSend
+    }
+  };
 }
 
 function searchSlaEnforcement(input: {
@@ -2169,9 +2675,10 @@ function searchSlaEnforcement(input: {
       "TTPs",
       "datasets",
       "sources",
-      "notes",
-      "warnings",
-      "cursor",
+    "notes",
+    "warnings",
+    "warningCodes",
+    "cursor",
       "nextCursor"
     ],
     sections: {
@@ -3184,6 +3691,14 @@ function schedulerSummaryForPlan(input: {
     workerQueueCutover,
     now
   });
+  const workerLeaseSoakHarness = buildSchedulerWorkerLeaseSoakHarness({
+    queueEconomics,
+    runtimeExecution,
+    runtimeSla,
+    workerQueueCutover,
+    workerSoakMigration,
+    now
+  });
   const productionAdapterTelemetry = buildSchedulerProductionAdapterTelemetry({
     queueEconomics,
     runtimeExecution,
@@ -3199,6 +3714,82 @@ function schedulerSummaryForPlan(input: {
     slaEnforcement,
     workerQueueCutover,
     workerSoakMigration,
+    now
+  });
+  const durableBackendReadiness = buildSchedulerDurableBackendReadiness({
+    queueEconomics,
+    runtimeExecution,
+    runtimeSla,
+    slaEnforcement,
+    workerQueueCutover,
+    workerSoakMigration,
+    productionAdapterTelemetry,
+    canaryControlPlane,
+    now
+  });
+  const freshnessSloEngine = buildSchedulerFreshnessSloEngine({
+    plan: input.plan,
+    sources: input.options?.store.listSources(),
+    queueEconomics,
+    runtimeExecution,
+    slaEnforcement,
+    workerQueueCutover,
+    durableBackendReadiness,
+    now
+  });
+  const freshnessSloDashboard = buildSchedulerFreshnessSloDashboard({
+    queueEconomics,
+    runtimeExecution,
+    slaEnforcement,
+    workerQueueCutover,
+    freshnessSloEngine,
+    workerLeaseSoakHarness,
+    now
+  });
+  const productionLeaseSemantics = buildSchedulerProductionLeaseSemantics({
+    queueEconomics,
+    runtimeExecution,
+    slaEnforcement,
+    workerQueueCutover,
+    durableBackendReadiness,
+    freshnessSloEngine,
+    now
+  });
+  const fairnessGovernance = buildSchedulerFairnessGovernance({
+    plan: input.plan,
+    queueEconomics,
+    runtimeExecution,
+    slaEnforcement,
+    workerQueueCutover,
+    durableBackendReadiness,
+    freshnessSloEngine,
+    productionLeaseSemantics,
+    now
+  });
+  const interactiveSearchFreshness = buildSchedulerInteractiveSearchFreshness({
+    plan: input.plan,
+    run: input.run,
+    attachedToActiveRun: input.planner?.attachedToActiveRun,
+    freshnessSloEngine,
+    freshnessSloDashboard,
+    queueEconomics,
+    workerQueueCutover,
+    fairnessGovernance,
+    now
+  });
+  const persistenceReplayCutover = buildSchedulerPersistenceReplayCutover({
+    plan: input.plan,
+    runs: input.options?.store.listRuns(),
+    queueEconomics,
+    runtimeExecution,
+    slaEnforcement,
+    productionLeaseSemantics,
+    fairnessGovernance,
+    now
+  });
+  const postgresQueueAdapter = buildSchedulerPostgresQueueAdapterReadiness({
+    config: input.options?.config?.scheduler,
+    persistenceReplayCutover,
     now
   });
   const analystLoop = buildTiAnalystLoopSummary({
@@ -3268,8 +3859,17 @@ function schedulerSummaryForPlan(input: {
     slaEnforcement,
     workerQueueCutover,
     workerSoakMigration,
+    workerLeaseSoakHarness,
     productionAdapterTelemetry,
     canaryControlPlane,
+    durableBackendReadiness,
+    freshnessSloEngine,
+    freshnessSloDashboard,
+    interactiveSearchFreshness,
+    productionLeaseSemantics,
+    fairnessGovernance,
+    persistenceReplayCutover,
+    postgresQueueAdapter,
     analystLoop: persistedAnalystLoop ? {
       ...analystLoop,
       persistence: {
@@ -3296,9 +3896,713 @@ type TiAnalystLoopNextStep = {
   detail: string;
   tone: "ok" | "watch" | "bad";
 };
+type TiAnalystWorkQueueKind =
+  | "queued_collection"
+  | "metadata_review"
+  | "blocked_unsafe_target"
+  | "source_activation"
+  | "victim_notification"
+  | "claim_ledger";
+type TiAnalystWorkQueueItem = {
+  id: string;
+  kind: TiAnalystWorkQueueKind;
+  state: TiAnalystLoopState;
+  priority: "critical" | "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  route: string;
+  actionRoute?: string;
+  allowedActions: string[];
+  claimHeadline?: string;
+  company?: string;
+  victim?: string;
+  affectedAccounts?: string;
+  datasetSize?: string;
+  actorStatement?: string;
+  sourceHash?: string;
+  provenance?: unknown;
+  noLeakBoundary: {
+    metadataOnly: true;
+    rawLeakMaterialAccessed: false;
+    notificationDeliveredExternally: false;
+    sourceActivationPerformed: false;
+    wording: string;
+    whatWasNotAccessed: string[];
+  };
+};
+type TiAnalystActivityTimelineItem = {
+  id: string;
+  at: string;
+  kind:
+    | "metadata_capture"
+    | "metadata_review_created"
+    | "metadata_review_action"
+    | "source_activation_decision"
+    | "notification_packet"
+    | "claim_ledger_action"
+    | "unsafe_target_blocked";
+  actor: "system" | "analyst" | "operator" | "external";
+  title: string;
+  summary: string;
+  route?: string;
+  subjectIds: {
+    reviewTaskId?: string;
+    activationPacketId?: string;
+    notificationPacketId?: string;
+    claimLedgerEntryId?: string;
+    sourceId?: string;
+    captureId?: string;
+    sourceHash?: string;
+  };
+  noLeakBoundary: {
+    metadataOnly: true;
+    rawLeakMaterialAccessed: false;
+    notificationDeliveredByScraper: false;
+    sourceActivationPerformed: false;
+  };
+};
+type TiAnalystReadinessChecklistItem = {
+  id: string;
+  code:
+    | "metadata_captured"
+    | "analyst_review_complete"
+    | "unsafe_targets_resolved"
+    | "source_activation_resolved"
+    | "notification_packet_ready"
+    | "claim_ledger_trusted"
+    | "reviewed_evidence_sufficient";
+  label: string;
+  state: "pass" | "pending" | "blocked" | "not_applicable";
+  detail: string;
+  route?: string;
+  counts?: Record<string, number>;
+  noLeakBoundary: {
+    metadataOnly: true;
+    rawLeakMaterialAccessed: false;
+    doesNotImplyVerification: true;
+  };
+};
 type TiAnalystReviewItem =
   | ReturnType<typeof metadataReviewItemFromTask>
   | NonNullable<ReturnType<typeof metadataReviewItemFromCapture>>;
+
+function analystActivityNoLeakBoundary(): TiAnalystActivityTimelineItem["noLeakBoundary"] {
+  return {
+    metadataOnly: true,
+    rawLeakMaterialAccessed: false,
+    notificationDeliveredByScraper: false,
+    sourceActivationPerformed: false
+  };
+}
+
+function sortAnalystActivityTimeline(items: TiAnalystActivityTimelineItem[]): TiAnalystActivityTimelineItem[] {
+  return [...items].sort((left, right) => right.at.localeCompare(left.at) || left.kind.localeCompare(right.kind) || left.id.localeCompare(right.id));
+}
+
+function analystWorkQueueNoLeakBoundary(): TiAnalystWorkQueueItem["noLeakBoundary"] {
+  return {
+    metadataOnly: true,
+    rawLeakMaterialAccessed: false,
+    notificationDeliveredExternally: false,
+    sourceActivationPerformed: false,
+    wording: "This queue item contains safe metadata and workflow state only; the scraper did not verify, download, or expose leaked contents.",
+    whatWasNotAccessed: analystMetadataWhatWasNotAccessed()
+  };
+}
+
+function sortAnalystWorkQueue(items: TiAnalystWorkQueueItem[]): TiAnalystWorkQueueItem[] {
+  const priorityRank: Record<TiAnalystWorkQueueItem["priority"], number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3
+  };
+  const kindRank: Record<TiAnalystWorkQueueKind, number> = {
+    blocked_unsafe_target: 0,
+    metadata_review: 1,
+    victim_notification: 2,
+    source_activation: 3,
+    claim_ledger: 4,
+    queued_collection: 5
+  };
+  return [...items].sort((left, right) =>
+    priorityRank[left.priority] - priorityRank[right.priority]
+    || kindRank[left.kind] - kindRank[right.kind]
+    || left.title.localeCompare(right.title)
+    || left.id.localeCompare(right.id)
+  );
+}
+
+function analystReadinessNoLeakBoundary(): TiAnalystReadinessChecklistItem["noLeakBoundary"] {
+  return {
+    metadataOnly: true,
+    rawLeakMaterialAccessed: false,
+    doesNotImplyVerification: true
+  };
+}
+
+function analystReadinessChecklist(input: {
+  resultState: TiAnalystLoopState;
+  queuedTasks: number;
+  metadataItemCount: number;
+  openReviewTasks: number;
+  blockedUnsafeTargets: number;
+  approvalWorkItems: number;
+  notificationDrafts: number;
+  claimLedgerReviewItems: number;
+  trustedClaimCount: number;
+}): TiAnalystReadinessChecklistItem[] {
+  const noLeakBoundary = analystReadinessNoLeakBoundary();
+  const hasMetadata = input.metadataItemCount > 0;
+  const ready = input.resultState === "ready";
+  return [
+    {
+      id: stableId("analyst-readiness", "metadata_captured"),
+      code: "metadata_captured",
+      label: "Safe metadata captured",
+      state: hasMetadata ? "pass" : input.queuedTasks > 0 ? "pending" : "not_applicable",
+      detail: hasMetadata
+        ? "At least one safe leak/threat-actor metadata claim is available for review."
+        : input.queuedTasks > 0
+          ? "Approved safe collection is still running before metadata can be reviewed."
+          : "No safe leak/threat-actor metadata claim is available for this result.",
+      route: hasMetadata ? "/v1/analyst/metadata-review-tasks" : input.queuedTasks > 0 ? "/v1/frontier/status" : undefined,
+      counts: { metadataItems: input.metadataItemCount, queuedTasks: input.queuedTasks },
+      noLeakBoundary
+    },
+    {
+      id: stableId("analyst-readiness", "analyst_review_complete"),
+      code: "analyst_review_complete",
+      label: "Analyst review complete",
+      state: ready ? "pass" : input.openReviewTasks > 0 ? "pending" : hasMetadata ? "pending" : "not_applicable",
+      detail: ready
+        ? "Reviewed evidence is sufficient for a usable answer."
+        : input.openReviewTasks > 0
+          ? "Safe metadata review tasks still need analyst action."
+          : hasMetadata
+            ? "Metadata exists, but the answer remains partial until review and trust gates complete."
+            : "No metadata review task is present.",
+      route: hasMetadata ? "/v1/analyst/metadata-review-tasks" : undefined,
+      counts: { openReviewTasks: input.openReviewTasks, metadataItems: input.metadataItemCount },
+      noLeakBoundary
+    },
+    {
+      id: stableId("analyst-readiness", "unsafe_targets_resolved"),
+      code: "unsafe_targets_resolved",
+      label: "Unsafe targets resolved",
+      state: input.blockedUnsafeTargets > 0 ? "blocked" : "pass",
+      detail: input.blockedUnsafeTargets > 0
+        ? "Raw leak, download, credential, private-access, or interaction targets remain blocked."
+        : "No unsafe raw target is required for the current metadata-only workflow.",
+      route: input.blockedUnsafeTargets > 0 ? "/v1/analyst/loop" : undefined,
+      counts: { blockedUnsafeTargets: input.blockedUnsafeTargets },
+      noLeakBoundary
+    },
+    {
+      id: stableId("analyst-readiness", "source_activation_resolved"),
+      code: "source_activation_resolved",
+      label: "Source activation resolved",
+      state: input.approvalWorkItems > 0 ? "pending" : "pass",
+      detail: input.approvalWorkItems > 0
+        ? "Operator/legal source approval work remains pending before any metadata-only collection can proceed."
+        : "No source activation approval is blocking this result.",
+      route: input.approvalWorkItems > 0 ? "/v1/analyst/source-activation-packets" : undefined,
+      counts: { approvalWorkItems: input.approvalWorkItems },
+      noLeakBoundary
+    },
+    {
+      id: stableId("analyst-readiness", "notification_packet_ready"),
+      code: "notification_packet_ready",
+      label: "Victim notification packet ready",
+      state: input.notificationDrafts > 0 ? "pending" : ready ? "pass" : hasMetadata ? "pending" : "not_applicable",
+      detail: input.notificationDrafts > 0
+        ? "A redacted victim/company notification draft exists and needs analyst-approved external handling."
+        : ready
+          ? "Notification context is not blocking the ready answer."
+          : hasMetadata
+            ? "Notification packet readiness still depends on review workflow state."
+            : "No victim/company notification packet is needed yet.",
+      route: input.notificationDrafts > 0 || hasMetadata ? "/v1/analyst/victim-notification-packets" : undefined,
+      counts: { notificationDrafts: input.notificationDrafts },
+      noLeakBoundary
+    },
+    {
+      id: stableId("analyst-readiness", "claim_ledger_trusted"),
+      code: "claim_ledger_trusted",
+      label: "Claim ledger trusted",
+      state: input.claimLedgerReviewItems > 0 && input.trustedClaimCount < input.claimLedgerReviewItems ? "pending" : hasMetadata || ready ? "pass" : "not_applicable",
+      detail: input.claimLedgerReviewItems > 0 && input.trustedClaimCount < input.claimLedgerReviewItems
+        ? "Claim ledger entries are still pending analyst trust, hold, duplicate, or contradiction decisions."
+        : hasMetadata || ready
+          ? "Claim ledger trust gate is not blocking this result."
+          : "No claim ledger entries are present.",
+      route: input.claimLedgerReviewItems > 0 ? "/v1/analyst/claim-ledger" : undefined,
+      counts: { claimLedgerReviewItems: input.claimLedgerReviewItems, trustedClaimCount: input.trustedClaimCount },
+      noLeakBoundary
+    },
+    {
+      id: stableId("analyst-readiness", "reviewed_evidence_sufficient"),
+      code: "reviewed_evidence_sufficient",
+      label: "Reviewed evidence sufficient",
+      state: ready ? "pass" : "pending",
+      detail: ready
+        ? "Enough reviewed evidence exists for a usable answer."
+        : "The result remains partial until metadata review, trust gates, approval work, and unsafe-target blocks are resolved.",
+      route: "/v1/analyst/loop",
+      counts: {
+        queuedTasks: input.queuedTasks,
+        metadataItems: input.metadataItemCount,
+        blockedUnsafeTargets: input.blockedUnsafeTargets,
+        approvalWorkItems: input.approvalWorkItems
+      },
+      noLeakBoundary
+    }
+  ];
+}
+
+function analystWorkQueueFromLoopSummary(input: {
+  queuedTaskCount: number;
+  blockedUnsafeTargets: number;
+  allReasons: string[];
+  metadataReviewInbox: TiAnalystReviewItem[];
+  sourceActivationActions: ReturnType<typeof sourceActivationActionsForAnalystLoop>;
+  victimNotificationPacket?: ReturnType<typeof victimNotificationPacketFromReviewItem>;
+}): TiAnalystWorkQueueItem[] {
+  const noLeakBoundary = analystWorkQueueNoLeakBoundary();
+  const items: TiAnalystWorkQueueItem[] = [];
+  if (input.queuedTaskCount > 0) {
+    items.push({
+      id: stableId("analyst-work-queue", `queued:${input.queuedTaskCount}`),
+      kind: "queued_collection",
+      state: "queued",
+      priority: "low",
+      title: "Approved safe collection is running",
+      detail: `${input.queuedTaskCount} approved collection task${input.queuedTaskCount === 1 ? "" : "s"} are queued for this run.`,
+      route: "/v1/frontier/status",
+      allowedActions: ["poll_status"],
+      noLeakBoundary
+    });
+  }
+  for (const item of input.metadataReviewInbox) {
+    items.push({
+      id: stableId("analyst-work-queue", `metadata:${item.id}`),
+      kind: "metadata_review",
+      state: "metadata_review",
+      priority: "high",
+      title: analystMetadataClaimHeadline(item),
+      detail: "Review safe actor/victim/account/dataset metadata before notification or public wording.",
+      route: "/v1/analyst/metadata-review-tasks",
+      actionRoute: `/v1/analyst/metadata-review-tasks/${encodeURIComponent(item.id)}/actions`,
+      allowedActions: [...item.allowedActions],
+      claimHeadline: analystMetadataClaimHeadline(item),
+      company: item.company,
+      victim: item.victim,
+      affectedAccounts: item.affectedAccounts,
+      datasetSize: item.datasetSize,
+      actorStatement: item.actorStatement,
+      sourceHash: item.sourceHash,
+      provenance: item.provenance,
+      noLeakBoundary
+    });
+    items.push({
+      id: stableId("analyst-work-queue", `claim-ledger:${item.id}`),
+      kind: "claim_ledger",
+      state: "metadata_review",
+      priority: "medium",
+      title: "Review claim ledger entries",
+      detail: "Confirm victim, affected-account, dataset-size, and actor-statement claim rows before graph/STIX promotion.",
+      route: "/v1/analyst/claim-ledger",
+      allowedActions: ANALYST_CLAIM_LEDGER_ACTIONS,
+      claimHeadline: analystMetadataClaimHeadline(item),
+      company: item.company,
+      victim: item.victim,
+      affectedAccounts: item.affectedAccounts,
+      datasetSize: item.datasetSize,
+      actorStatement: item.actorStatement,
+      sourceHash: item.sourceHash,
+      provenance: item.provenance,
+      noLeakBoundary
+    });
+  }
+  if (input.victimNotificationPacket) {
+    items.push({
+      id: stableId("analyst-work-queue", `notification:${input.victimNotificationPacket.sourceHash ?? input.victimNotificationPacket.company ?? "unknown"}`),
+      kind: "victim_notification",
+      state: "metadata_review",
+      priority: "high",
+      title: "Prepare victim notification draft",
+      detail: "Review the redacted notification packet and deliver only through an approved external workflow.",
+      route: "/v1/analyst/victim-notification-packets",
+      allowedActions: ["approve_packet", "cancel_packet", "record_external_sent"],
+      claimHeadline: analystMetadataClaimHeadline(input.victimNotificationPacket),
+      company: input.victimNotificationPacket.company,
+      affectedAccounts: input.victimNotificationPacket.affectedAccounts,
+      datasetSize: input.victimNotificationPacket.datasetSize,
+      actorStatement: input.victimNotificationPacket.actorStatement,
+      sourceHash: input.victimNotificationPacket.sourceHash,
+      noLeakBoundary
+    });
+  }
+  for (const action of input.sourceActivationActions) {
+    items.push({
+      id: stableId("analyst-work-queue", `activation:${action.action}:${action.sourceId ?? "unknown"}`),
+      kind: action.execution === "blocked" ? "blocked_unsafe_target" : "source_activation",
+      state: action.execution === "blocked" ? "blocked_unsafe_target" : "needs_source_activation",
+      priority: action.execution === "blocked" ? "critical" : "medium",
+      title: action.execution === "blocked" ? "Unsafe target remains blocked" : "Source activation approval needed",
+      detail: action.reason,
+      route: action.execution === "blocked" ? "/v1/analyst/loop" : "/v1/analyst/source-activation-packets",
+      allowedActions: action.execution === "blocked" ? ["keep_blocked"] : ["approve_metadata_only", "keep_blocked", "request_legal_review"],
+      noLeakBoundary
+    });
+  }
+  if (input.blockedUnsafeTargets > 0 && !input.sourceActivationActions.some((action) => action.execution === "blocked")) {
+    items.push({
+      id: stableId("analyst-work-queue", `blocked:${input.allReasons.join("|").slice(0, 120)}`),
+      kind: "blocked_unsafe_target",
+      state: "blocked_unsafe_target",
+      priority: "critical",
+      title: "Unsafe raw target blocked",
+      detail: "A raw leak, download, credential, private-access, or interaction target was blocked before collection.",
+      route: "/v1/analyst/loop",
+      allowedActions: ["keep_blocked", "request_legal_review"],
+      noLeakBoundary
+    });
+  }
+  return sortAnalystWorkQueue(items);
+}
+
+function analystWorkQueueFromReadModel(input: {
+  queuedTasks: number;
+  blockedUnsafeTargets: number;
+  reviewTasks: AnalystMetadataReviewTask[];
+  activationPackets: AnalystSourceActivationPacket[];
+  notificationPackets: AnalystVictimNotificationPacket[];
+  claimLedger: AnalystClaimLedgerEntry[];
+}): TiAnalystWorkQueueItem[] {
+  const noLeakBoundary = analystWorkQueueNoLeakBoundary();
+  const items: TiAnalystWorkQueueItem[] = [];
+  if (input.queuedTasks > 0) {
+    items.push({
+      id: stableId("analyst-work-queue", `read-model:queued:${input.queuedTasks}`),
+      kind: "queued_collection",
+      state: "queued",
+      priority: "low",
+      title: "Approved safe collection is running",
+      detail: `${input.queuedTasks} approved collection task${input.queuedTasks === 1 ? "" : "s"} are queued or leased.`,
+      route: "/v1/frontier/status",
+      allowedActions: ["poll_status"],
+      noLeakBoundary
+    });
+  }
+  for (const task of input.reviewTasks) {
+    items.push({
+      id: stableId("analyst-work-queue", `read-model:metadata:${task.id}`),
+      kind: "metadata_review",
+      state: "metadata_review",
+      priority: task.status === "escalated" ? "critical" : "high",
+      title: analystMetadataClaimHeadline(task),
+      detail: task.status === "notified"
+        ? "Notification workflow has been prepared; keep claim metadata available for audit and follow-up."
+        : "Review safe actor/victim/account/dataset metadata before notification or public wording.",
+      route: "/v1/analyst/metadata-review-tasks",
+      actionRoute: `/v1/analyst/metadata-review-tasks/${encodeURIComponent(task.id)}/actions`,
+      allowedActions: analystMetadataAllowedActions(task.allowedActions),
+      claimHeadline: analystMetadataClaimHeadline(task),
+      company: task.company,
+      victim: task.victim,
+      affectedAccounts: task.affectedAccounts,
+      datasetSize: task.datasetSize,
+      actorStatement: task.actorStatement,
+      sourceHash: task.sourceHash,
+      provenance: task.provenance,
+      noLeakBoundary
+    });
+  }
+  for (const packet of input.activationPackets) {
+    const blocked = packet.execution === "blocked";
+    items.push({
+      id: stableId("analyst-work-queue", `read-model:activation:${packet.id}`),
+      kind: blocked ? "blocked_unsafe_target" : "source_activation",
+      state: blocked ? "blocked_unsafe_target" : "needs_source_activation",
+      priority: blocked ? "critical" : "medium",
+      title: blocked ? "Unsafe target remains blocked" : "Source activation approval needed",
+      detail: packet.reason,
+      route: "/v1/analyst/source-activation-packets",
+      actionRoute: `/v1/analyst/source-activation-packets/${encodeURIComponent(packet.id)}/actions`,
+      allowedActions: blocked ? ["keep_blocked", "request_legal_review"] : ["approve_metadata_only", "keep_blocked", "request_legal_review"],
+      noLeakBoundary
+    });
+  }
+  for (const packet of input.notificationPackets) {
+    items.push({
+      id: stableId("analyst-work-queue", `read-model:notification:${packet.id}`),
+      kind: "victim_notification",
+      state: "metadata_review",
+      priority: packet.status === "draft" ? "high" : "medium",
+      title: packet.status === "draft" ? "Review victim notification draft" : "Track victim notification packet",
+      detail: "Use the redacted packet for approved external notification; the scraper does not send it.",
+      route: "/v1/analyst/victim-notification-packets",
+      actionRoute: `/v1/analyst/victim-notification-packets/${encodeURIComponent(packet.id)}/actions`,
+      allowedActions: ["approve_packet", "cancel_packet", "record_external_sent"],
+      claimHeadline: analystMetadataClaimHeadline(packet),
+      company: packet.company,
+      victim: packet.victim,
+      affectedAccounts: packet.affectedAccounts,
+      datasetSize: packet.datasetSize,
+      actorStatement: packet.actorStatement,
+      sourceHash: packet.sourceHash,
+      provenance: packet.provenance,
+      noLeakBoundary
+    });
+  }
+  for (const entry of input.claimLedger.filter((entry) => entry.ledgerStatus !== "closed")) {
+    items.push({
+      id: stableId("analyst-work-queue", `read-model:claim-ledger:${entry.id}`),
+      kind: "claim_ledger",
+      state: entry.ledgerStatus === "trusted" ? "ready" : "metadata_review",
+      priority: entry.ledgerStatus === "contradicted" ? "critical" : entry.legalHold ? "high" : "medium",
+      title: `Claim ledger: ${entry.claimKind.replace(/_/g, " ")}`,
+      detail: entry.claimTextSummary,
+      route: "/v1/analyst/claim-ledger",
+      actionRoute: `/v1/analyst/claim-ledger/${encodeURIComponent(entry.id)}/actions`,
+      allowedActions: ANALYST_CLAIM_LEDGER_ACTIONS,
+      company: entry.company,
+      victim: entry.victim,
+      sourceHash: entry.sourceHash,
+      provenance: entry.provenance,
+      noLeakBoundary
+    });
+  }
+  if (input.blockedUnsafeTargets > 0 && !items.some((item) => item.kind === "blocked_unsafe_target")) {
+    items.push({
+      id: stableId("analyst-work-queue", `read-model:blocked:${input.blockedUnsafeTargets}`),
+      kind: "blocked_unsafe_target",
+      state: "blocked_unsafe_target",
+      priority: "critical",
+      title: "Unsafe raw target blocked",
+      detail: "A raw leak, download, credential, private-access, or interaction target was blocked before collection.",
+      route: "/v1/analyst/loop",
+      allowedActions: ["keep_blocked", "request_legal_review"],
+      noLeakBoundary
+    });
+  }
+  return sortAnalystWorkQueue(items);
+}
+
+function analystActivityTimelineFromLoopSummary(input: {
+  metadataReviewInbox: TiAnalystReviewItem[];
+  sourceActivationActions: ReturnType<typeof sourceActivationActionsForAnalystLoop>;
+  victimNotificationPacket?: ReturnType<typeof victimNotificationPacketFromReviewItem>;
+  blockedUnsafeTargets: number;
+  allReasons: string[];
+  fallbackAt: string;
+}): TiAnalystActivityTimelineItem[] {
+  const noLeakBoundary = analystActivityNoLeakBoundary();
+  const items: TiAnalystActivityTimelineItem[] = [];
+  for (const item of input.metadataReviewInbox) {
+    const observedAt = "observedAt" in item && typeof item.observedAt === "string" ? item.observedAt : input.fallbackAt;
+    items.push({
+      id: stableId("analyst-activity", `capture:${item.id}:${item.sourceHash}`),
+      at: observedAt,
+      kind: "metadata_capture",
+      actor: "system",
+      title: "Metadata-only leak claim captured",
+      summary: analystMetadataClaimHeadline(item),
+      route: "/v1/analyst/metadata-review-tasks",
+      subjectIds: {
+        reviewTaskId: item.id,
+        sourceId: item.sourceId,
+        captureId: "captureId" in item ? item.captureId : undefined,
+        sourceHash: item.sourceHash
+      },
+      noLeakBoundary
+    });
+    items.push({
+      id: stableId("analyst-activity", `review-created:${item.id}`),
+      at: input.fallbackAt,
+      kind: "metadata_review_created",
+      actor: "system",
+      title: "Metadata review queued",
+      summary: "Safe claim metadata was placed in the analyst review queue.",
+      route: "/v1/analyst/metadata-review-tasks",
+      subjectIds: {
+        reviewTaskId: item.id,
+        sourceId: item.sourceId,
+        sourceHash: item.sourceHash
+      },
+      noLeakBoundary
+    });
+  }
+  if (input.victimNotificationPacket) {
+    items.push({
+      id: stableId("analyst-activity", `notification-draft:${input.victimNotificationPacket.sourceHash ?? input.victimNotificationPacket.company ?? "unknown"}`),
+      at: input.fallbackAt,
+      kind: "notification_packet",
+      actor: "system",
+      title: "Victim notification draft prepared",
+      summary: "A redacted notification packet is available for analyst approval; no external notification was sent.",
+      route: "/v1/analyst/victim-notification-packets",
+      subjectIds: {
+        sourceHash: input.victimNotificationPacket.sourceHash
+      },
+      noLeakBoundary
+    });
+  }
+  for (const action of input.sourceActivationActions) {
+    items.push({
+      id: stableId("analyst-activity", `activation:${action.action}:${action.sourceId ?? "unknown"}`),
+      at: input.fallbackAt,
+      kind: action.execution === "blocked" ? "unsafe_target_blocked" : "source_activation_decision",
+      actor: "system",
+      title: action.execution === "blocked" ? "Unsafe target blocked" : "Source approval workflow created",
+      summary: action.reason,
+      route: action.execution === "blocked" ? "/v1/analyst/loop" : "/v1/analyst/source-activation-packets",
+      subjectIds: {
+        sourceId: action.sourceId
+      },
+      noLeakBoundary
+    });
+  }
+  if (input.blockedUnsafeTargets > 0 && !input.sourceActivationActions.some((action) => action.execution === "blocked")) {
+    items.push({
+      id: stableId("analyst-activity", `blocked:${input.allReasons.join("|").slice(0, 120)}`),
+      at: input.fallbackAt,
+      kind: "unsafe_target_blocked",
+      actor: "system",
+      title: "Unsafe target blocked",
+      summary: "A raw leak, download, credential, private-access, or interaction target was blocked before collection.",
+      route: "/v1/analyst/loop",
+      subjectIds: {},
+      noLeakBoundary
+    });
+  }
+  return sortAnalystActivityTimeline(items);
+}
+
+function analystActivityTimelineFromReadModel(input: {
+  reviewTasks: AnalystMetadataReviewTask[];
+  activationPackets: AnalystSourceActivationPacket[];
+  notificationPackets: AnalystVictimNotificationPacket[];
+  claimLedger: AnalystClaimLedgerEntry[];
+  blockedUnsafeTargets: number;
+}): TiAnalystActivityTimelineItem[] {
+  const noLeakBoundary = analystActivityNoLeakBoundary();
+  const items: TiAnalystActivityTimelineItem[] = [];
+  for (const task of input.reviewTasks) {
+    items.push({
+      id: stableId("analyst-activity", `read-model:review-created:${task.id}`),
+      at: task.createdAt,
+      kind: "metadata_review_created",
+      actor: "system",
+      title: "Metadata review queued",
+      summary: analystMetadataClaimHeadline(task),
+      route: "/v1/analyst/metadata-review-tasks",
+      subjectIds: {
+        reviewTaskId: task.id,
+        sourceId: task.sourceId,
+        captureId: task.captureId,
+        sourceHash: task.sourceHash
+      },
+      noLeakBoundary
+    });
+    const lastAction = record(task.provenance.lastAnalystAction);
+    if (lastAction) {
+      items.push({
+        id: stableId("analyst-activity", `read-model:review-action:${task.id}:${String(lastAction.action ?? task.status)}`),
+        at: typeof lastAction.at === "string" ? lastAction.at : task.updatedAt,
+        kind: "metadata_review_action",
+        actor: "analyst",
+        title: `Review action: ${String(lastAction.action ?? task.status).replace(/_/g, " ")}`,
+        summary: typeof lastAction.reason === "string" && lastAction.reason ? lastAction.reason : "Analyst review action recorded.",
+        route: `/v1/analyst/metadata-review-tasks/${encodeURIComponent(task.id)}/actions`,
+        subjectIds: {
+          reviewTaskId: task.id,
+          sourceId: task.sourceId,
+          captureId: task.captureId,
+          sourceHash: task.sourceHash
+        },
+        noLeakBoundary
+      });
+    }
+  }
+  for (const packet of input.activationPackets) {
+    items.push({
+      id: stableId("analyst-activity", `read-model:activation:${packet.id}:${packet.approvedAt ?? packet.createdAt}`),
+      at: packet.approvedAt ?? packet.createdAt,
+      kind: "source_activation_decision",
+      actor: packet.approvedAt ? "operator" : "system",
+      title: packet.approvedAt ? "Source approval metadata recorded" : "Source approval packet created",
+      summary: packet.approvedAt ? "Approval metadata was recorded; no source mutation or crawling was performed." : packet.reason,
+      route: `/v1/analyst/source-activation-packets/${encodeURIComponent(packet.id)}/actions`,
+      subjectIds: {
+        activationPacketId: packet.id,
+        sourceId: packet.sourceId
+      },
+      noLeakBoundary
+    });
+  }
+  for (const packet of input.notificationPackets) {
+    items.push({
+      id: stableId("analyst-activity", `read-model:notification:${packet.id}:${packet.updatedAt}`),
+      at: packet.sentAt ?? packet.updatedAt,
+      kind: "notification_packet",
+      actor: packet.status === "sent" ? "external" : packet.approvedBy ? "analyst" : "system",
+      title: packet.status === "sent"
+        ? "External notification recorded"
+        : packet.status === "approved"
+          ? "Notification packet approved"
+          : packet.status === "cancelled"
+            ? "Notification packet cancelled"
+            : "Notification draft prepared",
+      summary: packet.status === "sent"
+        ? "An external workflow notification event was recorded; the scraper did not deliver it."
+        : "Redacted victim notification packet state updated without exposing restricted material.",
+      route: `/v1/analyst/victim-notification-packets/${encodeURIComponent(packet.id)}/actions`,
+      subjectIds: {
+        notificationPacketId: packet.id,
+        reviewTaskId: packet.reviewTaskId,
+        sourceHash: packet.sourceHash
+      },
+      noLeakBoundary
+    });
+  }
+  for (const entry of input.claimLedger) {
+    const lastAction = record(entry.provenance.lastAnalystLedgerAction);
+    const at = typeof lastAction?.at === "string" ? lastAction.at : entry.reviewedAt ?? entry.updatedAt ?? entry.createdAt;
+    items.push({
+      id: stableId("analyst-activity", `read-model:claim:${entry.id}:${entry.ledgerStatus}:${at}`),
+      at,
+      kind: "claim_ledger_action",
+      actor: lastAction ? "analyst" : "system",
+      title: `Claim ledger ${entry.ledgerStatus.replace(/_/g, " ")}`,
+      summary: entry.claimTextSummary,
+      route: `/v1/analyst/claim-ledger/${encodeURIComponent(entry.id)}/actions`,
+      subjectIds: {
+        claimLedgerEntryId: entry.id,
+        reviewTaskId: entry.reviewTaskId,
+        sourceId: entry.sourceId,
+        captureId: entry.captureId,
+        sourceHash: entry.sourceHash
+      },
+      noLeakBoundary
+    });
+  }
+  if (input.blockedUnsafeTargets > 0 && !items.some((item) => item.kind === "unsafe_target_blocked")) {
+    items.push({
+      id: stableId("analyst-activity", `read-model:blocked:${input.blockedUnsafeTargets}`),
+      at: nowIso(),
+      kind: "unsafe_target_blocked",
+      actor: "system",
+      title: "Unsafe target blocked",
+      summary: "A raw leak, download, credential, private-access, or interaction target was blocked before collection.",
+      route: "/v1/analyst/loop",
+      subjectIds: {},
+      noLeakBoundary
+    });
+  }
+  return sortAnalystActivityTimeline(items).slice(0, 50);
+}
 
 function buildTiAnalystLoopSummary(input: {
   plan: CollectionPlan;
@@ -3333,7 +4637,40 @@ function buildTiAnalystLoopSummary(input: {
           ? "queued"
           : "ready";
   const reviewTaskCount = metadataReviewInbox.length > 0 ? metadataReviewInbox.length : input.reviewTaskCount;
-  const meaningfulWorkCount = input.queuedTaskCount + reviewTaskCount;
+  const sourceActivationActions = sourceActivationActionsForAnalystLoop(input.plan.reviewRequired, allReasons, input.run?.id, needsActivation, blockedUnsafeTargets);
+  const firstReviewItem = metadataReviewInbox[0];
+  const approvalWorkItems = needsActivation ? Math.max(1, sourceActivationActions.length) : 0;
+  const notificationDrafts = firstReviewItem ? 1 : 0;
+  const claimLedgerReviewItems = metadataReviewInbox.length;
+  const meaningfulWorkCount = input.queuedTaskCount + reviewTaskCount + blockedUnsafeTargets + approvalWorkItems + notificationDrafts + claimLedgerReviewItems;
+  const victimNotificationPacket = firstReviewItem ? victimNotificationPacketFromReviewItem(firstReviewItem) : undefined;
+  const workQueue = analystWorkQueueFromLoopSummary({
+    queuedTaskCount: input.queuedTaskCount,
+    blockedUnsafeTargets,
+    allReasons,
+    metadataReviewInbox,
+    sourceActivationActions,
+    victimNotificationPacket
+  });
+  const activityTimeline = analystActivityTimelineFromLoopSummary({
+    metadataReviewInbox,
+    sourceActivationActions,
+    victimNotificationPacket,
+    blockedUnsafeTargets,
+    allReasons,
+    fallbackAt: nowIso()
+  });
+  const readinessChecklist = analystReadinessChecklist({
+    resultState,
+    queuedTasks: input.queuedTaskCount,
+    metadataItemCount: metadataReviewInbox.length,
+    openReviewTasks: reviewTaskCount,
+    blockedUnsafeTargets,
+    approvalWorkItems,
+    notificationDrafts,
+    claimLedgerReviewItems,
+    trustedClaimCount: 0
+  });
   const nextSteps: TiAnalystLoopNextStep[] = [
     ...(input.queuedTaskCount > 0 ? [{
       state: "queued" as const,
@@ -3368,8 +4705,6 @@ function buildTiAnalystLoopSummary(input: {
       tone: "ok" as const
     });
   }
-  const firstReviewItem = metadataReviewInbox[0];
-
   return {
     resultState,
     headline: analystLoopHeadline(resultState, reviewTaskCount || meaningfulWorkCount || 1),
@@ -3379,16 +4714,23 @@ function buildTiAnalystLoopSummary(input: {
       reviewTasks: reviewTaskCount,
       rejectedSources: input.rejectedSourceCount,
       blockedUnsafeTargets,
+      approvalWorkItems,
+      notificationDrafts,
+      claimLedgerReviewItems,
       meaningfulWorkCount,
-      summary: `${input.queuedTaskCount} queued collection task${input.queuedTaskCount === 1 ? "" : "s"}, ${reviewTaskCount} metadata review task${reviewTaskCount === 1 ? "" : "s"}, ${blockedUnsafeTargets} unsafe target block${blockedUnsafeTargets === 1 ? "" : "s"}, ${input.rejectedSourceCount} rejected source${input.rejectedSourceCount === 1 ? "" : "s"}`
+      emptyQueueDoesNotMeanNoWork: meaningfulWorkCount > input.queuedTaskCount,
+      summary: `${input.queuedTaskCount} queued collection task${input.queuedTaskCount === 1 ? "" : "s"}, ${reviewTaskCount} metadata review task${reviewTaskCount === 1 ? "" : "s"}, ${blockedUnsafeTargets} unsafe target block${blockedUnsafeTargets === 1 ? "" : "s"}, ${approvalWorkItems} approval work item${approvalWorkItems === 1 ? "" : "s"}, ${notificationDrafts} notification draft${notificationDrafts === 1 ? "" : "s"}, ${input.rejectedSourceCount} rejected source${input.rejectedSourceCount === 1 ? "" : "s"}`
     },
     metadataReviewInbox,
+    workQueue,
+    activityTimeline,
+    readinessChecklist,
     sourceActivationWorkflow: {
       required: needsActivation,
       dryRunOnly: true,
-      actions: sourceActivationActionsForAnalystLoop(input.plan.reviewRequired, allReasons, input.run?.id, needsActivation, blockedUnsafeTargets)
+      actions: sourceActivationActions
     },
-    victimNotificationPacket: firstReviewItem ? victimNotificationPacketFromReviewItem(firstReviewItem) : undefined,
+    victimNotificationPacket,
     persistence: {
       currentBackend: "in_memory",
       targetBackend: "postgres",
@@ -3768,28 +5110,31 @@ function buildAnalystLoopReadModelResponse(store: ScraperStore, input: {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.createdAt.localeCompare(left.createdAt))
     .slice(0, input.limit);
   const taskIds = new Set(tasks.map((task) => task.id));
-  const activationPackets = store.listAnalystSourceActivationPackets()
+  const rawActivationPackets = store.listAnalystSourceActivationPackets()
     .filter((packet) => !input.tenantId || packet.tenantId === input.tenantId)
     .filter((packet) => !input.runId || packet.runId === input.runId)
-    .filter((packet) => !latestSnapshot || snapshotActivationPacketIds.has(packet.id) || packet.runId === latestSnapshot.runId || packet.planId === latestSnapshot.planId)
-    .map(safeAnalystSourceActivationPacketDto);
-  const notificationPackets = store.listAnalystVictimNotificationPackets()
+    .filter((packet) => !latestSnapshot || snapshotActivationPacketIds.has(packet.id) || packet.runId === latestSnapshot.runId || packet.planId === latestSnapshot.planId);
+  const activationPackets = rawActivationPackets.map(safeAnalystSourceActivationPacketDto);
+  const rawNotificationPackets = store.listAnalystVictimNotificationPackets()
     .filter((packet) => !input.tenantId || packet.tenantId === input.tenantId)
-    .filter((packet) => taskIds.has(packet.reviewTaskId) || packet.id === latestSnapshot?.victimNotificationPacketId)
-    .map(safeAnalystVictimNotificationPacketDto);
-  const claimLedger = store.listAnalystClaimLedgerEntries()
+    .filter((packet) => taskIds.has(packet.reviewTaskId) || packet.id === latestSnapshot?.victimNotificationPacketId);
+  const notificationPackets = rawNotificationPackets.map(safeAnalystVictimNotificationPacketDto);
+  const rawClaimLedger = store.listAnalystClaimLedgerEntries()
     .filter((entry) => !input.tenantId || entry.tenantId === input.tenantId)
     .filter((entry) => !normalizedQuery || entry.normalizedQuery === normalizedQuery)
-    .filter((entry) => taskIds.has(entry.reviewTaskId ?? "") || !latestSnapshot)
-    .map(safeAnalystClaimLedgerEntryDto);
+    .filter((entry) => taskIds.has(entry.reviewTaskId ?? "") || !latestSnapshot);
+  const claimLedger = rawClaimLedger.map(safeAnalystClaimLedgerEntryDto);
   const openReviewTasks = tasks.filter((task) => task.status === "open" || task.status === "approval_requested" || task.status === "escalated").length;
   const blockedUnsafeTargets = latestSnapshot?.blockedUnsafeTargets
     ?? activationPackets.filter((packet) => packet.execution === "blocked").length
     ?? 0;
   const reviewTasks = latestSnapshot?.reviewTasks ?? openReviewTasks;
   const queuedTasks = latestSnapshot?.queuedTasks ?? 0;
-  const meaningfulWorkCount = latestSnapshot?.meaningfulWorkCount
-    ?? queuedTasks + reviewTasks + activationPackets.length + notificationPackets.length;
+  const approvalWorkItems = activationPackets.filter((packet) => packet.execution === "approval_required").length;
+  const notificationDrafts = notificationPackets.filter((packet) => packet.status === "draft").length;
+  const claimLedgerEntries = claimLedger.length;
+  const recomputedMeaningfulWorkCount = queuedTasks + reviewTasks + blockedUnsafeTargets + activationPackets.length + notificationDrafts + claimLedgerEntries;
+  const meaningfulWorkCount = Math.max(latestSnapshot?.meaningfulWorkCount ?? 0, recomputedMeaningfulWorkCount);
   const state: TiAnalystLoopState = latestSnapshot?.resultState
     ?? (reviewTasks > 0
       ? "metadata_review"
@@ -3808,6 +5153,32 @@ function buildAnalystLoopReadModelResponse(store: ScraperStore, input: {
       : "Use the persisted metadata-only analyst-loop rows before promoting public wording.",
     tone: state === "blocked_unsafe_target" ? "bad" as const : state === "ready" ? "ok" as const : "watch" as const
   }];
+  const workQueue = analystWorkQueueFromReadModel({
+    queuedTasks,
+    blockedUnsafeTargets,
+    reviewTasks: tasks,
+    activationPackets: rawActivationPackets,
+    notificationPackets: rawNotificationPackets,
+    claimLedger: rawClaimLedger
+  });
+  const activityTimeline = analystActivityTimelineFromReadModel({
+    reviewTasks: tasks,
+    activationPackets: rawActivationPackets,
+    notificationPackets: rawNotificationPackets,
+    claimLedger: rawClaimLedger,
+    blockedUnsafeTargets
+  });
+  const readinessChecklist = analystReadinessChecklist({
+    resultState: state,
+    queuedTasks,
+    metadataItemCount: tasks.length,
+    openReviewTasks,
+    blockedUnsafeTargets,
+    approvalWorkItems,
+    notificationDrafts,
+    claimLedgerReviewItems: rawClaimLedger.filter((entry) => entry.ledgerStatus !== "closed").length,
+    trustedClaimCount: rawClaimLedger.filter((entry) => entry.ledgerStatus === "trusted").length
+  });
 
   return {
     contract: {
@@ -3832,14 +5203,19 @@ function buildAnalystLoopReadModelResponse(store: ScraperStore, input: {
       reviewTasks,
       rejectedSources: latestSnapshot?.rejectedSources ?? 0,
       blockedUnsafeTargets,
+      approvalWorkItems,
       metadataReviewTasks: tasks.length,
       activationPackets: activationPackets.length,
-      notificationDrafts: notificationPackets.filter((packet) => packet.status === "draft").length,
-      claimLedgerEntries: claimLedger.length,
+      notificationDrafts,
+      claimLedgerEntries,
       meaningfulWorkCount,
-      summary: `${queuedTasks} queued collection task${queuedTasks === 1 ? "" : "s"}, ${reviewTasks} metadata review task${reviewTasks === 1 ? "" : "s"}, ${blockedUnsafeTargets} unsafe target block${blockedUnsafeTargets === 1 ? "" : "s"}`
+      emptyQueueDoesNotMeanNoWork: meaningfulWorkCount > queuedTasks,
+      summary: `${queuedTasks} queued collection task${queuedTasks === 1 ? "" : "s"}, ${reviewTasks} metadata review task${reviewTasks === 1 ? "" : "s"}, ${blockedUnsafeTargets} unsafe target block${blockedUnsafeTargets === 1 ? "" : "s"}, ${approvalWorkItems} approval work item${approvalWorkItems === 1 ? "" : "s"}, ${notificationDrafts} notification draft${notificationDrafts === 1 ? "" : "s"}, ${claimLedgerEntries} claim ledger entr${claimLedgerEntries === 1 ? "y" : "ies"}`
     },
     nextSteps,
+    workQueue,
+    activityTimeline,
+    readinessChecklist,
     reviewTasks: tasks.map(safeAnalystMetadataReviewTaskDto),
     sourceActivationPackets: activationPackets,
     notificationPackets,
@@ -3922,6 +5298,52 @@ type AnalystSourceActivationExecutionPreviewResult =
   | { ok: true; body: Record<string, unknown> }
   | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> };
 
+function analystSourceActivationApprovalWorkflow(packet: AnalystSourceActivationPacket) {
+  const blocked = packet.execution === "blocked";
+  const approved = Boolean(packet.approvedAt && packet.approvedBy);
+  const safeToExecuteMetadataOnly = approved && !blocked;
+  return {
+    packetId: packet.id,
+    sourceId: packet.sourceId,
+    requestedAction: packet.action,
+    execution: packet.execution,
+    reason: packet.reason,
+    approval: {
+      required: packet.execution === "approval_required",
+      approved,
+      approvedBy: packet.approvedBy,
+      approvedAt: packet.approvedAt,
+      safeToExecuteMetadataOnly
+    },
+    expectedMetadataOnlyEffect: packet.expectedEffect,
+    rollback: packet.rollback,
+    allowedOperatorActions: blocked ? ["keep_blocked", "request_legal_review"] : ["approve_metadata_only", "keep_blocked", "request_legal_review"],
+    requiredBeforeExecution: safeToExecuteMetadataOnly
+      ? []
+      : blocked
+        ? ["repair or replace blocked unsafe target with a metadata listing before any activation"]
+        : ["approve_metadata_only through /v1/analyst/source-activation-packets/{packetId}/actions"],
+    deliveryBoundary: {
+      dryRunOnly: true,
+      sourceMutationPerformed: false,
+      crawlingStarted: false,
+      restrictedFetchEnabled: false,
+      unsafeTargetConvertedToRunnableWork: false,
+      externalGovernanceHandoffRequired: true
+    },
+    forbiddenOperations: [
+      "automatic_source_activation",
+      "restricted_fetch_enablement",
+      "raw_leak_download",
+      "credential_collection",
+      "private_access",
+      "authentication_or_captcha_bypass",
+      "threat_actor_contact",
+      "unsafe_url_execution"
+    ]
+  };
+}
+
 function buildAnalystSourceActivationExecutionPreviewResponse(store: ScraperStore, packetId: string): AnalystSourceActivationExecutionPreviewResult {
   const packet = store.listAnalystSourceActivationPackets().find((item) => item.id === packetId);
   if (!packet) return { ok: false, status: 404, code: "not_found", message: "Source activation packet not found" };
@@ -3959,6 +5381,7 @@ function buildAnalystSourceActivationExecutionPreviewResponse(store: ScraperStor
             : ["approve_metadata_only through /v1/analyst/source-activation-packets/{packetId}/actions"]
       },
       packet: safeAnalystSourceActivationPacketDto(packet),
+      approvalWorkflow: analystSourceActivationApprovalWorkflow(packet),
       source: source ? {
         id: source.id,
         name: source.name,
@@ -4068,6 +5491,7 @@ function applyAnalystSourceActivationPacketAction(store: ScraperStore, packetId:
       dryRun: input.dryRun,
       action: input.action,
       packet: safeAnalystSourceActivationPacketDto(input.dryRun ? packet : approvedPacket),
+      approvalWorkflow: analystSourceActivationApprovalWorkflow(input.dryRun ? packet : approvedPacket),
       result: {
         persisted: !input.dryRun && input.action === "approve_metadata_only",
         approvalRecorded: !input.dryRun && input.action === "approve_metadata_only",
@@ -4177,6 +5601,7 @@ function buildAnalystVictimNotificationPacketExportResponse(store: ScraperStore,
       packet: {
         id: packet.id,
         reviewTaskId: packet.reviewTaskId,
+        claimHeadline: analystMetadataClaimHeadline(packet),
         company: packet.company,
         victim: packet.victim,
         claimSummary: packet.claimSummary,
@@ -4190,7 +5615,9 @@ function buildAnalystVictimNotificationPacketExportResponse(store: ScraperStore,
         provenance: packet.provenance,
         claimLedger,
         redactions: packet.redactions,
-        whatWasNotAccessed: packet.whatWasNotAccessed
+        whatWasNotAccessed: packet.whatWasNotAccessed,
+        verificationBoundary: analystMetadataVerificationBoundary(),
+        redactedNotification: analystVictimRedactedNotification(packet)
       },
       sourceReview: task ? {
         taskId: task.id,
@@ -4420,6 +5847,7 @@ function safeAnalystMetadataReviewTaskDto(task: AnalystMetadataReviewTask) {
     captureId: task.captureId,
     status: task.status,
     resultState: task.resultState,
+    claimHeadline: analystMetadataClaimHeadline(task),
     company: task.company,
     victim: task.victim,
     affectedAccounts: task.affectedAccounts,
@@ -4436,6 +5864,7 @@ function safeAnalystMetadataReviewTaskDto(task: AnalystMetadataReviewTask) {
     confidence: task.confidence,
     unsafeMaterialAccessed: false,
     whatWasNotAccessed: task.whatWasNotAccessed,
+    verificationBoundary: analystMetadataVerificationBoundary(),
     duplicateOf: task.duplicateOf,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt
@@ -4455,6 +5884,7 @@ function safeAnalystVictimNotificationPacketDto(packet: AnalystVictimNotificatio
     tenantId: packet.tenantId,
     reviewTaskId: packet.reviewTaskId,
     status: packet.status,
+    claimHeadline: analystMetadataClaimHeadline(packet),
     company: packet.company,
     victim: packet.victim,
     claimSummary: packet.claimSummary,
@@ -4468,6 +5898,8 @@ function safeAnalystVictimNotificationPacketDto(packet: AnalystVictimNotificatio
     provenance: packet.provenance,
     redactions: packet.redactions,
     whatWasNotAccessed: packet.whatWasNotAccessed,
+    verificationBoundary: analystMetadataVerificationBoundary(),
+    redactedNotification: analystVictimRedactedNotification(packet),
     safeToSend: packet.safeToSend,
     approvedBy: packet.approvedBy,
     sentAt: packet.sentAt,
@@ -4489,6 +5921,7 @@ function safeAnalystSourceActivationPacketDto(packet: AnalystSourceActivationPac
     expectedEffect: packet.expectedEffect,
     rollback: packet.rollback,
     dryRun: true,
+    approvalWorkflow: analystSourceActivationApprovalWorkflow(packet),
     approvedBy: packet.approvedBy,
     approvedAt: packet.approvedAt,
     createdAt: packet.createdAt
@@ -5408,6 +6841,45 @@ function analystFeedbackLoopForQuery(input: {
   });
 }
 
+function qualityRegressionSuiteForQuery(input: {
+  query: string;
+  analystFeedbackLoop: ReturnType<typeof analystFeedbackLoopForQuery>;
+  timelinessGroundTruth?: ReturnType<typeof timelinessGroundTruthForQuery>;
+  attackMappingQuality?: ReturnType<typeof attackMappingQualityForQuery>;
+  generatedAt?: string;
+}) {
+  return buildQualityRegressionSuiteDto({
+    query: input.query,
+    feedbackLoop: input.analystFeedbackLoop,
+    timelinessGroundTruth: input.timelinessGroundTruth,
+    attackMappingQuality: input.attackMappingQuality,
+    generatedAt: input.generatedAt
+  });
+}
+
+function actorProfileReviewWorkbenchForQuery(input: {
+  query: string;
+  tenantId?: string;
+  options: ApiServerOptions;
+  analystFeedbackLoop: ReturnType<typeof analystFeedbackLoopForQuery>;
+  timelinessGroundTruth?: ReturnType<typeof timelinessGroundTruthForQuery>;
+  attackMappingQuality?: ReturnType<typeof attackMappingQualityForQuery>;
+  generatedAt?: string;
+}) {
+  const evidence = searchQualityEvidence(input);
+  const dto = evidence.length > 0 ? buildLiveActorIntelligenceDto({ query: input.query, evidence }) : undefined;
+  const answer = dto ? buildPublicIntelAnswerDto(dto, searchQualityForQuery(input)) : undefined;
+  return buildActorProfileReviewWorkbenchDto({
+    query: input.query,
+    actorProfile: dto,
+    claims: answer?.claims,
+    feedbackLoop: input.analystFeedbackLoop,
+    timelinessGroundTruth: input.timelinessGroundTruth,
+    attackMappingQuality: input.attackMappingQuality,
+    generatedAt: input.generatedAt
+  });
+}
+
 function actorProfileForQuery(input: {
   query: string;
   tenantId?: string;
@@ -6038,6 +7510,7 @@ function buildCanaryOperatorConsoleHtml(view: ReturnType<typeof buildCanaryOpera
             <td>${escapeHtml(capture.sourceId)}</td>
             <td>${escapeHtml(capture.title ?? "untitled")}</td>
             <td>${escapeHtml(capture.storageKind)}</td>
+            <td>${escapeHtml(capture.fetchProvenance?.mode ?? "unknown")}</td>
             <td>${escapeHtml(capture.collectedAt)}</td>
           </tr>`).join("");
   const sources = view.activeSources.map((source) => `
@@ -6054,6 +7527,20 @@ function buildCanaryOperatorConsoleHtml(view: ReturnType<typeof buildCanaryOpera
             <td>${escapeHtml(item.sourceId ?? item.taskId ?? "unknown")}</td>
             <td>${escapeHtml(item.reason)}</td>
           </tr>`).join("") || `<tr><td>ok</td><td>none</td><td>No held or blocked canary items.</td></tr>`;
+  const runtimeRows = [
+    ["Supervisor", view.runtime.supervisorAttached ? "attached" : "not attached"],
+    ["Enabled", view.runtime.enabled ? "yes" : "no"],
+    ["Running", view.runtime.running ? "yes" : "no"],
+    ["Cadence", view.runtime.intervalSeconds > 0 ? `${view.runtime.intervalSeconds}s` : "manual"],
+    ["Next cycle", view.runtime.nextCycleAt ?? "not scheduled"],
+    ["Last success", view.runtime.lastSuccessAt ?? "waiting"],
+    ["Consecutive errors", String(view.runtime.consecutiveErrorCount)],
+    ["Queue limit", String(view.runtime.queueLimit)]
+  ].map(([label, value]) => `
+          <tr>
+            <td>${escapeHtml(label)}</td>
+            <td>${escapeHtml(value)}</td>
+          </tr>`).join("");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -6078,6 +7565,12 @@ function buildCanaryOperatorConsoleHtml(view: ReturnType<typeof buildCanaryOpera
       .metric { background: #fff; border: 1px solid #d9dee7; border-radius: 8px; padding: 12px; min-height: 76px; }
       .metric span { display: block; color: #667085; font-size: 12px; }
       .metric strong { display: block; font-size: 22px; margin-top: 6px; }
+      .controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 4px; }
+      .controls form { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d9dee7; border-radius: 8px; padding: 8px; }
+      .controls input { width: 68px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px; font: inherit; }
+      button { border: 0; border-radius: 6px; padding: 8px 10px; background: #175cd3; color: #fff; font-weight: 700; cursor: pointer; }
+      button.secondary { background: #344054; }
+      button.danger { background: #b42318; }
       table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dee7; border-radius: 8px; overflow: hidden; }
       th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #edf0f4; font-size: 13px; vertical-align: top; }
       th { background: #eef2f6; color: #344054; font-size: 12px; text-transform: uppercase; }
@@ -6095,6 +7588,25 @@ function buildCanaryOperatorConsoleHtml(view: ReturnType<typeof buildCanaryOpera
         </div>
         <span class="pill ${healthState}">${healthState}</span>
       </header>
+      <section class="controls" aria-label="Canary controls">
+        <form method="post" action="/v1/sources/canary-activation">
+          <input type="hidden" name="operatorApproval" value="true">
+          <input type="hidden" name="approvedBy" value="console-operator">
+          <button type="submit">Approve Sources</button>
+        </form>
+        <form method="post" action="/v1/ops/canary/run">
+          <input type="hidden" name="operatorApproval" value="true">
+          <input type="hidden" name="approvedBy" value="console-operator">
+          <label class="subtle">Sources <input name="maxSources" type="number" min="1" max="10" value="3"></label>
+          <label class="subtle">Tasks <input name="maxTasks" type="number" min="1" max="10" value="3"></label>
+          <button class="secondary" type="submit">Run Canary</button>
+        </form>
+        <form method="post" action="/v1/sources/canary-pause">
+          <input type="hidden" name="operatorApproval" value="true">
+          <input type="hidden" name="approvedBy" value="console-operator">
+          <button class="danger" type="submit">Pause Sources</button>
+        </form>
+      </section>
       <section class="grid" aria-label="Canary metrics">
         <div class="metric"><span>Active sources</span><strong>${view.activeSources.length}</strong></div>
         <div class="metric"><span>Queued work</span><strong>${view.queue.queued}</strong></div>
@@ -6103,14 +7615,21 @@ function buildCanaryOperatorConsoleHtml(view: ReturnType<typeof buildCanaryOpera
         <div class="metric"><span>Error rate</span><strong>${view.schedulerHealth.errorRate.toFixed(2)}</strong></div>
         <div class="metric"><span>Duplicate rate</span><strong>${view.schedulerHealth.duplicateRate.toFixed(2)}</strong></div>
         <div class="metric"><span>External objects</span><strong>${view.evidenceStorage.externalObjectCaptureCount}</strong></div>
+        <div class="metric"><span>Evidence mode</span><strong>${escapeHtml(view.evidenceStorage.productionEvidenceMode)}</strong></div>
+        <div class="metric"><span>Native HTTP</span><strong>${view.evidenceStorage.nativeLiveHttpCaptureCount}</strong></div>
+        <div class="metric"><span>Proof fetches</span><strong>${view.evidenceStorage.injectedProofFetchCaptureCount}</strong></div>
         <div class="metric"><span>Extraction confidence</span><strong>${view.extraction.averageIncidentConfidence.toFixed(2)}</strong></div>
+        <div class="metric"><span>Loop enabled</span><strong>${view.runtime.enabled ? "Yes" : "No"}</strong></div>
+        <div class="metric"><span>Loop cadence</span><strong>${view.runtime.intervalSeconds > 0 ? `${view.runtime.intervalSeconds}s` : "Manual"}</strong></div>
       </section>
+      <h2>Runtime Loop</h2>
+      <table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>${runtimeRows}</tbody></table>
       <h2>Public Answer Readiness</h2>
       <table><thead><tr><th>Query</th><th>Captures</th><th>Latest</th><th>Why Partial</th></tr></thead><tbody>${rows}</tbody></table>
       <h2>Active Sources</h2>
       <table><thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Trust</th><th>Last Capture</th></tr></thead><tbody>${sources}</tbody></table>
       <h2>Latest Captures</h2>
-      <table><thead><tr><th>Capture</th><th>Source</th><th>Title</th><th>Storage</th><th>Collected</th></tr></thead><tbody>${captures || `<tr><td colspan="5">No canary captures yet.</td></tr>`}</tbody></table>
+      <table><thead><tr><th>Capture</th><th>Source</th><th>Title</th><th>Storage</th><th>Fetch Mode</th><th>Collected</th></tr></thead><tbody>${captures || `<tr><td colspan="6">No canary captures yet.</td></tr>`}</tbody></table>
       <h2>Blocked Or Held</h2>
       <table><thead><tr><th>State</th><th>Subject</th><th>Reason</th></tr></thead><tbody>${blocked}</tbody></table>
     </main>
@@ -6182,13 +7701,16 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
+    { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
+    { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/console", surface: "ops", owner: "Agent 07/09", responseKeys: ["text/html", "active sources", "queued work", "latest captures", "why public answer is partial"] },
     { method: "GET", path: "/v1/auth/integration-notes", surface: "auth", owner: "Agent 09", responseKeys: ["version", "authBoundary", "notes"] },
-    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "openapi", "surfaces", "publicCompatibility", "semantics"] },
+    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "openapi", "surfaces", "publicCompatibility", "semantics"] },
     { method: "GET", path: "/v1/analyst/claim-ledger", surface: "analyst", owner: "Agent 06/09", responseKeys: ["contract", "runStatusClarity", "entries", "allowedActions"] },
     { method: "POST", path: "/v1/analyst/claim-ledger/{id}/actions", surface: "analyst", owner: "Agent 06/09", responseKeys: ["contract", "dryRun", "action", "entry", "result"] },
     { method: "GET", path: "/v1/analyst/metadata-review-tasks", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "tasks", "notificationPackets", "claimLedger"] },
-    { method: "GET", path: "/v1/analyst/loop", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "state", "runStatusClarity", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger"] },
+    { method: "GET", path: "/v1/analyst/loop", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "state", "runStatusClarity", "workQueue", "activityTimeline", "readinessChecklist", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger"] },
+    { method: "GET", path: "/v1/analyst/persistence-readiness", surface: "analyst", owner: "Agent 01/09", responseKeys: ["endpoint", "migration", "workflowTables", "readiness", "noLeakGuardrails"] },
     { method: "GET", path: "/v1/analyst/source-activation-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
     { method: "GET", path: "/v1/analyst/source-activation-packets/{id}/execution-preview", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "readiness", "packet", "executionPreview", "forbiddenOperations"] },
     { method: "POST", path: "/v1/analyst/source-activation-packets/{id}/actions", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "dryRun", "action", "packet", "result"] },
@@ -6202,8 +7724,10 @@ function buildEnterpriseApiContractIndex() {
     { method: "POST", path: "/v1/sources/canary-activation", surface: "sources", owner: "Agent 01/09", responseKeys: ["activation", "guarantees"] },
     { method: "POST", path: "/v1/sources/canary-pause", surface: "sources", owner: "Agent 01/09", responseKeys: ["pause", "guarantees"] },
     { method: "POST", path: "/v1/sources/coverage-plan", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries"] },
-    { method: "POST", path: "/v1/sources/portfolio", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "portfolio"] },
+    { method: "POST", path: "/v1/sources/portfolio", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "portfolio", "reliabilityEconomics", "migrationReadiness", "sloBurnRate", "tenantActivation", "sourceImportCanary"] },
     { method: "POST", path: "/v1/sources/marketplace", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "marketplace", "parserCapabilityMatrix", "activationReadiness"] },
+    { method: "POST", path: "/v1/sources/atlas", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "summary", "records", "importPlans", "coverageMatrix", "activationCanary"] },
+    { method: "POST", path: "/v1/sources/atlas/export", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "summary", "reviewQueue", "exportManifest", "approvalPacket", "rollbackPacket"] },
     { method: "POST", path: "/v1/sources/activation-batches", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "coordination", "executionReadiness.rolloutPromotion"] },
     { method: "POST", path: "/v1/sources/runtime-sla", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "releasePacket"] },
     { method: "POST", path: "/v1/sources/coverage-closeout", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "activationWaves", "releasePacket"] },
@@ -6222,8 +7746,8 @@ function buildEnterpriseApiContractIndex() {
     { method: "POST", path: "/v1/intel/runs", surface: "intel", owner: "Agent 09", responseKeys: ["run"] },
     { method: "GET", path: "/v1/intel/runs/{id}", surface: "intel", owner: "Agent 09", responseKeys: ["run", "frontier"] },
     { method: "GET", path: "/v1/intel/runs/{id}/results", surface: "intel", owner: "Agent 09", responseKeys: ["run", "results"] },
-    { method: "GET", path: "/v1/intel/search", surface: "search", owner: "Agent 09", responseKeys: ["query", "mode", "status", "runId", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "analystLoop", "tiExperience", "publicTiAnswer", "publicWrapperDelta"] },
-    { method: "GET", path: "/v1/quality/evaluate", surface: "quality", owner: "Agent 07/09", responseKeys: ["query", "quality", "dashboard", "entityResolutionWorkbench", "timelinessGroundTruth", "attackMappingQuality", "analystFeedbackLoop", "examples"] },
+    { method: "GET", path: "/v1/intel/search", surface: "search", owner: "Agent 09", responseKeys: ["query", "mode", "status", "runId", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "analystLoop", "tiExperience", "publicTiAnswer", "publicWrapperDelta", "analystFeedbackLearningLoop", "activeLearningCandidateQueue", "qualityRuntimeValueGates", "highPriorityActorFreshnessDashboard", "ctiEvaluationDatasetPack"] },
+    { method: "GET", path: "/v1/quality/evaluate", surface: "quality", owner: "Agent 07/09", responseKeys: ["query", "quality", "dashboard", "entityResolutionWorkbench", "timelinessGroundTruth", "highPriorityActorFreshnessDashboard", "attackMappingQuality", "analystFeedbackLoop", "actorProfileReviewWorkbench", "evaluationDatasetGovernance", "ctiEvaluationDatasetPack", "analystQualityReviewQueue", "analystFeedbackLearningLoop", "activeLearningCandidateQueue", "qualityRuntimeValueGates", "examples"] },
     { method: "GET", path: "/v1/graph/review-plan", surface: "graph", owner: "Agent 08/09", responseKeys: ["contract", "reviewPlan"] },
     { method: "GET", path: "/v1/graph/query", surface: "graph", owner: "Agent 08/09", responseKeys: ["contract", "graph"] },
     { method: "GET", path: "/v1/graph/timeline", surface: "graph", owner: "Agent 08/09", responseKeys: ["contract", "timeline"] },
@@ -6234,7 +7758,9 @@ function buildEnterpriseApiContractIndex() {
     { method: "POST", path: "/v1/public-channels/apply-plan", surface: "public_channels", owner: "Agent 04/09", responseKeys: ["contract", "applyPlan"] },
     { method: "GET", path: "/v1/restricted-metadata/status", surface: "restricted_metadata", owner: "Agent 05/09", responseKeys: ["status"] },
     { method: "POST", path: "/v1/restricted-metadata/apply-plan", surface: "restricted_metadata", owner: "Agent 05/09", responseKeys: ["contract", "applyPlan"] },
-    { method: "POST", path: "/v1/sources/{id}/restricted-metadata/apply-plan", surface: "restricted_metadata", owner: "Agent 05/09", responseKeys: ["contract", "applyPlan"] }
+    { method: "POST", path: "/v1/sources/{id}/restricted-metadata/apply-plan", surface: "restricted_metadata", owner: "Agent 05/09", responseKeys: ["contract", "applyPlan"] },
+    { method: "GET", path: "/v1/darkweb/status", surface: "darkweb_index", owner: "Agent 05/09", responseKeys: ["status", "contract"] },
+    { method: "GET", path: "/v1/darkweb/search", surface: "darkweb_index", owner: "Agent 05/09", responseKeys: ["darkwebIndex", "contract"] }
   ];
   const compatibilityFields = [
     "query",
@@ -6252,6 +7778,7 @@ function buildEnterpriseApiContractIndex() {
     "sources",
     "notes",
     "warnings",
+    "warningCodes",
     "cursor",
     "nextCursor",
     "pollCursor",
@@ -6282,6 +7809,252 @@ function buildEnterpriseApiContractIndex() {
   const enterpriseApiSurface = enterpriseApiSurfaceContract(activeRoutes, commonErrorEnvelope);
   const sdkIntegration = sdkIntegrationContract(enterpriseApiSurface);
   const clientCompatibilityMatrix = clientCompatibilityMatrixContract(enterpriseApiSurface, sdkIntegration);
+  const streamingWebhookCompatibility = buildStreamingWebhookCompatibilityContract(enterpriseApiSurface, sdkIntegration);
+  const apiRegressionSentinelRouteSignatures = activeRoutes.map((route) => `${route.method} ${route.path}`);
+  const apiRegressionSentinel = {
+    schemaVersion: "ti.api_regression_sentinel.v1",
+    owner: "Agent 09",
+    status: "active_backward_compatibility_gate",
+    mode: "contract_and_route_shape_only",
+    routeInventoryInvariant: {
+      expectedRouteCount: activeRoutes.length,
+      requiredStableRoutes: [
+        "GET /v1/contracts",
+        "GET /v1/intel/search",
+        "POST /v1/intel/runs",
+        "GET /v1/intel/runs/{id}",
+        "GET /v1/intel/runs/{id}/results",
+        "GET /v1/sources",
+        "POST /v1/sources",
+        "GET /v1/captures",
+        "GET /v1/incidents",
+        "GET /v1/metrics",
+        "POST /api/ti/search"
+      ],
+      routeSignatures: apiRegressionSentinelRouteSignatures,
+      rule: "stable routes may gain optional fields, but removing or renaming these routes requires a new major version or compatibility-wrapper entry"
+    },
+    responseShapeInvariant: {
+      requiredTopLevelKeys: ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "openapi", "surfaces", "publicCompatibility", "semantics", "validation"],
+      publicSearchRequiredKeys: ["status", "runId", "refreshAfterSeconds", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "warningCodes", "publicTiAnswer", "publicWrapperDelta"],
+      publicSearchStableFields: compatibilityFields,
+      publicWrapperDeltaStableFields: publicWrapperDeltaStableFields(),
+      rule: "required keys must remain present for ready, partial, searching, metadata_review, queue_pressure, blocked, and empty-delta responses"
+    },
+    openapiInvariant: {
+      version: enterpriseApiSurface.openapi.openapi,
+      requiredSchemas: ["ErrorEnvelope", "CursorPage", "IdempotentRunRequest", "PublicSearchResponse", "SdkPollingEnvelope", "SdkSubscriptionRegistration", "StreamingEventEnvelope", "WebhookDeliveryAttempt", "PublicWrapperCutoverReadiness", "RealtimeDeliveryPrototype", "RealtimePrototypeEvent", "ClientGenerationFreeze", "GeneratedClientTarget"],
+      requiredPaths: ["/v1/intel/search", "/v1/intel/runs/{id}/results", "/v1/sources", "/v1/contracts"],
+      rule: "OpenAPI paths and component schemas are the generated-client backbone and must stay additive within /v1"
+    },
+    behaviorInvariants: {
+      auth: {
+        requiredForwardedHeaders: enterpriseApiSurface.authBoundary.requiredForwardedHeaders,
+        serviceTokenContext: enterpriseApiSurface.authBoundary.serviceTokenContext.header,
+        rule: "trusted gateway identity is propagated by headers; scraper examples never include token material"
+      },
+      idempotency: enterpriseApiSurface.idempotency,
+      pagination: enterpriseApiSurface.pagination,
+      errors: {
+        envelope: enterpriseApiSurface.errors.envelope,
+        requiredCodes: ["bad_request", "not_found", "idempotency_conflict", "queue_pressure", "policy_blocked", "duplicate_run_reuse"],
+        retryableCodes: enterpriseApiSurface.errors.retryableCodes,
+        failClosedCodes: enterpriseApiSurface.errors.failClosedCodes
+      },
+      rateLimits: {
+        responseHeaders: enterpriseApiSurface.rateLimits.responseHeaders,
+        overloadCodes: enterpriseApiSurface.rateLimits.overloadCodes
+      }
+    },
+    sdkInvariant: {
+      fixturePackSchemaVersion: sdkIntegration.fixturePack.schemaVersion,
+      requiredFixtureFiles: sdkIntegration.fixturePack.requiredFiles,
+      invariantFields: sdkIntegration.fixturePack.invariantFields,
+      compatibilityCommands: sdkIntegration.compatibilityCi.requiredCommands,
+      clientCompatibilityStatus: clientCompatibilityMatrix.status
+    },
+    streamingWebhookInvariant: {
+      schemaVersion: streamingWebhookCompatibility.schemaVersion,
+      status: streamingWebhookCompatibility.status,
+      deliveryModes: streamingWebhookCompatibility.deliveryModes.map((mode: { mode: string }) => mode.mode),
+      eventTypes: streamingWebhookCompatibility.eventTypes.map((event: { type: string }) => event.type),
+      pollingCompatibilityFields: streamingWebhookCompatibility.pollingCompatibility.sameFields,
+      requiredHeaders: streamingWebhookCompatibility.authAndGateway.requiredForwardedHeaders,
+      forbiddenPayloadFields: streamingWebhookCompatibility.noLeak.forbiddenPayloadFields,
+      failureBehavior: streamingWebhookCompatibility.webhooks.failureBehavior
+    },
+    forbiddenChangeClasses: [
+      "remove_stable_route",
+      "rename_required_response_key",
+      "drop_cursor_or_delta_cursor",
+      "change_error_envelope_shape",
+      "remove_idempotency_conflict",
+      "remove_tenant_or_requester_header_contract",
+      "remove_retry_after_headers",
+      "remove_sdk_fixture",
+      "make_streaming_required_for_polling_clients",
+      "remove_streaming_replay_cursor",
+      "remove_webhook_failure_state",
+      "reintroduce_default_actor_fallback",
+      "serve_demo_or_stale_cache_copy",
+      "mark_unknown_query_ready_without_evidence",
+      "add_raw_payload_example"
+    ],
+    noLeakAssertions: ["no auth-header examples", "no cookie-header examples", "no bearer-token examples", "no raw payload values", "no restricted URL values", "no object storage key values", "no credential values", "no leaked row values"],
+    proofCommands: ["bun run check:api-regression", "bun run check:contract-index", "bun run check:route-inventory", "bun run check:sdk-fixtures", "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts", "bun test", "bun run check"],
+    releaseRule: "block SDK/client/public-wrapper promotion if the sentinel fails; update this contract explicitly before any intentional breaking change"
+  };
+  const apiGatewayIntegration = {
+    schemaVersion: "ti.api_gateway_integration.v1",
+    owner: "Agent 09",
+    status: "deployment_plan_ready",
+    mode: "contract_only_gateway_cutover",
+    trustedBoundary: {
+      gatewayOwnsAuthnAuthz: true,
+      scraperStoresSecrets: false,
+      requiredForwardedHeaders: enterpriseApiSurface.authBoundary.requiredForwardedHeaders,
+      optionalForwardedHeaders: enterpriseApiSurface.authBoundary.optionalForwardedHeaders,
+      serviceTokenContextHeader: enterpriseApiSurface.authBoundary.serviceTokenContext.header,
+      requiredScopesByRoute: [
+        { route: "GET /v1/intel/search", scopes: ["intel:read"], failClosedCode: "policy_blocked" },
+        { route: "POST /v1/intel/runs", scopes: ["intel:run"], failClosedCode: "policy_blocked" },
+        { route: "GET /v1/intel/runs/{id}/results", scopes: ["intel:read", "evidence:read"], failClosedCode: "not_found" },
+        { route: "POST /v1/sources/*", scopes: ["sources:write", "scraper:admin"], failClosedCode: "policy_blocked" },
+        { route: "POST /v1/exports/stix", scopes: ["exports:write", "graph:read"], failClosedCode: "policy_blocked" }
+      ],
+      noSecretForwardingRule: "gateway forwards principal ids, role labels, service context, request ids, and trace ids only; token material, cookies, and API keys stay outside scraper logs and DTOs"
+    },
+    routeMapping: {
+      canonicalPublicWrapper: { external: "POST /api/ti/search", internal: "GET /v1/intel/search", methodBoundary: "gateway converts JSON q/query to canonical search query params and preserves stable response fields" },
+      canonicalVersionedPrefix: "/v1",
+      publicRoutes: ["POST /api/ti/search", "GET /v1/health", "GET /v1/contracts"],
+      analystRoutes: ["GET /v1/analyst/loop", "GET /v1/analyst/metadata-review-tasks", "GET /v1/evidence/claim-ledger"],
+      adminRoutes: ["POST /v1/sources/*", "POST /v1/frontier/apply-plan", "POST /v1/public-channels/apply-plan", "POST /v1/restricted-metadata/apply-plan"],
+      rollbackAlias: { route: "POST /api/ti/search", fallbackBehavior: "preserve compatibility wrapper and serve last safe bounded answer if scraper-native gate fails" }
+    },
+    tenantPropagation: {
+      requiredHeader: enterpriseApiSurface.identity.tenantHeader,
+      requesterHeader: enterpriseApiSurface.identity.requesterHeader,
+      requestIdHeader: enterpriseApiSurface.identity.requestIdHeader,
+      traceHeader: enterpriseApiSurface.identity.traceHeader,
+      orderingRule: enterpriseApiSurface.tenantBoundary.projectionRule,
+      crossTenantFailureCode: enterpriseApiSurface.tenantBoundary.crossTenantFailureCode,
+      auditFields: enterpriseApiSurface.authBoundary.auditLogging.requiredFields
+    },
+    rateLimitPlan: {
+      gatewayEnforced: true,
+      responseHeaders: enterpriseApiSurface.rateLimits.responseHeaders,
+      defaultPolicy: enterpriseApiSurface.rateLimits.defaultPolicy,
+      perRouteHints: enterpriseApiSurface.rateLimits.perRouteHints,
+      queuePressureBehavior: "return stable error envelope or partial response with retry-after; clients keep last safe answer and poll from cursor"
+    },
+    cutoverStages: [
+      { name: "shadow_headers", decision: "observe", requiredProof: "gateway forwards x-tenant-id/x-actor-id/x-request-id without storing token material", rollback: "strip gateway route to internal-only traffic" },
+      { name: "public_wrapper_shadow", decision: "observe", requiredProof: "POST /api/ti/search mirrors GET /v1/intel/search stable fields for known/random/made-up queries", rollback: "serve outer compatibility fallback" },
+      { name: "canary_public_wrapper", decision: "canary", requiredProof: "public proof matrix and apiRegressionSentinel are green", rollback: "pin /api/ti/search to previous compatibility wrapper" },
+      { name: "versioned_api_clients", decision: "promote", requiredProof: "contract index, route inventory, SDK fixtures, gateway check, and full tests pass", rollback: "keep /v1 contracts but disable new gateway route mapping" }
+    ],
+    rollbackPlan: {
+      triggers: ["missing_forwarded_identity", "tenant_boundary_failure", "public_wrapper_post_failure", "rate_limit_header_missing", "error_envelope_drift", "raw_material_leak", "sdk_fixture_drift"],
+      safeActions: ["preserve last safe public answer", "disable public wrapper cutover", "restore compatibility wrapper", "hold SDK release", "keep source/admin routes gateway-only"],
+      nonActions: ["do not bypass tenant checks", "do not expose token material", "do not serve raw evidence", "do not auto-activate sources"]
+    },
+    proofCommands: [
+      "bun run check:api-gateway",
+      "bun run check:api-regression",
+      "bun run check:contract-index",
+      "bun run check:route-inventory",
+      "bun run check:sdk-fixtures",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    noLeakGuarantee: "gateway integration examples carry route names, principal ids, request ids, scopes, retry hints, and rollback states only; never token material, cookies, raw evidence, object keys, restricted URLs, credentials, or leaked rows"
+  };
+  const publicWrapperCutoverReadiness = publicWrapperCutoverReadinessContract({
+    compatibilityFields,
+    enterpriseApiSurface,
+    sdkIntegration,
+    clientCompatibilityMatrix,
+    streamingWebhookCompatibility,
+    apiGatewayIntegration
+  });
+  const realtimeDeliveryPrototype = realtimeDeliveryPrototypeContract({
+    enterpriseApiSurface,
+    sdkIntegration,
+    streamingWebhookCompatibility,
+    publicWrapperCutoverReadiness
+  });
+  const realtimeDeliverySoak = buildRealtimeDeliverySoakContractLegacy({
+    enterpriseApiSurface,
+    sdkIntegration,
+    streamingWebhookCompatibility,
+    realtimeDeliveryPrototype,
+    publicWrapperCutoverReadiness
+  });
+  const clientGenerationFreeze = clientGenerationFreezeContract({
+    enterpriseApiSurface,
+    sdkIntegration,
+    clientCompatibilityMatrix,
+    streamingWebhookCompatibility,
+    realtimeDeliveryPrototype,
+    publicWrapperCutoverReadiness
+  });
+  (apiRegressionSentinel as {
+    publicWrapperCutoverInvariant?: unknown;
+    realtimeDeliveryPrototypeInvariant?: unknown;
+    clientGenerationFreezeInvariant?: unknown;
+  }).publicWrapperCutoverInvariant = {
+    schemaVersion: publicWrapperCutoverReadiness.schemaVersion,
+    status: publicWrapperCutoverReadiness.status,
+    requiredStableFields: publicWrapperCutoverReadiness.stableFieldAgreement.requiredFields,
+    bannedFallbackCodes: publicWrapperCutoverReadiness.fallbackWatch.bannedFallbackCodes,
+    deprecationAlias: publicWrapperCutoverReadiness.deprecationWatch.aliasRoute,
+    rollbackTriggers: publicWrapperCutoverReadiness.deprecationWatch.rollbackTriggers,
+    proofCommands: publicWrapperCutoverReadiness.proofCommands
+  };
+  (apiRegressionSentinel as {
+    realtimeDeliveryPrototypeInvariant?: unknown;
+    realtimeDeliverySoakInvariant?: unknown;
+  }).realtimeDeliveryPrototypeInvariant = {
+    schemaVersion: realtimeDeliveryPrototype.schemaVersion,
+    status: realtimeDeliveryPrototype.status,
+    enabledByDefault: realtimeDeliveryPrototype.featureFlags.enabledByDefault,
+    pollingPrimary: realtimeDeliveryPrototype.fallbackToPolling.pollingPrimary,
+    deliveryModes: realtimeDeliveryPrototype.deliveryModes.map((mode) => mode.mode),
+    eventTypes: realtimeDeliveryPrototype.eventPrototypes.map((event) => event.type),
+    requiredFields: realtimeDeliveryPrototype.eventEnvelope.requiredFields,
+    forbiddenPayloadFields: realtimeDeliveryPrototype.noLeak.forbiddenPayloadFields,
+    proofCommands: realtimeDeliveryPrototype.proofCommands
+  };
+  (apiRegressionSentinel as {
+    realtimeDeliverySoakInvariant?: unknown;
+  }).realtimeDeliverySoakInvariant = {
+    schemaVersion: realtimeDeliverySoak.schemaVersion,
+    status: realtimeDeliverySoak.status,
+    pollingPrimary: realtimeDeliverySoak.pollingFallback.pollingPrimary,
+    scenarios: realtimeDeliverySoak.soakScenarios.map((scenario) => scenario.name),
+    outboxStates: realtimeDeliverySoak.webhookOutbox.states,
+    cursorGapActions: realtimeDeliverySoak.cursorGapReplay.actions,
+    forbiddenPayloadFields: realtimeDeliverySoak.noLeak.forbiddenPayloadFields,
+    proofCommands: realtimeDeliverySoak.proofCommands
+  };
+  (apiRegressionSentinel as {
+    clientGenerationFreezeInvariant?: unknown;
+  }).clientGenerationFreezeInvariant = {
+    schemaVersion: clientGenerationFreeze.schemaVersion,
+    status: clientGenerationFreeze.status,
+    openapiVersion: clientGenerationFreeze.openapiManifest.openapi,
+    generatedTargets: clientGenerationFreeze.generatedClients.map((client) => client.target),
+    requiredOperationIds: clientGenerationFreeze.operationManifest.requiredOperationIds,
+    requiredSchemas: clientGenerationFreeze.schemaManifest.requiredSchemas,
+    requiredFixtures: clientGenerationFreeze.fixtureManifest.requiredFixtures,
+    changelogGateStatus: clientGenerationFreeze.changelogGate.status,
+    breakingChangeBlockers: clientGenerationFreeze.changelogGate.breakingChangeBlockers,
+    minimumNoticeDays: clientGenerationFreeze.changelogGate.deprecationPolicy.minimumNoticeDays,
+    failClosedChecks: clientGenerationFreeze.driftPolicy.failClosedChecks,
+    proofCommands: clientGenerationFreeze.proofCommands
+  };
   const stateMachine = {
     schemaVersion: "ti.public_answer_polling_state.v1",
     states: {
@@ -6296,7 +8069,7 @@ function buildEnterpriseApiContractIndex() {
       contradicted: { retryable: false, terminal: false, publicPromotion: "blocked_until_contradiction_review", requiredFields: ["warningCodes", "reviewGates"] },
       source_biased: { retryable: true, terminal: false, publicPromotion: "blocked_until_source_family_diversity", requiredFields: ["sourceCoverageGaps", "publicTiAnswer.waitReasons"] },
       ready: { retryable: false, terminal: true, publicPromotion: "allowed_when_release_gates_pass", requiredFields: ["status", "runId", "cursor", "nextCursor", "publicTiAnswer"] },
-      error: { retryable: "depends_on_error_code", terminal: true, publicPromotion: "blocked", requiredFields: ["error.code", "error.message"] }
+      error: { retryable: false, terminal: true, publicPromotion: "blocked", requiredFields: ["error.code", "error.message"] }
     },
     requiredUiFields: ["state", "phase", "progress", "changedSinceCursor", "polling", "holds", "confidenceLabel", "caveats", "waitReasons", "safeNoResult"]
   };
@@ -6338,6 +8111,10 @@ function buildEnterpriseApiContractIndex() {
     },
     guarantee: "release-candidate state is dry-run, no-leak, public POST compatible, and fail-closed for policy, provider, scraper, restricted emergency-stop, evidence, graph, scheduler, or canary blockers"
   };
+  const qualityRuntimeValueGatesContract = buildQualityRuntimeValueGatesDto({
+    query: "APT29",
+    generatedAt: "2026-05-24T00:00:00.000Z"
+  });
   const publicAnswerUxSemantics = {
     schemaVersion: "ti.public_answer_ux.v1",
     field: "publicTiAnswer.ux",
@@ -6518,6 +8295,70 @@ function buildEnterpriseApiContractIndex() {
     ],
     guarantee: "public delta polling preserves stable wrapper fields across first response, repeated polls, empty deltas, new evidence, holds, downgraded facts, and ready states with compact proof summaries only"
   };
+  const frontendProgressiveUpdateContract = buildFrontendProgressiveUpdateContract({
+    stateMachine,
+    publicWrapperResponsiveAudit,
+    publicWrapperDeltaAudit,
+    publicWrapperCutoverReadiness,
+    sdkIntegration
+  });
+  (apiRegressionSentinel as {
+    frontendProgressiveUpdateInvariant?: unknown;
+  }).frontendProgressiveUpdateInvariant = {
+    schemaVersion: frontendProgressiveUpdateContract.schemaVersion,
+    status: frontendProgressiveUpdateContract.status,
+    routes: frontendProgressiveUpdateContract.routes,
+    requiredFields: frontendProgressiveUpdateContract.requiredFields,
+    proofScenarios: frontendProgressiveUpdateContract.uiProofMatrix.map((fixture) => fixture.scenario),
+    mergeRules: frontendProgressiveUpdateContract.mergeSemantics.rules,
+    proofCommands: frontendProgressiveUpdateContract.proofCommands
+  };
+  const scraperNativeReplacementReadiness = buildScraperNativeReplacementReadinessContract({
+    publicWrapperCutoverReadiness,
+    frontendProgressiveUpdateContract,
+    clientGenerationFreeze,
+    sdkIntegration
+  });
+  (apiRegressionSentinel as {
+    scraperNativeReplacementInvariant?: unknown;
+  }).scraperNativeReplacementInvariant = {
+    schemaVersion: scraperNativeReplacementReadiness.schemaVersion,
+    status: scraperNativeReplacementReadiness.status,
+    decision: scraperNativeReplacementReadiness.decision,
+    routes: scraperNativeReplacementReadiness.routes,
+    requiredCases: scraperNativeReplacementReadiness.proofMatrix.map((row) => row.case),
+    blockers: scraperNativeReplacementReadiness.blockers,
+    proofCommands: scraperNativeReplacementReadiness.proofCommands
+  };
+  const darkwebIndexFrontendContract = buildDarkwebIndexFrontendContractDto();
+  (apiRegressionSentinel as {
+    darkwebIndexFrontendInvariant?: unknown;
+  }).darkwebIndexFrontendInvariant = {
+    schemaVersion: darkwebIndexFrontendContract.schemaVersion,
+    status: darkwebIndexFrontendContract.status,
+    route: darkwebIndexFrontendContract.route,
+    apiRoutes: darkwebIndexFrontendContract.apiRoutes,
+    tableColumns: darkwebIndexFrontendContract.table.columns,
+    filters: darkwebIndexFrontendContract.table.filters,
+    detailDrawerSections: darkwebIndexFrontendContract.safeDetailDrawer.sections,
+    forbiddenUiPayloadFields: darkwebIndexFrontendContract.noLeak.forbiddenUiPayloadFields,
+    proofCommands: darkwebIndexFrontendContract.proofCommands
+  };
+  const sourceAtlasFrontendContract = buildSourceAtlasFrontendContractDto();
+  (apiRegressionSentinel as {
+    sourceAtlasFrontendInvariant?: unknown;
+  }).sourceAtlasFrontendInvariant = {
+    schemaVersion: sourceAtlasFrontendContract.schemaVersion,
+    status: sourceAtlasFrontendContract.status,
+    route: sourceAtlasFrontendContract.route,
+    apiRoutes: sourceAtlasFrontendContract.apiRoutes,
+    tableColumns: sourceAtlasFrontendContract.table.columns,
+    filters: sourceAtlasFrontendContract.table.filters,
+    detailDrawerSections: sourceAtlasFrontendContract.safeDetailDrawer.sections,
+    importPlanLabels: sourceAtlasFrontendContract.importPlans.labels,
+    forbiddenOperations: sourceAtlasFrontendContract.noLeak.forbiddenOperations,
+    proofCommands: sourceAtlasFrontendContract.proofCommands
+  };
   const routeTruthAudit = {
     schemaVersion: "ti.route_truth_audit.v1",
     owner: "Agent 09",
@@ -6561,6 +8402,77 @@ function buildEnterpriseApiContractIndex() {
     ],
     guarantee: "route truth audit is dry-run, route-visible, no-leak, public POST compatible, and fail-closed for route drift, missing examples, provider/scraper failures, queue pressure, stale evidence, no approved sources, policy blocks, duplicate reuse, restricted emergency stop, and canary RC holds"
   };
+  const publicCanaryControlPlane = {
+    schemaVersion: "ti.public_canary_control_plane.v1",
+    routes: [
+      "/v1/sources/canary-activation",
+      "/v1/ops/canary/run",
+      "/v1/ops/canary",
+      "/v1/ops/canary/readiness",
+      "/v1/ops/canary/soak",
+      "/v1/ops/canary/console",
+      "/v1/sources/canary-pause"
+    ],
+    portfolio: {
+      minimumSourceCount: 8,
+      bundledSourceCount: 10,
+      allowedSourceClasses: ["vendor_blog", "rss_security_feed", "government_advisory", "public_news", "standards_body"],
+      forbiddenSourceClasses: ["darknet", "restricted_metadata", "private_channel", "credentialed_source", "captcha_gated_source", "leaked_payload_source"]
+    },
+    activation: {
+      executableRoute: "/v1/sources/canary-activation",
+      requiresHumanApproval: true,
+      approvalField: "operatorApproval=true",
+      auditFields: ["approvedBy", "approvedAt", "source.lifecycle", "source.governance"],
+      reversibleRoutes: ["/v1/sources/canary-pause"]
+    },
+    collection: {
+      executableRoute: "/v1/ops/canary/run",
+      continuousLoopAutoActivation: false,
+      backgroundEnv: ["TI_CANARY_ENABLED", "TI_CANARY_AUTO_ACTIVATE=false", "TI_CANARY_INTERVAL_SECONDS", "TI_CANARY_MAX_TASKS", "TI_CANARY_MAX_SOURCES", "TI_CANARY_MAX_QUEUE_SIZE"],
+      boundedControls: ["maxSources", "maxTasks", "maxBytes", "timeoutMs", "source crawlFrequencySeconds", "frontier retry/backoff"],
+      fetchProvenance: {
+        requiredCaptureMetadata: ["fetchProvenance.mode", "fetchProvenance.httpStatus", "fetchProvenance.finalUrlHash", "fetchProvenance.durationMs", "fetchProvenance.bytesReceived", "fetchProvenance.truncated"],
+        liveMode: "native_live_http",
+        proofMode: "injected_proof_fetch",
+        rawBodiesExternalized: true
+      }
+    },
+    runtimeLoop: {
+      schemaVersion: "ti.public_canary_loop_runtime.v1",
+      routeField: "/v1/ops/canary.operatorView.runtime",
+      fields: ["supervisorAttached", "enabled", "running", "startedAt", "intervalSeconds", "nextCycleAt", "lastSuccessAt", "lastError", "cycleCount", "successCount", "errorCount", "consecutiveErrorCount", "maxSources", "maxTasks", "maxBytes", "timeoutMs", "queueLimit", "controls"],
+      controls: ["canaryPortfolioOnly", "activationRequiresHumanApproval", "continuousLoopAutoActivation", "nativeFetchDefault", "objectBoundaryConfigured", "boundedQueueRequired", "dedupeBeforeWrite", "retriesBounded", "restrictedSourcesExcluded"]
+    },
+    readiness: {
+      route: "/v1/ops/canary/readiness",
+      schemaVersion: "ti.public_canary_readiness.v1",
+      decisions: ["promote", "canary-with-warnings", "hold"],
+      requiredQueries: ["APT42", "Turla"],
+      requiredEvidenceChecks: ["activeSourceCount", "freshnessSeconds", "externalObjectCaptureCount", "missingObjectReferenceCount", "nativeLiveHttpCaptureCount", "injectedProofFetchCaptureCount", "promotionYield", "queryReadiness"],
+      optionalProductionGates: ["requireNativeLiveHttp=true"],
+      blockerFields: ["blockers", "warnings", "controls"]
+    },
+    soak: {
+      route: "/v1/ops/canary/soak",
+      schemaVersion: "ti.public_canary_soak.v1",
+      decisions: ["promote", "canary-with-warnings", "hold"],
+      requiredMetrics: ["cycleCount", "completedCycleCount", "failedCycleCount", "zeroTaskCycleCount", "activeSourceCount", "externalObjectCaptureCount", "nativeLiveHttpCaptureCount", "injectedProofFetchCaptureCount", "freshnessSeconds", "errorRate", "duplicateRate", "promotionYield"],
+      optionalProductionGates: ["requireNativeLiveHttp=true"],
+      controls: ["canaryPortfolioOnly", "activationRequiresHumanApproval", "continuousLoopAutoActivation", "boundedQueueRequired", "objectBoundaryRequired", "fetchProvenanceRequired", "nativeLiveHttpRequired", "restrictedSourcesExcluded"]
+    },
+    operatorView: {
+      routes: ["/v1/ops/canary", "/v1/ops/canary/soak", "/v1/ops/canary/console"],
+      fields: ["activeSources", "queue", "latestRun", "schedulerHealth", "runtime", "evidenceStorage.productionEvidenceMode", "evidenceStorage", "blockedOrHeldItems", "latestCaptures", "extraction", "publicAnswerReadiness"]
+    },
+    proofCommands: [
+      "bun run check:canary-proof-path",
+      "bun run check:route-inventory",
+      "bun run check:deploy-hygiene",
+      "bun run check:scraper-native-search"
+    ],
+    guarantee: "public canary control plane is executable only for approved clear-web sources, keeps activation separate from collection, persists public bodies through the evidence object boundary when configured, and excludes restricted/private/leaked/auth/CAPTCHA source classes"
+  };
 
   return {
     endpoint: "/v1/contracts",
@@ -6577,11 +8489,22 @@ function buildEnterpriseApiContractIndex() {
       }))
     },
     routeTruthAudit,
+    apiRegressionSentinel,
+    apiGatewayIntegration,
+    publicWrapperCutoverReadiness,
+    realtimeDeliveryPrototype,
+    realtimeDeliverySoak,
+    clientGenerationFreeze,
+    frontendProgressiveUpdateContract,
+    scraperNativeReplacementReadiness,
+    darkwebIndexFrontendContract,
+    sourceAtlasFrontendContract,
     publicWrapperResponsiveAudit,
     publicWrapperDeltaAudit,
     enterpriseApiSurface,
     sdkIntegration,
     clientCompatibilityMatrix,
+    streamingWebhookCompatibility,
     openapi: enterpriseApiSurface.openapi,
     publicCompatibility: {
       canonicalPublicPath: "/api/ti/search",
@@ -6629,12 +8552,25 @@ function buildEnterpriseApiContractIndex() {
     semantics: {
       stateMachine,
       publicAnswerReleaseCandidate,
+      qualityRuntimeValueGates: qualityRuntimeValueGatesContract,
       publicAnswerUxSemantics,
       publicWrapperResponsiveAudit,
       publicWrapperDeltaAudit,
+      apiRegressionSentinel,
+      apiGatewayIntegration,
+      publicWrapperCutoverReadiness,
+      realtimeDeliveryPrototype,
+      realtimeDeliverySoak,
+      clientGenerationFreeze,
+      frontendProgressiveUpdateContract,
+      scraperNativeReplacementReadiness,
+      darkwebIndexFrontendContract,
+      sourceAtlasFrontendContract,
+      ["publicCanaryControlPlane"]: publicCanaryControlPlane,
       enterpriseApiSurface,
       sdkIntegration,
       clientCompatibilityMatrix,
+      streamingWebhookCompatibility,
       authBoundary: enterpriseApiSurface.authBoundary,
       pagination: enterpriseApiSurface.pagination,
       rateLimits: enterpriseApiSurface.rateLimits,
@@ -6673,7 +8609,8 @@ function buildEnterpriseApiContractIndex() {
         "scheduler_ack_wait_review",
         "scheduler_retry_debt_watch",
         "scheduler_dead_letter_watch",
-        "scheduler_cursor_waiting_for_deltas"
+        "scheduler_cursor_waiting_for_deltas",
+        "scheduler_durable_backend_readiness"
       ],
       restrictedMetadataConnectorCertification: {
         field: "restrictedMetadata.connectorCertification",
@@ -6717,12 +8654,84 @@ function buildEnterpriseApiContractIndex() {
         packetFields: ["playbookId", "scenario", "trigger", "detectionFields", "safeOperatorAction", "expectedDtoEffect", "rollback", "auditLogFields", "affectedAgents", "proofCommand", "handoffs", "forbiddenAlternatives", "noLeakSerialization"],
         guarantee: "restricted metadata operational playbooks are dry-run, metadata-only, source-hash-only, non-mutating, and review-safe for emergency stop, quarantine, legal hold, retention, approval, redaction, proxy, unsafe-source, stale, false-claim, and duplicate-claim workflows"
       },
+      restrictedMetadataQualityEvaluation: {
+        field: "restrictedMetadata.qualityEvaluation",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataQualityEvaluationContract().fixtureScenarios,
+        packetFields: ["gateId", "scenario", "claimConfidence", "duplicateStatus", "staleStatus", "actorReliability", "sourceReliability", "reviewState", "legalHold", "retentionState", "publicAnswerGate", "graphStixPromotionEligibility", "suppressionReason", "handoffs", "proof", "noLeakSerialization"],
+        guarantee: "restricted metadata quality evaluation suppresses false, impersonated, duplicate, stale, noisy, unavailable, biased, contradicted, and ambiguous claims before public answer or graph/STIX promotion"
+      },
+      restrictedMetadataCapacityIsolation: {
+        field: "restrictedMetadata.capacityIsolation",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataCapacityIsolationContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "networkBudgets", "queueDecision", "publicSearchProtection", "schedulerBackpressure", "evidenceRetentionImpact", "publicAnswerCaveat", "graphHold", "apiField", "releaseGate", "approvalReviewLoad", "legalHoldRetentionLoad", "proof", "noLeakSerialization"],
+        guarantee: "restricted metadata capacity isolation caps Tor/I2P/Freenet metadata workers separately from public search, fails closed on proxy/timeout pressure, drains emergency-stop queues, and preserves public search headroom without unsafe access or leaked-material serialization"
+      },
+      restrictedMetadataCapacitySlo: {
+        field: "restrictedMetadata.capacitySlo",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataCapacitySloContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "tenantIsolation", "slo", "capacity", "publicSearchSemantics", "graphStixExportHold", "apiCaveat", "failureMode", "safeRemediation", "handoffs", "proof", "noLeakSerialization"],
+        guarantee: "restricted metadata capacity SLOs keep Tor/I2P/Freenet workers tenant-isolated, cap legal-hold/approval/retention/quarantine/review queues, hold graph/STIX export during capacity or review breaches, and preserve non-blocking public search with hash-only API caveats"
+      },
+      restrictedMetadataOperatorGovernance: {
+        field: "restrictedMetadata.operatorGovernance",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataOperatorGovernanceContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "tenantId", "sourceHash", "policyReason", "allowedActions", "forbiddenActions", "graphStixApiEffect", "rollbackPath", "auditId", "proofCommands", "handoffs", "proof", "noLeakSerialization"],
+        guarantee: "restricted metadata operator governance packets explain held, rejected, quarantined, duplicated, disputed, expired, capacity-held, legal-held, and emergency-stopped restricted claims with source hashes, tenant scope, allowed actions, forbidden actions, rollback, audit ids, proof commands, and no raw restricted material"
+      },
+      restrictedMetadataDarkCanary: {
+        field: "restrictedMetadata.darkMetadataCanary",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataDarkCanaryContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "network", "actor", "victimCompany", "claimedDate", "sector", "country", "claimedDataType", "safeSourceHash", "urlHash", "screenshotHash", "firstSeen", "lastSeen", "policyState", "reviewState", "publicGraphStixEffects", "proxyIsolationBoundary", "emergencyStopPropagation", "operatorProofPacket", "noLeakProof", "noLeakSerialization"],
+        guarantee: "fixture-backed Tor/I2P/Freenet/ransomware/leak metadata canary packets prove safe metadata-only product reasoning, approved proxy boundaries, blocked unsafe targets, emergency-stop propagation, and operator evidence packets without credentials, forms, CAPTCHA solving, private-community access, stolen-file downloads, threat-actor interaction, raw unsafe URLs, or raw payloads"
+      },
+      restrictedMetadataLegalEthicsAuditExport: {
+        field: "restrictedMetadata.legalEthicsAuditExport",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataLegalEthicsAuditExportContract().fixtureScenarios,
+        packetFields: ["auditPacketId", "scenario", "collected", "blocked", "approval", "whatWasNotAccessed", "releaseInterpretation", "graphStixApiEffect", "proofCommands", "handoffs", "noLeakValidation", "noLeakSerialization"],
+        guarantee: "legal/ethics audit packets are thesis-ready and enterprise-ready dry-run evidence of what metadata was collected, what unsafe operations were blocked, why, who approved or must review it, what was not accessed, and which proof commands validate the no-leak boundary"
+      },
+      restrictedMetadataReviewHealth: {
+        field: "restrictedMetadata.reviewHealth",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataReviewHealthContract().fixtureScenarios,
+        packetFields: ["packetId", "scenario", "queue", "sla", "publicSearchBehavior", "publicAnswerCaveat", "graphStixExportBlock", "releaseBlocker", "handoffs", "proof", "noLeakSerialization"],
+        guarantee: "restricted metadata review health tracks approval, victim-claim, legal-hold, duplicate/stale, false-claim, emergency-stop, retention, and notification-draft queues while public search remains non-blocking and graph/STIX export stays held until review"
+      },
+      restrictedMetadataPolicyAuditExport: {
+        field: "restrictedMetadata.policyAuditExport",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataPolicyAuditExportContract().fixtureScenarios,
+        packetFields: ["exportId", "scenario", "policyDecisionHistory", "actorClaimId", "victimClaimId", "sourceHashId", "timestamps", "reviewState", "releaseBlockers", "retentionClass", "redactionState", "graphStixApiHolds", "jsonPacket", "compactSummary", "releaseGateInterpretation", "handoffs", "noLeakValidation", "noLeakSerialization"],
+        guarantee: "restricted metadata policy audit export emits dry-run JSON packets, compact summaries, and release-gate interpretation for thesis/enterprise audit use without raw leak data, raw onion URLs, credentials, screenshots, payloads, stolen file names, private-channel material, or access-bypass automation"
+      },
+      restrictedMetadataEvidenceHoldReleaseDrill: {
+        field: "restrictedMetadata.evidenceHoldReleaseDrill",
+        routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        scenarios: restrictedMetadataEvidenceHoldReleaseDrillContract().fixtureScenarios,
+        packetFields: ["drillId", "scenario", "actorClaimId", "victimClaimId", "sourceHashId", "reviewState", "releasePath", "releaseInterpretation", "releaseBlockers", "compensatingRollbackActions", "auditFields", "constraints", "graphStixApiEffect", "handoffs", "noLeakValidation", "noLeakSerialization"],
+        guarantee: "restricted metadata evidence-hold release drills are dry-run rollback/release interpretations for held claims moving between public caveats, graph pivots, evidence replay, analyst approval, STIX blocks, and rollback-only states without mutation, delivery, unsafe URLs, raw leak data, credentials, screenshots, payloads, stolen file names, private-channel material, or access-bypass automation"
+      },
       restrictedMetadataIsolationHarness: {
         field: "restrictedMetadata.isolationHarness",
         routes: ["/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/intel/search", "/v1/contracts"],
         scenarios: restrictedMetadataIsolationHarnessContract().fixtureScenarios,
         packetFields: ["packetId", "scenario", "nonNetworked", "connectorBoundary", "workerIsolation", "deniedOperation", "complianceEvidence", "proof", "noLeakSerialization"],
         guarantee: "non-networked Tor/I2P/Freenet metadata connector isolation harness proves approved proxy boundaries, kill-switch propagation, timeout attribution, unsafe target denial, no credential storage, no private access, no threat-actor interaction, and Agent 10 compliance evidence without live restricted access"
+      },
+      darkwebIndex: {
+        field: "darkwebIndex",
+        routes: darkwebIndexContract().routes,
+        targetRecordCount: darkwebIndexContract().targetRecordCount,
+        fixtureRecordCount: darkwebIndexContract().fixtureRecordCount,
+        recordFields: darkwebIndexContract().recordFields,
+        searchFilters: darkwebIndexContract().searchFilters,
+        guarantee: "dark-web metadata index records are hash-only descriptors for Tor/I2P/Freenet pages with isolated collector contracts, 60k scale target, search/status DTOs, and no raw unsafe URL, payload, credential, private access, CAPTCHA, or threat-actor interaction exposure"
       },
       graphExportCertification: {
         field: "graph.certification | readiness.certification | runtime.certification",
@@ -6829,6 +8838,76 @@ function buildEnterpriseApiContractIndex() {
         actions: ["start", "pause", "drain", "rollback", "expand"],
         guarantee: "scheduler canary execution control plane is dry-run only; it exposes queue deltas, partition effects, cursor/replay preservation, rollback steps, and headroom without leasing, acknowledging, or mutating queue state"
       },
+      schedulerDurableBackendReadiness: {
+        routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        fields: ["backendContracts", "fairnessLanes", "semanticInvariants", "pollingContract", "runReuse", "drainPlan", "emergencyBrake", "releaseGate", "routeContracts"],
+        backends: ["embedded_memory", "postgres_advisory_queue", "redis_streams", "nats_jetstream"],
+        guarantee: "backend-neutral scheduler readiness is dry-run only; it preserves 3-second public polling, duplicate run reuse, cursor replay, per-source fairness, worker drain, emergency brake, retry/backoff, and dead-letter semantics without mutating queue state"
+      },
+      schedulerFreshnessSloEngine: {
+        routes: ["/v1/frontier/status", "/v1/intel/search", "/v1/intel/runs/{id}", "/v1/contracts"],
+        queryClasses: ["actor", "ransomware", "cve_advisory", "campaign", "malware_tool", "sector", "country", "victim_company", "infrastructure"],
+        fields: ["queryClass", "slo", "cadence", "sourceCadenceHints", "queuePressureBehavior", "fairnessAging", "handoffs", "routeContracts"],
+        guarantee: "continuous public collection cadence is dry-run and SLO-led: source reliability, parser health, evidence yield, analyst priority, stale-source debt, queue pressure, run reuse, dead letters, worker drain, and emergency brake state produce route-visible retry-after and cadence hints without unsafe overcollection"
+      },
+      schedulerFreshnessSloDashboard: {
+        routes: ["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"],
+        field: "scheduler.freshnessSloDashboard",
+        schemaVersion: "ti.scheduler_freshness_slo_dashboard.v1",
+        actors: ["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira", "Scattered Spider"],
+        fields: ["summary", "actors", "workloadActions", "runbook", "routeContracts", "releaseGate"],
+        guarantee: "scheduler freshness SLO dashboard is dry-run and route-visible; daily/weekly high-priority actor freshness, queue age, retry debt, dead letters, worker partitions, priority aging actions, duplicate run reuse, 3-second polling, restricted metadata holds, and low-value sweep deferral are visible without mutating queue state"
+      },
+      schedulerInteractiveSearchFreshness: {
+        routes: ["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"],
+        field: "scheduler.interactiveSearchFreshness",
+        schemaVersion: "ti.scheduler_interactive_search_freshness.v1",
+        fields: ["currentQuery", "queueDecision", "actorTargets", "fairnessGuards", "uiSignals", "handoffs", "routeContracts", "releaseGate"],
+        decisions: ["reuse_active_run", "enqueue_interactive_refresh", "raise_priority", "serve_partial_and_poll", "metadata_review_hold", "emergency_hold"],
+        guarantee: "interactive search freshness scheduling is dry-run and UI-visible; known actor searches expose freshness state, queue decision, 3-second polling, duplicate-run reuse, retry-after, deferred background workloads, metadata-review holds, and actor targets without starving background work or mutating queues"
+      },
+      schedulerProductionLeaseSemantics: {
+        routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        primaryTargetBackend: "postgres_advisory_queue",
+        futureBackends: ["redis_streams", "nats_jetstream"],
+        fields: ["postgresContract", "leaseLifecycle", "cutoverPhases", "fairness", "safety", "releaseGate", "routeContracts"],
+        guarantee: "production queue cutover is dry-run and Postgres-first: enqueue, lease, heartbeat, checkpoint, ack, retry, dead-letter, drain, worker shutdown, duplicate run reuse, cursor replay, and emergency brake semantics are route-visible without leasing or mutating tasks"
+      },
+      schedulerFairnessGovernance: {
+        routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/intel/runs/{id}", "/v1/contracts"],
+        queryClasses: ["actor", "ransomware", "cve_advisory", "campaign", "malware_tool", "sector", "country", "victim_company", "infrastructure", "unknown"],
+        fields: ["tenants", "queryClassBudgets", "workloadFairness", "priorityAging", "pressurePolicy", "fairnessSlo", "handoffs", "releaseGate", "routeContracts"],
+        guarantee: "multi-tenant scheduler fairness is dry-run only; tenant/query-class budgets preserve 3-second polling, duplicate run reuse, priority aging, retry/backoff, dead-letter isolation, worker drain, emergency brake, and low-value sweep deferral without queue mutation"
+      },
+      schedulerPersistenceReplayCutover: {
+        routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/intel/runs/{id}", "/v1/contracts"],
+        primaryTargetBackend: "postgres_scheduler_store",
+        descriptorBackends: ["redis_streams", "nats_jetstream"],
+        tables: ["scheduler_runs", "frontier_tasks", "frontier_leases", "worker_heartbeats", "scheduler_checkpoints", "scheduler_cursor_events", "scheduler_retry_dead_letters", "scheduler_fairness_budget_snapshots", "scheduler_worker_drain_state"],
+        fixtures: ["queued_actor_search_restart", "leased_heartbeat_expiry", "restricted_metadata_hold", "dead_letter_retry_replay", "duplicate_public_run_reuse", "worker_drain_restart", "emergency_brake_restart"],
+        fields: ["postgresContracts", "replaySemantics", "restartFixtures", "cutoverPhases", "handoffs", "releaseGate", "routeContracts"],
+        guarantee: "scheduler persistence/replay cutover is dry-run and Postgres-first; public /ti runs, 3-second polling, pollCursor, deltaCursor, queued work, leases, heartbeats, checkpoints, retry/dead-letter context, fairness budgets, worker drains, and emergency brake state survive restart without default actor fallback, stale cache ready state, or generic live-search promotion"
+      },
+      schedulerPostgresQueueAdapter: {
+        routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        field: "scheduler.postgresQueueAdapter",
+        defaultBackend: "embedded_memory",
+        targetBackend: "postgres_scheduler_store",
+        featureFlags: ["SCRAPER_SCHEDULER_QUEUE_BACKEND", "SCRAPER_SCHEDULER_POSTGRES_QUEUE_ENABLED", "SCRAPER_SCHEDULER_POSTGRES_SHADOW_WRITES_ENABLED", "SCRAPER_SCHEDULER_POSTGRES_DSN"],
+        operations: ["enqueueTasks", "leaseNext", "heartbeatLease", "checkpointTask", "acknowledge", "cancelRun", "findOrRegisterRun", "gcActiveRuns", "pressure", "deltasSince", "runs", "tasks"],
+        preparedStatements: ["scheduler_runs_upsert_reuse_key_v1", "frontier_tasks_enqueue_idempotent_v1", "frontier_tasks_lease_fair_next_v1", "frontier_leases_checkpoint_ack_v1", "scheduler_worker_drain_restore_v1"],
+        fields: ["backendSelection", "safety", "operationContracts", "preparedStatements", "releaseGate", "routeContracts"],
+        guarantee: "Postgres scheduler queue adapter remains disabled by default and fail-closed without DSN/executor; embedded memory remains authoritative until a deliberate active cutover, while public polling, duplicate run reuse, cursor replay, leases, dead letters, and fairness snapshots stay route-visible"
+      },
+      schedulerWorkerLeaseSoakHarness: {
+        routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
+        field: "scheduler.workerLeaseSoakHarness",
+        fixture: "agent02_10k_multi_worker_lease_replay",
+        totalTasks: 10000,
+        scenarios: ["apt29_actor_burst", "public_channel_fanout", "restricted_metadata_holds", "evidence_replay_backlog", "graph_export_wave", "source_outage_wave", "parser_failure_storm", "low_value_sweep_pressure"],
+        fields: ["replay", "workloadSlices", "workerPartitions", "leaseSemantics", "fairnessProof", "pressureFixtures", "releaseGate", "routeContracts"],
+        guarantee: "10k-task scheduler lease soak harness models APT29 fanout, public-channel bursts, restricted metadata holds, replay/export waves, source outages, parser failures, low-value sweeps, leases, heartbeats, retries, request deadlines, dead letters, priority aging, per-source concurrency, and workload fairness without mutating queue state"
+      },
       evidencePersistenceCertification: {
         field: "claimLedger.certification | cutoverReport.trustLedger.certification | sla.claimLedger.certification",
         routes: ["/v1/evidence/claim-ledger", "/v1/evidence/cutover-report", "/v1/intel/search", "/v1/contracts"],
@@ -6854,18 +8933,21 @@ function buildEnterpriseApiContractIndex() {
       errorEnvelope: commonErrorEnvelope
     },
     surfaces: [
-      contractSurface("search", "GET", "/v1/intel/search", "Agent 09", ["query", "mode", "status", "runId", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "sla", "quality", "actorProfile", "answer", "analystLoop", "tiExperience", "publicTiAnswer", "publicWrapperDelta"], ["compatibility_fields", "cursor_polling", "delta_polling", "sla_enforcement", "analyst_loop_ui", "public_answer_contract", "no_leak_dto"]),
+      contractSurface("search", "GET", "/v1/intel/search", "Agent 09", ["query", "mode", "status", "runId", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "sla", "quality", "actorProfile", "answer", "analystLoop", "tiExperience", "publicTiAnswer", "publicWrapperDelta", "evaluationDatasetGovernance", "ctiEvaluationDatasetPack", "analystQualityReviewQueue", "analystFeedbackLearningLoop", "activeLearningCandidateQueue", "qualityRuntimeValueGates", "highPriorityActorFreshnessDashboard"], ["compatibility_fields", "cursor_polling", "delta_polling", "sla_enforcement", "analyst_loop_ui", "public_answer_contract", "evaluation_dataset_governance", "cti_evaluation_dataset_pack", "analyst_quality_review_queue", "analyst_feedback_learning_loop", "active_learning_candidate_queue", "quality_runtime_value_gates", "high_priority_actor_freshness_dashboard", "no_leak_dto"]),
+      contractSurface("analyst_loop", "GET/POST", "/v1/analyst/*", "Agent 01/06/09", ["contract", "state", "runStatusClarity", "workQueue", "activityTimeline", "readinessChecklist", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger", "persistenceReadiness"], ["metadata_review_inbox", "analyst_work_queue", "analyst_activity_timeline", "analyst_readiness_checklist", "source_activation_workflow", "victim_notification_packet", "claim_ledger_review", "postgres_persistence_readiness", "no_leak_workflow"]),
       contractSurface("run_status", "GET", "/v1/intel/runs/{id}", "Agent 09", ["run", "frontier"], ["idempotency_linkage", "scheduler_visibility"]),
       contractSurface("run_results", "GET", "/v1/intel/runs/{id}/results", "Agent 09", ["run", "results"], ["pagination", "include_filters", "safe_capture_dto"]),
-      contractSurface("sources", "GET/POST/PATCH", "/v1/sources/*", "Agent 01/09", ["sources", "applyPlan", "queries", "activationWaves", "executionReadiness", "rolloutPromotion", "releasePacket"], ["source_governance", "coverage_closeout", "source_activation_execution_readiness", "source_rollout_promotion_packet", "dry_run_apply_plans"]),
-      contractSurface("frontier", "GET/POST", "/v1/frontier/*", "Agent 02/09", ["queue", "summary", "scheduler", "applyPlan"], ["queue_pressure", "worker_queue_cutover", "worker_soak_migration", "scheduler_adapter_telemetry", "scheduler_canary_control_plane", "dry_run_scheduler_repairs"]),
+      contractSurface("sources", "GET/POST/PATCH", "/v1/sources/*", "Agent 01/09", ["sources", "applyPlan", "queries", "portfolio", "reliabilityEconomics", "migrationReadiness", "sloBurnRate", "tenantActivation", "sourceImportCanary", "sourceAtlas", "sourceAtlasFrontendContract", "activationWaves", "executionReadiness", "rolloutPromotion", "releasePacket"], ["source_governance", "source_portfolio_migration_readiness", "source_slo_burn_rate", "tenant_source_activation", "source_import_canary", "source_atlas", "source_atlas_frontend_contract", "coverage_closeout", "source_activation_execution_readiness", "source_rollout_promotion_packet", "dry_run_apply_plans"]),
+      contractSurface("frontier", "GET/POST", "/v1/frontier/*", "Agent 02/09", ["queue", "summary", "scheduler", "applyPlan"], ["queue_pressure", "worker_queue_cutover", "worker_soak_migration", "worker_lease_soak_harness", "scheduler_adapter_telemetry", "scheduler_canary_control_plane", "durable_backend_readiness", "freshness_slo_engine", "scheduler_freshness_slo_dashboard", "scheduler_interactive_search_freshness", "production_queue_lease_semantics", "multi_tenant_fairness_governance", "scheduler_persistence_replay_cutover", "scheduler_postgres_queue_adapter", "dry_run_scheduler_repairs"]),
       contractSurface("public_channels", "GET/POST", "/v1/public-channels/*", "Agent 04/09", ["status", "sla", "promotion", "applyPlan", "canaryRollout", "publicSignalFusion"], ["public_channel_sla", "source_pack_readiness", "canary_rollout", "public_signal_fusion", "no_raw_payload"]),
-      contractSurface("restricted_metadata", "GET/POST", "/v1/restricted-metadata/*", "Agent 05/09", ["status", "applyPlan", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "victimClaimWorkflow", "operationalPlaybooks", "isolationHarness"], ["metadata_only", "kill_switch", "safe_hashes", "dry_run_connector_certification", "kill_switch_drills", "emergency_stop_certification", "non_blocking_public_search", "analyst_operations_victim_safe", "victim_claim_dedupe_notification_workflow", "restricted_operational_playbooks", "non_networked_isolation_harness", "no_leak_serialization"]),
+      contractSurface("restricted_metadata", "GET/POST", "/v1/restricted-metadata/*", "Agent 05/09", ["status", "applyPlan", "connectorCertification", "killSwitchDrills", "emergencyStopCertification", "nonBlockingSearch", "analystOperations", "victimClaimWorkflow", "operationalPlaybooks", "qualityEvaluation", "capacityIsolation", "capacitySlo", "operatorGovernance", "darkMetadataCanary", "legalEthicsAuditExport", "reviewHealth", "policyAuditExport", "evidenceHoldReleaseDrill", "isolationHarness"], ["metadata_only", "kill_switch", "safe_hashes", "dry_run_connector_certification", "kill_switch_drills", "emergency_stop_certification", "non_blocking_public_search", "analyst_operations_victim_safe", "victim_claim_dedupe_notification_workflow", "restricted_operational_playbooks", "restricted_quality_abuse_resistance", "restricted_capacity_isolation_budget", "restricted_capacity_slo", "restricted_operator_governance", "restricted_dark_metadata_canary", "restricted_legal_ethics_audit_export", "restricted_review_queue_health", "restricted_policy_audit_export", "restricted_evidence_hold_release_drill", "non_networked_isolation_harness", "no_leak_serialization"]),
+      contractSurface("darkweb_index", "GET", "/v1/darkweb/*", "Agent 05/09", ["status", "darkwebIndex", "records", "counts", "latestRefreshRun", "storageReadiness", "uiContract", "frontendContract"], ["darkweb_metadata_index", "darkweb_index_frontend_contract", "isolated_collector_contract", "hash_only_records", "60k_scale_target", "no_leak_serialization"]),
       contractSurface("evidence", "GET", "/v1/evidence/*", "Agent 06/09", ["contract", "replayPlan", "cutoverReport", "trustLedger", "certification"], ["claim_ledger", "cursor_replay", "persistence_certification", "no_object_reference_leak"]),
-      contractSurface("quality", "GET", "/v1/quality/evaluate", "Agent 07/09", ["query", "quality", "dashboard", "entityResolutionWorkbench", "timelinessGroundTruth", "attackMappingQuality", "analystFeedbackLoop", "publicTiAnswer", "examples"], ["answer_readiness", "public_answer_contract", "review_required_states", "entity_resolution_workbench", "timeliness_ground_truth", "attack_mapping_quality", "analyst_feedback_loop"]),
+      contractSurface("quality", "GET", "/v1/quality/evaluate", "Agent 07/09", ["query", "quality", "dashboard", "entityResolutionWorkbench", "timelinessGroundTruth", "highPriorityActorFreshnessDashboard", "attackMappingQuality", "analystFeedbackLoop", "actorProfileReviewWorkbench", "evaluationDatasetGovernance", "ctiEvaluationDatasetPack", "analystQualityReviewQueue", "analystFeedbackLearningLoop", "activeLearningCandidateQueue", "qualityRuntimeValueGates", "qualityRegressionSuite", "publicTiAnswer", "examples"], ["answer_readiness", "public_answer_contract", "review_required_states", "entity_resolution_workbench", "timeliness_ground_truth", "high_priority_actor_freshness_dashboard", "attack_mapping_quality", "analyst_feedback_loop", "actor_profile_review_workbench", "evaluation_dataset_governance", "cti_evaluation_dataset_pack", "analyst_quality_review_queue", "analyst_feedback_learning_loop", "active_learning_candidate_queue", "quality_runtime_value_gates", "quality_regression_suite"]),
       contractSurface("graph", "GET", "/v1/graph/*", "Agent 08/09", ["contract", "graph", "timeline", "reviewPlan", "cutoverReport", "liveUpdate"], ["graph_enforcement", "graph_export_certification", "graph_live_update", "graph_stix_rc_gate", "stix_mapping", "review_workflow"]),
       contractSurface("stix", "GET/POST", "/v1/exports/stix", "Agent 08/09", ["readiness", "bundle", "liveUpdate"], ["stix_readiness", "schema_safe", "ledger_complete", "graph_live_update", "graph_stix_rc_gate", "taxii_descriptor_only"]),
-      contractSurface("ops", "GET", "/v1/ops/resource-snapshot", "Agent 10/09", ["resources", "capacity", "workerPools", "queue"], ["resource_budget", "worker_supervision"])
+      contractSurface("ops", "GET/POST", "/v1/ops/*", "Agent 07/10/09", ["resources", "capacity", "workerPools", "queue", "operatorView", "readiness"], ["resource_budget", "worker_supervision", "public_canary_control_plane", "public_canary_readiness", "no_implicit_source_activation"]),
+      contractSurface("contracts", "GET", "/v1/contracts", "Agent 09", ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "openapi", "semantics"], ["api_regression_sentinel", "api_gateway_integration", "public_wrapper_cutover_readiness", "realtime_delivery_prototype", "realtime_delivery_soak", "client_generation_freeze", "frontend_progressive_update", "scraper_native_replacement_readiness", "darkweb_index_frontend_contract", "source_atlas_frontend_contract", "streaming_webhook_compatibility", "backward_compatibility", "openapi_ready", "no_leak_dto"])
     ],
     examples: {
       publicPostSearch: {
@@ -6906,6 +8988,8 @@ function buildEnterpriseApiContractIndex() {
     },
     validation: {
       routeInventory: "bun run check:route-inventory",
+      apiRegression: "bun run check:api-regression",
+      apiGateway: "bun run check:api-gateway",
       apiTests: "bun test src/tests/api.test.ts src/tests/ops.test.ts",
       typecheck: "bun run check",
       fullTests: "bun test",
@@ -7023,6 +9107,799 @@ function clientCompatibilityMatrixContract(
   };
 }
 
+function publicWrapperCutoverReadinessContract(input: {
+  compatibilityFields: string[];
+  enterpriseApiSurface: ReturnType<typeof enterpriseApiSurfaceContract>;
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>;
+  clientCompatibilityMatrix: ReturnType<typeof clientCompatibilityMatrixContract>;
+  streamingWebhookCompatibility: ReturnType<typeof buildStreamingWebhookCompatibilityContract>;
+  apiGatewayIntegration: {
+    tenantPropagation: {
+      requiredHeader: string;
+      requesterHeader: string;
+      requestIdHeader: string;
+      orderingRule: string;
+    };
+    rateLimitPlan: {
+      responseHeaders: string[];
+      queuePressureBehavior: string;
+    };
+    rollbackPlan: { safeActions: string[] };
+  };
+}) {
+  return {
+    schemaVersion: "ti.public_wrapper_cutover_readiness.v1",
+    owner: "Agent 09",
+    status: "watch_ready_polling_compatible",
+    mode: "contract_only_public_wrapper_cutover_gate",
+    publicWrapperRoute: "POST /api/ti/search",
+    scraperNativeRoute: "GET /v1/intel/search",
+    stableFieldAgreement: {
+      requiredFields: uniqueStrings([
+        ...input.compatibilityFields,
+        "status",
+        "runId",
+        "cursor",
+        "nextCursor",
+        "pollCursor",
+        "deltaCursor",
+        "refreshAfterSeconds",
+        "updated",
+        "warningCodes",
+        "publicTiAnswer",
+        "publicWrapperDelta"
+      ]),
+      publicWrapperRoute: "POST /api/ti/search",
+      scraperNativeRoute: "GET /v1/intel/search",
+      runPollingRoutes: ["GET /v1/intel/search", "GET /v1/intel/runs/{id}", "GET /v1/intel/runs/{id}/results", "POST /api/ti/search"],
+      agreeingSurfaces: [
+        "publicCompatibility.stableFields",
+        "publicWrapperDeltaAudit.stableFields",
+        "routeTruthAudit.canonicalPublicPost.stableFields",
+        "sdkIntegration.polling.responseFields",
+        "streamingWebhookCompatibility.pollingCompatibility.sameFields"
+      ],
+      pollingSeconds: input.sdkIntegration.polling.intervalSeconds,
+      requiredInCompatibilityFields: true,
+      noDefaultActor: true
+    },
+    fallbackWatch: {
+      unknownQueryRule: "unknown or unsupported queries must not become ready from a default actor, demo copy, or stale wrapper assumption",
+      allowedUnknownStates: ["searching", "queued", "partial"],
+      bannedFallbackCodes: ["default_actor_fallback", "demo_copy", "stale_cache_copy", "implicit_apt29_example", "unknown_ready_without_evidence", "outer_wrapper_run_id_synthesis"],
+      bannedTextPatterns: ["default APT29", "cached demo", "demo data", "stale local cache", "example actor", "fallback actor"],
+      watchTargets: ["/ti", "POST /api/ti/search", "GET /v1/intel/search", "GET /v1/contracts", "fixtures/sdk/*"],
+      requiredCopyForNoResult: "Searching",
+      noLeakRule: "fallback checks inspect stable DTO fields, warning codes, hashes, and compact copy only"
+    },
+    deprecationWatch: {
+      aliasRoute: "POST /api/ti/search",
+      canonicalRoute: "GET /v1/intel/search",
+      state: "compatibility_wrapper_until_cutover",
+      headersWhenScheduled: input.enterpriseApiSurface.versioning.deprecationHeaders,
+      minimumNoticeDays: input.enterpriseApiSurface.versioning.minimumDeprecationNoticeDays,
+      noSunsetBefore: [
+        "public proof matrix is green for APT29, Random Actor, and Made Up Actor",
+        "apiRegressionSentinel and publicWrapperCutoverInvariant are green",
+        "gateway route mapping preserves tenant/requester/request ids",
+        "SDK fixtures and OpenAPI schemas include public wrapper cutover readiness",
+        "Agent 10 release board marks scraper-native replacement promote"
+      ],
+      rollbackTriggers: [
+        "public_wrapper_post_failure",
+        "default_actor_detected",
+        "demo_copy_detected",
+        "missing_cursor",
+        "unstable_run_id",
+        "rate_limit_header_missing",
+        "error_envelope_drift",
+        "tenant_boundary_failure",
+        "unsafe_payload_leak",
+        "streaming_contract_drift"
+      ],
+      safeRollbackActions: input.apiGatewayIntegration.rollbackPlan.safeActions
+    },
+    gatewayWatch: {
+      requiredForwardedHeaders: input.enterpriseApiSurface.authBoundary.requiredForwardedHeaders,
+      tenantHeader: input.apiGatewayIntegration.tenantPropagation.requiredHeader,
+      requesterHeader: input.apiGatewayIntegration.tenantPropagation.requesterHeader,
+      requestIdHeader: input.apiGatewayIntegration.tenantPropagation.requestIdHeader,
+      projectionRule: input.apiGatewayIntegration.tenantPropagation.orderingRule,
+      rateLimitHeaders: input.apiGatewayIntegration.rateLimitPlan.responseHeaders,
+      queuePressureBehavior: input.apiGatewayIntegration.rateLimitPlan.queuePressureBehavior,
+      errorEnvelope: input.enterpriseApiSurface.errors.envelope,
+      noSecretForwardingRule: input.enterpriseApiSurface.authBoundary.auditLogging.noSecretRule
+    },
+    compatibilityHandoffs: {
+      agent02Scheduler: ["stable run ids", "duplicate-run reuse", "3-second polling", "queue pressure retry hints"],
+      agent06Evidence: ["evidence-backed readiness only", "claim ledger ids", "no raw evidence in public wrapper"],
+      agent07Quality: ["unknown says Searching", "low-confidence caveats", "no overclaim wording"],
+      agent08Graph: ["graph relationship deltas", "review holds", "export eligibility caveats"],
+      agent10Release: ["release board promote or hold", "rollback triggers", "public proof packet"]
+    },
+    sdkAndStreamingCompatibility: {
+      clientMatrixStatus: input.clientCompatibilityMatrix.status,
+      sdkFixtureSchemaVersion: input.sdkIntegration.fixturePack.schemaVersion,
+      pollingPrimary: input.streamingWebhookCompatibility.pollingCompatibility.pollingPrimary,
+      futureDeliveryModes: input.streamingWebhookCompatibility.deliveryModes.map((mode) => mode.mode),
+      eventTypes: input.streamingWebhookCompatibility.eventTypes.map((event) => event.type),
+      migrationRule: input.streamingWebhookCompatibility.pollingCompatibility.migrationRule
+    },
+    proofCommands: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:contract-index",
+      "bun run check:route-inventory",
+      "bun run check:sdk-fixtures",
+      "bun run check:api-gateway",
+      "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts",
+      "bun test",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    noLeakGuarantee: "cutover readiness exposes route names, stable field names, warning codes, ids, hashes, retry hints, and release states only; it does not expose raw evidence, unsafe source locators, token material, object references, or restricted rows"
+  };
+}
+
+function buildDarkwebIndexFrontendContract() {
+  const darkwebContract = darkwebIndexContract();
+  return {
+    schemaVersion: "ti.darkweb_index_frontend_contract.v1",
+    status: "frozen_metadata_only_frontend_contract",
+    owner: "Agent 09",
+    route: "/ti/darkweb/index",
+    publicRoute: "hanasand.com/ti/darkweb/index",
+    apiRoutes: {
+      status: "/v1/darkweb/status",
+      search: "/v1/darkweb/search",
+      contracts: "/v1/contracts"
+    },
+    sdkOpenapi: {
+      operationIds: ["darkweb_get_v1_darkweb_status", "darkweb_get_v1_darkweb_search", "contracts_get_v1_contracts"],
+      responseFields: ["status", "contract", "darkwebIndex", "records", "uiContract", "noLeakSerialization"],
+      pagination: {
+        requestFields: ["cursor", "limit"],
+        responseFields: ["nextCursor", "totalMatches"],
+        limitMax: 100
+      },
+      schemaRefs: ["DarkwebIndexStatusDto", "DarkwebIndexSearchDto", "DarkwebIndexFrontendContract"]
+    },
+    table: {
+      searchBox: {
+        param: "q",
+        placeholderCopy: "Search metadata",
+        emptyDeltaCopy: "No new metadata records matched this poll.",
+        noResultCopy: "No matching metadata yet."
+      },
+      filters: ["q", "category", "legalTriage", "liveness", "network", "language", "source", "reviewState", "cursor", "limit"],
+      columns: ["redactedDisplayUrl", "category", "legalTriage", "safeSummary", "lastSeen", "liveness", "provenance", "reviewState"],
+      chips: {
+        category: ["forum", "marketplace", "leak_extortion", "paste", "directory", "blog", "research", "unknown"],
+        risk: ["benign", "news_or_research", "marketplace_or_illicit", "leak_or_extortion", "malware_or_payload", "credential_or_abuse", "unknown_requires_review", "blocked_unsafe"],
+        liveness: ["live", "dead", "intermittent", "blocked_by_policy", "requires_review", "unknown"],
+        reviewState: ["approved_metadata_only", "needs_review", "legal_hold", "blocked_unsafe", "false_positive_review"]
+      },
+      sort: {
+        default: "lastSeen:desc",
+        allowed: ["lastSeen:desc", "lastSeen:asc", "lastChecked:desc", "confidence:desc", "category:asc"]
+      }
+    },
+    safeDetailDrawer: {
+      sections: ["summary", "classification", "whatWasNotAccessed", "sourceProvenance", "refreshHistory", "graphLinks", "reviewState"],
+      fields: ["id", "redactedDisplayUrl", "safeSummary", "category", "legalTriage", "liveness", "classification.reasons", "whatWasNotAccessed", "provenance.sourceType", "provenance.sourceHash", "firstSeen", "lastSeen", "lastChecked", "contentHash", "screenshotHash", "actorHints", "victimHints", "ttpHints", "reviewState", "blockedReason"],
+      graphLinks: {
+        allowed: ["actorHints", "victimHints", "ttpHints", "sourceHash", "contentHash"],
+        holdRule: "darkweb descriptors may create graph hints only when metadata-safe or analyst-reviewed"
+      },
+      stixTaxii: {
+        exportState: "descriptor_hold_until_reviewed",
+        rule: "darkweb index records are descriptors only; no TAXII object is emitted from unsafe or unreviewed metadata"
+      }
+    },
+    copyRules: {
+      legalTriageDisclaimer: "Risk labels are triage labels, not legal advice.",
+      compactCopy: true,
+      blockedCopy: "Metadata only. Unsafe target details were not accessed.",
+      requiresReviewCopy: "Requires analyst review before promotion.",
+      whatWasNotAccessedLabel: "What was not accessed",
+      bannedPhrases: ["verified leak contents", "downloaded dump", "full onion URL", "credential sample", "private message transcript"]
+    },
+    provenance: {
+      requiredRecordFields: ["id", "rawUrlHash", "hostHash", "pathHash", "contentHash", "provenance.sourceHash", "provenance.discoveryPathHash", "lastChecked"],
+      displayRule: "show redactedDisplayUrl and hashes only; never display raw unsafe URLs or private locators"
+    },
+    noLeak: {
+      metadataOnly: true,
+      rawUnsafeUrlPublicOutputAllowed: false,
+      forbiddenUiPayloadFields: ["rawUrl", "rawUnsafeUrl", "fullOnionUrl", "credential", "password", "cookie", "authorization", "raw_body", "object_key", "leaked_row", "private_message", "payload_download", "webhook_secret"],
+      forbiddenOperations: ["payload download", "credential dump download", "private community access", "CAPTCHA solving", "auth bypass", "threat actor interaction", "malware execution"],
+      serializationRule: "frontend DTOs use redacted labels, hashes, compact summaries, triage labels, review state, and whatWasNotAccessed only"
+    },
+    examples: {
+      statusRequest: { method: "GET", path: "/v1/darkweb/status" },
+      searchRequest: { method: "GET", path: "/v1/darkweb/search?q=akira&network=tor&limit=25" },
+      recordPreview: {
+        id: "darkweb-index_*",
+        redactedDisplayUrl: "tor:host-abc123/path-def456",
+        category: "leak_extortion",
+        legalTriage: "leak_or_extortion",
+        safeSummary: "Metadata-only landing-page descriptor.",
+        lastSeen: "2026-05-24T00:00:00.000Z",
+        liveness: "requires_review",
+        reviewState: "needs_review",
+        whatWasNotAccessed: ["credential values", "payload downloads", "private access material", "threat actor communications"]
+      }
+    },
+    releaseGate: {
+      decision: "contract_ready_implementation_pending_public_page",
+      blockers: ["raw_unsafe_url_field_detected", "what_was_not_accessed_missing", "detail_drawer_without_no_leak_copy", "pagination_missing_cursor", "legal_triage_copy_implies_advice"],
+      proofCommands: ["bun run check:api-regression", "bun run check:contract-index", "bun run check:route-inventory", "bun test src/tests/api.test.ts src/tests/darkwebIndex.test.ts", "bun test", "bun run check"]
+    },
+    underlyingDarkwebContract: {
+      routes: darkwebContract.routes,
+      targetRecordCount: darkwebContract.targetRecordCount,
+      recordFields: darkwebContract.recordFields,
+      searchFilters: darkwebContract.searchFilters
+    },
+    proofCommands: ["bun run check:api-regression", "bun run check:contract-index", "bun run check:route-inventory", "bun test src/tests/api.test.ts src/tests/darkwebIndex.test.ts", "bun test", "bun run check"]
+  };
+}
+
+function buildFrontendProgressiveUpdateContract(input: {
+  stateMachine: {
+    schemaVersion: string;
+    states: Record<string, { retryable: unknown; terminal: boolean; publicPromotion: string; requiredFields: string[] }>;
+    requiredUiFields: string[];
+  };
+  publicWrapperResponsiveAudit: {
+    publicWrapper: { canonicalMethod: string; canonicalPath: string; pollingSeconds: number; stableFields: string[] };
+    fixtures: Array<{ name: string; query: string; expectedUxState: string; stableFields: string[]; compactUnknownCopy?: string }>;
+  };
+  publicWrapperDeltaAudit: {
+    stableFields: string[];
+    fixtures: Array<{ name: string; query: string; deltaKind: string; expectedDisplayState: string; warningCodes: string[] }>;
+  };
+  publicWrapperCutoverReadiness: ReturnType<typeof publicWrapperCutoverReadinessContract>;
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>;
+}) {
+  const firstResponseFields = ["status", "summary", "runId", "refreshAfterSeconds", "pollCursor", "deltaCursor", "updated", "publicTiAnswer", "publicWrapperDelta"];
+  return {
+    schemaVersion: "ti.frontend_progressive_update_contract.v1",
+    owner: "Agent 09",
+    status: "frozen_ui_polling_contract",
+    routes: {
+      publicPost: "POST /api/ti/search",
+      scraperNativeGet: "GET /v1/intel/search",
+      runStatus: "GET /v1/intel/runs/{id}",
+      runResults: "GET /v1/intel/runs/{id}/results"
+    },
+    polling: {
+      primary: true,
+      intervalSeconds: input.publicWrapperResponsiveAudit.publicWrapper.pollingSeconds,
+      responseFields: input.sdkIntegration.polling.responseFields,
+      keepLastSafeAnswerOn: ["empty_delta", "queue_pressure", "provider_unavailable", "scraper_unavailable", "rate_limit_retry"]
+    },
+    requiredFields: Array.from(new Set([...firstResponseFields, ...input.publicWrapperCutoverReadiness.stableFieldAgreement.requiredFields])),
+    stateMapping: {
+      first_response: { uiState: "loading_partial", copy: "Searching", merge: "render stable shell and show source coverage gaps" },
+      empty_delta: { uiState: "waiting", copy: "Checking for updates", merge: "preserve last safe answer and advance no fields except updated/poll metadata" },
+      new_delta_available: { uiState: "updated_partial", copy: "Updated", merge: "merge changed publicWrapperDelta sections by deltaCursor" },
+      metadata_review: { uiState: "review_required", copy: "Review required", merge: "show held metadata/review reasons without exposing restricted material" },
+      graph_hold: { uiState: "review_required", copy: "Review required", merge: "show graph caveat and keep fact promotion blocked" },
+      claim_ledger_hold: { uiState: "review_required", copy: "Review required", merge: "show claim trust gate and keep stale/unsupported facts out" },
+      ready: { uiState: "ready", copy: "Ready", merge: "promote only release-gated publicTiAnswer fields" },
+      no_result: { uiState: "searching", copy: "Searching", merge: "do not render no-evidence as absence or default actor context" }
+    },
+    mergeSemantics: {
+      identityFields: ["query", "runId"],
+      cursorFields: ["cursor", "nextCursor", "pollCursor", "deltaCursor"],
+      rules: [
+        "merge by runId and deltaCursor",
+        "preserve previous publicTiAnswer on empty deltas",
+        "append warningCodes without duplicating",
+        "replace sourceCoverage only when changedSinceCursor is not empty",
+        "never backfill default actor/demo copy",
+        "never clear review holds until publicWrapperDelta says ready"
+      ],
+      staleResponseBehavior: "keep last safe visible answer, display retry/wait state, and continue polling from the last cursor"
+    },
+    uiProofMatrix: [
+      frontendProgressiveFixture("first_response", "APT29", "loading_partial", ["publicTiAnswer", "publicWrapperDelta", "pollCursor"]),
+      frontendProgressiveFixture("repeated_poll_empty_delta", "APT29", "waiting", ["runId", "pollCursor", "deltaCursor"]),
+      frontendProgressiveFixture("new_delta_available", "APT29", "updated_partial", ["publicWrapperDelta", "answerDeltas"]),
+      frontendProgressiveFixture("random_actor_partial", "Random Actor", "loading_partial", ["sourceCoverage", "warningCodes"]),
+      frontendProgressiveFixture("made_up_actor_searching", "Made Up Actor", "searching", ["publicTiAnswer.stateMachine.safeNoResult"]),
+      frontendProgressiveFixture("metadata_review_hold", "Akira", "review_required", ["restrictedMetadata", "warningCodes"]),
+      frontendProgressiveFixture("graph_hold", "Volt Typhoon", "review_required", ["graph", "answerGraphCaveats"]),
+      frontendProgressiveFixture("claim_ledger_hold", "Turla", "review_required", ["claimLedger", "warningCodes"]),
+      frontendProgressiveFixture("final_ready", "APT29", "ready", ["publicTiAnswer", "sources", "updated"])
+    ],
+    noLeak: {
+      forbiddenUiPayloadFields: ["raw_body", "restricted_raw_url", "credential", "authorization", "cookie", "object_key", "leaked_row", "webhook_secret"],
+      copyRule: "public UI copy stays compact and explains partial/held/searching states without raw source material"
+    },
+    proofCommands: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:contract-index",
+      "bun run check:route-inventory",
+      "bun run check:sdk-fixtures",
+      "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts src/tests/sdkFixtures.test.ts",
+      "bun test",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    handoffs: {
+      frontend: ["render stateMapping", "merge by mergeSemantics", "preserve safe empty-delta UX"],
+      agent02: ["polling cadence", "duplicate run reuse", "retry-after hints"],
+      agent06: ["claim ledger holds", "safe evidence refs"],
+      agent07: ["quality caveats", "unknown actor Searching behavior"],
+      agent08: ["graph holds", "STIX readiness caveats"],
+      agent10: ["release board public proof matrix"]
+    }
+  };
+}
+
+function frontendProgressiveFixture(scenario: string, query: string, expectedUiState: string, requiredKeys: string[]) {
+  return {
+    scenario,
+    query,
+    expectedUiState,
+    routes: ["POST /api/ti/search", "GET /v1/intel/search"],
+    requiredKeys,
+    copyRule: query === "Made Up Actor" ? "Searching" : "compact status-specific copy",
+    noDefaultActor: true,
+    noDemoCopy: true
+  };
+}
+
+function buildScraperNativeReplacementReadinessContract(input: {
+  publicWrapperCutoverReadiness: ReturnType<typeof publicWrapperCutoverReadinessContract>;
+  frontendProgressiveUpdateContract: ReturnType<typeof buildFrontendProgressiveUpdateContract>;
+  clientGenerationFreeze: ReturnType<typeof clientGenerationFreezeContract>;
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>;
+}) {
+  const proofMatrix = [
+    scraperNativeReplacementCase("known_actor", "APT29", "partial_or_ready", "public proof returns run id, cursor, source coverage, and public wrapper POST parity", "promote"),
+    scraperNativeReplacementCase("random_actor", "Random Actor", "partial_or_searching", "public proof returns stable polling fields without default actor copy", "watch"),
+    scraperNativeReplacementCase("made_up_actor", "Made Up Actor", "searching", "unknown actor remains Searching and must not become ready without evidence", "promote"),
+    scraperNativeReplacementCase("cve_advisory", "CVE-2026-4242", "partial_or_searching", "CVE/advisory queries keep source coverage and no stale actor fallback", "watch"),
+    scraperNativeReplacementCase("sector_country", "energy sector threats", "partial_or_searching", "sector/country queries expose why coverage is partial", "watch"),
+    scraperNativeReplacementCase("victim_company", "Fjord Energy AS victim claim", "partial_or_review", "victim/company claims remain evidence- and review-gated", "watch"),
+    scraperNativeReplacementCase("restricted_metadata_hold", "Akira ransomware", "metadata_review_or_partial", "restricted metadata stays metadata-only and review-held", "hold"),
+    scraperNativeReplacementCase("graph_hold", "Volt Typhoon", "review_required_or_partial", "graph/STIX held facts do not become public facts until review gates pass", "hold"),
+    scraperNativeReplacementCase("empty_delta", "APT29 repeat poll", "waiting_or_partial", "empty deltas preserve last safe answer and never clear holds implicitly", "promote")
+  ];
+  return {
+    schemaVersion: "ti.scraper_native_replacement_readiness.v1",
+    owner: "Agent 09",
+    status: "replacement_board_ready_polling_primary",
+    decision: "watch_ready",
+    mode: "contract_and_public_proof_board",
+    routes: {
+      frontend: "hanasand.com/ti",
+      publicPost: "POST /api/ti/search",
+      scraperNative: "GET /v1/intel/search",
+      runStatus: "GET /v1/intel/runs/{id}",
+      runResults: "GET /v1/intel/runs/{id}/results",
+      contracts: "GET /v1/contracts"
+    },
+    promotionCriteria: [
+      "local contract gates green",
+      "full bun test green",
+      "public proof green for APT29, Random Actor, and Made Up Actor",
+      "public wrapper POST parity preserves runId, pollCursor, deltaCursor, refreshAfterSeconds, publicTiAnswer, and publicWrapperDelta",
+      "unknown and made-up actors remain Searching unless evidence-backed",
+      "restricted metadata, graph, and claim-ledger holds remain visible and non-promoted",
+      "no raw unsafe payload fields appear in examples, fixtures, events, or public DTOs"
+    ],
+    proofMatrix,
+    blockers: [
+      "public_proof_failed",
+      "default_actor_detected",
+      "demo_copy_detected",
+      "unknown_ready_without_evidence",
+      "missing_run_or_cursor",
+      "empty_delta_clears_safe_answer",
+      "held_state_promoted",
+      "tenant_boundary_failure",
+      "rate_limit_header_missing",
+      "unsafe_payload_field_detected",
+      "sdk_fixture_or_changelog_gate_failed"
+    ],
+    rollback: {
+      route: input.publicWrapperCutoverReadiness.deprecationWatch.aliasRoute,
+      actions: [
+        "keep public POST compatibility wrapper",
+        "serve last safe answer or Searching copy",
+        "continue polling from prior cursor",
+        "hold SDK/client release",
+        "do not enable realtime delivery as a substitute for failed polling"
+      ]
+    },
+    dependencies: {
+      publicWrapperCutoverStatus: input.publicWrapperCutoverReadiness.status,
+      frontendProgressiveStatus: input.frontendProgressiveUpdateContract.status,
+      clientGenerationStatus: input.clientGenerationFreeze.status,
+      sdkFixtureStatus: input.sdkIntegration.fixturePack.status,
+      pollingPrimary: input.frontendProgressiveUpdateContract.polling.primary,
+      pollingSeconds: input.sdkIntegration.polling.intervalSeconds
+    },
+    noLeak: {
+      forbiddenPayloadFields: input.frontendProgressiveUpdateContract.noLeak.forbiddenUiPayloadFields,
+      rule: "replacement readiness rows contain public proof states, ids, cursors, hashes, blockers, and compact notes only"
+    },
+    handoffs: {
+      agent02Scheduler: ["stable run ids", "3-second polling", "queue pressure retry-after"],
+      agent06Evidence: ["evidence promotion blockers", "claim ledger trust gate", "no raw body"],
+      agent07Quality: ["unknown Searching", "low-confidence caveats", "stale/contradiction holds"],
+      agent08Graph: ["graph hold visibility", "STIX export gate", "relationship review state"],
+      agent10Release: ["replacement decision", "rollback actions", "public proof packet"]
+    },
+    proofCommands: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:sdk-fixtures",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts src/tests/sdkFixtures.test.ts",
+      "bun test",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ]
+  };
+}
+
+function scraperNativeReplacementCase(
+  caseName: string,
+  query: string,
+  expectedState: string,
+  requiredProof: string,
+  decision: "promote" | "watch" | "hold"
+) {
+  return {
+    case: caseName,
+    query,
+    expectedState,
+    requiredProof,
+    decision,
+    noDefaultActor: true,
+    noDemoCopy: true,
+    noUnsafePayload: true
+  };
+}
+
+function clientGenerationFreezeContract(input: {
+  enterpriseApiSurface: ReturnType<typeof enterpriseApiSurfaceContract>;
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>;
+  clientCompatibilityMatrix: ReturnType<typeof clientCompatibilityMatrixContract>;
+  streamingWebhookCompatibility: ReturnType<typeof buildStreamingWebhookCompatibilityContract>;
+  realtimeDeliveryPrototype: ReturnType<typeof realtimeDeliveryPrototypeContract>;
+  publicWrapperCutoverReadiness: ReturnType<typeof publicWrapperCutoverReadinessContract>;
+}) {
+  const requiredSchemas = [
+    "ErrorEnvelope",
+    "CursorPage",
+    "IdempotentRunRequest",
+    "PublicSearchResponse",
+    "PublicWrapperCutoverReadiness",
+    "RealtimeDeliveryPrototype",
+    "RealtimePrototypeEvent",
+    "ClientGenerationFreeze",
+    "GeneratedClientTarget",
+    "SdkPollingEnvelope",
+    "SdkSubscriptionRegistration",
+    "StreamingEventEnvelope",
+    "WebhookDeliveryAttempt"
+  ];
+  const requiredOperationIds = [
+    "contracts_get_v1_contracts",
+    "intel_get_v1_intel_search",
+    "intel_post_v1_intel_runs",
+    "intel_get_v1_intel_runs_id",
+    "intel_get_v1_intel_runs_id_results",
+    "sources_get_v1_sources",
+    "captures_get_v1_captures",
+    "metrics_get_v1_metrics"
+  ];
+  const requiredFixtures = input.sdkIntegration.fixturePack.requiredFiles;
+  const sharedSchemas = ["ErrorEnvelope", "CursorPage", "SdkPollingEnvelope", "PublicSearchResponse"];
+  const changelogGate = {
+    schemaVersion: "ti.generated_client_changelog_gate.v1",
+    owner: "Agent 09",
+    status: "ready_for_generated_client_release_gate",
+    releasePolicy: "contract_only_no_artifact_publish",
+    semverPolicy: {
+      major: ["remove or rename required schema", "remove or rename operationId", "remove run or cursor fields", "change error envelope", "change tenant/requester header names", "enable realtime delivery by default"],
+      minor: ["add optional response field", "add route metadata", "add SDK fixture", "add inert realtime type", "add warning code", "add deprecation notice"],
+      patch: ["docs change", "example refresh", "fixture timestamp refresh without field drift", "release board note"]
+    },
+    requiredChangeClasses: [
+      "operation_id_added",
+      "required_schema_added",
+      "fixture_added",
+      "optional_response_field_added",
+      "deprecation_notice_added",
+      "realtime_type_added_disabled"
+    ],
+    breakingChangeBlockers: [
+      "operation_id_removed",
+      "required_schema_removed",
+      "required_field_removed",
+      "cursor_field_removed",
+      "error_envelope_changed",
+      "tenant_header_changed",
+      "realtime_enabled_by_default",
+      "unsafe_payload_field_added"
+    ],
+    deprecationPolicy: {
+      headersWhenScheduled: input.enterpriseApiSurface.versioning.deprecationHeaders,
+      minimumNoticeDays: 90,
+      publicWrapperAlias: input.publicWrapperCutoverReadiness.deprecationWatch.aliasRoute,
+      canonicalRoute: input.publicWrapperCutoverReadiness.deprecationWatch.canonicalRoute,
+      noSunsetBefore: input.publicWrapperCutoverReadiness.deprecationWatch.noSunsetBefore,
+      releaseBoardRequired: true
+    },
+    fixtureGate: {
+      requiredFiles: input.sdkIntegration.fixturePack.requiredFiles,
+      invariantFields: input.sdkIntegration.fixturePack.invariantFields,
+      fixtureRefreshRule: "only refresh generated-client fixtures after SDK fixture, API regression, route inventory, contract index, and public proof checks pass",
+      noLeakAssertions: input.sdkIntegration.fixturePack.noLeakAssertions
+    },
+    generatedClientReleaseChecklist: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:sdk-fixtures",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts src/tests/sdkFixtures.test.ts",
+      "bun test",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    changelogEntries: [
+      { id: "client_generation_freeze_added", type: "minor", summary: "Generated TypeScript client targets now freeze operation ids, schemas, fixtures, and no-leak DTO boundaries." },
+      { id: "realtime_types_disabled", type: "minor", summary: "Realtime generated types may be emitted as inert optional types only; polling remains primary." },
+      { id: "public_wrapper_cutover_watch", type: "minor", summary: "Public wrapper compatibility and scraper-native replacement stay gated by public proof and release-board checks." }
+    ]
+  };
+  return {
+    schemaVersion: "ti.client_generation_freeze.v1",
+    owner: "Agent 09",
+    status: "frozen_contract_ready_for_codegen",
+    mode: "contract_only_no_generated_artifacts_committed",
+    openapiManifest: {
+      schemaVersion: "ti.codegen_openapi_manifest.v1",
+      openapi: input.enterpriseApiSurface.openapi.openapi,
+      routeCount: Object.keys(input.enterpriseApiSurface.openapi.paths).length,
+      source: "/v1/contracts.openapi",
+      securityBoundary: "trusted gateway only; generated clients must send tenant/requester/request ids but never tokens to scraper DTOs",
+      operationIdRule: "operationId is stable within /v1 and derived from route surface, method, and path; changes require this freeze contract to move",
+      generatedArtifactRule: "codegen reads /v1/contracts only; it must not inspect memory store rows, adapter internals, evidence objects, or raw payloads"
+    },
+    operationManifest: {
+      requiredOperationIds,
+      requiredPublicCompatibilityRoutes: ["POST /api/ti/search", "GET /v1/intel/search"],
+      requiredRunRoutes: ["POST /v1/intel/runs", "GET /v1/intel/runs/{id}", "GET /v1/intel/runs/{id}/results"],
+      requiredDryRunAdminRoutes: ["POST /v1/sources/apply-plan", "POST /v1/frontier/apply-plan", "POST /v1/public-channels/apply-plan", "POST /v1/restricted-metadata/apply-plan"],
+      futureDisabledRoutes: [input.sdkIntegration.routes.futureSse, input.sdkIntegration.routes.futureWebhookRegistration],
+      missingOperationBehavior: "fail code generation before publish; do not synthesize clients from route handlers"
+    },
+    schemaManifest: {
+      requiredSchemas,
+      requiredSemantics: input.clientCompatibilityMatrix.contractFreeze.requiredSemantics,
+      stableFieldSets: {
+        publicWrapper: input.publicWrapperCutoverReadiness.stableFieldAgreement.requiredFields,
+        polling: input.sdkIntegration.polling.responseFields,
+        realtimeEnvelope: input.realtimeDeliveryPrototype.eventEnvelope.requiredFields,
+        errors: ["error.code", "error.message", "error.details"]
+      },
+      additiveOnlyRule: input.clientCompatibilityMatrix.contractFreeze.noBreakingChangeRule,
+      forbiddenBreakingChanges: [
+        "remove required schema",
+        "rename operationId",
+        "remove runId or cursor fields",
+        "change error envelope",
+        "remove tenant/requester header contract",
+        "make disabled realtime routes required for polling clients",
+        "add raw payload fields to generated DTOs"
+      ]
+    },
+    generatedClients: [
+      {
+        target: "typescript_fetch_browser",
+        language: "TypeScript",
+        status: "ready_for_generation_from_contract",
+        primaryRoutes: ["POST /api/ti/search", "GET /v1/intel/search"],
+        requiredSchemas: ["PublicSearchResponse", "SdkPollingEnvelope", "ErrorEnvelope"],
+        requiredFixtures: ["fixtures/sdk/initial_public_search.json", "fixtures/sdk/repeated_poll_empty_delta.json", "fixtures/sdk/new_delta_available.json"],
+        releaseGate: "browser /ti must preserve Searching for unknown queries and keep polling on empty deltas"
+      },
+      {
+        target: "typescript_node_service",
+        language: "TypeScript",
+        status: "ready_for_generation_from_contract",
+        primaryRoutes: ["POST /v1/intel/runs", "GET /v1/intel/runs/{id}", "GET /v1/intel/runs/{id}/results", "POST /v1/exports/stix"],
+        requiredSchemas: ["IdempotentRunRequest", "CursorPage", "SdkPollingEnvelope", "ErrorEnvelope"],
+        requiredFixtures: ["fixtures/sdk/idempotent_run_reuse.json", "fixtures/sdk/cursor_results_page.json", "fixtures/sdk/queue_pressure_retry.json"],
+        releaseGate: "service clients must require idempotency on run creation and honor retry-after headers"
+      },
+      {
+        target: "analyst_automation_types",
+        language: "TypeScript",
+        status: "ready_for_generation_from_contract",
+        primaryRoutes: ["GET /v1/analyst/loop", "GET /v1/analyst/metadata-review-tasks", "GET /v1/evidence/claim-ledger", "GET /v1/restricted-metadata/status"],
+        requiredSchemas: sharedSchemas,
+        requiredFixtures: ["fixtures/sdk/metadata_review_required.json", "fixtures/sdk/policy_blocked_fail_closed.json"],
+        releaseGate: "analyst automation must stay metadata-only and dry-run for review actions unless an explicit mutation route is called"
+      },
+      {
+        target: "future_realtime_types",
+        language: "TypeScript",
+        status: "disabled_until_feature_flags_enabled",
+        primaryRoutes: [input.sdkIntegration.routes.futureSse, input.sdkIntegration.routes.futureWebhookRegistration],
+        requiredSchemas: ["RealtimeDeliveryPrototype", "RealtimePrototypeEvent", "StreamingEventEnvelope", "WebhookDeliveryAttempt"],
+        requiredFixtures: ["fixtures/sdk/future_event_delta_available.json"],
+        releaseGate: "SSE/webhook generated types may ship as inert types only; polling remains primary and realtime feature flags stay false"
+      }
+    ],
+    fixtureManifest: {
+      schemaVersion: input.sdkIntegration.fixturePack.schemaVersion,
+      status: input.sdkIntegration.fixturePack.status,
+      requiredFixtures,
+      invariantFields: input.sdkIntegration.fixturePack.invariantFields,
+      noLeakAssertions: input.sdkIntegration.fixturePack.noLeakAssertions,
+      generationSource: "fixtures/sdk plus /v1/contracts.sdkIntegration.fixturePack",
+      fixtureRefreshRule: "regenerate fixtures only after API regression, contract index, SDK fixtures, and public proof pass"
+    },
+    changelogGate,
+    driftPolicy: {
+      status: "fail_closed_before_codegen_publish",
+      failClosedChecks: [
+        "operation_id_drift",
+        "required_schema_missing",
+        "required_fixture_missing",
+        "public_wrapper_field_drift",
+        "cursor_field_drift",
+        "error_envelope_drift",
+        "tenant_header_drift",
+        "realtime_flag_enabled_by_default",
+        "unsafe_payload_field_detected"
+      ],
+      rollback: "keep generated clients unpublished, preserve public wrapper compatibility, and continue polling from existing cursors",
+      releaseBoardHandoff: ["Agent 10 release board", "Agent 02 scheduler retry semantics", "Agent 06 evidence DTOs", "Agent 07 quality caveats", "Agent 08 graph holds"]
+    },
+    noLeak: {
+      forbiddenPayloadFields: [
+        ...input.realtimeDeliveryPrototype.noLeak.forbiddenPayloadFields,
+        "authorization",
+        "cookie",
+        "api_key",
+        "session",
+        "password"
+      ],
+      rule: "generated clients expose route DTOs, ids, hashes, cursors, warning codes, summaries, and review states only"
+    },
+    proofCommands: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:sdk-fixtures",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts",
+      "bun test"
+    ],
+    handoffs: {
+      agent02Scheduler: ["retry-after semantics", "run status states", "cursor continuity"],
+      agent06Evidence: ["safe capture/evidence DTO fields", "no object keys", "claim ledger references"],
+      agent07Quality: ["quality caveat warning codes", "unknown query Searching behavior"],
+      agent08Graph: ["graph holds", "STIX export readiness fields"],
+      agent10Release: ["client generation must stay blocked until proofCommands and public proof matrix are green"]
+    }
+  };
+}
+
+function buildDarkwebIndexFrontendContractDto() {
+  return buildDarkwebIndexFrontendContract();
+}
+
+function buildSourceAtlasFrontendContractDto() {
+  return {
+    schemaVersion: "ti.source_atlas_frontend_contract.v1",
+    status: "frozen_dry_run_source_discovery_frontend_contract",
+    owner: "Agent 09",
+    route: "/ti/sources/atlas",
+    publicRoute: "hanasand.com/ti/sources/atlas",
+    apiRoutes: {
+      atlas: "/v1/sources/atlas",
+      export: "/v1/sources/atlas/export",
+      contracts: "/v1/contracts",
+      approvalQueue: "/v1/analyst/source-activation-packets"
+    },
+    sdkOpenapi: {
+      operationIds: ["sources_post_v1_sources_atlas", "sources_post_v1_sources_atlas_export", "contracts_get_v1_contracts"],
+      responseFields: ["endpoint", "schemaVersion", "dryRun", "willMutate", "willImportSourcePacks", "willStartCrawling", "summary", "records", "importPlans", "coverageMatrix", "activationCanary", "reviewQueue", "exportManifest", "approvalPacket", "rollbackPacket"],
+      requestFields: ["queries", "recordLimit", "planLabel", "tenantId"],
+      schemaRefs: ["SourceAtlasResponse", "SourceAtlasRecord", "SourceAtlasExportManifest", "SourceAtlasFrontendContract"]
+    },
+    table: {
+      searchBox: {
+        param: "queries",
+        placeholderCopy: "Search source candidates",
+        emptyDeltaCopy: "No new source candidates matched this view.",
+        noResultCopy: "No safe public source candidates yet."
+      },
+      filters: ["queryClass", "family", "language", "region", "sector", "parserState", "legalRobotsState", "activationReadiness", "duplicateState", "recordLimit"],
+      columns: ["id", "domain", "family", "queryClassCoverage", "sourceValueScore", "parserCapability", "legalRobotsState", "activationReadiness", "approvalRequired"],
+      chips: {
+        family: ["vendor_threat_blog", "cert_government", "cve_advisory", "ransomware_tracker", "public_research_feed", "github_security_advisory", "public_channel_descriptor"],
+        parserState: ["certified", "supported", "certification_required", "unsupported_hold"],
+        legalRobotsState: ["review_current", "review_stale", "robots_unknown", "legal_review_required"],
+        activationReadiness: ["ready_for_dry_run", "needs_parser_certification", "needs_legal_review", "descriptor_only_hold", "duplicate_suppressed", "blocked_unsafe"],
+        plan: ["first_100", "first_1000", "future_10k"]
+      },
+      sort: {
+        default: "sourceValueScore:desc",
+        allowed: ["sourceValueScore:desc", "freshness:desc", "evidenceYield:desc", "family:asc", "activationReadiness:asc"]
+      }
+    },
+    safeDetailDrawer: {
+      sections: ["sourceSummary", "coverage", "parserCapability", "legalRobots", "activationReadiness", "approvalPacket", "rollbackPacket", "canaryPlan", "whatWillNotHappen"],
+      fields: ["id", "domain", "family", "queryClassCoverage", "languages", "regions", "sectors", "sourceValueScore", "reliability", "freshness", "evidenceYield", "parserCapability.certificationRequired", "legalRobotsState", "activationReadiness.state", "activationReadiness.autoActivationAllowed", "approvalRequired", "rollbackPacket.rollbackPlanId"],
+      approvalActions: ["stage_for_review", "request_parser_certification", "request_legal_review", "suppress_duplicate", "export_manifest_dry_run"],
+      nonActions: ["import source pack", "mutate registry", "enqueue crawl", "activate candidate", "fetch restricted target"]
+    },
+    importPlans: {
+      labels: ["first_100", "first_1000", "future_10k"],
+      planFields: ["label", "sourceCount", "sourceIds", "dryRun", "willMutate", "willImportSourcePacks", "willStartCrawling", "approvalPacket", "rollbackPacket"],
+      canaryFields: ["first100SourceIds", "first1000SourceIds", "descriptorOnlySourceIds", "parserCertificationRequiredSourceIds", "dryRun", "willMutate", "willStartCrawling"],
+      exportFields: ["reviewQueue", "exportManifest.rows", "approvalPacket", "rollbackPacket", "guardrails"],
+      canaryRule: "first-100 and first-1000 are review/export plans only; collection starts only through a separate approved activation workflow"
+    },
+    copyRules: {
+      dryRunBanner: "Dry run only. No sources are imported or crawled from this view.",
+      approvalCopy: "Operator/legal approval is required before activation.",
+      descriptorHoldCopy: "Descriptor-only sources require explicit review before they can become runnable.",
+      duplicateCopy: "Duplicate or mirror candidates are suppressed until reviewed.",
+      whatWillNotHappenLabel: "What will not happen",
+      bannedPhrases: ["activate now", "crawl now", "imported automatically", "private invite source", "CAPTCHA bypass", "credentialed access"]
+    },
+    noLeak: {
+      publicOnly: true,
+      dryRunOnly: true,
+      rawUnsafeUrlPublicOutputAllowed: false,
+      forbiddenUiPayloadFields: ["rawRestrictedUrl", "privateInviteUrl", "credential", "password", "cookie", "authorization", "captcha_token", "raw_payload", "object_key", "download_url", "private_channel"],
+      forbiddenOperations: ["source pack import", "registry mutation", "crawl enqueue", "silent activation", "private/invite/auth/CAPTCHA activation", "credentialed fetch", "payload download"],
+      serializationRule: "frontend DTOs expose domains, hashes, coverage, parser/legal state, approval packets, rollback ids, and dry-run import plans only"
+    },
+    releaseGate: {
+      decision: "contract_ready_implementation_pending_public_page",
+      blockers: ["will_mutate_true", "will_start_crawling_true", "auto_activation_allowed", "approval_packet_missing", "rollback_packet_missing", "private_auth_captcha_source_detected", "raw_payload_field_detected"],
+      proofCommands: ["bun run check:api-regression", "bun run check:contract-index", "bun run check:route-inventory", "bun test src/tests/api.test.ts src/tests/sourceSeeds.test.ts", "bun test", "bun run check"]
+    },
+    examples: {
+      atlasRequest: { method: "POST", path: "/v1/sources/atlas", body: { queries: ["APT29", "CVE-2026-4242"], recordLimit: 100 } },
+      exportRequest: { method: "POST", path: "/v1/sources/atlas/export", body: { queries: ["APT29"], planLabel: "first_100", recordLimit: 100 } },
+      recordPreview: {
+        id: "source_atlas_*",
+        domain: "example-security-research.test",
+        family: "vendor_threat_blog",
+        queryClassCoverage: ["actor", "malware_tool"],
+        sourceValueScore: 0.86,
+        parserCapability: { certificationRequired: false },
+        legalRobotsState: "review_current",
+        activationReadiness: { state: "ready_for_dry_run", autoActivationAllowed: false },
+        approvalRequired: true
+      }
+    },
+    proofCommands: ["bun run check:api-regression", "bun run check:contract-index", "bun run check:route-inventory", "bun test src/tests/api.test.ts src/tests/sourceSeeds.test.ts", "bun test", "bun run check"]
+  };
+}
+
 function contractSurface(
   name: string,
   method: string,
@@ -7049,7 +9926,14 @@ function enterpriseAuthBoundaryContract() {
     mode: "trusted_gateway_forwarded_identity",
     enforcedHere: false,
     requiredForwardedHeaders: ["x-tenant-id", "x-actor-id"],
-    optionalForwardedHeaders: ["x-request-id", "x-trace-id", "x-client-id"],
+    optionalForwardedHeaders: ["x-request-id", "x-trace-id", "x-client-id", "x-service-token-context", "x-analyst-role", "x-source-approval-role"],
+    serviceTokenContext: {
+      header: "x-service-token-context",
+      acceptedValues: ["gateway_validated_service", "scheduled_worker", "analyst_automation", "ci_contract_probe"],
+      validationOwner: "cti_gateway",
+      scraperStoresToken: false,
+      auditField: "servicePrincipalId"
+    },
     authzModel: {
       resolvedUpstream: true,
       scopes: [
@@ -7065,6 +9949,15 @@ function enterpriseAuthBoundaryContract() {
       adminOnlyRoutes: ["/v1/sources/*", "/v1/frontier/apply-plan", "/v1/public-channels/apply-plan", "/v1/restricted-metadata/*"],
       readRoutes: ["/v1/health", "/v1/metrics", "/v1/contracts", "/v1/intel/search", "/v1/intel/runs/{id}", "/v1/intel/runs/{id}/results"]
     },
+    roleContracts: {
+      analystRoles: ["analyst:reader", "analyst:reviewer", "analyst:exporter"],
+      sourceApprovalRoles: ["source:approver", "source:publisher", "source:retirer"],
+      readWriteSeparation: {
+        readScopes: ["intel:read", "sources:read", "evidence:read", "graph:read"],
+        writeScopes: ["intel:run", "sources:write", "exports:write", "scraper:admin"],
+        rule: "gateway authorizes before scraper receives request; scraper contract labels mutation routes but does not evaluate bearer material"
+      }
+    },
     tenantContract: {
       header: "x-tenant-id",
       requiredForProduction: true,
@@ -7076,6 +9969,11 @@ function enterpriseAuthBoundaryContract() {
       requiredForProduction: true,
       auditOnlyHere: true,
       piiRule: "store requester ids or service principals only; do not store bearer tokens, cookies, authorization headers, or session material"
+    },
+    auditLogging: {
+      requiredFields: ["tenantId", "requesterId", "requestId", "traceId", "servicePrincipalId", "route", "method", "decision", "occurredAt"],
+      mutationDecisions: ["accepted", "dry_run", "operator_approval_required", "policy_blocked", "idempotency_conflict"],
+      noSecretRule: "audit entries record principal identifiers and decisions only, never bearer tokens, cookies, authorization headers, passwords, or secret material"
     },
     secretHandling: {
       scraperDoesNotStoreSecrets: true,
@@ -7159,6 +10057,72 @@ function enterpriseApiSurfaceContract(
       stableOrdering: "createdAt/id for persisted resources; cursor/delta order for live streams",
       paginatedRoutes
     },
+    tenantBoundary: {
+      schemaVersion: "ti.tenant_boundary.v1",
+      appliedBefore: ["pagination", "evidence_lookup", "graph_export", "source_admin", "claim_ledger", "restricted_metadata_review", "capture_listing", "run_status"],
+      fallbackMode: "single_tenant_dev_only",
+      crossTenantFailureCode: "not_found",
+      projectionRule: "filter by tenant before cursor construction, DTO projection, evidence lookup, graph export, source administration, claim ledger review, or restricted metadata review"
+    },
+    versioning: {
+      schemaVersion: "ti.api_versioning_policy.v1",
+      currentVersion: "v1",
+      routePrefix: "/v1",
+      compatibilityStatus: "additive_changes_only",
+      versionHeader: "x-api-version",
+      responseHeaders: ["x-api-version", "x-request-id"],
+      deprecationHeaders: ["deprecation", "sunset", "link", "x-api-version", "x-request-id"],
+      minimumDeprecationNoticeDays: 90,
+      breakingChangeRequires: [
+        "new major route prefix",
+        "clientCompatibilityMatrix entry",
+        "contract-index proof",
+        "public-wrapper proof",
+        "migration note"
+      ],
+      additiveAllowedWithoutNewMajor: [
+        "optional response fields",
+        "new warning codes",
+        "new OpenAPI component schemas",
+        "new examples",
+        "new route metadata"
+      ],
+      removalBlockedFor: [
+        "required response fields",
+        "error envelope shape",
+        "idempotency semantics",
+        "cursor field names",
+        "public wrapper stable fields",
+        "tenant/requester header names"
+      ],
+      legacyAliases: [
+        {
+          route: "POST /api/ti/search",
+          canonicalRoute: "GET /v1/intel/search",
+          status: "compatibility_wrapper",
+          removalPolicy: "no_sunset_until_public_wrapper_proof_and_client_matrix_are_green"
+        }
+      ],
+      sunsetWorkflow: {
+        states: ["active", "deprecated", "sunset_scheduled", "removed_in_next_major"],
+        requiredAuditFields: ["route", "replacementRoute", "deprecatedAt", "sunsetAt", "clientImpact", "owner"],
+        safeClientBehavior: "prefer canonical /v1 routes and preserve last safe answer when receiving deprecation or sunset headers"
+      },
+      examples: [
+        {
+          name: "deprecated_compatibility_wrapper",
+          route: "POST /api/ti/search",
+          headers: {
+            deprecation: "true",
+            sunset: "2026-09-01T00:00:00.000Z",
+            link: "</v1/intel/search>; rel=\"successor-version\"",
+            "x-api-version": "v1",
+            "x-request-id": "req_compat_123"
+          },
+          body: { error: { code: "deprecated_route", message: "Use the canonical /v1 route.", details: { replacementRoute: "GET /v1/intel/search", requestId: "req_compat_123" } } }
+        }
+      ]
+    },
     rateLimits: {
       model: "gateway_enforced_with_route_hints",
       responseHeaders: ["retry-after", "x-rate-limit-policy", "x-request-id"],
@@ -7167,6 +10131,16 @@ function enterpriseApiSurfaceContract(
         { route: "GET /v1/intel/search", windowSeconds: 60, maxRequests: 60, retryAfterSeconds: 3 },
         { route: "POST /v1/intel/runs", windowSeconds: 60, maxRequests: 30, retryAfterSeconds: 5 },
         { route: "POST /v1/sources/*", windowSeconds: 60, maxRequests: 20, retryAfterSeconds: 30 }
+      ],
+      perRouteHints: [
+        { route: "GET /v1/intel/search", policy: "live_search_read", windowSeconds: 60, maxRequests: 60, retryAfterSeconds: 3, queuePressureCode: "queue_pressure", safeClientBehavior: "preserve the current answer and poll again with cursor backoff" },
+        { route: "POST /api/ti/search", policy: "public_wrapper_live_search", windowSeconds: 60, maxRequests: 90, retryAfterSeconds: 3, queuePressureCode: "queue_pressure", publicWrapperThrottle: true, safeClientBehavior: "preserve the last safe answer, show compact searching/partial state, and poll with backoff" },
+        { route: "POST /v1/intel/runs", policy: "run_creation", windowSeconds: 60, maxRequests: 30, retryAfterSeconds: 5, queuePressureCode: "queue_pressure", safeClientBehavior: "reuse idempotent run when available or retry after the advertised delay" },
+        { route: "GET /v1/intel/runs/{id}/results", policy: "result_pagination", windowSeconds: 60, maxRequests: 120, retryAfterSeconds: 2, queuePressureCode: "queue_pressure", safeClientBehavior: "keep the prior page and retry with the same cursor" },
+        { route: "POST /v1/sources/apply-plan", policy: "source_admin_apply_plan", windowSeconds: 60, maxRequests: 20, retryAfterSeconds: 30, queuePressureCode: "queue_pressure", safeClientBehavior: "do not mutate source state until operator approval can be revalidated" },
+        { route: "POST /v1/public-channels/apply-plan", policy: "public_channel_apply_plan", windowSeconds: 60, maxRequests: 20, retryAfterSeconds: 30, queuePressureCode: "queue_pressure", safeClientBehavior: "keep public-channel actions dry-run and retry after gateway backoff" },
+        { route: "POST /v1/restricted-metadata/apply-plan", policy: "restricted_metadata_apply_plan", windowSeconds: 60, maxRequests: 12, retryAfterSeconds: 60, queuePressureCode: "policy_blocked", safeClientBehavior: "fail closed to metadata-only review and require human approval before retry" },
+        { route: "POST /v1/exports/stix", policy: "graph_export", windowSeconds: 60, maxRequests: 20, retryAfterSeconds: 30, queuePressureCode: "queue_pressure", safeClientBehavior: "keep export held and retry after graph/evidence eligibility remains valid" }
       ],
       overloadCodes: ["queue_pressure", "provider_unavailable", "scraper_unavailable"]
     },
@@ -7191,7 +10165,27 @@ function enterpriseApiSurfaceContract(
         "duplicate_run_reuse"
       ],
       retryableCodes: ["provider_unavailable", "scraper_unavailable", "queue_pressure", "stale_evidence"],
-      failClosedCodes: ["policy_blocked", "no_approved_sources", "idempotency_conflict"]
+      failClosedCodes: ["policy_blocked", "no_approved_sources", "idempotency_conflict"],
+      safeExamples: [
+        {
+          name: "queue_pressure",
+          status: 429,
+          headers: { "retry-after": "5", "x-rate-limit-policy": "live_search_queue", "x-request-id": "req_123" },
+          body: { error: { code: "queue_pressure", message: "Queue pressure; retry later.", details: { retryAfterSeconds: 5, requestId: "req_123" } } }
+        },
+        {
+          name: "policy_blocked",
+          status: 403,
+          headers: { "x-request-id": "req_456" },
+          body: { error: { code: "policy_blocked", message: "Request is blocked by policy.", details: { reasonCode: "restricted_metadata_requires_review", requestId: "req_456" } } }
+        },
+        {
+          name: "idempotency_conflict",
+          status: 409,
+          headers: { "x-request-id": "req_789" },
+          body: { error: { code: "idempotency_conflict", message: "Idempotency key already maps to a different request.", details: { conflictField: "request_hash", requestId: "req_789" } } }
+        }
+      ]
     },
     openapi: {
       schemaVersion: "ti.openapi_ready_contract.v1",
@@ -7219,6 +10213,71 @@ function enterpriseApiSurfaceContract(
           CursorPage: { type: "object", required: ["nextCursor"], properties: { nextCursor: { type: ["string", "null"] } } },
           IdempotentRunRequest: { type: "object", required: ["query"], properties: { query: { type: "string" }, entityType: { type: "string" }, tenantId: { type: "string" } } },
           PublicSearchResponse: { type: "object", required: ["status", "runId", "pollCursor", "deltaCursor", "updated"], properties: Object.fromEntries(publicWrapperDeltaStableFields().map((field) => [field, { type: ["string", "number", "array", "object", "boolean", "null"] }])) },
+          PublicWrapperCutoverReadiness: {
+            type: "object",
+            required: ["schemaVersion", "status", "stableFieldAgreement", "fallbackWatch", "deprecationWatch", "proofCommands"],
+            properties: {
+              schemaVersion: { type: "string" },
+              status: { type: "string" },
+              stableFieldAgreement: { type: "object" },
+              fallbackWatch: { type: "object" },
+              deprecationWatch: { type: "object" },
+              proofCommands: { type: "array", items: { type: "string" } }
+            }
+          },
+          RealtimeDeliveryPrototype: {
+            type: "object",
+            required: ["schemaVersion", "status", "featureFlags", "deliveryModes", "eventPrototypes", "fallbackToPolling"],
+            properties: {
+              schemaVersion: { type: "string" },
+              status: { type: "string" },
+              featureFlags: { type: "object" },
+              deliveryModes: { type: "array", items: { type: "object" } },
+              eventPrototypes: { type: "array", items: { $ref: "#/components/schemas/RealtimePrototypeEvent" } },
+              fallbackToPolling: { type: "object" }
+            }
+          },
+          RealtimePrototypeEvent: {
+            type: "object",
+            required: ["type", "source", "payloadFields", "pollingEquivalent", "enabled"],
+            properties: {
+              type: { type: "string" },
+              source: { type: "string" },
+              payloadFields: { type: "array", items: { type: "string" } },
+              pollingEquivalent: { type: "string" },
+              enabled: { type: "boolean" },
+              noLeakRule: { type: "string" }
+            }
+          },
+          ClientGenerationFreeze: {
+            type: "object",
+            required: ["schemaVersion", "status", "openapiManifest", "operationManifest", "schemaManifest", "generatedClients", "fixtureManifest", "changelogGate", "driftPolicy", "proofCommands"],
+            properties: {
+              schemaVersion: { type: "string" },
+              status: { type: "string" },
+              openapiManifest: { type: "object" },
+              operationManifest: { type: "object" },
+              schemaManifest: { type: "object" },
+              generatedClients: { type: "array", items: { $ref: "#/components/schemas/GeneratedClientTarget" } },
+              fixtureManifest: { type: "object" },
+              changelogGate: { type: "object" },
+              driftPolicy: { type: "object" },
+              proofCommands: { type: "array", items: { type: "string" } }
+            }
+          },
+          GeneratedClientTarget: {
+            type: "object",
+            required: ["target", "language", "status", "primaryRoutes", "requiredSchemas", "requiredFixtures"],
+            properties: {
+              target: { type: "string" },
+              language: { type: "string" },
+              status: { type: "string" },
+              primaryRoutes: { type: "array", items: { type: "string" } },
+              requiredSchemas: { type: "array", items: { type: "string" } },
+              requiredFixtures: { type: "array", items: { type: "string" } },
+              releaseGate: { type: "string" }
+            }
+          },
           SdkPollingEnvelope: {
             type: "object",
             required: ["runId", "status", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated"],
@@ -7242,6 +10301,35 @@ function enterpriseApiSurfaceContract(
               callbackRef: { type: "string" },
               eventTypes: { type: "array", items: { type: "string" } }
             }
+          },
+          StreamingEventEnvelope: {
+            type: "object",
+            required: ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "createdAt"],
+            properties: {
+              eventId: { type: "string" },
+              eventType: { type: "string" },
+              runId: { type: "string" },
+              tenantId: { type: "string" },
+              requesterId: { type: "string" },
+              pollCursor: { type: "string" },
+              deltaCursor: { type: "string" },
+              sequence: { type: "integer", minimum: 0 },
+              retryAfterSeconds: { type: "integer", minimum: 0 },
+              warningCodes: { type: "array", items: { type: "string" } },
+              createdAt: { type: "string", format: "date-time" }
+            }
+          },
+          WebhookDeliveryAttempt: {
+            type: "object",
+            required: ["subscriptionId", "eventId", "attempt", "deliveryState", "nextRetryAt"],
+            properties: {
+              subscriptionId: { type: "string" },
+              eventId: { type: "string" },
+              attempt: { type: "integer", minimum: 1 },
+              deliveryState: { type: "string", enum: ["queued", "delivered", "retry_scheduled", "disabled"] },
+              nextRetryAt: { type: ["string", "null"], format: "date-time" },
+              failureCode: { type: ["string", "null"] }
+            }
           }
         }
       }
@@ -7264,6 +10352,266 @@ function enterpriseApiSurfaceContract(
       }
     ],
     noLeakGuarantee: "OpenAPI examples and audit contracts use identifiers, hashes, ledger ids, and compact summaries only; never raw bodies, credentials, cookies, authorization headers, object keys, restricted raw URLs, or leaked rows."
+  };
+}
+
+function realtimeDeliveryPrototypeContract(input: {
+  enterpriseApiSurface: ReturnType<typeof enterpriseApiSurfaceContract>;
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>;
+  streamingWebhookCompatibility: ReturnType<typeof buildStreamingWebhookCompatibilityContract>;
+  publicWrapperCutoverReadiness: ReturnType<typeof publicWrapperCutoverReadinessContract>;
+}) {
+  const eventPrototypes = [
+    realtimePrototypeEvent("run.status", "Agent 02 scheduler", ["eventId", "runId", "tenantId", "requesterId", "status", "pollCursor", "deltaCursor", "retryAfterSeconds", "warningCodes"], "GET /v1/intel/runs/{id}"),
+    realtimePrototypeEvent("answer.delta", "public /ti answer", ["eventId", "runId", "tenantId", "deltaCursor", "publicWrapperDelta", "changedSections", "confidence", "warningCodes"], "GET /v1/intel/search?deltaCursor=..."),
+    realtimePrototypeEvent("evidence.promoted", "Agent 06 evidence", ["eventId", "runId", "tenantId", "evidenceIds", "ledgerIds", "captureHashes", "deltaCursor"], "GET /v1/intel/runs/{id}/results"),
+    realtimePrototypeEvent("source.gap", "Agent 01/04 source coverage", ["eventId", "runId", "tenantId", "sourceFamily", "gapCode", "activationState", "retryAfterSeconds"], "GET /v1/intel/search.sourceCoverage"),
+    realtimePrototypeEvent("graph.review_hold", "Agent 08 graph", ["eventId", "runId", "tenantId", "relationshipIds", "holdReason", "exportEligible", "deltaCursor"], "GET /v1/graph/query"),
+    realtimePrototypeEvent("restricted_metadata.hold", "Agent 05 restricted metadata", ["eventId", "runId", "tenantId", "reviewTaskIds", "reasonCode", "policyDecisionIds", "deltaCursor"], "GET /v1/restricted-metadata/status"),
+    realtimePrototypeEvent("quality.caveat", "Agent 07 quality", ["eventId", "runId", "tenantId", "caveatCode", "confidence", "reviewQueueIds", "deltaCursor"], "GET /v1/quality/evaluate"),
+    realtimePrototypeEvent("error.retry_hint", "gateway/scheduler", ["eventId", "runId", "tenantId", "errorCode", "retryAfterSeconds", "requestId", "rateLimitPolicy"], "stable error envelope or partial response"),
+    realtimePrototypeEvent("run.terminal", "run state", ["eventId", "runId", "tenantId", "status", "terminalState", "pollCursor", "deltaCursor", "warningCodes"], "GET /v1/intel/runs/{id}")
+  ];
+  return {
+    schemaVersion: "ti.realtime_delivery_prototype.v1",
+    owner: "Agent 09",
+    status: "disabled_by_default_polling_primary",
+    mode: "contract_first_prototype_no_mounted_delivery",
+    featureFlags: {
+      enabledByDefault: false,
+      sseFlag: "TI_REALTIME_SSE_ENABLED=false",
+      webhookFlag: "TI_REALTIME_WEBHOOKS_ENABLED=false",
+      deliveryWritesFlag: "TI_REALTIME_DELIVERY_WRITES_ENABLED=false",
+      routeMountFlag: "TI_REALTIME_ROUTES_ENABLED=false",
+      productionDefault: "off_until_explicit_release_board_approval",
+      canaryDefault: "off"
+    },
+    deliveryModes: [
+      {
+        mode: "sse",
+        prototypeRoute: input.sdkIntegration.routes.futureSse,
+        mounted: false,
+        enabled: false,
+        resumeWith: ["Last-Event-ID", "deltaCursor"],
+        failureFallback: "client continues 3-second polling from pollCursor or deltaCursor"
+      },
+      {
+        mode: "webhook",
+        prototypeRoute: input.sdkIntegration.routes.futureWebhookRegistration,
+        mounted: false,
+        enabled: false,
+        registrationDryRunOnly: true,
+        idempotencyKeyRequired: true,
+        failureFallback: "subscription failure never blocks polling; client resumes from last delivered deltaCursor"
+      }
+    ],
+    eventEnvelope: {
+      schemaVersion: "ti.realtime_event_envelope.v1",
+      requiredFields: ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "sequence", "createdAt"],
+      optionalSafeFields: ["requesterId", "requestId", "warningCodes", "retryAfterSeconds", "sourceIds", "captureHashes", "evidenceIds", "ledgerIds", "relationshipIds", "policyDecisionIds", "confidence", "summary"],
+      ordering: "monotonic sequence per run; clients dedupe by eventId and ignore stale sequence numbers",
+      replayWindowSeconds: 900,
+      cursorGapBehavior: "return stable stale_evidence or queue_pressure error envelope and require polling fallback"
+    },
+    eventPrototypes,
+    authAndIdentity: {
+      requiredForwardedHeaders: input.enterpriseApiSurface.authBoundary.requiredForwardedHeaders,
+      optionalForwardedHeaders: input.enterpriseApiSurface.authBoundary.optionalForwardedHeaders,
+      tenantHeader: input.enterpriseApiSurface.identity.tenantHeader,
+      requesterHeader: input.enterpriseApiSurface.identity.requesterHeader,
+      requestIdHeader: input.enterpriseApiSurface.identity.requestIdHeader,
+      noSecretForwardingRule: input.enterpriseApiSurface.authBoundary.auditLogging.noSecretRule
+    },
+    idempotencyAndReplay: {
+      runCreationHeader: input.enterpriseApiSurface.idempotency.header,
+      webhookRegistrationHeader: input.enterpriseApiSurface.idempotency.header,
+      replayCursors: ["Last-Event-ID", "pollCursor", "deltaCursor"],
+      duplicateRule: "event delivery must never create or duplicate search runs; duplicate registration keys return the existing subscription draft",
+      conflictCode: input.enterpriseApiSurface.idempotency.conflictCode
+    },
+    fallbackToPolling: {
+      pollingPrimary: true,
+      intervalSeconds: input.sdkIntegration.polling.intervalSeconds,
+      sameFields: input.streamingWebhookCompatibility.pollingCompatibility.sameFields,
+      sameStates: input.streamingWebhookCompatibility.pollingCompatibility.sameStates,
+      retryHeaders: input.enterpriseApiSurface.rateLimits.responseHeaders,
+      clientBehavior: "when realtime is disabled, unavailable, missing events, or cursor replay gaps, clients keep polling with the same runId, pollCursor, deltaCursor, status, warning codes, and retry hints"
+    },
+    publicWrapperGuardrails: {
+      noDefaultActor: true,
+      noDemoOrStaleCacheCopy: true,
+      unknownQueryCopy: input.publicWrapperCutoverReadiness.fallbackWatch.requiredCopyForNoResult,
+      stableRunIds: true,
+      stableCursors: ["pollCursor", "deltaCursor", "nextCursor"],
+      bannedFallbackCodes: input.publicWrapperCutoverReadiness.fallbackWatch.bannedFallbackCodes
+    },
+    errorSemantics: {
+      envelope: input.enterpriseApiSurface.errors.envelope,
+      retryableCodes: input.enterpriseApiSurface.errors.retryableCodes,
+      failClosedCodes: input.enterpriseApiSurface.errors.failClosedCodes,
+      realtimeSpecificCodes: ["stream_disabled", "webhook_disabled", "replay_cursor_gap", "delivery_retry_scheduled", "subscription_policy_blocked"],
+      fallbackRule: "realtime errors are additive hints; polling response shape and public wrapper state remain stable"
+    },
+    handoffs: {
+      agent02Scheduler: ["run.status", "error.retry_hint", "retryAfterSeconds", "queue pressure"],
+      agent06Evidence: ["evidence.promoted", "evidenceIds", "ledgerIds", "captureHashes"],
+      agent07Quality: ["quality.caveat", "confidence", "reviewQueueIds", "unknown Searching guardrail"],
+      agent08Graph: ["graph.review_hold", "relationshipIds", "exportEligible"],
+      agent10Release: ["feature flags remain off", "release board approval required", "rollback to polling only"]
+    },
+    noLeak: {
+      guarantee: "prototype events contain ids, cursors, hashes, reason codes, confidence, and compact summaries only",
+      forbiddenPayloadFields: ["raw_body", "raw_text", "html", "screenshot_bytes", "restricted_raw_url", "unsafe_raw_url", "credential", "authorization", "cookie", "object_reference", "object_key", "leaked_row", "webhook_secret", "private_channel_material"]
+    },
+    proofCommands: ["bun run check", "bun run check:api-regression", "bun run check:sdk-fixtures", "bun run check:route-inventory", "bun run check:contract-index", "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts"]
+  };
+}
+
+function realtimePrototypeEvent(type: string, source: string, payloadFields: string[], pollingEquivalent: string) {
+  return {
+    type,
+    source,
+    enabled: false,
+    payloadFields,
+    pollingEquivalent,
+    noLeakRule: "ids, cursors, hashes, reason codes, confidence, warning codes, and compact summaries only"
+  };
+}
+
+function buildRealtimeDeliverySoakContractLegacy(input: {
+  enterpriseApiSurface: ReturnType<typeof enterpriseApiSurfaceContract>;
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>;
+  streamingWebhookCompatibility: ReturnType<typeof buildStreamingWebhookCompatibilityContract>;
+  realtimeDeliveryPrototype: ReturnType<typeof realtimeDeliveryPrototypeContract>;
+  publicWrapperCutoverReadiness: ReturnType<typeof publicWrapperCutoverReadinessContract>;
+}) {
+  const disabledFlagRules = [
+    input.realtimeDeliveryPrototype.featureFlags.sseFlag,
+    input.realtimeDeliveryPrototype.featureFlags.webhookFlag,
+    input.realtimeDeliveryPrototype.featureFlags.deliveryWritesFlag,
+    input.realtimeDeliveryPrototype.featureFlags.routeMountFlag
+  ];
+  const soakScenarios = [
+    realtimeSoakScenario("disabled_sse_replay", "sse", "hold", "Last-Event-ID replay request returns disabled hint and client continues polling", ["eventId", "runId", "pollCursor", "deltaCursor"]),
+    realtimeSoakScenario("disabled_webhook_registration", "webhook", "hold", "registration remains dry-run only and cannot create a live subscription", ["subscriptionId", "eventTypes", "deliveryState"]),
+    realtimeSoakScenario("webhook_outbox_retry", "webhook", "watch", "retry schedule is bounded and never blocks public polling", ["attemptId", "subscriptionId", "retryAfterSeconds", "deliveryState"]),
+    realtimeSoakScenario("cursor_gap_replay", "sse", "hold", "cursor gaps fail closed with polling fallback from the latest safe cursor", ["runId", "pollCursor", "deltaCursor", "warningCodes"]),
+    realtimeSoakScenario("fallback_to_polling", "polling", "promote", "polling remains primary and preserves the public wrapper response shape", input.sdkIntegration.polling.responseFields),
+    realtimeSoakScenario("duplicate_event_dedupe", "sse", "watch", "clients dedupe by eventId and ignore stale sequence numbers", ["eventId", "sequence", "runId", "deltaCursor"]),
+    realtimeSoakScenario("held_state_event", "sse", "hold", "restricted metadata, graph, and claim-ledger holds stay non-promoted", ["eventType", "reasonCode", "relationshipIds", "ledgerIds"]),
+    realtimeSoakScenario("unsafe_payload_block", "webhook", "hold", "unsafe payload fields fail the soak and trigger polling-only rollback", ["eventId", "runId", "warningCodes"]),
+    realtimeSoakScenario("public_wrapper_empty_delta", "polling", "promote", "empty deltas preserve the last safe answer and do not clear holds", ["runId", "pollCursor", "deltaCursor", "publicTiAnswer"])
+  ];
+
+  return {
+    schemaVersion: "ti.realtime_delivery_soak.v1",
+    owner: "Agent 09",
+    status: "disabled_soak_contract_ready_polling_primary",
+    mode: "disabled_delivery_soak_no_mounted_realtime_routes",
+    deliveryFlags: {
+      enabledByDefault: false,
+      requiredDisabledFlags: disabledFlagRules,
+      releaseRule: "SSE and webhook routes remain unmounted until a future release board explicitly promotes them",
+      canaryRule: "soak can model delivery behavior from fixtures only; it must not write subscriptions or dispatch events"
+    },
+    soakScenarios,
+    webhookOutbox: {
+      schemaVersion: "ti.webhook_outbox_soak.v1",
+      enabled: false,
+      dryRunOnly: true,
+      states: ["draft", "scheduled", "retry_scheduled", "dead_lettered", "disabled"],
+      maxAttempts: input.streamingWebhookCompatibility.webhooks.failureBehavior.maxAttempts,
+      retryableStatuses: input.streamingWebhookCompatibility.webhooks.failureBehavior.retryableStatuses,
+      idempotencyHeader: input.enterpriseApiSurface.idempotency.header,
+      fallback: "after any failure, clients continue 3-second polling from pollCursor or deltaCursor",
+      nonActions: ["do not deliver callbacks", "do not store webhook secrets", "do not block public polling", "do not activate sources"]
+    },
+    cursorGapReplay: {
+      schemaVersion: "ti.realtime_cursor_gap_replay.v1",
+      replayCursors: input.realtimeDeliveryPrototype.idempotencyAndReplay.replayCursors,
+      replayWindowSeconds: input.realtimeDeliveryPrototype.eventEnvelope.replayWindowSeconds,
+      actions: ["return stable warning", "preserve runId", "preserve pollCursor", "preserve deltaCursor", "fallback_to_polling"],
+      errorCodes: ["replay_cursor_gap", "stream_disabled", "webhook_disabled"],
+      clientRule: input.realtimeDeliveryPrototype.fallbackToPolling.clientBehavior
+    },
+    pollingFallback: {
+      pollingPrimary: true,
+      intervalSeconds: input.sdkIntegration.polling.intervalSeconds,
+      sameFields: input.realtimeDeliveryPrototype.fallbackToPolling.sameFields,
+      sameStates: input.realtimeDeliveryPrototype.fallbackToPolling.sameStates,
+      keepLastSafeAnswerOn: ["stream_disabled", "webhook_disabled", "replay_cursor_gap", "delivery_retry_scheduled", "queue_pressure", "empty_delta"],
+      publicWrapperRoute: input.publicWrapperCutoverReadiness.stableFieldAgreement.publicWrapperRoute,
+      scraperNativeRoute: input.publicWrapperCutoverReadiness.stableFieldAgreement.scraperNativeRoute
+    },
+    eventEnvelopeSoak: {
+      schemaVersion: input.realtimeDeliveryPrototype.eventEnvelope.schemaVersion,
+      requiredFields: input.realtimeDeliveryPrototype.eventEnvelope.requiredFields,
+      optionalSafeFields: input.realtimeDeliveryPrototype.eventEnvelope.optionalSafeFields,
+      eventTypes: input.realtimeDeliveryPrototype.eventPrototypes.map((event) => event.type),
+      ordering: input.realtimeDeliveryPrototype.eventEnvelope.ordering,
+      dedupe: "eventId plus runId; stale sequence numbers are ignored",
+      noPromotionRule: "events may announce holds or deltas, but public fact promotion still comes from polling-visible publicTiAnswer and review gates"
+    },
+    noLeak: {
+      forbiddenPayloadFields: input.realtimeDeliveryPrototype.noLeak.forbiddenPayloadFields,
+      rule: "soak fixtures and outbox rows contain ids, cursors, hashes, warning codes, retry hints, and compact summaries only",
+      rollbackOn: ["raw_body", "restricted_raw_url", "credential", "object_key", "leaked_row", "webhook_secret", "private_channel_material"]
+    },
+    releaseGate: {
+      decision: "hold_realtime_polling_primary",
+      promotionBlockers: [
+        "feature_flag_enabled_by_default",
+        "mounted_realtime_route_detected",
+        "outbox_write_detected",
+        "cursor_gap_without_polling_fallback",
+        "unsafe_payload_field_detected",
+        "public_wrapper_field_drift",
+        "unknown_ready_without_evidence"
+      ],
+      rollbackActions: [
+        "disable realtime flags",
+        "drop delivery attempts",
+        "continue public polling",
+        "hold SDK realtime publish",
+        "preserve public POST compatibility wrapper"
+      ]
+    },
+    handoffs: {
+      agent02Scheduler: ["retry hints", "queue pressure", "run status events"],
+      agent06Evidence: ["evidence promoted ids", "claim ledger ids", "no raw event payloads"],
+      agent07Quality: ["quality caveats", "unknown Searching guardrail", "held state wording"],
+      agent08Graph: ["graph review holds", "relationship ids", "STIX export holds"],
+      agent10Release: ["realtime remains hold", "polling-only rollback", "soak proof packet"]
+    },
+    proofCommands: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:sdk-fixtures",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts src/tests/sdkFixtures.test.ts",
+      "bun test"
+    ]
+  };
+}
+
+function realtimeSoakScenario(
+  name: string,
+  mode: "sse" | "webhook" | "polling",
+  decision: "promote" | "watch" | "hold",
+  expectedBehavior: string,
+  requiredFields: string[]
+) {
+  return {
+    name,
+    mode,
+    decision,
+    expectedBehavior,
+    requiredFields,
+    realtimeEnabled: false,
+    mountedRouteAllowed: false,
+    pollingFallbackRequired: true,
+    noUnsafePayload: true
   };
 }
 
@@ -7313,7 +10661,7 @@ function sdkIntegrationContract(enterpriseApiSurface: ReturnType<typeof enterpri
     eventBoundary: {
       delivery: "future_contract_only",
       allowedModes: ["sse", "webhook"],
-      eventTypes: ["run.created", "run.updated", "delta.available", "run.ready", "run.blocked", "review.required"],
+      eventTypes: ["run.created", "run.updated", "delta.available", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "run.ready", "run.blocked", "review.required", "error.retry_hint"],
       payloadRule: "send identifiers, cursors, warning codes, source/capture hashes, confidence, and compact summaries only",
       forbiddenPayloadFields: ["raw_body", "restricted_raw_url", "credential", "authorization", "cookie", "object_reference", "leaked_row"],
       replayRule: "clients resume with lastEventId or deltaCursor; server must fail closed on cursor gaps"
@@ -7361,6 +10709,58 @@ function sdkIntegrationContract(enterpriseApiSurface: ReturnType<typeof enterpri
         responseKeys: ["subscriptionId", "eventTypes", "deliveryState"]
       }
     ],
+    fixturePack: {
+      schemaVersion: "ti.sdk_fixture_pack.v1",
+      status: "contract_frozen_for_client_ci",
+      fixtureNames: [
+        "initial_public_search",
+        "repeated_poll_empty_delta",
+        "new_delta_available",
+        "queue_pressure_retry",
+        "policy_blocked_fail_closed",
+        "idempotent_run_reuse",
+        "cursor_results_page",
+        "metadata_review_required",
+        "future_event_delta_available"
+      ],
+      requiredFiles: [
+        "fixtures/sdk/initial_public_search.json",
+        "fixtures/sdk/repeated_poll_empty_delta.json",
+        "fixtures/sdk/new_delta_available.json",
+        "fixtures/sdk/queue_pressure_retry.json",
+        "fixtures/sdk/policy_blocked_fail_closed.json",
+        "fixtures/sdk/idempotent_run_reuse.json",
+        "fixtures/sdk/cursor_results_page.json",
+        "fixtures/sdk/metadata_review_required.json",
+        "fixtures/sdk/future_event_delta_available.json"
+      ],
+      invariantFields: ["runId", "status", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "warningCodes"],
+      noLeakAssertions: ["no raw_body", "no restricted_raw_url", "no credential", "no authorization", "no cookie", "no object_reference", "no leaked_row"],
+      generationRule: "fixtures are derived from /v1/contracts and public wrapper examples; generated clients must not depend on internal store rows or adapter payloads"
+    },
+    compatibilityCi: {
+      schemaVersion: "ti.sdk_compatibility_ci.v1",
+      status: "contract_only_required_before_sdk_release",
+      requiredCommands: [
+        "bun run check:contract-index",
+        "bun run check:route-inventory",
+        "bun run check:sdk-fixtures",
+        "bun test src/tests/api.test.ts",
+        "bun test",
+        "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+        "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+        "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+      ],
+      gates: [
+        { name: "openapi_schema_available", proof: "components include SdkPollingEnvelope and SdkSubscriptionRegistration", failureAction: "block SDK generation" },
+        { name: "polling_contract_stable", proof: "pollCursor, deltaCursor, nextCursor, refreshAfterSeconds, and updated remain stable", failureAction: "block SDK release" },
+        { name: "error_envelope_stable", proof: "safe error examples use shared ErrorEnvelope shape", failureAction: "block SDK release" },
+        { name: "public_wrapper_compatible", proof: "POST /api/ti/search returns run id, cursors, and live state", failureAction: "preserve compatibility wrapper" },
+        { name: "no_leak_fixtures", proof: "fixture JSON omits raw bodies, restricted URLs, credentials, object references, and leaked rows", failureAction: "fail CI and regenerate fixtures" }
+      ],
+      clientMatrix: ["typescript_fetch", "node_service", "browser_ti", "analyst_automation"],
+      artifactRule: "publish generated clients only after contract-index, route inventory, focused API tests, full Bun tests, and public proof commands pass"
+    },
     openapi: {
       schemaVersion: "ti.sdk_openapi_extension.v1",
       components: ["SdkPollingEnvelope", "SdkSubscriptionRegistration"],
@@ -7371,6 +10771,161 @@ function sdkIntegrationContract(enterpriseApiSurface: ReturnType<typeof enterpri
       }
     },
     noLeakGuarantee: "SDK examples and event payload contracts contain only safe DTO fields and never push raw bodies, credentials, cookies, authorization headers, object references, restricted raw URLs, or leaked rows."
+  };
+}
+
+function buildStreamingWebhookCompatibilityContract(
+  enterpriseApiSurface: ReturnType<typeof enterpriseApiSurfaceContract>,
+  sdkIntegration: ReturnType<typeof sdkIntegrationContract>
+) {
+  const eventTypes = [
+    {
+      type: "run.status",
+      source: "Agent 02 scheduler",
+      payloadFields: ["eventId", "runId", "status", "pollCursor", "deltaCursor", "retryAfterSeconds", "warningCodes"],
+      pollingEquivalent: "GET /v1/intel/runs/{id}",
+      noLeakRule: "status and scheduler warnings only"
+    },
+    {
+      type: "answer.delta",
+      source: "public /ti answer",
+      payloadFields: ["eventId", "runId", "deltaCursor", "publicWrapperDelta", "changedSections", "confidence", "warningCodes"],
+      pollingEquivalent: "GET /v1/intel/search?deltaCursor=...",
+      noLeakRule: "compact public answer deltas only"
+    },
+    {
+      type: "evidence.promoted",
+      source: "Agent 06 evidence",
+      payloadFields: ["eventId", "runId", "evidenceIds", "ledgerIds", "captureHashes", "confidence", "deltaCursor"],
+      pollingEquivalent: "GET /v1/intel/runs/{id}/results",
+      noLeakRule: "ids and hashes only; no raw bodies or object references"
+    },
+    {
+      type: "source.gap",
+      source: "Agent 01/04 source coverage",
+      payloadFields: ["eventId", "runId", "sourceFamily", "gapCode", "activationState", "retryAfterSeconds"],
+      pollingEquivalent: "GET /v1/intel/search.sourceCoverage",
+      noLeakRule: "source family and reason codes only"
+    },
+    {
+      type: "graph.review_hold",
+      source: "Agent 08 graph",
+      payloadFields: ["eventId", "runId", "relationshipIds", "holdReason", "exportEligible", "deltaCursor"],
+      pollingEquivalent: "GET /v1/graph/query",
+      noLeakRule: "bounded graph ids and hold reasons only"
+    },
+    {
+      type: "restricted_metadata.hold",
+      source: "Agent 05 restricted metadata",
+      payloadFields: ["eventId", "runId", "reviewTaskIds", "reasonCode", "policyDecisionIds", "deltaCursor"],
+      pollingEquivalent: "GET /v1/restricted-metadata/status",
+      noLeakRule: "metadata review ids and reason codes only"
+    },
+    {
+      type: "error.retry_hint",
+      source: "gateway/scheduler",
+      payloadFields: ["eventId", "runId", "errorCode", "retryAfterSeconds", "requestId", "rateLimitPolicy"],
+      pollingEquivalent: "stable error envelope or partial response",
+      noLeakRule: "error codes and retry hints only"
+    },
+    {
+      type: "run.terminal",
+      source: "run state",
+      payloadFields: ["eventId", "runId", "status", "terminalState", "pollCursor", "deltaCursor", "warningCodes"],
+      pollingEquivalent: "GET /v1/intel/runs/{id}",
+      noLeakRule: "terminal state and compact warnings only"
+    }
+  ];
+  return {
+    schemaVersion: "ti.streaming_webhook_compatibility.v1",
+    owner: "Agent 09",
+    status: "contract_only_polling_remains_primary",
+    mode: "additive_future_delivery_contract",
+    deliveryModes: [
+      {
+        mode: "sse",
+        route: sdkIntegration.routes.futureSse,
+        status: "future_not_mounted",
+        reconnect: {
+          resumeWith: ["Last-Event-ID", "deltaCursor"],
+          replayAfterHeader: "retry-after",
+          cursorGapBehavior: "return stable error envelope with stale_evidence or queue_pressure and require polling fallback"
+        }
+      },
+      {
+        mode: "webhook",
+        route: sdkIntegration.routes.futureWebhookRegistration,
+        status: "future_not_mounted",
+        registrationFields: ["tenantId", "eventTypes", "callbackRef", "secretRef", "rateLimitPolicy"],
+        deliveryHeaders: ["x-tenant-id", "x-request-id", "x-ti-event-id", "x-ti-event-type", "x-ti-signature-ref"],
+        failureState: "retry_scheduled | disabled | polling_fallback_required"
+      }
+    ],
+    pollingCompatibility: {
+      pollingPrimary: true,
+      intervalSeconds: sdkIntegration.polling.intervalSeconds,
+      sameFields: ["runId", "status", "pollCursor", "deltaCursor", "nextCursor", "refreshAfterSeconds", "updated", "warningCodes"],
+      sameStates: [...sdkIntegration.polling.retryableStates, ...sdkIntegration.polling.terminalStates],
+      migrationRule: "SSE/webhook clients must be able to drop back to 3-second polling with the same runId, pollCursor, deltaCursor, status, retry headers, and warning codes; polling clients are never required to subscribe.",
+      emptyDeltaRule: sdkIntegration.polling.emptyDelta.clientBehavior,
+      idempotencyRule: "run creation remains idempotent through idempotency-key; event subscription does not create or duplicate search runs"
+    },
+    eventEnvelope: {
+      schemaVersion: "ti.streaming_event_envelope.v1",
+      requiredFields: ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "sequence", "createdAt"],
+      optionalSafeFields: ["requesterId", "warningCodes", "retryAfterSeconds", "sourceIds", "captureHashes", "evidenceIds", "ledgerIds", "relationshipIds", "policyDecisionIds", "confidence", "summary"],
+      ordering: "monotonic sequence per run; clients dedupe by eventId and ignore stale sequence numbers",
+      retentionWindow: { defaultSeconds: 900, maxSeconds: 3600, cursorReplayFallback: true }
+    },
+    eventTypes,
+    authAndGateway: {
+      requiredForwardedHeaders: enterpriseApiSurface.authBoundary.requiredForwardedHeaders,
+      optionalForwardedHeaders: enterpriseApiSurface.authBoundary.optionalForwardedHeaders,
+      tenantPropagation: enterpriseApiSurface.tenantBoundary.projectionRule,
+      requesterPropagation: "requester id is carried as x-actor-id and never as credentials",
+      rateLimitHeaders: enterpriseApiSurface.rateLimits.responseHeaders,
+      gatewayOwnsSignatureVerification: true,
+      noSecretForwardingRule: "gateway may keep webhook signing material by reference only; scraper DTOs expose secretRef/signatureRef labels, never secrets"
+    },
+    webhooks: {
+      subscriptionSchema: "SdkSubscriptionRegistration",
+      deliveryAttemptSchema: "WebhookDeliveryAttempt",
+      failureBehavior: {
+        retryableStatuses: [408, 409, 425, 429, 500, 502, 503, 504],
+        maxAttempts: 6,
+        backoff: "respect retry-after when present, otherwise exponential backoff capped at 15 minutes",
+        disableAfter: "six consecutive delivery failures or policy_blocked",
+        fallback: "client resumes polling from last delivered deltaCursor or requested replay cursor"
+      },
+      auditFields: ["subscriptionId", "eventId", "tenantId", "requestId", "attempt", "deliveryState", "nextRetryAt", "failureCode"],
+      nonActions: ["do not inline webhook secrets", "do not send raw evidence", "do not fan out cross-tenant events", "do not activate sources from delivery failure"]
+    },
+    integrations: {
+      agent02Scheduler: ["run.status", "error.retry_hint"],
+      agent06Evidence: ["evidence.promoted"],
+      agent07Quality: ["answer.delta", "error.retry_hint"],
+      agent08Graph: ["graph.review_hold"],
+      agent10Incidents: ["webhook.delivery_failed", "stream.replay_gap", "polling_fallback_required"]
+    },
+    examples: [
+      {
+        name: "sse_answer_delta",
+        event: { eventType: "answer.delta", runId: "run_apt29", pollCursor: "poll_10", deltaCursor: "delta_10", warningCodes: ["partial"], changedSections: ["summary", "sources"] }
+      },
+      {
+        name: "webhook_retry_hint",
+        event: { eventType: "error.retry_hint", runId: "run_random_actor", errorCode: "queue_pressure", retryAfterSeconds: 5, requestId: "req_123" }
+      },
+      {
+        name: "restricted_metadata_hold",
+        event: { eventType: "restricted_metadata.hold", runId: "run_case", reviewTaskIds: ["review_123"], reasonCode: "metadata_review_required", policyDecisionIds: ["policy_123"] }
+      }
+    ],
+    noLeak: {
+      guarantee: "streaming and webhook contracts carry identifiers, cursors, hashes, reason codes, confidence, and compact summaries only; raw restricted material, unsafe raw URLs, credentials, payload bodies, object references, and leaked rows are prohibited",
+      forbiddenPayloadFields: ["raw_body", "raw_text", "html", "screenshot_bytes", "restricted_raw_url", "unsafe_raw_url", "credential", "authorization", "cookie", "object_reference", "object_key", "leaked_row", "webhook_secret"]
+    },
+    proofCommands: ["bun run check:api-regression", "bun run check:contract-index", "bun run check:route-inventory", "bun run check:sdk-fixtures", "bun test src/tests/apiRegressionSentinel.test.ts src/tests/api.test.ts", "bun run check"]
   };
 }
 
@@ -7432,7 +10987,7 @@ function publicWrapperResponsiveFixture(
     noDefaultActor: true,
     noLeakRequired: true,
     noStaleCacheCopy: true,
-    compactUnknownCopy: expectedUxState === "searching" ? "Searching" : undefined,
+    compactUnknownCopy: expectedUxState === "searching" ? "Searching" : "Use compact state copy without default actor claims",
     updatedSemantics: "updated is response generation time; lastSeen only appears with evidence timestamps",
     stableFields: ["query", "mode", "status", "runId", "cursor", "nextCursor", "refreshAfterSeconds", "analystLoop", "tiExperience", "publicTiAnswer"],
     proofCommand: "bun run check:scraper-native-search"
@@ -7452,6 +11007,8 @@ function publicWrapperDeltaFixture(
     query,
     queryClass,
     deltaKind,
+    deltaType: deltaKind,
+    expectedStatus: expectedDisplayState,
     expectedDisplayState,
     warningCodes,
     route: "GET /v1/intel/search",
@@ -7479,7 +11036,21 @@ const EMPTY_OBJECT_STORE: ObjectEvidenceStore = {
   }
 };
 
+function numberParam(value: string | null): number | undefined {
+  if (value === null || !value.trim()) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 async function readJson<T>(request: Request): Promise<T> {
+  if (isHtmlFormRequest(request)) {
+    const form = await request.formData();
+    const body: Record<string, unknown> = {};
+    for (const [key, value] of form.entries()) {
+      body[key] = value === "true" ? true : value === "false" ? false : value;
+    }
+    return body as T;
+  }
   try {
     return await request.json() as T;
   } catch {
@@ -7487,8 +11058,51 @@ async function readJson<T>(request: Request): Promise<T> {
   }
 }
 
+async function readRequestBody<T extends Record<string, unknown>>(request: Request): Promise<T> {
+  if (isHtmlFormRequest(request)) {
+    const form = await request.formData();
+    const body: Record<string, unknown> = {};
+    for (const [key, value] of form.entries()) {
+      if (typeof value !== "string") continue;
+      body[key] = formValue(value);
+    }
+    return body as T;
+  }
+  return readJson<T>(request);
+}
+
+function formValue(value: string): string | number | boolean {
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return value;
+}
+
+function isHtmlFormRequest(request: Request): boolean {
+  const contentType = request.headers.get("content-type") ?? "";
+  return contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data");
+}
+
+function redirectToCanaryConsole(status: string): Response {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: `/v1/ops/canary/console?status=${encodeURIComponent(status)}`,
+      "cache-control": "no-store"
+    }
+  });
+}
+
 function numericParam(value: string | null): number | undefined {
   if (value === null || !value.trim()) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function numericBodyParam(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return undefined;
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }

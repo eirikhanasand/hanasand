@@ -34,6 +34,9 @@ interface StatusProofResult {
     releasePacketMetadataOnly: boolean;
     enforcementMetadataOnly: boolean;
     governanceMetadataOnly: boolean;
+    operatorGovernanceMetadataOnly: boolean;
+    darkCanaryMetadataOnly: boolean;
+    legalEthicsAuditMetadataOnly: boolean;
     auditReplayMetadataOnly: boolean;
     certificationMetadataOnly: boolean;
     killSwitchDrillsMetadataOnly: boolean;
@@ -51,6 +54,7 @@ type EmergencyStopCertificationProof = {
   observedScenarios: string[];
   noLeakSerialization: { passed: boolean };
   packets: Array<{
+    scenario: string;
     metadataOnly: boolean;
     safeForApi: boolean;
     dryRunOnly: boolean;
@@ -118,6 +122,126 @@ type IsolationHarnessProof = {
   }>;
 };
 
+type OperatorGovernanceProof = {
+  metadataOnly: boolean;
+  safeForApi: boolean;
+  dryRunOnly: boolean;
+  operatorVisible: boolean;
+  observedScenarios: string[];
+  noLeakSerialization: { passed: boolean };
+  packets: Array<{
+    metadataOnly: boolean;
+    safeForApi: boolean;
+    dryRunOnly: boolean;
+    operatorVisible: boolean;
+    sourceHashOnly: boolean;
+    sourceHash: string;
+    policyReason: string;
+    allowedActions: string[];
+    forbiddenActions: string[];
+    graphStixApiEffect: { stix: string; publicSearch: string };
+    rollbackPath: string[];
+    auditId: string;
+    proofCommands: string[];
+    proof: {
+      noRawOnionUrls: boolean;
+      noStolenFileNames: boolean;
+      noLeakedRows: boolean;
+      noCredentials: boolean;
+      noScreenshots: boolean;
+      noPrivateChannelContent: boolean;
+      noActorInteractionText: boolean;
+      metadataOnlyEvidence: boolean;
+      sourceHashOnly: boolean;
+    };
+    noLeakSerialization: { passed: boolean };
+  }>;
+};
+
+type DarkCanaryProof = {
+  metadataOnly: boolean;
+  safeForApi: boolean;
+  dryRunOnly: boolean;
+  fixtureBacked: boolean;
+  observedScenarios: string[];
+  noLeakSerialization: { passed: boolean };
+  packets: Array<{
+    metadataOnly: boolean;
+    safeForApi: boolean;
+    dryRunOnly: boolean;
+    fixtureBacked: boolean;
+    sourceHashOnly: boolean;
+    safeSourceHash: string;
+    urlHash: string;
+    policyState: string;
+    reviewState: string;
+    publicGraphStixEffects: { publicSearch: string; stix: string; api: string };
+    proxyIsolationBoundary: {
+      approvedProxyRequired: boolean;
+      directEgressAllowed: boolean;
+      credentialsAllowed: boolean;
+      formsAllowed: boolean;
+      captchaSolvingAllowed: boolean;
+      privateCommunityAccessAllowed: boolean;
+      fileDownloadsAllowed: boolean;
+      threatActorInteractionAllowed: boolean;
+      rawUnsafeUrlExposureAllowed: boolean;
+    };
+    emergencyStopPropagation: { scheduler: string; evidence: string; graph: string; api: string; releaseGate: string };
+    operatorProofPacket: { proofCommands: string[]; forbiddenActions: string[] };
+    noLeakProof: {
+      noRawOnionUrls: boolean;
+      noRawUnsafeUrls: boolean;
+      noRawPayloads: boolean;
+      noStolenFileDownloads: boolean;
+      noCredentialValues: boolean;
+      noCaptchaSolving: boolean;
+      noPrivateAccess: boolean;
+      noThreatActorInteraction: boolean;
+    };
+    noLeakSerialization: { passed: boolean };
+  }>;
+};
+
+type LegalEthicsAuditProof = {
+  metadataOnly: boolean;
+  safeForApi: boolean;
+  dryRunOnly: boolean;
+  thesisReady: boolean;
+  enterpriseReady: boolean;
+  observedScenarios: string[];
+  summary: {
+    packetCount: number;
+    blockedOperationCount: number;
+    holdCount: number;
+    rollbackCount: number;
+  };
+  noLeakSerialization: { passed: boolean };
+  packets: Array<{
+    scenario: string;
+    metadataOnly: boolean;
+    safeForApi: boolean;
+    dryRunOnly: boolean;
+    thesisReady: boolean;
+    enterpriseReady: boolean;
+    collected: {
+      fields: string[];
+      sourceHashIds: string[];
+      urlHashIds: string[];
+      evidenceType: string;
+    };
+    blocked: { operations: string[]; reason: string };
+    approval: { policyVersion: string; auditTrailIds: string[] };
+    whatWasNotAccessed: string[];
+    releaseInterpretation: string;
+    graphStixApiEffect: { stix: string; api: string; publicSearch: string };
+    proofCommands: string[];
+    handoffs: { agent09ApiField: string };
+    noLeakValidation: Record<string, boolean>;
+    noLeakSerialization: { passed: boolean };
+  }>;
+};
+
 const store = new InMemoryScraperStore();
 for (const source of restrictedMetadataSources()) store.saveSource(source);
 for (const capture of restrictedMetadataCaptures()) store.saveCapture(capture);
@@ -154,6 +278,9 @@ async function runStatusRoute(): Promise<StatusProofResult> {
       enforcement: { level: string; metadataOnly: boolean; safeForApi: boolean; agent09WarningCodes: string[]; emergencyStop: { state: string; dryRunOnly: boolean; workerAction: string }; activeRules: Array<{ rule: string; metadataOnly: boolean; safeForApi: boolean }> };
       auditTrail: { metadataOnly: boolean; safeForApi: boolean; unsafeFieldsExposed: boolean; rejectedFields: string[] };
       governancePackets: Array<{ metadataOnly: boolean; safeForApi: boolean; proof: { noStolenFilesStored: boolean; noRawPayloadsStored: boolean }; redactionPolicy: { rawUrlRedacted: boolean; payloadReferenceRedacted: boolean } }>;
+      operatorGovernance: OperatorGovernanceProof;
+      darkMetadataCanary: DarkCanaryProof;
+      legalEthicsAuditExport: LegalEthicsAuditProof;
       auditReplay: { metadataOnly: boolean; safeForApi: boolean; observedScenarios: string[]; scenarios: Array<{ metadataOnly: boolean; safeForApi: boolean; scenario: string }> };
       connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
       killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; killSwitchPropagation: { publicApiState: string }; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
@@ -184,6 +311,9 @@ async function runIntelSearch(
       enforcement: { level: string; metadataOnly: boolean; safeForApi: boolean; agent09WarningCodes: string[]; emergencyStop: { state: string; dryRunOnly: boolean; workerAction: string }; activeRules: Array<{ rule: string; metadataOnly: boolean; safeForApi: boolean }> };
       auditTrail: { metadataOnly: boolean; safeForApi: boolean; unsafeFieldsExposed: boolean; rejectedFields: string[] };
       governancePackets: Array<{ metadataOnly: boolean; safeForApi: boolean; proof: { noStolenFilesStored: boolean; noRawPayloadsStored: boolean }; redactionPolicy: { rawUrlRedacted: boolean; payloadReferenceRedacted: boolean } }>;
+      operatorGovernance: OperatorGovernanceProof;
+      darkMetadataCanary: DarkCanaryProof;
+      legalEthicsAuditExport: LegalEthicsAuditProof;
       auditReplay: { metadataOnly: boolean; safeForApi: boolean; observedScenarios: string[]; scenarios: Array<{ metadataOnly: boolean; safeForApi: boolean; scenario: string }> };
       connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
       killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; killSwitchPropagation: { publicApiState: string }; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
@@ -216,6 +346,9 @@ function proofResult(
     enforcement: { level: string; metadataOnly: boolean; safeForApi: boolean; agent09WarningCodes: string[]; emergencyStop: { state: string; dryRunOnly: boolean; workerAction: string }; activeRules: Array<{ rule: string; metadataOnly: boolean; safeForApi: boolean }> };
     auditTrail: { metadataOnly: boolean; safeForApi: boolean; unsafeFieldsExposed: boolean; rejectedFields: string[] };
     governancePackets: Array<{ metadataOnly: boolean; safeForApi: boolean; proof: { noStolenFilesStored: boolean; noRawPayloadsStored: boolean }; redactionPolicy: { rawUrlRedacted: boolean; payloadReferenceRedacted: boolean } }>;
+    operatorGovernance: OperatorGovernanceProof;
+    darkMetadataCanary: DarkCanaryProof;
+    legalEthicsAuditExport: LegalEthicsAuditProof;
     auditReplay: { metadataOnly: boolean; safeForApi: boolean; observedScenarios: string[]; scenarios: Array<{ metadataOnly: boolean; safeForApi: boolean; scenario: string }> };
     connectorCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
     killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; killSwitchPropagation: { publicApiState: string }; guarantees: { noContact: boolean; noDownload: boolean; noCredentialBypass: boolean; noCaptchaSolving: boolean; noStealth: boolean }; noLeakSerialization: { passed: boolean } }> };
@@ -241,6 +374,92 @@ function proofResult(
     releasePacketMetadataOnly: payload.agent10ReleasePacket.metadataOnly && payload.agent10ReleasePacket.safeForApi,
     enforcementMetadataOnly: payload.enforcement.metadataOnly && payload.enforcement.safeForApi && payload.enforcement.activeRules.every((rule) => rule.metadataOnly && rule.safeForApi),
     governanceMetadataOnly: payload.governancePackets.every((packet) => packet.metadataOnly && packet.safeForApi && packet.proof.noStolenFilesStored && packet.proof.noRawPayloadsStored && packet.redactionPolicy.rawUrlRedacted && packet.redactionPolicy.payloadReferenceRedacted),
+    operatorGovernanceMetadataOnly: payload.operatorGovernance.metadataOnly && payload.operatorGovernance.safeForApi && payload.operatorGovernance.dryRunOnly && payload.operatorGovernance.operatorVisible && payload.operatorGovernance.noLeakSerialization.passed && payload.operatorGovernance.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.operatorVisible &&
+      packet.sourceHashOnly &&
+      packet.sourceHash.length > 0 &&
+      packet.policyReason.length > 0 &&
+      packet.allowedActions.includes("keep_public_search_non_blocking") &&
+      packet.forbiddenActions.includes("download_stolen_files") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.rollbackPath.includes("restore_review_hold") &&
+      packet.auditId.startsWith("restricted-governance-audit_") &&
+      packet.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.proof.noRawOnionUrls &&
+      packet.proof.noStolenFileNames &&
+      packet.proof.noLeakedRows &&
+      packet.proof.noCredentials &&
+      packet.proof.noScreenshots &&
+      packet.proof.noPrivateChannelContent &&
+      packet.proof.noActorInteractionText &&
+      packet.proof.metadataOnlyEvidence &&
+      packet.proof.sourceHashOnly &&
+      packet.noLeakSerialization.passed
+    ),
+    darkCanaryMetadataOnly: payload.darkMetadataCanary.metadataOnly && payload.darkMetadataCanary.safeForApi && payload.darkMetadataCanary.dryRunOnly && payload.darkMetadataCanary.fixtureBacked && payload.darkMetadataCanary.noLeakSerialization.passed && payload.darkMetadataCanary.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.fixtureBacked &&
+      packet.sourceHashOnly &&
+      packet.safeSourceHash.length > 0 &&
+      packet.urlHash.length > 0 &&
+      packet.publicGraphStixEffects.publicSearch === "non_blocking" &&
+      packet.publicGraphStixEffects.stix === "blocked" &&
+      packet.publicGraphStixEffects.api === "restrictedMetadata.darkMetadataCanary" &&
+      packet.proxyIsolationBoundary.approvedProxyRequired &&
+      packet.proxyIsolationBoundary.directEgressAllowed === false &&
+      packet.proxyIsolationBoundary.credentialsAllowed === false &&
+      packet.proxyIsolationBoundary.formsAllowed === false &&
+      packet.proxyIsolationBoundary.captchaSolvingAllowed === false &&
+      packet.proxyIsolationBoundary.privateCommunityAccessAllowed === false &&
+      packet.proxyIsolationBoundary.fileDownloadsAllowed === false &&
+      packet.proxyIsolationBoundary.threatActorInteractionAllowed === false &&
+      packet.proxyIsolationBoundary.rawUnsafeUrlExposureAllowed === false &&
+      packet.emergencyStopPropagation.scheduler === "pause_restricted_partition" &&
+      packet.emergencyStopPropagation.evidence === "metadata_only_no_object_download" &&
+      packet.emergencyStopPropagation.graph === "hold_restricted_edges" &&
+      packet.emergencyStopPropagation.api === "safe_metadata_only" &&
+      packet.operatorProofPacket.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.operatorProofPacket.forbiddenActions.includes("download_stolen_files") &&
+      packet.noLeakProof.noRawOnionUrls &&
+      packet.noLeakProof.noRawUnsafeUrls &&
+      packet.noLeakProof.noRawPayloads &&
+      packet.noLeakProof.noStolenFileDownloads &&
+      packet.noLeakProof.noCredentialValues &&
+      packet.noLeakProof.noCaptchaSolving &&
+      packet.noLeakProof.noPrivateAccess &&
+      packet.noLeakProof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    ),
+    legalEthicsAuditMetadataOnly: payload.legalEthicsAuditExport.metadataOnly && payload.legalEthicsAuditExport.safeForApi && payload.legalEthicsAuditExport.dryRunOnly && payload.legalEthicsAuditExport.thesisReady && payload.legalEthicsAuditExport.enterpriseReady && payload.legalEthicsAuditExport.noLeakSerialization.passed && payload.legalEthicsAuditExport.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.thesisReady &&
+      packet.enterpriseReady &&
+      packet.collected.evidenceType === "restricted_metadata_hashes_and_claim_fields_only" &&
+      packet.collected.fields.includes("actor") &&
+      packet.collected.sourceHashIds.length > 0 &&
+      packet.collected.urlHashIds.length > 0 &&
+      packet.blocked.operations.includes("download_stolen_files") &&
+      packet.blocked.operations.includes("interact_with_threat_actor") &&
+      packet.approval.policyVersion === "restricted_metadata_policy_v1" &&
+      packet.approval.auditTrailIds.length > 0 &&
+      packet.whatWasNotAccessed.includes("leaked rows") &&
+      packet.whatWasNotAccessed.includes("threat actor communications") &&
+      packet.graphStixApiEffect.stix === "blocked" &&
+      packet.graphStixApiEffect.api === "metadata_only_audit" &&
+      packet.graphStixApiEffect.publicSearch === "non_blocking" &&
+      packet.proofCommands.includes("bun run check:restricted-metadata-status") &&
+      packet.handoffs.agent09ApiField === "restrictedMetadata.legalEthicsAuditExport" &&
+      Object.values(packet.noLeakValidation).every(Boolean) &&
+      packet.noLeakSerialization.passed
+    ),
     auditReplayMetadataOnly: payload.auditReplay.metadataOnly && payload.auditReplay.safeForApi && payload.auditReplay.scenarios.every((scenario) => scenario.metadataOnly && scenario.safeForApi),
     certificationMetadataOnly: payload.connectorCertification.metadataOnly && payload.connectorCertification.safeForApi && payload.connectorCertification.dryRunOnly && payload.connectorCertification.noLeakSerialization.passed && payload.connectorCertification.packets.every((packet) =>
       packet.metadataOnly && packet.safeForApi && packet.dryRunOnly && packet.noLeakSerialization.passed && packet.guarantees.noContact && packet.guarantees.noDownload && packet.guarantees.noCredentialBypass && packet.guarantees.noCaptchaSolving && packet.guarantees.noStealth
@@ -282,6 +501,25 @@ function proofResult(
     && payload.agent10ReleasePacket.runtimeProofName === "restricted_metadata_sla"
     && payload.agent10ReleasePacket.emergencyStopState === payload.enforcement.emergencyStop.state
     && payload.agent10ReleasePacket.governancePacketIds.length === payload.governancePackets.length
+    && payload.operatorGovernance.observedScenarios.includes("ransomware_leak_claim_review_hold")
+    && payload.operatorGovernance.observedScenarios.includes("emergency_stop_active")
+    && payload.darkMetadataCanary.observedScenarios.includes("tor_metadata_canary")
+    && payload.darkMetadataCanary.observedScenarios.includes("i2p_metadata_canary")
+    && payload.darkMetadataCanary.observedScenarios.includes("freenet_metadata_canary")
+    && payload.darkMetadataCanary.observedScenarios.includes("ransomware_leak_site_claim")
+    && payload.darkMetadataCanary.observedScenarios.includes("emergency_stop")
+    && payload.darkMetadataCanary.packets.some((packet) => packet.policyState === "blocked" && packet.reviewState === "blocked_unsafe_target")
+    && payload.darkMetadataCanary.packets.some((packet) => packet.scenario === "emergency_stop" && packet.emergencyStopPropagation.releaseGate === "rollback")
+    && payload.legalEthicsAuditExport.observedScenarios.includes("metadata_only_collection")
+    && payload.legalEthicsAuditExport.observedScenarios.includes("unsafe_target_blocked")
+    && payload.legalEthicsAuditExport.observedScenarios.includes("emergency_stop_review")
+    && payload.legalEthicsAuditExport.observedScenarios.includes("operator_thesis_export")
+    && payload.legalEthicsAuditExport.summary.packetCount === payload.legalEthicsAuditExport.packets.length
+    && payload.legalEthicsAuditExport.summary.blockedOperationCount >= 1
+    && payload.legalEthicsAuditExport.summary.holdCount >= 1
+    && payload.legalEthicsAuditExport.summary.rollbackCount >= 1
+    && payload.legalEthicsAuditExport.packets.some((packet) => packet.releaseInterpretation === "rollback")
+    && payload.legalEthicsAuditExport.packets.some((packet) => packet.releaseInterpretation === "hold")
     && payload.auditReplay.observedScenarios.includes("allowed_metadata_only_record")
     && payload.auditReplay.observedScenarios.includes("unsafe_action_attempt")
     && payload.connectorCertification.observedScenarios.length > 0

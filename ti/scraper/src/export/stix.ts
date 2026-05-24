@@ -18,7 +18,11 @@ import type {
 import { hashContent, normalizeWhitespace, stableId } from "../utils.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { mapAttackTechniqueCandidates } from "./attack.ts";
-import { checkStixExportReadiness } from "./graphViews.ts";
+import {
+  buildGraphReviewPersistenceLedgerDto,
+  buildReviewedExportSubsetGovernanceDto,
+  checkStixExportReadiness
+} from "./graphViews.ts";
 import { buildRelationshipGraph } from "./relationships.ts";
 
 export interface EvidenceBackedStixBundleInput {
@@ -131,6 +135,8 @@ export function exportEvidenceBackedStixBundle(input: EvidenceBackedStixBundleIn
 
 export function exportGraphSnapshotToStixBundle(snapshot: PersistedGraphSnapshot, options: StixExportOptions): StixBundle {
   const readiness = checkStixExportReadiness(snapshot);
+  const reviewPersistence = buildGraphReviewPersistenceLedgerDto(snapshot, { generatedAt: options.generatedAt });
+  const exportGovernance = buildReviewedExportSubsetGovernanceDto(snapshot, { generatedAt: options.generatedAt });
   const readyRelationshipIds = new Set(readiness.relationships.filter((relationship) => relationship.ready).map((relationship) => relationship.relationshipId));
   const exportableRelationships = snapshot.relationships.filter((relationship) => readyRelationshipIds.has(relationship.id));
   const referencedNodeIds = new Set(exportableRelationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]));
@@ -146,7 +152,27 @@ export function exportGraphSnapshotToStixBundle(snapshot: PersistedGraphSnapshot
         blockers: relationship.blockers,
         reviewState: relationship.reviewState,
         discoveryOnly: relationship.discoveryOnly
-      }))
+      })),
+    x_ti_review_persistence: {
+      mode: reviewPersistence.mode,
+      decisionActions: reviewPersistence.decisionActions,
+      decisionIds: reviewPersistence.decisions.map((decision) => decision.decisionId),
+      cursorField: reviewPersistence.cursorContinuity.cursorField,
+      latestCursor: reviewPersistence.cursorContinuity.latestCursor,
+      rollbackStrategy: reviewPersistence.rollbackPlan.strategy,
+      noLeak: reviewPersistence.noLeak
+    },
+    x_ti_reviewed_export_subset: {
+      subsetId: exportGovernance.subsetId,
+      mediaType: exportGovernance.mediaType,
+      eligibleRelationshipIds: exportGovernance.eligibleRelationshipIds,
+      heldRelationshipIds: exportGovernance.heldRelationshipIds,
+      excludedRelationshipIds: exportGovernance.excludedRelationshipIds,
+      cursor: exportGovernance.cursor,
+      governanceChecks: exportGovernance.governanceChecks,
+      counts: exportGovernance.counts,
+      noLeak: exportGovernance.noLeak
+    }
   });
 
   const marking: StixObject = {

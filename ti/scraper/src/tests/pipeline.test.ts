@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { actorAliasesFor } from "../pipeline/actorAliases.ts";
-import { buildAnalystFeedbackLoopDto } from "../pipeline/analystFeedback.ts";
+import { buildActiveLearningCandidateQueueDto, buildActorProfileReviewWorkbenchDto, buildAnalystFeedbackLearningLoopDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto, buildQualityRegressionSuiteDto } from "../pipeline/analystFeedback.ts";
 import { buildAttackMappingQualityDto } from "../pipeline/attackMappingQuality.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto, fuseActorProfile, type ActorProfileSnapshot } from "../pipeline/actorProfileFusion.ts";
 import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
-import { evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
+import { buildCtiEvaluationDatasetPackDto, buildEvaluationDatasetGovernanceDto, buildQualityRuntimeValueGatesDto, evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
 import { EXTRACTOR_VERSION } from "../pipeline/extractors.ts";
 import { buildActorQueryExtractionProfile, buildLiveTiSearchSummary, buildTiSearchResultDto, extractionProfileKinds, summarizeEvidenceDeltas, type EvidenceStage, type TiConfidenceCaveatCode } from "../pipeline/intelligenceProfiles.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { analystCaveatPacks, buildSearchQualityApiDto, buildSearchQualityApplyPlan, buildSearchQualityDashboardDto, evaluateSearchQualityGate, searchQualityApiExamples } from "../pipeline/searchQualityGate.ts";
-import { buildTimelinessGroundTruthHarnessDto } from "../pipeline/timelinessGroundTruth.ts";
+import { buildHighPriorityActorFreshnessDashboardDto, buildTimelinessGroundTruthHarnessDto } from "../pipeline/timelinessGroundTruth.ts";
 import { hashContent } from "../utils.ts";
 import { extractionEvaluationCorpus } from "./fixtures/extraction/corpus.ts";
 import { extractionCalibrationCorpus } from "./fixtures/extraction/calibration.ts";
@@ -141,6 +141,147 @@ describe("pipeline", () => {
       "extracted_ttp_needs_review",
       "source_family_bias"
     ]));
+  });
+
+  test("builds evaluation dataset governance labels with audit routing and public semantics", () => {
+    const governance = buildEvaluationDatasetGovernanceDto({
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(governance.schemaVersion).toBe("ti.evaluation_dataset_governance.v1");
+    expect(governance.summary.labelCount).toBeGreaterThanOrEqual(16);
+    expect(governance.summary.caseKinds).toEqual(expect.arrayContaining([
+      "actor_profile",
+      "unknown_actor",
+      "cve",
+      "malware_tool",
+      "country",
+      "sector",
+      "victim_company",
+      "stale",
+      "contradicted",
+      "low_confidence"
+    ]));
+    expect(governance.labels.map((label) => label.subject)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT42",
+      "Turla",
+      "Volt Typhoon",
+      "Scattered Spider",
+      "Akira",
+      "random actor",
+      "unknown actor",
+      "CVE-2026-12345",
+      "Cobalt Strike",
+      "United States",
+      "Healthcare",
+      "Northwind Health"
+    ]));
+    expect(governance.labels.every((label) => label.evidenceIds.length > 0 && label.claimLedgerRefs.length > 0)).toBe(true);
+    expect(governance.labels.every((label) => label.provenance.redacted && label.provenance.evidenceIds.length > 0)).toBe(true);
+    expect(governance.labels.every((label) => label.allowedDownstreamUse.length > 0)).toBe(true);
+    expect(governance.auditChecks.map((check) => check.code)).toEqual(expect.arrayContaining([
+      "stale_label",
+      "overconfident_summary",
+      "missing_provenance",
+      "contradiction_handling",
+      "public_channel_only_caveat",
+      "restricted_metadata_hold",
+      "graph_stix_export_eligibility",
+      "unknown_searching_only"
+    ]));
+    expect(governance.auditChecks.find((check) => check.code === "restricted_metadata_hold")?.status).toBe("hold");
+    expect(governance.labels.find((label) => label.caseKind === "unknown_actor")).toMatchObject({
+      expectedPublicState: "searching",
+      publicSemantics: {
+        unknownActorSearchingOnly: true,
+        noDefaultActor: true,
+        noDemoOrCacheProse: true
+      }
+    });
+    expect(governance.routing.agent01SourceGaps.length).toBeGreaterThan(0);
+    expect(governance.routing.agent04PublicBenchmarks.length).toBeGreaterThan(0);
+    expect(governance.routing.agent06EvidenceReplay.length).toBeGreaterThan(0);
+    expect(governance.routing.agent08GraphDrift.length).toBeGreaterThan(0);
+    expect(governance.routing.agent09ApiRegressionFixtures.length).toBeGreaterThan(0);
+    expect(governance.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(governance.policy).toMatchObject({
+      labelsAreImmutable: true,
+      analystApprovalRequired: true,
+      preservesUncertainty: true,
+      noAutomaticPromotion: true,
+      unknownActorSearchingOnly: true
+    });
+    expect(governance.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(JSON.stringify(governance)).not.toContain("https://");
+    expect(JSON.stringify(governance)).not.toContain("rawText");
+  });
+
+  test("builds CTI evaluation dataset pack across extraction stale unknown restricted and contradiction scenarios", () => {
+    const governance = buildEvaluationDatasetGovernanceDto({
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const pack = buildCtiEvaluationDatasetPackDto({
+      governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(pack.schemaVersion).toBe("ti.cti_evaluation_dataset_pack.v1");
+    expect(pack.fixtures.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "actor_extraction",
+      "victim_extraction",
+      "ttp_extraction",
+      "ioc_extraction",
+      "stale_answer_rejection",
+      "unknown_actor_searching_only",
+      "restricted_no_leak",
+      "contradiction_handling"
+    ]));
+    expect(pack.fixtures.every((fixture) => fixture.immutable && fixture.appliesAutomatically === false && fixture.noLeak)).toBe(true);
+    expect(pack.fixtures.every((fixture) => fixture.evidenceIds.length > 0 && fixture.claimLedgerRefs.length > 0 && fixture.metrics.provenanceRequired)).toBe(true);
+    expect(pack.fixtures.find((fixture) => fixture.scenario === "unknown_actor_searching_only")).toMatchObject({
+      expectedPublicState: "searching",
+      metrics: { unknownSearchingRequired: true }
+    });
+    expect(pack.fixtures.find((fixture) => fixture.scenario === "restricted_no_leak")?.metrics.restrictedNoLeakRequired).toBe(true);
+    expect(pack.fixtures.find((fixture) => fixture.scenario === "stale_answer_rejection")?.metrics.staleAnswerRejectionRequired).toBe(true);
+    expect(pack.fixtures.find((fixture) => fixture.scenario === "contradiction_handling")?.metrics.contradictionHoldRequired).toBe(true);
+    expect(pack.metrics).toMatchObject({
+      fixtureCount: 8,
+      actorExtractionCount: 1,
+      victimExtractionCount: 1,
+      ttpExtractionCount: 1,
+      iocExtractionCount: 1,
+      staleAnswerRejectionCount: 1,
+      unknownSearchingCount: 1,
+      restrictedNoLeakCount: 1,
+      contradictionHandlingCount: 1,
+      provenanceCompletenessTarget: 1
+    });
+    expect(pack.routing.agent03ParserCertification.length).toBeGreaterThan(0);
+    expect(pack.routing.agent06EvidenceReplay.length).toBe(8);
+    expect(pack.routing.agent09ApiRegression.length).toBe(8);
+    expect(pack.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(pack.policy).toMatchObject({
+      fixturesAreImmutable: true,
+      analystApprovalRequired: true,
+      noAutomaticPromotion: true,
+      noModelSelfMutation: true,
+      unknownActorSearchingOnly: true,
+      staleEvidenceCannotBeLatest: true
+    });
+    expect(pack.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(JSON.stringify(pack)).not.toContain("https://");
   });
 
   test("builds actor intelligence profiles and /ti search DTOs with temporal context", () => {
@@ -1122,6 +1263,57 @@ describe("pipeline", () => {
     });
   });
 
+  test("builds high-priority actor freshness dashboard with daily and weekly holds", () => {
+    const staleApt42 = buildTimelinessGroundTruthHarnessDto({
+      query: "APT42",
+      generatedAt: "2026-05-24T00:00:00.000Z",
+      evidence: [
+        stagedResult("apt42-stale-dashboard-a", "captured_page", "APT42 phishing activity was last seen 2025-12-01.", undefined, undefined, undefined, {
+          publishedAt: "2025-12-01T00:00:00.000Z"
+        })
+      ]
+    });
+    const dashboard = buildHighPriorityActorFreshnessDashboardDto({
+      query: "APT42",
+      timelinessGroundTruth: staleApt42,
+      generatedAt: "2026-05-24T00:00:00.000Z"
+    });
+    const apt42 = dashboard.actors.find((actor) => actor.actor === "APT42");
+
+    expect(dashboard.schemaVersion).toBe("ti.high_priority_actor_freshness_dashboard.v1");
+    expect(dashboard.actors.map((actor) => actor.actor)).toEqual(expect.arrayContaining(["APT29", "APT42", "Sandworm", "Volt Typhoon", "Lazarus", "LockBit", "Akira"]));
+    expect(apt42).toMatchObject({
+      priority: "critical",
+      cadence: { expected: "daily", targetMaxAgeDays: 14 },
+      states: {
+        overall: "stale",
+        publicAnswerState: "partial",
+        blocksReadyPromotion: true
+      }
+    });
+    expect(dashboard.summary.dailyDueCount).toBeGreaterThan(0);
+    expect(dashboard.summary.readyPromotionHoldCount).toBeGreaterThan(0);
+    expect(dashboard.queues.dailyRefresh).toContain(apt42!.id);
+    expect(dashboard.queues.staleAnswerHolds).toContain(apt42!.id);
+    expect(dashboard.routing.agent02SchedulerCadence).toContain(apt42!.id);
+    expect(dashboard.routing.agent04FreshnessSourceGaps.length).toBeGreaterThan(0);
+    expect(dashboard.policy).toMatchObject({
+      preservesUncertainty: true,
+      staleCannotBeLatest: true,
+      unknownActorSearchingOnly: true,
+      noAutomaticPromotion: true,
+      noAutonomousScraping: true
+    });
+    expect(dashboard.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(JSON.stringify(dashboard)).not.toContain("APT42 phishing activity");
+    expect(JSON.stringify(dashboard)).not.toContain("https://");
+  });
+
   test("builds analyst feedback loop contracts without model self mutation", () => {
     const evidence = [
       stagedResult("feedback-apt29-a", "captured_page", "APT29 may have used phishing against Northwind Health. Last seen 2025-12-01.", undefined, undefined, undefined, {
@@ -1143,6 +1335,18 @@ describe("pipeline", () => {
       timelinessGroundTruth,
       generatedAt: "2026-05-24T12:00:00.000Z"
     });
+    const attackMappingQuality = buildAttackMappingQualityDto({
+      query: "APT29",
+      evidence,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const regressionSuite = buildQualityRegressionSuiteDto({
+      query: "APT29",
+      feedbackLoop: feedback,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
 
     expect(feedback.schemaVersion).toBe("ti.analyst_feedback_loop.v1");
     expect(feedback.items.map((item) => item.mark)).toEqual(expect.arrayContaining(["stale", "underconfident", "missing"]));
@@ -1158,6 +1362,497 @@ describe("pipeline", () => {
     expect(feedback.items.every((item) => item.immutable && item.appliesAutomatically === false)).toBe(true);
     expect(JSON.stringify(feedback)).not.toContain("https://example.test");
     expect(JSON.stringify(feedback)).not.toContain("may have used phishing");
+    expect(regressionSuite.schemaVersion).toBe("ti.quality_regression_suite.v1");
+    expect(regressionSuite.cases.map((item) => item.state)).toEqual(expect.arrayContaining(["stale", "underconfident", "parser_repair"]));
+    expect(regressionSuite.coverage.publicAnswerCaveats).toBeGreaterThan(0);
+    expect(regressionSuite.coverage.attackMapping).toBeGreaterThan(0);
+    expect(regressionSuite.coverage.entityResolution).toBeGreaterThan(0);
+    expect(regressionSuite.cases.some((item) => item.assertion.includes("stale evidence cannot be described as current activity"))).toBe(true);
+    expect(regressionSuite.cases.some((item) => item.assertion.includes("ATT&CK mappings with drift"))).toBe(true);
+    expect(regressionSuite.cases.some((item) => item.caveatUpdates.includes("stale activity must remain caveated"))).toBe(true);
+    expect(regressionSuite.routing.agent03ParserRepair.length).toBeGreaterThan(0);
+    expect(regressionSuite.routing.agent08GraphHolds.length).toBeGreaterThan(0);
+    expect(regressionSuite.routing.agent09Api.length).toBe(regressionSuite.cases.length);
+    expect(regressionSuite.policy).toMatchObject({
+      modelSelfMutationAllowed: false,
+      regressionOnly: true,
+      preservesProvenance: true
+    });
+    expect(regressionSuite.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false
+    });
+    expect(JSON.stringify(regressionSuite)).not.toContain("https://example.test");
+    expect(JSON.stringify(regressionSuite)).not.toContain("may have used phishing");
+  });
+
+  test("builds actor profile review workbench with field-level corrections and provenance", () => {
+    const evidence = [
+      stagedResult("workbench-stale", "captured_page", "Researchers linked Turla to Snake malware against Example Embassy. Last seen 2024-01-01.", undefined, undefined, undefined, {
+        publishedAt: "2024-01-01T00:00:00.000Z",
+        evidenceLedgerId: "ledger_workbench_stale"
+      }),
+      stagedResult("workbench-contradiction", "captured_page", "A second vendor disputed Turla attribution for Example Embassy but referenced command and control infrastructure.", undefined, undefined, undefined, {
+        publishedAt: "2026-05-22T00:00:00.000Z",
+        evidenceLedgerId: "ledger_workbench_contradiction"
+      })
+    ];
+    const actorProfile = buildLiveActorIntelligenceDto({ query: "Turla", evidence });
+    const answer = buildPublicIntelAnswerDto(actorProfile, { status: "needs-review", score: 0.24, publicWarningCodes: ["contradicted_answer", "stale_answer"], publicWarningText: ["contradicted", "stale"] });
+    const timelinessGroundTruth = buildTimelinessGroundTruthHarnessDto({ query: "Turla", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const attackMappingQuality = buildAttackMappingQualityDto({ query: "Turla", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const feedbackLoop = buildAnalystFeedbackLoopDto({
+      query: "Turla",
+      actorProfile,
+      claims: answer.claims,
+      timelinessGroundTruth,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const workbench = buildActorProfileReviewWorkbenchDto({
+      query: "Turla",
+      actorProfile,
+      claims: answer.claims,
+      feedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(workbench.schemaVersion).toBe("ti.actor_profile_review_workbench.v1");
+    expect(workbench.fields.map((field) => field.field)).toEqual(expect.arrayContaining([
+      "summary",
+      "aliases",
+      "recent_activity",
+      "targets",
+      "victims",
+      "malware_tools",
+      "vulnerabilities",
+      "datasets"
+    ]));
+    expect(workbench.summary.reviewRequiredCount).toBeGreaterThan(0);
+    expect(workbench.queues.stale).toContain("recent_activity");
+    expect(workbench.queues.contradicted.length).toBeGreaterThan(0);
+    expect(workbench.fields.some((field) => field.correctionActions.some((action) => action.kind === "mark_contradicted"))).toBe(true);
+    expect(workbench.fields.some((field) => field.correctionActions.some((action) => action.kind === "request_more_evidence"))).toBe(true);
+    expect(workbench.fields.every((field) => field.uncertainty.preservesUncertainty)).toBe(true);
+    expect(workbench.fields.flatMap((field) => field.correctionActions).every((action) => action.manualOnly && action.appliesAutomatically === false)).toBe(true);
+    expect(workbench.routing.agent06ClaimLedger.length).toBeGreaterThan(0);
+    expect(workbench.routing.agent08GraphHolds.length).toBeGreaterThan(0);
+    expect(workbench.routing.agent09ApiContracts.length).toBeGreaterThan(0);
+    expect(workbench.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      preservesProvenance: true,
+      manualCorrectionsOnly: true
+    });
+    expect(workbench.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false
+    });
+    expect(JSON.stringify(workbench)).not.toContain("A second vendor");
+    expect(JSON.stringify(workbench)).not.toContain("https://example.test");
+  });
+
+  test("builds analyst quality review queue and release gate without default actor semantics", () => {
+    const evidence = [
+      stagedResult("queue-stale", "captured_page", "Researchers linked Turla to Snake malware against Example Embassy. Last seen 2024-01-01.", undefined, undefined, undefined, {
+        publishedAt: "2024-01-01T00:00:00.000Z",
+        evidenceLedgerId: "ledger_queue_stale"
+      }),
+      stagedResult("queue-contradiction", "captured_page", "A second vendor disputed Turla attribution for Example Embassy but referenced command and control infrastructure.", undefined, undefined, undefined, {
+        publishedAt: "2026-05-22T00:00:00.000Z",
+        evidenceLedgerId: "ledger_queue_contradiction"
+      })
+    ];
+    const actorProfile = buildLiveActorIntelligenceDto({ query: "Turla", evidence });
+    const answer = buildPublicIntelAnswerDto(actorProfile, { status: "needs-review", score: 0.24, publicWarningCodes: ["contradicted_answer", "stale_answer"], publicWarningText: ["contradicted", "stale"] });
+    const timelinessGroundTruth = buildTimelinessGroundTruthHarnessDto({ query: "Turla", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const attackMappingQuality = buildAttackMappingQualityDto({ query: "Turla", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const feedbackLoop = buildAnalystFeedbackLoopDto({
+      query: "Turla",
+      actorProfile,
+      claims: answer.claims,
+      timelinessGroundTruth,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const regressionSuite = buildQualityRegressionSuiteDto({
+      query: "Turla",
+      feedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const workbench = buildActorProfileReviewWorkbenchDto({
+      query: "Turla",
+      actorProfile,
+      claims: answer.claims,
+      feedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const governance = buildEvaluationDatasetGovernanceDto({ generatedAt: "2026-05-24T12:00:00.000Z" });
+    const queue = buildAnalystQualityReviewQueueDto({
+      query: "Turla",
+      actorProfileReviewWorkbench: workbench,
+      feedbackLoop,
+      qualityRegressionSuite: regressionSuite,
+      evaluationDatasetGovernance: governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const unknownQueue = buildAnalystQualityReviewQueueDto({
+      query: "Made Up Actor",
+      actorProfileReviewWorkbench: workbench,
+      feedbackLoop,
+      qualityRegressionSuite: regressionSuite,
+      evaluationDatasetGovernance: governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(queue.schemaVersion).toBe("ti.analyst_quality_review_queue.v1");
+    expect(queue.items.map((item) => item.field)).toEqual(expect.arrayContaining([
+      "actor_summary",
+      "recent_activity",
+      "victims",
+      "ttps",
+      "infrastructure",
+      "malware_tools",
+      "cves",
+      "source_gaps"
+    ]));
+    expect(queue.items.every((item) => item.immutable && item.appliesAutomatically === false)).toBe(true);
+    expect(queue.items.some((item) => item.requiredActions.includes("resolve_contradiction"))).toBe(true);
+    expect(queue.items.some((item) => item.requiredActions.includes("refresh_evidence"))).toBe(true);
+    expect(queue.releaseGate.requiredChecks.map((check) => check.code)).toEqual(expect.arrayContaining([
+      "freshness",
+      "provenance",
+      "source_diversity",
+      "contradiction_state",
+      "evidence_retention",
+      "restricted_holds",
+      "unknown_searching_semantics",
+      "label_governance"
+    ]));
+    expect(queue.releaseGate.decision).toBe("hold");
+    expect(queue.releaseGate.blocksReadyPromotion).toBe(true);
+    expect(queue.qualityReleaseSignals.agent09PublicApi.length).toBeGreaterThan(0);
+    expect(queue.qualityReleaseSignals.agent10ReleaseBoard.length).toBeGreaterThan(0);
+    expect(queue.qualityReleaseSignals.regressionFixtures.length).toBeGreaterThan(0);
+    expect(queue.qualityReleaseSignals.staleAnswerPrevention.length).toBeGreaterThan(0);
+    expect(queue.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      preservesUncertainty: true,
+      manualReviewOnly: true,
+      unknownActorSearchingOnly: true
+    });
+    expect(queue.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(unknownQueue.releaseGate.publicAnswerState).toBe("searching");
+    expect(unknownQueue.routing.unknownQuery.length).toBeGreaterThan(0);
+    expect(unknownQueue.items.find((item) => item.field === "unknown_query")).toMatchObject({
+      state: "searching_only",
+      releaseImpact: { publicAnswerState: "searching" }
+    });
+    expect(JSON.stringify(queue)).not.toContain("A second vendor");
+    expect(JSON.stringify(queue)).not.toContain("https://example.test");
+  });
+
+  test("builds analyst feedback learning loop governance records and scorecards", () => {
+    const evidence = [
+      stagedResult("learning-stale", "captured_page", "Researchers linked Turla to Snake malware against Example Embassy. Last seen 2024-01-01.", undefined, undefined, undefined, {
+        publishedAt: "2024-01-01T00:00:00.000Z",
+        evidenceLedgerId: "ledger_learning_stale"
+      }),
+      stagedResult("learning-contradiction", "captured_page", "A second vendor disputed Turla attribution for Example Embassy but referenced command and control infrastructure.", undefined, undefined, undefined, {
+        publishedAt: "2026-05-22T00:00:00.000Z",
+        evidenceLedgerId: "ledger_learning_contradiction"
+      })
+    ];
+    const actorProfile = buildLiveActorIntelligenceDto({ query: "Turla", evidence });
+    const answer = buildPublicIntelAnswerDto(actorProfile, { status: "needs-review", score: 0.24, publicWarningCodes: ["contradicted_answer", "stale_answer"], publicWarningText: ["contradicted", "stale"] });
+    const timelinessGroundTruth = buildTimelinessGroundTruthHarnessDto({ query: "Turla", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const attackMappingQuality = buildAttackMappingQualityDto({ query: "Turla", evidence, generatedAt: "2026-05-24T12:00:00.000Z" });
+    const feedbackLoop = buildAnalystFeedbackLoopDto({
+      query: "Turla",
+      actorProfile,
+      claims: answer.claims,
+      timelinessGroundTruth,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const regressionSuite = buildQualityRegressionSuiteDto({
+      query: "Turla",
+      feedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const workbench = buildActorProfileReviewWorkbenchDto({
+      query: "Turla",
+      actorProfile,
+      claims: answer.claims,
+      feedbackLoop,
+      timelinessGroundTruth,
+      attackMappingQuality,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const governance = buildEvaluationDatasetGovernanceDto({ generatedAt: "2026-05-24T12:00:00.000Z" });
+    const queue = buildAnalystQualityReviewQueueDto({
+      query: "Turla",
+      actorProfileReviewWorkbench: workbench,
+      feedbackLoop,
+      qualityRegressionSuite: regressionSuite,
+      evaluationDatasetGovernance: governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const learningLoop = buildAnalystFeedbackLearningLoopDto({
+      query: "Turla",
+      feedbackLoop,
+      qualityRegressionSuite: regressionSuite,
+      actorProfileReviewWorkbench: workbench,
+      analystQualityReviewQueue: queue,
+      evaluationDatasetGovernance: governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const activeLearningQueue = buildActiveLearningCandidateQueueDto({
+      query: "Turla",
+      feedbackLoop,
+      qualityRegressionSuite: regressionSuite,
+      actorProfileReviewWorkbench: workbench,
+      analystQualityReviewQueue: queue,
+      evaluationDatasetGovernance: governance,
+      analystFeedbackLearningLoop: learningLoop,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+
+    expect(learningLoop.schemaVersion).toBe("ti.analyst_feedback_learning_loop.v1");
+    expect(learningLoop.records.map((record) => record.type)).toEqual(expect.arrayContaining([
+      "actor_alias_correction",
+      "victim_false_positive",
+      "ttp_mapping_correction",
+      "stale_activity_rejection",
+      "source_reliability_downgrade",
+      "contradiction_merge_split",
+      "restricted_hold_confirmation",
+      "unknown_query_searching_approval"
+    ]));
+    expect(learningLoop.records.every((record) => record.immutable && record.appliesAutomatically === false && record.replay.requiresHumanApproval)).toBe(true);
+    expect(learningLoop.records.every((record) => record.prohibitedEffects.includes("autonomous_scraping") && record.prohibitedEffects.includes("silent_source_activation") && record.prohibitedEffects.includes("model_self_mutation") && record.prohibitedEffects.includes("raw_evidence_export") && record.prohibitedEffects.includes("restricted_payload_access"))).toBe(true);
+    expect(learningLoop.scorecards.map((scorecard) => scorecard.metric)).toEqual(expect.arrayContaining([
+      "extraction_precision",
+      "extraction_recall",
+      "source_diversity",
+      "freshness",
+      "contradiction_handling",
+      "unknown_actor_behavior",
+      "restricted_no_leak_handling",
+      "public_answer_latency"
+    ]));
+    expect(learningLoop.fixtures.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "apt29_daily_activity_freshness",
+      "apt42_instant_summary",
+      "made_up_actor_searching_only",
+      "stale_2025_only_answer_rejection",
+      "public_channel_rumor_demotion",
+      "restricted_metadata_hold",
+      "graph_contradiction"
+    ]));
+    expect(learningLoop.persistence).toMatchObject({
+      mode: "readiness_contract_append_only",
+      appendOnly: true,
+      mutationBoundary: "no_runtime_mutation_until_persistence_adapter_is_enabled"
+    });
+    expect(learningLoop.persistence.replayOrder.length).toBeGreaterThan(0);
+    expect(learningLoop.persistence.importSemantics.length).toBeGreaterThan(0);
+    expect(learningLoop.routeState).toMatchObject({
+      explainsPartial: true,
+      explainsSearching: true,
+      explainsHeld: true,
+      explainsReady: true
+    });
+    expect(learningLoop.routing.agent03ParserRepair.length).toBeGreaterThan(0);
+    expect(learningLoop.routing.agent04SourceCoverage.length).toBeGreaterThan(0);
+    expect(learningLoop.routing.agent08GraphCorrections.length).toBeGreaterThan(0);
+    expect(learningLoop.routing.agent09PublicApiFields.length).toBeGreaterThan(0);
+    expect(learningLoop.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(learningLoop.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      autonomousScrapingAllowed: false,
+      silentSourceActivationAllowed: false,
+      preservesUncertainty: true
+    });
+    expect(learningLoop.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(activeLearningQueue.schemaVersion).toBe("ti.active_learning_candidate_queue.v1");
+    expect(activeLearningQueue.candidates.map((candidate) => candidate.type)).toEqual(expect.arrayContaining([
+      "parser_prompt_model_improvement",
+      "source_ranking_adjustment",
+      "ttp_mapping_rule_update",
+      "actor_alias_merge_split",
+      "victim_false_positive_suppression",
+      "ioc_false_positive_suppression",
+      "source_reliability_downgrade",
+      "freshness_rule_update",
+      "contradiction_resolution"
+    ]));
+    expect(activeLearningQueue.candidates.every((candidate) => candidate.immutable && candidate.appliesAutomatically === false && candidate.noAutonomousChangeGuarantee)).toBe(true);
+    expect(activeLearningQueue.candidates.every((candidate) => candidate.humanApproval.required && candidate.humanApproval.forbiddenActions.includes("activate_source") && candidate.humanApproval.forbiddenActions.includes("change_model_weights") && candidate.humanApproval.forbiddenActions.includes("publish_public_answer"))).toBe(true);
+    expect(activeLearningQueue.scorecards.map((scorecard) => scorecard.metric)).toEqual(expect.arrayContaining([
+      "extraction_precision",
+      "extraction_recall",
+      "source_diversity",
+      "freshness",
+      "contradiction_handling",
+      "restricted_no_leak_handling",
+      "public_answer_latency",
+      "provenance_completeness",
+      "stale_answer_rejection"
+    ]));
+    expect(activeLearningQueue.fixturePack.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "apt29_daily_activity_freshness",
+      "apt42_instant_summary",
+      "made_up_actor_searching_only",
+      "stale_2025_only_answer_rejection",
+      "public_channel_rumor_demotion",
+      "restricted_metadata_hold",
+      "graph_contradiction"
+    ]));
+    expect(activeLearningQueue.workflow).toMatchObject({
+      appendOnly: true,
+      humanApprovalRequired: true,
+      fixtureRequiredBeforeApproval: true,
+      replayRequiredBeforePromotion: true,
+      mutationBoundary: "no_runtime_or_model_change_until_human_approved_fixture_replay"
+    });
+    expect(activeLearningQueue.routing.agent03ParserCertification.length).toBeGreaterThan(0);
+    expect(activeLearningQueue.routing.agent04FreshnessSourceGaps.length).toBeGreaterThan(0);
+    expect(activeLearningQueue.routing.agent06EvidenceReplay.length).toBeGreaterThan(0);
+    expect(activeLearningQueue.routing.agent08GraphCorrections.length).toBeGreaterThan(0);
+    expect(activeLearningQueue.routing.agent09ApiFields.length).toBeGreaterThan(0);
+    expect(activeLearningQueue.routing.agent10ReleaseGates.length).toBeGreaterThan(0);
+    expect(activeLearningQueue.policy).toMatchObject({
+      analystApprovalRequired: true,
+      modelSelfMutationAllowed: false,
+      autonomousScrapingAllowed: false,
+      silentSourceActivationAllowed: false,
+      preservesUncertainty: true,
+      unknownActorSearchingOnly: true
+    });
+    expect(activeLearningQueue.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(JSON.stringify(learningLoop)).not.toContain("A second vendor");
+    expect(JSON.stringify(learningLoop)).not.toContain("https://example.test");
+    expect(JSON.stringify(activeLearningQueue)).not.toContain("A second vendor");
+    expect(JSON.stringify(activeLearningQueue)).not.toContain("https://example.test");
+  });
+
+  test("builds quality runtime value gates for analyst usefulness and safe remediation", () => {
+    const governance = buildEvaluationDatasetGovernanceDto({ generatedAt: "2026-05-24T12:00:00.000Z" });
+    const ctiEvaluationDatasetPack = buildCtiEvaluationDatasetPackDto({
+      governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const gates = buildQualityRuntimeValueGatesDto({
+      query: "Made Up Actor",
+      generatedAt: "2026-05-24T12:00:00.000Z",
+      quality: {
+        status: "weak-evidence",
+        score: 0.1,
+        publicWarningCodes: ["source_biased", "restricted_metadata_hold"]
+      },
+      publicTiAnswer: {
+        displayState: "searching",
+        waitReasons: [{ code: "capture_promotion" }]
+      },
+      timelinessGroundTruth: {
+        releaseImpact: { publicAnswerState: "searching", holdsReadyPromotion: false, caveats: ["Searching"] },
+        fields: [{ field: "recent_activity", status: "unknown", score: 0.1 }]
+      },
+      ctiEvaluationDatasetPack
+    });
+
+    expect(gates.schemaVersion).toBe("ti.quality_runtime_value_gates.v1");
+    expect(gates.queryClass).toBe("unknown");
+    expect(gates.summary.decision).toBe("searching");
+    expect(gates.summary.gateCount).toBeGreaterThanOrEqual(10);
+    expect(gates.gates.map((gate) => gate.name)).toEqual(expect.arrayContaining([
+      "timeliness",
+      "specificity",
+      "source_diversity",
+      "provenance_completeness",
+      "darkweb_metadata_caveat",
+      "source_atlas_value",
+      "stale_answer_rejection",
+      "unknown_query_honesty"
+    ]));
+    expect(gates.gates.find((gate) => gate.name === "unknown_query_honesty")).toMatchObject({
+      status: "pass",
+      publicAnswerEffect: "searching"
+    });
+    expect(gates.darkwebMetadataRules).toMatchObject({
+      metadataMayImproveHints: true,
+      publicPromotionRequiresCorroboration: true
+    });
+    expect(gates.sourceAtlasFeedback.map((row) => row.signal)).toEqual(expect.arrayContaining([
+      "low_yield_source_family",
+      "duplicate_heavy_pack",
+      "stale_only_pack",
+      "parser_gap",
+      "language_gap",
+      "activation_candidate"
+    ]));
+    expect(gates.fixtureCorpus.map((fixture) => fixture.id)).toEqual(expect.arrayContaining([
+      "fresh_high_activity_actor",
+      "random_actor_searching",
+      "made_up_actor_no_result",
+      "stale_apt_activity_rejection",
+      "fresh_cve_advisory",
+      "ransomware_victim_claim",
+      "country_sector_surge",
+      "darkweb_metadata_only_hold",
+      "public_channel_weak_signal",
+      "contradictory_source_cluster"
+    ]));
+    expect(gates.fixtureCorpus.every((fixture) => fixture.noLeak)).toBe(true);
+    expect(gates.remediationHandoffs.agent01SourceActivation.length).toBeGreaterThan(0);
+    expect(gates.remediationHandoffs.agent05RestrictedReview.length).toBeGreaterThan(0);
+    expect(gates.remediationHandoffs.agent10ReleaseRollback.length).toBeGreaterThan(0);
+    expect(gates.releaseGate).toMatchObject({
+      decision: "partial",
+      blocksReadyPromotion: true
+    });
+    expect(gates.policy).toMatchObject({
+      analystApprovalRequired: true,
+      noAutomaticPromotion: true,
+      unknownActorSearchingOnly: true,
+      staleEvidenceCannotBeLatest: true,
+      metadataOnlyDarkwebCannotStandAlone: true
+    });
+    expect(gates.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      unsafeDarkwebTargetsExposed: false
+    });
+    expect(JSON.stringify(gates)).not.toContain("https://");
+    expect(JSON.stringify(gates)).not.toContain("object/key");
+    expect(JSON.stringify(gates)).not.toContain("credential dump");
   });
 
   test("builds ATT&CK mapping quality and drift evaluation without raw evidence", () => {

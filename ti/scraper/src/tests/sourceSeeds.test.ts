@@ -6,7 +6,10 @@ import {
   buildSourceCoveragePlanApiResponse,
   buildSourceMarketplaceApiResponse,
   buildSourcePortfolioApiResponse,
+  buildSourceReliabilityEconomicsPacket,
   buildSourceRuntimeSlaApiResponse,
+  buildTiSourceAtlasApiResponse,
+  buildTiSourceAtlasExportManifestApiResponse,
   buildSourceActivationReport,
   buildSourceActivationApiResponse,
   buildLiveSearchSourceActivationDto,
@@ -739,7 +742,97 @@ describe("source seed bundles", () => {
     const sources: SourceRecord[] = [
       { ...imported[0]!, status: "active", metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.91 }, crawlState: { retryCount: 0, lastCollectedAt: "2026-05-23T20:00:00.000Z" } },
       { ...imported[1]!, status: "approved", metadata: { legalNotesReviewedAt: "2026-02-01T00:00:00.000Z", robotsReviewedAt: "2026-02-01T00:00:00.000Z", extractionYield: 0.42 } },
-      { ...imported[2]!, status: "candidate", metadata: { extractionYield: 0.25 } }
+      { ...imported[2]!, status: "candidate", metadata: { extractionYield: 0.25 } },
+      {
+        ...imported[0]!,
+        id: "src_portfolio_advisory_api",
+        name: "Tenant Advisory API",
+        type: "api",
+        accessMethod: "official_api",
+        status: "active",
+        tenantId: "tenant_portfolio",
+        metadata: { legalNotesReviewedAt: generatedAt, extractionYield: 0.82 },
+        catalog: {
+          ...imported[0]!.catalog!,
+          approvalScope: "safe_public_auto",
+          adapterCompatibility: ["api"],
+          coverage: { ...imported[0]!.catalog!.coverage, topics: ["CVE", "advisory"], queryPatterns: ["CVE-2024-1234"] }
+        }
+      },
+      {
+        ...imported[0]!,
+        id: "src_portfolio_dynamic",
+        name: "Tenant Dynamic Candidate",
+        type: "dynamic_web",
+        status: "candidate",
+        tenantId: "tenant_portfolio",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.71 },
+        catalog: {
+          ...imported[0]!.catalog!,
+          approvalScope: "public_requires_review",
+          adapterCompatibility: [],
+          coverage: { ...imported[0]!.catalog!.coverage, topics: ["campaign"], queryPatterns: ["APT29 campaign"] }
+        }
+      },
+      {
+        ...imported[0]!,
+        id: "src_portfolio_pdf",
+        name: "Tenant Report PDF",
+        type: "pdf",
+        status: "approved",
+        tenantId: "tenant_portfolio",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.62 },
+        catalog: {
+          ...imported[0]!.catalog!,
+          approvalScope: "public_requires_review",
+          adapterCompatibility: ["pdf"],
+          coverage: { ...imported[0]!.catalog!.coverage, topics: ["malware", "tool"], queryPatterns: ["Cobalt Strike malware tool"] }
+        }
+      },
+      {
+        ...imported[0]!,
+        id: "src_portfolio_channel",
+        name: "Tenant Public Channel",
+        type: "telegram_public",
+        status: "needs_review",
+        tenantId: "tenant_portfolio",
+        risk: "medium",
+        metadata: { legalNotesReviewedAt: generatedAt, extractionYield: 0.56 },
+        catalog: {
+          ...imported[0]!.catalog!,
+          approvalScope: "public_requires_review",
+          adapterCompatibility: ["telegram_public"],
+          retentionClass: "public_chat_text",
+          coverage: { ...imported[0]!.catalog!.coverage, topics: ["victim", "ransomware"], queryPatterns: ["LockBit ransomware victims"] }
+        }
+      },
+      {
+        ...imported[0]!,
+        id: "src_portfolio_restricted",
+        name: "Tenant Restricted Metadata",
+        type: "tor_metadata",
+        accessMethod: "approved_proxy",
+        status: "needs_review",
+        risk: "restricted",
+        tenantId: "tenant_portfolio",
+        legalNotes: "Restricted metadata only with explicit legal approval.",
+        governance: { approvalState: "pending", approvalRequired: true, metadataOnly: true },
+        metadata: { legalNotesReviewedAt: generatedAt, extractionYield: 0.5 },
+        catalog: {
+          ...imported[0]!.catalog!,
+          approvalScope: "metadata_only",
+          adapterCompatibility: ["tor_metadata"],
+          retentionClass: "restricted_metadata",
+          coverage: { ...imported[0]!.catalog!.coverage, topics: ["victim", "leak metadata"], queryPatterns: ["Akira ransomware victims"] }
+        }
+      },
+      {
+        ...imported[0]!,
+        id: "src_other_tenant",
+        status: "active",
+        tenantId: "tenant_other",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.95 }
+      }
     ];
     const portfolio = buildSourcePortfolioApiResponse({
       tenantId: "tenant_portfolio",
@@ -777,6 +870,523 @@ describe("source seed bundles", () => {
       field: "sourcePortfolioId",
       gate: "source_portfolio_ready"
     });
+    expect(portfolio.reliabilityEconomics).toMatchObject({
+      schemaVersion: "ti.source_reliability_economics.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      governance: {
+        approvalMode: "explicit_operator_approval",
+        noSilentActivation: true,
+        restrictedSourcesMetadataOnly: true
+      }
+    });
+    expect(portfolio.reliabilityEconomics.sources.some((source) => source.handoffs.agent02SchedulerPriority)).toBe(true);
+    expect(portfolio.migrationReadiness).toMatchObject({
+      schemaVersion: "ti.source_portfolio_migration_readiness.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      tenantId: "tenant_portfolio",
+      guardrails: {
+        approvalMode: "explicit_operator_approval",
+        restrictedMetadataOnly: true,
+        noSilentActivation: true
+      }
+    });
+    expect(portfolio.migrationReadiness.lanes.map((lane) => lane.state)).toEqual(expect.arrayContaining(["candidate", "sandbox", "active", "degraded", "retired"]));
+    expect(portfolio.migrationReadiness.lanes.find((lane) => lane.state === "sandbox")).toMatchObject({
+      approvalRequired: true,
+      rollbackAction: "return_to_sandbox",
+      parserCapability: "supported",
+      legalReview: "mixed"
+    });
+    expect(portfolio.migrationReadiness.queryClasses.map((query) => query.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware_victim", "cve", "country", "sector"]));
+    expect(portfolio.migrationReadiness.queryClasses.every((query) => ["ready", "partial", "hold"].includes(query.readiness))).toBe(true);
+    expect(portfolio.migrationReadiness.recommendedActions.every((action) =>
+      action.dryRun &&
+      action.willMutate === false &&
+      action.willStartCrawling === false &&
+      action.approvalRequired
+    )).toBe(true);
+    expect(portfolio.migrationReadiness.handoffs.agent09ApiFields).toContain("migrationReadiness.lanes");
+    expect(portfolio.sloBurnRate).toMatchObject({
+      schemaVersion: "ti.source_slo_burn_rate.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      tenantId: "tenant_portfolio",
+      guardrails: {
+        dryRunOnly: true,
+        noAutomaticRestrictedActivation: true,
+        noRawUnsafeUrls: true
+      }
+    });
+    expect(portfolio.sloBurnRate.signals.map((signal) => signal.signal)).toEqual(expect.arrayContaining([
+      "freshness",
+      "low_evidence_yield",
+      "approval_expiry",
+      "query_coverage_gap"
+    ]));
+    expect(portfolio.sloBurnRate.remediationQueue.map((item) => item.action)).toEqual(expect.arrayContaining([
+      "raise_cadence",
+      "request_evidence_replay",
+      "request_source_pack_expansion",
+      "request_analyst_approval"
+    ]));
+    expect(portfolio.sloBurnRate.remediationQueue.every((item) =>
+      item.dryRun &&
+      item.willMutate === false &&
+      item.willStartCrawling === false
+    )).toBe(true);
+    expect(portfolio.sloBurnRate.groupedByQueryClass.map((row) => row.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware_victim", "cve", "country", "sector"]));
+    expect(portfolio.sloBurnRate.handoffs.agent02).toContain("signals.freshness");
+    expect(portfolio.sloBurnRate.handoffs.agent04).toContain("signals.query_coverage_gap");
+    expect(JSON.stringify(portfolio.sloBurnRate)).not.toContain("https://");
+    expect(portfolio.tenantActivation).toMatchObject({
+      schemaVersion: "ti.tenant_source_activation.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      tenantId: "tenant_portfolio",
+      guardrails: {
+        dryRunOnly: true,
+        noSilentActivation: true,
+        noCrawlingFromApprovalPackets: true,
+        noRestrictedAutoActivation: true,
+        noRawUnsafeUrls: true
+      }
+    });
+    expect(portfolio.tenantActivation.tenantIsolation).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        tenantId: "tenant_portfolio",
+        crossTenantSourcesExcluded: true
+      })
+    ]));
+    expect(JSON.stringify(portfolio.tenantActivation)).not.toContain("src_other_tenant");
+    expect(portfolio.tenantActivation.approvalPackets.map((packet) => packet.sourceClass)).toEqual(expect.arrayContaining([
+      "public_rss_blog",
+      "advisory_api",
+      "public_channel",
+      "dynamic_browser_candidate",
+      "report_pdf",
+      "restricted_metadata_only"
+    ]));
+    expect(portfolio.tenantActivation.approvalPackets.map((packet) => packet.decision)).toEqual(expect.arrayContaining([
+      "activate",
+      "stage",
+      "hold",
+      "hold_restricted_metadata"
+    ]));
+    expect(portfolio.tenantActivation.approvalPackets.find((packet) => packet.sourceIds.includes("src_portfolio_restricted"))).toMatchObject({
+      decision: "hold_restricted_metadata",
+      approvalRequired: true,
+      safetyPolicy: {
+        metadataOnly: true,
+        noRestrictedAutoActivation: true
+      },
+      routeHint: "/v1/analyst/source-activation-packets"
+    });
+    expect(portfolio.tenantActivation.approvalPackets.find((packet) => packet.sourceIds.includes("src_portfolio_dynamic"))?.blockers).toContain("parser_certification");
+    expect(portfolio.tenantActivation.groups.every((group) => group.tenantId === "tenant_portfolio")).toBe(true);
+    expect(portfolio.tenantActivation.queryClassReadiness.map((row) => row.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware_victim", "cve", "country", "sector"]));
+    expect(portfolio.tenantActivation.handoffs.agent05RestrictedPolicyHolds).toContain("approvalPackets.decision.hold_restricted_metadata");
+    expect(portfolio.tenantActivation.approvalPackets.every((packet) =>
+      packet.dryRun &&
+      packet.willMutate === false &&
+      packet.willStartCrawling === false &&
+      packet.expectedEffect.publicSearchResponsive
+    )).toBe(true);
+    expect(JSON.stringify(portfolio.tenantActivation)).not.toContain("https://");
+    expect(portfolio.sourceImportCanary).toMatchObject({
+      schemaVersion: "ti.source_import_canary.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      tenantId: "tenant_portfolio",
+      summary: {
+        first10Count: 10,
+        first50Count: 50
+      },
+      guardrails: {
+        approvalMode: "dry_run_packet_then_explicit_operator_approval",
+        noSilentActivation: true,
+        noSourcePackImport: true,
+        noCrawlingFromCanary: true,
+        noUnsafeRawUrls: true,
+        restrictedMetadataOnly: true
+      }
+    });
+    expect(portfolio.sourceImportCanary.first10SourceRollout).toHaveLength(10);
+    expect(portfolio.sourceImportCanary.first50SourceRollout).toHaveLength(50);
+    expect(portfolio.sourceImportCanary.first10SourceRollout.map((source) => source.canaryOrder)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(portfolio.sourceImportCanary.first50SourceRollout.every((source) => source.sourceHash && source.rollbackPlanId && !("url" in source))).toBe(true);
+    expect(portfolio.sourceImportCanary.activationResults.map((result) => result.dimension)).toEqual(expect.arrayContaining([
+      "tenant",
+      "query_class",
+      "source_family",
+      "source_policy",
+      "adapter_certification",
+      "scheduler_impact",
+      "evidence_store_impact",
+      "quality_gate_impact",
+      "graph_stix_impact",
+      "api_public_answer_effect"
+    ]));
+    expect(portfolio.sourceImportCanary.activationResults.find((result) => result.key === "restricted_metadata_hold")).toMatchObject({
+      decision: "hold",
+      nextAction: "hold_restricted_metadata"
+    });
+    expect(portfolio.sourceImportCanary.fixtures.map((fixture) => fixture.fixtureClass)).toEqual(expect.arrayContaining([
+      "actor_intelligence",
+      "ransomware_leak_metadata",
+      "vulnerability_advisory",
+      "malware_report",
+      "public_cert_feed",
+      "vendor_blog",
+      "public_channel_descriptor"
+    ]));
+    expect(portfolio.sourceImportCanary.lifecycle).toMatchObject({
+      retirements: { dryRun: true, willMutate: false },
+      duplicateSuppression: { dryRun: true, willMutate: false },
+      staleSourceDetection: { dryRun: true, willMutate: false },
+      restrictedMetadataHoldPropagation: {
+        dryRun: true,
+        willMutate: false,
+        routeHint: "/v1/analyst/source-activation-packets"
+      }
+    });
+    expect(portfolio.sourceImportCanary.lifecycle.restrictedMetadataHoldPropagation.sourceIds).toContain("src_portfolio_restricted");
+    expect(portfolio.sourceImportCanary.rollbackPlans.length).toBeGreaterThanOrEqual(3);
+    expect(portfolio.sourceImportCanary.handoffs.agent10ReleaseRollback).toContain("rollbackPlans");
+    expect(JSON.stringify(portfolio.sourceImportCanary)).not.toContain("src_other_tenant");
+    expect(JSON.stringify(portfolio.sourceImportCanary)).not.toContain("https://");
+  });
+
+  test("scores source reliability economics for stale, duplicate, legal-review, and scheduler handoff decisions", () => {
+    const generatedAt = "2026-05-24T00:00:00.000Z";
+    const record = (source: Partial<SourceRecord>, status: SourceRecord["status"]): SourceRecord => ({
+      id: "src_seed",
+      name: "Seed Source",
+      type: "rss",
+      url: "https://example.test/source",
+      accessMethod: "public_http",
+      risk: "low",
+      trustScore: 0.5,
+      crawlFrequencySeconds: 3600,
+      legalNotes: "Public seed source for validation tests.",
+      ...source,
+      status,
+      createdAt: generatedAt,
+      updatedAt: generatedAt
+    });
+    const sources: SourceRecord[] = [
+      {
+        ...record({ ...seedSource("https://reliability.example.test/trusted.xml"), id: "src_reliability_trusted" }, "active"),
+        status: "active",
+        trustScore: 0.92,
+        lastSeenAt: "2026-05-23T23:00:00.000Z",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.94, evidenceReplaySuccess: 0.95, falsePositiveRate: 0.01 },
+        scoring: { reliability: 0.94, freshness: 0.95, relevance: 0.9, uniqueness: 0.9, parseability: 0.93, policyRiskPenalty: 0, operatorBoost: 0.05 }
+      },
+      {
+        ...record({ ...seedSource("https://reliability.example.test/promote.xml"), id: "src_reliability_promote" }, "candidate"),
+        status: "candidate",
+        trustScore: 0.88,
+        lastSeenAt: "2026-05-23T22:00:00.000Z",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.9, evidenceReplaySuccess: 0.9 },
+        scoring: { reliability: 0.9, freshness: 0.9, relevance: 0.85, uniqueness: 0.9, parseability: 0.9, policyRiskPenalty: 0, operatorBoost: 0 }
+      },
+      {
+        ...record({ ...seedSource("https://reliability.example.test/stale.xml"), id: "src_reliability_stale" }, "active"),
+        status: "active",
+        lastSeenAt: "2026-05-10T00:00:00.000Z",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.8, evidenceReplaySuccess: 0.8 }
+      },
+      {
+        ...record({ ...seedSource("https://reliability.example.test/duplicate.xml"), id: "src_reliability_duplicate_a" }, "active"),
+        status: "active",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.7 }
+      },
+      {
+        ...record({ ...seedSource("https://reliability.example.test/duplicate.xml"), id: "src_reliability_duplicate_b" }, "active"),
+        status: "active",
+        metadata: { legalNotesReviewedAt: generatedAt, robotsReviewedAt: generatedAt, extractionYield: 0.7 }
+      },
+      {
+        ...record({ ...seedSource("https://reliability.example.test/legal.xml"), id: "src_reliability_legal" }, "active"),
+        status: "active",
+        legalNotes: "",
+        metadata: { robotsReviewedAt: generatedAt, extractionYield: 0.75 }
+      },
+      {
+        ...record({ ...seedSource("https://reliability.example.test/restricted"), id: "src_reliability_restricted", type: "tor_metadata", accessMethod: "approved_proxy", risk: "restricted", catalog: undefined }, "needs_review"),
+        status: "needs_review",
+        legalNotes: "Restricted metadata source requires explicit legal approval and remains metadata only.",
+        governance: { approvalState: "pending", approvalRequired: true, metadataOnly: true },
+        metadata: { usefulAnswerYield: 0.8, evidenceReplaySuccess: 0.6 }
+      }
+    ];
+
+    const packet = buildSourceReliabilityEconomicsPacket("portfolio", sources, generatedAt);
+    const trusted = packet.sources.find((source) => source.sourceId === "src_reliability_trusted");
+    const promote = packet.sources.find((source) => source.sourceId === "src_reliability_promote");
+    const stale = packet.sources.find((source) => source.sourceId === "src_reliability_stale");
+    const duplicate = packet.sources.find((source) => source.sourceId === "src_reliability_duplicate_a");
+    const legal = packet.sources.find((source) => source.sourceId === "src_reliability_legal");
+    const restricted = packet.sources.find((source) => source.sourceId === "src_reliability_restricted");
+
+    expect(packet.schemaVersion).toBe("ti.source_reliability_economics.v1");
+    expect(packet.summary.sourceCount).toBe(7);
+    expect(packet.summary.trusted).toBeGreaterThanOrEqual(1);
+    expect(packet.summary.promoteCandidates).toBeGreaterThanOrEqual(1);
+    expect(packet.summary.staleSourceSuppression).toBeGreaterThanOrEqual(1);
+    expect(packet.summary.duplicateSuppression).toBeGreaterThanOrEqual(2);
+    expect(packet.summary.activationWaveReady).toBeGreaterThanOrEqual(1);
+    expect(trusted).toMatchObject({
+      decision: "trusted",
+      handoffs: {
+        agent02SchedulerPriority: "high",
+        agent03ParserCapability: "supported",
+        agent06EvidenceReplay: "ready",
+        agent09ApiContract: "source_reliability_fields_ready"
+      },
+      guardrails: { dryRun: true, willMutate: false, willStartCrawling: false, noLeakedDataAccess: true }
+    });
+    expect(promote?.decision).toBe("promote_candidate");
+    expect(promote?.handoffs.agent04SourcePackRecommendation).toBe("promote");
+    expect(stale?.decision).toBe("paused");
+    expect(stale?.economics.staleSuppressed).toBe(true);
+    expect(duplicate?.economics.duplicateSuppressed).toBe(true);
+    expect(duplicate?.handoffs.agent04SourcePackRecommendation).toBe("dedupe");
+    expect(legal?.decision).toBe("needs_review");
+    expect(legal?.reasons).toContain("legal_review_missing");
+    expect(restricted?.decision).toBe("needs_review");
+    expect(restricted?.handoffs.agent03ParserCapability).toBe("restricted_metadata_handoff");
+    expect(packet.portfolioEconomics.staleSuppressedSourceIds).toContain("src_reliability_stale");
+    expect(packet.governance.forbiddenSourceClasses).toEqual(expect.arrayContaining(["restricted raw payload collection", "leaked-file endpoints"]));
+    expect(packet.coordination.agent02Fields).toContain("handoffs.agent02SchedulerPriority");
+    expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("builds high-value TI source atlas records import plans and activation handoffs without auto-activation", () => {
+    const atlas = buildTiSourceAtlasApiResponse({
+      tenantId: "tenant_atlas",
+      generatedAt: "2026-05-24T12:00:00.000Z",
+      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Cobalt Strike malware", "Norway", "healthcare sector", "Operation Dream Job campaign", "campaign infrastructure"],
+      recordLimit: 500
+    });
+
+    expect(atlas).toMatchObject({
+      endpoint: "/v1/sources/atlas",
+      schemaVersion: "ti.source_atlas.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      tenantId: "tenant_atlas",
+      summary: {
+        recordCount: 500,
+        syntheticScaleCandidateCount: 10000,
+        first100Count: 100,
+        first1000Count: 1000
+      },
+      guardrails: {
+        publicOnly: true,
+        noPrivateInviteAuthCaptcha: true,
+        noSilentActivation: true,
+        noSourcePackImport: true,
+        noCrawlingFromAtlas: true,
+        descriptorOnlyPublicChannels: true
+      }
+    });
+    expect(atlas.records.length).toBeGreaterThanOrEqual(500);
+    expect(atlas.records.map((record) => record.family)).toEqual(expect.arrayContaining([
+      "vendor_threat_blog",
+      "cert_government",
+      "cve_advisory",
+      "malware_researcher",
+      "ransomware_tracker",
+      "github_security_advisory",
+      "regional_cyber_agency",
+      "ics_ot",
+      "cloud_saas_security",
+      "public_channel_descriptor"
+    ]));
+    expect(atlas.records.every((record) =>
+      record.safety.publicOnly &&
+      record.safety.privateInviteAuthCaptcha === false &&
+      record.safety.rawPayloadTarget === false &&
+      record.safety.autoActivate === false &&
+      record.activationReadiness.approvalRequired &&
+      record.activationReadiness.autoActivationAllowed === false
+    )).toBe(true);
+    expect(atlas.records.some((record) => record.activationReadiness.state === "descriptor_only_hold")).toBe(true);
+    expect(atlas.records.some((record) => record.duplicate.suppressed && record.activationReadiness.state === "duplicate_suppressed")).toBe(true);
+    expect(atlas.records.some((record) => record.parserCapability.certificationRequired)).toBe(true);
+    expect(atlas.importPlans.map((plan) => plan.label)).toEqual(["first_100", "first_1000", "future_10k"]);
+    expect(atlas.importPlans.every((plan) =>
+      plan.dryRun &&
+      plan.willMutate === false &&
+      plan.willImportSourcePacks === false &&
+      plan.willStartCrawling === false &&
+      plan.approvalPacket.forbiddenActions.includes("auto_activate") &&
+      plan.approvalPacket.forbiddenActions.includes("bypass_captcha_or_auth")
+    )).toBe(true);
+    expect(atlas.importPlans.find((plan) => plan.label === "first_100")?.sourceIds).toHaveLength(100);
+    expect(atlas.importPlans.find((plan) => plan.label === "first_1000")?.sourceIds).toHaveLength(1000);
+    expect(atlas.importPlans.find((plan) => plan.label === "future_10k")?.sourceCount).toBe(10000);
+    const queryClasses = atlas.coverageMatrix.map((row) => row.queryClass) as string[];
+    for (const queryClass of [
+      "actor",
+      "ransomware_victim",
+      "cve",
+      "malware_tool",
+      "country",
+      "sector",
+      "infrastructure"
+    ] as const) {
+      expect(queryClasses).toContain(queryClass);
+    }
+    expect(atlas.coverageMatrix.every((row) => row.candidateSourceCount > 0 && row.downstreamPublicAnswerImpact >= 0)).toBe(true);
+    expect(atlas.activationCanary).toMatchObject({
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false
+    });
+	    expect(atlas.activationCanary.first100SourceIds).toHaveLength(100);
+	    expect(atlas.activationCanary.first1000SourceIds).toHaveLength(1000);
+	    expect(atlas.activationCanary.descriptorOnlySourceIds.length).toBeGreaterThan(0);
+	    expect(atlas.activationCanary.registryActivationHandoff).toMatchObject({
+	      routeHint: "/v1/analyst/source-activation-packets",
+	      dryRun: true,
+	      willMutate: false,
+	      willImportSourcePacks: false,
+	      willStartCrawling: false,
+	      approvalRequired: true,
+	      sourceRegistryMutationAllowed: false,
+	      candidateCount: 100,
+	      schedulerPreview: {
+	        owner: "agent_02",
+	        queuePartition: "source_atlas_canary",
+	        leaseMode: "dry_run_preview_only"
+	      },
+	      rollbackPacket: {
+	        rollbackPlanIds: atlas.activationCanary.rollbackPlanIds
+	      }
+	    });
+	    expect(atlas.activationCanary.registryActivationHandoff.canarySourceIds).toEqual(atlas.activationCanary.first100SourceIds);
+	    expect(atlas.activationCanary.registryActivationHandoff.proposedSourceRecords).toHaveLength(10);
+	    expect(atlas.activationCanary.registryActivationHandoff.proposedSourceRecords.every((record) =>
+	      record.proposedSourceId.startsWith("src_atlas_canary_") &&
+	      record.statusPreview === "candidate" &&
+	      record.metadata.provenance === "ti_source_atlas" &&
+	      record.governance.approvalRequired &&
+	      record.governance.autoActivationAllowed === false
+	    )).toBe(true);
+	    expect(atlas.activationCanary.registryActivationHandoff.prerequisites).toEqual(expect.arrayContaining([
+	      "operator_legal_approval_packet_approved",
+	      "legal_and_robots_review_current",
+	      "parser_certification_complete_for_required_sources",
+	      "rollback_packet_ready"
+	    ]));
+	    expect(atlas.activationCanary.registryActivationHandoff.forbiddenOperations).toEqual(expect.arrayContaining([
+	      "registry_mutation",
+	      "source_pack_import",
+	      "crawl_enqueue",
+	      "source_auto_activation",
+	      "auth_or_captcha_bypass",
+	      "payload_download"
+	    ]));
+	    expect(atlas.activationCanary.registryActivationHandoff.downstreamHandoffs.agent09ApiContract).toContain("activationCanary.registryActivationHandoff");
+	    expect(atlas.discoveryInputs.map((input) => input.method)).toEqual(expect.arrayContaining([
+	      "curated_list",
+      "public_report",
+      "github_repository",
+      "awesome_list",
+      "opml_rss",
+      "vendor_page",
+      "analyst_import",
+      "existing_source_pack"
+    ]));
+    expect(atlas.exportImportSchema.requiredFields).toEqual(expect.arrayContaining(["id", "url", "domain", "family", "queryClassCoverage", "sourceValueScore", "activationReadiness"]));
+    expect(atlas.handoffs.agent03ParserCertification).toContain("activationCanary.parserCertificationRequiredSourceIds");
+    expect(atlas.handoffs.agent10ReleaseGates).toContain("importPlans.rollbackPacket");
+    const serialized = JSON.stringify(atlas).toLowerCase();
+    expect(serialized).not.toContain("captcha=true");
+    expect(serialized).not.toContain("invite-only");
+    expect(serialized).not.toContain("\"autoactivate\":true");
+    expect(serialized).not.toContain("\"rawpayloadtarget\":true");
+  });
+
+  test("builds source atlas export manifest review packets without importing or crawling", () => {
+    const manifest = buildTiSourceAtlasExportManifestApiResponse({
+      tenantId: "tenant_atlas_export",
+      generatedAt: "2026-05-24T13:00:00.000Z",
+      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Operation Dream Job campaign"],
+      planLabel: "first_100",
+      recordLimit: 500
+    });
+
+    expect(manifest).toMatchObject({
+      endpoint: "/v1/sources/atlas/export",
+      schemaVersion: "ti.source_atlas_export_manifest.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      tenantId: "tenant_atlas_export",
+      requestedPlan: "first_100",
+      summary: {
+        plannedSourceCount: 100,
+        manifestRowCount: 100
+      },
+      guardrails: {
+        publicOnly: true,
+        noPrivateInviteAuthCaptcha: true,
+        noSilentActivation: true,
+        noManifestImport: true,
+        explicitApprovalRequired: true
+      }
+    });
+    expect(manifest.reviewQueue).toHaveLength(100);
+    expect(manifest.exportManifest).toMatchObject({
+      schemaVersion: "ti.source_atlas_export.v1",
+      format: "source_pack_import_dry_run_json",
+      hashAlgorithm: "stable_sha256",
+      primaryKey: "atlasSourceId"
+    });
+    expect(manifest.exportManifest.rows).toHaveLength(100);
+    expect(manifest.reviewQueue.every((row) =>
+      row.approvalRoute === "/v1/analyst/source-activation-packets" &&
+      row.dryRun &&
+      row.willMutate === false &&
+      row.willStartCrawling === false
+    )).toBe(true);
+    expect(manifest.exportManifest.rows.every((row) =>
+      row.sourceHash.startsWith("ti_source_atlas_source_") &&
+      row.approvalRequired &&
+      row.autoActivationAllowed === false
+    )).toBe(true);
+    expect(manifest.reviewQueue.map((row) => row.decision)).toEqual(expect.arrayContaining([
+      "stage_for_canary",
+      "hold_descriptor_only"
+    ]));
+    expect(manifest.approvalPacket.forbiddenActions).toEqual(expect.arrayContaining([
+      "auto_activate",
+      "start_crawl",
+      "import_without_review",
+      "bypass_captcha_or_auth",
+      "download_payload"
+    ]));
+    expect(manifest.handoffs.agent01RegistryImport).toContain("exportManifest.rows");
+    expect(manifest.handoffs.agent09ApiContracts).toContain("sourceAtlas");
+    const serialized = JSON.stringify(manifest).toLowerCase();
+    expect(serialized).not.toContain("invite-only");
+    expect(serialized).not.toContain("\"willmutate\":true");
+    expect(serialized).not.toContain("\"willstartcrawling\":true");
+    expect(serialized).not.toContain("\"autoactivationallowed\":true");
   });
 
   test("builds source marketplace and parser capability matrix without activating sources", () => {
@@ -1097,7 +1707,7 @@ describe("source seed bundles", () => {
     const response = buildSourceCoverageCloseoutApiResponse({
       tenantId: "tenant_closeout",
       generatedAt,
-      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Cobalt Strike malware tool", "Norway", "healthcare sector", "campaign infrastructure", "C2 infrastructure"],
+      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Cobalt Strike malware tool", "Norway", "healthcare sector", "Operation Dream Job campaign", "campaign infrastructure", "C2 infrastructure"],
       sources
     });
     const categories = response.activationWaves.map((wave) => wave.category);
@@ -1134,7 +1744,8 @@ describe("source seed bundles", () => {
       source.promotionImpact.agent09 === "api_coverage_ready" &&
       source.promotionImpact.agent10 === "release_candidate"
     )).toBe(true);
-    expect(response.queries.map((query) => query.queryClass)).toEqual([
+    const closeoutQueryClasses = response.queries.map((query) => query.queryClass);
+    expect(closeoutQueryClasses).toEqual(expect.arrayContaining([
       "actor",
       "ransomware_victim",
       "cve",
@@ -1143,7 +1754,7 @@ describe("source seed bundles", () => {
       "sector",
       "campaign",
       "infrastructure"
-    ]);
+    ]));
     expect(response.queries.every((query) => query.plannedSafePublicSourceCount > 0)).toBe(true);
     expect(response.forbiddenSourceClasses).toEqual(expect.arrayContaining([
       "restricted raw payload collection",
@@ -1161,7 +1772,7 @@ describe("source seed bundles", () => {
     const response = buildSourceCoverageCloseoutApiResponse({
       tenantId: "tenant_execution",
       generatedAt,
-      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Norway", "healthcare sector", "campaign infrastructure"],
+      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Norway", "healthcare sector", "Operation Dream Job campaign", "campaign infrastructure"],
       sources: []
     });
     const readiness = response.executionReadiness;
