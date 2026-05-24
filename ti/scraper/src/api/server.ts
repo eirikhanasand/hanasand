@@ -49,7 +49,7 @@ import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
-import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
+import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourceMarketplaceApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
 import type {
   AnalystClaimLedgerEntry,
   AnalystLoopSnapshot,
@@ -66,6 +66,7 @@ import type {
   MetricsResponse,
   PipelineResult,
   RawCapture,
+  RetentionClass,
   RunResultsInclude,
   RunStatus,
   SafeCaptureDto,
@@ -170,6 +171,20 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     });
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/ops/canary/console") {
+    const operatorView = buildCanaryOperatorSummary({
+      store: options.store,
+      frontier: options.frontier,
+      generatedAt: url.searchParams.get("generatedAt") ?? undefined
+    });
+    return new Response(buildCanaryOperatorConsoleHtml(operatorView), {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store"
+      }
+    });
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/auth/integration-notes") {
     const authBoundary = enterpriseAuthBoundaryContract();
     return json({
@@ -186,6 +201,36 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 
   if (request.method === "GET" && url.pathname === "/v1/contracts") {
     return json(buildEnterpriseApiContractIndex());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/analyst/claim-ledger") {
+    return json(buildAnalystClaimLedgerResponse(options.store, {
+      tenantId: url.searchParams.get("tenantId") ?? request.headers.get("x-tenant-id") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+      claimKind: url.searchParams.get("claimKind") ?? undefined,
+      query: url.searchParams.get("q") ?? url.searchParams.get("query") ?? undefined,
+      cursor: Math.max(0, Number.parseInt(url.searchParams.get("cursor") ?? "0", 10)),
+      limit: Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get("limit") ?? "50", 10)))
+    }));
+  }
+
+  const analystClaimLedgerActionMatch = url.pathname.match(/^\/v1\/analyst\/claim-ledger\/([^/]+)\/actions$/);
+  if (request.method === "POST" && analystClaimLedgerActionMatch) {
+    const entryId = analystClaimLedgerActionMatch[1];
+    if (!entryId) return apiError("bad_request", "Claim ledger entry id is required", 400);
+    const input = await readJson<Record<string, unknown>>(request);
+    const result = applyAnalystClaimLedgerAction(options.store, entryId, {
+      action: typeof input.action === "string" ? input.action : "",
+      dryRun: input.dryRun !== false,
+      operatorId: typeof input.operatorId === "string" ? input.operatorId : request.headers.get("x-actor-id") ?? undefined,
+      reason: typeof input.reason === "string" ? input.reason : undefined,
+      duplicateOf: typeof input.duplicateOf === "string" ? input.duplicateOf : undefined,
+      contradictionReason: typeof input.contradictionReason === "string" ? input.contradictionReason : undefined,
+      confidence: typeof input.confidence === "number" ? input.confidence : undefined,
+      retentionClass: typeof input.retentionClass === "string" ? input.retentionClass : undefined,
+      legalHold: typeof input.legalHold === "boolean" ? input.legalHold : undefined
+    });
+    return result.ok ? json(result.body, result.status) : apiError(result.code, result.message, result.status, result.details);
   }
 
   if (request.method === "GET" && url.pathname === "/v1/analyst/metadata-review-tasks") {
@@ -462,6 +507,21 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       queries,
       sources: options.store.listSources(),
       sourcePacks: options.sourcePacks ?? await defaultCoverageSourcePacks(input),
+      generatedAt: nowIso()
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/sources/marketplace") {
+    const input = await readJson<Record<string, unknown>>(request);
+    const tenantId = typeof input.tenantId === "string" ? input.tenantId : request.headers.get("x-tenant-id") ?? undefined;
+    const queries = Array.isArray(input.queries)
+      ? input.queries.map(String).filter((query) => query.trim().length > 0)
+      : typeof input.query === "string" && input.query.trim()
+        ? [input.query]
+        : [];
+    return json(buildSourceMarketplaceApiResponse({
+      tenantId,
+      queries,
       generatedAt: nowIso()
     }));
   }
@@ -4472,9 +4532,274 @@ function safeAnalystClaimLedgerEntryDto(entry: AnalystClaimLedgerEntry) {
     sourceHash: entry.sourceHash,
     confidence: entry.confidence,
     ledgerStatus: entry.ledgerStatus,
+    duplicateOf: entry.duplicateOf,
+    contradictionReason: entry.contradictionReason,
+    retentionClass: entry.retentionClass,
+    legalHold: entry.legalHold === true,
+    graphEligible: entry.graphEligible === true,
+    stixEligible: entry.stixEligible === true,
+    reviewedBy: entry.reviewedBy,
+    reviewedAt: entry.reviewedAt,
+    updatedAt: entry.updatedAt,
     observedAt: entry.observedAt,
     provenance: entry.provenance,
     createdAt: entry.createdAt
+  };
+}
+
+type AnalystClaimLedgerAction =
+  | "promote"
+  | "hold"
+  | "contradict"
+  | "mark_duplicate"
+  | "mark_stale"
+  | "attach_confidence"
+  | "attach_legal_hold"
+  | "set_retention"
+  | "close";
+
+const ANALYST_CLAIM_LEDGER_ACTIONS: AnalystClaimLedgerAction[] = [
+  "promote",
+  "hold",
+  "contradict",
+  "mark_duplicate",
+  "mark_stale",
+  "attach_confidence",
+  "attach_legal_hold",
+  "set_retention",
+  "close"
+];
+
+const API_RETENTION_CLASSES: RetentionClass[] = [
+  "public_raw",
+  "public_report",
+  "public_chat_text",
+  "darknet_metadata",
+  "discovery_snippet",
+  "live_search_snapshot",
+  "evidence_delta",
+  "screenshot_hash",
+  "sensitive_metadata",
+  "standard",
+  "short",
+  "restricted_metadata",
+  "legal_hold"
+];
+
+function isAnalystClaimLedgerAction(action: string): action is AnalystClaimLedgerAction {
+  return (ANALYST_CLAIM_LEDGER_ACTIONS as string[]).includes(action);
+}
+
+function isApiRetentionClass(value: string | undefined): value is RetentionClass {
+  return Boolean(value && (API_RETENTION_CLASSES as string[]).includes(value));
+}
+
+function claimLedgerEligibility(entry: AnalystClaimLedgerEntry): { graphEligible: boolean; stixEligible: boolean; blockedReasons: string[] } {
+  const blockedReasons = [
+    entry.ledgerStatus !== "trusted" ? "claim_not_trusted" : undefined,
+    entry.legalHold ? "legal_hold" : undefined,
+    entry.ledgerStatus === "duplicate" ? "duplicate_claim" : undefined,
+    entry.ledgerStatus === "contradicted" ? "contradicted_claim" : undefined,
+    entry.ledgerStatus === "stale" ? "stale_claim" : undefined,
+    entry.confidence < 0.65 ? "low_confidence" : undefined
+  ].filter((reason): reason is string => Boolean(reason));
+  const eligible = blockedReasons.length === 0;
+  return { graphEligible: eligible, stixEligible: eligible, blockedReasons };
+}
+
+function buildAnalystClaimLedgerResponse(store: ScraperStore, options: {
+  tenantId?: string;
+  status?: string;
+  claimKind?: string;
+  query?: string;
+  cursor: number;
+  limit: number;
+}) {
+  const normalizedQuery = options.query?.trim().toLowerCase();
+  const entries = store.listAnalystClaimLedgerEntries()
+    .filter((entry) => !options.tenantId || entry.tenantId === options.tenantId)
+    .filter((entry) => !options.status || entry.ledgerStatus === options.status)
+    .filter((entry) => !options.claimKind || entry.claimKind === options.claimKind)
+    .filter((entry) => !normalizedQuery || entry.normalizedQuery.includes(normalizedQuery) || entry.company?.toLowerCase().includes(normalizedQuery) || entry.victim?.toLowerCase().includes(normalizedQuery))
+    .sort((a, b) => (b.updatedAt ?? b.reviewedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.reviewedAt ?? a.createdAt));
+  const page = entries.slice(options.cursor, options.cursor + options.limit);
+  const nextCursor = options.cursor + options.limit < entries.length ? String(options.cursor + options.limit) : undefined;
+  const byStatus = entries.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.ledgerStatus] = (acc[entry.ledgerStatus] ?? 0) + 1;
+    return acc;
+  }, {});
+  const eligibleEntries = entries.map((entry) => ({ entry, eligibility: claimLedgerEligibility(entry) }));
+
+  return {
+    contract: {
+      endpoint: "/v1/analyst/claim-ledger",
+      actionsEndpoint: "/v1/analyst/claim-ledger/{entryId}/actions",
+      schemaVersion: "ti.analyst_claim_ledger.v1",
+      metadataOnly: true,
+      safeForApi: true,
+      rawLeakMaterialAccessed: false,
+      objectKeysExposed: false,
+      unsafeUrlsExposed: false
+    },
+    runStatusClarity: {
+      totalClaims: entries.length,
+      reviewRequired: entries.filter((entry) => entry.ledgerStatus === "metadata_review" || entry.ledgerStatus === "held").length,
+      trusted: byStatus.trusted ?? 0,
+      duplicates: byStatus.duplicate ?? 0,
+      contradicted: byStatus.contradicted ?? 0,
+      stale: byStatus.stale ?? 0,
+      legalHolds: entries.filter((entry) => entry.legalHold).length,
+      graphEligible: eligibleEntries.filter(({ eligibility }) => eligibility.graphEligible).length,
+      stixEligible: eligibleEntries.filter(({ eligibility }) => eligibility.stixEligible).length,
+      meaningfulWorkCount: entries.filter((entry) => entry.ledgerStatus !== "closed").length,
+      byStatus
+    },
+    page: {
+      cursor: String(options.cursor),
+      nextCursor
+    },
+    allowedActions: ANALYST_CLAIM_LEDGER_ACTIONS,
+    entries: page.map((entry) => {
+      const eligibility = claimLedgerEligibility(entry);
+      return {
+        ...safeAnalystClaimLedgerEntryDto(entry),
+        graphEligible: entry.graphEligible ?? eligibility.graphEligible,
+        stixEligible: entry.stixEligible ?? eligibility.stixEligible,
+        eligibilityBlockers: eligibility.blockedReasons,
+        allowedActions: ANALYST_CLAIM_LEDGER_ACTIONS
+      };
+    }),
+    guarantees: [
+      "claim ledger rows contain metadata summaries and source hashes only",
+      "restricted leak rows, credentials, unsafe source URLs, object keys, private content, and threat-actor interaction are not serialized",
+      "graph and STIX eligibility are explicit review states, not automatic promotion of restricted claims"
+    ]
+  };
+}
+
+type AnalystClaimLedgerActionResult =
+  | { ok: true; status: number; body: Record<string, unknown> }
+  | { ok: false; status: number; code: string; message: string; details?: Record<string, unknown> };
+
+function applyAnalystClaimLedgerAction(store: ScraperStore, entryId: string, input: {
+  action: string;
+  dryRun: boolean;
+  operatorId?: string;
+  reason?: string;
+  duplicateOf?: string;
+  contradictionReason?: string;
+  confidence?: number;
+  retentionClass?: string;
+  legalHold?: boolean;
+}): AnalystClaimLedgerActionResult {
+  const entry = store.listAnalystClaimLedgerEntries().find((item) => item.id === entryId);
+  if (!entry) return { ok: false, status: 404, code: "not_found", message: "Claim ledger entry not found" };
+  if (!isAnalystClaimLedgerAction(input.action)) {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_action",
+      message: "Unsupported claim ledger action",
+      details: { allowedActions: ANALYST_CLAIM_LEDGER_ACTIONS }
+    };
+  }
+  if (input.action === "mark_duplicate" && !input.duplicateOf) {
+    return { ok: false, status: 400, code: "duplicate_target_required", message: "duplicateOf is required when marking a claim duplicate" };
+  }
+  if (input.action === "set_retention" && !isApiRetentionClass(input.retentionClass)) {
+    return { ok: false, status: 400, code: "invalid_retention_class", message: "A valid retentionClass is required", details: { retentionClasses: API_RETENTION_CLASSES } };
+  }
+  if (input.confidence !== undefined && (input.confidence < 0 || input.confidence > 1)) {
+    return { ok: false, status: 400, code: "invalid_confidence", message: "confidence must be between 0 and 1" };
+  }
+
+  const now = nowIso();
+  const nextStatus: AnalystClaimLedgerEntry["ledgerStatus"] = input.action === "promote"
+    ? "trusted"
+    : input.action === "hold"
+      ? "held"
+      : input.action === "contradict"
+        ? "contradicted"
+        : input.action === "mark_duplicate"
+          ? "duplicate"
+          : input.action === "mark_stale"
+            ? "stale"
+            : input.action === "close"
+              ? "closed"
+              : entry.ledgerStatus;
+  const nextLegalHold = input.action === "attach_legal_hold" ? input.legalHold ?? true : entry.legalHold;
+  const nextRetentionClass = input.action === "set_retention"
+    ? input.retentionClass as RetentionClass
+    : nextLegalHold
+      ? "legal_hold"
+      : entry.retentionClass;
+  const updated: AnalystClaimLedgerEntry = {
+    ...entry,
+    confidence: input.confidence ?? entry.confidence,
+    ledgerStatus: nextStatus,
+    duplicateOf: input.action === "mark_duplicate" ? input.duplicateOf : entry.duplicateOf,
+    contradictionReason: input.action === "contradict" ? input.contradictionReason ?? input.reason ?? "analyst_contradiction" : entry.contradictionReason,
+    retentionClass: nextRetentionClass,
+    legalHold: nextLegalHold,
+    reviewedBy: input.operatorId ?? entry.reviewedBy,
+    reviewedAt: now,
+    updatedAt: now,
+    provenance: {
+      ...entry.provenance,
+      lastAnalystLedgerAction: {
+        action: input.action,
+        dryRun: input.dryRun,
+        operatorId: input.operatorId,
+        reason: input.reason,
+        at: now,
+        externalDeliveryPerformed: false,
+        rawLeakMaterialAccessed: false
+      }
+    }
+  };
+  const eligibility = claimLedgerEligibility(updated);
+  const withEligibility: AnalystClaimLedgerEntry = {
+    ...updated,
+    graphEligible: eligibility.graphEligible,
+    stixEligible: eligibility.stixEligible
+  };
+  if (!input.dryRun) store.saveAnalystClaimLedgerEntry(withEligibility);
+
+  return {
+    ok: true,
+    status: input.dryRun ? 200 : 202,
+    body: {
+      contract: {
+        endpoint: "/v1/analyst/claim-ledger/{entryId}/actions",
+        method: "POST",
+        schemaVersion: "ti.analyst_claim_ledger_action.v1",
+        metadataOnly: true,
+        safeForApi: true,
+        rawLeakMaterialAccessed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        graphPromotionAutomatic: false,
+        stixPromotionAutomatic: false
+      },
+      dryRun: input.dryRun,
+      action: input.action,
+      entry: {
+        ...safeAnalystClaimLedgerEntryDto(input.dryRun ? entry : withEligibility),
+        eligibilityBlockers: eligibility.blockedReasons
+      },
+      result: {
+        persisted: !input.dryRun,
+        nextStatus: withEligibility.ledgerStatus,
+        graphEligible: withEligibility.graphEligible,
+        stixEligible: withEligibility.stixEligible,
+        externalDeliveryPerformed: false
+      },
+      guarantees: [
+        "claim review actions update metadata-only ledger state only",
+        "no raw restricted source was fetched, downloaded, or serialized",
+        "graph/STIX eligibility is held when claims are duplicate, stale, contradicted, low-confidence, or under legal hold"
+      ]
+    }
   };
 }
 
@@ -5691,6 +6016,117 @@ function buildMetrics(options: ApiServerOptions): MetricsResponse {
   };
 }
 
+function buildCanaryOperatorConsoleHtml(view: ReturnType<typeof buildCanaryOperatorSummary>): string {
+  const healthState = view.schedulerHealth.errorRate > 0.1 || view.evidenceStorage.missingObjectReferenceCount > 0
+    ? "warn"
+    : view.activeSources.length > 0 && view.latestCaptures.length > 0
+      ? "ok"
+      : "hold";
+  const freshnessLabel = view.schedulerHealth.freshnessSeconds === 0
+    ? "fresh"
+    : `${view.schedulerHealth.freshnessSeconds}s old`;
+  const rows = view.publicAnswerReadiness.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.query)}</td>
+            <td>${item.captureCount}</td>
+            <td>${escapeHtml(item.latestCollectedAt ?? "waiting")}</td>
+            <td>${item.whyPartial.map(escapeHtml).join("; ")}</td>
+          </tr>`).join("");
+  const captures = view.latestCaptures.map((capture) => `
+          <tr>
+            <td>${escapeHtml(capture.captureId)}</td>
+            <td>${escapeHtml(capture.sourceId)}</td>
+            <td>${escapeHtml(capture.title ?? "untitled")}</td>
+            <td>${escapeHtml(capture.storageKind)}</td>
+            <td>${escapeHtml(capture.collectedAt)}</td>
+          </tr>`).join("");
+  const sources = view.activeSources.map((source) => `
+          <tr>
+            <td>${escapeHtml(source.sourceName)}</td>
+            <td>${escapeHtml(source.type)}</td>
+            <td>${escapeHtml(source.status)}</td>
+            <td>${source.trustScore.toFixed(2)}</td>
+            <td>${escapeHtml(source.lastCollectedAt ?? "not yet")}</td>
+          </tr>`).join("");
+  const blocked = view.blockedOrHeldItems.map((item) => `
+          <tr>
+            <td>${escapeHtml(item.state)}</td>
+            <td>${escapeHtml(item.sourceId ?? item.taskId ?? "unknown")}</td>
+            <td>${escapeHtml(item.reason)}</td>
+          </tr>`).join("") || `<tr><td>ok</td><td>none</td><td>No held or blocked canary items.</td></tr>`;
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="30">
+    <title>TI Canary Ops</title>
+    <style>
+      :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin: 0; background: #f6f7f9; color: #1f2933; }
+      main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+      header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+      h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: 0; }
+      h2 { font-size: 15px; margin: 24px 0 8px; letter-spacing: 0; }
+      a { color: #175cd3; }
+      .subtle { color: #667085; font-size: 13px; }
+      .pill { border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+      .ok { background: #dff7e8; color: #14532d; }
+      .warn { background: #fff1c2; color: #713f12; }
+      .hold { background: #e7edf5; color: #344054; }
+      .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      .metric { background: #fff; border: 1px solid #d9dee7; border-radius: 8px; padding: 12px; min-height: 76px; }
+      .metric span { display: block; color: #667085; font-size: 12px; }
+      .metric strong { display: block; font-size: 22px; margin-top: 6px; }
+      table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dee7; border-radius: 8px; overflow: hidden; }
+      th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #edf0f4; font-size: 13px; vertical-align: top; }
+      th { background: #eef2f6; color: #344054; font-size: 12px; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      @media (max-width: 760px) { main { padding: 16px; } header { display: block; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } table { display: block; overflow-x: auto; } }
+      @media (prefers-color-scheme: dark) { body { background: #111827; color: #e5e7eb; } .metric, table { background: #182230; border-color: #344054; } th { background: #202b3a; color: #cbd5e1; } td, th { border-bottom-color: #344054; } .subtle { color: #98a2b3; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>TI Canary Ops</h1>
+          <div class="subtle">Generated ${escapeHtml(view.generatedAt)} · ${escapeHtml(freshnessLabel)} · <a href="/v1/ops/canary">JSON</a></div>
+        </div>
+        <span class="pill ${healthState}">${healthState}</span>
+      </header>
+      <section class="grid" aria-label="Canary metrics">
+        <div class="metric"><span>Active sources</span><strong>${view.activeSources.length}</strong></div>
+        <div class="metric"><span>Queued work</span><strong>${view.queue.queued}</strong></div>
+        <div class="metric"><span>Latest captures</span><strong>${view.latestCaptures.length}</strong></div>
+        <div class="metric"><span>Promotion yield</span><strong>${view.schedulerHealth.promotionYield.toFixed(2)}</strong></div>
+        <div class="metric"><span>Error rate</span><strong>${view.schedulerHealth.errorRate.toFixed(2)}</strong></div>
+        <div class="metric"><span>Duplicate rate</span><strong>${view.schedulerHealth.duplicateRate.toFixed(2)}</strong></div>
+        <div class="metric"><span>External objects</span><strong>${view.evidenceStorage.externalObjectCaptureCount}</strong></div>
+        <div class="metric"><span>Extraction confidence</span><strong>${view.extraction.averageIncidentConfidence.toFixed(2)}</strong></div>
+      </section>
+      <h2>Public Answer Readiness</h2>
+      <table><thead><tr><th>Query</th><th>Captures</th><th>Latest</th><th>Why Partial</th></tr></thead><tbody>${rows}</tbody></table>
+      <h2>Active Sources</h2>
+      <table><thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Trust</th><th>Last Capture</th></tr></thead><tbody>${sources}</tbody></table>
+      <h2>Latest Captures</h2>
+      <table><thead><tr><th>Capture</th><th>Source</th><th>Title</th><th>Storage</th><th>Collected</th></tr></thead><tbody>${captures || `<tr><td colspan="5">No canary captures yet.</td></tr>`}</tbody></table>
+      <h2>Blocked Or Held</h2>
+      <table><thead><tr><th>State</th><th>Subject</th><th>Reason</th></tr></thead><tbody>${blocked}</tbody></table>
+    </main>
+  </body>
+</html>`;
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function resourceSnapshot(options: ApiServerOptions) {
   const config = options.config;
   if (!config) return undefined;
@@ -5746,8 +6182,11 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
+    { method: "GET", path: "/v1/ops/canary/console", surface: "ops", owner: "Agent 07/09", responseKeys: ["text/html", "active sources", "queued work", "latest captures", "why public answer is partial"] },
     { method: "GET", path: "/v1/auth/integration-notes", surface: "auth", owner: "Agent 09", responseKeys: ["version", "authBoundary", "notes"] },
     { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "openapi", "surfaces", "publicCompatibility", "semantics"] },
+    { method: "GET", path: "/v1/analyst/claim-ledger", surface: "analyst", owner: "Agent 06/09", responseKeys: ["contract", "runStatusClarity", "entries", "allowedActions"] },
+    { method: "POST", path: "/v1/analyst/claim-ledger/{id}/actions", surface: "analyst", owner: "Agent 06/09", responseKeys: ["contract", "dryRun", "action", "entry", "result"] },
     { method: "GET", path: "/v1/analyst/metadata-review-tasks", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "tasks", "notificationPackets", "claimLedger"] },
     { method: "GET", path: "/v1/analyst/loop", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "state", "runStatusClarity", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger"] },
     { method: "GET", path: "/v1/analyst/source-activation-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
@@ -5764,6 +6203,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "POST", path: "/v1/sources/canary-pause", surface: "sources", owner: "Agent 01/09", responseKeys: ["pause", "guarantees"] },
     { method: "POST", path: "/v1/sources/coverage-plan", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries"] },
     { method: "POST", path: "/v1/sources/portfolio", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "portfolio"] },
+    { method: "POST", path: "/v1/sources/marketplace", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "marketplace", "parserCapabilityMatrix", "activationReadiness"] },
     { method: "POST", path: "/v1/sources/activation-batches", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "coordination", "executionReadiness.rolloutPromotion"] },
     { method: "POST", path: "/v1/sources/runtime-sla", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "releasePacket"] },
     { method: "POST", path: "/v1/sources/coverage-closeout", surface: "sources", owner: "Agent 01/09", responseKeys: ["endpoint", "queries", "activationWaves", "releasePacket"] },

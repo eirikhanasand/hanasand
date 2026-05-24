@@ -431,6 +431,110 @@ export interface SourcePortfolioApiResponse {
   };
 }
 
+export type SourceMarketplaceParserProfile =
+  | "static_html"
+  | "rss"
+  | "dynamic_page"
+  | "pdf_report"
+  | "public_channel"
+  | "advisory_security_signal"
+  | "restricted_metadata_handoff";
+
+export interface SourceMarketplaceParserCapability {
+  profile: SourceMarketplaceParserProfile;
+  owner: "agent_03" | "agent_04" | "agent_05";
+  supportedSourceTypes: SourceType[];
+  supported: boolean;
+  marketplaceSourceCount: number;
+  compatibleSourceCount: number;
+  activationBlockedUntilSupported: boolean;
+  notes: string[];
+}
+
+export interface SourceMarketplaceSource {
+  sourceId: string;
+  sourceName: string;
+  sourceFamily: SourceActivationWaveCategory;
+  sourceType: SourceType;
+  url: string;
+  trustScore: number;
+  reliability: number;
+  region: string[];
+  language: string;
+  sectorUtility: string[];
+  parserProfile: SourceMarketplaceParserProfile;
+  parserSupported: boolean;
+  parserOwner: "agent_03" | "agent_04" | "agent_05";
+  legalReviewState: "current" | "missing" | "stale";
+  robotsReviewState: "current" | "missing" | "stale" | "not_required";
+  schedulerCost: {
+    budgetClass: SourceCollectionSla["budgetClass"];
+    cadenceSeconds: number;
+    estimatedDailyTasks: number;
+    maxBytes: number;
+  };
+  expectedEvidenceYield: number;
+  duplicateRate: number;
+  activationReadiness: "ready_for_dry_run" | "needs_parser_support" | "needs_legal_review" | "blocked_unsafe";
+  rollbackState: {
+    rollbackPath: string;
+    quarantineTrigger: string;
+  };
+  recommendedAction: "dry_run_activation_packet" | "request_parser_support" | "request_legal_review" | "exclude_unsafe";
+  handoffs: {
+    agent02: "scheduler_budget_ready" | "budget_review";
+    agent03: "parser_supported" | "parser_gap";
+    agent04: "public_signal_candidate" | "not_public_channel";
+    agent06: "evidence_yield_ready" | "yield_watch";
+    agent07: "quality_input_ready" | "quality_watch";
+    agent09: "api_contract_ready";
+    agent10: "slo_ready" | "release_hold";
+  };
+}
+
+export interface SourceMarketplaceApiResponse {
+  endpoint: "/v1/sources/marketplace";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  tenantId?: string;
+  generatedAt: string;
+  marketplace: {
+    sourceCount: number;
+    safePublicSourceCount: number;
+    sourceFamilies: SourceActivationWaveCategory[];
+    sources: SourceMarketplaceSource[];
+  };
+  parserCapabilityMatrix: SourceMarketplaceParserCapability[];
+  activationReadiness: {
+    readyForDryRun: number;
+    needsParserSupport: number;
+    needsLegalReview: number;
+    blockedUnsafe: number;
+  };
+  unsupportedSourceClasses: Array<{
+    sourceClass: string;
+    reason: string;
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+    activationAllowed: false;
+  }>;
+  governance: {
+    approvalMode: "dry_run_packets_only";
+    noSilentActivation: true;
+    noCrawlingFromMarketplace: true;
+    requiredBeforeActivation: string[];
+  };
+  coordination: {
+    agent02Fields: string[];
+    agent03Fields: string[];
+    agent04Fields: string[];
+    agent06Fields: string[];
+    agent07Fields: string[];
+    agent09Fields: string[];
+    agent10Fields: string[];
+  };
+}
+
 export interface SourceActivationBatchSource {
   sourceId: string;
   sourceName: string;

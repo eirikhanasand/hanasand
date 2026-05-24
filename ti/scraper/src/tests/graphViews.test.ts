@@ -254,6 +254,16 @@ describe("CTI graph persistence and query views", () => {
     expect(workspace.campaignGraph.campaignNodeIds).toContain(snapshot.nodes.find((node) => node.value === "Embassy spearphish wave")!.id);
     expect(workspace.campaignGraph.techniqueNodeIds.length).toBeGreaterThanOrEqual(1);
     expect(workspace.exportEligibility.heldRelationshipIds.length).toBeGreaterThanOrEqual(1);
+    expect(workspace.pivotQueues.some((pivot) => pivot.pivotType === "attack-pattern" && pivot.nextActions.includes("hold_export"))).toBe(true);
+    expect(workspace.performanceBudget).toMatchObject({
+      maxNodes: 50,
+      maxEdges: 75,
+      maxTimelineEvents: 50,
+      maxReviewHolds: 50,
+      truncated: false,
+      queryPlan: "bounded_single_hop_campaign_ttp_pivots"
+    });
+    expect(workspace.performanceBudget.edgeCount).toBe(workspace.campaignGraph.edges.length);
     expect(workspace.safety.taxiiBoundary).toBe("descriptor_only_no_server");
   });
 

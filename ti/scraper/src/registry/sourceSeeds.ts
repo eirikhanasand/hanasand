@@ -64,6 +64,10 @@ import type {
   SourceCoverageSloRollup,
   SourceCoverageSloStatus,
   SourceFamilyCoverageGate,
+  SourceMarketplaceApiResponse,
+  SourceMarketplaceParserCapability,
+  SourceMarketplaceParserProfile,
+  SourceMarketplaceSource,
   SourcePackOnboardingPlan,
   SourcePortfolioApiResponse,
   SourcePortfolioGroup,
@@ -129,6 +133,10 @@ export type {
   SourceCoverageSloRollup,
   SourceCoverageSloStatus,
   SourceFamilyCoverageGate,
+  SourceMarketplaceApiResponse,
+  SourceMarketplaceParserCapability,
+  SourceMarketplaceParserProfile,
+  SourceMarketplaceSource,
   SourcePackOnboardingPlan,
   SourcePortfolioApiResponse,
   SourcePortfolioGroup,
@@ -441,6 +449,64 @@ export function buildSourcePortfolioApiResponse(input: {
       value: stableId("source_portfolio", `${input.tenantId ?? "global"}:${queries.join("|")}:${generatedAt}`),
       gate: "source_portfolio_ready",
       ready
+    }
+  };
+}
+
+export function buildSourceMarketplaceApiResponse(input: {
+  queries?: string[];
+  tenantId?: string;
+  generatedAt?: string;
+  maxSources?: number;
+} = {}): SourceMarketplaceApiResponse {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const waves = buildEnterpriseSafePublicActivationWaves(generatedAt);
+  const rollout = balancedActivationWaveSources(waves).slice(0, input.maxSources ?? 50);
+  const marketplaceSources = rollout.map((source) => sourceMarketplaceSource(source));
+  const parserCapabilityMatrix = buildSourceMarketplaceParserCapabilityMatrix(marketplaceSources);
+  const activationReadiness = {
+    readyForDryRun: marketplaceSources.filter((source) => source.activationReadiness === "ready_for_dry_run").length,
+    needsParserSupport: marketplaceSources.filter((source) => source.activationReadiness === "needs_parser_support").length,
+    needsLegalReview: marketplaceSources.filter((source) => source.activationReadiness === "needs_legal_review").length,
+    blockedUnsafe: marketplaceSources.filter((source) => source.activationReadiness === "blocked_unsafe").length
+  };
+
+  return {
+    endpoint: "/v1/sources/marketplace",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    tenantId: input.tenantId,
+    generatedAt,
+    marketplace: {
+      sourceCount: marketplaceSources.length,
+      safePublicSourceCount: marketplaceSources.filter((source) => source.activationReadiness !== "blocked_unsafe").length,
+      sourceFamilies: uniqueStrings(marketplaceSources.map((source) => source.sourceFamily)) as SourceMarketplaceApiResponse["marketplace"]["sourceFamilies"],
+      sources: marketplaceSources
+    },
+    parserCapabilityMatrix,
+    activationReadiness,
+    unsupportedSourceClasses: sourceMarketplaceUnsupportedClasses(),
+    governance: {
+      approvalMode: "dry_run_packets_only",
+      noSilentActivation: true,
+      noCrawlingFromMarketplace: true,
+      requiredBeforeActivation: [
+        "operator/legal approval packet",
+        "parser capability pass",
+        "legal and robots review current",
+        "scheduler budget accepted",
+        "Agent 10 SLO gate pass"
+      ]
+    },
+    coordination: {
+      agent02Fields: ["schedulerCost", "estimatedDailyTasks", "budgetClass"],
+      agent03Fields: ["parserProfile", "parserSupported", "parserCapabilityMatrix"],
+      agent04Fields: ["sourceFamily", "public_signal_candidate", "unsupported public_channel boundary"],
+      agent06Fields: ["expectedEvidenceYield", "duplicateRate"],
+      agent07Fields: ["sectorUtility", "trustScore", "quality_input_ready"],
+      agent09Fields: ["endpoint", "marketplace.sources", "parserCapabilityMatrix", "activationReadiness"],
+      agent10Fields: ["activationReadiness", "slo_ready", "release_hold"]
     }
   };
 }
@@ -1263,6 +1329,118 @@ function balancedActivationWaveSources(waves: SourceActivationWave[]): SourceAct
     }
   }
   return output;
+}
+
+function sourceMarketplaceSource(source: SourceActivationWaveSource): SourceMarketplaceSource {
+  const parserProfile = sourceMarketplaceParserProfile(source.sourceType, source.category);
+  const parserSupported = source.parserCompatible && parserProfile !== "dynamic_page" && parserProfile !== "public_channel" && parserProfile !== "restricted_metadata_handoff";
+  const needsReview = source.legalReviewState !== "current" || (source.robotsReviewState !== "current" && source.robotsReviewState !== "not_required");
+  const activationReadiness: SourceMarketplaceSource["activationReadiness"] = !sourceMarketplaceSafePublic(source)
+    ? "blocked_unsafe"
+    : !parserSupported
+      ? "needs_parser_support"
+      : needsReview
+        ? "needs_legal_review"
+        : "ready_for_dry_run";
+  const recommendedAction: SourceMarketplaceSource["recommendedAction"] = activationReadiness === "ready_for_dry_run"
+    ? "dry_run_activation_packet"
+    : activationReadiness === "needs_parser_support"
+      ? "request_parser_support"
+      : activationReadiness === "needs_legal_review"
+        ? "request_legal_review"
+        : "exclude_unsafe";
+  const sectorUtility = uniqueStrings(source.safePublicRationale
+    .flatMap((item) => item.replace("coverage:", "").split(","))
+    .map((item) => item.trim())
+    .filter(Boolean));
+  const yieldReady = source.expectedEvidenceYield >= 0.5;
+
+  return {
+    sourceId: source.sourceId,
+    sourceName: source.sourceName,
+    sourceFamily: source.category,
+    sourceType: source.sourceType,
+    url: source.url,
+    trustScore: Number(Math.min(0.98, source.expectedEvidenceYield + 0.2).toFixed(2)),
+    reliability: Number(Math.min(0.98, source.expectedEvidenceYield + 0.15).toFixed(2)),
+    region: source.category === "government_cert" || source.category === "advisory" ? ["global", "Europe"] : ["global"],
+    language: "en",
+    sectorUtility,
+    parserProfile,
+    parserSupported,
+    parserOwner: sourceMarketplaceParserOwner(parserProfile),
+    legalReviewState: source.legalReviewState,
+    robotsReviewState: source.robotsReviewState,
+    schedulerCost: source.schedulerBudget,
+    expectedEvidenceYield: source.expectedEvidenceYield,
+    duplicateRate: source.category === "rss" ? 0.08 : source.category === "public_research_feed" ? 0.05 : 0.02,
+    activationReadiness,
+    rollbackState: {
+      rollbackPath: source.rollbackQuarantinePlan.rollbackPath,
+      quarantineTrigger: source.rollbackQuarantinePlan.quarantineTrigger
+    },
+    recommendedAction,
+    handoffs: {
+      agent02: source.schedulerBudget.estimatedDailyTasks <= 24 ? "scheduler_budget_ready" : "budget_review",
+      agent03: parserSupported ? "parser_supported" : "parser_gap",
+      agent04: source.category === "rss" || source.category === "vendor_blog" || source.category === "advisory" ? "public_signal_candidate" : "not_public_channel",
+      agent06: yieldReady ? "evidence_yield_ready" : "yield_watch",
+      agent07: yieldReady ? "quality_input_ready" : "quality_watch",
+      agent09: "api_contract_ready",
+      agent10: activationReadiness === "ready_for_dry_run" ? "slo_ready" : "release_hold"
+    }
+  };
+}
+
+function buildSourceMarketplaceParserCapabilityMatrix(sources: SourceMarketplaceSource[]): SourceMarketplaceParserCapability[] {
+  const definitions: Array<Omit<SourceMarketplaceParserCapability, "marketplaceSourceCount" | "compatibleSourceCount">> = [
+    { profile: "static_html", owner: "agent_03", supportedSourceTypes: ["static_web"], supported: true, activationBlockedUntilSupported: false, notes: ["static public HTML parser available for safe public pages"] },
+    { profile: "rss", owner: "agent_03", supportedSourceTypes: ["rss"], supported: true, activationBlockedUntilSupported: false, notes: ["RSS/Atom parser available with conditional request support"] },
+    { profile: "dynamic_page", owner: "agent_03", supportedSourceTypes: ["dynamic_web"], supported: false, activationBlockedUntilSupported: true, notes: ["browser/dynamic workers remain disabled until separate canary approval"] },
+    { profile: "pdf_report", owner: "agent_03", supportedSourceTypes: ["pdf"], supported: true, activationBlockedUntilSupported: false, notes: ["public PDF/report parsing is supported for defensive reports"] },
+    { profile: "public_channel", owner: "agent_04", supportedSourceTypes: ["telegram_public"], supported: false, activationBlockedUntilSupported: true, notes: ["public-channel activation is governed separately and does not satisfy safe-public marketplace rollout"] },
+    { profile: "advisory_security_signal", owner: "agent_03", supportedSourceTypes: ["api"], supported: true, activationBlockedUntilSupported: false, notes: ["public advisory/security APIs are supported without private repository access"] },
+    { profile: "restricted_metadata_handoff", owner: "agent_05", supportedSourceTypes: ["tor_metadata", "i2p_metadata", "freenet_metadata"], supported: false, activationBlockedUntilSupported: true, notes: ["restricted metadata stays approval-gated and cannot become safe-public activation"] }
+  ];
+  return definitions.map((definition) => {
+    const matches = sources.filter((source) => source.parserProfile === definition.profile);
+    return {
+      ...definition,
+      marketplaceSourceCount: matches.length,
+      compatibleSourceCount: matches.filter((source) => source.parserSupported).length
+    };
+  });
+}
+
+function sourceMarketplaceParserProfile(sourceType: SourceType, category: SourceActivationWaveCategory): SourceMarketplaceParserProfile {
+  if (sourceType === "rss") return "rss";
+  if (sourceType === "api" || category === "github_security_advisory" || category === "advisory") return "advisory_security_signal";
+  if (sourceType === "static_web") return "static_html";
+  if (sourceType === "pdf") return "pdf_report";
+  if (sourceType === "telegram_public") return "public_channel";
+  if (sourceType === "dynamic_web") return "dynamic_page";
+  return "restricted_metadata_handoff";
+}
+
+function sourceMarketplaceParserOwner(profile: SourceMarketplaceParserProfile): SourceMarketplaceSource["parserOwner"] {
+  if (profile === "public_channel") return "agent_04";
+  if (profile === "restricted_metadata_handoff") return "agent_05";
+  return "agent_03";
+}
+
+function sourceMarketplaceSafePublic(source: SourceActivationWaveSource): boolean {
+  return ["rss", "static_web", "api", "pdf"].includes(source.sourceType) && source.approvalScope === "safe_public_auto";
+}
+
+function sourceMarketplaceUnsupportedClasses(): SourceMarketplaceApiResponse["unsupportedSourceClasses"] {
+  return [
+    { sourceClass: "restricted_raw_payload", owner: "agent_01", activationAllowed: false, reason: "Raw restricted payloads and leaked datasets are never safe-public marketplace sources." },
+    { sourceClass: "private_forum_or_invite", owner: "agent_01", activationAllowed: false, reason: "Private or invite-only collection requires separate governance and cannot be installed from marketplace." },
+    { sourceClass: "credentialed_or_auth_gated", owner: "agent_01", activationAllowed: false, reason: "Credentialed, tokenized, or auth-gated targets are excluded from automatic onboarding." },
+    { sourceClass: "captcha_or_bypass_required", owner: "agent_03", activationAllowed: false, reason: "CAPTCHA solving and bypass flows are prohibited; dynamic parsing needs separate canary approval." },
+    { sourceClass: "public_chat_source", owner: "agent_04", activationAllowed: false, reason: "Public chat sources are handled by the public-channel workflow and do not count as safe-public web rollout." },
+    { sourceClass: "restricted_metadata_handoff", owner: "agent_05", activationAllowed: false, reason: "Restricted metadata remains metadata-only, legal/operator approved, and separated from safe-public activation." }
+  ];
 }
 
 function activationExecutionSource(

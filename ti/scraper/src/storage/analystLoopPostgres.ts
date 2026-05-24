@@ -107,6 +107,15 @@ export interface AnalystClaimLedgerEntryRow {
   source_hash: string;
   confidence: number;
   ledger_status: AnalystClaimLedgerEntry["ledgerStatus"];
+  duplicate_of?: string;
+  contradiction_reason?: string;
+  retention_class?: AnalystClaimLedgerEntry["retentionClass"];
+  legal_hold?: boolean;
+  graph_eligible?: boolean;
+  stix_eligible?: boolean;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  updated_at?: string;
   observed_at: string;
   provenance: JsonObject;
   created_at: string;
@@ -317,6 +326,15 @@ export function analystClaimLedgerEntryToPostgresRow(entry: AnalystClaimLedgerEn
     source_hash: entry.sourceHash,
     confidence: entry.confidence,
     ledger_status: entry.ledgerStatus,
+    duplicate_of: entry.duplicateOf,
+    contradiction_reason: entry.contradictionReason,
+    retention_class: entry.retentionClass,
+    legal_hold: entry.legalHold,
+    graph_eligible: entry.graphEligible,
+    stix_eligible: entry.stixEligible,
+    reviewed_by: entry.reviewedBy,
+    reviewed_at: entry.reviewedAt,
+    updated_at: entry.updatedAt,
     observed_at: entry.observedAt,
     provenance: safeProvenance(entry.provenance, entry.id),
     created_at: entry.createdAt
@@ -338,6 +356,15 @@ export function analystClaimLedgerEntryFromPostgresRow(row: AnalystClaimLedgerEn
     sourceHash: row.source_hash,
     confidence: row.confidence,
     ledgerStatus: row.ledger_status,
+    duplicateOf: row.duplicate_of,
+    contradictionReason: row.contradiction_reason,
+    retentionClass: row.retention_class,
+    legalHold: row.legal_hold,
+    graphEligible: row.graph_eligible,
+    stixEligible: row.stix_eligible,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    updatedAt: row.updated_at,
     observedAt: row.observed_at,
     provenance: safeProvenance(row.provenance, row.id),
     createdAt: row.created_at

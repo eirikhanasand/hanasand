@@ -525,6 +525,49 @@ export function buildCanaryOperatorSummary(input: {
   };
 }
 
+export function buildCanaryOperatorConsoleHtml(summary: CanaryOperatorSummary): string {
+  const health = summary.schedulerHealth;
+  const rows = [
+    ["Active sources", String(summary.activeSources.length)],
+    ["Queued tasks", String(summary.queue.queued)],
+    ["Leased tasks", String(summary.queue.leased)],
+    ["Dead letters", String(summary.queue.deadLetters)],
+    ["Latest captures", String(summary.latestCaptures.length)],
+    ["Promotion yield", health.promotionYield.toFixed(3)],
+    ["Error rate", health.errorRate.toFixed(3)]
+  ];
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TI Canary Operator Console</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; color: #17202a; }
+    table { border-collapse: collapse; min-width: 420px; }
+    th, td { border-bottom: 1px solid #d8dee4; padding: 8px 10px; text-align: left; }
+    th { background: #f6f8fa; }
+    code { background: #f6f8fa; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>TI Canary Operator Console</h1>
+  <p>Generated at <code>${escapeHtml(summary.generatedAt)}</code></p>
+  <table>
+    <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+    <tbody>${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody>
+  </table>
+</body>
+</html>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & {
   intervalSeconds?: number;
   enabled?: boolean;

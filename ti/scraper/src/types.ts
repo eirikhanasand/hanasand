@@ -651,13 +651,44 @@ export interface AnalystClaimLedgerEntry {
   reviewTaskId?: string;
   captureId?: string;
   sourceId: string;
-  claimKind: "leak_claim" | "victim_claim" | "dataset_size_claim" | "affected_accounts_claim" | "actor_statement_claim";
+  claimKind:
+    | "leak_claim"
+    | "victim_claim"
+    | "dataset_size_claim"
+    | "affected_accounts_claim"
+    | "actor_statement_claim"
+    | "actor_claim"
+    | "cve_claim"
+    | "malware_tool_claim"
+    | "campaign_claim"
+    | "ttp_claim"
+    | "sector_claim"
+    | "country_claim"
+    | "infrastructure_claim";
   company?: string;
   victim?: string;
   claimTextSummary: string;
   sourceHash: string;
   confidence: number;
-  ledgerStatus: "metadata_review" | "trusted" | "duplicate" | "notified" | "blocked" | "closed";
+  ledgerStatus:
+    | "metadata_review"
+    | "trusted"
+    | "held"
+    | "contradicted"
+    | "duplicate"
+    | "stale"
+    | "notified"
+    | "blocked"
+    | "closed";
+  duplicateOf?: string;
+  contradictionReason?: string;
+  retentionClass?: RetentionClass;
+  legalHold?: boolean;
+  graphEligible?: boolean;
+  stixEligible?: boolean;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  updatedAt?: string;
   observedAt: string;
   provenance: Record<string, unknown>;
   createdAt: string;
@@ -1697,6 +1728,14 @@ export interface GraphAttackCampaignWorkspaceDto {
     actorNodeIds: string[];
     techniqueNodeIds: string[];
   };
+  pivotQueues: Array<{
+    pivotType: Extract<IntelligenceNodeType, "actor" | "campaign" | "attack-pattern" | "malware" | "tool" | "victim" | "infrastructure" | "vulnerability">;
+    nodeIds: string[];
+    relationshipIds: string[];
+    nextActions: Array<"open_neighborhood" | "request_evidence" | "hold_export" | "promote_reviewed">;
+    priority: "high" | "medium" | "low";
+    reason: string;
+  }>;
   reviewHolds: Array<{
     relationshipId: string;
     reasonCodes: GraphIntegrityFindingCode[];
@@ -1706,6 +1745,19 @@ export interface GraphAttackCampaignWorkspaceDto {
     readyRelationshipIds: string[];
     heldRelationshipIds: string[];
     policy: "reviewed_or_promoted_ttp_campaign_edges_only";
+  };
+  performanceBudget: {
+    maxNodes: number;
+    maxEdges: number;
+    maxTimelineEvents: number;
+    maxReviewHolds: number;
+    nodeCount: number;
+    edgeCount: number;
+    timelineEventCount: number;
+    reviewHoldCount: number;
+    truncated: boolean;
+    nextPageCursor?: string;
+    queryPlan: "bounded_single_hop_campaign_ttp_pivots";
   };
   deltaPolling: {
     cursorField: "graph.deltas[].cursor";

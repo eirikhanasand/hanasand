@@ -4,6 +4,7 @@ import {
   buildSourceActivationBatchApiResponse,
   buildSourceCoverageCloseoutApiResponse,
   buildSourceCoveragePlanApiResponse,
+  buildSourceMarketplaceApiResponse,
   buildSourcePortfolioApiResponse,
   buildSourceRuntimeSlaApiResponse,
   buildSourceActivationReport,
@@ -776,6 +777,72 @@ describe("source seed bundles", () => {
       field: "sourcePortfolioId",
       gate: "source_portfolio_ready"
     });
+  });
+
+  test("builds source marketplace and parser capability matrix without activating sources", () => {
+    const generatedAt = "2026-05-24T00:00:00.000Z";
+    const marketplace = buildSourceMarketplaceApiResponse({
+      tenantId: "tenant_marketplace",
+      generatedAt,
+      queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "Norway critical infrastructure"]
+    });
+
+    expect(marketplace).toMatchObject({
+      endpoint: "/v1/sources/marketplace",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      tenantId: "tenant_marketplace"
+    });
+    expect(marketplace.marketplace.sourceCount).toBe(50);
+    expect(marketplace.marketplace.safePublicSourceCount).toBe(50);
+    expect(marketplace.marketplace.sourceFamilies).toEqual(expect.arrayContaining([
+      "vendor_blog",
+      "advisory",
+      "rss",
+      "github_security_advisory",
+      "public_research_feed",
+      "government_cert"
+    ]));
+    expect(marketplace.marketplace.sources.every((source) => source.activationReadiness === "ready_for_dry_run")).toBe(true);
+    expect(marketplace.marketplace.sources.every((source) => source.schedulerCost.estimatedDailyTasks > 0)).toBe(true);
+    expect(marketplace.marketplace.sources.every((source) => source.rollbackState.rollbackPath.length > 0)).toBe(true);
+    expect(marketplace.parserCapabilityMatrix.map((item) => item.profile)).toEqual(expect.arrayContaining([
+      "static_html",
+      "rss",
+      "dynamic_page",
+      "pdf_report",
+      "public_channel",
+      "advisory_security_signal",
+      "restricted_metadata_handoff"
+    ]));
+    expect(marketplace.parserCapabilityMatrix.find((item) => item.profile === "dynamic_page")).toMatchObject({
+      supported: false,
+      activationBlockedUntilSupported: true
+    });
+    expect(marketplace.parserCapabilityMatrix.find((item) => item.profile === "rss")?.compatibleSourceCount).toBeGreaterThan(0);
+    expect(marketplace.activationReadiness).toMatchObject({
+      readyForDryRun: 50,
+      needsParserSupport: 0,
+      needsLegalReview: 0,
+      blockedUnsafe: 0
+    });
+    expect(marketplace.unsupportedSourceClasses.map((item) => item.sourceClass)).toEqual(expect.arrayContaining([
+      "restricted_raw_payload",
+      "private_forum_or_invite",
+      "credentialed_or_auth_gated",
+      "captcha_or_bypass_required",
+      "public_chat_source",
+      "restricted_metadata_handoff"
+    ]));
+    expect(marketplace.unsupportedSourceClasses.every((item) => item.activationAllowed === false)).toBe(true);
+    expect(marketplace.governance).toMatchObject({
+      approvalMode: "dry_run_packets_only",
+      noSilentActivation: true,
+      noCrawlingFromMarketplace: true
+    });
+    expect(JSON.stringify(marketplace)).not.toContain("onion");
+    expect(JSON.stringify(marketplace)).not.toContain("password");
   });
 
   test("builds dry-run source activation batches for runtime collection readiness", async () => {

@@ -15,6 +15,8 @@ interface RouteCheck {
   expectedStatus?: number;
   body?: unknown;
   expectKeys: string[];
+  expectText?: string[];
+  expectContentType?: string;
 }
 
 interface RouteResult {
@@ -70,11 +72,13 @@ function routeChecks(): RouteCheck[] {
     { owner: "Agent 01", name: "sources_list", method: "GET", path: "/v1/sources?limit=2", expectKeys: ["sources"] },
     { owner: "Agent 01", name: "sources_apply_plan", method: "POST", path: "/v1/sources/apply-plan", body: { queryScope: { queries: ["APT29"], entityTypes: ["actor"] }, selectedActions: ["approve", "quarantine", "retire", "request_legal_notes", "leave_unchanged"], includeExecutionPreview: true }, expectKeys: ["applyPlan"] },
     { owner: "Agent 01", name: "sources_coverage_plan", method: "POST", path: "/v1/sources/coverage-plan", body: { queries: ["APT29", "Scattered Spider"], entityTypes: ["actor"] }, expectKeys: ["endpoint", "queries"] },
+    { owner: "Agent 01", name: "sources_marketplace", method: "POST", path: "/v1/sources/marketplace", body: { queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234"] }, expectKeys: ["endpoint", "marketplace", "parserCapabilityMatrix", "activationReadiness"] },
     { owner: "Agent 01", name: "sources_activation_batches", method: "POST", path: "/v1/sources/activation-batches", body: { queries: ["APT29"], entityTypes: ["actor"] }, expectKeys: ["endpoint", "queries", "coordination", "executionReadiness"] },
     { owner: "Agent 01", name: "sources_coverage_closeout", method: "POST", path: "/v1/sources/coverage-closeout", body: { queries: ["APT29", "Akira ransomware victims", "CVE-2024-1234", "campaign infrastructure"], entityTypes: ["actor"] }, expectKeys: ["endpoint", "queries", "activationWaves", "executionReadiness", "releasePacket"] },
     { owner: "Agent 02", name: "frontier_snapshot", method: "GET", path: "/v1/frontier", expectKeys: ["queue", "summary", "scheduler"] },
     { owner: "Agent 02", name: "frontier_status", method: "GET", path: "/v1/frontier/status?q=APT29", expectKeys: ["endpoint", "summary", "scheduler"] },
     { owner: "Agent 02", name: "frontier_apply_plan", method: "POST", path: "/v1/frontier/apply-plan", body: { scenario: "normal", includeExecutionPreview: true }, expectKeys: ["applyPlan"] },
+    { owner: "Agent 07", name: "canary_operator_console", method: "GET", path: "/v1/ops/canary/console", expectKeys: [], expectText: ["TI Canary Ops", "Active Sources", "Public Answer Readiness", "Why Partial"], expectContentType: "text/html" },
     { owner: "Agent 04", name: "public_channel_status", method: "GET", path: "/v1/public-channels/status?q=APT29&entityType=actor", expectKeys: ["status"] },
     { owner: "Agent 04", name: "public_channel_apply_plan", method: "POST", path: "/v1/public-channels/apply-plan", body: { selectedActions: ["activate_source_pack"], dryRun: true, query: "APT29" }, expectKeys: ["applyPlan"] },
     { owner: "Agent 05", name: "restricted_metadata_apply_plan", method: "POST", path: "/v1/restricted-metadata/apply-plan", body: { sourceIds: ["src_restricted"], dryRun: true }, expectKeys: ["applyPlan"] },
@@ -104,6 +108,8 @@ async function runRouteCheck(base: string, check: RouteCheck): Promise<RouteResu
   const json = parseJson(text);
   const keys = isRecord(json) ? Object.keys(json).sort() : [];
   const missingKeys = check.expectKeys.filter((key) => !keys.includes(key));
+  const missingText = (check.expectText ?? []).filter((value) => !text.includes(value));
+  const contentTypeOk = check.expectContentType ? (response.headers.get("content-type") ?? "").includes(check.expectContentType) : true;
   const expectedStatus = check.expectedStatus ?? 200;
   const unsafeLeak = ["telegram raw proof payload", "cookie=", "password=", "authorization:", "set-cookie"].some((raw) => text.toLowerCase().includes(raw));
   return {
@@ -111,10 +117,20 @@ async function runRouteCheck(base: string, check: RouteCheck): Promise<RouteResu
     name: check.name,
     route: `${check.method} ${check.path.split("?")[0]}`,
     status: response.status,
-    ok: response.status === expectedStatus && missingKeys.length === 0 && !unsafeLeak,
+    ok: response.status === expectedStatus && missingKeys.length === 0 && missingText.length === 0 && contentTypeOk && !unsafeLeak,
     keys,
-    expectedOutput: `HTTP ${expectedStatus}; keys=${check.expectKeys.join(",")}; compact safe response`,
-    errorCode: isRecord(json) && isRecord(json.error) ? String(json.error.code ?? "") : undefined
+    expectedOutput: check.expectText?.length
+      ? `HTTP ${expectedStatus}; text=${check.expectText.join(",")}; compact safe response`
+      : `HTTP ${expectedStatus}; keys=${check.expectKeys.join(",")}; compact safe response`,
+    errorCode: response.status !== expectedStatus
+      ? `status_${response.status}`
+      : missingKeys.length
+        ? `missing_${missingKeys.join("_")}`
+        : missingText.length
+          ? `missing_text_${missingText.join("_")}`
+          : !contentTypeOk
+            ? "content_type_mismatch"
+            : isRecord(json) && isRecord(json.error) ? String(json.error.code ?? "") : undefined
   };
 }
 

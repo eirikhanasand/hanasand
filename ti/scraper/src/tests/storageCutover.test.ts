@@ -221,7 +221,14 @@ describe("evidence storage cutover", () => {
       claimTextSummary: "20 GB was claimed as dataset size or volume.",
       sourceHash: reviewTask.sourceHash,
       confidence: 0.82,
-      ledgerStatus: "metadata_review",
+      ledgerStatus: "trusted",
+      retentionClass: "restricted_metadata",
+      legalHold: false,
+      graphEligible: true,
+      stixEligible: true,
+      reviewedBy: "analyst-6",
+      reviewedAt: "2026-05-24T10:03:30.000Z",
+      updatedAt: "2026-05-24T10:03:30.000Z",
       observedAt: reviewTask.observedAt,
       provenance: reviewTask.provenance,
       createdAt: "2026-05-24T10:03:00.000Z"
@@ -280,7 +287,12 @@ describe("evidence storage cutover", () => {
     });
     expect(claimRow).toMatchObject({
       claim_kind: "dataset_size_claim",
-      ledger_status: "metadata_review"
+      ledger_status: "trusted",
+      retention_class: "restricted_metadata",
+      legal_hold: false,
+      graph_eligible: true,
+      stix_eligible: true,
+      reviewed_by: "analyst-6"
     });
     expect(analystMetadataReviewTaskFromPostgresRow(reviewRow)).toEqual(reviewTask);
     expect(analystSourceActivationPacketFromPostgresRow(activationRow)).toEqual(activationPacket);
