@@ -216,7 +216,7 @@ describe("api v1", () => {
       metadata: { claimClusterId: "claim_product_slo" }
     }));
 
-    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=20&actorRowCount=98&actorUsefulRowCount=48&actorFreshRowCount=64&actorStaleRowCount=3&actorSellableRows=16&actorIncludedWithCaveatRows=32&actorCoverageGapOnlyRows=30&actorHoldRows=20&actorSuppressRows=0&actorTargetSellableRows=25&actorAverageBuyerValueScore=0.6&actorDefaultWatchlistRun=true&computeCostUsd=0.0023&resultPriceUsdPerThousand=3&actorStartPriceUsd=0.00005&apifyMarginRate=0.2&apifyActorViewCount=6&apifyActorRunCount=2&apifyUniqueUserCount=1&apifyTrialRunCount=2&apifyPaidRunCount=1&apifyRepeatUserCount=0&apifyBeneficiaryVerified=false&apifyPayoutMethodReady=false&apifyPricingEffectiveAt=2026-07-04"), { store, frontier }));
+    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=20&actorRowCount=98&actorUsefulRowCount=48&actorFreshRowCount=64&actorStaleRowCount=3&actorSellableRows=16&actorIncludedWithCaveatRows=32&actorCoverageGapOnlyRows=30&actorHoldRows=20&actorSuppressRows=0&actorTargetSellableRows=25&actorAverageBuyerValueScore=0.6&actorDefaultWatchlistRun=true&computeCostUsd=0.0023&resultPriceUsdPerThousand=3&actorStartPriceUsd=0.00005&apifyMarginRate=0.2&apifyActorViewCount=6&apifyActorRunCount=2&apifyUniqueUserCount=1&apifyTrialRunCount=2&apifyPaidRunCount=1&apifyActorStartCount=2&apifyDatasetRowCount=98&apifyFailedRunCount=0&apifyRepeatUserCount=0&apifyRefundCount=0&apifyPlatformUsageCostUsd=0.0023&apifyEstimatedCreatorRevenueUsd=0.235&apifyBeneficiaryVerified=false&apifyPayoutMethodReady=false&apifyWithdrawalReady=false&apifyPricingEffectiveAt=2026-07-04"), { store, frontier }));
 
     expect(response.schemaVersion).toBe("ti.live_product_slo_dashboard.v1");
     expect(response.route).toBe("/v1/ops/product-slo");
@@ -227,6 +227,12 @@ describe("api v1", () => {
     expect((response.apifyLaunchExperiment as {
       paidRowDecisionCounts: { sellable: number; includedWithCaveat: number; coverageGapOnly: number; hold: number; buyerUseful: number };
       monetizationReadiness: { status: string; targetSellableRows: number; sellableRows: number; averageBuyerValueScore: number; sellableRowRate: number; blockers: string[] };
+      marketplaceTelemetry: { schemaVersion: string; storePageViews: number; actorStarts: number; datasetRows: number; failedRuns: number; refunds: number; platformUsageCostUsd: number; estimatedCreatorRevenueUsd: number; realDataRequired: boolean; unknownMeansNoClaim: boolean };
+      payoutReadiness: { schemaVersion: string; payoutMethodState: string; beneficiaryState: string; withdrawalReadiness: string; externallyVerified: boolean; blockers: string[] };
+      conversionExperiments: Array<{ id: string; successCriteria: string[]; stopLossCriteria: string[]; datasetValueProofField: string; buyerVisibleFields: string[]; noLeakRequired: boolean }>;
+      operatorBlockerBoard: Array<{ owner: string; blocker: string; conversionImpact: string }>;
+      fakeTractionGuards: string[];
+      nextRevenueAction: string;
       storeViewToRunRate: number;
       storeViewToUserRate: number;
       runsPerUser: number;
@@ -234,17 +240,29 @@ describe("api v1", () => {
     })).toMatchObject({
       paidRowDecisionCounts: { sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, buyerUseful: 48 },
       monetizationReadiness: { status: "blocked_for_paid_traffic", targetSellableRows: 25, sellableRows: 16, averageBuyerValueScore: 0.6, sellableRowRate: 0.163, blockers: ["sellable_rows_below_paid_traffic_floor"] },
+      marketplaceTelemetry: { schemaVersion: "ti.apify_marketplace_telemetry_input.v1", storePageViews: 6, actorStarts: 2, datasetRows: 98, failedRuns: 0, refunds: 0, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, realDataRequired: true, unknownMeansNoClaim: true },
+      payoutReadiness: { schemaVersion: "ti.apify_payout_readiness.v1", payoutMethodState: "blocked", beneficiaryState: "blocked", withdrawalReadiness: "blocked", externallyVerified: false, blockers: expect.arrayContaining(["apify_withdrawal_readiness_not_confirmed"]) as unknown as string[] },
+      nextRevenueAction: "payout_setup",
       storeViewToRunRate: 0.333,
       storeViewToUserRate: 0.167,
       runsPerUser: 2,
       trialToPaidRate: 0.5
     });
+    const launch = response.apifyLaunchExperiment as {
+      conversionExperiments: Array<{ id: string; buyerVisibleFields: string[]; noLeakRequired: boolean }>;
+      operatorBlockerBoard: Array<{ owner: string }>;
+      fakeTractionGuards: string[];
+    };
+    expect(launch.conversionExperiments.map((item) => item.id)).toEqual(["starter_actor_query_pack", "high_freshness_apt_monitoring_pack", "ransomware_public_claim_metadata_pack"]);
+    expect(launch.conversionExperiments.every((item) => item.buyerVisibleFields.includes("noLeakProof") && item.noLeakRequired)).toBe(true);
+    expect(launch.operatorBlockerBoard.map((item) => item.owner)).toEqual(expect.arrayContaining(["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"]));
+    expect(launch.fakeTractionGuards.join(" ")).toContain("remain null until sourced from Apify analytics");
     expect((response.apifyLaunchExperiment as { unknowns: string[] }).unknowns).toContain("grossPpeRevenueUsd");
     expect((response.paidProductEconomics as {
       pricing: { resultPriceUsdPerThousand: number; effectiveAt: string };
       latestRun: { rowCount: number; usefulRowRate: number; freshRowRate: number; defaultWatchlistRun: boolean; paidRowDecisionCounts: { buyerUseful: number }; monetizationReadiness: { status: string; sellableRowRate: number } };
       projectedRevenue: { grossRowsUsd: number; netAfterApifyUsd: number; projectedNetAfterUsageUsd: number };
-      marketplace: { storeViewToRunRate: number; trialToPaidRate: number; beneficiaryStatus: string; payoutMethodStatus: string; blockers: string[] };
+      marketplace: { storeViewToRunRate: number; trialToPaidRate: number; beneficiaryStatus: string; payoutMethodStatus: string; withdrawalStatus: string; blockers: string[]; fakeTractionGuards: string[] };
     })).toMatchObject({
       pricing: { resultPriceUsdPerThousand: 3, effectiveAt: "2026-07-04" },
       latestRun: { rowCount: 98, usefulRowRate: 0.49, freshRowRate: 0.653, defaultWatchlistRun: true, paidRowDecisionCounts: { buyerUseful: 48 }, monetizationReadiness: { status: "blocked_for_paid_traffic", sellableRowRate: 0.163 } },
@@ -254,7 +272,8 @@ describe("api v1", () => {
         trialToPaidRate: 0.5,
         beneficiaryStatus: "blocked",
         payoutMethodStatus: "blocked",
-        blockers: expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed"]) as unknown as string[]
+        withdrawalStatus: "blocked",
+        blockers: expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed", "apify_withdrawal_readiness_not_confirmed"]) as unknown as string[]
       }
     });
     expect((response.sourceMonetizationGate as {
@@ -415,6 +434,43 @@ describe("api v1", () => {
       blockedLatestClaimReasons: expect.arrayContaining(["old_evidence", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]) as unknown as string[]
     });
     expect((response.liveFreshnessQualityGate as { sourceParserHandoffs: Array<{ owner: string }> }).sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect((response.freshnessRepairLoop as {
+      schemaVersion: string;
+      routeVisibleOn: string[];
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      repairQueueSize: number;
+      actorCoverage: string[];
+      blockerReasons: string[];
+      staleRowsBlocked: number;
+      genericRowsRepaired: number;
+      aliasOrUnrelatedRowsSuppressed: number;
+      caveatedRowsPreserved: number;
+      sellableRowsGained: number;
+      usefulRowsGained: number;
+      averageBuyerValueDelta: number;
+      ownerHandoffs: Array<{ owner: string }>;
+      noLeakProof: { rawEvidenceExposed: boolean; unsafeUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+    })).toMatchObject({
+      schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"]) as unknown as string[],
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      repairQueueSize: 20,
+      actorCoverage: expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]) as unknown as string[],
+      blockerReasons: expect.arrayContaining(["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]) as unknown as string[],
+      staleRowsBlocked: 4,
+      genericRowsRepaired: 4,
+      aliasOrUnrelatedRowsSuppressed: 4,
+      caveatedRowsPreserved: 5,
+      sellableRowsGained: 6,
+      usefulRowsGained: 5,
+      averageBuyerValueDelta: 0.19,
+      noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
+    });
+    expect((response.freshnessRepairLoop as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect((response.deploymentProof as { actorBuildId: string }).actorBuildId).toBe("build_live");
     expect((response.resourceGuardrails as { scraperTargetRamGb: number }).scraperTargetRamGb).toBe(96);
 
@@ -1590,6 +1646,11 @@ describe("api v1", () => {
       frontendApiCompatibility: { states: Array<{ state: string; copy: string; refreshAfterSeconds: number; preservePriorAnswer: boolean }>; stableFields: string[]; unknownActorCopy: string; emptyDeltaRule: string };
       pricingHooks: { model: string; unitEvent: string; actorStartEvent: string; effectiveDate: string; rowPriceUsdPerThousand: number; actorStartPriceUsd: number; platformUsageIncludedForUsers: boolean; apifyMarginPercent: number; payoutStatus: string; revenueTelemetryHandoff: string };
       conversionTracking: { currentStorePageViews: null | number; currentUniqueUsers: null | number; currentTrialRuns: null | number; currentPaidRuns: null | number; currentConversionRate: null | number; metricsToTrack: string[]; handoffRoute: string };
+      marketplaceTelemetryInputContract: { schemaVersion: string; routeVisibleOn: string[]; fields: string[]; currentValues: Record<string, null | number>; realDataRequired: boolean; unknownMeansNoClaim: boolean; forbiddenSyntheticClaims: string[] };
+      payoutReadiness: { schemaVersion: string; payoutMethodState: string; beneficiaryState: string; withdrawalReadiness: string; externallyVerified: boolean; externalVerificationRequired: string[]; blockers: string[] };
+      conversionExperiments: Array<{ id: string; expectedBuyer: string; successCriteria: string[]; stopLossCriteria: string[]; datasetValueProofField: string; buyerVisibleFields: string[]; noLeakRequired: boolean }>;
+      operatorBlockerBoard: Array<{ owner: string; blocker: string; conversionImpact: string; nextAction: string }>;
+      fakeTractionGuards: string[];
       buyerFacingConversionProof: {
         schemaVersion: string;
         routeVisibleOn: string[];
@@ -3016,11 +3077,39 @@ describe("api v1", () => {
       "uniqueUsers",
       "trialRuns",
       "paidRuns",
+      "actorStarts",
+      "datasetRows",
+      "failedRuns",
+      "refunds",
+      "platformUsageCostUsd",
+      "estimatedCreatorRevenueUsd",
       "conversionRate",
       "usefulRowRate",
       "freshRowRate",
       "costPerUsefulRow"
     ]));
+    expect(apifyStoreReadiness.marketplaceTelemetryInputContract).toMatchObject({
+      schemaVersion: "ti.apify_marketplace_telemetry_input.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "route_inventory"]),
+      realDataRequired: true,
+      unknownMeansNoClaim: true
+    });
+    expect(apifyStoreReadiness.marketplaceTelemetryInputContract.fields).toEqual(expect.arrayContaining(["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "actorStarts", "actorRuns", "datasetRows", "failedRuns", "repeatUsers", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd"]));
+    expect(apifyStoreReadiness.marketplaceTelemetryInputContract.currentValues.storePageViews).toBeNull();
+    expect(apifyStoreReadiness.marketplaceTelemetryInputContract.currentValues.paidRuns).toBeNull();
+    expect(apifyStoreReadiness.marketplaceTelemetryInputContract.forbiddenSyntheticClaims).toEqual(expect.arrayContaining(["synthetic_unique_users", "invented_paid_runs", "placeholder_payout_ready"]));
+    expect(apifyStoreReadiness.payoutReadiness).toMatchObject({
+      schemaVersion: "ti.apify_payout_readiness.v1",
+      payoutMethodState: "unknown",
+      beneficiaryState: "unknown",
+      withdrawalReadiness: "unknown",
+      externallyVerified: false,
+      externalVerificationRequired: expect.arrayContaining(["beneficiary", "payout_method", "withdrawal_readiness"])
+    });
+    expect(apifyStoreReadiness.conversionExperiments.map((experiment) => experiment.id)).toEqual(["starter_actor_query_pack", "high_freshness_apt_monitoring_pack", "ransomware_public_claim_metadata_pack"]);
+    expect(apifyStoreReadiness.conversionExperiments.every((experiment) => experiment.buyerVisibleFields.includes("noLeakProof") && experiment.noLeakRequired && experiment.successCriteria.length > 0 && experiment.stopLossCriteria.length > 0)).toBe(true);
+    expect(apifyStoreReadiness.operatorBlockerBoard.map((row) => row.owner)).toEqual(expect.arrayContaining(["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"]));
+    expect(apifyStoreReadiness.fakeTractionGuards.join(" ")).toContain("remain null until sourced from Apify analytics");
     expect(apifyStoreReadiness.buyerFacingConversionProof).toMatchObject({
       schemaVersion: "ti.apify_buyer_facing_conversion_proof.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "/v1/quality/evaluate"]),

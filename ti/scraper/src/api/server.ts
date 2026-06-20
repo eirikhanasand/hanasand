@@ -7766,9 +7766,16 @@ function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Recor
       uniqueUserCount: numberQuery(url.searchParams.get("apifyUniqueUserCount")) ?? null,
       trialRunCount: numberQuery(url.searchParams.get("apifyTrialRunCount")) ?? null,
       paidRunCount: numberQuery(url.searchParams.get("apifyPaidRunCount")) ?? null,
+      actorStartCount: numberQuery(url.searchParams.get("apifyActorStartCount")) ?? null,
+      datasetRowCount: numberQuery(url.searchParams.get("apifyDatasetRowCount")) ?? null,
+      failedRunCount: numberQuery(url.searchParams.get("apifyFailedRunCount")) ?? null,
       repeatUserCount: numberQuery(url.searchParams.get("apifyRepeatUserCount")) ?? null,
+      refundCount: numberQuery(url.searchParams.get("apifyRefundCount")) ?? null,
+      platformUsageCostUsd: numberQuery(url.searchParams.get("apifyPlatformUsageCostUsd")) ?? null,
+      estimatedCreatorRevenueUsd: numberQuery(url.searchParams.get("apifyEstimatedCreatorRevenueUsd")) ?? null,
       beneficiaryVerified: booleanQuery(url.searchParams.get("apifyBeneficiaryVerified")),
       payoutMethodReady: booleanQuery(url.searchParams.get("apifyPayoutMethodReady")),
+      withdrawalReady: booleanQuery(url.searchParams.get("apifyWithdrawalReady")),
       pricingEffectiveAt: url.searchParams.get("apifyPricingEffectiveAt") ?? null
     },
     sourceMonetization: {
@@ -7811,7 +7818,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "qualityConversionGate", "liveFreshnessQualityGate", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -10006,6 +10013,40 @@ function buildApifyStoreReadinessContract(input: {
     apifyPublicProofDto("Scattered Spider", "actor", "scattered_spider", 5, ["clear_web", "public_channel"], "current", "corroborated"),
     apifyPublicProofDto("LockBit", "ransomware", "lockbit", 7, ["clear_web", "darknet_metadata"], "recent", "single_source")
   ];
+  const telemetryFields = ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "actorStarts", "actorRuns", "datasetRows", "failedRuns", "repeatUsers", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd"] as const;
+  const buyerVisibleFields = ["sellableRowCount", "usefulRowCount", "freshRowRate", "actorVictimTtpSpecificity", "sourceFamilyDiversity", "confidence", "buyerCaveat", "nextSearchPivots", "noLeakProof"] as const;
+  const conversionExperiments = [
+    {
+      id: "starter_actor_query_pack",
+      expectedBuyer: "evaluation user checking one actor or CVE before committing to a monitor",
+      pricingTest: "low-cost starter query pack",
+      successCriteria: ["storeViewToRunRate >= 0.08", "trialToPaidRate >= 0.15", "usefulRowsPerQuery >= 2"],
+      stopLossCriteria: ["storePageViews >= 100 and paidRuns = 0", "refunds > 0", "usefulRowsPerQuery < 1"],
+      datasetValueProofField: "paidRowDecisionCounts.buyerUseful",
+      buyerVisibleFields,
+      noLeakRequired: true
+    },
+    {
+      id: "high_freshness_apt_monitoring_pack",
+      expectedBuyer: "CTI analyst monitoring daily APT activity",
+      pricingTest: "high-freshness actor-monitoring pack",
+      successCriteria: ["freshRowRate >= 0.55", "sellableRowRate >= 0.25", "repeatUsers >= 1"],
+      stopLossCriteria: ["stale latest-activity claims increase", "averageBuyerValueScore < 0.55", "single-source rows dominate"],
+      datasetValueProofField: "freshnessStatus",
+      buyerVisibleFields,
+      noLeakRequired: true
+    },
+    {
+      id: "ransomware_public_claim_metadata_pack",
+      expectedBuyer: "ransomware/victim lead analyst who needs safe public-claim metadata",
+      pricingTest: "ransomware/public-claim metadata pack",
+      successCriteria: ["metadata rows remain safe", "public corroboration adds caveated usefulness", "refunds = 0"],
+      stopLossCriteria: ["restricted-only rows promoted as paid proof", "false victim review hold increases", "no public support after metadata lead"],
+      datasetValueProofField: "buyerCaveat",
+      buyerVisibleFields,
+      noLeakRequired: true
+    }
+  ];
 
   return {
     schemaVersion: "ti.apify_store_readiness.v1",
@@ -10101,6 +10142,45 @@ function buildApifyStoreReadinessContract(input: {
       payoutStatus: "not_available_without_external_apify_account_verification",
       revenueTelemetryHandoff: "/v1/ops/product-slo.apifyLaunchExperiment"
     },
+    marketplaceTelemetryInputContract: {
+      schemaVersion: "ti.apify_marketplace_telemetry_input.v1",
+      routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "route_inventory"],
+      source: "manual_or_apify_api_sourced",
+      fields: telemetryFields,
+      currentValues: Object.fromEntries(telemetryFields.map((field) => [field, null])),
+      realDataRequired: true,
+      unknownMeansNoClaim: true,
+      forbiddenSyntheticClaims: ["fake_store_views", "synthetic_unique_users", "invented_paid_runs", "placeholder_payout_ready", "estimated_revenue_without_paid_runs"]
+    },
+    payoutReadiness: {
+      schemaVersion: "ti.apify_payout_readiness.v1",
+      payoutMethodState: "unknown",
+      beneficiaryState: "unknown",
+      withdrawalReadiness: "unknown",
+      externallyVerified: false,
+      externalVerificationRequired: ["beneficiary", "payout_method", "withdrawal_readiness"],
+      blockers: [
+        "apify_beneficiary_and_payout_method_not_stored_in_repo",
+        "apify_beneficiary_and_payout_withdrawal_readiness_requires_external_billing_verification"
+      ]
+    },
+    conversionExperiments,
+    operatorBlockerBoard: [
+      { owner: "Agent 01", blocker: "low_source_value_or_stale_source_mix", conversionImpact: "paid users do not convert when rows are stale or duplicated", nextAction: "replace low-value sources before paid traffic" },
+      { owner: "Agent 03", blocker: "parser_specificity_below_buyer_threshold", conversionImpact: "generic summaries reduce useful-row rate", nextAction: "extract actor victim TTP first/last-seen and source-family fields" },
+      { owner: "Agent 04", blocker: "missing_public_channel_or_clear_web_corroboration", conversionImpact: "single-source rows stay caveated instead of sellable", nextAction: "add safe public corroboration packs" },
+      { owner: "Agent 05", blocker: "dark_metadata_not_useful_without_public_support", conversionImpact: "restricted metadata cannot become paid proof alone", nextAction: "keep leads caveated and route public support gaps" },
+      { owner: "Agent 07", blocker: "freshness_or_bloat_suppression_failure", conversionImpact: "buyers churn when latest activity is stale or padded", nextAction: "block old generic alias-only and unrelated rows" },
+      { owner: "Agent 08", blocker: "graph_pivots_missing_or_unreviewed", conversionImpact: "rows lack next-search utility", nextAction: "promote reviewed graph pivots only" },
+      { owner: "Agent 10", blocker: "release_economics_or_payout_not_verified", conversionImpact: "paid traffic cannot start without economics and payout proof", nextAction: "verify Apify payout state and cost thresholds" }
+    ],
+    fakeTractionGuards: [
+      "store views remain null until sourced from Apify analytics",
+      "unique users remain null until sourced from Apify analytics",
+      "trial and paid runs remain null until sourced from Apify analytics or billing export",
+      "estimated creator revenue remains null until calculated from real paid runs and platform costs",
+      "payout readiness is unknown or blocked unless externally verified"
+    ],
     conversionTracking: {
       source: "Apify Store analytics and /v1/ops/product-slo",
       currentStorePageViews: null,
@@ -10108,7 +10188,7 @@ function buildApifyStoreReadinessContract(input: {
       currentTrialRuns: null,
       currentPaidRuns: null,
       currentConversionRate: null,
-      metricsToTrack: ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "repeatUsers", "conversionRate", "usefulRowRate", "freshRowRate", "noLeakFailures", "costPerUsefulRow"],
+      metricsToTrack: ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "actorStarts", "datasetRows", "failedRuns", "repeatUsers", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd", "conversionRate", "usefulRowRate", "freshRowRate", "noLeakFailures", "costPerUsefulRow"],
       handoffRoute: "/v1/ops/product-slo.apifyLaunchExperiment",
       notes: "Real buyer metrics stay null until Apify analytics are copied from the account; do not store billing identifiers or secrets in this repository."
     },

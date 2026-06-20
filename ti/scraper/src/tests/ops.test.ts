@@ -302,7 +302,7 @@ describe("ops controls", () => {
       ],
       actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 20, rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowCount: 3, activityClaimRowCount: 4, sellableRowCount: 16, includedWithCaveatRowCount: 32, coverageGapOnlyRowCount: 30, holdRowCount: 20, suppressRowCount: 0, targetSellableRows: 25, averageBuyerValueScore: 0.6, defaultWatchlistRun: true },
       cost: { computeCostUsd: 0.0023, resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2 },
-      marketplace: { actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, repeatUserCount: 0, beneficiaryVerified: false, payoutMethodReady: false, pricingEffectiveAt: "2026-07-04" },
+      marketplace: { actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, actorStartCount: 2, datasetRowCount: 98, failedRunCount: 0, repeatUserCount: 0, refundCount: 0, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, beneficiaryVerified: false, payoutMethodReady: false, withdrawalReady: false, pricingEffectiveAt: "2026-07-04" },
       sourceMonetization: { evaluatedSourceCandidateCount: 4000, payworthySourceCount: 1468, payworthyThresholdRate: 0.72 },
       snapshotStoragePath: "var/ops/live-product-slo/test.jsonl"
     });
@@ -345,8 +345,9 @@ describe("ops controls", () => {
       blockers: ["sellable_rows_below_paid_traffic_floor"]
     });
     expect(dashboard.paidProductEconomics.projectedRevenue).toMatchObject({ grossRowsUsd: 0.294, grossActorStartUsd: 0.00005, grossTotalUsd: 0.294, apifyMarginUsd: 0.059, netAfterApifyUsd: 0.235, internalUsageCostUsd: 0.002, projectedNetAfterUsageUsd: 0.233, costPerRunUsd: 0.002, costPerRowUsd: 0, costPerUsefulRowUsd: 0 });
-    expect(dashboard.paidProductEconomics.marketplace).toMatchObject({ actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, repeatUserCount: 0, storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5 });
-    expect(dashboard.paidProductEconomics.marketplace.blockers).toEqual(expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed"]));
+    expect(dashboard.paidProductEconomics.marketplace).toMatchObject({ actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, actorStartCount: 2, datasetRowCount: 98, failedRunCount: 0, repeatUserCount: 0, refundCount: 0, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5, withdrawalStatus: "blocked" });
+    expect(dashboard.paidProductEconomics.marketplace.blockers).toEqual(expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed", "apify_withdrawal_readiness_not_confirmed"]));
+    expect(dashboard.paidProductEconomics.marketplace.fakeTractionGuards.join(" ")).toContain("remain null until sourced from Apify analytics");
     expect(dashboard.sourceMonetizationGate).toMatchObject({
       evaluatedSourceCandidateCount: 4000,
       payworthySourceCount: 1468,
@@ -445,6 +446,25 @@ describe("ops controls", () => {
       blockedLatestClaimReasons: expect.arrayContaining(["old_evidence", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"])
     });
     expect(dashboard.liveFreshnessQualityGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect(dashboard.freshnessRepairLoop).toMatchObject({
+      schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      repairQueueSize: 20,
+      staleRowsBlocked: 4,
+      genericRowsRepaired: 4,
+      aliasOrUnrelatedRowsSuppressed: 4,
+      caveatedRowsPreserved: 5,
+      sellableRowsGained: 6,
+      usefulRowsGained: 5,
+      averageBuyerValueDelta: 0.19,
+      blockerReasons: expect.arrayContaining(["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"])
+    });
+    expect(dashboard.freshnessRepairLoop.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]));
+    expect(dashboard.freshnessRepairLoop.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(dashboard.freshnessRepairLoop.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false });
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);
@@ -457,7 +477,31 @@ describe("ops controls", () => {
       status: "blocked_for_paid_traffic",
       nextRevenueAction: "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
     });
+    expect(dashboard.apifyLaunchExperiment.marketplaceTelemetry).toMatchObject({
+      schemaVersion: "ti.apify_marketplace_telemetry_input.v1",
+      storePageViews: 6,
+      actorStarts: 2,
+      datasetRows: 98,
+      failedRuns: 0,
+      refunds: 0,
+      platformUsageCostUsd: 0.0023,
+      estimatedCreatorRevenueUsd: 0.235,
+      realDataRequired: true,
+      unknownMeansNoClaim: true
+    });
+    expect(dashboard.apifyLaunchExperiment.payoutReadiness).toMatchObject({
+      schemaVersion: "ti.apify_payout_readiness.v1",
+      payoutMethodState: "blocked",
+      beneficiaryState: "blocked",
+      withdrawalReadiness: "blocked",
+      externallyVerified: false
+    });
+    expect(dashboard.apifyLaunchExperiment.conversionExperiments.map((item) => item.id)).toEqual(["starter_actor_query_pack", "high_freshness_apt_monitoring_pack", "ransomware_public_claim_metadata_pack"]);
+    expect(dashboard.apifyLaunchExperiment.conversionExperiments.every((item) => item.buyerVisibleFields.includes("noLeakProof") && item.noLeakRequired)).toBe(true);
+    expect(dashboard.apifyLaunchExperiment.operatorBlockerBoard.map((item) => item.owner)).toEqual(expect.arrayContaining(["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"]));
+    expect(dashboard.apifyLaunchExperiment.nextRevenueAction).toBe("payout_setup");
     expect(dashboard.apifyLaunchExperiment).toMatchObject({ storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5 });
+    expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("payout readiness is unknown or blocked unless externally verified");
     expect(dashboard.apifyLaunchExperiment.unknowns).toContain("grossPpeRevenueUsd");
     expect(dashboard.deploymentProof.actorBuildId).toBe("build_123");
     expect(dashboard.deploymentProof.publicProofCommands).toContain("bun run smoke:apify-threat-actor-monitor");

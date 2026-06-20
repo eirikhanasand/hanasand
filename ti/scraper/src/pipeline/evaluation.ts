@@ -519,8 +519,8 @@ export interface ProgramBdQualityEvaluationPackDto {
         expectedEffect: string;
       }>;
     };
-    liveFreshnessQualityGate: {
-      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1";
+	    liveFreshnessQualityGate: {
+	      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1";
       routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo">;
       dryRun: true;
       willMutateSources: false;
@@ -556,9 +556,52 @@ export interface ProgramBdQualityEvaluationPackDto {
         owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
         blocker: string;
         expectedEffect: string;
-      }>;
-    };
-    releaseDecision: "promote" | "partial" | "hold";
+	      }>;
+	    };
+	    freshnessRepairLoop: {
+	      schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1";
+	      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo" | "Apify OUTPUT">;
+	      dryRun: true;
+	      willMutateSources: false;
+	      willStartCollection: false;
+	      repairQueue: Array<{
+	        id: string;
+	        actor: string;
+	        family: "apt" | "ransomware";
+	        blocker: "stale_latest_activity" | "generic_summary" | "single_source" | "alias_only" | "unrelated_actor" | "contradicted" | "metadata_only_without_public_support";
+	        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        currentDecision: "chargeable" | "caveated" | "held" | "suppressed";
+	        targetDecision: "chargeable" | "caveated" | "held" | "suppressed";
+	        requiredEvidenceFamily: "clear_web" | "public_advisory" | "public_channel" | "restricted_metadata" | "graph_ledger";
+	        proofNeeded: string[];
+	        expectedBuyerVisibleLift: string[];
+	        currentBuyerValue: number;
+	        targetBuyerValue: number;
+	        noLeak: true;
+	      }>;
+	      lift: {
+	        staleRowsBlocked: number;
+	        genericRowsRepaired: number;
+	        aliasOrUnrelatedRowsSuppressed: number;
+	        caveatedRowsPreserved: number;
+	        sellableRowsGained: number;
+	        usefulRowsGained: number;
+	        averageBuyerValueDelta: number;
+	      };
+	      ownerHandoffs: Array<{
+	        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        queueCount: number;
+	        blockerFocus: string;
+	        expectedEffect: string;
+	      }>;
+	      noLeakProof: {
+	        rawEvidenceExposed: false;
+	        unsafeUrlsExposed: false;
+	        restrictedPayloadsExposed: false;
+	        objectKeysExposed: false;
+	      };
+	    };
+	    releaseDecision: "promote" | "partial" | "hold";
     apifyDatasetFields: string[];
     remediationActions: string[];
   };
@@ -885,6 +928,85 @@ function buildProgramBrLiveFreshnessQualityGate(): ProgramBdQualityEvaluationPac
   };
 }
 
+function buildProgramBsFreshnessRepairLoop(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"] {
+  const repairQueue: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"] = [
+    programBsRepairRow("bs_apt29_old_latest", "APT29", "apt", "stale_latest_activity", "agent_01", "held", "chargeable", "clear_web", 0.28, 0.82, ["fresh captured public report", "advisory corroboration", "capture ledger id"], ["freshness", "source_family_diversity", "current_activity_wording"]),
+    programBsRepairRow("bs_apt28_single_source_ttp", "APT28", "apt", "single_source", "agent_04", "caveated", "chargeable", "public_channel", 0.52, 0.74, ["second safe public family", "first/last seen support"], ["corroboration", "ttp_specificity"]),
+    programBsRepairRow("bs_apt42_public_channel_thin", "APT42", "apt", "single_source", "agent_04", "caveated", "caveated", "public_channel", 0.58, 0.66, ["public-channel corroboration", "source-family caveat"], ["caveat_clarity", "freshness"]),
+    programBsRepairRow("bs_turla_generic_tooling", "Turla", "apt", "generic_summary", "agent_03", "held", "chargeable", "clear_web", 0.34, 0.78, ["tool/TTP extraction", "actor-specific span", "provenance hash"], ["specificity", "next_search_pivots"]),
+    programBsRepairRow("bs_volt_typhoon_generic_lotl", "Volt Typhoon", "apt", "generic_summary", "agent_03", "caveated", "chargeable", "public_advisory", 0.5, 0.8, ["LOTL technique extraction", "infrastructure relationship"], ["ttp_specificity", "confidence"]),
+    programBsRepairRow("bs_lazarus_stale_crypto", "Lazarus Group", "apt", "stale_latest_activity", "agent_01", "held", "caveated", "clear_web", 0.3, 0.68, ["fresh sector evidence", "date-bounded activity"], ["freshness", "sector_country"]),
+    programBsRepairRow("bs_sandworm_contradicted", "Sandworm", "apt", "contradicted", "agent_07", "held", "held", "graph_ledger", 0.22, 0.22, ["analyst contradiction review", "accepted relationship ledger"], ["honest_hold"]),
+    programBsRepairRow("bs_scattered_spider_alias_noise", "Scattered Spider", "apt", "alias_only", "agent_07", "caveated", "suppressed", "clear_web", 0.4, 0.0, ["entity resolution reject", "alias collision note"], ["bloat_suppression"]),
+    programBsRepairRow("bs_lockbit_metadata_only", "LockBit", "ransomware", "metadata_only_without_public_support", "agent_05", "caveated", "caveated", "restricted_metadata", 0.56, 0.62, ["public support or caveat", "metadata-only label"], ["victim_lead_clarity", "no_leak_proof"]),
+    programBsRepairRow("bs_akira_metadata_public_support", "Akira", "ransomware", "metadata_only_without_public_support", "agent_05", "held", "caveated", "restricted_metadata", 0.32, 0.64, ["safe victim metadata", "public corroboration pointer"], ["victim_watch", "caveat_usefulness"]),
+    programBsRepairRow("bs_clop_exploit_single_source", "Clop", "ransomware", "single_source", "agent_04", "caveated", "chargeable", "public_advisory", 0.6, 0.79, ["advisory plus vendor corroboration", "CVE relationship"], ["corroboration", "cve_specificity"]),
+    programBsRepairRow("bs_black_basta_stale_repost", "Black Basta", "ransomware", "stale_latest_activity", "agent_07", "held", "suppressed", "clear_web", 0.18, 0.0, ["stale repost suppression proof"], ["stale_suppression"]),
+    programBsRepairRow("bs_apt29_unrelated_actor_blog", "APT29", "apt", "unrelated_actor", "agent_07", "caveated", "suppressed", "clear_web", 0.36, 0.0, ["actor-link rejection", "query match explanation"], ["bloat_suppression"]),
+    programBsRepairRow("bs_apt42_generic_summary", "APT42", "apt", "generic_summary", "agent_03", "held", "caveated", "clear_web", 0.31, 0.63, ["victim/sector extraction", "source family label"], ["specificity", "useful_caveat"]),
+    programBsRepairRow("bs_turla_stale_campaign", "Turla", "apt", "stale_latest_activity", "agent_01", "caveated", "caveated", "clear_web", 0.48, 0.6, ["current campaign timestamp", "old-campaign caveat"], ["freshness_caveat"]),
+    programBsRepairRow("bs_volt_typhoon_contradicted_infra", "Volt Typhoon", "apt", "contradicted", "agent_08", "held", "held", "graph_ledger", 0.26, 0.26, ["graph contradiction resolution", "accepted/rejected edge state"], ["honest_hold"]),
+    programBsRepairRow("bs_lazarus_alias_overlap", "Lazarus Group", "apt", "alias_only", "agent_07", "held", "suppressed", "clear_web", 0.2, 0.0, ["alias normalization reject", "no actor activity evidence"], ["bloat_suppression"]),
+    programBsRepairRow("bs_lockbit_victim_specificity", "LockBit", "ransomware", "generic_summary", "agent_03", "caveated", "chargeable", "clear_web", 0.55, 0.76, ["victim/sector/date extraction", "fresh source support"], ["victim_specificity", "freshness"]),
+    programBsRepairRow("bs_akira_single_source_victim", "Akira", "ransomware", "single_source", "agent_04", "held", "caveated", "public_channel", 0.38, 0.65, ["safe second source family", "caveated public support"], ["corroboration", "victim_watch"]),
+    programBsRepairRow("bs_clop_unrelated_cve", "Clop", "ransomware", "unrelated_actor", "agent_07", "held", "suppressed", "public_advisory", 0.24, 0.0, ["CVE-to-actor relationship rejection", "query-specific proof"], ["bloat_suppression"])
+  ];
+  const rowsNeedingDecisionLift = repairQueue.filter((row) => row.currentDecision !== row.targetDecision);
+  const valueDelta = repairQueue.reduce((sum, row) => sum + row.targetBuyerValue - row.currentBuyerValue, 0) / repairQueue.length;
+  const usefulTargets = new Set(["chargeable", "caveated"]);
+
+  return {
+    schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    repairQueue,
+    lift: {
+      staleRowsBlocked: repairQueue.filter((row) => row.blocker === "stale_latest_activity" && row.currentDecision !== "chargeable").length,
+      genericRowsRepaired: repairQueue.filter((row) => row.blocker === "generic_summary" && rowsNeedingDecisionLift.includes(row)).length,
+      aliasOrUnrelatedRowsSuppressed: repairQueue.filter((row) => (row.blocker === "alias_only" || row.blocker === "unrelated_actor") && row.targetDecision === "suppressed").length,
+      caveatedRowsPreserved: repairQueue.filter((row) => row.targetDecision === "caveated").length,
+      sellableRowsGained: repairQueue.filter((row) => row.targetDecision === "chargeable" && row.currentDecision !== "chargeable").length,
+      usefulRowsGained: repairQueue.filter((row) => usefulTargets.has(row.targetDecision) && !usefulTargets.has(row.currentDecision)).length,
+      averageBuyerValueDelta: programBdRound(valueDelta)
+    },
+    ownerHandoffs: [
+      { owner: "agent_01", queueCount: repairQueue.filter((row) => row.owner === "agent_01").length, blockerFocus: "stale public source replacement", expectedEffect: "Fresh public captures can turn old latest-activity holds into current caveated or chargeable rows." },
+      { owner: "agent_03", queueCount: repairQueue.filter((row) => row.owner === "agent_03").length, blockerFocus: "generic parser summaries", expectedEffect: "Structured actor/victim/TTP fields raise specificity and useful-row yield." },
+      { owner: "agent_04", queueCount: repairQueue.filter((row) => row.owner === "agent_04").length, blockerFocus: "single-source and public-channel corroboration", expectedEffect: "Cross-family support moves caveated/held rows toward chargeable decisions." },
+      { owner: "agent_05", queueCount: repairQueue.filter((row) => row.owner === "agent_05").length, blockerFocus: "metadata-only public support", expectedEffect: "Restricted metadata stays caveated until safe public corroboration exists." },
+      { owner: "agent_07", queueCount: repairQueue.filter((row) => row.owner === "agent_07").length, blockerFocus: "alias, unrelated, stale, and contradiction review", expectedEffect: "Suppress bloat and prevent stale/latest wording from being sold." },
+      { owner: "agent_08", queueCount: repairQueue.filter((row) => row.owner === "agent_08").length, blockerFocus: "graph contradiction holds", expectedEffect: "Contradicted graph edges stay held until accepted ledger state exists." },
+      { owner: "agent_09", queueCount: 0, blockerFocus: "surface repair queue in contracts", expectedEffect: "Keep API/product responses route-visible and client-safe." },
+      { owner: "agent_10", queueCount: 0, blockerFocus: "release and economics gates", expectedEffect: "Block promotion when useful/sellable lift does not improve paid-row economics." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function programBsRepairRow(
+  id: string,
+  actor: string,
+  family: "apt" | "ransomware",
+  blocker: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"][number]["blocker"],
+  owner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"][number]["owner"],
+  currentDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"][number]["currentDecision"],
+  targetDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"][number]["targetDecision"],
+  requiredEvidenceFamily: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"][number]["requiredEvidenceFamily"],
+  currentBuyerValue: number,
+  targetBuyerValue: number,
+  proofNeeded: string[],
+  expectedBuyerVisibleLift: string[]
+): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["freshnessRepairLoop"]["repairQueue"][number] {
+  return { id, actor, family, blocker, owner, currentDecision, targetDecision, requiredEvidenceFamily, proofNeeded, expectedBuyerVisibleLift, currentBuyerValue, targetBuyerValue, noLeak: true };
+}
+
 function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
   const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
     programBdLiveBaseline({
@@ -932,10 +1054,11 @@ function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["
     liveBaselines: baselines,
     metricThresholds,
     sourceTierGates: [100, 1000, 4000, 10000, 20000, 60000].map((tier) => paidSourceTierGate(tier as 100 | 1000 | 4000 | 10000 | 20000 | 60000)),
-    buyerVisibleQualityLiftGate: buildProgramBgBuyerVisibleQualityLiftGate(),
-    qualityConversionGate: buildProgramBqQualityConversionGate(),
-    liveFreshnessQualityGate: buildProgramBrLiveFreshnessQualityGate(),
-    releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
+	    buyerVisibleQualityLiftGate: buildProgramBgBuyerVisibleQualityLiftGate(),
+	    qualityConversionGate: buildProgramBqQualityConversionGate(),
+	    liveFreshnessQualityGate: buildProgramBrLiveFreshnessQualityGate(),
+	    freshnessRepairLoop: buildProgramBsFreshnessRepairLoop(),
+	    releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
     apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
     remediationActions: [
       "downgrade APT29 stale-only rows until fresh captured evidence exists",

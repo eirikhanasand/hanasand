@@ -103,6 +103,52 @@ describe("darkweb metadata index contracts", () => {
       "no_body_or_html_columns",
       "no_payload_or_credential_columns"
     ]));
+    expect(status.liveValueExpansion).toMatchObject({
+      schemaVersion: "ti.darkweb_index_live_value_expansion.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_ready_to_import_value_expansion",
+      willFetchNetwork: false,
+      willScheduleLiveWork: false,
+      sourceCountInflationBlocked: true,
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.liveValueExpansion.tiers.map((tier) => tier.tier)).toEqual(["tier_1000", "tier_4000"]);
+    expect(status.liveValueExpansion.tiers.every((tier) =>
+      tier.candidateRows.length >= 12 &&
+      tier.buyerSearchProof.sampleRows.length === 12 &&
+      tier.buyerSearchProof.usefulQueryCount >= 20 &&
+      tier.advancementDecision === "hold_for_value_density" &&
+      tier.blockers.includes("stale_duplicate_or_review_rows_do_not_count_toward_tier") &&
+      tier.rejectedLowValueCandidateCount > tier.valueQualifiedCandidateCount &&
+      tier.candidateRows.every((row) =>
+        row.safeLocatorHash.length > 0 &&
+        row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+        row.whyWorthPayingFor.includes("without exposing raw locations") &&
+        row.firstSeen.length > 0 &&
+        row.lastSeen.length > 0
+      )
+    )).toBe(true);
+    expect(status.liveValueExpansion.refreshScheduleSemantics).toHaveLength(6);
+    expect(status.liveValueExpansion.refreshScheduleSemantics.every((schedule) =>
+      schedule.cadenceMinutes > 0 &&
+      schedule.lastSuccessAt.length > 0 &&
+      schedule.nextDueAt.length > 0 &&
+      schedule.expectedRowsPerDay > 0 &&
+      schedule.approvedBoundary === "metadata_only_no_network_in_this_contract"
+    )).toBe(true);
+    expect(status.liveValueExpansion.valueGateRejects.map((row) => row.reason)).toEqual(expect.arrayContaining([
+      "duplicate",
+      "stale_mirror",
+      "generic_listing",
+      "no_actor_victim_dataset_hint",
+      "unsafe_output_risk",
+      "review_or_legal_hold",
+      "auth_captcha_private_dependency",
+      "low_buyer_value"
+    ]));
+    expect(status.liveValueExpansion.valueGateRejects.every((row) => row.doesNotCountTowardTier)).toBe(true);
     expect(contract.storageHandoff).toMatchObject({
       schemaVersion: "ti.darkweb_index_storage_handoff.v1",
       tables: expect.arrayContaining(["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs"]),

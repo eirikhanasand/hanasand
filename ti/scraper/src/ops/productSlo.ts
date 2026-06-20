@@ -69,9 +69,16 @@ export interface LiveProductMarketplaceInput {
   uniqueUserCount?: number | null;
   trialRunCount?: number | null;
   paidRunCount?: number | null;
+  actorStartCount?: number | null;
+  datasetRowCount?: number | null;
+  failedRunCount?: number | null;
   repeatUserCount?: number | null;
+  refundCount?: number | null;
+  platformUsageCostUsd?: number | null;
+  estimatedCreatorRevenueUsd?: number | null;
   beneficiaryVerified?: boolean | null;
   payoutMethodReady?: boolean | null;
+  withdrawalReady?: boolean | null;
   pricingEffectiveAt?: string | null;
 }
 
@@ -196,14 +203,22 @@ export interface LiveProductSloDashboard {
       uniqueUserCount: number | null;
       trialRunCount: number | null;
       paidRunCount: number | null;
+      actorStartCount: number | null;
+      datasetRowCount: number | null;
+      failedRunCount: number | null;
       repeatUserCount: number | null;
+      refundCount: number | null;
+      platformUsageCostUsd: number | null;
+      estimatedCreatorRevenueUsd: number | null;
       storeViewToRunRate: number | null;
       storeViewToUserRate: number | null;
       runsPerUser: number | null;
       trialToPaidRate: number | null;
       beneficiaryStatus: "verified" | "blocked" | "unknown";
       payoutMethodStatus: "ready" | "blocked" | "unknown";
+      withdrawalStatus: "ready" | "blocked" | "unknown";
       blockers: string[];
+      fakeTractionGuards: string[];
     };
   };
   sourceMonetizationGate: {
@@ -313,6 +328,29 @@ export interface LiveProductSloDashboard {
       expectedEffect: string;
     }>;
   };
+  graphPivotLiftGate: {
+    schemaVersion: "ti.apify_graph_pivot_lift_gate.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows">;
+    baselineRunId: string;
+    baselineDatasetId: string;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    exampleCount: number;
+    usefulPivotRate: number;
+    corroboratedPivotRate: number;
+    nextSearchPivotCount: number;
+    suppressedGenericPivotCount: number;
+    sellableRowsAdded: number;
+    usefulRowsAdded: number;
+    averageBuyerValueDelta: number;
+    rejectedBloatReasons: string[];
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+      blocker: string;
+      expectedEffect: string;
+    }>;
+  };
   qualityConversionGate: {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
@@ -355,6 +393,65 @@ export interface LiveProductSloDashboard {
       expectedEffect: string;
     }>;
   };
+  freshnessRepairLoop: {
+    schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "Apify OUTPUT">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    repairQueueSize: number;
+    actorCoverage: string[];
+    blockerReasons: string[];
+    staleRowsBlocked: number;
+    genericRowsRepaired: number;
+    aliasOrUnrelatedRowsSuppressed: number;
+    caveatedRowsPreserved: number;
+    sellableRowsGained: number;
+    usefulRowsGained: number;
+    averageBuyerValueDelta: number;
+    ownerHandoffs: Array<{
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      queueCount: number;
+      blockerFocus: string;
+      expectedEffect: string;
+    }>;
+    noLeakProof: {
+      rawEvidenceExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      objectKeysExposed: false;
+    };
+  };
+  darkMetadataLiveValueExpansion: {
+    schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/darkweb/status" | "/v1/darkweb/search" | "/v1/contracts">;
+    owner: "Agent 05";
+    dryRun: true;
+    willStartCollection: false;
+    willFetchNetwork: false;
+    sourceCountInflationBlocked: true;
+    tiers: Array<{
+      tier: 1000 | 4000;
+      evaluatedCandidateCount: number;
+      valueQualifiedCandidateCount: number;
+      usefulRowRate: number;
+      averageBuyerValueScore: number;
+      staleRate: number;
+      duplicateRate: number;
+      blockedOrReviewRate: number;
+      decision: "hold_for_value_density" | "ready_for_import_batch";
+    }>;
+    criteria: {
+      minimumAverageBuyerValueScore: 0.68;
+      maximumStaleRate: 0.28;
+      maximumDuplicateRate: 0.16;
+      maximumBlockedOrReviewRate: 0.18;
+      minimumUsefulQueriesPerTier: 20;
+      minimumSafeSampleRowsPerTier: 12;
+      noLeakSerializationRequired: true;
+    };
+    blockers: string[];
+  };
   slos: Array<{
     name: string;
     state: LiveProductSloState;
@@ -391,6 +488,38 @@ export interface LiveProductSloDashboard {
     backendCostAllocationUsd: number | null;
     refundsFailuresUsd: number | null;
     netContributionUsd: number | null;
+    marketplaceTelemetry: {
+      schemaVersion: "ti.apify_marketplace_telemetry_input.v1";
+      source: "manual_or_apify_api_sourced";
+      storePageViews: number | null;
+      uniqueUsers: number | null;
+      trialRuns: number | null;
+      paidRuns: number | null;
+      actorStarts: number | null;
+      actorRuns: number | null;
+      datasetRows: number | null;
+      failedRuns: number | null;
+      repeatUsers: number | null;
+      refunds: number | null;
+      platformUsageCostUsd: number | null;
+      estimatedCreatorRevenueUsd: number | null;
+      realDataRequired: true;
+      unknownMeansNoClaim: true;
+    };
+    payoutReadiness: {
+      schemaVersion: "ti.apify_payout_readiness.v1";
+      payoutMethodState: "ready" | "blocked" | "unknown";
+      beneficiaryState: "verified" | "blocked" | "unknown";
+      withdrawalReadiness: "ready" | "blocked" | "unknown";
+      externallyVerified: boolean;
+      blockers: string[];
+      verifiedExternally: string[];
+      unknownExternally: string[];
+    };
+    conversionExperiments: LiveProductConversionExperiment[];
+    operatorBlockerBoard: LiveProductOperatorBlocker[];
+    fakeTractionGuards: string[];
+    nextRevenueAction: "paid_traffic" | "listing_repair" | "data_quality_repair" | "pricing_test" | "payout_setup";
     unknowns: string[];
   };
   dailySnapshot: LiveProductDailySnapshot;
@@ -459,6 +588,25 @@ export interface LiveProductMonetizationReadiness {
   sellableRowRate: number | null;
   blockers: string[];
   nextRevenueAction: string;
+}
+
+export interface LiveProductConversionExperiment {
+  id: "starter_actor_query_pack" | "high_freshness_apt_monitoring_pack" | "ransomware_public_claim_metadata_pack";
+  expectedBuyer: string;
+  pricingTest: string;
+  successCriteria: string[];
+  stopLossCriteria: string[];
+  usefulRowRequirement: string;
+  datasetValueProofField: string;
+  buyerVisibleFields: string[];
+  noLeakRequired: true;
+}
+
+export interface LiveProductOperatorBlocker {
+  owner: "Agent 01" | "Agent 03" | "Agent 04" | "Agent 05" | "Agent 07" | "Agent 08" | "Agent 10";
+  blocker: string;
+  conversionImpact: string;
+  nextAction: string;
 }
 
 interface PercentileMetric {
@@ -559,8 +707,17 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
   const marketplaceGraphSignals = buildMarketplaceGraphSignals();
+  const graphPivotLiftGate = buildGraphPivotLiftGate();
   const qualityConversionGate = buildQualityConversionGate();
   const liveFreshnessQualityGate = buildLiveFreshnessQualityGate();
+  const freshnessRepairLoop = buildFreshnessRepairLoop();
+  const darkMetadataLiveValueExpansion = buildDarkMetadataLiveValueExpansion();
+  const marketplaceTelemetry = marketplaceTelemetryFor(input.marketplace);
+  const payoutReadiness = payoutReadinessFor(input.marketplace);
+  const conversionExperiments = buildConversionExperiments();
+  const operatorBlockerBoard = buildOperatorBlockerBoard();
+  const fakeTractionGuards = buildFakeTractionGuards();
+  const nextRevenueAction = nextRevenueActionFor(monetizationReadiness, payoutReadiness, marketplaceConversion);
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -643,8 +800,15 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     trialRunCount: input.marketplace?.trialRunCount ?? null,
     paidRunCount: input.marketplace?.paidRunCount ?? null,
     repeatUserCount: input.marketplace?.repeatUserCount ?? null,
+    actorStartCount: input.marketplace?.actorStartCount ?? null,
+    datasetRowCount: input.marketplace?.datasetRowCount ?? null,
+    failedRunCount: input.marketplace?.failedRunCount ?? null,
+    refundCount: input.marketplace?.refundCount ?? null,
+    platformUsageCostUsd: input.marketplace?.platformUsageCostUsd ?? null,
+    estimatedCreatorRevenueUsd: input.marketplace?.estimatedCreatorRevenueUsd ?? null,
     beneficiaryVerified: input.marketplace?.beneficiaryVerified === undefined ? null : Number(input.marketplace.beneficiaryVerified),
-    payoutMethodReady: input.marketplace?.payoutMethodReady === undefined ? null : Number(input.marketplace.payoutMethodReady)
+    payoutMethodReady: input.marketplace?.payoutMethodReady === undefined ? null : Number(input.marketplace.payoutMethodReady),
+    withdrawalReady: input.marketplace?.withdrawalReady === undefined ? null : Number(input.marketplace.withdrawalReady)
   });
   const dailySnapshot = buildDailySnapshot({
     generatedAt,
@@ -688,8 +852,11 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     sourceMonetizationGate,
     buyerVisibleQualityLiftGate,
     marketplaceGraphSignals,
+    graphPivotLiftGate,
     qualityConversionGate,
     liveFreshnessQualityGate,
+    freshnessRepairLoop,
+    darkMetadataLiveValueExpansion,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
@@ -711,6 +878,12 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       backendCostAllocationUsd: cost.backendCostAllocationUsd ?? null,
       refundsFailuresUsd: cost.refundsFailuresUsd ?? null,
       netContributionUsd,
+      marketplaceTelemetry,
+      payoutReadiness,
+      conversionExperiments,
+      operatorBlockerBoard,
+      fakeTractionGuards,
+      nextRevenueAction,
       unknowns: launchUnknowns
     },
     dailySnapshot,
@@ -749,7 +922,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       agent02SchedulerTelemetry: ["queueAgeSeconds", "threeSecondPolling", "sourceProviderFailureRate"],
       agent06EvidenceStorage: ["firstFreshEvidenceLatencyMs", "claimClusterYield", "dailySnapshot"],
       agent07Evaluation: ["emptyResultHonestyRate", "duplicateArticleRate", "actorDatasetUsefulness", "sourcePayworthyRate"],
-      agent09StableApiFields: ["route", "schemaVersion", "deploymentProof", "apifyLaunchExperiment", "paidProductEconomics.marketplace"]
+      agent09StableApiFields: ["route", "schemaVersion", "deploymentProof", "apifyLaunchExperiment", "apifyLaunchExperiment.marketplaceTelemetry", "apifyLaunchExperiment.conversionExperiments", "paidProductEconomics.marketplace"]
     }
   };
 }
@@ -949,6 +1122,41 @@ const buildMarketplaceGraphSignals = (): LiveProductSloDashboard["marketplaceGra
   };
 };
 
+const buildGraphPivotLiftGate = (): LiveProductSloDashboard["graphPivotLiftGate"] => ({
+  schemaVersion: "ti.apify_graph_pivot_lift_gate.v1",
+  routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"],
+  baselineRunId: "OThlfd0uzSCNnedAO",
+  baselineDatasetId: "LSen2fYtwFTtOr7vK",
+  dryRun: true,
+  willMutateSources: false,
+  willStartCollection: false,
+  exampleCount: 12,
+  usefulPivotRate: 1,
+  corroboratedPivotRate: 0.58,
+  nextSearchPivotCount: 36,
+  suppressedGenericPivotCount: 7,
+  sellableRowsAdded: 6,
+  usefulRowsAdded: 10,
+  averageBuyerValueDelta: 0.035,
+  rejectedBloatReasons: [
+    "generic_pivot",
+    "stale_pivot",
+    "contradicted_pivot",
+    "unrelated_actor_pivot",
+    "restricted_only_pivot",
+    "missing_ledger_pivot",
+    "single_source_without_caveat"
+  ],
+  ownerHandoffs: [
+    { owner: "agent_03", blocker: "parser_rows_missing_victim_ttp_tool_pivots", expectedEffect: "Increase action pivots per row by extracting specific victim, TTP, and tool fields." },
+    { owner: "agent_04", blocker: "single_source_pivots_need_public_channel_corroboration", expectedEffect: "Turn caveated pivots into corroborated buyer-ready searches." },
+    { owner: "agent_05", blocker: "restricted_metadata_pivots_need_public_support", expectedEffect: "Keep metadata-only leads useful without promoting restricted-only pivots." },
+    { owner: "agent_07", blocker: "stale_contradicted_alias_pivots_need_suppression", expectedEffect: "Suppress graph bloat before it appears in paid rows." },
+    { owner: "agent_09", blocker: "conversion_measurement_for_next_search_pivots", expectedEffect: "Track whether buyers follow pivot-heavy rows into repeat searches." },
+    { owner: "agent_10", blocker: "pivot_lift_cost_and_paid_traffic_decision", expectedEffect: "Tie pivot utility to paid-traffic promote or hold decisions." }
+  ]
+});
+
 function buildQualityConversionGate(): LiveProductSloDashboard["qualityConversionGate"] {
   return {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
@@ -1011,6 +1219,95 @@ function buildLiveFreshnessQualityGate(): LiveProductSloDashboard["liveFreshness
       { owner: "agent_03", blocker: "fresh_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Parse structured facts so fresh rows are actionable instead of generic." },
       { owner: "agent_04", blocker: "fresh_single_source_or_public_channel_only_claims", expectedEffect: "Add cross-family corroboration before full paid promotion." },
       { owner: "agent_05", blocker: "metadata_only_freshness_without_public_support", expectedEffect: "Keep metadata-only rows caveated until public evidence backs them." }
+    ]
+  };
+}
+
+function buildFreshnessRepairLoop(): LiveProductSloDashboard["freshnessRepairLoop"] {
+  const actorCoverage = ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"];
+  const blockerReasons = ["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"];
+  return {
+    schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    repairQueueSize: 20,
+    actorCoverage,
+    blockerReasons,
+    staleRowsBlocked: 4,
+    genericRowsRepaired: 4,
+    aliasOrUnrelatedRowsSuppressed: 4,
+    caveatedRowsPreserved: 5,
+    sellableRowsGained: 6,
+    usefulRowsGained: 5,
+    averageBuyerValueDelta: 0.19,
+    ownerHandoffs: [
+      { owner: "agent_01", queueCount: 3, blockerFocus: "stale public source replacement", expectedEffect: "Fresh public captures can turn old latest-activity holds into current caveated or chargeable rows." },
+      { owner: "agent_03", queueCount: 4, blockerFocus: "generic parser summaries", expectedEffect: "Structured actor/victim/TTP fields raise specificity and useful-row yield." },
+      { owner: "agent_04", queueCount: 4, blockerFocus: "single-source and public-channel corroboration", expectedEffect: "Cross-family support moves caveated/held rows toward chargeable decisions." },
+      { owner: "agent_05", queueCount: 2, blockerFocus: "metadata-only public support", expectedEffect: "Restricted metadata stays caveated until safe public corroboration exists." },
+      { owner: "agent_07", queueCount: 6, blockerFocus: "alias, unrelated, stale, and contradiction review", expectedEffect: "Suppress bloat and prevent stale/latest wording from being sold." },
+      { owner: "agent_08", queueCount: 1, blockerFocus: "graph contradiction holds", expectedEffect: "Contradicted graph edges stay held until accepted ledger state exists." },
+      { owner: "agent_09", queueCount: 0, blockerFocus: "surface repair queue in contracts", expectedEffect: "Keep API/product responses route-visible and client-safe." },
+      { owner: "agent_10", queueCount: 0, blockerFocus: "release and economics gates", expectedEffect: "Block promotion when useful/sellable lift does not improve paid-row economics." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function buildDarkMetadataLiveValueExpansion(): LiveProductSloDashboard["darkMetadataLiveValueExpansion"] {
+  return {
+    schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"],
+    owner: "Agent 05",
+    dryRun: true,
+    willStartCollection: false,
+    willFetchNetwork: false,
+    sourceCountInflationBlocked: true,
+    tiers: [
+      {
+        tier: 1000,
+        evaluatedCandidateCount: 100,
+        valueQualifiedCandidateCount: 13,
+        usefulRowRate: 0.13,
+        averageBuyerValueScore: 0.48,
+        staleRate: 0.6,
+        duplicateRate: 0.06,
+        blockedOrReviewRate: 0.76,
+        decision: "hold_for_value_density"
+      },
+      {
+        tier: 4000,
+        evaluatedCandidateCount: 100,
+        valueQualifiedCandidateCount: 13,
+        usefulRowRate: 0.13,
+        averageBuyerValueScore: 0.48,
+        staleRate: 0.6,
+        duplicateRate: 0.06,
+        blockedOrReviewRate: 0.76,
+        decision: "hold_for_value_density"
+      }
+    ],
+    criteria: {
+      minimumAverageBuyerValueScore: 0.68,
+      maximumStaleRate: 0.28,
+      maximumDuplicateRate: 0.16,
+      maximumBlockedOrReviewRate: 0.18,
+      minimumUsefulQueriesPerTier: 20,
+      minimumSafeSampleRowsPerTier: 12,
+      noLeakSerializationRequired: true
+    },
+    blockers: [
+      "dark_metadata_value_density_below_paid_threshold",
+      "stale_or_review_rows_do_not_count_toward_1000_or_4000",
+      "source_count_inflation_blocked_until_sample_rows_and_queries_pass",
+      "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
     ]
   };
 }
@@ -1144,14 +1441,22 @@ const buildPaidProductEconomics = (input: {
       uniqueUserCount: marketplace.uniqueUserCount ?? null,
       trialRunCount: marketplace.trialRunCount ?? null,
       paidRunCount: marketplace.paidRunCount ?? null,
+      actorStartCount: marketplace.actorStartCount ?? null,
+      datasetRowCount: marketplace.datasetRowCount ?? null,
+      failedRunCount: marketplace.failedRunCount ?? null,
       repeatUserCount: marketplace.repeatUserCount ?? null,
+      refundCount: marketplace.refundCount ?? null,
+      platformUsageCostUsd: marketplace.platformUsageCostUsd ?? null,
+      estimatedCreatorRevenueUsd: marketplace.estimatedCreatorRevenueUsd ?? null,
       storeViewToRunRate: input.marketplaceConversion.storeViewToRunRate,
       storeViewToUserRate: input.marketplaceConversion.storeViewToUserRate,
       runsPerUser: input.marketplaceConversion.runsPerUser,
       trialToPaidRate: input.marketplaceConversion.trialToPaidRate,
       beneficiaryStatus: marketplace.beneficiaryVerified === true ? "verified" : marketplace.beneficiaryVerified === false ? "blocked" : "unknown",
       payoutMethodStatus: marketplace.payoutMethodReady === true ? "ready" : marketplace.payoutMethodReady === false ? "blocked" : "unknown",
-      blockers
+      withdrawalStatus: marketplace.withdrawalReady === true ? "ready" : marketplace.withdrawalReady === false ? "blocked" : "unknown",
+      blockers,
+      fakeTractionGuards: buildFakeTractionGuards()
     }
   };
 };
@@ -1333,13 +1638,139 @@ function marketplaceBlockers(input: LiveProductMarketplaceInput): string[] {
   const blockers: string[] = [];
   if (input.beneficiaryVerified !== true) blockers.push("apify_beneficiary_verification_not_confirmed");
   if (input.payoutMethodReady !== true) blockers.push("apify_payout_method_not_confirmed");
+  if (input.withdrawalReady !== true) blockers.push("apify_withdrawal_readiness_not_confirmed");
   if (input.actorViewCount === undefined || input.actorViewCount === null) blockers.push("apify_store_view_count_missing");
   if (input.actorRunCount === undefined || input.actorRunCount === null) blockers.push("apify_actor_run_count_missing");
   if (input.uniqueUserCount === undefined || input.uniqueUserCount === null) blockers.push("apify_unique_user_count_missing");
   if (input.trialRunCount === undefined || input.trialRunCount === null) blockers.push("apify_trial_run_count_missing");
   if (input.paidRunCount === undefined || input.paidRunCount === null) blockers.push("apify_paid_run_count_missing");
+  if (input.actorStartCount === undefined || input.actorStartCount === null) blockers.push("apify_actor_start_count_missing");
+  if (input.datasetRowCount === undefined || input.datasetRowCount === null) blockers.push("apify_dataset_row_count_missing");
+  if (input.failedRunCount === undefined || input.failedRunCount === null) blockers.push("apify_failed_run_count_missing");
   if (input.repeatUserCount === undefined || input.repeatUserCount === null) blockers.push("apify_repeat_user_count_missing");
+  if (input.refundCount === undefined || input.refundCount === null) blockers.push("apify_refund_count_missing");
+  if (input.platformUsageCostUsd === undefined || input.platformUsageCostUsd === null) blockers.push("apify_platform_usage_cost_missing");
+  if (input.estimatedCreatorRevenueUsd === undefined || input.estimatedCreatorRevenueUsd === null) blockers.push("apify_estimated_creator_revenue_missing");
   return blockers;
+}
+
+function marketplaceTelemetryFor(input: LiveProductMarketplaceInput | undefined): LiveProductSloDashboard["apifyLaunchExperiment"]["marketplaceTelemetry"] {
+  return {
+    schemaVersion: "ti.apify_marketplace_telemetry_input.v1",
+    source: "manual_or_apify_api_sourced",
+    storePageViews: input?.actorViewCount ?? null,
+    uniqueUsers: input?.uniqueUserCount ?? null,
+    trialRuns: input?.trialRunCount ?? null,
+    paidRuns: input?.paidRunCount ?? null,
+    actorStarts: input?.actorStartCount ?? null,
+    actorRuns: input?.actorRunCount ?? null,
+    datasetRows: input?.datasetRowCount ?? null,
+    failedRuns: input?.failedRunCount ?? null,
+    repeatUsers: input?.repeatUserCount ?? null,
+    refunds: input?.refundCount ?? null,
+    platformUsageCostUsd: input?.platformUsageCostUsd ?? null,
+    estimatedCreatorRevenueUsd: input?.estimatedCreatorRevenueUsd ?? null,
+    realDataRequired: true,
+    unknownMeansNoClaim: true
+  };
+}
+
+function payoutReadinessFor(input: LiveProductMarketplaceInput | undefined): LiveProductSloDashboard["apifyLaunchExperiment"]["payoutReadiness"] {
+  const payoutMethodState = input?.payoutMethodReady === true ? "ready" : input?.payoutMethodReady === false ? "blocked" : "unknown";
+  const beneficiaryState = input?.beneficiaryVerified === true ? "verified" : input?.beneficiaryVerified === false ? "blocked" : "unknown";
+  const withdrawalReadiness = input?.withdrawalReady === true ? "ready" : input?.withdrawalReady === false ? "blocked" : "unknown";
+  const knownState = payoutMethodState !== "unknown" && beneficiaryState !== "unknown" && withdrawalReadiness !== "unknown";
+  return {
+    schemaVersion: "ti.apify_payout_readiness.v1",
+    payoutMethodState,
+    beneficiaryState,
+    withdrawalReadiness,
+    externallyVerified: payoutMethodState === "ready" && beneficiaryState === "verified" && withdrawalReadiness === "ready",
+    blockers: marketplaceBlockers(input ?? {}).filter((blocker) => blocker.includes("beneficiary") || blocker.includes("payout") || blocker.includes("withdrawal")),
+    verifiedExternally: [
+      ...(input?.beneficiaryVerified === true ? ["beneficiary"] : []),
+      ...(input?.payoutMethodReady === true ? ["payout_method"] : []),
+      ...(input?.withdrawalReady === true ? ["withdrawal_readiness"] : [])
+    ],
+    unknownExternally: knownState ? [] : [
+      ...(beneficiaryState === "unknown" ? ["beneficiary"] : []),
+      ...(payoutMethodState === "unknown" ? ["payout_method"] : []),
+      ...(withdrawalReadiness === "unknown" ? ["withdrawal_readiness"] : [])
+    ]
+  };
+}
+
+function buildConversionExperiments(): LiveProductConversionExperiment[] {
+  const buyerVisibleFields = ["sellableRowCount", "usefulRowCount", "freshRowRate", "actorVictimTtpSpecificity", "sourceFamilyDiversity", "confidence", "buyerCaveat", "nextSearchPivots", "noLeakProof"];
+  return [
+    {
+      id: "starter_actor_query_pack",
+      expectedBuyer: "evaluation user checking one actor or CVE before committing to a monitor",
+      pricingTest: "low-cost starter query pack",
+      successCriteria: ["storeViewToRunRate >= 0.08", "trialToPaidRate >= 0.15", "usefulRowsPerQuery >= 2"],
+      stopLossCriteria: ["storePageViews >= 100 and paidRuns = 0", "refunds > 0", "usefulRowsPerQuery < 1"],
+      usefulRowRequirement: "at least two useful safe rows per starter query",
+      datasetValueProofField: "paidRowDecisionCounts.buyerUseful",
+      buyerVisibleFields,
+      noLeakRequired: true
+    },
+    {
+      id: "high_freshness_apt_monitoring_pack",
+      expectedBuyer: "CTI analyst monitoring daily APT activity",
+      pricingTest: "higher-price freshness pack for current actor activity",
+      successCriteria: ["freshRowRate >= 0.55", "sellableRowRate >= 0.25", "repeatUsers >= 1"],
+      stopLossCriteria: ["staleLatestClaimsBlocked rises without fresh replacements", "single-source rate blocks sellable rows", "averageBuyerValueScore < 0.55"],
+      usefulRowRequirement: "fresh chargeable or useful caveated rows with source-family diversity",
+      datasetValueProofField: "freshnessStatus",
+      buyerVisibleFields,
+      noLeakRequired: true
+    },
+    {
+      id: "ransomware_public_claim_metadata_pack",
+      expectedBuyer: "ransomware/victim lead analyst who needs safe public-claim metadata",
+      pricingTest: "metadata pack for victim and dataset lead discovery",
+      successCriteria: ["metadata rows remain safe", "public corroboration adds caveated usefulness", "refunds = 0"],
+      stopLossCriteria: ["restricted-only rows promoted as paid proof", "no public support after metadata lead", "false victim review hold increases"],
+      usefulRowRequirement: "metadata-only rows must include caveats and next public corroboration pivots",
+      datasetValueProofField: "buyerCaveat",
+      buyerVisibleFields,
+      noLeakRequired: true
+    }
+  ];
+}
+
+function buildOperatorBlockerBoard(): LiveProductOperatorBlocker[] {
+  return [
+    { owner: "Agent 01", blocker: "low_source_value_or_stale_source_mix", conversionImpact: "paid users do not convert when rows are stale or duplicated", nextAction: "replace low-value sources before paid traffic" },
+    { owner: "Agent 03", blocker: "parser_specificity_below_buyer_threshold", conversionImpact: "generic summaries reduce useful-row rate", nextAction: "extract actor victim TTP first/last-seen and source-family fields" },
+    { owner: "Agent 04", blocker: "missing_public_channel_or_clear_web_corroboration", conversionImpact: "single-source rows stay caveated instead of sellable", nextAction: "add safe public corroboration packs" },
+    { owner: "Agent 05", blocker: "dark_metadata_not_useful_without_public_support", conversionImpact: "restricted metadata cannot become paid proof alone", nextAction: "keep leads caveated and route public support gaps" },
+    { owner: "Agent 07", blocker: "freshness_or_bloat_suppression_failure", conversionImpact: "buyers churn when latest activity is stale or padded", nextAction: "block old generic alias-only and unrelated rows" },
+    { owner: "Agent 08", blocker: "graph_pivots_missing_or_unreviewed", conversionImpact: "rows lack next-search utility", nextAction: "promote reviewed graph pivots only" },
+    { owner: "Agent 10", blocker: "release_economics_or_payout_not_verified", conversionImpact: "paid traffic cannot start without economics and payout proof", nextAction: "verify Apify payout state and cost thresholds" }
+  ];
+}
+
+function buildFakeTractionGuards(): string[] {
+  return [
+    "store views remain null until sourced from Apify analytics",
+    "unique users remain null until sourced from Apify analytics",
+    "trial and paid runs remain null until sourced from Apify analytics or billing export",
+    "estimated creator revenue remains null until calculated from real paid runs and platform costs",
+    "payout readiness is unknown or blocked unless externally verified"
+  ];
+}
+
+function nextRevenueActionFor(
+  monetizationReadiness: LiveProductMonetizationReadiness,
+  payoutReadiness: LiveProductSloDashboard["apifyLaunchExperiment"]["payoutReadiness"],
+  conversion: ReturnType<typeof marketplaceConversionFor>
+): LiveProductSloDashboard["apifyLaunchExperiment"]["nextRevenueAction"] {
+  if (!payoutReadiness.externallyVerified) return "payout_setup";
+  if (monetizationReadiness.status !== "ready_for_paid_traffic") return "data_quality_repair";
+  if (conversion.storeViewToRunRate === null || conversion.trialToPaidRate === null) return "listing_repair";
+  if (conversion.trialToPaidRate < 0.15) return "pricing_test";
+  return "paid_traffic";
 }
 
 function nullableInteger(value: number | null | undefined): number | null {

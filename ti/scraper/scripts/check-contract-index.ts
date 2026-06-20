@@ -125,6 +125,10 @@ const apifyCompatibility = isRecord(apifyStoreReadiness.frontendApiCompatibility
 const apifyCompatibilityStates = Array.isArray(apifyCompatibility.states) ? apifyCompatibility.states.filter(isRecord).map((state) => String(state.state ?? "")) : [];
 const apifyPricingHooks = isRecord(apifyStoreReadiness.pricingHooks) ? apifyStoreReadiness.pricingHooks : {};
 const apifyConversionTracking = isRecord(apifyStoreReadiness.conversionTracking) ? apifyStoreReadiness.conversionTracking : {};
+const apifyMarketplaceTelemetry = isRecord(apifyStoreReadiness.marketplaceTelemetryInputContract) ? apifyStoreReadiness.marketplaceTelemetryInputContract : {};
+const apifyPayoutReadiness = isRecord(apifyStoreReadiness.payoutReadiness) ? apifyStoreReadiness.payoutReadiness : {};
+const apifyConversionExperiments = Array.isArray(apifyStoreReadiness.conversionExperiments) ? apifyStoreReadiness.conversionExperiments.filter(isRecord) : [];
+const apifyOperatorBlockerBoard = Array.isArray(apifyStoreReadiness.operatorBlockerBoard) ? apifyStoreReadiness.operatorBlockerBoard.filter(isRecord) : [];
 const apifyGuardrails = isRecord(apifyStoreReadiness.marketplaceGuardrails) ? apifyStoreReadiness.marketplaceGuardrails : {};
 const darkwebIndexFrontendContract = isRecord(record.darkwebIndexFrontendContract) ? record.darkwebIndexFrontendContract : {};
 const darkwebFrontendApiRoutes = isRecord(darkwebIndexFrontendContract.apiRoutes) ? darkwebIndexFrontendContract.apiRoutes : {};
@@ -310,6 +314,17 @@ const checks = [
   apifyPricingHooks.apifyMarginPercent === 20,
   apifyConversionTracking.currentStorePageViews === null,
   stringArray(apifyConversionTracking.metricsToTrack).includes("conversionRate"),
+  apifyMarketplaceTelemetry.schemaVersion === "ti.apify_marketplace_telemetry_input.v1",
+  apifyMarketplaceTelemetry.realDataRequired === true,
+  apifyMarketplaceTelemetry.unknownMeansNoClaim === true,
+  isRecord(apifyMarketplaceTelemetry.currentValues) && apifyMarketplaceTelemetry.currentValues.storePageViews === null,
+  ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "actorStarts", "datasetRows", "failedRuns", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd"].every((field) => stringArray(apifyMarketplaceTelemetry.fields).includes(field)),
+  apifyPayoutReadiness.schemaVersion === "ti.apify_payout_readiness.v1",
+  apifyPayoutReadiness.externallyVerified === false,
+  stringArray(apifyPayoutReadiness.externalVerificationRequired).includes("withdrawal_readiness"),
+  apifyConversionExperiments.length === 3,
+  apifyConversionExperiments.every((experiment) => Array.isArray(experiment.buyerVisibleFields) && stringArray(experiment.buyerVisibleFields).includes("noLeakProof") && experiment.noLeakRequired === true),
+  ["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"].every((owner) => apifyOperatorBlockerBoard.some((row) => row.owner === owner)),
   stringArray(apifyDefaultInput.queries).length === 20,
   apifyDefaultInput.maxRowsPerQuery === 25,
   apifyDefaultInput.includeDatasets === false,

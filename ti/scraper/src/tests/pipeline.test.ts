@@ -2081,6 +2081,28 @@ describe("pipeline", () => {
       "metadata_only_without_public_support"
     ]));
     expect(pack.paidRowQualityGate.liveFreshnessQualityGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect(pack.paidRowQualityGate.freshnessRepairLoop).toMatchObject({
+      schemaVersion: "ti.program_bs_paid_row_freshness_repair_loop.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      lift: {
+        staleRowsBlocked: 4,
+        genericRowsRepaired: 4,
+        aliasOrUnrelatedRowsSuppressed: 4,
+        caveatedRowsPreserved: 5,
+        sellableRowsGained: 6,
+        usefulRowsGained: 5,
+        averageBuyerValueDelta: 0.19
+      },
+      noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
+    });
+    expect(pack.paidRowQualityGate.freshnessRepairLoop.repairQueue).toHaveLength(20);
+    expect(pack.paidRowQualityGate.freshnessRepairLoop.repairQueue.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]));
+    expect(pack.paidRowQualityGate.freshnessRepairLoop.repairQueue.map((row) => row.blocker)).toEqual(expect.arrayContaining(["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]));
+    expect(pack.paidRowQualityGate.freshnessRepairLoop.repairQueue.every((row) => row.proofNeeded.length > 0 && row.expectedBuyerVisibleLift.length > 0 && row.noLeak)).toBe(true);
+    expect(pack.paidRowQualityGate.freshnessRepairLoop.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

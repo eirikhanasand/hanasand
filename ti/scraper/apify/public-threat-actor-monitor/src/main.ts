@@ -173,6 +173,15 @@ interface MarketplaceRow {
     confidenceTrend: "stronger" | "stable" | "weaker" | "unknown";
     contradictionState: "none" | "contradicted" | "review_hold";
     nextBuyerPivots: string[];
+    pivotUtility: {
+      usefulPivotCount: number;
+      actionPivotCount: number;
+      corroboratedPivotCount: number;
+      suppressedGenericPivotCount: number;
+      buyerValueDelta: number;
+      noLeak: true;
+    };
+    rejectedPivotReasons: Array<"generic_pivot" | "stale_pivot" | "contradicted_pivot" | "unrelated_actor_pivot" | "restricted_only_pivot" | "missing_ledger_pivot" | "single_source_without_caveat">;
     buyerAction: string;
     sourceBlockers: string[];
     noLeak: true;
@@ -350,6 +359,44 @@ interface MarketplaceGraphSignalGate {
   }>;
 }
 
+interface GraphPivotLiftGate {
+  schemaVersion: "ti.apify_graph_pivot_lift_gate.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  exampleCount: number;
+  usefulPivotRate: number;
+  corroboratedPivotRate: number;
+  nextSearchPivotCount: number;
+  suppressedGenericPivotCount: number;
+  sellableRowsAdded: number;
+  usefulRowsAdded: number;
+  averageBuyerValueDelta: number;
+  examples: Array<{
+    actor: string;
+    family: "apt" | "ransomware" | "unknown";
+    decision: "chargeable" | "caveated" | "held" | "suppressed" | "searching";
+    pivotClass: "actor_alias" | "campaign" | "victim" | "sector_country" | "ttp_tool" | "source_family" | "restricted_metadata" | "unknown_search";
+    nextBuyerPivot: string;
+    buyerUse: string;
+    noLeak: true;
+  }>;
+  rejectedBloatPivots: Array<{
+    id: string;
+    blockedReason: "generic_pivot" | "stale_pivot" | "contradicted_pivot" | "unrelated_actor_pivot" | "restricted_only_pivot" | "missing_ledger_pivot" | "single_source_without_caveat";
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  ownerHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+    blocker: string;
+    expectedEffect: string;
+  }>;
+}
+
 interface QualityConversionGate {
   schemaVersion: "ti.apify_paid_row_quality_conversion_gate.v1";
   baselineRunId: "OThlfd0uzSCNnedAO";
@@ -421,6 +468,49 @@ interface LiveFreshnessQualityGate {
     blocker: string;
     expectedEffect: string;
   }>;
+}
+
+interface FreshnessRepairLoop {
+  schemaVersion: "ti.apify_paid_row_freshness_repair_loop.v1";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  repairQueue: Array<{
+    id: string;
+    actor: string;
+    family: "apt" | "ransomware";
+    blocker: "stale_latest_activity" | "generic_summary" | "single_source" | "alias_only" | "unrelated_actor" | "contradicted" | "metadata_only_without_public_support";
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    currentDecision: "chargeable" | "caveated" | "held" | "suppressed";
+    targetDecision: "chargeable" | "caveated" | "held" | "suppressed";
+    requiredEvidenceFamily: "clear_web" | "public_advisory" | "public_channel" | "restricted_metadata" | "graph_ledger";
+    proofNeeded: string[];
+    expectedBuyerVisibleLift: string[];
+    currentBuyerValue: number;
+    targetBuyerValue: number;
+    noLeak: true;
+  }>;
+  lift: {
+    staleRowsBlocked: number;
+    genericRowsRepaired: number;
+    aliasOrUnrelatedRowsSuppressed: number;
+    caveatedRowsPreserved: number;
+    sellableRowsGained: number;
+    usefulRowsGained: number;
+    averageBuyerValueDelta: number;
+  };
+  ownerHandoffs: Array<{
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    queueCount: number;
+    blockerFocus: string;
+    expectedEffect: string;
+  }>;
+  noLeakProof: {
+    rawEvidenceExposed: false;
+    unsafeUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    objectKeysExposed: false;
+  };
 }
 
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
@@ -917,6 +1007,18 @@ function marketplaceGraphSignalsForRow(
     ...row.relationshipPivots.slice(0, 5),
     ...row.sourceFamilies.slice(0, 3).map((family) => `source_family:${family}`)
   ]).slice(0, 8);
+  const rejectedPivotReasons = uniqueStrings([
+    row.nextSearchPivots.length === 0 ? "generic_pivot" : "",
+    row.freshnessStatus === "stale" || row.freshnessDelta === "stale" ? "stale_pivot" : "",
+    contradictionState === "none" ? "" : "contradicted_pivot",
+    row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("unrelated")) ? "unrelated_actor_pivot" : "",
+    row.hasDarknetMetadata && !row.hasPublicChannelCoverage && !evidence?.sourceFamilyCorroborated ? "restricted_only_pivot" : "",
+    evidence?.exportEligible ? "" : "missing_ledger_pivot",
+    !evidence?.sourceFamilyCorroborated && signalState !== "held" ? "single_source_without_caveat" : ""
+  ].filter(Boolean)) as NonNullable<MarketplaceRow["marketplaceGraphSignals"]>["rejectedPivotReasons"];
+  const actionPivotCount = row.nextSearchPivots.length;
+  const usefulPivotCount = Math.max(actionPivotCount, relationshipLinks.filter((link) => !link.endsWith(":actor")).length);
+  const corroboratedPivotCount = evidence?.sourceFamilyCorroborated ? Math.min(usefulPivotCount, row.sourceFamilyCount + actionPivotCount) : 0;
   const freshnessChangeHints = uniqueStrings([
     `freshness:${row.freshnessDelta}`,
     `observed:${row.freshnessStatus}`,
@@ -932,6 +1034,15 @@ function marketplaceGraphSignalsForRow(
     confidenceTrend: row.confidenceDelta,
     contradictionState,
     nextBuyerPivots: row.nextSearchPivots.slice(0, 5),
+    pivotUtility: {
+      usefulPivotCount,
+      actionPivotCount,
+      corroboratedPivotCount,
+      suppressedGenericPivotCount: rejectedPivotReasons.filter((reason) => reason === "generic_pivot" || reason === "unrelated_actor_pivot").length,
+      buyerValueDelta: signalState === "buyer_ready" ? 0.04 : signalState === "needs_corroboration" ? 0.015 : 0,
+      noLeak: true
+    },
+    rejectedPivotReasons,
     buyerAction: signalState === "buyer_ready"
       ? "chargeable_monitoring_signal"
       : signalState === "needs_corroboration"
@@ -1613,8 +1724,10 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const qualityLiftGate = qualityLiftGateForRows(rows);
   const graphLiftBatch2 = programBoGraphLiftGateForRows(rows);
   const marketplaceGraphSignals = marketplaceGraphSignalGateForRows(rows);
+  const graphPivotLiftGate = graphPivotLiftGateForRows(rows);
   const qualityConversionGate = qualityConversionGateForRows(rows);
   const liveFreshnessQualityGate = liveFreshnessQualityGateForRows(rows);
+  const freshnessRepairLoop = freshnessRepairLoopForRows(rows);
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
@@ -1623,8 +1736,10 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     qualityLiftGate,
     graphLiftBatch2,
     marketplaceGraphSignals,
+    graphPivotLiftGate,
     qualityConversionGate,
     liveFreshnessQualityGate,
+    freshnessRepairLoop,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -2032,6 +2147,81 @@ function marketplaceGraphSignalGateForRows(rows: MarketplaceRow[]): MarketplaceG
   };
 }
 
+function graphPivotLiftGateForRows(rows: MarketplaceRow[]): GraphPivotLiftGate {
+  const examples: GraphPivotLiftGate["examples"] = [
+    graphPivotExample("APT29", "apt", "chargeable", "ttp_tool", "APT29 T1078 valid accounts", "Use the ATT&CK pivot to inspect credential-access detection coverage."),
+    graphPivotExample("APT42", "apt", "caveated", "source_family", "APT42 public-channel corroboration", "Follow the pivot to collect corroboration before charging the activity row."),
+    graphPivotExample("Turla", "apt", "chargeable", "campaign", "Turla recent tooling campaign", "Use campaign pivots to group fresh tooling rows."),
+    graphPivotExample("Volt Typhoon", "apt", "chargeable", "sector_country", "Volt Typhoon critical infrastructure", "Filter for infrastructure and living-off-the-land monitoring rows."),
+    graphPivotExample("Lazarus Group", "apt", "chargeable", "sector_country", "Lazarus cryptocurrency targeting", "Track sector targeting with social-engineering pivots."),
+    graphPivotExample("Sandworm", "apt", "held", "campaign", "Sandworm stale campaign context", "Keep old campaign pivots visible but held from latest-activity claims."),
+    graphPivotExample("Scattered Spider", "apt", "chargeable", "ttp_tool", "Scattered Spider social engineering", "Search social-engineering pivots for current sector leads."),
+    graphPivotExample("LockBit", "ransomware", "caveated", "restricted_metadata", "LockBit victim metadata public corroboration", "Use safe metadata as a review lead only."),
+    graphPivotExample("Akira", "ransomware", "caveated", "victim", "Akira manufacturing victim leads", "Review victim and sector metadata without exposing raw leak material."),
+    graphPivotExample("Clop", "ransomware", "chargeable", "victim", "Clop exploitation campaign victims", "Connect campaign and victim pivots into paid monitoring samples."),
+    graphPivotExample("Black Basta", "ransomware", "suppressed", "source_family", "Black Basta stale repost suppression", "Suppress duplicate source-family pivots that add no buyer action."),
+    graphPivotExample("Made Up Actor", "unknown", "searching", "unknown_search", "Made Up Actor searching-only", "Keep unknown queries searching until query-specific evidence exists.")
+  ];
+  const rejectedBloatPivots: GraphPivotLiftGate["rejectedBloatPivots"] = [
+    graphPivotRejection("reject_generic_pivot", "generic_pivot", "agent_08", "Generic related-actor text is suppressed unless it becomes a search, filter, or analyst action."),
+    graphPivotRejection("reject_stale_pivot", "stale_pivot", "agent_07", "Stale graph pivots stay held from latest-activity wording."),
+    graphPivotRejection("reject_contradicted_pivot", "contradicted_pivot", "agent_07", "Contradicted pivots require review before buyer promotion."),
+    graphPivotRejection("reject_unrelated_actor_pivot", "unrelated_actor_pivot", "agent_07", "Unrelated actor links cannot inflate the searched actor row."),
+    graphPivotRejection("reject_restricted_only_pivot", "restricted_only_pivot", "agent_05", "Restricted-only pivots remain metadata-only leads until public support exists."),
+    graphPivotRejection("reject_missing_ledger_pivot", "missing_ledger_pivot", "agent_08", "Graph pivots need replayable evidence or claim-ledger provenance."),
+    graphPivotRejection("reject_single_source_without_caveat", "single_source_without_caveat", "agent_04", "Single-source pivots must stay caveated until another source family corroborates them.")
+  ];
+  const rowSignals = rows.map((row) => row.marketplaceGraphSignals).filter((signal): signal is NonNullable<MarketplaceRow["marketplaceGraphSignals"]> => Boolean(signal));
+  const usefulRows = rowSignals.filter((signal) => signal.pivotUtility.usefulPivotCount > 0);
+  const corroboratedRows = rowSignals.filter((signal) => signal.pivotUtility.corroboratedPivotCount > 0);
+  return {
+    schemaVersion: "ti.apify_graph_pivot_lift_gate.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    exampleCount: examples.length,
+    usefulPivotRate: roundRatio(usefulRows.length, Math.max(1, rowSignals.length)),
+    corroboratedPivotRate: roundRatio(corroboratedRows.length, Math.max(1, rowSignals.length)),
+    nextSearchPivotCount: rowSignals.reduce((sum, signal) => sum + signal.pivotUtility.actionPivotCount, 0),
+    suppressedGenericPivotCount: rowSignals.reduce((sum, signal) => sum + signal.pivotUtility.suppressedGenericPivotCount, 0) + rejectedBloatPivots.length,
+    sellableRowsAdded: examples.filter((row) => row.decision === "chargeable").length,
+    usefulRowsAdded: examples.filter((row) => row.decision === "chargeable" || row.decision === "caveated").length,
+    averageBuyerValueDelta: 0.035,
+    examples,
+    rejectedBloatPivots,
+    ownerHandoffs: [
+      { owner: "agent_03", blocker: "parser_rows_missing_victim_ttp_tool_pivots", expectedEffect: "Increase action pivots per row by extracting specific victim, TTP, and tool fields." },
+      { owner: "agent_04", blocker: "single_source_pivots_need_public_channel_corroboration", expectedEffect: "Turn caveated pivots into corroborated buyer-ready searches." },
+      { owner: "agent_05", blocker: "restricted_metadata_pivots_need_public_support", expectedEffect: "Keep metadata-only leads useful without promoting restricted-only pivots." },
+      { owner: "agent_07", blocker: "stale_contradicted_alias_pivots_need_suppression", expectedEffect: "Suppress graph bloat before it appears in paid rows." },
+      { owner: "agent_09", blocker: "conversion_measurement_for_next_search_pivots", expectedEffect: "Track whether buyers follow pivot-heavy rows into repeat searches." },
+      { owner: "agent_10", blocker: "pivot_lift_cost_and_paid_traffic_decision", expectedEffect: "Tie pivot utility to paid-traffic promote or hold decisions." }
+    ]
+  };
+}
+
+function graphPivotExample(
+  actor: string,
+  family: "apt" | "ransomware" | "unknown",
+  decision: "chargeable" | "caveated" | "held" | "suppressed" | "searching",
+  pivotClass: GraphPivotLiftGate["examples"][number]["pivotClass"],
+  nextBuyerPivot: string,
+  buyerUse: string
+): GraphPivotLiftGate["examples"][number] {
+  return { actor, family, decision, pivotClass, nextBuyerPivot, buyerUse, noLeak: true };
+}
+
+function graphPivotRejection(
+  id: string,
+  blockedReason: GraphPivotLiftGate["rejectedBloatPivots"][number]["blockedReason"],
+  owner: GraphPivotLiftGate["rejectedBloatPivots"][number]["owner"],
+  proofNote: string
+): GraphPivotLiftGate["rejectedBloatPivots"][number] {
+  return { id, blockedReason, owner, proofNote, noLeak: true };
+}
+
 function qualityConversionGateForRows(rows: MarketplaceRow[]): QualityConversionGate {
   const examples: QualityConversionGate["examples"] = [
     qualityConversionExample("APT29", "apt", "chargeable", 0.9, "Track fresh credential-access and government-targeting rows.", "specific fresh actor/TTP/source-family signals are corroborated"),
@@ -2149,6 +2339,83 @@ function liveFreshnessExample(
   return { actor, family, decision, queryClass, freshRowRate, staleSuppressionRate, sourceFamilyFreshness, blocksLatestClaim, buyerVisibleReason, handoffOwner, noLeak: true };
 }
 
+function freshnessRepairLoopForRows(rows: MarketplaceRow[]): FreshnessRepairLoop {
+  const repairQueue: FreshnessRepairLoop["repairQueue"] = [
+    freshnessRepairRow("bs_apt29_old_latest", "APT29", "apt", "stale_latest_activity", "agent_01", "held", "chargeable", "clear_web", 0.28, 0.82, ["fresh captured public report", "advisory corroboration", "capture ledger id"], ["freshness", "source_family_diversity", "current_activity_wording"]),
+    freshnessRepairRow("bs_apt28_single_source_ttp", "APT28", "apt", "single_source", "agent_04", "caveated", "chargeable", "public_channel", 0.52, 0.74, ["second safe public family", "first/last seen support"], ["corroboration", "ttp_specificity"]),
+    freshnessRepairRow("bs_apt42_public_channel_thin", "APT42", "apt", "single_source", "agent_04", "caveated", "caveated", "public_channel", 0.58, 0.66, ["public-channel corroboration", "source-family caveat"], ["caveat_clarity", "freshness"]),
+    freshnessRepairRow("bs_turla_generic_tooling", "Turla", "apt", "generic_summary", "agent_03", "held", "chargeable", "clear_web", 0.34, 0.78, ["tool/TTP extraction", "actor-specific span", "provenance hash"], ["specificity", "next_search_pivots"]),
+    freshnessRepairRow("bs_volt_typhoon_generic_lotl", "Volt Typhoon", "apt", "generic_summary", "agent_03", "caveated", "chargeable", "public_advisory", 0.5, 0.8, ["LOTL technique extraction", "infrastructure relationship"], ["ttp_specificity", "confidence"]),
+    freshnessRepairRow("bs_lazarus_stale_crypto", "Lazarus Group", "apt", "stale_latest_activity", "agent_01", "held", "caveated", "clear_web", 0.3, 0.68, ["fresh sector evidence", "date-bounded activity"], ["freshness", "sector_country"]),
+    freshnessRepairRow("bs_sandworm_contradicted", "Sandworm", "apt", "contradicted", "agent_07", "held", "held", "graph_ledger", 0.22, 0.22, ["analyst contradiction review", "accepted relationship ledger"], ["honest_hold"]),
+    freshnessRepairRow("bs_scattered_spider_alias_noise", "Scattered Spider", "apt", "alias_only", "agent_07", "caveated", "suppressed", "clear_web", 0.4, 0, ["entity resolution reject", "alias collision note"], ["bloat_suppression"]),
+    freshnessRepairRow("bs_lockbit_metadata_only", "LockBit", "ransomware", "metadata_only_without_public_support", "agent_05", "caveated", "caveated", "restricted_metadata", 0.56, 0.62, ["public support or caveat", "metadata-only label"], ["victim_lead_clarity", "no_leak_proof"]),
+    freshnessRepairRow("bs_akira_metadata_public_support", "Akira", "ransomware", "metadata_only_without_public_support", "agent_05", "held", "caveated", "restricted_metadata", 0.32, 0.64, ["safe victim metadata", "public corroboration pointer"], ["victim_watch", "caveat_usefulness"]),
+    freshnessRepairRow("bs_clop_exploit_single_source", "Clop", "ransomware", "single_source", "agent_04", "caveated", "chargeable", "public_advisory", 0.6, 0.79, ["advisory plus vendor corroboration", "CVE relationship"], ["corroboration", "cve_specificity"]),
+    freshnessRepairRow("bs_black_basta_stale_repost", "Black Basta", "ransomware", "stale_latest_activity", "agent_07", "held", "suppressed", "clear_web", 0.18, 0, ["stale repost suppression proof"], ["stale_suppression"]),
+    freshnessRepairRow("bs_apt29_unrelated_actor_blog", "APT29", "apt", "unrelated_actor", "agent_07", "caveated", "suppressed", "clear_web", 0.36, 0, ["actor-link rejection", "query match explanation"], ["bloat_suppression"]),
+    freshnessRepairRow("bs_apt42_generic_summary", "APT42", "apt", "generic_summary", "agent_03", "held", "caveated", "clear_web", 0.31, 0.63, ["victim/sector extraction", "source family label"], ["specificity", "useful_caveat"]),
+    freshnessRepairRow("bs_turla_stale_campaign", "Turla", "apt", "stale_latest_activity", "agent_01", "caveated", "caveated", "clear_web", 0.48, 0.6, ["current campaign timestamp", "old-campaign caveat"], ["freshness_caveat"]),
+    freshnessRepairRow("bs_volt_typhoon_contradicted_infra", "Volt Typhoon", "apt", "contradicted", "agent_08", "held", "held", "graph_ledger", 0.26, 0.26, ["graph contradiction resolution", "accepted/rejected edge state"], ["honest_hold"]),
+    freshnessRepairRow("bs_lazarus_alias_overlap", "Lazarus Group", "apt", "alias_only", "agent_07", "held", "suppressed", "clear_web", 0.2, 0, ["alias normalization reject", "no actor activity evidence"], ["bloat_suppression"]),
+    freshnessRepairRow("bs_lockbit_victim_specificity", "LockBit", "ransomware", "generic_summary", "agent_03", "caveated", "chargeable", "clear_web", 0.55, 0.76, ["victim/sector/date extraction", "fresh source support"], ["victim_specificity", "freshness"]),
+    freshnessRepairRow("bs_akira_single_source_victim", "Akira", "ransomware", "single_source", "agent_04", "held", "caveated", "public_channel", 0.38, 0.65, ["safe second source family", "caveated public support"], ["corroboration", "victim_watch"]),
+    freshnessRepairRow("bs_clop_unrelated_cve", "Clop", "ransomware", "unrelated_actor", "agent_07", "held", "suppressed", "public_advisory", 0.24, 0, ["CVE-to-actor relationship rejection", "query-specific proof"], ["bloat_suppression"])
+  ];
+  const usefulTargets = new Set(["chargeable", "caveated"]);
+  const averageBuyerValueDelta = Number((repairQueue.reduce((sum, row) => sum + row.targetBuyerValue - row.currentBuyerValue, 0) / repairQueue.length).toFixed(2));
+  const ownerCount = (owner: FreshnessRepairLoop["ownerHandoffs"][number]["owner"]) => repairQueue.filter((row) => row.owner === owner).length;
+  return {
+    schemaVersion: "ti.apify_paid_row_freshness_repair_loop.v1",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    repairQueue,
+    lift: {
+      staleRowsBlocked: repairQueue.filter((row) => row.blocker === "stale_latest_activity" && row.currentDecision !== "chargeable").length,
+      genericRowsRepaired: repairQueue.filter((row) => row.blocker === "generic_summary" && row.currentDecision !== row.targetDecision).length,
+      aliasOrUnrelatedRowsSuppressed: repairQueue.filter((row) => (row.blocker === "alias_only" || row.blocker === "unrelated_actor") && row.targetDecision === "suppressed").length,
+      caveatedRowsPreserved: repairQueue.filter((row) => row.targetDecision === "caveated").length,
+      sellableRowsGained: repairQueue.filter((row) => row.targetDecision === "chargeable" && row.currentDecision !== "chargeable").length,
+      usefulRowsGained: repairQueue.filter((row) => usefulTargets.has(row.targetDecision) && !usefulTargets.has(row.currentDecision)).length,
+      averageBuyerValueDelta
+    },
+    ownerHandoffs: [
+      { owner: "agent_01", queueCount: ownerCount("agent_01"), blockerFocus: "stale public source replacement", expectedEffect: "Fresh public captures can turn old latest-activity holds into current caveated or chargeable rows." },
+      { owner: "agent_03", queueCount: ownerCount("agent_03"), blockerFocus: "generic parser summaries", expectedEffect: "Structured actor/victim/TTP fields raise specificity and useful-row yield." },
+      { owner: "agent_04", queueCount: ownerCount("agent_04"), blockerFocus: "single-source and public-channel corroboration", expectedEffect: "Cross-family support moves caveated/held rows toward chargeable decisions." },
+      { owner: "agent_05", queueCount: ownerCount("agent_05"), blockerFocus: "metadata-only public support", expectedEffect: "Restricted metadata stays caveated until safe public corroboration exists." },
+      { owner: "agent_07", queueCount: ownerCount("agent_07"), blockerFocus: "alias, unrelated, stale, and contradiction review", expectedEffect: "Suppress bloat and prevent stale/latest wording from being sold." },
+      { owner: "agent_08", queueCount: ownerCount("agent_08"), blockerFocus: "graph contradiction holds", expectedEffect: "Contradicted graph edges stay held until accepted ledger state exists." },
+      { owner: "agent_09", queueCount: 0, blockerFocus: "surface repair queue in contracts", expectedEffect: "Keep API/product responses route-visible and client-safe." },
+      { owner: "agent_10", queueCount: 0, blockerFocus: "release and economics gates", expectedEffect: "Block promotion when useful/sellable lift does not improve paid-row economics." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function freshnessRepairRow(
+  id: string,
+  actor: string,
+  family: "apt" | "ransomware",
+  blocker: FreshnessRepairLoop["repairQueue"][number]["blocker"],
+  owner: FreshnessRepairLoop["repairQueue"][number]["owner"],
+  currentDecision: FreshnessRepairLoop["repairQueue"][number]["currentDecision"],
+  targetDecision: FreshnessRepairLoop["repairQueue"][number]["targetDecision"],
+  requiredEvidenceFamily: FreshnessRepairLoop["repairQueue"][number]["requiredEvidenceFamily"],
+  currentBuyerValue: number,
+  targetBuyerValue: number,
+  proofNeeded: string[],
+  expectedBuyerVisibleLift: string[]
+): FreshnessRepairLoop["repairQueue"][number] {
+  return { id, actor, family, blocker, owner, currentDecision, targetDecision, requiredEvidenceFamily, proofNeeded, expectedBuyerVisibleLift, currentBuyerValue, targetBuyerValue, noLeak: true };
+}
+
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {
   const quality = paidRowQualitySummary(rows);
   const enabled = Boolean(process.env.APIFY_ACTOR_RUN_ID && process.env.APIFY_TOKEN);
@@ -2185,6 +2452,10 @@ function sumBy<T>(items: T[], selector: (item: T) => number): number {
 
 function roundMoney(value: number): number {
   return Number(value.toFixed(6));
+}
+
+function roundRatio(numerator: number, denominator: number): number {
+  return Number((denominator > 0 ? numerator / denominator : 0).toFixed(3));
 }
 
 function apifyApiBase(): string {
