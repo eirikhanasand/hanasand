@@ -280,6 +280,7 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
 
   if (input.includeSources) {
     for (const source of response.sources) {
+      if (sourceType(source.type) === "system") continue;
       rows.push({
         ...baseRow(response, generatedAt, lastSeen),
         rowType: "source",
@@ -336,7 +337,7 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
     confidence: clampNumber(response.confidence, 0, 1),
     generatedAt,
     collectionMode: response.mode,
-    sourceCount: response.sources.length,
+    sourceCount: evidenceCount,
     sourceFamilyCount: quality.sourceFamilyCount,
     activityCount: response.recentActivity.length,
     freshnessStatus: quality.freshnessStatus,
@@ -483,7 +484,7 @@ function safePublicUrl(url: string | undefined): string | undefined {
 function warningsFor(response: TiSearchResponse): string[] {
   const warnings = ["safe_metadata_only"];
   if (response.status && response.status !== "ready") warnings.push(`status:${response.status}`);
-  if (response.datasets.some((dataset) => dataset.type === "darknet_metadata" && dataset.status === "metadata_only")) {
+  if (response.sources.some((source) => sourceType(source.type) === "darknet_metadata")) {
     warnings.push("darknet_metadata_only");
   }
   if (response.notes.some((note) => note.toLowerCase().includes("review"))) warnings.push("analyst_review_required");

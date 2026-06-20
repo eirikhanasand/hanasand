@@ -6,6 +6,8 @@
 - Kept coverage metadata available as an explicit input option.
 - Revised the example output to reflect single-source evidence without inflated corroboration claims.
 - Classified dated news sources as clear-web evidence and covered the mapping in the smoke fixture.
+- Removed internal run-status rows and capability-only darknet warnings from customer datasets.
+- Counted evidence sources separately from orchestration records.
 
 ## 0.2.0 - 2026-06-20
 

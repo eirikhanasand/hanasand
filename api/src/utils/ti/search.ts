@@ -353,7 +353,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             datasets: liveDatasets(),
             sources: matches.slice(0, 8).map(match => ({
                 id: match.id,
-                name: match.publisher ? `${match.publisher}: ${match.title}` : match.title,
+                name: match.publisher ?? match.title,
                 type: match.kind === 'news' ? 'live_news' : match.kind === 'background' ? 'background_reference' : 'live_clear_web',
                 provenance: match.url,
                 url: safeTiLink(match.url)
@@ -1285,6 +1285,7 @@ function decodeHtml(value: string) {
     return value
         .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
+        .replace(/&nbsp;/g, ' ')
         .replace(/&#x27;/g, '\'')
         .replace(/&#39;/g, '\'')
         .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)))

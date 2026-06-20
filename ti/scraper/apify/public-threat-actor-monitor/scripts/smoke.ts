@@ -32,8 +32,14 @@ for (const row of output) {
   if (JSON.stringify(row).toLowerCase().includes("password")) throw new Error("Output contains forbidden password text");
 }
 const profile = output.find((row) => row.rowType === "profile");
-if (profile?.sourceCount !== 2 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "single_source") {
+if (profile?.sourceCount !== 1 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "single_source") {
   throw new Error("Internal status sources must not increase evidence grade or source-family coverage");
+}
+if (output.some((row) => row.rowType === "source" && row.sourceType === "system")) {
+  throw new Error("Internal status rows must not be included in marketplace evidence output");
+}
+if (output.some((row) => Array.isArray(row.warningCodes) && row.warningCodes.includes("darknet_metadata_only"))) {
+  throw new Error("Coverage capability alone must not produce a darknet evidence warning");
 }
 
 console.log(`Smoke passed with ${output.length} safe metadata rows.`);

@@ -4,7 +4,7 @@ const xml = `<?xml version="1.0"?>
 <rss><channel><item>
   <title>APT29 targets cloud accounts - Security Vendor</title>
   <link>https://example.com/report</link>
-  <description><![CDATA[<b>APT29</b> campaign details.]]></description>
+  <description><![CDATA[<b>APT29</b>&nbsp;campaign details.]]></description>
   <pubDate>Fri, 20 Jun 2026 08:30:00 GMT</pubDate>
   <source url="https://example.com">Security Vendor</source>
 </item></channel></rss>`
