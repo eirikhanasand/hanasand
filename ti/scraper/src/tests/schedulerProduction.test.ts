@@ -1707,6 +1707,45 @@ describe("scheduler production readiness", () => {
         paidRowGate: "metadata_context_only"
       })
     ]));
+    expect(daily.sourceGapExecutionReadiness.queueTaskSpecs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        willEnqueue: false,
+        expectedRepositoryOperation: "findOrRegisterRun_then_enqueueTasks",
+        task: expect.objectContaining({
+          id: "dryrun_interactive_live_search_tier_100_apt29_safe_public_sources",
+          sourceType: "static_web",
+          runId: "public:APT29:safe_public_sources:daily_actor",
+          sourceConcurrencyKey: "public:APT29:safe_public_sources:daily_actor",
+          planning: expect.objectContaining({
+            decision: "selected",
+            selectedFor: "interactive",
+            idempotencyKey: "daily-source-gap:public:APT29:safe_public_sources:daily_actor"
+          })
+        }),
+        forbiddenMutations: expect.arrayContaining(["network_fetch", "payload_download", "actor_interaction"])
+      }),
+      expect.objectContaining({
+        task: expect.objectContaining({
+          sourceType: "telegram_public",
+          planning: expect.objectContaining({
+            selectedFor: "probe",
+            safetyEnvelope: expect.objectContaining({ allowPublicChannel: true })
+          })
+        })
+      }),
+      expect.objectContaining({
+        task: expect.objectContaining({
+          sourceType: "tor_metadata",
+          maxBytes: 0,
+          planning: expect.objectContaining({
+            decision: "blocked-by-policy",
+            selectedFor: "metadata",
+            safetyEnvelope: expect.objectContaining({ metadataOnlyRestricted: true })
+          })
+        }),
+        enqueuePreconditions: expect.arrayContaining(["metadata_only_review_current"])
+      })
+    ]));
     expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
       expect.objectContaining({
         step: "finish_active_dataset_emit",

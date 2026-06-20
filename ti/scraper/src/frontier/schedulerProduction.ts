@@ -2153,6 +2153,64 @@ export function buildSchedulerDailyActorRunPlan(input: {
           : "suppress_until_fresh"
     };
   });
+  const queueTaskSpecs: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["queueTaskSpecs"] = materializedTasks.map((task, index) => {
+    const sourceType: CollectionTask["sourceType"] = task.noLeakMode === "metadata_only_no_raw_download"
+      ? "tor_metadata"
+      : task.workClass === "public_channel_probe"
+        ? "telegram_public"
+        : "static_web";
+    return {
+      willEnqueue: false,
+      task: {
+        id: task.dryRunTaskId,
+        tenantId: "default",
+        sourceId: `scheduler_${task.sourceTier}_${task.workerPartition}`,
+        targetUrl: `ti://scheduler/source-gap/${encodeURIComponent(task.query)}/${task.sourceTier}`,
+        sourceType,
+        queuedAt: now.toISOString(),
+        priority: Math.max(1, 100 - index),
+        reason: `dry-run source gap closure for ${task.query}; ${task.paidRowGate}`,
+        retryCount: 0,
+        intelRequestId: task.idempotencyKey,
+        runId: task.reuseKey,
+        deadlineAt: new Date(now.getTime() + task.deadlineSeconds * 1000).toISOString(),
+        maxBytes: task.noLeakMode === "metadata_only_no_raw_download" ? 0 : 262_144,
+        availableAt: now.toISOString(),
+        attemptDeadlineAt: new Date(now.getTime() + task.leaseSeconds * 1000).toISOString(),
+        crawlBudgetKey: `${task.workerPartition}:${task.sourceTier}`,
+        maxRetries: task.maxAttempts,
+        sourceConcurrencyKey: task.reuseKey,
+        fairnessKey: `${task.workerPartition}:${task.query}`,
+        planning: {
+          budgetClass: task.workClass as PlanningBudgetClass,
+          decision: task.noLeakMode === "metadata_only_no_raw_download" ? "blocked-by-policy" : "selected",
+          reason: task.paidRowGate,
+          queryTerms: [task.query, task.sourceTier],
+          freshness: task.paidRowGate === "suppress_until_fresh" ? 0.2 : task.paidRowGate === "caveat_until_correlated" ? 0.55 : 0.4,
+          freshnessTargetSeconds: task.deadlineSeconds,
+          maxCost: {
+            tasks: 1,
+            bytes: task.noLeakMode === "metadata_only_no_raw_download" ? 0 : 262_144
+          },
+          safetyEnvelope: {
+            allowClearWeb: task.noLeakMode === "public_fetch_only",
+            allowPublicChannel: task.workClass === "public_channel_probe",
+            allowRestrictedMetadata: task.noLeakMode === "metadata_only_no_raw_download",
+            metadataOnlyRestricted: task.noLeakMode === "metadata_only_no_raw_download",
+            forbiddenOperations: ["raw_url_output", "payload_download", "credential_access", "actor_interaction"]
+          },
+          idempotencyKey: task.idempotencyKey,
+          sourceTrust: task.noLeakMode === "metadata_only_no_raw_download" ? 0.68 : 0.82,
+          selectedFor: task.noLeakMode === "metadata_only_no_raw_download" ? "metadata" : task.workClass === "public_channel_probe" ? "probe" : "interactive"
+        }
+      },
+      enqueuePreconditions: task.noLeakMode === "metadata_only_no_raw_download"
+        ? ["reuse_key_not_active", "metadata_only_review_current", "paid_row_gate_not_ready"]
+        : ["reuse_key_not_active", "source_policy_allows_public_fetch", "paid_row_gate_not_ready"],
+      expectedRepositoryOperation: "findOrRegisterRun_then_enqueueTasks",
+      forbiddenMutations: ["network_fetch", "raw_url_output", "payload_download", "credential_access", "actor_interaction"]
+    };
+  });
   const drainExecution: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["drainExecution"] = [
     {
       step: "finish_active_dataset_emit",
@@ -2263,6 +2321,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
       }
     ],
     materializedTasks,
+    queueTaskSpecs,
     drainExecution
   };
   const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {

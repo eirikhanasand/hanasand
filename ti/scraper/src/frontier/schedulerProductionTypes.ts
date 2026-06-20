@@ -1453,6 +1453,13 @@ export interface SchedulerDailyActorRunPlanDto {
       noLeakMode: "public_fetch_only" | "metadata_only_no_raw_download";
       paidRowGate: "suppress_until_fresh" | "caveat_until_correlated" | "metadata_context_only";
     }>;
+    queueTaskSpecs: Array<{
+      willEnqueue: false;
+      task: CollectionTask;
+      enqueuePreconditions: Array<"reuse_key_not_active" | "source_policy_allows_public_fetch" | "metadata_only_review_current" | "paid_row_gate_not_ready">;
+      expectedRepositoryOperation: "findOrRegisterRun_then_enqueueTasks";
+      forbiddenMutations: Array<"network_fetch" | "raw_url_output" | "payload_download" | "credential_access" | "actor_interaction">;
+    }>;
     drainExecution: Array<{
       step: "finish_active_dataset_emit" | "checkpoint_interactive_refresh" | "checkpoint_public_gap_fill" | "checkpoint_source_sweeps" | "checkpoint_metadata_review";
       appliesToBatch: "daily_actor_dataset_emit" | "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep";

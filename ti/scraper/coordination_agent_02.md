@@ -13,6 +13,14 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 00:35 CEST
+
+- Added queue-compatible dry-run task specs to `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness`.
+- Source-gap materialization now includes inert `CollectionTask` payloads with `ti://scheduler/source-gap/...` targets, source type, deadline, retry budget, source concurrency key, fairness key, crawl budget key, and `TaskPlanningMetadata`.
+- Queue specs remain non-mutating (`willEnqueue: false`) and require `findOrRegisterRun_then_enqueueTasks`, with forbidden mutations covering network fetch, raw URL output, payload download, credential access, and actor interaction.
+- Green: `bun run check` and `bun test src/tests/schedulerProduction.test.ts`.
+- Next: continue from dry-run queue specs into a disabled-by-default enqueue adapter path once shared Agent 01/05/09/10 work stabilizes.
+
 ## Progress - 2026-06-21 00:25 CEST
 
 - Extended `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness` with dry-run materialized source-gap tasks and drain execution steps.
