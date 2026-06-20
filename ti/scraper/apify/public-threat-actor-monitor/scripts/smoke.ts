@@ -44,6 +44,9 @@ for (const row of output) {
   if (!Array.isArray(row.reviewReasons) || row.reviewReasons.length === 0) {
     throw new Error("Every row must expose reviewReasons for analyst quality triage");
   }
+  if (!Array.isArray(row.analysisFacets) || !row.analysisFacets.includes(`row:${row.rowType}`) || !row.analysisFacets.includes("safety:metadata_only")) {
+    throw new Error("Every row must expose stable analysisFacets for marketplace filtering");
+  }
   if (typeof row.coverageStatus !== "string" || typeof row.recommendedCollectionAction !== "string") {
     throw new Error("Every row must expose coverage status and recommended collection action");
   }
@@ -73,6 +76,9 @@ if (activity?.claimType !== "campaign" || activity?.publisherCount !== 1) {
 }
 if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes("review:single_source")) {
   throw new Error("Activity rows must explain single-source review state");
+}
+if (!Array.isArray(activity?.analysisFacets) || !activity.analysisFacets.includes("claim:campaign") || !activity.analysisFacets.includes("evidence:single_source")) {
+  throw new Error("Activity rows must expose claim and evidence analysis facets");
 }
 if (activity?.pollingHint !== "source_gap_review" || activity?.schedulerDecision !== "reuse_active_run") {
   throw new Error("Activity rows must expose scheduler decision and polling hint");

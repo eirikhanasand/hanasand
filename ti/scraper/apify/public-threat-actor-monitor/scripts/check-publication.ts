@@ -18,7 +18,29 @@ const forbiddenListingTerms = [
   "language model"
 ];
 
-const requiredCategories = ["SECURITY", "MONITORING", "NEWS"];
+const requiredCategories = ["SECURITY", "MONITORING"];
+const expectedDefaultQueries = [
+  "APT29",
+  "APT28",
+  "APT42",
+  "Lazarus Group",
+  "Volt Typhoon",
+  "Salt Typhoon",
+  "Turla",
+  "Sandworm",
+  "Kimsuky",
+  "MuddyWater",
+  "Charming Kitten",
+  "Scattered Spider",
+  "LockBit",
+  "Clop",
+  "Akira",
+  "Black Basta",
+  "Play",
+  "RansomHub",
+  "ALPHV",
+  "Hunters International"
+];
 const manifest = await Bun.file(".actor/actor.json").json() as ActorManifest;
 const readme = await Bun.file("README.md").text();
 const changelog = await Bun.file("CHANGELOG.md").text();
@@ -35,7 +57,7 @@ for (const category of requiredCategories) {
   if (!manifest.categories?.includes(category)) failures.push(`Missing ${category} category`);
 }
 
-for (const generic of ["DEVELOPER_TOOLS", "AUTOMATION"]) {
+for (const generic of ["DEVELOPER_TOOLS", "AUTOMATION", "NEWS"]) {
   if (manifest.categories?.includes(generic)) failures.push(`Remove generic ${generic} category`);
 }
 
@@ -44,9 +66,10 @@ if (!exampleInput) {
   failures.push("Missing parseable exampleRunInput.body");
 } else {
   const queries = Array.isArray(exampleInput.queries) ? exampleInput.queries : [];
-  for (const query of ["APT29", "Volt Typhoon", "LockBit"]) {
+  for (const query of expectedDefaultQueries) {
     if (!queries.includes(query)) failures.push(`Example input must include ${query}`);
   }
+  if (queries.length !== expectedDefaultQueries.length) failures.push(`Example input must contain exactly ${expectedDefaultQueries.length} default queries`);
   if (exampleInput.includeCoverageGaps !== true) failures.push("Example input must include coverage gaps");
   if (exampleInput.includeDatasets !== false) failures.push("Example input should keep dataset coverage disabled by default");
 }

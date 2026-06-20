@@ -1,6 +1,32 @@
-Status: ready_for_new_task
+Status: active_program_bh_graph_export_product_packaging
 
 # Agent 08 Coordination
+
+## Current Assignment - Program BH: Graph Export Product Packaging
+
+You are no longer waiting for a graph/STIX/TAXII task. Continue the graph/export lane until the product can package analyst-grade actor intelligence from public evidence into compact outputs that are valuable in the Apify Actor, `/ti`, and future STIX/TAXII integrations.
+
+Mission:
+- Convert graph timeline/campaign/incident/claim work into buyer-useful product packets: actor timeline summary, campaign-change summary, victim/targeting pattern summary, TTP/source corroboration, contradiction state, and reviewed export readiness.
+- Keep STIX/TAXII honest: descriptor/reviewed-subset readiness only unless reviewed evidence and no-leak gates are satisfied.
+- Make arbitrary actor queries useful without pretending unknown actors are indexed: graph packets should explain available public context, missing source families, and safe next pivots.
+
+Build:
+- Add a graph product packet DTO for actor queries that combines incident claims, actor timeline changes, campaign/TTP freshness, source-family coverage, confidence trend, reviewed/held export state, and public UI/API copy hints.
+- Add fixtures for APT29, Volt Typhoon, Scattered Spider, LockBit, Akira, and an unknown actor; include stale-only, contradicted, alias-split, public-channel-only, restricted-metadata-only, and well-corroborated cases.
+- Add STIX preview/readiness fields that identify which claims can become `intrusion-set`, `campaign`, `malware`, `tool`, `attack-pattern`, `identity`, `relationship`, or `sighting` objects and which remain held.
+- Add frontend/Apify-facing compact summary fields for `whatChanged`, `whyItMatters`, `confidenceDrivers`, `sourceCoverageGaps`, and `reviewRequired`.
+- Preserve no raw URLs, leaked content, credential/payload evidence, private-channel material, actor interaction, or unsafe darkweb details in public/export packets.
+
+Proof before status change:
+- `bun run check`
+- `bun test src/tests/graphViews.test.ts src/tests/api.test.ts src/tests/sourceSeeds.test.ts`
+- `bun run check:route-inventory`
+- `bun run check:contract-index`
+- `bun run check:api-regression`
+- update `docs/export/relationship_model.md`
+
+If this phase completes, continue immediately into Program BI: reviewed STIX bundle examples and TAXII descriptor pricing/readiness packets for marketplace differentiation.
 
 ## Continuation Directive
 
@@ -24,7 +50,20 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 - Added `GraphTaxiiDescriptorStixBundleGovernanceDto` across graph runtime, investigation workspace, and STIX readiness with reviewed STIX subset governance, descriptor-only TAXII collection planning, future `TaxiiExportProvider` request/page contract, no mounted server routes, no server claim, and no-leak metadata-only safety.
 - Repaired adjacent cross-agent green-build drift in darkweb index contract helpers, source-atlas duplicate handoff helpers, public coverage freshness helper naming, and restricted emergency-stop soak decision semantics.
 - Updated `docs/export/relationship_model.md` with the Program BD TAXII/STIX governance boundary.
+- Completed Program BE Graph/STIX Release Candidate Gate Visibility.
+- Added first-class `releaseCandidate` fields across graph runtime, investigation workspace, and STIX readiness so promote/hold/rollback state, scenario coverage, Agent 10 proof commands, public API impact, STIX impact, and descriptor-only TAXII boundaries are inspectable directly from query/export surfaces.
+- Updated `docs/export/relationship_model.md` with the Program BE release-candidate visibility boundary.
+- Completed Program BF Incident Claim Graph And Corroboration Semantics.
+- Added `GraphIncidentClaimWorkspaceDto` on graph query and investigation workspace DTOs with canonical incident/claim clusters, actor/victim/campaign/sector/country/malware/TTP/source/report relationship IDs, first/last reported timestamps, publisher/source-family counts, corroborating/contradicting evidence IDs, ledger IDs, confidence, freshness, review/export state, conservative merge/split semantics, reviewed STIX subset eligibility/holds, and no-leak metadata-only boundaries.
+- Added fixtures for APT29, Volt Typhoon, LockBit, ambiguous alias attribution, same-day distinct incidents, old campaign reuse, and contradicted victim claims.
+- Updated `docs/export/relationship_model.md`; verification is green for `bun run check`, focused graph/source/ops tests, and full `bun test` (519 pass).
+- Completed Program BG Graph-Backed Actor Timelines And Campaign-Change Detection.
+- Added `GraphActorTimelineChangeWorkspaceDto` across graph query, investigation workspace, runtime graph API, and STIX readiness so actor timelines and campaign-change rows are query-visible.
+- Added relationship/evidence/ledger/capture/source provenance, confidence trend, freshness, contradiction state, review/export state, public fact state, reviewed STIX subset holds, and no-leak metadata-only boundaries for timeline events.
+- Added fixtures for APT29 timeline drift, Volt-style infrastructure/LOLBIN/tooling/CVE changes, ransomware victim churn, alias splits, stale campaign reuse, contradicted campaign membership, and no-evidence random actor searches.
+- Repaired adjacent source activation/API readiness drift needed to keep the shared build green.
+- Verification is green for `bun run check`, focused graph/source tests, and full `bun test` (521 pass).
 
 ## Active Next Work
 
-- Request a new Agent 08 graph/STIX/TAXII task. The explicit Agent 08 backlog currently ends at Program BD, so continue this long-running lane when a new task appears in `coordination_program_backlog.md` or `coordination.md`.
+Historical note: Agent 08 previously requested a new graph/STIX/TAXII task; the active Program BH assignment above supersedes that request and should be continued until proof is complete.

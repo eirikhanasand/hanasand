@@ -1,8 +1,16 @@
 # Changelog
 
+## 0.6.0 - 2026-06-20
+
+- Added the `GET /v1/contracts` `apifyStoreReadiness` publication contract as the source of truth for the exact default input, sample output DTOs, public proof DTOs, frontend polling states, pricing hooks, safety contract, and known Apify payout blockers.
+- Expanded the manifest example input to the full 20-query default watchlist and kept `includeCoverageGaps` enabled by default.
+- Tightened publication guardrails to reject draft listing copy, hello-world input, generic local categories, and unsafe output claims.
+- Documented public proof commands for `APT29`, `Volt Typhoon`, `Scattered Spider`, `LockBit`, random actor, and made-up actor readiness checks.
+
 ## 0.5.0 - 2026-06-20
 
 - Added `reviewReasons` to every dataset row so analysts can see why a finding is actionable, single-source, partial, stale, contradicted, metadata-only, or held.
+- Added `analysisFacets` to every dataset row for stable filtering by row type, claim type, evidence grade, freshness, collection action, entity presence, source class, and safety boundary.
 - Added coverage-gap rows plus source-family, collection-priority, and recommended collection action fields for thin or stale evidence.
 - Added scheduler polling, retry/backoff, duplicate-run reuse, deferred workload, badge, and source-coverage gap fields to every dataset row.
 - Aligned fixture smoke coverage with scheduler polling, duplicate-run reuse, source coverage gaps, and safe-metadata-only quality fields.

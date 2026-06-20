@@ -3,7 +3,7 @@
 ## Product
 
 - Title: `Public Threat Actor & Ransomware Activity Monitor`
-- Primary listing category: security / monitoring / news
+- Primary listing categories: security / monitoring
 - First promise: safe public-intelligence metadata for actor activity, targeting, and TTPs.
 - Do not market as a stolen-data, credential, or payload scraper.
 
@@ -24,7 +24,28 @@
 
 ```json
 {
-  "queries": ["APT29", "Volt Typhoon", "LockBit"],
+  "queries": [
+    "APT29",
+    "APT28",
+    "APT42",
+    "Lazarus Group",
+    "Volt Typhoon",
+    "Salt Typhoon",
+    "Turla",
+    "Sandworm",
+    "Kimsuky",
+    "MuddyWater",
+    "Charming Kitten",
+    "Scattered Spider",
+    "LockBit",
+    "Clop",
+    "Akira",
+    "Black Basta",
+    "Play",
+    "RansomHub",
+    "ALPHV",
+    "Hunters International"
+  ],
   "maxRowsPerQuery": 25,
   "includeActivity": true,
   "includeTargets": true,
@@ -50,6 +71,30 @@ docker build -t public-threat-actor-monitor .
 
 Then run the image with a local Apify storage directory and fixture before publishing.
 
+From the repository root, also verify the public API/store contract:
+
+```bash
+bun run check
+bun run check:api-regression
+bun run check:contract-index
+bun run check:apify-threat-actor-monitor
+bun run smoke:apify-threat-actor-monitor
+bun run check:apify-publication
+```
+
+Refresh public proof after publish or when network approval is available:
+
+```bash
+TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY='Volt Typhoon' bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY='Scattered Spider' bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY=LockBit bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search
+```
+
+`GET /v1/contracts` returns the `apifyStoreReadiness` field. It is the source of truth for the exact default input, verified sample output DTOs, frontend partial/ready/queued/searching/empty-delta states, pricing hooks, safety contract, proof commands, and known blockers.
+
 ## Launch Pricing
 
 Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtime so customers can predict cost before scheduling a run.
@@ -66,6 +111,7 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 - Do not add a monthly rental at launch; usage is too early to justify one.
 - Review pricing after 30 paid runs using actual rows per run, repeat usage, platform costs, and support load.
 - Monetization remains blocked until Apify beneficiary details and a payout method are verified.
+- Do not store beneficiary, payout, token, or account identifiers in this repository.
 
 ## Next Data Upgrades
 

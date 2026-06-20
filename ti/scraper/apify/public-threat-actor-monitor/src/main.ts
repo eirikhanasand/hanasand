@@ -133,6 +133,7 @@ interface MarketplaceRow {
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
+  analysisFacets: string[];
   hasDarknetMetadata: boolean;
   hasPublicChannelCoverage: boolean;
   confidence: number;
@@ -276,6 +277,7 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
       const itemSources = item.sourceIds.map((id) => sourceById.get(id)).filter(Boolean);
       const source = itemSources.find((candidate) => sourceType(candidate?.type) !== "system") ?? itemSources[0];
       const evidenceCount = itemSources.filter((candidate) => sourceType(candidate?.type) !== "system").length;
+      const itemQuality = qualityFields(response, item.date, item.confidence, evidenceCount);
       rows.push({
         ...baseRow(response, generatedAt, lastSeen),
         rowType: "activity",
@@ -296,7 +298,14 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         corroboratingSourceIds: item.corroboratingSourceIds ?? [],
         contradictingSourceIds: item.contradictingSourceIds ?? [],
         confidence: clampNumber(item.confidence, 0, 1),
-        ...qualityFields(response, item.date, item.confidence, evidenceCount),
+        ...itemQuality,
+        analysisFacets: analysisFacetsFor(response, "activity", itemQuality, {
+          sourceType: sourceType(source?.type),
+          claimType: item.claimType,
+          victimName: item.victimName,
+          affectedSectors: item.affectedSectors,
+          countries: item.countries
+        }),
         provenanceHash: stableHash([response.query, item.title, item.detail, item.date, item.sourceIds.join(",")].join("|"))
       });
     }
@@ -312,6 +321,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         sector: target.sector,
         regions: target.regions,
         confidence: clampNumber(target.confidence, 0, 1),
+        analysisFacets: analysisFacetsFor(response, "target", qualityFields(response, lastSeen, target.confidence, response.sources.length), {
+          affectedSectors: [target.sector]
+        }),
         provenanceHash: stableHash([response.query, target.sector, target.regions.join(","), target.rationale].join("|"))
       });
     }
@@ -328,6 +340,10 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         attackId: ttp.attackId,
         tactic: ttp.tactic,
         confidence: clampNumber(ttp.confidence, 0, 1),
+        analysisFacets: analysisFacetsFor(response, "ttp", qualityFields(response, lastSeen, ttp.confidence, response.sources.length), {
+          attackId: ttp.attackId,
+          tactic: ttp.tactic
+        }),
         provenanceHash: stableHash([response.query, ttp.name, ttp.attackId ?? "", ttp.tactic, ttp.detail].join("|"))
       });
     }
@@ -347,6 +363,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         sourceUrl: safePublicUrl(source.url),
         provenance: source.provenance,
         confidence: clampNumber(response.confidence, 0, 1),
+        analysisFacets: analysisFacetsFor(response, "source", qualityFields(response, lastSeen, response.confidence, response.sources.length), {
+          sourceType: sourceType(source.type)
+        }),
         provenanceHash: stableHash([response.query, source.id, source.provenance].join("|"))
       });
     }
@@ -366,6 +385,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         sourceUrl: safePublicUrl(dataset.url),
         sourceType: sourceType(dataset.type),
         confidence: clampNumber(response.confidence, 0, 1),
+        analysisFacets: analysisFacetsFor(response, "dataset", qualityFields(response, lastSeen, response.confidence, response.sources.length), {
+          sourceType: sourceType(dataset.type)
+        }),
         provenanceHash: stableHash([response.query, dataset.name, dataset.type, dataset.coverage, dataset.status].join("|"))
       });
     }
@@ -411,6 +433,7 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
     evidenceGrade: quality.evidenceGrade,
     isActionable: quality.isActionable,
     reviewReasons: quality.reviewReasons,
+    analysisFacets: analysisFacetsFor(response, "profile", quality, { sourceType: "system" }),
     hasDarknetMetadata: quality.hasDarknetMetadata,
     hasPublicChannelCoverage: quality.hasPublicChannelCoverage,
     firstSeen: generatedAt,
@@ -475,8 +498,46 @@ function coverageGapRows(response: TiSearchResponse, generatedAt: string, lastSe
     summary: coverageGapSummary(response, code, quality),
     sourceType: "system",
     confidence: clampNumber(response.confidence, 0, 1),
+    analysisFacets: analysisFacetsFor(response, "coverage_gap", quality, { coverageGapCode: code, sourceType: "system" }),
     provenanceHash: stableHash([response.query, code, quality.sourceFamilies.join(","), quality.missingSourceFamilies.join(",")].join("|"))
   }));
+}
+
+function analysisFacetsFor(
+  response: TiSearchResponse,
+  rowType: MarketplaceRow["rowType"],
+  quality: ReturnType<typeof qualityFields>,
+  context: {
+    sourceType?: MarketplaceRow["sourceType"];
+    claimType?: string;
+    victimName?: string;
+    affectedSectors?: string[];
+    countries?: string[];
+    attackId?: string;
+    tactic?: string;
+    coverageGapCode?: string;
+  }
+): string[] {
+  return uniqueStrings([
+    `row:${rowType}`,
+    `status:${response.status ?? "unknown"}`,
+    `freshness:${quality.freshnessStatus}`,
+    `evidence:${quality.evidenceGrade}`,
+    `coverage:${quality.coverageStatus}`,
+    `priority:${quality.collectionPriority}`,
+    `action:${quality.recommendedCollectionAction}`,
+    context.sourceType ? `source:${context.sourceType}` : undefined,
+    context.claimType ? `claim:${context.claimType}` : undefined,
+    context.victimName ? "entity:victim" : undefined,
+    context.affectedSectors?.length ? "entity:sector" : undefined,
+    context.countries?.length ? "entity:country" : undefined,
+    context.attackId ? "entity:attack_technique" : undefined,
+    context.tactic ? `tactic:${normalizeFacet(context.tactic)}` : undefined,
+    context.coverageGapCode ? `gap:${context.coverageGapCode}` : undefined,
+    quality.hasPublicChannelCoverage ? "coverage:public_channel_present" : undefined,
+    quality.hasDarknetMetadata ? "coverage:darknet_metadata_present" : undefined,
+    "safety:metadata_only"
+  ].filter((value): value is string => Boolean(value))).sort();
 }
 
 function expectedSourceFamilies(response: TiSearchResponse): EvidenceSourceFamily[] {
@@ -801,6 +862,10 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values
     .map((value) => value.trim().replace(/\s+/g, " ").slice(0, 120))
     .filter(Boolean))];
+}
+
+function normalizeFacet(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "unknown";
 }
 
 function clampInt(value: number | undefined, min: number, max: number, fallback: number): number {

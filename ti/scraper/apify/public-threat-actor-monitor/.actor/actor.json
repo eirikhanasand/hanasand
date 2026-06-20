@@ -3,7 +3,7 @@
   "name": "public-threat-actor-monitor",
   "title": "Public Threat Actor & Ransomware Activity Monitor",
   "description": "Tracks public threat actor and ransomware activity and returns metadata rows for recent claims, reporting, targeting, TTPs, confidence, and provenance. Raw leaked data is excluded.",
-  "version": "0.5",
+  "version": "0.6",
   "buildTag": "latest",
   "dockerfile": "../Dockerfile",
   "input": "./INPUT_SCHEMA.json",
@@ -12,9 +12,9 @@
     "dataset": "./DATASET_SCHEMA.json"
   },
   "readme": "../README.md",
-  "categories": ["SECURITY", "MONITORING", "NEWS"],
+  "categories": ["SECURITY", "MONITORING"],
   "exampleRunInput": {
-    "body": "{\n  \"queries\": [\"APT29\", \"Volt Typhoon\", \"LockBit\"],\n  \"maxRowsPerQuery\": 25,\n  \"includeActivity\": true,\n  \"includeTargets\": true,\n  \"includeTtps\": true,\n  \"includeSources\": true,\n  \"includeDatasets\": false,\n  \"includeCoverageGaps\": true\n}",
+    "body": "{\n  \"queries\": [\n    \"APT29\",\n    \"APT28\",\n    \"APT42\",\n    \"Lazarus Group\",\n    \"Volt Typhoon\",\n    \"Salt Typhoon\",\n    \"Turla\",\n    \"Sandworm\",\n    \"Kimsuky\",\n    \"MuddyWater\",\n    \"Charming Kitten\",\n    \"Scattered Spider\",\n    \"LockBit\",\n    \"Clop\",\n    \"Akira\",\n    \"Black Basta\",\n    \"Play\",\n    \"RansomHub\",\n    \"ALPHV\",\n    \"Hunters International\"\n  ],\n  \"maxRowsPerQuery\": 25,\n  \"includeActivity\": true,\n  \"includeTargets\": true,\n  \"includeTtps\": true,\n  \"includeSources\": true,\n  \"includeDatasets\": false,\n  \"includeCoverageGaps\": true\n}",
     "contentType": "application/json; charset=utf-8"
   },
   "defaultRunOptions": {

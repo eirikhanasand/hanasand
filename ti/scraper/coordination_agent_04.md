@@ -1,39 +1,36 @@
-Status: active_program_bh_public_channel_coverage_and_actor_feeds
-
-## Current Assignment - Program BH: Public Channel Coverage And Actor Feed Value
-
-You are no longer waiting for a task. Continue the public-channel/source-coverage lane until the scraper has useful, safe, legal public-channel and actor-feed coverage that improves real actor monitoring beyond generic news.
-
-Mission:
-- Close the current product gap where many actor results are clear-web only and the Actor has to say `missing_public_channel_evidence`.
-- Build safe public-channel/source coverage contracts, candidate packs, approval workflows, and metadata-only output that can feed the Apify Actor and `/ti` without risky collection.
-
-Build:
-- Add public-channel source pack models for Telegram public channels, vendor/public RSS channels, public ransomware/news trackers, CERT social feeds, public GitHub/security feeds, and curated analyst-maintained actor feeds.
-- For each candidate: source family, public/legal status, access method, API/library expectation, join/auth requirement status, safe collection mode, cadence, expected actor coverage, language, trust score, noise score, duplicate risk, parser profile, and activation gate.
-- Add route-visible coverage-gap remediation packets that say exactly which source family is missing for each default watchlist actor and what safe candidate sources could fill it.
-- Add PII/minimization and provenance contracts for public-channel rows: message IDs may be hashed, no private/user lists, no raw leaked content, no credentials, no invite-only content.
-- Add Apify Actor integration notes and fixture rows showing how public-channel coverage changes `sourceFamilies`, `coverageStatus`, `reviewReasons`, and `recommendedCollectionAction`.
-- Coordinate with Agent 01 source atlas, Agent 02 scheduler, Agent 07 quality gates, Agent 09 API/UI fields, and Agent 10 source freshness SLOs.
-
-Proof before status change:
-- `bun run check`
-- `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts`
-- `bun run check:apify-threat-actor-monitor`
-- `bun run smoke:apify-threat-actor-monitor`
-- `bun run check:route-inventory`
-- `bun run check:contract-index`
-- docs update for public-channel boundaries and source-gap remediation
-
-If this phase completes, continue immediately into Program BI: actor-specific source coverage matrix for at least 50 actors/groups.
+Status: active_program_bi_actor_source_coverage_expansion
 
 # Agent 04 Coordination
 
-- Added Apify Actor coverage-gap output for `apify/public-threat-actor-monitor`: optional `coverage_gap` rows now identify missing public-channel/clear-web source support, stale or missing freshness, single-family support, contradiction holds, collection priority, and the next safe collection action.
-- Added source-family diagnostics to every Actor dataset row: `sourceFamilies`, `missingSourceFamilies`, `coverageStatus`, `coverageGapCodes`, `collectionPriority`, `recommendedCollectionAction`, and source-coverage gap counts.
-- Added scheduler/polling fields to every Actor row so downstream monitors can distinguish active-run reuse, retry/backoff, source-gap follow-up, queued work, and safe polling hints.
-- Preserved Agent 04 safety boundaries: public metadata only, no private Telegram/channel access, no account automation, no group joins, no auth/CAPTCHA bypass, no stolen data, no payload downloads, no raw leak contents, and no threat-actor interaction.
-- Updated Apify input/dataset schemas, README, changelog, and smoke assertions for the new coverage diagnostics.
-- Verification passed: `bun run check` and `bun run smoke` in `apify/public-threat-actor-monitor`, plus root `bun run check` and full root `bun test` with 519 passing tests.
+## Current Assignment - Program BI: Actor Source Coverage Expansion
 
-Continuing Agent 04 ownership for public-channel/source coverage usefulness, source gaps, provenance, PII minimization, and safe public metadata feeding the marketplace Actor. Requesting the next concrete Agent 04 task.
+You are no longer requesting a task. Continue the public-channel/source-coverage lane until the scraper can explain which source families cover each high-value actor, what is missing, and which safe source activations will improve the Apify/public product.
+
+Mission:
+- Build a buyer-useful coverage expansion layer for at least 30 configured actors/groups, with public-only and metadata-only source families mapped per actor.
+- Turn source gaps into concrete upstream work for Agents 01/02/03/05 and downstream quality/graph/API handoffs for Agents 07/08/09.
+- Keep the product practical: this should improve live results for actor searches, not create abstract taxonomy bloat.
+
+Build:
+- Add/update actor coverage fixtures for APT29, APT42, Sandworm, Volt Typhoon, Salt Typhoon, Lazarus, Kimsuky, Charming Kitten, MuddyWater, OilRig, FIN7, TA505, Scattered Spider, LockBit, Akira, Cl0p, Play, BlackSuit, RansomHub, Qilin, Medusa, DragonForce, 8Base, Hunters International, BianLian, ALPHV/BlackCat, Royal, Conti legacy, DarkSide/BlackMatter legacy, and one unknown-query control.
+- For each actor, expose required source families, currently covered families, stale families, blocked/restricted metadata families, public advisory/blog/news/channel value, dark metadata caveat state, and next safe activation tasks.
+- Add freshness expectations by actor class: high-volume ransomware/public extortion groups should not show old-only recent activity as fresh; APT groups need corroborated reports, advisories, malware/tool/TTP changes, or public campaign updates.
+- Route output into the public product surface without raw URLs, raw leaked data, private-channel claims, actor interaction, credentials, payload links, or auth/CAPTCHA behavior.
+- Coordinate with Agent 09 so the Apify Actor can surface compact `sourceCoverageGaps` and `coverageStatus` fields that help buyers understand why a result is partial.
+
+Proof before status change:
+- `bun run check`
+- `bun test src/tests/publicSignalFusion.test.ts src/tests/publicAdvisory.test.ts src/tests/api.test.ts`
+- `bun run check:route-inventory`
+- `bun run check:contract-index`
+- `bun run check:api-regression`
+- update `docs/source_registry.md` or `docs/operations.md` if contracts move
+
+If this phase completes, continue immediately into Program BJ: public-channel freshness scoring and source economics for the highest-value marketplace queries.
+
+## Prior Completed Slice
+
+- Added a runtime bridge from `PublicAdvisoryAdapter` `CollectedItem` output into connector-ready `PublicAdvisorySignalRecord` rows, preserving source id, family, entities, confidence, reliability, state, safe policy flags, timestamps, and parser provenance.
+- Proved captured GitHub Security Advisory and CISA/KEV-style records can flow into `buildPublicAdvisorySignalConnector` and `buildPublicAdvisoryCorrelation` for ranked, evidence-backed actor/CVE signals and reviewable conflict output.
+- Kept Agent 04 safety boundaries intact: public/official API or public HTTP only, no private repo access, no auth/CAPTCHA bypass, no payload download, no leaked-data redistribution, no private channels, and unsafe URLs hash/suppress before public output.
+- Verification passed for `bun test src/tests/publicAdvisory.test.ts`, `bun test src/tests/publicSignalFusion.test.ts`, full `bun test` with 521 passing tests, and `bun run check`.

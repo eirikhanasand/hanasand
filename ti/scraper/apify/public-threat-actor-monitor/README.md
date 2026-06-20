@@ -15,6 +15,7 @@ The Actor monitors a 20-group default watchlist and returns machine-readable row
 - freshness and actionability flags,
 - scheduler polling, duplicate-run reuse, retry/backoff, and source-coverage gap state,
 - review reasons for stale, single-source, partial, contradicted, metadata-only, or actionable rows,
+- analysis facets for spreadsheet/API filtering by row type, claim type, evidence grade, freshness, source family, and safety boundary,
 - first/last-seen timestamps.
 
 It does not return stolen data, credential values, private messages, payloads, raw leak contents, or protected/private forum material.
@@ -23,13 +24,35 @@ It does not return stolen data, credential values, private messages, payloads, r
 
 ```json
 {
-  "queries": ["APT29", "Volt Typhoon", "LockBit"],
+  "queries": [
+    "APT29",
+    "APT28",
+    "APT42",
+    "Lazarus Group",
+    "Volt Typhoon",
+    "Salt Typhoon",
+    "Turla",
+    "Sandworm",
+    "Kimsuky",
+    "MuddyWater",
+    "Charming Kitten",
+    "Scattered Spider",
+    "LockBit",
+    "Clop",
+    "Akira",
+    "Black Basta",
+    "Play",
+    "RansomHub",
+    "ALPHV",
+    "Hunters International"
+  ],
   "maxRowsPerQuery": 25,
   "includeActivity": true,
   "includeTargets": true,
   "includeTtps": true,
   "includeSources": true,
-  "includeDatasets": false
+  "includeDatasets": false,
+  "includeCoverageGaps": true
 }
 ```
 
@@ -67,13 +90,46 @@ It does not return stolen data, credential values, private messages, payloads, r
   "evidenceGrade": "corroborated",
   "isActionable": true,
   "reviewReasons": ["freshness:current", "evidence:corroborated", "actionable:monitor_or_triage"],
+  "analysisFacets": ["claim:campaign", "evidence:corroborated", "freshness:current", "row:activity", "safety:metadata_only"],
   "hasDarknetMetadata": false,
   "hasPublicChannelCoverage": false,
   "firstSeen": "2026-06-20T02:29:22.559Z",
   "lastSeen": "2026-06-20T02:29:22.559Z",
   "rawContentIncluded": false,
+  "safety": {
+    "metadataOnly": true,
+    "credentialsIncluded": false,
+    "stolenFilesIncluded": false,
+    "privateContentIncluded": false,
+    "actorInteraction": false
+  },
   "provenanceHash": "..."
 }
+```
+
+## Public Proof Contract
+
+`GET /v1/contracts` exposes `apifyStoreReadiness`, which mirrors the Actor default input and safe sample output DTOs for `APT29`, `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
+
+Each public proof DTO includes:
+
+- `runId`, `buildVersion`, and `datasetId`,
+- query, row count, freshness, and source families,
+- the `safe_metadata_only.v1` safety contract,
+- a no-leak proof showing raw content, credentials, private content, and actor interaction are absent.
+
+Run these before publication or after changing the listing contract:
+
+```bash
+bun run check
+bun run check:api-regression
+bun run check:apify-threat-actor-monitor
+bun run smoke:apify-threat-actor-monitor
+bun run check:apify-publication
+TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY='Volt Typhoon' bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY='Scattered Spider' bun run check:scraper-native-search
+TI_SEARCH_READINESS_QUERY=LockBit bun run check:scraper-native-search
 ```
 
 ## Safety Boundary
@@ -90,8 +146,8 @@ The Actor emits public metadata and summaries only. These fields are excluded:
 
 ## Using the results
 
-Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `reviewReasons`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
+Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `reviewReasons`, `analysisFacets`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
 
-The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Coverage metadata is disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows.
+The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Dataset coverage rows are disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows. Coverage-gap rows remain enabled by default because they explain why an answer may still be partial.
 
 Claims remain claims until corroborated. Confidence and evidence fields expose that distinction instead of presenting every public mention as confirmed activity.

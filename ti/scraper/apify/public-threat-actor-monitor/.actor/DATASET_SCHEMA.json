@@ -69,6 +69,7 @@
       "evidenceGrade": { "type": "string", "enum": ["corroborated", "single_source", "unverified"] },
       "isActionable": { "type": "boolean" },
       "reviewReasons": { "type": "array", "items": { "type": "string" } },
+      "analysisFacets": { "type": "array", "items": { "type": "string" } },
       "hasDarknetMetadata": { "type": "boolean" },
       "hasPublicChannelCoverage": { "type": "boolean" },
       "provenanceHash": { "type": "string" },
@@ -127,6 +128,7 @@
       "evidenceGrade",
       "isActionable",
       "reviewReasons",
+      "analysisFacets",
       "provenanceHash",
       "rawContentIncluded",
       "safety",
@@ -137,7 +139,7 @@
     "overview": {
       "title": "Actor intelligence",
       "transformation": {
-        "fields": ["actor", "rowType", "title", "summary", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+        "fields": ["actor", "rowType", "title", "summary", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
       },
       "display": {
         "component": "table",
@@ -163,6 +165,7 @@
           "recommendedCollectionAction": { "label": "Next collection action", "format": "text" },
           "isActionable": { "label": "Actionable", "format": "boolean" },
           "reviewReasons": { "label": "Review reasons", "format": "array" },
+          "analysisFacets": { "label": "Analysis facets", "format": "array" },
           "sourceType": { "label": "Source class", "format": "text" },
           "sourceFamilies": { "label": "Source families", "format": "array" },
           "missingSourceFamilies": { "label": "Missing families", "format": "array" },
