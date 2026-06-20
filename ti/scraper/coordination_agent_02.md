@@ -89,6 +89,12 @@ Side-tool support priority:
 
 ## CURRENT ASSIGNMENT - READ FIRST
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+The Actor is monetized in Apify with upcoming pay-per-event pricing, but revenue now depends on daily fresh runs that improve the dataset, not scheduler theory. Latest proof run: `dQzvWhNM2OHrBWVfo`, build `0.6.3`, 15 rows, 3.1s, usage about `$0.00075`; APT29 was still stale, APT42 was missing public-channel coverage, and LockBit was current. Your scheduler lane must now produce a daily default-watchlist run plan plus source-tier sweep cadence for 100 -> 1,000 -> 4,000 sources/metadata records, with cost per useful row and stale-row suppression.
+
+Continue durable queue work only where it directly supports those daily Actor runs, live source sweeps, run reuse, and freshness SLOs. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 Program BA: Durable Scheduler, Queue Backend, Replay, And Worker Orchestration.
 
 This is a multi-week production lane. You own the scheduler until it can run real public actor searches, background source sweeps, evidence replays, restricted metadata holds, and graph/export work without losing state across restarts. Do not mark ready after adding readiness packets. Build the implementation path and proof harness.

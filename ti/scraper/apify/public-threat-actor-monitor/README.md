@@ -20,6 +20,15 @@ The Actor monitors a 20-group default watchlist and returns machine-readable row
 
 It does not return stolen data, credential values, private messages, payloads, raw leak contents, or protected/private forum material.
 
+## Pricing
+
+The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026. Apify bills the built-in start event and default dataset item event automatically:
+
+- `apify-actor-start`
+- `apify-default-dataset-item`
+
+This keeps customer cost tied to useful output volume rather than wall-clock runtime. Platform usage is included for customers, so the row price is set to cover normal runtime cost and margin. The default dataset remains one row per normalized finding; the `OUTPUT` key-value-store record includes a compact monetization summary with expected event names and row count.
+
 ## Input
 
 ```json

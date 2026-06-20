@@ -2,6 +2,14 @@
 
 Current risk: the scraper can look enterprise-ready while still failing to produce sellable, fresh, useful data. For the next 24 hours, every worker should treat buyer-visible data quality and marketplace conversion as the main objective.
 
+## Current Monetization Baseline
+
+- Apify Actor: `eirikhanasand/public-threat-actor-monitor`.
+- Published build: `0.6.3`.
+- Upcoming pricing effective July 4, 2026: `Result` / `apify-default-dataset-item` at `$3.00 / 1,000`; `Actor Start` / `apify-actor-start` at `$0.00005`; platform usage included for users; Apify margin 20%.
+- Latest proof run: `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 safe rows for APT29/APT42/LockBit, 3.1s runtime, about `$0.00075` usage.
+- Current buyer-visible blockers: APT29 rows stale, APT42 missing public-channel coverage, source-family diversity thin, summaries need more specific extracted facts, and payout/beneficiary withdrawal readiness still must be verified in Apify billing.
+
 ## Non-Negotiable Direction
 
 - Finish any patch already in progress, but do not start new internal DTO/contract/readiness work unless it directly improves live data quality, Apify output, source growth, dark metadata search, or marketplace conversion.

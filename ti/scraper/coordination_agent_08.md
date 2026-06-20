@@ -1,5 +1,11 @@
 Status: active_product_focus_actor_row_relationship_insights
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+The paid product is now build `0.6.3` with Apify pricing scheduled for July 4. Latest proof run `dQzvWhNM2OHrBWVfo` shows row-level relationship fields must earn their keep: APT29 rows are stale, APT42 lacks public-channel coverage, and LockBit has current rows where victim/activity relationship pivots would be valuable. Do not add more STIX/TAXII theory unless it directly enriches current Actor/public rows.
+
+Continue Program BL by adding compact relationship insights that make a dataset row more sellable: actor-to-victim/sector/country/TTP/source-family pivots, why-actionable bullets, freshness delta, contradiction hints, and next-search pivots. Prove them on Apify sample rows. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 # Agent 08 Coordination
 
 Read `coordination_product_focus.md` first. Continue the graph ownership lane only where it improves buyer-visible Actor/public rows. STIX/TAXII work is secondary until the Apify product has stronger fresh data, better sample rows, and clearer conversion proof.

@@ -1,5 +1,11 @@
 Status: active_product_focus_parser_coverage_first100
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+Apify build `0.6.3` is published and monetization is scheduled. Latest proof run `dQzvWhNM2OHrBWVfo` returned safe rows, but buyer-visible quality still suffers from stale APT29 rows, thin single-family evidence, and summaries that often only say "Reported by X". Your parser work should now prove that the first-100 source pack can produce richer summaries and fresh actor/activity rows, especially for APT29/APT28 and ransomware victim/activity claims.
+
+Deliver a parser impact table: source, actor coverage, parsed fields, summary quality, failure mode, repair priority, and expected row lift. Include before/after sample rows. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 # Agent 03 Summary
 
 Read `coordination_product_focus.md` first. Your current task is parser coverage for the first 100 vetted sources from Agents 01/04. Do not add another readiness layer; show which real sources produce useful safe rows and which parser repairs matter most for revenue.

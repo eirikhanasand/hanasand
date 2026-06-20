@@ -109,6 +109,7 @@ const visibleDatasetFields = [
 const manifest = await Bun.file(".actor/actor.json").json() as ActorManifest;
 const readme = await Bun.file("README.md").text();
 const changelog = await Bun.file("CHANGELOG.md").text();
+const mainSource = await Bun.file("src/main.ts").text();
 const datasetSchema = await Bun.file(".actor/DATASET_SCHEMA.json").json() as DatasetSchema;
 const inputSchema = await Bun.file(".actor/INPUT_SCHEMA.json").text();
 const fixture = await Bun.file("fixtures/apt42.json").json() as Record<string, unknown>;
@@ -144,6 +145,7 @@ const combinedText = [
   JSON.stringify(manifest, null, 2),
   readme,
   changelog,
+  mainSource,
   JSON.stringify(datasetSchema, null, 2),
   inputSchema
 ].join("\n");
@@ -162,7 +164,10 @@ const contractMentions: Array<[string, string[]]> = [
   ["coverage status", ["coverageStatus"]],
   ["source coverage gaps", ["sourceCoverageGaps"]],
   ["source coverage action fields", ["nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"]],
-  ["scheduler decision", ["schedulerDecision"]]
+  ["scheduler decision", ["schedulerDecision"]],
+  ["pay-per-event pricing", ["pay-per-event", "apify-default-dataset-item"]],
+  ["actor start charge event", ["apify-actor-start"]],
+  ["synthetic Apify event billing", ["apify_synthetic_events", "default dataset"]]
 ];
 
 for (const [label, acceptedTerms] of contractMentions) {

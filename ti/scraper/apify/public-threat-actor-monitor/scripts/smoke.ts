@@ -23,9 +23,27 @@ const proc = Bun.spawn({
 const code = await proc.exited;
 if (code !== 0) process.exit(code);
 
-const output = await Bun.file(`${storage}/key_value_stores/default/OUTPUT.json`).json() as Array<Record<string, unknown>>;
+const outputRecord = await Bun.file(`${storage}/key_value_stores/default/OUTPUT.json`).json() as Record<string, unknown>;
+if (outputRecord.outputContract !== "safe_metadata_only.v1") {
+  throw new Error("OUTPUT record must expose the safe metadata contract");
+}
+const output = outputRecord.rows as Array<Record<string, unknown>>;
 if (!Array.isArray(output) || output.length < 4) {
   throw new Error(`Expected at least 4 output rows, got ${Array.isArray(output) ? output.length : "non-array"}`);
+}
+const monetization = outputRecord.monetization as Record<string, unknown> | undefined;
+if (
+  !monetization
+  || monetization.enabled !== false
+  || !["missing_actor_run_id", "missing_apify_token"].includes(String(monetization.skippedReason))
+  || monetization.pricingModel !== "pay_per_event"
+  || monetization.billingMode !== "apify_synthetic_events"
+  || monetization.datasetItemCount !== output.length
+  || !Array.isArray(monetization.eventNames)
+  || !monetization.eventNames.includes("apify-actor-start")
+  || !monetization.eventNames.includes("apify-default-dataset-item")
+) {
+  throw new Error("OUTPUT record must expose Apify synthetic-event monetization readiness");
 }
 for (const row of output) {
   if (row.rawContentIncluded !== false) throw new Error("rawContentIncluded must be false");

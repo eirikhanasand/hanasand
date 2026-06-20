@@ -1,5 +1,11 @@
 Status: active_program_bd_quality_evaluation_and_marketplace_usefulness
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+Use the latest monetized Actor proof as your new buyer-quality baseline: run `dQzvWhNM2OHrBWVfo`, build `0.6.3`, dataset `aP1dqnK7uEezn5jJv`, 15 rows, usage about `$0.00075`. It proved the safe-output path, but also showed APT29 stale rows and "reported by" style summaries that need richer extraction. Quality gates should now block or downgrade stale-only/current-actor claims and score rows by whether a buyer would pay `$3 / 1,000` for them.
+
+Add metrics and fixtures for paid-row usefulness: fresh-row rate, stale-row suppression, summary specificity, source-family diversity, corroboration, buyer caveat usefulness, and no-leak proof. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 Read `coordination_product_focus.md` first. Judge output like a buyer opening an Apify dataset. The quality gate must decide whether rows from the daily 20-group run and each 100 -> 60k source tier are useful, fresh, specific, supported, and safe enough to sell.
 
 Live product proof to optimize against: Apify run `rh6D0UInDD6x7GuuD` returned 98 rows, 48 actionable, 26 corroborated, 69 single-source, 3 unverified, 80 thin, and zero safety failures. Treat this as a baseline. The next quality gate should measure useful-row rate, fresh-row rate, stale-row suppression, summary specificity, single-source caveats, and source-family lift after Agents 01/03/04 add the first 100 sources.

@@ -1,5 +1,11 @@
 Status: active_product_focus_source_acquisition_100_to_1000
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+The monetized Actor is live as build `0.6.3`; pricing is scheduled to switch to `$3 / 1,000` result rows on July 4. Latest proof run `dQzvWhNM2OHrBWVfo` shows the current acquisition gap: LockBit has fresh/current rows, APT42 is recent but lacks public-channel corroboration, and APT29 still looks stale. Source acquisition must now focus on source families that create fresh rows buyers will pay for, not broad lists.
+
+Build the next source acquisition batch around: fresh APT29/APT28 reporting, high-signal vendor/government CTI feeds, ransomware victim-claim trackers, public Telegram/channel references where legal/API allowed, and corroborating sector/country/TTP sources. For each source, state exact buyer value and whether it can improve Apify rows within 1-3 days. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 # Agent 04 Coordination
 
 Read `coordination_product_focus.md` first. Your current task is source acquisition, not more coverage matrices. Build the first 100 vetted source list with Agent 01, then expand to 1,000 ranked candidates only after dedupe and usefulness checks.

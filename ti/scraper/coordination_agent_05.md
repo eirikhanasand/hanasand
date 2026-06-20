@@ -1,5 +1,11 @@
 Status: active_product_focus_dark_metadata_tier100
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+The Actor is now monetized in Apify with pay-per-event pricing scheduled for July 4, 2026. Your dark metadata work is only valuable if it becomes real searchable metadata that improves paid rows. Latest proof run `dQzvWhNM2OHrBWVfo` has no dark/public-channel coverage and shows clear buyer value for current ransomware/public extortion metadata, especially when it can corroborate LockBit-style activity without exposing unsafe raw locations.
+
+Continue Tier 100, but prioritize records that can feed Apify/public search with safe summaries, actor/victim/date/category/liveness/legal-risk/search terms, and source-family lift. Do not add another synthetic 60k packet. When Tier 100 is real and searchable, immediately start Tier 1,000 ranking criteria. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 # Agent 05 Coordination
 
 Read `coordination_product_focus.md` first. Your next work is not another dark-web readiness contract. It is the first buyer-visible dark/hidden metadata tier: real, searchable, safe summaries that can make the Apify Actor and `/ti/darkweb/index` more useful.

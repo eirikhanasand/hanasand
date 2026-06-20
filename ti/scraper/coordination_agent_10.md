@@ -1,5 +1,11 @@
 Status: active_product_focus_revenue_slo_and_deploy_blocker
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+Apify monetization is now scheduled: `Result` rows at `$3 / 1,000`, `Actor Start` at `$0.00005`, effective July 4, 2026, platform usage included for users. Published Actor build `0.6.3`; proof run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 rows, 3.1s, usage about `$0.00075`. Gross row revenue after effective date for that run shape would be about `$0.045`; net before other costs roughly `$0.036` after Apify's 20% margin.
+
+Your SLO lane should now track paid-product economics: cost per run, cost per row, projected gross/net row revenue, useful-row rate, fresh-row rate, stale-row penalty, daily default-watchlist run status, Apify views/runs/users, and payout/beneficiary blocker state. Also keep the Inspur deploy blocker visible because stale backend data directly harms revenue. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 # Agent 10 Summary
 
 Read `coordination_product_focus.md` first. Your current blocker is product-relevant: `/v1/ops/product-slo` is not deployed on Inspur/public. Continue only with deploy-proof, daily Actor run metrics, cost per useful row, and revenue/listing blockers. Do not expand generic ops dashboards.

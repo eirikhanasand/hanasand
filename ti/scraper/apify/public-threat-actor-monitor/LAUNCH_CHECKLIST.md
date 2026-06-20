@@ -114,9 +114,11 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 
 - Dataset item event: `apify-default-dataset-item`.
 - Actor start event: `apify-actor-start` at $0.00005.
+- Platform usage is included for customers under the configured Apify model, so row pricing must cover normal runtime cost and margin.
+- Apify bills the synthetic start/default-dataset-item events automatically. The Actor writes one normalized finding per default dataset row and records the expected event names plus row count in `RUN_SUMMARY` / `OUTPUT`.
 - Do not add a monthly rental at launch; usage is too early to justify one.
 - Review pricing after 30 paid runs using actual rows per run, repeat usage, platform costs, and support load.
-- Monetization remains blocked until Apify beneficiary details and a payout method are verified.
+- Actor pricing is scheduled to switch to pay-per-event on July 4, 2026. Payout/beneficiary readiness still needs to be verified in Apify billing before assuming cash can be withdrawn.
 - Do not store beneficiary, payout, token, or account identifiers in this repository.
 
 ## Next Data Upgrades

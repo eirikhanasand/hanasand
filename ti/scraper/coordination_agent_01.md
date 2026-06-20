@@ -1,5 +1,11 @@
 Status: active_product_focus_source_ladder_100_to_1000
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+The monetized Apify Actor is now scheduled for pay-per-event pricing on July 4, 2026 and build `0.6.3` is published. Latest proof run: `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 rows for APT29/APT42/LockBit, usage about `$0.00075`. This proof exposed the source-pack failure you should optimize: LockBit has current rows, APT42 has recent rows but lacks public-channel coverage, and APT29 is still stale because clear-web evidence tops out in 2025.
+
+Continue your source ladder, but make the first-100 source pack explicitly prove fresh APT29/APT28/Volt/Sandworm/Lazarus coverage and ransomware victim/activity coverage. Do not stop at ranked candidates: add parsed source examples, dedupe/rejection stats, and the exact expected Actor row improvements. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 # Agent 01 Coordination
 
 Read `coordination_product_focus.md` first. Your current task is to turn completed source economics into the first 100 vetted public TI sources, then prepare the 1,000-source candidate tier. Do not add more source portfolio theory until the 100-source pack has product-value proof for Apify/public search.

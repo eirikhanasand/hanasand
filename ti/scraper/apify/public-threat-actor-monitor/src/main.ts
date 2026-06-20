@@ -160,7 +160,20 @@ interface MarketplaceRow {
   warningCodes: string[];
 }
 
+interface MonetizationSummary {
+  enabled: boolean;
+  eventNames: string[];
+  pricingModel: "pay_per_event";
+  billingMode: "apify_synthetic_events";
+  actorStartEvent: string;
+  datasetItemEvent: string;
+  datasetItemCount: number;
+  skippedReason?: string;
+}
+
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
+const ACTOR_START_EVENT = "apify-actor-start";
+const DATASET_ITEM_EVENT = "apify-default-dataset-item";
 const DEFAULT_QUERIES = [
   "APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon",
   "Salt Typhoon", "Turla", "Sandworm", "Kimsuky", "MuddyWater",
@@ -180,12 +193,16 @@ async function main() {
     }
   }
 
-  await writeOutputs(rows);
+  const monetizationSummary = monetizationForRows(rows.length);
+  await writeOutputs(rows, monetizationSummary);
   console.log(JSON.stringify({
     ok: true,
     rowCount: rows.length,
     queries: input.queries,
-    outputContract: "safe_metadata_only.v1"
+    outputContract: "safe_metadata_only.v1",
+    billingMode: monetizationSummary.billingMode,
+    chargeEvents: monetizationSummary.eventNames,
+    datasetItemEventsExpected: monetizationSummary.datasetItemCount
   }));
 }
 
@@ -835,14 +852,14 @@ function freshnessFor(value: string): MarketplaceRow["freshnessStatus"] {
   return "stale";
 }
 
-async function writeOutputs(rows: MarketplaceRow[]) {
+async function writeOutputs(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
   await Bun.write("output.json", JSON.stringify(rows, null, 2));
-  await pushRemoteApifyOutputs(rows);
+  await pushRemoteApifyOutputs(rows, monetizationSummary);
 
   const outputStoreDir = process.env.APIFY_OUTPUT_KEY_VALUE_STORE_DIR;
   if (outputStoreDir) {
     await ensureDir(outputStoreDir);
-    await Bun.write(`${outputStoreDir}/OUTPUT.json`, JSON.stringify(rows, null, 2));
+    await Bun.write(`${outputStoreDir}/OUTPUT.json`, JSON.stringify(outputRecord(rows, monetizationSummary), null, 2));
   }
 
   const localStorageDir = process.env.APIFY_LOCAL_STORAGE_DIR;
@@ -851,7 +868,7 @@ async function writeOutputs(rows: MarketplaceRow[]) {
     const keyValueDir = `${localStorageDir}/key_value_stores/default`;
     await ensureDir(datasetDir);
     await ensureDir(keyValueDir);
-    await Bun.write(`${keyValueDir}/OUTPUT.json`, JSON.stringify(rows, null, 2));
+    await Bun.write(`${keyValueDir}/OUTPUT.json`, JSON.stringify(outputRecord(rows, monetizationSummary), null, 2));
     await Promise.all(rows.map((row, index) => {
       const id = String(index + 1).padStart(9, "0");
       return Bun.write(`${datasetDir}/${id}.json`, JSON.stringify(row, null, 2));
@@ -859,7 +876,7 @@ async function writeOutputs(rows: MarketplaceRow[]) {
   }
 }
 
-async function pushRemoteApifyOutputs(rows: MarketplaceRow[]) {
+async function pushRemoteApifyOutputs(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
   if (!process.env.APIFY_TOKEN) return;
 
   const datasetId = process.env.APIFY_DEFAULT_DATASET_ID;
@@ -883,10 +900,55 @@ async function pushRemoteApifyOutputs(rows: MarketplaceRow[]) {
         ...apifyHeaders(),
         "content-type": "application/json"
       },
-      body: JSON.stringify(rows)
+      body: JSON.stringify(outputRecord(rows, monetizationSummary))
     });
     if (!response.ok) throw new Error(`Apify output record write returned ${response.status}`);
   }
+
+  if (storeId) {
+    const response = await fetch(`${apifyApiBase()}/v2/key-value-stores/${storeId}/records/RUN_SUMMARY`, {
+      method: "PUT",
+      headers: {
+        ...apifyHeaders(),
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(outputRecord(rows, monetizationSummary))
+    });
+    if (!response.ok) throw new Error(`Apify output record write returned ${response.status}`);
+  }
+}
+
+function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
+  return {
+    outputContract: "safe_metadata_only.v1",
+    rowCount: rows.length,
+    generatedAt: new Date().toISOString(),
+    monetization: monetizationSummary,
+    rows
+  };
+}
+
+function monetizationForRows(rowCount: number): MonetizationSummary {
+  const enabled = Boolean(process.env.APIFY_ACTOR_RUN_ID && process.env.APIFY_TOKEN);
+  const summary: MonetizationSummary = {
+    enabled,
+    eventNames: [ACTOR_START_EVENT, DATASET_ITEM_EVENT],
+    pricingModel: "pay_per_event",
+    billingMode: "apify_synthetic_events",
+    actorStartEvent: ACTOR_START_EVENT,
+    datasetItemEvent: DATASET_ITEM_EVENT,
+    datasetItemCount: rowCount
+  };
+  if (!summary.enabled) {
+    summary.skippedReason = apifyEventSkipReason();
+  }
+  return summary;
+}
+
+function apifyEventSkipReason(): string {
+  if (!process.env.APIFY_TOKEN) return "missing_apify_token";
+  if (!process.env.APIFY_ACTOR_RUN_ID) return "missing_actor_run_id";
+  return "not_running_on_apify";
 }
 
 function apifyApiBase(): string {

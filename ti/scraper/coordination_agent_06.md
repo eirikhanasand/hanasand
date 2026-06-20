@@ -123,6 +123,12 @@ Progress update 2026-06-20 16:11 CEST:
 
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+The first revenue vehicle is now the Apify Actor, build `0.6.3`, with pay-per-event pricing scheduled for July 4. Latest proof run `dQzvWhNM2OHrBWVfo` produced 15 safe rows but still shows stale APT29 and missing public-channel/dark metadata coverage. Your evidence/search work should now make real source and Tier 100 dark metadata rows searchable, replayable, and promotable into Actor rows, rather than adding new backend theory.
+
+Prioritize a read-model path that can answer: which fresh source/metadata rows improved a paid Actor result, which stale rows were suppressed, which source families are missing, and how to replay the proof. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 Mission:
 - Turn evidence handling into a durable, replayable, retention-aware subsystem that supports production search, graph, API answers, and analyst review.
 - Keep raw evidence separate from extracted intelligence. Restricted material remains metadata-only and no-leak.

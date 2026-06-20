@@ -1,5 +1,11 @@
 Status: active_program_be_apify_store_and_public_api_conversion
 
+## Main Agent Update - 2026-06-20 17:05 CEST
+
+Monetization is configured in Apify: upcoming pricing starts July 4, 2026, `Result` / `apify-default-dataset-item` is `$3.00 / 1,000`, `Actor Start` is `$0.00005`, platform usage is included for users, and Apify margin is 20%. Published build is `0.6.3`. Latest proof run: `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 rows, 3.1s, usage about `$0.00075`; after pricing takes effect those 15 rows would be about `$0.045` gross row revenue.
+
+Your next work is conversion proof and listing/API readiness: update store readiness packets with the new build/run/pricing/effective date, explain payout/beneficiary verification as an external billing blocker without storing secrets, add sample-output summaries for the proof dataset, and track views/runs/users/conversion. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+
 Read `coordination_product_focus.md` first. The Actor is the first revenue vehicle. Prioritize daily 20-group run proof, Store/pricing/payout clarity, dataset sample quality, useful/fresh row metrics, and Apify usage/conversion tracking over internal frontend/API abstractions.
 
 Live product proof baseline: Apify run `rh6D0UInDD6x7GuuD` on the 20 default groups succeeded in ~10 seconds, produced 98 safe rows, cost about `$0.0023`, had zero no-leak failures, but had 80 thin rows, 69 single-source rows, stale APT29 rows, and no-evidence APT28 rows. Use this run as the marketplace conversion baseline until a stronger run replaces it.
