@@ -112,8 +112,8 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 | Silver | $2.40 |
 | Gold | $2.10 |
 
-- Published build: `0.6.3`.
-- Latest proof run: `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 safe rows for APT29/APT42/LockBit, 3.1s runtime, about `$0.00075` usage, about `$0.045` gross row revenue after pricing starts.
+- Published build: `0.6.4` on Actor version `0.6`.
+- Latest proof run: `iMQGeezZ8bx7WtlhQ`, dataset `5PLmkE30luBA5Lbgc`, 10 safe APT42 rows, 4s runtime, about `$0.001` usage, about `$0.03` gross row revenue after pricing starts.
 - Daily 20-group baseline: run `rh6D0UInDD6x7GuuD`, dataset `dYbGGA37MRq7pU47O`, 98 safe rows, about `$0.0023` usage, zero no-leak failures, with stale/thin-row gaps still tracked.
 - Dataset item event: `apify-default-dataset-item` at $3.00 / 1,000 rows.
 - Actor start event: `apify-actor-start` at $0.00005.

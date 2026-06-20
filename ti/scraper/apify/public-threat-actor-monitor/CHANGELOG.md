@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.4 - 2026-06-20
+
+- Published Apify build `0.6.4` on Actor version `0.6`. Proof run `iMQGeezZ8bx7WtlhQ` produced dataset `5PLmkE30luBA5Lbgc` with 10 safe APT42 rows and visible paid-row decisions, caveated lead rows, held stale rows, and metadata-only safety fields.
+
 ## 0.6.3 - 2026-06-20
 
 - Recorded published build `0.6.3`, proof run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, July 4 pricing, Apify margin, platform-usage inclusion, and conversion metric handoff in the public readiness contract and launch checklist.

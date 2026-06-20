@@ -9991,8 +9991,8 @@ function buildApifyStoreReadinessContract(input: {
     actor: {
       name: "public-threat-actor-monitor",
       title: "Public Threat Actor & Ransomware Activity Monitor",
-      version: "0.6.3",
-      publishedBuildVersion: "0.6.3",
+      version: "0.6",
+      publishedBuildVersion: "0.6.4",
       buildTag: "latest",
       actorRoot: "apify/public-threat-actor-monitor",
       defaultApiBase: "https://api.hanasand.com/api/ti/search",
@@ -10020,16 +10020,16 @@ function buildApifyStoreReadinessContract(input: {
         "remote_public_proof_requires_network_approval_when_run_outside_deployed_host"
       ],
       readinessDecision: "buyer_ready_after_external_payout_verification",
-      latestBuild: { source: "Apify Store", buildTag: "latest", buildVersion: "0.6.3", actorId: "eirikhanasand/public-threat-actor-monitor" },
+      latestBuild: { source: "Apify Store", buildTag: "latest", buildVersion: "0.6.4", actorId: "eirikhanasand/public-threat-actor-monitor" },
       latestProofRun: {
         source: "Apify run",
-        runId: "dQzvWhNM2OHrBWVfo",
-        datasetId: "aP1dqnK7uEezn5jJv",
-        querySet: ["APT29", "APT42", "LockBit"],
-        rowCount: 15,
-        runtimeSeconds: 3.1,
-        usageUsd: 0.00075,
-        projectedGrossRowRevenueUsdAfterPricing: 0.045
+        runId: "iMQGeezZ8bx7WtlhQ",
+        datasetId: "5PLmkE30luBA5Lbgc",
+        querySet: ["APT42"],
+        rowCount: 10,
+        runtimeSeconds: 4,
+        usageUsd: 0.001,
+        projectedGrossRowRevenueUsdAfterPricing: 0.03
       },
       dailyRunBaseline: {
         source: "Apify run",
@@ -10089,9 +10089,7 @@ function buildApifyStoreReadinessContract(input: {
       notes: "Real buyer metrics stay null until Apify analytics are copied from the account; do not store billing identifiers or secrets in this repository."
     },
     sampleOutputSummaries: [
-      { query: "APT29", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", summary: "Safe public rows exist, but stale-row quality remains a buyer-visible gap to reduce before scaling paid traffic.", rowSafety: "metadata_only" },
-      { query: "APT42", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", summary: "Safe rows are present; public-channel coverage is still thinner than the desired marketplace baseline.", rowSafety: "metadata_only" },
-      { query: "LockBit", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", summary: "Ransomware activity rows demonstrate current safe metadata output without raw leak material.", rowSafety: "metadata_only" }
+      { query: "APT42", runId: "iMQGeezZ8bx7WtlhQ", datasetId: "5PLmkE30luBA5Lbgc", summary: "Published build 0.6.4 emits safe metadata rows with paid-row decisions, caveated leads, and held stale rows visible in the dataset.", rowSafety: "metadata_only" }
     ],
     marketplaceGuardrails: {
       noPlaceholderDefaults: true,
@@ -10140,9 +10138,9 @@ function apifyPublicProofDto(
   return {
     schemaVersion: "ti.public_proof_dto.v1",
     runId: `apify_sample_run_${slug}`,
-    sourceRunId: "dQzvWhNM2OHrBWVfo",
-    sourceDatasetId: "aP1dqnK7uEezn5jJv",
-    buildVersion: "0.6.3",
+    sourceRunId: "iMQGeezZ8bx7WtlhQ",
+    sourceDatasetId: "5PLmkE30luBA5Lbgc",
+    buildVersion: "0.6.4",
     datasetId: `apify_sample_dataset_${slug}`,
     query,
     queryClass,
@@ -10192,6 +10190,12 @@ function apifyPublicProofDto(
       sourceCoverageGapCount: hasPublicChannelCoverage ? 0 : 1,
       sourceCoverageGaps: hasPublicChannelCoverage ? [] : ["missing_public_channel_evidence"],
       pollingHint: "poll_again_for_freshness",
+      paidRowDecision: evidenceGrade === "corroborated" && sourceFamilies.length > 1 ? "sellable" : "included_with_caveat",
+      paidRowReason: evidenceGrade === "corroborated" && sourceFamilies.length > 1
+        ? "Fresh or recent corroborated public evidence supports this sample enough for paid monitoring output."
+        : "This sample is useful as a lead but needs corroboration or source-family diversity before promotion.",
+      buyerValueScore: evidenceGrade === "corroborated" && sourceFamilies.length > 1 ? 0.9 : 0.65,
+      billingGuidance: evidenceGrade === "corroborated" && sourceFamilies.length > 1 ? "charge" : "include_as_context",
       evidenceGrade,
       isActionable: evidenceGrade === "corroborated",
       reviewReasons: [`freshness:${freshness}`, `evidence:${evidenceGrade}`, "safety:metadata_only"],

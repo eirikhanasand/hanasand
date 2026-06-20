@@ -2698,8 +2698,8 @@ describe("api v1", () => {
     });
     expect(apifyStoreReadiness.actor).toMatchObject({
       name: "public-threat-actor-monitor",
-      version: "0.6.3",
-      publishedBuildVersion: "0.6.3",
+      version: "0.6",
+      publishedBuildVersion: "0.6.4",
       outputContract: "safe_metadata_only.v1"
     });
     expect(apifyStoreReadiness.actor.categories).toEqual(["SECURITY", "MONITORING"]);
@@ -2748,15 +2748,15 @@ describe("api v1", () => {
     ]));
     expect(apifyStoreReadiness.storeReadiness.readinessDecision).toBe("buyer_ready_after_external_payout_verification");
     expect(apifyStoreReadiness.storeReadiness.latestBuild).toMatchObject({
-      buildVersion: "0.6.3"
+      buildVersion: "0.6.4"
     });
     expect(apifyStoreReadiness.storeReadiness.latestProofRun).toMatchObject({
-      runId: "dQzvWhNM2OHrBWVfo",
-      datasetId: "aP1dqnK7uEezn5jJv",
-      rowCount: 15,
-      runtimeSeconds: 3.1,
-      usageUsd: 0.00075,
-      projectedGrossRowRevenueUsdAfterPricing: 0.045
+      runId: "iMQGeezZ8bx7WtlhQ",
+      datasetId: "5PLmkE30luBA5Lbgc",
+      rowCount: 10,
+      runtimeSeconds: 4,
+      usageUsd: 0.001,
+      projectedGrossRowRevenueUsdAfterPricing: 0.03
     });
     expect(apifyStoreReadiness.storeReadiness.dailyRunBaseline).toMatchObject({
       runId: "rh6D0UInDD6x7GuuD",
@@ -2781,9 +2781,9 @@ describe("api v1", () => {
     for (const proof of apifyStoreReadiness.publicProofDtos) {
       expect(proof.schemaVersion).toBe("ti.public_proof_dto.v1");
       expect(proof.runId).toMatch(/^apify_sample_run_/);
-      expect(proof.sourceRunId).toBe("dQzvWhNM2OHrBWVfo");
-      expect(proof.sourceDatasetId).toBe("aP1dqnK7uEezn5jJv");
-      expect(proof.buildVersion).toBe("0.6.3");
+      expect(proof.sourceRunId).toBe("iMQGeezZ8bx7WtlhQ");
+      expect(proof.sourceDatasetId).toBe("5PLmkE30luBA5Lbgc");
+      expect(proof.buildVersion).toBe("0.6.4");
       expect(proof.datasetId).toMatch(/^apify_sample_dataset_/);
       expect(proof.rowCount).toBeGreaterThan(0);
       expect(proof.safetyContract).toBe("safe_metadata_only.v1");
@@ -2838,9 +2838,7 @@ describe("api v1", () => {
       "costPerUsefulRow"
     ]));
     expect(apifyStoreReadiness.sampleOutputSummaries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ query: "APT29", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", rowSafety: "metadata_only" }),
-      expect.objectContaining({ query: "APT42", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", rowSafety: "metadata_only" }),
-      expect.objectContaining({ query: "LockBit", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", rowSafety: "metadata_only" })
+      expect.objectContaining({ query: "APT42", runId: "iMQGeezZ8bx7WtlhQ", datasetId: "5PLmkE30luBA5Lbgc", rowSafety: "metadata_only" })
     ]));
     expect(apifyStoreReadiness.marketplaceGuardrails).toMatchObject({
       noPlaceholderDefaults: true,
