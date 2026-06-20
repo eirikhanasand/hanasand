@@ -1964,8 +1964,37 @@ describe("pipeline", () => {
       "ttp_evidence_support",
       "source_family_diversity",
       "contradiction_flags",
-      "actionability_correctness"
+      "actionability_correctness",
+      "useful_row_rate",
+      "fresh_row_rate",
+      "stale_row_suppression",
+      "buyer_caveat_usefulness",
+      "no_leak_proof"
     ]));
+    expect(pack.paidRowQualityGate).toMatchObject({
+      schemaVersion: "ti.program_bd_paid_row_quality_gate.v1",
+      pricing: {
+        resultPriceUsdPer1000Rows: 3,
+        actorStartUsd: 0.00005,
+        effectiveDate: "2026-07-04"
+      }
+    });
+    expect(pack.paidRowQualityGate.liveBaselines.map((baseline) => baseline.runId)).toEqual(expect.arrayContaining([
+      "dQzvWhNM2OHrBWVfo",
+      "rh6D0UInDD6x7GuuD"
+    ]));
+    expect(pack.paidRowQualityGate.metricThresholds.map((threshold) => threshold.metric)).toEqual(expect.arrayContaining([
+      "useful_row_rate",
+      "fresh_row_rate",
+      "stale_row_suppression",
+      "summary_specificity",
+      "source_family_diversity",
+      "buyer_caveat_usefulness",
+      "no_leak_proof"
+    ]));
+    expect(pack.paidRowQualityGate.sourceTierGates.map((gate) => gate.tier)).toEqual([100, 1000, 4000, 10000, 20000, 60000]);
+    expect(pack.paidRowQualityGate.sourceTierGates.every((gate) => gate.noLeakRequired && gate.requiredBeforeAdvance.length > 0)).toBe(true);
+    expect(pack.paidRowQualityGate.apifyDatasetFields).toEqual(expect.arrayContaining(["reviewReasons", "analysisFacets", "buyerCaveat"]));
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

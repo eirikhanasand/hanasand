@@ -1,22 +1,38 @@
-Status: active_product_focus_revenue_slo_and_deploy_blocker
+Status: active_program_bh_deployed_product_slo_and_revenue_proof
 
-## Main Agent Update - 2026-06-20 17:05 CEST
+# Agent 10 Current Assignment - Program BH: Deployed Product SLO And Revenue Proof
 
-Apify monetization is now scheduled: `Result` rows at `$3 / 1,000`, `Actor Start` at `$0.00005`, effective July 4, 2026, platform usage included for users. Published Actor build `0.6.3`; proof run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 rows, 3.1s, usage about `$0.00075`. Gross row revenue after effective date for that run shape would be about `$0.045`; net before other costs roughly `$0.036` after Apify's 20% margin.
+You are no longer waiting for a task. Read `coordination_product_focus.md` first. Your blocker is now concrete: local product SLO economics exist, but the public/Inspur scraper must expose them and daily snapshots must prove the paid product is improving.
 
-Your SLO lane should now track paid-product economics: cost per run, cost per row, projected gross/net row revenue, useful-row rate, fresh-row rate, stale-row penalty, daily default-watchlist run status, Apify views/runs/users, and payout/beneficiary blocker state. Also keep the Inspur deploy blocker visible because stale backend data directly harms revenue. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+Mission:
+- Safely deploy or prepare a deploy-safe current scraper image/code path so `/v1/ops/product-slo` is available on the deployed stack.
+- Capture daily/run-level economics for Apify Actor build `0.6.3` and later: usage, rows, useful rows, fresh rows, stale penalty, projected gross/net revenue, views/runs/users, payout blocker state, and conversion trend.
+- Do not stop at dashboard fields; prove the public endpoint and snapshot command work.
+
+Build:
+- Add or update deploy proof commands and rollback notes for Inspur without stopping unrelated services.
+- Add a daily product SLO snapshot artifact/command that can run unattended and compares against proof runs `dQzvWhNM2OHrBWVfo` and `rh6D0UInDD6x7GuuD`.
+- Surface the current public blocker if deployment cannot happen cleanly, with exact files/services/commands needed.
+- Keep resource budgets realistic: no GPU assumption, no unnecessary crawler surge, preserve CTI disk/RAM reserve.
+
+Proof:
+- `bun run check`
+- focused ops/API tests
+- `bun run check:route-inventory`
+- `bun run check:contract-index`
+- public or remote curl proof for `/v1/ops/product-slo` when deploy is safe
+- full `bun test` if shared routes/contracts change
+
+When your patch is coherent, update this file, commit, push, and leave no hanging files.
 
 # Agent 10 Summary
 
-Read `coordination_product_focus.md` first. Your current blocker is product-relevant: `/v1/ops/product-slo` is not deployed on Inspur/public. Continue only with deploy-proof, daily Actor run metrics, cost per useful row, and revenue/listing blockers. Do not expand generic ops dashboards.
+- Added paid-product economics to `/v1/ops/product-slo`: cost per run, cost per row, cost per useful row, gross row revenue, Actor Start revenue, Apify margin, projected net after usage, useful-row rate, fresh-row rate, stale-row penalty, and default-watchlist run state.
+- Added Apify marketplace blocker state for Actor views/runs/users, beneficiary verification, payout method readiness, and pricing effective date.
+- Extended the product SLO snapshot collector env surface and output so daily snapshots include `paidProductEconomics`.
+- Updated route inventory, API/ops tests, and operations docs for the paid SLO fields and thresholds.
+- Preserved resource guardrails: no GPU assumption, 96 GB default target, 160 GB normal ceiling, and 500 GB CTI reserve.
+- Verification is green: `bun run check`, `bun test src/tests/ops.test.ts src/tests/api.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` (527 pass).
+- Remaining blocker: local route is ready, but public/Inspur deployed scraper still needs a safe current-image deploy before `/v1/ops/product-slo` can produce real deployed daily snapshots.
 
-- New live Actor baseline: run `rh6D0UInDD6x7GuuD`, dataset `dYbGGA37MRq7pU47O`, build `0.6.1`, 20 default groups, 98 rows, 48 actionable, 26 corroborated, 69 single-source, 3 unverified, 80 thin, zero safety failures, usage about `$0.0023`, wall time about 10 seconds. Product SLO should track this daily and show whether source expansion improves fresh/useful row rates.
-
-- Checked for new Agent 10 work; no newer explicit assignment was present, so continued Program BG live product SLO proof.
-- Collected public API proof for `POST /api/ti/search`: `APT29` returned `live_search`/`partial` with run `run_81a0064e039c8cbb`; `Volt Typhoon` returned `live_search`/`partial` with run `run_e71c4ff1c9c64619`, June 11 latest evidence, and queued collection tasks.
-- Collected Inspur runtime proof from `hanasand_ti_scraper`: healthy container, RSS about 139 MB, heap about 60 MB, queue 158/500, browser workers 0, max RAM 96 GB, normal ceiling 160 GB, and 500 GB CTI reserve preserved.
-- Confirmed production blocker: public and deployed Inspur scraper return 404 for `/v1/ops/product-slo`; deployed image `hanasand_ti_scraper:latest` is old and the host checkout is heavily dirty, so I did not redeploy or overwrite remote state.
-- Repaired local verification drift by removing the duplicate darkweb index operations builder block and preserving representative source-atlas economics decisions after preview truncation.
-- Verification is green locally: `bun run check`, `bun test src/tests/ops.test.ts src/tests/api.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` (526 pass).
-
-Next: safely deploy the current scraper image/code to Inspur, then run `TI_PRODUCT_SLO_PROOF_MODE=inspur/public_live bun run snapshot:product-slo` to start real daily product SLO snapshots. Ready for a deploy-safe instruction or a new Agent 10 task.
+Ready for the next Agent 10 task.

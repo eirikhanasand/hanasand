@@ -1,33 +1,39 @@
-Status: active_product_focus_source_ladder_100_to_1000
+Status: active_program_bk_source_activation_to_live_value
 
-## Main Agent Update - 2026-06-20 17:05 CEST
+# Agent 01 Current Assignment - Program BK: Source Activation To Live Value
 
-The monetized Apify Actor is now scheduled for pay-per-event pricing on July 4, 2026 and build `0.6.3` is published. Latest proof run: `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 rows for APT29/APT42/LockBit, usage about `$0.00075`. This proof exposed the source-pack failure you should optimize: LockBit has current rows, APT42 has recent rows but lacks public-channel coverage, and APT29 is still stale because clear-web evidence tops out in 2025.
+You are no longer waiting for a task. Read `coordination_product_focus.md` first, then turn the first-100 source ladder from a dry-run catalog into activation-ready source registry work that can improve the paid Apify Actor within days.
 
-Continue your source ladder, but make the first-100 source pack explicitly prove fresh APT29/APT28/Volt/Sandworm/Lazarus coverage and ransomware victim/activity coverage. Do not stop at ranked candidates: add parsed source examples, dedupe/rejection stats, and the exact expected Actor row improvements. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+Mission:
+- Move the first-100 source pack toward real, approved, observable source onboarding without mutating production sources silently.
+- Prove which sources can improve fresh rows for APT29/APT28/Volt/Sandworm/Lazarus and ransomware activity/victim claims.
+- Keep buyer-visible value first: useful-row lift, fresh-row lift, source-family diversity, parser readiness, and expected cost per useful row.
 
-# Agent 01 Coordination
+Build:
+- Add an activation batch/readiness packet for the first 25 and first 100 sources with `approve`, `canary`, `hold`, `reject`, and `retire_duplicate` decisions.
+- Include source health checks, robots/legal notes, parser owner, expected entities, actor/query classes, freshness SLO, duplicate group, canary sample expectation, and rollback plan.
+- Produce a non-mutating import/apply plan that Agent 02 can schedule, Agent 03 can parse, Agent 07 can quality-gate, Agent 09 can expose, and Agent 10 can measure.
+- Add a clear "why this improves the paid Actor" field per source and an aggregate expected row/revenue impact.
 
-Read `coordination_product_focus.md` first. Your current task is to turn completed source economics into the first 100 vetted public TI sources, then prepare the 1,000-source candidate tier. Do not add more source portfolio theory until the 100-source pack has product-value proof for Apify/public search.
+Proof:
+- `bun run check`
+- focused source/API tests
+- `bun run check:route-inventory`
+- `bun run check:contract-index`
+- `bun run check:api-regression`
+- full `bun test` if shared contracts/routes change
 
-Live product proof to optimize against: Apify run `rh6D0UInDD6x7GuuD` on the 20 default groups returned 98 rows for about `$0.0023`, but 80 rows were thin, 69 were single-source, APT28 had no evidence, and APT29 rows were stale. Your first-100 source pack should specifically reduce those failures before expanding toward 1,000.
+When your patch is coherent, update this file, commit, push, and leave no hanging files.
 
-Deliverables:
-- `first100` source pack: source id/name/family/public URL or safe locator hash, legal/robots note, parser family, actors/query classes improved, expected freshness, expected entities, dedupe group, rejection reason if rejected, and buyer-value score.
-- Candidate pipeline for 1,000 ranked sources with dedupe/rejection metrics.
-- Handoff to Agent 03 parser coverage and Agent 02 scheduler cadence.
-- Proof commands and a compact summary of how the pack improves daily 20-group Actor output.
+# Agent 01 Coordination Summary
 
-## Completed Slice - Program BI: Source Reliability Economics And Activation Planning
-
-- Added `/v1/sources/atlas.sourceEconomics` as a dry-run source portfolio economics packet for first-50, first-500, and first-5000 public-source rollout planning.
-- Included per-source rows with source ids/hashes, family, query-class coverage, expected actor/query coverage, unique evidence yield, duplicate risk, parser/legal dependencies, language/region coverage, storage and scheduler cost, API/Actor usefulness, public-answer lift, economics score, decision, and rollback state.
-- Included source-family metrics, marketplace value breakdowns for actor profile, ransomware victim claim, CVE/advisory, public-channel, dark-metadata corroboration, and STIX/export value, plus stale/noisy/legal/parser/low-yield/high-cost degradation queues.
-- Kept all outputs source-id/hash oriented and dry-run only: no registry mutation, no source activation, no source-pack import, no worker lease, no crawling, no raw unsafe URLs, no payload downloads, and no private/invite/auth/CAPTCHA sources.
-- Updated shared `/v1/sources/atlas` coordination contract and `docs/source_registry.md` before changing the shared API response.
-- Verification is green: `bun run check`, `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts src/tests/productionAdapterRuntime.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (526 pass).
+- Completed the product-focused `/v1/sources/atlas.sourceLadder` contract for the first-100 vetted public TI source pack and 1,000-source candidate tier.
+- Added first-100 rows with curated source names/domains, safe locator hashes, legal/robots state, parser family, actor/query coverage, expected freshness/entities, dedupe groups, rejection reasons, buyer-value text/scores, and expected Actor/ransomware row lift.
+- Added 1,000-candidate dedupe/rejection metrics, family breakdowns, parsed-source examples, parser coverage proof, parser repair priorities, before/after safe parser samples, and expected Apify/public-threat-actor monitor row improvements for APT28, APT29, Volt Typhoon, Sandworm, Lazarus, LockBit, and Akira.
+- Preserved safety boundaries: dry-run only, no registry mutation, no source activation, no source-pack import, no crawling, no worker leases, no raw unsafe URLs, no raw source payloads, and no payload downloads.
+- Updated shared coordination for the additive `/v1/sources/atlas.sourceLadder` contract and restored buyer-visible Program BD paid-row quality gate typing.
+- Verification is green: `bun run check`, focused `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts src/tests/pipeline.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (527 pass).
 
 ## Next Agent 01 Task Request
 
-- Program BJ is the next named continuation: tenant-aware source policy overlays and paid-product source pack segmentation.
-- Please provide the BJ scope or confirm the expected shared contract fields/routes for tenant overlays, paid/free source-pack tiers, buyer-facing entitlements, and activation boundaries.
+- Ready for the next Agent 01 source registry, source lifecycle, governance approval, source health, source scoring, seed ingestion, or Postgres persistence task.

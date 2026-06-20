@@ -393,6 +393,71 @@ describe("darkweb metadata index contracts", () => {
       targetRecordCount: 60000,
       liveCollectionEnabled: false
     });
+    expect(status.tier100Product).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier100_product.v1",
+      owner: "Agent 05",
+      tier: "tier_100",
+      mode: "buyer_visible_safe_metadata",
+      recordGoal: 100,
+      producedRecordCount: 100,
+      noLeakSerialization: {
+        passed: true
+      },
+      safety: {
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      }
+    });
+    expect(status.tier100Product.sourceFamilies.map((family) => family.family)).toEqual(expect.arrayContaining([
+      "public_report",
+      "analyst_import",
+      "directory_metadata",
+      "public_tracker_reference",
+      "approved_seed",
+      "safe_search_result"
+    ]));
+    expect(status.tier100Product.sourceFamilies.every((family) =>
+      family.candidateCount >= 0 &&
+      family.acceptedCount >= 0 &&
+      family.duplicateCount >= 0 &&
+      family.blockedCount >= 0 &&
+      family.reviewCount >= 0 &&
+      family.staleOrDeadCount >= 0 &&
+      family.productLift.length > 0
+    )).toBe(true);
+    expect(status.tier100Product.importOutcome).toMatchObject({
+      duplicate: status.sourceIngestReadiness.dedupePlan.duplicateClusters.flatMap((cluster) => cluster.duplicateRecordIds).length,
+      blocked: status.counts.blockedUnsafe
+    });
+    expect(status.tier100Product.importOutcome.accepted).toBeGreaterThan(0);
+    expect(status.tier100Product.importOutcome.reviewNeeded).toBeGreaterThan(0);
+    expect(status.tier100Product.importOutcome.staleOrDead).toBeGreaterThan(0);
+    expect(status.tier100Product.buyerVisibleSearch).toMatchObject({
+      usefulSummaryRate: 1,
+      categoryCoverageCount: 12,
+      apifyFields: ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"]
+    });
+    expect(status.tier100Product.buyerVisibleSearch.actorHintCoverage).toBeGreaterThanOrEqual(0.25);
+    expect(status.tier100Product.buyerVisibleSearch.publicSearchBoostQueries).toEqual(expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]));
+    expect(status.tier100Product.tier1000AdvancementCriteria).toMatchObject({
+      targetTier: "tier_1000",
+      minAcceptedRecords: 70,
+      maxDuplicateRate: 0.2,
+      minUsefulSummaryRate: 0.8,
+      requireNoLeakProof: true,
+      requireApifySearchLift: true
+    });
+    expect(contract.tier100Product).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier100_product.v1",
+      tier: "tier_100",
+      recordGoal: 100,
+      advancementTarget: "tier_1000",
+      requireNoLeakProof: true
+    });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
     expect(status.sourceIngestReadiness.sources.every((source) =>
       source.sourceHash.length > 0 &&
@@ -487,11 +552,18 @@ describe("darkweb metadata index contracts", () => {
       },
       uiContract: {
         route: "/ti/darkweb/index"
+      },
+      productHandoff: {
+        tier: "tier_100",
+        publicSearchUse: "corroborating_metadata_context_only",
+        warnings: ["metadata_only", "review_required", "no_raw_locations"]
       }
     });
     expect(firstPage.records.length).toBeLessThanOrEqual(3);
     expect(secondPage.records.map((record) => record.id)).not.toEqual(firstPage.records.map((record) => record.id));
     expect(firstPage.records.every((record) => record.actorHints.includes("akira") && record.network === "tor")).toBe(true);
+    expect(firstPage.productHandoff.apifyReadyFields).toEqual(["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"]);
+    expect(firstPage.productHandoff.recordIds).toEqual(firstPage.records.map((record) => record.id));
     expect(firstPage.noLeakSerialization.passed).toBe(true);
 
     const serialized = JSON.stringify({ firstPage, secondPage, status: buildDarkwebIndexStatus(records), contract: darkwebIndexContract() });

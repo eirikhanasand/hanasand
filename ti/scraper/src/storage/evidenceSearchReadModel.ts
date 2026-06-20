@@ -499,6 +499,75 @@ export interface EvidencePromotionTransactionAuditReplay {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceActorProductImpactReplay {
+  schemaVersion: "ti.evidence_actor_product_impact_replay.v1";
+  generatedAt: string;
+  handoffId: string;
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.3";
+  latestProofRunId: "dQzvWhNM2OHrBWVfo";
+  state: "ready" | "partial" | "hold";
+  usefulActorRows: {
+    freshRowsImprovingActorResult: EvidenceActorProductImpactRow[];
+    restrictedMetadataRows: EvidenceActorProductImpactRow[];
+    staleRowsSuppressed: Array<EvidenceActorProductImpactRow & { staleReason: string }>;
+    missingSourceFamilies: Array<{
+      family: "public_report" | "public_channel" | "advisory" | "restricted_metadata";
+      impact: string;
+      nextAction: string;
+    }>;
+  };
+  answerImpact: {
+    canImprovePaidActorResult: boolean;
+    freshnessWindowDays: number;
+    freshSourceFamilies: string[];
+    staleSuppressionRequired: boolean;
+    darkMetadataSearchable: boolean;
+    darkMetadataCaveated: boolean;
+    replayableFromDurableRows: true;
+  };
+  replayProof: {
+    handoffId: string;
+    promotionTransactionId: string;
+    auditReplaySchemaVersion: EvidencePromotionTransactionAuditReplay["schemaVersion"];
+    proofRunId: "dQzvWhNM2OHrBWVfo";
+    proofDatasetId: "aP1dqnK7uEezn5jJv";
+    commands: string[];
+  };
+  noLeakGuarantees: {
+    restrictedRowsMetadataOnly: true;
+    rawBodiesExposed: false;
+    objectKeysExposed: false;
+    unsafeUrlsExposed: false;
+    credentialsExposed: false;
+    restrictedRawContentExposed: false;
+    actorInteractionExposed: false;
+    vectorEmbeddingsForRestrictedRows: false;
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorProductImpactRow {
+  documentId: string;
+  kind: EvidenceSearchIndexDocument["kind"];
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  relationshipId?: string;
+  sourceFamily: "public_report" | "public_channel" | "advisory" | "restricted_metadata" | "unknown";
+  title: string;
+  evidenceEffect: string;
+  observedAt?: string;
+  collectedAt?: string;
+  publishedAt?: string;
+  confidence?: number;
+  replayId: string;
+  retentionClass?: RetentionClass;
+  restrictedMetadata: boolean;
+  metadataOnly: boolean;
+  embeddingEligible: boolean;
+}
+
 export interface EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend;
   readiness(): EvidenceSearchReadModelReadiness;
@@ -1188,6 +1257,100 @@ export function buildEvidencePromotionTransactionAuditReplay(
   };
 }
 
+export function buildEvidenceActorProductImpactReplay(
+  writeSet: EvidenceSearchReadModelBackendWriteSet,
+  promotionTransaction: EvidencePromotionTransactionPlan,
+  auditReplay: EvidencePromotionTransactionAuditReplay,
+  input: { generatedAt?: string; freshnessWindowDays?: number } = {}
+): EvidenceActorProductImpactReplay {
+  const generatedAt = input.generatedAt ?? auditReplay.generatedAt;
+  const freshnessWindowDays = input.freshnessWindowDays ?? 30;
+  const cutoffMs = Date.parse(generatedAt) - freshnessWindowDays * 24 * 60 * 60 * 1000;
+  const rows = writeSet.postgresDocuments.filter((row) => !row.tombstoned_at);
+  const rowStates = rows.map((row) => {
+    const staleReason = productRowStaleReason(row, cutoffMs);
+    return {
+      row,
+      impact: actorProductImpactRow(row),
+      staleReason
+    };
+  });
+  const freshPublicRows = rowStates
+    .filter(({ row, staleReason }) => !staleReason && !row.restricted_metadata && !row.metadata_only)
+    .map(({ impact }) => impact);
+  const restrictedMetadataRows = rowStates
+    .filter(({ row, staleReason }) => !staleReason && (row.restricted_metadata || row.metadata_only))
+    .map(({ impact }) => impact);
+  const staleRowsSuppressed = rowStates
+    .filter(({ staleReason }) => Boolean(staleReason))
+    .map(({ impact, staleReason }) => ({
+      ...impact,
+      staleReason: staleReason ?? "stale_row"
+    }));
+  const freshSourceFamilies = [...new Set([...freshPublicRows, ...restrictedMetadataRows].map((row) => row.sourceFamily).filter((family) => family !== "unknown"))].sort();
+  const missingSourceFamilies = actorRequiredSourceFamilies()
+    .filter((family) => !freshSourceFamilies.includes(family))
+    .map((family) => ({
+      family,
+      impact: sourceFamilyImpact(family),
+      nextAction: sourceFamilyNextAction(family)
+    }));
+  const canImprovePaidActorResult = freshPublicRows.length > 0 || restrictedMetadataRows.length > 0;
+  const state: EvidenceActorProductImpactReplay["state"] = canImprovePaidActorResult && missingSourceFamilies.length === 0 && staleRowsSuppressed.length === 0
+    ? "ready"
+    : canImprovePaidActorResult
+      ? "partial"
+      : "hold";
+
+  return {
+    schemaVersion: "ti.evidence_actor_product_impact_replay.v1",
+    generatedAt,
+    handoffId: writeSet.handoffId,
+    productSurface: "apify_public_threat_actor_monitor",
+    actorBuild: "0.6.3",
+    latestProofRunId: "dQzvWhNM2OHrBWVfo",
+    state,
+    usefulActorRows: {
+      freshRowsImprovingActorResult: freshPublicRows,
+      restrictedMetadataRows,
+      staleRowsSuppressed,
+      missingSourceFamilies
+    },
+    answerImpact: {
+      canImprovePaidActorResult,
+      freshnessWindowDays,
+      freshSourceFamilies,
+      staleSuppressionRequired: staleRowsSuppressed.length > 0,
+      darkMetadataSearchable: restrictedMetadataRows.length > 0,
+      darkMetadataCaveated: restrictedMetadataRows.length > 0,
+      replayableFromDurableRows: true
+    },
+    replayProof: {
+      handoffId: writeSet.handoffId,
+      promotionTransactionId: promotionTransaction.transactionId,
+      auditReplaySchemaVersion: auditReplay.schemaVersion,
+      proofRunId: "dQzvWhNM2OHrBWVfo",
+      proofDatasetId: "aP1dqnK7uEezn5jJv",
+      commands: [
+        "bun run measure:search-product",
+        "bun test src/tests/storageCutover.test.ts",
+        "bun test src/tests/api.test.ts -t evidence"
+      ]
+    },
+    noLeakGuarantees: {
+      restrictedRowsMetadataOnly: true,
+      rawBodiesExposed: false,
+      objectKeysExposed: false,
+      unsafeUrlsExposed: false,
+      credentialsExposed: false,
+      restrictedRawContentExposed: false,
+      actorInteractionExposed: false,
+      vectorEmbeddingsForRestrictedRows: false
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
 class InMemoryEvidenceSearchReadModelRepository implements EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend = "embedded_memory";
   private readonly records = new Map<string, EvidenceSearchReadModelRecord>();
@@ -1480,6 +1643,94 @@ function summarizePromotionRows(
     bullets.push(`${restrictedRows.length} restricted or metadata-only documents are available only as caveated defensive context and are excluded from embedding/vector promotion.`);
   }
   return bullets;
+}
+
+function actorProductImpactRow(row: EvidenceSearchReadModelPostgresDocumentRow): EvidenceActorProductImpactRow {
+  return {
+    documentId: row.document_id,
+    kind: row.kind,
+    sourceId: row.source_id,
+    captureId: row.capture_id,
+    claimLedgerEntryId: row.claim_ledger_entry_id,
+    relationshipId: row.relationship_id,
+    sourceFamily: inferActorSourceFamily(row),
+    title: row.title,
+    evidenceEffect: productEvidenceEffect(row),
+    observedAt: row.freshness.observedAt,
+    collectedAt: row.freshness.collectedAt,
+    publishedAt: row.freshness.publishedAt,
+    confidence: row.confidence,
+    replayId: row.replay.replayId,
+    retentionClass: row.retention_class,
+    restrictedMetadata: row.restricted_metadata,
+    metadataOnly: row.metadata_only,
+    embeddingEligible: row.embedding.eligible && !row.restricted_metadata && !row.metadata_only
+  };
+}
+
+function productEvidenceEffect(row: EvidenceSearchReadModelPostgresDocumentRow): string {
+  if (row.restricted_metadata || row.metadata_only) {
+    return "adds caveated defensive leak/victim metadata to Actor rows without raw material";
+  }
+  if (row.kind === "claim") return "adds reviewed claim support for Actor summary facts";
+  if (row.kind === "graph_relationship") return "adds relationship context when review/export gates allow it";
+  if (row.kind === "source") return "adds source-family coverage evidence";
+  return "adds fresh public evidence for buyer-visible Actor result rows";
+}
+
+function productRowStaleReason(row: EvidenceSearchReadModelPostgresDocumentRow, cutoffMs: number): string | undefined {
+  if ((row.kind === "capture" || row.kind === "claim") && !row.replay.extractorVersion) return "missing_extractor_version_refresh_required";
+  const newestMs = newestFreshnessMs(row);
+  if (newestMs === undefined) return "missing_freshness_timestamp";
+  if (newestMs < cutoffMs) return "outside_actor_freshness_window";
+  return undefined;
+}
+
+function newestFreshnessMs(row: EvidenceSearchReadModelPostgresDocumentRow): number | undefined {
+  const values = [
+    row.freshness.observedAt,
+    row.freshness.collectedAt,
+    row.freshness.publishedAt,
+    row.freshness.cursor
+  ]
+    .map((value) => value ? Date.parse(value) : Number.NaN)
+    .filter((value) => Number.isFinite(value));
+  if (values.length === 0) return undefined;
+  return Math.max(...values);
+}
+
+function inferActorSourceFamily(
+  row: EvidenceSearchReadModelPostgresDocumentRow
+): EvidenceActorProductImpactRow["sourceFamily"] {
+  const text = [
+    row.source_id,
+    row.retention_class,
+    row.kind,
+    ...row.tags
+  ].join(" ").toLowerCase();
+  if (row.restricted_metadata || row.metadata_only || /restricted|dark|tor|leak|victim/.test(text)) return "restricted_metadata";
+  if (/public_channel|telegram|channel|chat/.test(text)) return "public_channel";
+  if (/advisory|cve|cert|cisa|nvd|github/.test(text)) return "advisory";
+  if (/public_report|static_web|report|blog|research/.test(text)) return "public_report";
+  return "unknown";
+}
+
+function actorRequiredSourceFamilies(): Array<"public_report" | "public_channel" | "advisory" | "restricted_metadata"> {
+  return ["public_report", "public_channel", "advisory", "restricted_metadata"];
+}
+
+function sourceFamilyImpact(family: "public_report" | "public_channel" | "advisory" | "restricted_metadata"): string {
+  if (family === "public_channel") return "APT42/public-channel freshness gaps remain visible in paid Actor rows";
+  if (family === "advisory") return "CVE/infrastructure rows lack advisory corroboration";
+  if (family === "restricted_metadata") return "leak/victim/company/dataset metadata cannot improve defensive context";
+  return "actor summaries depend on thin or stale public reporting";
+}
+
+function sourceFamilyNextAction(family: "public_report" | "public_channel" | "advisory" | "restricted_metadata"): string {
+  if (family === "public_channel") return "activate approved public-channel metadata/feed rows and replay into this read model";
+  if (family === "advisory") return "replay public advisory/CVE source rows into Actor-supporting evidence";
+  if (family === "restricted_metadata") return "import approved Tier 100 dark metadata descriptors as metadata-only rows";
+  return "refresh vetted public report captures and suppress stale-only rows";
 }
 
 function tokenize(query: string): string[] {

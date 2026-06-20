@@ -13,6 +13,15 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 17:30 CEST
+
+- Completed the daily Apify Actor run-plan slice for revenue-focused freshness: `scheduler.dailyActorRunPlan` now exposes the 20-query default watchlist, Actor id/build, daily timing, 3-second polling, duplicate-run reuse, useful/fresh row targets, stale-only suppression, and cost-per-useful-row economics.
+- Added source-tier sweep cadence for the first 100 safe public sources, first 1,000 safe public sources, and first 4,000 approved dark-metadata records with reserved scheduler slots, max daily task budgets, useful-row lift expectations, and advance/hold criteria.
+- Wired the run plan through frontier status/search/run scheduler DTOs and `/v1/contracts` so UI/API clients can show queue, freshness, stale suppression, source ladder, dark-metadata cadence, and paid-row economics instead of a static searching state.
+- Repaired shared Program BD quality-pack drift by wiring the existing paid-row quality gate and removing a duplicate helper so the repo compiles cleanly.
+- Green: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, `bun test src/tests/pipeline.test.ts -t "Program BD"`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (527 pass).
+- Next: continue the Agent 02 lane by turning the daily run plan into stronger execution-facing scheduler behavior for real source sweeps, freshness SLOs, run reuse, queue fairness, and worker/drain readiness.
+
 ## Progress - 2026-06-20 16:14 CEST
 
 - Completed the next Apify monitor source-coverage handoff slice for `apify/public-threat-actor-monitor`.

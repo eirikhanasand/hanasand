@@ -54,6 +54,7 @@ import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/me
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
@@ -2057,6 +2058,59 @@ describe("evidence storage cutover", () => {
         actorInteractionExposed: false
       }
     });
+    const actorProductImpactReplay = buildEvidenceActorProductImpactReplay(backendWriteSet, promotionTransaction, auditReplay, {
+      generatedAt: "2026-05-24T21:45:10.000Z"
+    });
+    expect(actorProductImpactReplay).toMatchObject({
+      schemaVersion: "ti.evidence_actor_product_impact_replay.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.3",
+      latestProofRunId: "dQzvWhNM2OHrBWVfo",
+      state: "partial",
+      answerImpact: {
+        canImprovePaidActorResult: true,
+        freshnessWindowDays: 30,
+        staleSuppressionRequired: true,
+        darkMetadataSearchable: true,
+        darkMetadataCaveated: true,
+        replayableFromDurableRows: true
+      },
+      replayProof: {
+        handoffId: backendWriteSet.handoffId,
+        promotionTransactionId: promotionTransaction.transactionId,
+        auditReplaySchemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1",
+        proofRunId: "dQzvWhNM2OHrBWVfo",
+        proofDatasetId: "aP1dqnK7uEezn5jJv",
+        commands: expect.arrayContaining(["bun run measure:search-product"])
+      },
+      noLeakGuarantees: {
+        restrictedRowsMetadataOnly: true,
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false,
+        vectorEmbeddingsForRestrictedRows: false
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(actorProductImpactReplay.usefulActorRows.freshRowsImprovingActorResult.some((row) => row.sourceFamily === "public_report")).toBe(true);
+    expect(actorProductImpactReplay.usefulActorRows.restrictedMetadataRows.some((row) => row.sourceFamily === "restricted_metadata")).toBe(true);
+    expect(actorProductImpactReplay.usefulActorRows.staleRowsSuppressed.some((row) => row.staleReason === "missing_extractor_version_refresh_required")).toBe(true);
+    expect(actorProductImpactReplay.usefulActorRows.missingSourceFamilies.map((row) => row.family)).toEqual(expect.arrayContaining(["public_channel", "advisory"]));
+    const actorProductSerialized = JSON.stringify(actorProductImpactReplay);
+    expect(actorProductSerialized).toContain("Fjord Energy AS");
+    expect(actorProductSerialized).not.toContain(restrictedRaw);
+    expect(actorProductSerialized).not.toContain("tenant/source/private-key");
+    expect(actorProductSerialized).not.toContain(".onion");
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");

@@ -19,6 +19,7 @@ import {
   buildSchedulerDurableBackendReadiness,
   buildSchedulerFreshnessSloEngine,
   buildSchedulerFreshnessSloDashboard,
+  buildSchedulerDailyActorRunPlan,
   buildSchedulerInteractiveSearchFreshness,
   buildSchedulerProductionLeaseSemantics,
   buildSchedulerFairnessGovernance,
@@ -1416,6 +1417,75 @@ describe("scheduler production readiness", () => {
     });
     expect(dashboard.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_freshness_slo_dashboard");
     expect(dashboard.releaseGate.proofCommands).toContain("bun run check:contract-index");
+  });
+
+  test("builds daily Apify Actor run plan with source-tier cadence economics and stale suppression", () => {
+    const now = new Date("2026-06-20T17:10:00.000Z");
+    const queued = [
+      task({ id: "task_daily_apt29", sourceId: "src_daily_apt29", budgetClass: "interactive_live_search", queuedAt: "2026-06-20T16:50:00.000Z", runId: "run_daily_apt29" }),
+      task({ id: "task_daily_source_sweep", sourceId: "src_daily_sweep", budgetClass: "broad_daily_sweep", queuedAt: "2026-06-20T15:45:00.000Z", runId: "run_daily_sweep" }),
+      task({ id: "task_daily_dark_metadata", sourceId: "src_daily_dark", sourceType: "tor_metadata", budgetClass: "restricted_darknet_metadata_sweep", queuedAt: "2026-06-20T15:30:00.000Z", retryCount: 1, runId: "run_daily_dark" })
+    ];
+    const economics = buildSchedulerQueueEconomics({ queued, workerSlots: 64, memoryCeilingMb: 96 * 1024, now });
+    const runtime = buildSchedulerRuntimeExecution({ queued, queueEconomics: economics, pendingActivationBatchCount: 0, now });
+    const sla = buildSchedulerRuntimeSla({ queueEconomics: economics, runtimeExecution: runtime, runs: [], now });
+    const enforcement = buildSchedulerSlaEnforcement({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, runs: [], now });
+    const cutover = buildSchedulerWorkerQueueCutover({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, now });
+    const soak = buildSchedulerWorkerSoakMigration({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, now });
+    const harness = buildSchedulerWorkerLeaseSoakHarness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const telemetry = buildSchedulerProductionAdapterTelemetry({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const canary = buildSchedulerCanaryControlPlane({ productionAdapterTelemetry: telemetry, queueEconomics: economics, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, now });
+    const readiness = buildSchedulerDurableBackendReadiness({ queueEconomics: economics, runtimeExecution: runtime, runtimeSla: sla, slaEnforcement: enforcement, workerQueueCutover: cutover, workerSoakMigration: soak, productionAdapterTelemetry: telemetry, canaryControlPlane: canary, now });
+    const freshness = buildSchedulerFreshnessSloEngine({ plan: plan({ query: "APT29", entityType: "actor", priority: "urgent", tasks: queued }), queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, durableBackendReadiness: readiness, now });
+    const dashboard = buildSchedulerFreshnessSloDashboard({ queueEconomics: economics, runtimeExecution: runtime, slaEnforcement: enforcement, workerQueueCutover: cutover, freshnessSloEngine: freshness, workerLeaseSoakHarness: harness, now });
+    const daily = buildSchedulerDailyActorRunPlan({
+      freshnessSloDashboard: dashboard,
+      queueEconomics: economics,
+      workerQueueCutover: cutover,
+      now
+    });
+
+    expect(daily.schemaVersion).toBe("ti.scheduler_daily_actor_run_plan.v1");
+    expect(daily.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "apify_public_threat_actor_monitor"]));
+    expect(daily.apifyActor).toMatchObject({
+      actorId: "eirikhanasand/public-threat-actor-monitor",
+      publishedBuild: "0.6.3",
+      defaultQueryCount: 20,
+      runCadence: "daily"
+    });
+    expect(daily.apifyActor.defaultQueries).toEqual(expect.arrayContaining(["APT29", "APT42", "LockBit", "Hunters International"]));
+    expect(daily.runTargets).toMatchObject({
+      duplicateRunReuseRequired: true,
+      nextPollSeconds: 3,
+      sourceFamilyDiversityTarget: 4
+    });
+    expect(daily.watchlist).toHaveLength(20);
+    expect(daily.watchlist.find((row) => row.query === "APT29")).toMatchObject({
+      priority: "daily_until_fresh",
+      schedulerAction: "raise_priority",
+      staleSuppression: "drop_stale_only_activity"
+    });
+    expect(daily.watchlist.find((row) => row.query === "APT42")?.sourceFamilyFocus).toContain("public_channel");
+    expect(daily.watchlist.find((row) => row.query === "LockBit")?.sourceFamilyFocus).toContain("approved_dark_metadata");
+    expect(daily.sourceTierCadence.map((tier) => tier.tier)).toEqual(["tier_100", "tier_1000", "tier_4000"]);
+    expect(daily.sourceTierCadence.find((tier) => tier.tier === "tier_100")).toMatchObject({
+      scope: "safe_public_sources",
+      cadence: "hourly",
+      workClass: "broad_daily_sweep"
+    });
+    expect(daily.sourceTierCadence.find((tier) => tier.tier === "tier_4000")).toMatchObject({
+      scope: "approved_dark_metadata",
+      workClass: "restricted_darknet_metadata_sweep"
+    });
+    expect(daily.economics.estimatedGrossRevenueUsd).toBeGreaterThan(0);
+    expect(daily.economics.estimatedCostPerUsefulRowUsd).toBeLessThanOrEqual(daily.runTargets.maxCostPerUsefulRowUsd);
+    expect(daily.staleSuppression).toMatchObject({
+      staleOnlyRowsExcludedFromReady: true,
+      maxStaleRowsPerActor: 1
+    });
+    expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));
+    expect(daily.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_daily_actor_run_plan");
+    expect(daily.releaseGate.proofCommands).toContain("bun run check:apify-publication");
   });
 
   test("builds interactive search freshness decisions with run reuse and visible scheduler state", () => {

@@ -297,10 +297,12 @@ describe("ops controls", () => {
       },
       resource: { memoryRssGb: 4.5, diskGrowthGbPerDay: 3 },
       queryMeasurements: [
-        { query: "APT29", proofMode: "inspur", firstResponseMs: 900, firstFreshEvidenceMs: 7000, pollIntervalMs: 3000, status: "ready", rowCount: 29, usefulRowCount: 12, activityClaimCount: 4, duplicateArticleRate: 0.05, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false },
-        { query: "Made Up Actor", proofMode: "inspur", firstResponseMs: 650, pollIntervalMs: 3000, status: "empty", rowCount: 0, usefulRowCount: 0, activityClaimCount: 0, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
+        { query: "APT29", proofMode: "inspur", firstResponseMs: 900, firstFreshEvidenceMs: 7000, pollIntervalMs: 3000, status: "ready", rowCount: 29, usefulRowCount: 12, freshRowCount: 24, activityClaimCount: 4, duplicateArticleRate: 0.05, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false },
+        { query: "Made Up Actor", proofMode: "inspur", firstResponseMs: 650, pollIntervalMs: 3000, status: "empty", rowCount: 0, usefulRowCount: 0, freshRowCount: 0, activityClaimCount: 0, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
       ],
-      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.4", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 2, rowCount: 29, usefulRowCount: 12, activityClaimRowCount: 4 },
+      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.3", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 20, rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowCount: 3, activityClaimRowCount: 4, defaultWatchlistRun: true },
+      cost: { computeCostUsd: 0.0023, resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2 },
+      marketplace: { actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, beneficiaryVerified: false, payoutMethodReady: false, pricingEffectiveAt: "2026-07-04" },
       snapshotStoragePath: "var/ops/live-product-slo/test.jsonl"
     });
 
@@ -314,9 +316,15 @@ describe("ops controls", () => {
     expect(dashboard.dashboard.state).toBe("pass");
     expect(dashboard.slos.find((item) => item.name === "known_actor_summary_latency")).toMatchObject({ state: "pass", target: "<=2000" });
     expect(dashboard.slos.find((item) => item.name === "stale_result_rejection")).toMatchObject({ state: "pass", target: ">=0.95" });
-    expect(dashboard.metrics.costPerUsefulRowUsd.value).toBeNull();
+    expect(dashboard.slos.find((item) => item.name === "actor_useful_row_rate")).toMatchObject({ state: "pass", observed: 0.49 });
+    expect(dashboard.slos.find((item) => item.name === "actor_fresh_row_rate")).toMatchObject({ state: "pass", observed: 0.653 });
+    expect(dashboard.metrics.costPerUsefulRowUsd.value).toBe(0);
+    expect(dashboard.paidProductEconomics.pricing).toMatchObject({ resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2, effectiveAt: "2026-07-04" });
+    expect(dashboard.paidProductEconomics.latestRun).toMatchObject({ rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowPenaltyRows: 3, defaultWatchlistRun: true });
+    expect(dashboard.paidProductEconomics.projectedRevenue).toMatchObject({ grossRowsUsd: 0.294, grossActorStartUsd: 0.00005, grossTotalUsd: 0.294, apifyMarginUsd: 0.059, netAfterApifyUsd: 0.235, internalUsageCostUsd: 0.002, projectedNetAfterUsageUsd: 0.233, costPerRunUsd: 0.002, costPerRowUsd: 0, costPerUsefulRowUsd: 0 });
+    expect(dashboard.paidProductEconomics.marketplace.blockers).toEqual(expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed"]));
     expect(dashboard.apifyLaunchExperiment.grossPpeRevenueUsd).toBeNull();
-    expect(dashboard.apifyLaunchExperiment.unknowns).toContain("uniqueUsers");
+    expect(dashboard.apifyLaunchExperiment.uniqueUsers).toBe(1);
     expect(dashboard.apifyLaunchExperiment.unknowns).toContain("grossPpeRevenueUsd");
     expect(dashboard.deploymentProof.actorBuildId).toBe("build_123");
     expect(dashboard.deploymentProof.publicProofCommands).toContain("bun run smoke:apify-threat-actor-monitor");

@@ -1213,6 +1213,87 @@ export interface SchedulerFreshnessSloDashboardDto {
   };
 }
 
+export interface SchedulerDailyActorRunPlanDto {
+  generatedAt: string;
+  apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "apify_public_threat_actor_monitor" | "agent10_revenue_slo">;
+  dryRun: true;
+  willMutate: false;
+  schemaVersion: "ti.scheduler_daily_actor_run_plan.v1";
+  apifyActor: {
+    actorId: "eirikhanasand/public-threat-actor-monitor";
+    publishedBuild: "0.6.3";
+    defaultQueryCount: 20;
+    defaultQueries: string[];
+    runCadence: "daily";
+    window: "00:15_utc_after_source_sweeps";
+    pricing: {
+      resultEvent: "apify-default-dataset-item";
+      actorStartEvent: "apify-actor-start";
+      resultPricePerThousandUsd: 3;
+      actorStartPriceUsd: 0.00005;
+      apifyMarginPercent: 20;
+    };
+  };
+  runTargets: {
+    expectedRows: number;
+    usefulRowTarget: number;
+    freshRowTarget: number;
+    staleRowSuppressionTarget: number;
+    sourceFamilyDiversityTarget: number;
+    maxCostPerUsefulRowUsd: number;
+    duplicateRunReuseRequired: true;
+    nextPollSeconds: 3;
+  };
+  watchlist: Array<{
+    query: string;
+    priority: "daily" | "daily_until_fresh" | "weekly_if_fresh";
+    currentFreshness: "fresh" | "aging" | "stale" | "unknown" | "blocked";
+    schedulerAction: "run_daily" | "raise_priority" | "suppress_stale_only_rows" | "hold_restricted_metadata" | "reuse_active_run";
+    sourceFamilyFocus: string[];
+    expectedUsefulRows: number;
+    staleSuppression: "drop_stale_only_activity" | "caveat_stale_context" | "normal";
+  }>;
+  sourceTierCadence: Array<{
+    tier: "tier_100" | "tier_1000" | "tier_4000";
+    scope: "safe_public_sources" | "approved_dark_metadata";
+    targetRecords: number;
+    cadence: "hourly" | "four_hourly" | "daily";
+    workClass: SchedulerWorkClass;
+    reservedWorkerSlots: number;
+    expectedUsefulRowLift: number;
+    maxDailyTasks: number;
+    advanceCriteria: string[];
+    holdCriteria: string[];
+  }>;
+  economics: {
+    estimatedRowsPerRun: number;
+    estimatedUsefulRowsPerRun: number;
+    estimatedGrossRevenueUsd: number;
+    estimatedAfterApifyMarginUsd: number;
+    estimatedSchedulerCostUsd: number;
+    estimatedCostPerUsefulRowUsd: number;
+    usefulRowRate: number;
+    freshRowRate: number;
+  };
+  staleSuppression: {
+    staleOnlyRowsExcludedFromReady: true;
+    maxStaleRowsPerActor: number;
+    actions: Array<"raise_source_cadence" | "request_source_family_expansion" | "caveat_old_context" | "suppress_ready_state">;
+    affectedQueries: string[];
+  };
+  routeContracts: {
+    frontierStatusField: "scheduler.dailyActorRunPlan";
+    searchSchedulerField: "scheduler.dailyActorRunPlan";
+    runStatusField: "scheduler.dailyActorRunPlan";
+    contractsField: "surfaces.frontier.contracts.scheduler_daily_actor_run_plan";
+  };
+  releaseGate: {
+    decision: "pass" | "hold" | "rollback";
+    reasons: string[];
+    proofCommands: string[];
+  };
+}
+
 export interface SchedulerInteractiveSearchFreshnessDto {
   generatedAt: string;
   apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "frontend_ti_progressive_update">;

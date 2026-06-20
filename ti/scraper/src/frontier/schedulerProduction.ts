@@ -41,6 +41,7 @@ import type {
   SchedulerExecutionSloThresholds,
   SchedulerExecutionTraffic,
   SchedulerFreshnessQueryClass,
+  SchedulerDailyActorRunPlanDto,
   SchedulerFreshnessSloDashboardActor,
   SchedulerFreshnessSloDashboardDto,
   SchedulerFreshnessSloEngineDto,
@@ -141,6 +142,7 @@ export type {
   SchedulerExecutionSloThresholds,
   SchedulerExecutionTraffic,
   SchedulerFreshnessQueryClass,
+  SchedulerDailyActorRunPlanDto,
   SchedulerFreshnessSloDashboardActor,
   SchedulerFreshnessSloDashboardDto,
   SchedulerFreshnessSloEngineDto,
@@ -1820,6 +1822,218 @@ export function buildSchedulerFreshnessSloDashboard(input: {
         "bun run check:route-inventory",
         "bun run check:contract-index",
         "bun run check:api-regression"
+      ]
+    }
+  };
+}
+
+export function buildSchedulerDailyActorRunPlan(input: {
+  freshnessSloDashboard: SchedulerFreshnessSloDashboardDto;
+  queueEconomics: SchedulerQueueEconomicsDto;
+  workerQueueCutover: SchedulerWorkerQueueCutoverDto;
+  now?: Date;
+}): SchedulerDailyActorRunPlanDto {
+  const now = input.now ?? new Date();
+  const actorByName = new Map(input.freshnessSloDashboard.actors.map((actor) => [actor.actor.toLowerCase(), actor]));
+  const defaultQueries = [
+    "APT29",
+    "APT28",
+    "APT42",
+    "Lazarus Group",
+    "Volt Typhoon",
+    "Salt Typhoon",
+    "Turla",
+    "Sandworm",
+    "Kimsuky",
+    "MuddyWater",
+    "Charming Kitten",
+    "Scattered Spider",
+    "LockBit",
+    "Clop",
+    "Akira",
+    "Black Basta",
+    "Play",
+    "RansomHub",
+    "ALPHV",
+    "Hunters International"
+  ];
+  const commercialBlockers = new Set(["APT29", "APT28", "APT42"]);
+  const publicChannelFocus = new Set(["APT42", "Charming Kitten", "Scattered Spider", "Volt Typhoon", "Salt Typhoon"]);
+  const darkMetadataFocus = new Set(["LockBit", "Clop", "Akira", "Black Basta", "Play", "RansomHub", "ALPHV", "Hunters International"]);
+  const expectedRows = Math.max(80, defaultQueries.length * 5);
+  const staleDashboardActors = input.freshnessSloDashboard.actors.filter((actor) => actor.state === "stale" || actor.state === "blocked");
+  const usefulRowTarget = Math.max(50, Math.round(expectedRows * 0.55));
+  const freshRowTarget = Math.max(42, Math.round(expectedRows * 0.48));
+  const estimatedUsefulRows = Math.max(1, usefulRowTarget - Math.min(10, staleDashboardActors.length * 3));
+  const estimatedRows = expectedRows;
+  const formatMoney = (value: number): number => Number(value.toFixed(6));
+  const estimatedGrossRevenueUsd = formatMoney((estimatedRows / 1000) * 3);
+  const estimatedAfterApifyMarginUsd = formatMoney(estimatedGrossRevenueUsd * 0.8);
+  const estimatedSchedulerCostUsd = formatMoney(0.00005 + estimatedRows * 0.000002 + input.queueEconomics.totals.retryDebt * 0.00001);
+  const estimatedCostPerUsefulRowUsd = formatMoney(estimatedSchedulerCostUsd / estimatedUsefulRows);
+  const partitions = new Map(input.workerQueueCutover.partitions.map((partition) => [partition.workload, partition]));
+  const watchlist = defaultQueries.map((query): SchedulerDailyActorRunPlanDto["watchlist"][number] => {
+    const dashboardActor = actorByName.get(query.toLowerCase()) ?? actorByName.get(query.replace(/ group$/i, "").toLowerCase());
+    const currentFreshness: SchedulerDailyActorRunPlanDto["watchlist"][number]["currentFreshness"] = dashboardActor?.state === "blocked"
+      ? "blocked"
+      : dashboardActor?.state === "stale"
+        ? "stale"
+        : dashboardActor?.state === "aging"
+          ? "aging"
+          : dashboardActor?.state === "fresh"
+            ? "fresh"
+            : "unknown";
+    const priority: SchedulerDailyActorRunPlanDto["watchlist"][number]["priority"] = commercialBlockers.has(query) || currentFreshness === "stale" || currentFreshness === "unknown"
+      ? "daily_until_fresh"
+      : dashboardActor?.priority === "weekly" && currentFreshness === "fresh"
+        ? "weekly_if_fresh"
+        : "daily";
+    const schedulerAction: SchedulerDailyActorRunPlanDto["watchlist"][number]["schedulerAction"] = currentFreshness === "blocked"
+      ? "hold_restricted_metadata"
+      : currentFreshness === "stale" || commercialBlockers.has(query)
+        ? "raise_priority"
+        : currentFreshness === "fresh" && dashboardActor?.schedulerAction === "reuse_active_run"
+          ? "reuse_active_run"
+          : currentFreshness === "aging"
+            ? "run_daily"
+            : "suppress_stale_only_rows";
+    return {
+      query,
+      priority,
+      currentFreshness,
+      schedulerAction,
+      sourceFamilyFocus: uniqueStrings([
+        "clear_web_report",
+        "vendor_advisory",
+        ...(publicChannelFocus.has(query) ? ["public_channel"] : []),
+        ...(darkMetadataFocus.has(query) ? ["approved_dark_metadata"] : []),
+        ...(query.includes("CVE") ? ["public_advisory"] : [])
+      ]),
+      expectedUsefulRows: currentFreshness === "fresh" ? 3 : commercialBlockers.has(query) ? 5 : 4,
+      staleSuppression: currentFreshness === "stale" || commercialBlockers.has(query)
+        ? "drop_stale_only_activity"
+        : currentFreshness === "aging"
+          ? "caveat_stale_context"
+          : "normal"
+    };
+  });
+  const sourceTierCadence: SchedulerDailyActorRunPlanDto["sourceTierCadence"] = [
+    {
+      tier: "tier_100",
+      scope: "safe_public_sources",
+      targetRecords: 100,
+      cadence: "hourly",
+      workClass: "broad_daily_sweep",
+      reservedWorkerSlots: partitions.get("scheduled_source_sweep")?.reservedWorkerSlots ?? 1,
+      expectedUsefulRowLift: 0.18,
+      maxDailyTasks: 600,
+      advanceCriteria: ["dedupe_rate_below_35_percent", "fresh_row_rate_above_45_percent", "parser_success_above_85_percent", "no_leak_gate_green"],
+      holdCriteria: ["fresh_row_rate_below_30_percent", "stale_only_rows_above_35_percent", "parser_failures_block_top_actor_rows"]
+    },
+    {
+      tier: "tier_1000",
+      scope: "safe_public_sources",
+      targetRecords: 1000,
+      cadence: "four_hourly",
+      workClass: "broad_daily_sweep",
+      reservedWorkerSlots: partitions.get("scheduled_source_sweep")?.reservedWorkerSlots ?? 1,
+      expectedUsefulRowLift: 0.34,
+      maxDailyTasks: 1800,
+      advanceCriteria: ["tier_100_quality_gate_passed", "source_family_diversity_at_least_4", "cost_per_useful_row_under_target", "daily_actor_run_has_no_empty_commercial_blockers"],
+      holdCriteria: ["queue_pressure_degrades_three_second_polling", "duplicate_rows_exceed_fresh_rows", "stale_apt29_or_apt42_rows_remain_unresolved"]
+    },
+    {
+      tier: "tier_4000",
+      scope: "approved_dark_metadata",
+      targetRecords: 4000,
+      cadence: "daily",
+      workClass: "restricted_darknet_metadata_sweep",
+      reservedWorkerSlots: partitions.get("restricted_metadata_approval")?.reservedWorkerSlots ?? 1,
+      expectedUsefulRowLift: 0.22,
+      maxDailyTasks: 1200,
+      advanceCriteria: ["tier_1000_public_sources_stable", "metadata_only_review_holds_green", "search_quality_above_baseline", "no_unsafe_url_or_payload_output"],
+      holdCriteria: ["approval_expired", "dead_letters_above_budget", "restricted_metadata_blocks_clear_web_polling"]
+    }
+  ];
+  const affectedQueries = watchlist
+    .filter((row) => row.staleSuppression !== "normal" || row.currentFreshness === "unknown")
+    .map((row) => row.query);
+  const decision: SchedulerDailyActorRunPlanDto["releaseGate"]["decision"] = input.freshnessSloDashboard.releaseGate.decision === "rollback"
+    ? "rollback"
+    : affectedQueries.length > 0 || input.queueEconomics.totals.retryDebt > 0
+      ? "hold"
+      : "pass";
+
+  return {
+    generatedAt: now.toISOString(),
+    apiTargets: ["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts", "apify_public_threat_actor_monitor", "agent10_revenue_slo"],
+    dryRun: true,
+    willMutate: false,
+    schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
+    apifyActor: {
+      actorId: "eirikhanasand/public-threat-actor-monitor",
+      publishedBuild: "0.6.3",
+      defaultQueryCount: 20,
+      defaultQueries,
+      runCadence: "daily",
+      window: "00:15_utc_after_source_sweeps",
+      pricing: {
+        resultEvent: "apify-default-dataset-item",
+        actorStartEvent: "apify-actor-start",
+        resultPricePerThousandUsd: 3,
+        actorStartPriceUsd: 0.00005,
+        apifyMarginPercent: 20
+      }
+    },
+    runTargets: {
+      expectedRows,
+      usefulRowTarget,
+      freshRowTarget,
+      staleRowSuppressionTarget: Math.max(20, Math.round(expectedRows * 0.25)),
+      sourceFamilyDiversityTarget: 4,
+      maxCostPerUsefulRowUsd: 0.0025,
+      duplicateRunReuseRequired: true,
+      nextPollSeconds: 3
+    },
+    watchlist,
+    sourceTierCadence,
+    economics: {
+      estimatedRowsPerRun: estimatedRows,
+      estimatedUsefulRowsPerRun: estimatedUsefulRows,
+      estimatedGrossRevenueUsd,
+      estimatedAfterApifyMarginUsd,
+      estimatedSchedulerCostUsd,
+      estimatedCostPerUsefulRowUsd,
+      usefulRowRate: Number((estimatedUsefulRows / estimatedRows).toFixed(3)),
+      freshRowRate: Number((freshRowTarget / estimatedRows).toFixed(3))
+    },
+    staleSuppression: {
+      staleOnlyRowsExcludedFromReady: true,
+      maxStaleRowsPerActor: 1,
+      actions: ["raise_source_cadence", "request_source_family_expansion", "caveat_old_context", "suppress_ready_state"],
+      affectedQueries
+    },
+    routeContracts: {
+      frontierStatusField: "scheduler.dailyActorRunPlan",
+      searchSchedulerField: "scheduler.dailyActorRunPlan",
+      runStatusField: "scheduler.dailyActorRunPlan",
+      contractsField: "surfaces.frontier.contracts.scheduler_daily_actor_run_plan"
+    },
+    releaseGate: {
+      decision,
+      reasons: uniqueStrings([
+        ...(decision === "pass" ? ["daily_actor_run_plan_ready"] : []),
+        ...(affectedQueries.length > 0 ? ["stale_or_unknown_watchlist_rows_require_suppression_or_source_expansion"] : []),
+        ...(input.queueEconomics.totals.retryDebt > 0 ? ["retry_debt_must_not_hide_paid_row_freshness"] : []),
+        ...(input.freshnessSloDashboard.releaseGate.decision === "rollback" ? ["freshness_dashboard_rollback"] : [])
+      ]),
+      proofCommands: [
+        "bun test src/tests/schedulerProduction.test.ts src/tests/api.test.ts",
+        "bun run check",
+        "bun run check:route-inventory",
+        "bun run check:contract-index",
+        "bun run check:api-regression",
+        "bun run check:apify-publication"
       ]
     }
   };

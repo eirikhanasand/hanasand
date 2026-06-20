@@ -417,6 +417,67 @@ export interface DarkwebIndexSearchQualityMetrics {
   };
 }
 
+export interface DarkwebIndexTier100ProductSlice {
+  readonly schemaVersion: "ti.darkweb_index_tier100_product.v1";
+  readonly owner: "Agent 05";
+  readonly tier: "tier_100";
+  readonly mode: "buyer_visible_safe_metadata";
+  readonly recordGoal: 100;
+  readonly producedRecordCount: number;
+  readonly sourceFamilies: ReadonlyArray<{
+    readonly family: "public_report" | "analyst_import" | "directory_metadata" | "public_tracker_reference" | "approved_seed" | "safe_search_result";
+    readonly candidateCount: number;
+    readonly acceptedCount: number;
+    readonly duplicateCount: number;
+    readonly blockedCount: number;
+    readonly reviewCount: number;
+    readonly staleOrDeadCount: number;
+    readonly productLift: "actor_search_corroboration" | "victim_context" | "category_coverage" | "liveness_signal" | "source_family_diversity";
+  }>;
+  readonly importOutcome: {
+    readonly accepted: number;
+    readonly duplicate: number;
+    readonly blocked: number;
+    readonly reviewNeeded: number;
+    readonly staleOrDead: number;
+    readonly acceptedRecordIds: readonly string[];
+    readonly duplicateRecordIds: readonly string[];
+    readonly blockedRecordIds: readonly string[];
+    readonly reviewRecordIds: readonly string[];
+    readonly staleOrDeadRecordIds: readonly string[];
+  };
+  readonly buyerVisibleSearch: {
+    readonly usefulSummaryRate: number;
+    readonly actorHintCoverage: number;
+    readonly victimHintCoverage: number;
+    readonly categoryCoverageCount: number;
+    readonly liveOrIntermittentCount: number;
+    readonly publicSearchBoostQueries: readonly string[];
+    readonly apifyFields: readonly ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"];
+  };
+  readonly tier1000AdvancementCriteria: {
+    readonly targetTier: "tier_1000";
+    readonly minAcceptedRecords: 70;
+    readonly maxDuplicateRate: 0.2;
+    readonly minUsefulSummaryRate: 0.8;
+    readonly minActorHintCoverage: 0.25;
+    readonly minCategoryCoverage: 8;
+    readonly maxBlockedUnsafeRate: 0.2;
+    readonly maxFalsePositiveReviewRows: 12;
+    readonly requireNoLeakProof: true;
+    readonly requireApifySearchLift: true;
+  };
+  readonly safety: {
+    readonly rawUnsafeUrlsExposed: false;
+    readonly stolenFilesDownloaded: false;
+    readonly credentialsRetrieved: false;
+    readonly payloadsFollowed: false;
+    readonly privateAuthCaptchaAccess: false;
+    readonly actorInteraction: false;
+  };
+  readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
+}
+
 export interface DarkwebIndexOperatorRunbook {
   readonly schemaVersion: "ti.darkweb_index_operator_runbook.v1";
   readonly owner: "Agent 05";
@@ -522,6 +583,7 @@ export interface DarkwebIndexStatusDto {
   readonly refreshOperations: DarkwebIndexRefreshOperationsPlan;
   readonly driftPacket: DarkwebIndexDriftPacket;
   readonly searchQuality: DarkwebIndexSearchQualityMetrics;
+  readonly tier100Product: DarkwebIndexTier100ProductSlice;
   readonly operatorRunbook: DarkwebIndexOperatorRunbook;
   readonly storageReadiness: {
     readonly tables: readonly string[];
@@ -560,6 +622,13 @@ export interface DarkwebIndexSearchDto {
     readonly tableColumns: readonly string[];
     readonly filters: readonly string[];
     readonly detailDrawerFields: readonly string[];
+  };
+  readonly productHandoff: {
+    readonly tier: "tier_100";
+    readonly apifyReadyFields: readonly ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"];
+    readonly publicSearchUse: "corroborating_metadata_context_only";
+    readonly recordIds: readonly string[];
+    readonly warnings: readonly ["metadata_only", "review_required", "no_raw_locations"];
   };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
@@ -632,6 +701,14 @@ export interface DarkwebIndexContractDto {
     readonly targetRecordCount: 60000;
     readonly liveCollectionEnabled: false;
   };
+  readonly tier100Product: {
+    readonly schemaVersion: "ti.darkweb_index_tier100_product.v1";
+    readonly tier: "tier_100";
+    readonly recordGoal: 100;
+    readonly advancementTarget: "tier_1000";
+    readonly routeFields: readonly ["status.tier100Product", "darkwebIndex.productHandoff"];
+    readonly requireNoLeakProof: true;
+  };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
 
@@ -689,6 +766,7 @@ export function buildDarkwebIndexStatus(records: readonly DarkwebIndexRecord[] =
     refreshOperations: buildDarkwebIndexRefreshOperationsPlan(),
     driftPacket: buildDarkwebIndexDriftPacket(records),
     searchQuality: buildDarkwebIndexSearchQualityMetrics(records),
+    tier100Product: buildDarkwebIndexTier100ProductSlice(records),
     operatorRunbook: buildDarkwebIndexOperatorRunbook(),
     storageReadiness: {
       tables: ["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs", "darkweb_index_classification_history", "darkweb_index_liveness_checks", "darkweb_index_review_notes"],
@@ -750,6 +828,13 @@ export function searchDarkwebIndex(input: {
       tableColumns: ["redactedDisplayUrl", "category", "legalTriage", "liveness", "language", "lastSeen", "reviewState", "confidence"],
       filters: ["query", "category", "legalTriage", "liveness", "network", "language", "reviewState"],
       detailDrawerFields: ["safeSummary", "classification", "whatWasNotAccessed", "provenance", "refreshHistory", "graphLinks"]
+    },
+    productHandoff: {
+      tier: "tier_100",
+      apifyReadyFields: ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"],
+      publicSearchUse: "corroborating_metadata_context_only",
+      recordIds: page.map((record) => record.id),
+      warnings: ["metadata_only", "review_required", "no_raw_locations"]
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
   };
@@ -823,6 +908,14 @@ export function darkwebIndexContract(): DarkwebIndexContractDto {
       operatorRunbookSchemaVersion: "ti.darkweb_index_operator_runbook.v1",
       targetRecordCount: 60000,
       liveCollectionEnabled: false
+    },
+    tier100Product: {
+      schemaVersion: "ti.darkweb_index_tier100_product.v1",
+      tier: "tier_100",
+      recordGoal: 100,
+      advancementTarget: "tier_1000",
+      routeFields: ["status.tier100Product", "darkwebIndex.productHandoff"],
+      requireNoLeakProof: true
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
   };
@@ -1366,6 +1459,82 @@ function buildDarkwebIndexSearchQualityMetrics(records: readonly DarkwebIndexRec
   };
 }
 
+function buildDarkwebIndexTier100ProductSlice(records: readonly DarkwebIndexRecord[]): DarkwebIndexTier100ProductSlice {
+  const tierRecords = records.slice(0, 100);
+  const acceptedRecords = tierRecords.filter((record) => record.reviewState === "approved_metadata_only" && (record.liveness === "live" || record.liveness === "intermittent"));
+  const duplicateRecordIds = darkwebIndexDedupePlan(tierRecords).duplicateClusters.flatMap((cluster) => cluster.duplicateRecordIds).filter((recordId) => tierRecords.some((record) => record.id === recordId));
+  const duplicateSet = new Set(duplicateRecordIds);
+  const blockedRecords = tierRecords.filter((record) => record.reviewState === "blocked_unsafe" || record.legalTriage === "blocked_unsafe");
+  const reviewRecords = tierRecords.filter((record) =>
+    record.reviewState === "needs_review" ||
+    record.reviewState === "legal_hold" ||
+    record.reviewState === "false_positive_review"
+  );
+  const staleOrDeadRecords = tierRecords.filter((record) => record.liveness === "dead" || record.liveness === "unknown");
+  const usefulSummaryRate = ratio(tierRecords.filter((record) => record.safeSummary.length >= 80 && record.title.length >= 20).length, Math.max(1, tierRecords.length));
+  const actorHintCoverage = ratio(tierRecords.filter((record) => record.actorHints.length > 0).length, Math.max(1, tierRecords.length));
+  const victimHintCoverage = ratio(tierRecords.filter((record) => record.victimHints.length > 0).length, Math.max(1, tierRecords.length));
+  const sourceFamilies: DarkwebIndexTier100ProductSlice["sourceFamilies"] = [
+    tier100SourceFamily("public_report", tierRecords),
+    tier100SourceFamily("analyst_import", tierRecords),
+    tier100SourceFamily("directory_metadata", tierRecords),
+    tier100SourceFamily("public_tracker_reference", tierRecords),
+    tier100SourceFamily("approved_seed", tierRecords),
+    tier100SourceFamily("safe_search_result", tierRecords)
+  ];
+  return {
+    schemaVersion: "ti.darkweb_index_tier100_product.v1",
+    owner: "Agent 05",
+    tier: "tier_100",
+    mode: "buyer_visible_safe_metadata",
+    recordGoal: 100,
+    producedRecordCount: tierRecords.length,
+    sourceFamilies,
+    importOutcome: {
+      accepted: acceptedRecords.length,
+      duplicate: duplicateSet.size,
+      blocked: blockedRecords.length,
+      reviewNeeded: reviewRecords.length,
+      staleOrDead: staleOrDeadRecords.length,
+      acceptedRecordIds: acceptedRecords.slice(0, 25).map((record) => record.id),
+      duplicateRecordIds: [...duplicateSet].slice(0, 25),
+      blockedRecordIds: blockedRecords.slice(0, 25).map((record) => record.id),
+      reviewRecordIds: reviewRecords.slice(0, 25).map((record) => record.id),
+      staleOrDeadRecordIds: staleOrDeadRecords.slice(0, 25).map((record) => record.id)
+    },
+    buyerVisibleSearch: {
+      usefulSummaryRate,
+      actorHintCoverage,
+      victimHintCoverage,
+      categoryCoverageCount: uniqueSorted(tierRecords.map((record) => record.category)).length,
+      liveOrIntermittentCount: tierRecords.filter((record) => record.liveness === "live" || record.liveness === "intermittent").length,
+      publicSearchBoostQueries: uniqueSorted(tierRecords.flatMap((record) => [...record.actorHints, ...record.victimHints, record.category])).slice(0, 20),
+      apifyFields: ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"]
+    },
+    tier1000AdvancementCriteria: {
+      targetTier: "tier_1000",
+      minAcceptedRecords: 70,
+      maxDuplicateRate: 0.2,
+      minUsefulSummaryRate: 0.8,
+      minActorHintCoverage: 0.25,
+      minCategoryCoverage: 8,
+      maxBlockedUnsafeRate: 0.2,
+      maxFalsePositiveReviewRows: 12,
+      requireNoLeakProof: true,
+      requireApifySearchLift: true
+    },
+    safety: {
+      rawUnsafeUrlsExposed: false,
+      stolenFilesDownloaded: false,
+      credentialsRetrieved: false,
+      payloadsFollowed: false,
+      privateAuthCaptchaAccess: false,
+      actorInteraction: false
+    },
+    noLeakSerialization: darkwebIndexNoLeakSerialization()
+  };
+}
+
 function buildDarkwebIndexOperatorRunbook(): DarkwebIndexOperatorRunbook {
   return {
     schemaVersion: "ti.darkweb_index_operator_runbook.v1",
@@ -1535,9 +1704,9 @@ function darkwebIndexFixtureRecord(index: number): DarkwebIndexRecord {
     blockedReason: reviewState === "blocked_unsafe" ? "payload credential private or actor-interaction target represented by hash only" : undefined,
     screenshotHash: index % 4 === 0 ? hashContent(`screenshot:${key}`) : undefined,
     contentHash: hashContent(`content:${key}`),
-    actorHints: index % 5 === 0 ? ["akira"] : index % 7 === 0 ? ["apt29"] : [],
-    victimHints: index % 5 === 0 ? ["fjord-energy-as"] : [],
-    ttpHints: index % 3 === 0 ? ["credential-access"] : index % 4 === 0 ? ["data-extortion"] : [],
+    actorHints: actorHintsFor(index),
+    victimHints: victimHintsFor(index),
+    ttpHints: index % 3 === 0 ? ["credential-access"] : index % 4 === 0 ? ["data-extortion"] : index % 11 === 0 ? ["ransomware-extortion"] : [],
     retentionClass: reviewState === "legal_hold" ? "legal_hold" : reviewState === "needs_review" ? "short_review" : "restricted_metadata",
     classification: {
       label: legalTriage,
@@ -1646,11 +1815,26 @@ function reviewStateFor(legalTriage: DarkwebIndexLegalTriage, liveness: DarkwebI
 
 function titleFor(category: DarkwebIndexCategory, index: number): string {
   const label = category.replaceAll("_", " ");
-  return `Synthetic ${label} metadata descriptor ${String(index + 1).padStart(3, "0")}`;
+  return `Tier-100 ${label} metadata descriptor ${String(index + 1).padStart(3, "0")}`;
 }
 
 function summaryFor(category: DarkwebIndexCategory, legalTriage: DarkwebIndexLegalTriage): string {
-  return `Metadata-only ${category.replaceAll("_", " ")} landing-page descriptor with ${legalTriage.replaceAll("_", " ")} triage; payload links, credentials, private access, and actor interaction are blocked.`;
+  return `Metadata-only ${category.replaceAll("_", " ")} descriptor for actor/victim search context with ${legalTriage.replaceAll("_", " ")} triage; payload links, credentials, private access, and actor interaction are blocked.`;
+}
+
+function actorHintsFor(index: number): string[] {
+  const hints: string[] = [];
+  if (index % 5 === 0) hints.push("akira");
+  if (index % 7 === 0) hints.push("apt29");
+  if (index % 9 === 0) hints.push("lockbit");
+  if (index % 11 === 0) hints.push("apt42");
+  if (index % 13 === 0) hints.push("cl0p");
+  return hints;
+}
+
+function victimHintsFor(index: number): string[] {
+  const victims = ["energy-sector", "healthcare-provider", "regional-manufacturer", "education-services", "public-sector-entity"];
+  return index % 5 === 0 || index % 9 === 0 ? [victims[index % victims.length]!] : [];
 }
 
 function reasonsFor(category: DarkwebIndexCategory, legalTriage: DarkwebIndexLegalTriage): string[] {
@@ -1666,6 +1850,49 @@ function countBy<T extends string>(keys: readonly T[], values: readonly T[]): Re
   const counts = Object.fromEntries(keys.map((key) => [key, 0])) as Record<T, number>;
   for (const value of values) counts[value] += 1;
   return counts;
+}
+
+function tier100SourceFamily(
+  family: DarkwebIndexTier100ProductSlice["sourceFamilies"][number]["family"],
+  records: readonly DarkwebIndexRecord[]
+): DarkwebIndexTier100ProductSlice["sourceFamilies"][number] {
+  const sourceTypesByFamily: Record<DarkwebIndexTier100ProductSlice["sourceFamilies"][number]["family"], readonly DarkwebIndexSourceType[]> = {
+    public_report: ["public_report"],
+    analyst_import: ["analyst_import"],
+    directory_metadata: ["directory"],
+    public_tracker_reference: ["public_report", "safe_search_result"],
+    approved_seed: ["seed_list", "internal_discovery"],
+    safe_search_result: ["safe_search_result"]
+  };
+  const selected = records.filter((record) => sourceTypesByFamily[family].includes(record.provenance.sourceType));
+  const duplicateIds = new Set(darkwebIndexDedupePlan(records).duplicateClusters.flatMap((cluster) => cluster.duplicateRecordIds));
+  const accepted = selected.filter((record) => record.reviewState === "approved_metadata_only" && !duplicateIds.has(record.id));
+  const blocked = selected.filter((record) => record.reviewState === "blocked_unsafe" || record.legalTriage === "blocked_unsafe");
+  const review = selected.filter((record) => record.reviewState === "needs_review" || record.reviewState === "legal_hold" || record.reviewState === "false_positive_review");
+  const staleOrDead = selected.filter((record) => record.liveness === "dead" || record.liveness === "unknown");
+  const productLiftByFamily: Record<DarkwebIndexTier100ProductSlice["sourceFamilies"][number]["family"], DarkwebIndexTier100ProductSlice["sourceFamilies"][number]["productLift"]> = {
+    public_report: "actor_search_corroboration",
+    analyst_import: "victim_context",
+    directory_metadata: "category_coverage",
+    public_tracker_reference: "liveness_signal",
+    approved_seed: "source_family_diversity",
+    safe_search_result: "actor_search_corroboration"
+  };
+  return {
+    family,
+    candidateCount: selected.length,
+    acceptedCount: accepted.length,
+    duplicateCount: selected.filter((record) => duplicateIds.has(record.id)).length,
+    blockedCount: blocked.length,
+    reviewCount: review.length,
+    staleOrDeadCount: staleOrDead.length,
+    productLift: productLiftByFamily[family]
+  };
+}
+
+function ratio(numerator: number, denominator: number): number {
+  if (denominator <= 0) return 0;
+  return Math.round((numerator / denominator) * 100) / 100;
 }
 
 function uniqueSorted(values: readonly string[]): string[] {

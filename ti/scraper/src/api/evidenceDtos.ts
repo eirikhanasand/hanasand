@@ -23,10 +23,12 @@ import {
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidencePromotionExecutionToPostgresRows,
   executeEvidencePromotionTransactionPlan,
+  type EvidenceActorProductImpactReplay,
   evidenceSearchReadModelReadiness,
   type EvidencePromotionTransactionAuditReplay,
   type EvidencePromotionTransactionExecutionReceipt,
@@ -194,6 +196,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   promotionTransaction: EvidencePromotionTransactionPlan;
   promotionExecution: EvidencePromotionTransactionExecutionReceipt;
   promotionAuditReplay: EvidencePromotionTransactionAuditReplay;
+  actorProductImpactReplay: EvidenceActorProductImpactReplay;
   safeOutput: {
     rawBodiesExposed: false;
     objectKeysExposed: false;
@@ -421,6 +424,7 @@ function buildEvidenceSearchReadModelCutoverDto(
   const promotionExecution = executeEvidencePromotionTransactionPlan(promotionTransaction, { generatedAt });
   const promotionAuditRows = evidencePromotionExecutionToPostgresRows(promotionExecution);
   const promotionAuditReplay = buildEvidencePromotionTransactionAuditReplay(promotionAuditRows, { generatedAt });
+  const actorProductImpactReplay = buildEvidenceActorProductImpactReplay(writeSet, promotionTransaction, promotionAuditReplay, { generatedAt });
   const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
   const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
   const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
@@ -471,6 +475,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     promotionTransaction,
     promotionExecution,
     promotionAuditReplay,
+    actorProductImpactReplay,
     safeOutput: {
       rawBodiesExposed: false,
       objectKeysExposed: false,

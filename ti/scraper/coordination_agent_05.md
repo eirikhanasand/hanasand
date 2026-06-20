@@ -24,6 +24,16 @@ Priorities:
 
 Do not spend this pass on more synthetic 60k scale planning unless it directly helps tier 100 become real and searchable. When tier 100 is proven, continue into tier 1,000 candidate ingestion and ranking without waiting for another prompt.
 
+## Progress - 2026-06-20 17:18 CEST
+
+- Added route-visible tier-100 product proof under `/v1/darkweb/status.tier100Product` with 100 safe metadata descriptors split into accepted, duplicate, blocked, review-needed, and stale/dead groups.
+- Added source-family lift rows for public reports, analyst imports, directory metadata, public tracker references, approved seeds, and safe search results.
+- Added `/v1/darkweb/search.productHandoff` so Apify/public search can consume actor/victim hints, category, legal triage, liveness, safe summary, source family, last-seen, and safe record IDs without raw locations.
+- Added tier-1,000 advancement criteria: accepted records, duplicate rate, useful summary rate, actor-hint coverage, category coverage, blocked unsafe rate, false-positive review count, no-leak proof, and Apify search lift.
+- Updated darkweb/API focused tests and `docs/operations.md`.
+- Focused proof is green: `bun test src/tests/darkwebIndex.test.ts` and `bun test src/tests/api.test.ts -t "routes darkweb metadata index status and search without unsafe leaks"`.
+- Current blocker: repo-wide `bun run check` is blocked by unrelated dirty work in `src/frontier/schedulerProduction.ts` and `src/registry/sourceSeeds.ts`; do not mark Program BF complete until shared typecheck is green and the patch can be committed/pushed.
+
 ## Completed Summary
 
 - Added the dark-web operations model for the 60k metadata-only index with Tor, I2P, Freenet, directory, analyst-import, and public-report refresh lanes.
