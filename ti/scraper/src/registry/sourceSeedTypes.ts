@@ -1640,6 +1640,49 @@ export interface TiSourceAtlasProductSourceLadderPacket {
         agent07Inputs: string[];
         agent10Inputs: string[];
       };
+      sourceActivationPacketInputs: {
+        schemaVersion: "ti.source_atlas.payworthy_repair_activation_packet_inputs.v1";
+        routeHint: "/v1/analyst/source-activation-packets";
+        dryRun: true;
+        willMutate: false;
+        willStartCrawling: false;
+        packetCount: number;
+        totalSourceCount: number;
+        expectedPayworthyLift: number;
+        expectedFreshRowsPerDay: number;
+        packets: Array<{
+          packetId: string;
+          priority: "p0_revenue_blocker" | "p1_payworthy_lift" | "p2_review_batch";
+          approvalMode: "operator_legal_required";
+          action: "refresh_legal_review" | "retire_duplicate" | "request_readiness_review" | "replace_candidate";
+          repairDecision: "repair" | "replace" | "retire_duplicate";
+          blocker: "duplicate_suppressed" | "legal_review_not_current" | "not_ready_for_dry_run";
+          atlasSourceIds: string[];
+          replacementCandidateIds: string[];
+          sourceFamilies: TiSourceAtlasFamily[];
+          expectedPayworthyLift: number;
+          expectedFreshRowsPerDay: number;
+          expectedRowLift: number;
+          buyerVisibleReason: string;
+          prerequisites: Array<"operator_approval" | "legal_review_refresh" | "robots_review_refresh" | "parser_certification" | "duplicate_retirement" | "replacement_review" | "canary_packet_after_approval">;
+          routeHints: string[];
+          forbiddenActions: Array<"auto_activate" | "start_crawl" | "import_without_review" | "download_payload" | "bypass_auth_or_captcha" | "contact_actor">;
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+            sourceActivationApplied: false;
+          };
+        }>;
+        ownerHandoffs: {
+          agent01SourceRegistry: string[];
+          agent02Scheduler: string[];
+          agent03Parser: string[];
+          agent07Quality: string[];
+          agent10Revenue: string[];
+        };
+      };
     };
     highValueReplacementBatch: {
       schemaVersion: "ti.source_atlas.high_value_replacement_batch.v1";

@@ -1663,17 +1663,17 @@ describe("source seed bundles", () => {
       row.noLeakBoundary.rawPayloadExposed === false &&
       row.noLeakBoundary.privateAuthCaptchaRequired === false &&
       row.noLeakBoundary.crawlStarted === false
-	    )).toBe(true);
-	    expect(payworthyRepairRows.some((row) => row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === true)).toBe(true);
-	    expect(payworthyRepairRows.filter((row) => row.repairDecision === "repair").every((row) =>
-	      row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === true
-	    )).toBe(true);
-	    expect(payworthyRepairRows.some((row) =>
-	      row.repairDecision === "replace" &&
-	      row.repairability === "replace_with_better_source" &&
-	      row.replacementCandidateIds.length > 0
-	    )).toBe(true);
-	    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.duplicateSuppressed.rows.every((row) =>
+    )).toBe(true);
+    expect(payworthyRepairRows.some((row) => row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === true)).toBe(true);
+    expect(payworthyRepairRows.filter((row) => row.repairDecision === "repair").every((row) =>
+      row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === true
+    )).toBe(true);
+    expect(payworthyRepairRows.some((row) =>
+      row.repairDecision === "replace" &&
+      row.repairability === "replace_with_better_source" &&
+      row.replacementCandidateIds.length > 0
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.duplicateSuppressed.rows.every((row) =>
       row.repairDecision === "retire_duplicate" &&
       row.replacementCandidateIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
       row.noLeakBoundary.rawUrlExposed === false &&
@@ -1699,6 +1699,47 @@ describe("source seed bundles", () => {
       "bypass_auth_or_captcha",
       "contact_actor"
     ]));
+    const repairPacketInputs = atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.sourceActivationPacketInputs;
+    expect(repairPacketInputs).toMatchObject({
+      schemaVersion: "ti.source_atlas.payworthy_repair_activation_packet_inputs.v1",
+      routeHint: "/v1/analyst/source-activation-packets",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false
+    });
+    expect(repairPacketInputs.packetCount).toBe(repairPacketInputs.packets.length);
+    expect(repairPacketInputs.packetCount).toBeGreaterThan(0);
+    expect(repairPacketInputs.totalSourceCount).toBeGreaterThan(0);
+    expect(repairPacketInputs.expectedPayworthyLift).toBeGreaterThan(0);
+    expect(repairPacketInputs.expectedFreshRowsPerDay).toBeGreaterThanOrEqual(0);
+    expect(repairPacketInputs.packets.map((packet) => packet.action)).toEqual(expect.arrayContaining([
+      "refresh_legal_review",
+      "replace_candidate",
+      "retire_duplicate"
+    ]));
+    expect(repairPacketInputs.packets.every((packet) =>
+      packet.packetId.startsWith("ti_source_atlas_repair_activation_packet_") &&
+      ["p0_revenue_blocker", "p1_payworthy_lift", "p2_review_batch"].includes(packet.priority) &&
+      packet.approvalMode === "operator_legal_required" &&
+      packet.atlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      packet.expectedPayworthyLift > 0 &&
+      packet.expectedRowLift >= 0 &&
+      packet.buyerVisibleReason.includes("paid Actor") &&
+      packet.prerequisites.includes("operator_approval") &&
+      packet.prerequisites.includes("canary_packet_after_approval") &&
+      packet.routeHints.includes("/v1/analyst/source-activation-packets") &&
+      packet.routeHints.includes("/v1/sources/atlas") &&
+      packet.forbiddenActions.includes("auto_activate") &&
+      packet.forbiddenActions.includes("start_crawl") &&
+      packet.forbiddenActions.includes("download_payload") &&
+      packet.noLeakBoundary.rawUrlExposed === false &&
+      packet.noLeakBoundary.rawPayloadExposed === false &&
+      packet.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      packet.noLeakBoundary.crawlStarted === false &&
+      packet.noLeakBoundary.sourceActivationApplied === false
+    )).toBe(true);
+    expect(repairPacketInputs.ownerHandoffs.agent01SourceRegistry.join(" ")).toContain("operator/legal");
+    expect(repairPacketInputs.ownerHandoffs.agent10Revenue.join(" ")).toContain("cost per useful row");
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch).toMatchObject({
       schemaVersion: "ti.source_atlas.high_value_replacement_batch.v1",
       routeHint: "/v1/sources/atlas",

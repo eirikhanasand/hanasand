@@ -1245,7 +1245,12 @@ function buildPayworthyRepairQueue(
       agent03Inputs: ["notReadyForDryRun.rows.currentState", "rows.replacementCandidateIds"],
       agent07Inputs: ["rows.whyBuyerWouldCare", "aggregateProjectedPayworthyLift"],
       agent10Inputs: ["projectedPayworthyRate", "projectedPayworthySourceCount", "expectedRowLift"]
-    }
+    },
+    sourceActivationPacketInputs: buildPayworthyRepairActivationPacketInputs([
+      ...duplicateSuppressed.rows,
+      ...legalReviewNotCurrent.rows,
+      ...notReadyForDryRun.rows
+    ])
   };
 }
 
@@ -1366,6 +1371,131 @@ function payworthyRepairAction(
 function payworthyRepairBuyerValue(sourceName: string, actors: string[], blocker: string, expectedRowLift: number): string {
   const actorText = actors.slice(0, 3).join(", ") || "default watchlist actors";
   return `${sourceName} is queued for ${blocker} because clearing or replacing it can recover about ${expectedRowLift} useful rows/day for ${actorText}, improving paid Actor freshness and source-family diversity without touching raw leak data.`;
+}
+
+function buildPayworthyRepairActivationPacketInputs(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"] {
+  const groupMap = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = `${row.blocker}:${row.repairDecision}:${row.family}`;
+    groupMap.set(key, [...(groupMap.get(key) ?? []), row]);
+  }
+  const packets = [...groupMap.values()]
+    .map(payworthyRepairActivationPacketInput)
+    .sort((left, right) =>
+      payworthyRepairActivationPriorityScore(right.priority) - payworthyRepairActivationPriorityScore(left.priority) ||
+      right.expectedPayworthyLift - left.expectedPayworthyLift ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.packetId.localeCompare(right.packetId)
+    )
+    .slice(0, 48);
+  return {
+    schemaVersion: "ti.source_atlas.payworthy_repair_activation_packet_inputs.v1",
+    routeHint: "/v1/analyst/source-activation-packets",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    packetCount: packets.length,
+    totalSourceCount: uniqueStrings(packets.flatMap((packet) => packet.atlasSourceIds)).length,
+    expectedPayworthyLift: packets.reduce((sum, packet) => sum + packet.expectedPayworthyLift, 0),
+    expectedFreshRowsPerDay: roundScore(packets.reduce((sum, packet) => sum + packet.expectedFreshRowsPerDay, 0)),
+    packets,
+    ownerHandoffs: {
+      agent01SourceRegistry: ["Review packet prerequisites, source ids, and replacement candidates before any source registry change.", "Create operator/legal packets only; do not auto-activate repair rows."],
+      agent02Scheduler: ["Use approved packets to estimate canary budgets after approval; do not lease work from dry-run packet inputs."],
+      agent03Parser: ["Prioritize packets containing parser_certification prerequisites before readiness review."],
+      agent07Quality: ["Score buyerVisibleReason and expectedRowLift before counting packet lift toward paid rows."],
+      agent10Revenue: ["Measure useful/fresh/sellable row deltas and cost per useful row after packet approval."]
+    }
+  };
+}
+
+function payworthyRepairActivationPacketInput(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number] {
+  const first = rows[0]!;
+  const atlasSourceIds = uniqueStrings(rows.map((row) => row.atlasSourceId)).slice(0, 12);
+  const replacementCandidateIds = uniqueStrings(rows.flatMap((row) => row.replacementCandidateIds)).slice(0, 12);
+  const sourceFamilies = uniqueStrings(rows.map((row) => row.family)) as TiSourceAtlasFamily[];
+  const expectedFreshRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedRowLift = roundScore(rows.reduce((sum, row) => sum + row.expectedRowLift, 0));
+  const action = payworthyRepairActivationAction(first);
+  const prerequisites = payworthyRepairActivationPrerequisites(rows);
+  const expectedPayworthyLift = first.repairDecision === "repair"
+    ? rows.length
+    : Math.max(1, Math.ceil(Math.min(rows.length, replacementCandidateIds.length || rows.length) * 0.8));
+  return {
+    packetId: stableId("ti_source_atlas_repair_activation_packet", `${first.blocker}:${first.repairDecision}:${sourceFamilies.join(":")}:${atlasSourceIds.join(":")}`),
+    priority: payworthyRepairActivationPriority(first, expectedFreshRowsPerDay),
+    approvalMode: "operator_legal_required",
+    action,
+    repairDecision: first.repairDecision,
+    blocker: first.blocker,
+    atlasSourceIds,
+    replacementCandidateIds,
+    sourceFamilies,
+    expectedPayworthyLift,
+    expectedFreshRowsPerDay,
+    expectedRowLift,
+    buyerVisibleReason: payworthyRepairActivationBuyerReason(rows, expectedRowLift, expectedPayworthyLift),
+    prerequisites,
+    routeHints: ["/v1/analyst/source-activation-packets", "/v1/sources/atlas", "/v1/ops/product-slo"],
+    forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "download_payload", "bypass_auth_or_captcha", "contact_actor"],
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawPayloadExposed: false,
+      privateAuthCaptchaRequired: false,
+      crawlStarted: false,
+      sourceActivationApplied: false
+    }
+  };
+}
+
+function payworthyRepairActivationAction(
+  row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"][number]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number]["action"] {
+  if (row.repairDecision === "retire_duplicate") return "retire_duplicate";
+  if (row.repairDecision === "replace") return "replace_candidate";
+  if (row.blocker === "legal_review_not_current") return "refresh_legal_review";
+  return "request_readiness_review";
+}
+
+function payworthyRepairActivationPrerequisites(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number]["prerequisites"] {
+  const prerequisites: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number]["prerequisites"] = ["operator_approval", "canary_packet_after_approval"];
+  if (rows.some((row) => row.repairDecision === "retire_duplicate")) prerequisites.push("duplicate_retirement", "replacement_review");
+  if (rows.some((row) => row.repairDecision === "replace")) prerequisites.push("replacement_review");
+  if (rows.some((row) => row.blocker === "legal_review_not_current" || row.legalRobotsEvidence.legalReview !== "current")) prerequisites.push("legal_review_refresh");
+  if (rows.some((row) => row.legalRobotsEvidence.robotsReview === "missing" || row.legalRobotsEvidence.robotsReview === "stale")) prerequisites.push("robots_review_refresh");
+  if (rows.some((row) => row.currentState === "needs_parser_certification")) prerequisites.push("parser_certification");
+  return uniqueStrings(prerequisites) as typeof prerequisites;
+}
+
+function payworthyRepairActivationPriority(
+  row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"][number],
+  expectedFreshRowsPerDay: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number]["priority"] {
+  if (expectedFreshRowsPerDay >= 1 || row.blocker === "legal_review_not_current") return "p0_revenue_blocker";
+  if (row.repairDecision === "replace" || row.repairDecision === "retire_duplicate") return "p1_payworthy_lift";
+  return "p2_review_batch";
+}
+
+function payworthyRepairActivationPriorityScore(priority: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number]["priority"]): number {
+  if (priority === "p0_revenue_blocker") return 3;
+  if (priority === "p1_payworthy_lift") return 2;
+  return 1;
+}
+
+function payworthyRepairActivationBuyerReason(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"],
+  expectedRowLift: number,
+  expectedPayworthyLift: number
+): string {
+  const blockers = uniqueStrings(rows.map((row) => row.blocker)).join(", ");
+  const families = uniqueStrings(rows.map((row) => row.family.replaceAll("_", " "))).slice(0, 3).join(", ");
+  return `Operator approval for ${rows.length} ${families} repair rows addresses ${blockers}, can add about ${expectedPayworthyLift} payworthy sources, and preserves roughly ${expectedRowLift} useful rows/day for paid Actor monitoring without exposing raw source material.`;
 }
 
 const HIGH_VALUE_REPLACEMENT_TARGET_CANDIDATES = 10_000;
