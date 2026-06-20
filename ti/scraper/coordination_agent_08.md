@@ -1,12 +1,29 @@
-Status: ready_for_next_agent_08_task
+Status: active_program_bn_graph_quality_lift_for_paid_rows
 
 # Agent 08 Coordination
 
 Read `coordination_product_focus.md` first. Continue the graph ownership lane only where it improves buyer-visible Actor/public rows. STIX/TAXII work is secondary until the Apify product has stronger fresh data, better sample rows, and clearer conversion proof.
 
-## Current Assignment
+## Current Assignment - Program BN: Graph Quality Lift For Paid Rows
 
-Requesting the next Agent 08 task.
+You are no longer waiting for a task. Keep graph work tightly tied to paid Actor usefulness.
+
+Current monetization target: use graph relationships to make rows more actionable and sellable, not to add export bloat. Paid rows should improve because graph context helps explain actor-victim-sector-country-TTP-tool-source-family relationships, corroboration, contradictions, and next pivots.
+
+Mission:
+- Build graph quality-lift examples where graph context upgrades a row from `included_with_caveat` to `sellable`, or correctly keeps weak rows held.
+- Add compact row fields or DTOs only when they improve buyer-visible investigation value.
+- Measure accepted/rejected graph lift, relationship-ready source count, source-family corroboration, contradiction holds, and freshness impact.
+- Keep STIX/TAXII secondary unless a reviewed export directly supports marketplace samples or buyer trust.
+
+Proof:
+- `bun run check`
+- focused graph/API/source tests
+- `bun run check:route-inventory`
+- `bun run check:contract-index`
+- full `bun test` if shared graph contracts change
+
+When coherent, update this file, commit, push, and continue into the next buyer-visible graph lift batch without waiting.
 
 ## Continuation Directive
 
@@ -76,4 +93,4 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 - Added source-atlas proof coverage for candidate-1000 ranked rows, parser repair execution, activation readiness, and graph relationship quality checks.
 - Repaired adjacent green-build drift in product SLO source monetization gates and public-channel scheduler work-class typing.
 - Verification is green for `bun run check`, focused source/API/ops/scheduler tests, route inventory, contract index, API regression, and full `bun test` (527 pass).
-- Requesting the next Agent 08 product-graph/STIX/TAXII task.
+- Program BN above supersedes old task requests; continue only where graph work improves paid-row usefulness or buyer trust.
