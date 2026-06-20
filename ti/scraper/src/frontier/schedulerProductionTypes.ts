@@ -1436,6 +1436,31 @@ export interface SchedulerDailyActorRunPlanDto {
       nextPollSeconds: 3 | 15 | 60;
       promotesToVisibleState: "searching" | "partial" | "metadata_review";
     }>;
+    materializedTasks: Array<{
+      dryRunTaskId: string;
+      query: string;
+      workClass: SchedulerWorkClass;
+      sourceTier: "tier_100" | "tier_1000" | "tier_4000";
+      reuseKey: string;
+      idempotencyKey: string;
+      enqueueBatch: "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_4000_metadata_sweep";
+      workerPartition: "interactive_actor_search" | "public_channel_window" | "restricted_metadata_approval";
+      leaseSeconds: number;
+      heartbeatSeconds: number;
+      maxAttempts: number;
+      deadlineSeconds: number;
+      cursorCheckpoint: "answer_delta" | "source_gap_delta" | "metadata_review_delta";
+      noLeakMode: "public_fetch_only" | "metadata_only_no_raw_download";
+      paidRowGate: "suppress_until_fresh" | "caveat_until_correlated" | "metadata_context_only";
+    }>;
+    drainExecution: Array<{
+      step: "finish_active_dataset_emit" | "checkpoint_interactive_refresh" | "checkpoint_public_gap_fill" | "checkpoint_source_sweeps" | "checkpoint_metadata_review";
+      appliesToBatch: "daily_actor_dataset_emit" | "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep";
+      action: "finish_if_under_deadline" | "checkpoint_and_requeue_by_reuse_key" | "pause_new_leases";
+      maxWaitSeconds: number;
+      preserves: Array<"run_id" | "reuse_key" | "poll_cursor" | "delta_cursor" | "source_gap_cursor" | "metadata_review_cursor">;
+      visibleState: "searching" | "partial" | "metadata_review" | "ready";
+    }>;
   };
   routeContracts: {
     frontierStatusField: "scheduler.dailyActorRunPlan";

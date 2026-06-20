@@ -2121,6 +2121,88 @@ export function buildSchedulerDailyActorRunPlan(input: {
       nextOperatorAction: closure.queueAction === "suppress_ready_until_gap_closes" ? "suppress_paid_ready" : "attach_or_enqueue"
     };
   });
+  const materializedTasks: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["materializedTasks"] = readinessByClosure.map((readiness) => {
+    const closure = sourceGapClosurePlan.gapClosures.find((row) => row.reuseKey === readiness.reuseKey) ?? sourceGapClosurePlan.gapClosures[0];
+    return {
+      dryRunTaskId: `dryrun_${readiness.taskFingerprint.replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase()}`,
+      query: readiness.query,
+      workClass: closure.workClass,
+      sourceTier: closure.sourceTier,
+      reuseKey: readiness.reuseKey,
+      idempotencyKey: readiness.idempotencyKey,
+      enqueueBatch: readiness.missingSourceFamily === "approved_dark_metadata"
+        ? "tier_4000_metadata_sweep"
+        : readiness.missingSourceFamily === "public_channel"
+          ? "public_channel_gap_fill"
+          : "interactive_commercial_refresh",
+      workerPartition: readiness.missingSourceFamily === "approved_dark_metadata"
+        ? "restricted_metadata_approval"
+        : readiness.missingSourceFamily === "public_channel"
+          ? "public_channel_window"
+          : "interactive_actor_search",
+      leaseSeconds: readiness.maxLeaseSeconds,
+      heartbeatSeconds: readiness.heartbeatSeconds,
+      maxAttempts: closure.maxAttempts,
+      deadlineSeconds: closure.deadlineSeconds,
+      cursorCheckpoint: readiness.cursorCheckpoint,
+      noLeakMode: readiness.missingSourceFamily === "approved_dark_metadata" ? "metadata_only_no_raw_download" : "public_fetch_only",
+      paidRowGate: readiness.missingSourceFamily === "approved_dark_metadata"
+        ? "metadata_context_only"
+        : readiness.missingSourceFamily === "public_channel"
+          ? "caveat_until_correlated"
+          : "suppress_until_fresh"
+    };
+  });
+  const drainExecution: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["drainExecution"] = [
+    {
+      step: "finish_active_dataset_emit",
+      appliesToBatch: "daily_actor_dataset_emit",
+      action: "finish_if_under_deadline",
+      maxWaitSeconds: 30,
+      preserves: ["run_id", "poll_cursor", "delta_cursor"],
+      visibleState: decision === "pass" ? "ready" : "partial"
+    },
+    {
+      step: "checkpoint_interactive_refresh",
+      appliesToBatch: "interactive_commercial_refresh",
+      action: "checkpoint_and_requeue_by_reuse_key",
+      maxWaitSeconds: 15,
+      preserves: ["run_id", "reuse_key", "poll_cursor", "delta_cursor"],
+      visibleState: "searching"
+    },
+    {
+      step: "checkpoint_public_gap_fill",
+      appliesToBatch: "public_channel_gap_fill",
+      action: "checkpoint_and_requeue_by_reuse_key",
+      maxWaitSeconds: 15,
+      preserves: ["run_id", "reuse_key", "source_gap_cursor", "delta_cursor"],
+      visibleState: "partial"
+    },
+    {
+      step: "checkpoint_source_sweeps",
+      appliesToBatch: "tier_100_source_sweep",
+      action: "pause_new_leases",
+      maxWaitSeconds: 10,
+      preserves: ["reuse_key", "source_gap_cursor"],
+      visibleState: "partial"
+    },
+    {
+      step: "checkpoint_source_sweeps",
+      appliesToBatch: "tier_1000_source_sweep",
+      action: "pause_new_leases",
+      maxWaitSeconds: 10,
+      preserves: ["reuse_key", "source_gap_cursor"],
+      visibleState: "partial"
+    },
+    {
+      step: "checkpoint_metadata_review",
+      appliesToBatch: "tier_4000_metadata_sweep",
+      action: "checkpoint_and_requeue_by_reuse_key",
+      maxWaitSeconds: 60,
+      preserves: ["reuse_key", "metadata_review_cursor", "delta_cursor"],
+      visibleState: "metadata_review"
+    }
+  ];
   const sourceGapExecutionReadiness: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"] = {
     schemaVersion: "ti.scheduler_source_gap_execution_readiness.v1",
     routeVisible: true,
@@ -2179,7 +2261,9 @@ export function buildSchedulerDailyActorRunPlan(input: {
         nextPollSeconds: 60,
         promotesToVisibleState: "metadata_review"
       }
-    ]
+    ],
+    materializedTasks,
+    drainExecution
   };
   const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {
     enqueueWindow: "source_sweeps_before_actor_run",

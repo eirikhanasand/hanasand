@@ -13,6 +13,14 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 00:25 CEST
+
+- Extended `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness` with dry-run materialized source-gap tasks and drain execution steps.
+- Materialized tasks now expose dry-run task ids, work class, source tier, reuse/idempotency key, worker partition, lease/heartbeat/deadline bounds, cursor checkpoint, no-leak mode, and paid-row gate for APT29, APT42, and ransomware metadata closures.
+- Drain execution now states how dataset emission, interactive freshness, public-channel gap fill, source sweeps, and metadata review finish, checkpoint, pause leases, or requeue by reuse key while preserving run/cursor state.
+- Green: `bun test src/tests/schedulerProduction.test.ts`. `bun run check` is currently blocked by unrelated dirty Agent 05/10 files (`src/adapters/darkwebIndex.ts`, `src/ops/productSlo.ts`) with duplicate/missing helper compile drift.
+- Next: continue worker drain execution toward real queue materialization once shared dirty compile drift is cleared.
+
 ## Progress - 2026-06-20 23:52 CEST
 
 - Extended `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness` from executable states into concrete run-reuse execution branches.

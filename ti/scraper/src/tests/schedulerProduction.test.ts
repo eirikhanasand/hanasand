@@ -1679,6 +1679,54 @@ describe("scheduler production readiness", () => {
         promotesToVisibleState: "metadata_review"
       })
     ]));
+    expect(daily.sourceGapExecutionReadiness.materializedTasks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        dryRunTaskId: "dryrun_interactive_live_search_tier_100_apt29_safe_public_sources",
+        query: "APT29",
+        workClass: "interactive_live_search",
+        sourceTier: "tier_100",
+        enqueueBatch: "interactive_commercial_refresh",
+        workerPartition: "interactive_actor_search",
+        noLeakMode: "public_fetch_only",
+        paidRowGate: "suppress_until_fresh"
+      }),
+      expect.objectContaining({
+        query: "APT42",
+        workClass: "public_channel_probe",
+        sourceTier: "tier_1000",
+        enqueueBatch: "public_channel_gap_fill",
+        cursorCheckpoint: "source_gap_delta",
+        paidRowGate: "caveat_until_correlated"
+      }),
+      expect.objectContaining({
+        query: "LockBit",
+        workClass: "restricted_darknet_metadata_sweep",
+        sourceTier: "tier_4000",
+        workerPartition: "restricted_metadata_approval",
+        noLeakMode: "metadata_only_no_raw_download",
+        paidRowGate: "metadata_context_only"
+      })
+    ]));
+    expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        step: "finish_active_dataset_emit",
+        appliesToBatch: "daily_actor_dataset_emit",
+        action: "finish_if_under_deadline",
+        preserves: expect.arrayContaining(["run_id", "poll_cursor", "delta_cursor"])
+      }),
+      expect.objectContaining({
+        step: "checkpoint_public_gap_fill",
+        appliesToBatch: "public_channel_gap_fill",
+        action: "checkpoint_and_requeue_by_reuse_key",
+        visibleState: "partial"
+      }),
+      expect.objectContaining({
+        step: "checkpoint_metadata_review",
+        appliesToBatch: "tier_4000_metadata_sweep",
+        maxWaitSeconds: 60,
+        preserves: expect.arrayContaining(["metadata_review_cursor"])
+      })
+    ]));
     expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));
     expect(daily.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_daily_actor_run_plan");
     expect(daily.releaseGate.proofCommands).toContain("bun run check:apify-publication");
