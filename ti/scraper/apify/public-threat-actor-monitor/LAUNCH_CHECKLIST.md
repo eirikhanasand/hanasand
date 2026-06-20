@@ -126,6 +126,33 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 - Do not store beneficiary, payout, token, or account identifiers in this repository.
 - Before buying traffic, verify `revenueConversionChecklist`, `pricingProof`, and 12 `buyerSampleRows` are visible in `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo.apifyLaunchExperiment`, and Actor `OUTPUT`. Telemetry and payout fields must remain `null`/`unknown` until copied from Apify analytics or billing.
 
+### Marketplace Telemetry Snapshot
+
+Copy only real values from Apify Console. From Store analytics copy page views, unique users, trial runs, paid runs, actor starts/runs, failed runs, repeat users, and refunds. From the latest paid dataset/run copy dataset row count. From billing copy platform usage cost, estimated creator revenue, beneficiary verification, payout method readiness, and withdrawal readiness. Then run:
+
+```bash
+TI_PRODUCT_SLO_PROOF_MODE=public_live \
+TI_PRODUCT_SLO_BASE_URL=https://ti.hanasand.no \
+TI_PRODUCT_SLO_APIFY_ACTOR_VIEW_COUNT=<store-views> \
+TI_PRODUCT_SLO_APIFY_UNIQUE_USER_COUNT=<unique-users> \
+TI_PRODUCT_SLO_APIFY_TRIAL_RUN_COUNT=<trial-runs> \
+TI_PRODUCT_SLO_APIFY_PAID_RUN_COUNT=<paid-runs> \
+TI_PRODUCT_SLO_APIFY_ACTOR_START_COUNT=<actor-starts> \
+TI_PRODUCT_SLO_APIFY_ACTOR_RUN_COUNT=<actor-runs> \
+TI_PRODUCT_SLO_APIFY_DATASET_ROW_COUNT=<dataset-rows> \
+TI_PRODUCT_SLO_APIFY_FAILED_RUN_COUNT=<failed-runs> \
+TI_PRODUCT_SLO_APIFY_REPEAT_USER_COUNT=<repeat-users> \
+TI_PRODUCT_SLO_APIFY_REFUND_COUNT=<refunds> \
+TI_PRODUCT_SLO_APIFY_PLATFORM_USAGE_COST_USD=<usage-cost-usd> \
+TI_PRODUCT_SLO_APIFY_ESTIMATED_CREATOR_REVENUE_USD=<creator-revenue-usd> \
+TI_PRODUCT_SLO_APIFY_BENEFICIARY_VERIFIED=<true-or-false> \
+TI_PRODUCT_SLO_APIFY_PAYOUT_METHOD_READY=<true-or-false> \
+TI_PRODUCT_SLO_APIFY_WITHDRAWAL_READY=<true-or-false> \
+bun run snapshot:product-slo
+```
+
+Do not fill these fields from local sample runs, owner proof runs, smoke rows, or synthetic fixtures. If a value is not visible in Apify analytics or billing, leave it unset so `/v1/ops/product-slo` keeps the blocker as unknown.
+
 ## Next Data Upgrades
 
 - Cluster multiple reports about the same campaign into one claim with supporting publishers.

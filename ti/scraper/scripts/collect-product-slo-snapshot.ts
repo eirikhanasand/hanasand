@@ -69,6 +69,20 @@ console.log(JSON.stringify({
   appendedSnapshotCount: snapshots.length,
   metrics: snapshot.metrics,
   monetizationReadiness: snapshot.monetizationReadiness,
+  marketplaceTelemetry: dashboard.apifyLaunchExperiment.marketplaceTelemetry,
+  marketplaceConversion: {
+    storeViewToRunRate: dashboard.apifyLaunchExperiment.storeViewToRunRate,
+    storeViewToUserRate: dashboard.apifyLaunchExperiment.storeViewToUserRate,
+    runsPerUser: dashboard.apifyLaunchExperiment.runsPerUser,
+    trialToPaidRate: dashboard.apifyLaunchExperiment.trialToPaidRate
+  },
+  payoutReadiness: dashboard.apifyLaunchExperiment.payoutReadiness,
+  pricingProof: {
+    usageCostGuard: dashboard.apifyLaunchExperiment.pricingProof.usageCostGuard,
+    payoutRevenueSeparation: dashboard.apifyLaunchExperiment.pricingProof.payoutRevenueSeparation
+  },
+  nextRevenueAction: dashboard.apifyLaunchExperiment.nextRevenueAction,
+  fakeTractionGuards: dashboard.apifyLaunchExperiment.fakeTractionGuards,
   apifyUnknowns: dashboard.apifyLaunchExperiment.unknowns,
   paidProductEconomics: dashboard.paidProductEconomics,
   sourceMonetizationGate: dashboard.sourceMonetizationGate,

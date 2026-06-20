@@ -109,6 +109,25 @@ function incidentCandidate(id: string, captureId: string): IncidentCandidate {
   };
 }
 
+function productSloFrontierSummary() {
+  return {
+    total: 2,
+    queued: 1,
+    leased: 1,
+    groups: { tenants: { global: 2 }, sources: { src_mandiant: 2 }, adapterTypes: { rss: 2 }, priorityBuckets: { high: 2 }, ageBuckets: { fresh: 2 } },
+    budgets: {},
+    metrics: {
+      queueAgeSeconds: { max: 12, average: 8, highPriorityMax: 10 },
+      throughput: { completed: 4, failed: 0, cancelled: 0, retryScheduled: 0, retryExhausted: 0 },
+      retryPressure: 0,
+      budgetExhaustion: 0,
+      sourceStarvation: 0,
+      tenantStarvation: 0,
+      adapterSaturation: { rss: 1 }
+    }
+  };
+}
+
 describe("ops controls", () => {
   test("keeps default Inspur budgets within the normal scraper ceiling", () => {
     const config = loadRuntimeConfig({});
@@ -630,6 +649,92 @@ describe("ops controls", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("promotes real Apify marketplace telemetry to paid traffic without synthetic traction", () => {
+    const dashboard = buildLiveProductSloDashboard({
+      generatedAt: "2026-06-20T12:30:00.000Z",
+      proofMode: "local",
+      runs: [],
+      sources: [],
+      captures: [],
+      incidents: [],
+      frontier: productSloFrontierSummary(),
+      queryMeasurements: [
+        { query: "APT29", proofMode: "local", firstResponseMs: 700, pollIntervalMs: 3000, status: "ready", rowCount: 20, usefulRowCount: 12, freshRowCount: 16, activityClaimCount: 4, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
+      ],
+      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_paid", runId: "run_paid", datasetId: "ds_paid", status: "succeeded", queryCount: 20, rowCount: 40, usefulRowCount: 24, freshRowCount: 28, staleRowCount: 1, activityClaimRowCount: 8, sellableRowCount: 12, includedWithCaveatRowCount: 12, coverageGapOnlyRowCount: 8, holdRowCount: 8, suppressRowCount: 0, targetSellableRows: 10, averageBuyerValueScore: 0.72, defaultWatchlistRun: false },
+      cost: { grossPpeRevenueUsd: 0.12, apifyCommissionUsd: 0.024, computeCostUsd: 0.004, backendCostAllocationUsd: 0.002, refundsFailuresUsd: 0, actorStartCostUsd: 0.00005, resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2 },
+      marketplace: { actorViewCount: 120, actorRunCount: 24, uniqueUserCount: 12, trialRunCount: 10, paidRunCount: 3, actorStartCount: 24, datasetRowCount: 40, failedRunCount: 0, repeatUserCount: 3, refundCount: 0, platformUsageCostUsd: 0.006, estimatedCreatorRevenueUsd: 0.096, beneficiaryVerified: true, payoutMethodReady: true, withdrawalReady: true, pricingEffectiveAt: "2026-07-04" },
+      sourceMonetization: { evaluatedSourceCandidateCount: 4000, payworthySourceCount: 3200, payworthyThresholdRate: 0.72 }
+    });
+
+    expect(dashboard.apifyLaunchExperiment.marketplaceTelemetry).toMatchObject({
+      storePageViews: 120,
+      uniqueUsers: 12,
+      trialRuns: 10,
+      paidRuns: 3,
+      actorStarts: 24,
+      actorRuns: 24,
+      datasetRows: 40,
+      failedRuns: 0,
+      repeatUsers: 3,
+      refunds: 0,
+      platformUsageCostUsd: 0.006,
+      estimatedCreatorRevenueUsd: 0.096,
+      realDataRequired: true,
+      unknownMeansNoClaim: true
+    });
+    expect(dashboard.apifyLaunchExperiment.payoutReadiness).toMatchObject({
+      payoutMethodState: "ready",
+      beneficiaryState: "verified",
+      withdrawalReadiness: "ready",
+      externallyVerified: true,
+      blockers: []
+    });
+    expect(dashboard.apifyLaunchExperiment.revenueConversionChecklist).toMatchObject({
+      telemetryState: "ready",
+      payoutState: "ready",
+      paidTrafficState: "ready"
+    });
+    expect(dashboard.apifyLaunchExperiment).toMatchObject({
+      storeViewToRunRate: 0.2,
+      storeViewToUserRate: 0.1,
+      runsPerUser: 2,
+      trialToPaidRate: 0.3,
+      nextRevenueAction: "paid_traffic"
+    });
+    expect(dashboard.apifyLaunchExperiment.pricingProof.usageCostGuard).toMatchObject({
+      platformUsageCostUsd: 0.006,
+      estimatedCreatorRevenueUsd: 0.096,
+      maxCostPerUsefulRowUsd: 0.01
+    });
+    expect(dashboard.apifyLaunchExperiment.pricingProof.payoutRevenueSeparation).toMatchObject({
+      paymentMethodState: "ready",
+      beneficiaryState: "verified",
+      withdrawalReadiness: "ready",
+      externallyVerifiedRevenueUsd: 0.096
+    });
+    expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("local sample runs and owner proof runs never count");
+    expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("synthetic proof rows never count");
+    expect(dashboard.apifyLaunchExperiment.unknowns).not.toEqual(expect.arrayContaining([
+      "actorViewCount",
+      "uniqueUserCount",
+      "trialRunCount",
+      "paidRunCount",
+      "actorStartCount",
+      "datasetRowCount",
+      "failedRunCount",
+      "repeatUserCount",
+      "refundCount",
+      "platformUsageCostUsd",
+      "estimatedCreatorRevenueUsd",
+      "beneficiaryVerified",
+      "payoutMethodReady",
+      "withdrawalReady",
+      "grossPpeRevenueUsd",
+      "netContributionUsd"
+    ]));
   });
 
   test("rejects excessive darknet metadata worker counts", () => {

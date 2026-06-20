@@ -162,6 +162,13 @@ Progress update 2026-06-20 20:00 CEST:
 - Audit rows contain only ids, cache keys, intended actions, held states, blocker reasons, counts, and no-leak flags; no raw bodies, object keys, unsafe URLs, credentials, private material, restricted raw content, actor interaction, embeddings, graph export, or STIX export are persisted or exposed.
 - Updated evidence storage docs plus storage/API assertions. Continue next with source-family gap feedback into Actor row suppression policy or a disabled repository factory around these audit rows.
 
+Progress update 2026-06-20 20:28 CEST:
+- Continued with the disabled repository factory/status for Actor dataset/public-answer consumer audit rows.
+- Added `ti.evidence_actor_dataset_consumer_audit_repository.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetConsumerAuditRepository`, accepting execution/cache/dataset audit rows while holding persistence behind `TI_ACTOR_DATASET_CONSUMER_AUDIT_REPOSITORY_ENABLED`.
+- The factory is fail-closed by default: no live backend connection, no persisted rows, zero Actor dataset/public-answer mutations, and explicit blocked reasons until a real Postgres audit repository is configured.
+- Restricted/leak rows remain metadata-only and caveated; repository status contains only row counts, table names, feature flags, blocker reasons, replay readiness, and no-leak flags.
+- Continue next with source-family gap feedback into Actor row suppression policy or a real repository implementation behind explicit enablement.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST
