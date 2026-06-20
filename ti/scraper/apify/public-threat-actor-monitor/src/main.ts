@@ -5989,8 +5989,8 @@ function roundMoney(value: number): number {
   return Number(value.toFixed(6));
 }
 
-function round(value: number): number {
-  return Number(value.toFixed(3));
+function round(value: number, digits = 3): number {
+  return Number(value.toFixed(digits));
 }
 
 function roundRatio(numerator: number, denominator: number): number {

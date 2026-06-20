@@ -82,6 +82,8 @@ import type {
   SchedulerRuntimeSlaState,
   SchedulerSlaEnforcementDto,
   SchedulerSourceCadenceHint,
+  SchedulerSourceGapEnqueueRehearsalOptions,
+  SchedulerSourceGapEnqueueRehearsalReceipt,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -2623,6 +2625,88 @@ export function buildSchedulerDailyActorRunPlan(input: {
         "bun run check:apify-publication"
       ]
     }
+  };
+}
+
+export function rehearseSchedulerSourceGapEnqueue(
+  plan: SchedulerDailyActorRunPlanDto,
+  repository: SchedulerQueueRepository,
+  options: SchedulerSourceGapEnqueueRehearsalOptions = {}
+): SchedulerSourceGapEnqueueRehearsalReceipt {
+  const now = options.now ?? new Date();
+  const preview = plan.sourceGapExecutionReadiness.enqueueAdapterPreview;
+  const blockedReasons: SchedulerSourceGapEnqueueRehearsalReceipt["blockedReasons"] = [
+    ...(!options.apply ? ["apply_not_requested" as const] : []),
+    ...(!options.sourceGapEnqueueEnabled ? ["source_gap_enqueue_flag_disabled" as const] : []),
+    ...(!options.postgresQueueEnabled ? ["postgres_queue_disabled" as const] : []),
+    ...(!options.postgresDsnConfigured ? ["postgres_dsn_missing" as const] : []),
+    ...(!options.executorAvailable ? ["executor_unavailable" as const] : []),
+    ...(!options.sourcePolicyCurrent ? ["source_policy_not_current" as const] : []),
+    ...(!options.paidRowGateOpen ? ["paid_row_gate_closed" as const] : []),
+    ...(preview.repositoryCalls.some((call) => call.blockedUntil.includes("metadata_review_current")) && !options.metadataReviewCurrent
+      ? ["metadata_review_not_current" as const]
+      : [])
+  ];
+  const willMutate = blockedReasons.length === 0;
+  const taskById = new Map(plan.sourceGapExecutionReadiness.queueTaskSpecs.map((spec) => [spec.task.id, spec.task]));
+  let mutatedRunCount = 0;
+  let mutatedTaskCount = 0;
+  let emittedDeltaCount = 0;
+
+  const repositoryCalls: SchedulerSourceGapEnqueueRehearsalReceipt["repositoryCalls"] = preview.repositoryCalls.map((call) => {
+    if (!willMutate) {
+      return {
+        callOrder: call.callOrder,
+        reuseKey: call.reuseKey,
+        taskId: call.taskId,
+        operation: call.dryRunOperation,
+        executed: false,
+        skippedReason: "blocked_by_preflight"
+      };
+    }
+    if (call.dryRunOperation === "findOrRegisterRun") {
+      const result = repository.findOrRegisterRun(call.run, call.reuseKey, now);
+      mutatedRunCount += result.reused ? 0 : 1;
+      return {
+        callOrder: call.callOrder,
+        reuseKey: call.reuseKey,
+        taskId: call.taskId,
+        operation: call.dryRunOperation,
+        executed: true,
+        result: {
+          runId: result.run.id,
+          reused: result.reused,
+          duplicateReuseCount: result.duplicateReuseCount
+        }
+      };
+    }
+
+    const task = taskById.get(call.taskId);
+    const deltas = task ? repository.enqueueTasks([task], now) : [];
+    mutatedTaskCount += task ? 1 : 0;
+    emittedDeltaCount += deltas.length;
+    return {
+      callOrder: call.callOrder,
+      reuseKey: call.reuseKey,
+      taskId: call.taskId,
+      operation: call.dryRunOperation,
+      executed: true,
+      result: {
+        deltaCount: deltas.length
+      }
+    };
+  });
+
+  return {
+    schemaVersion: "ti.scheduler_source_gap_enqueue_rehearsal.v1",
+    generatedAt: now.toISOString(),
+    mode: willMutate ? "applied_explicitly" : "blocked_dry_run",
+    willMutate,
+    blockedReasons: uniqueStrings(blockedReasons),
+    repositoryCalls,
+    mutatedRunCount,
+    mutatedTaskCount,
+    emittedDeltaCount
   };
 }
 

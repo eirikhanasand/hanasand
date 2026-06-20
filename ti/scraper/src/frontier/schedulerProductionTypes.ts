@@ -1510,6 +1510,43 @@ export interface SchedulerDailyActorRunPlanDto {
   };
 }
 
+export interface SchedulerSourceGapEnqueueRehearsalOptions {
+  apply?: boolean;
+  sourceGapEnqueueEnabled?: boolean;
+  postgresQueueEnabled?: boolean;
+  postgresDsnConfigured?: boolean;
+  executorAvailable?: boolean;
+  sourcePolicyCurrent?: boolean;
+  paidRowGateOpen?: boolean;
+  metadataReviewCurrent?: boolean;
+  now?: Date;
+}
+
+export interface SchedulerSourceGapEnqueueRehearsalReceipt {
+  schemaVersion: "ti.scheduler_source_gap_enqueue_rehearsal.v1";
+  generatedAt: string;
+  mode: "blocked_dry_run" | "applied_explicitly";
+  willMutate: boolean;
+  blockedReasons: Array<"apply_not_requested" | "source_gap_enqueue_flag_disabled" | "postgres_queue_disabled" | "postgres_dsn_missing" | "executor_unavailable" | "source_policy_not_current" | "paid_row_gate_closed" | "metadata_review_not_current">;
+  repositoryCalls: Array<{
+    callOrder: number;
+    reuseKey: string;
+    taskId: string;
+    operation: "findOrRegisterRun" | "enqueueTasks";
+    executed: boolean;
+    skippedReason?: "blocked_by_preflight";
+    result?: {
+      runId?: string;
+      reused?: boolean;
+      duplicateReuseCount?: number;
+      deltaCount?: number;
+    };
+  }>;
+  mutatedRunCount: number;
+  mutatedTaskCount: number;
+  emittedDeltaCount: number;
+}
+
 export interface SchedulerInteractiveSearchFreshnessDto {
   generatedAt: string;
   apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "frontend_ti_progressive_update">;

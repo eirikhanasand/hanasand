@@ -11,6 +11,7 @@ import type {
   TiSourceAtlasExportManifestApiResponse,
   TiSourceAtlasExportManifestRow,
   TiSourceAtlasProductSourceLadderPacket,
+  TiSourceAtlasReliabilityEconomicsPacket,
   TiSourceAtlasRecord,
   TiSourceAtlasReviewQueueRow
 } from "../registry/sourceSeedTypes.ts";
@@ -229,6 +230,43 @@ export interface SourceAtlasActivationPacketAuditRow {
   generated_at: string;
 }
 
+type TiSourceAtlasSourcePackCandidate =
+  TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number];
+
+export interface SourceAtlasSourcePackCandidateReviewRow {
+  pack_id: string;
+  tenant_id?: string;
+  rank: number;
+  pack_label: string;
+  family: TiSourceAtlasSourcePackCandidate["family"];
+  acquisition_mode: TiSourceAtlasSourcePackCandidate["acquisitionMode"];
+  source_ids: string[];
+  safe_source_hashes: string[];
+  expected_payworthy_lift: number;
+  expected_fresh_rows_per_day: number;
+  expected_useful_evidence_items_per_day: number;
+  expected_scheduler_tasks_per_day: number;
+  estimated_cost_units_per_useful_evidence: number;
+  buyer_visible_use_case: string;
+  required_proof: TiSourceAtlasSourcePackCandidate["requiredProof"];
+  agent01_source_registry_handoff: string;
+  agent03_parser_handoff: string;
+  agent07_quality_handoff: string;
+  agent09_marketplace_handoff: string;
+  agent10_slo_handoff: string;
+  dry_run: true;
+  will_mutate: false;
+  will_import_source_packs: false;
+  will_start_crawling: false;
+  source_pack_imported: false;
+  source_activation_applied: false;
+  registry_mutation_planned: false;
+  crawl_enqueued: false;
+  raw_urls_exposed: false;
+  raw_payloads_exposed: false;
+  generated_at: string;
+}
+
 export interface SourceRegistryPostgresRows {
   sources: SourceRegistrySourceRow[];
   source_governance: SourceRegistryGovernanceRow[];
@@ -244,6 +282,7 @@ export interface SourceAtlasPostgresRows {
   source_atlas_review_queue: SourceAtlasReviewQueuePostgresRow[];
   source_atlas_export_manifest: SourceAtlasExportManifestPostgresRow[];
   source_atlas_activation_packet_audit: SourceAtlasActivationPacketAuditRow[];
+  source_atlas_source_pack_candidate_review: SourceAtlasSourcePackCandidateReviewRow[];
 }
 
 type TiSourceAtlasPayworthyRepairActivationPacket =
@@ -320,7 +359,8 @@ export function buildSourceRegistryPersistenceReadinessPacket(generatedAt: strin
       { table: "source_atlas_records", mapper: "tiSourceAtlasRecordToPostgresRow", requiredForCutover: false },
       { table: "source_atlas_review_queue", mapper: "tiSourceAtlasReviewQueueRowToPostgresRow", requiredForCutover: false },
       { table: "source_atlas_export_manifest", mapper: "tiSourceAtlasExportManifestRowToPostgresRow", requiredForCutover: false },
-      { table: "source_atlas_activation_packet_audit", mapper: "tiSourceAtlasRepairActivationPacketInputsToPostgresRows", requiredForCutover: false }
+      { table: "source_atlas_activation_packet_audit", mapper: "tiSourceAtlasRepairActivationPacketInputsToPostgresRows", requiredForCutover: false },
+      { table: "source_atlas_source_pack_candidate_review", mapper: "tiSourceAtlasSourcePackCandidatesToPostgresRows", requiredForCutover: false }
     ],
     replayOrder: [
       "sources",
@@ -333,7 +373,8 @@ export function buildSourceRegistryPersistenceReadinessPacket(generatedAt: strin
       "source_atlas_records",
       "source_atlas_review_queue",
       "source_atlas_export_manifest",
-      "source_atlas_activation_packet_audit"
+      "source_atlas_activation_packet_audit",
+      "source_atlas_source_pack_candidate_review"
     ],
     guardrails: [
       "source registry persistence does not lease work or start crawling",
@@ -342,7 +383,8 @@ export function buildSourceRegistryPersistenceReadinessPacket(generatedAt: strin
       "legal notes and lifecycle events remain audit-visible after restart",
       "source atlas rows are staged dry-run records and do not become active sources without explicit approval",
       "source atlas export manifest rows are audit records only and do not import source packs",
-      "source atlas activation packet audit rows are operator/legal inputs only and cannot apply source activation"
+      "source atlas activation packet audit rows are operator/legal inputs only and cannot apply source activation",
+      "source atlas source-pack candidate review rows are economics review inputs only and cannot import packs"
     ]
   };
 }
@@ -461,7 +503,8 @@ export function tiSourceAtlasExportManifestToPostgresRows(packet: TiSourceAtlasE
     source_atlas_records: [],
     source_atlas_review_queue: packet.reviewQueue.map((row) => tiSourceAtlasReviewQueueRowToPostgresRow(row, packet)),
     source_atlas_export_manifest: packet.exportManifest.rows.map((row) => tiSourceAtlasExportManifestRowToPostgresRow(row, packet)),
-    source_atlas_activation_packet_audit: []
+    source_atlas_activation_packet_audit: [],
+    source_atlas_source_pack_candidate_review: []
   };
 }
 
@@ -495,6 +538,45 @@ export function tiSourceAtlasRepairActivationPacketInputsToPostgresRows(
     private_auth_captcha_required: false,
     crawl_started: false,
     source_activation_applied: false,
+    generated_at: input.generatedAt
+  }));
+}
+
+export function tiSourceAtlasSourcePackCandidatesToPostgresRows(
+  packet: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"],
+  input: { tenantId?: string; generatedAt: string }
+): SourceAtlasSourcePackCandidateReviewRow[] {
+  return packet.packs.map((pack) => ({
+    pack_id: pack.packId,
+    tenant_id: input.tenantId,
+    rank: pack.rank,
+    pack_label: pack.packLabel,
+    family: pack.family,
+    acquisition_mode: pack.acquisitionMode,
+    source_ids: [...pack.sourceIds],
+    safe_source_hashes: [...pack.safeSourceHashes],
+    expected_payworthy_lift: pack.expectedPayworthyLift,
+    expected_fresh_rows_per_day: pack.expectedFreshRowsPerDay,
+    expected_useful_evidence_items_per_day: pack.expectedUsefulEvidenceItemsPerDay,
+    expected_scheduler_tasks_per_day: pack.expectedSchedulerTasksPerDay,
+    estimated_cost_units_per_useful_evidence: pack.estimatedCostUnitsPerUsefulEvidence,
+    buyer_visible_use_case: pack.buyerVisibleUseCase,
+    required_proof: [...pack.requiredProof],
+    agent01_source_registry_handoff: pack.ownerHandoffs.agent01SourceRegistry,
+    agent03_parser_handoff: pack.ownerHandoffs.agent03Parser,
+    agent07_quality_handoff: pack.ownerHandoffs.agent07Quality,
+    agent09_marketplace_handoff: pack.ownerHandoffs.agent09Marketplace,
+    agent10_slo_handoff: pack.ownerHandoffs.agent10Slo,
+    dry_run: true,
+    will_mutate: false,
+    will_import_source_packs: false,
+    will_start_crawling: false,
+    source_pack_imported: false,
+    source_activation_applied: false,
+    registry_mutation_planned: false,
+    crawl_enqueued: false,
+    raw_urls_exposed: false,
+    raw_payloads_exposed: false,
     generated_at: input.generatedAt
   }));
 }
