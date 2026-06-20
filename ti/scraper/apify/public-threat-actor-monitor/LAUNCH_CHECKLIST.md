@@ -46,15 +46,26 @@ docker build -t public-threat-actor-monitor .
 
 Then run the image with a local Apify storage directory and fixture before publishing.
 
-## Pricing Draft
+## Launch Pricing
 
-- Free trial: 10 rows.
-- Starter: 1,000 rows/month.
-- Pro: 10,000 rows/month.
-- Enterprise: custom source pack and support.
+Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtime so customers can predict cost before scheduling a run.
 
-## First Upgrade After Listing
+| Customer plan | Price per 1,000 rows |
+| --- | ---: |
+| Free | $3.00 |
+| Bronze | $2.70 |
+| Silver | $2.40 |
+| Gold | $2.10 |
 
-- Add a dedicated backend endpoint that returns already-normalized marketplace rows.
-- Add canary source freshness status to each row.
-- Add source coverage counters so buyers understand whether the result came from clear-web, public channel, or darknet metadata.
+- Dataset item event: `apify-default-dataset-item`.
+- Actor start event: `apify-actor-start` at $0.00005.
+- Do not add a monthly rental at launch; usage is too early to justify one.
+- Review pricing after 30 paid runs using actual rows per run, repeat usage, platform costs, and support load.
+- Monetization remains blocked until Apify beneficiary details and a payout method are verified.
+
+## Next Data Upgrades
+
+- Cluster multiple reports about the same campaign into one claim with supporting publishers.
+- Extract named victims, affected countries, sectors, and claimed impact when directly supported by public evidence.
+- Record corroborating and contradicting evidence separately.
+- Add long-running public-channel and reviewed darknet-metadata sources to the same provenance contract.
