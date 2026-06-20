@@ -363,9 +363,9 @@ describe("api v1", () => {
       productionSellableRowFloor: 100,
       usefulCaveatedRows: 32,
       rowsBlockedFromBilling: 82,
-      oneRepairAwayRows: 123,
-      projectedSellableRowsFromAcceptedRepairs: 123,
-      projectedSellableRowsAfterAcceptedRepairs: 139,
+      oneRepairAwayRows: 159,
+      projectedSellableRowsFromAcceptedRepairs: 159,
+      projectedSellableRowsAfterAcceptedRepairs: 175,
       topBlocker: "sellable_rows_below_100",
       revenueTruth: {
         paidTrafficAllowed: false,
@@ -373,21 +373,90 @@ describe("api v1", () => {
         payoutEvidenceExternal: true,
         revenueEvidenceExternal: true,
         proofSizedRunsMayCompleteShapeSafetyOnly: true
-      },
-      acceptedRepairBuckets: expect.arrayContaining([
-        expect.objectContaining({ source: "parserToSellableRepairPacket.candidates", projectedSellableRows: 87, countsTowardProjectedFloor: true }),
-        expect.objectContaining({ source: "parserRealSellableLift.promotedRows", projectedSellableRows: 20, countsTowardProjectedFloor: true }),
-        expect.objectContaining({ source: "hundredSellableRowGraphPivotPlan", countsTowardProjectedFloor: false }),
-        expect.objectContaining({ source: "darkMetadataPublicHandoff100", projectedSellableRows: 0, countsTowardProjectedFloor: false })
-      ]) as unknown as Array<{ owner: string; source: string; projectedSellableRows: number; countsTowardProjectedFloor: boolean }>,
-      exclusionProof: expect.arrayContaining([
-        expect.objectContaining({ class: "synthetic_rows", countsAsSellable: false }),
-        expect.objectContaining({ class: "graph_only_rows", countsAsSellable: false }),
-        expect.objectContaining({ class: "stale_rows", countsAsSellable: false }),
-        expect.objectContaining({ class: "restricted_only_rows", countsAsSellable: false, currentRows: 100 }),
-        expect.objectContaining({ class: "caveat_only_rows", countsAsSellable: false, currentRows: 32 })
-      ]) as unknown as Array<{ class: string; countsAsSellable: boolean; currentRows: number | null }>
+      }
     });
+    expect((response.releaseDecision as {
+      acceptedRepairBuckets: Array<{ owner: string; source: string; projectedSellableRows: number; countsTowardProjectedFloor: boolean }>;
+    }).acceptedRepairBuckets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: "parserToSellableRepairPacket.candidates", projectedSellableRows: 87, countsTowardProjectedFloor: true }),
+      expect.objectContaining({ source: "parserRealSellableLift.promotedRows", projectedSellableRows: 20, countsTowardProjectedFloor: true }),
+      expect.objectContaining({ source: "parserRealSellableLift.liveSourceAdmissionPacket", projectedSellableRows: 36, countsTowardProjectedFloor: true }),
+      expect.objectContaining({ source: "hundredSellableRowGraphPivotPlan", countsTowardProjectedFloor: false }),
+      expect.objectContaining({ source: "darkMetadataPublicHandoff100", projectedSellableRows: 0, countsTowardProjectedFloor: false })
+    ]));
+    expect((response.releaseDecision as {
+      exclusionProof: Array<{ class: string; countsAsSellable: boolean; currentRows: number | null }>;
+    }).exclusionProof).toEqual(expect.arrayContaining([
+      expect.objectContaining({ class: "synthetic_rows", countsAsSellable: false }),
+      expect.objectContaining({ class: "graph_only_rows", countsAsSellable: false }),
+      expect.objectContaining({ class: "stale_rows", countsAsSellable: false }),
+      expect.objectContaining({ class: "restricted_only_rows", countsAsSellable: false, currentRows: 100 }),
+      expect.objectContaining({ class: "caveat_only_rows", countsAsSellable: false, currentRows: 32 })
+    ]));
+    expect((response.paidReleaseTruthBoard as {
+      schemaVersion: string;
+      routeVisibleOn: string[];
+      generatedFrom: string;
+      productionSellableFloor: number;
+      paidTrafficAllowed: boolean;
+      observedProof: {
+        proofRunId: string;
+        proofDatasetId: string;
+        proofDecision: string;
+        apifySmokeRows: number;
+        apifySmokeSellableRows: number;
+        apifySmokeBuyerUsefulRows: number;
+        apifySmokeAverageBuyerValueScore: number;
+        currentSloSellableRows: number;
+        currentSloBuyerUsefulRows: number;
+        currentSloAverageBuyerValueScore: number;
+        remainingRowsFromSmokeProof: number;
+        remainingRowsFromCurrentSlo: number;
+      };
+      rowDeltaTo100: { alreadyChargeableRows: number; remainingSellableRowsNeeded: number; additiveBucketRows: number; bucketMathIsAdditive: boolean };
+      blockerBuckets: Array<{ blocker: string; owner: string; rowDeltaTo100: number; expectedRowGain: number; countsTowardPaidFloorNow: boolean; coordinationFile: string; fastestNextTask: string }>;
+      fakeMetricGuard: { apifyStoreViews: string; apifyActorRuns: string; apifyPaidRuns: string; apifyRevenueUsd: null; apifyPayoutState: string; conversionRate: null; noSyntheticFallback: boolean };
+      exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }>;
+    })).toMatchObject({
+      schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"]) as unknown as string[],
+      generatedFrom: "observed_apify_smoke_and_current_slo",
+      productionSellableFloor: 100,
+      paidTrafficAllowed: false,
+      observedProof: {
+        proofRunId: "OThlfd0uzSCNnedAO",
+        proofDatasetId: "LSen2fYtwFTtOr7vK",
+        proofDecision: "shape_safety_proof",
+        apifySmokeRows: 12,
+        apifySmokeSellableRows: 3,
+        apifySmokeBuyerUsefulRows: 9,
+        apifySmokeAverageBuyerValueScore: 0.558,
+        currentSloSellableRows: 16,
+        currentSloBuyerUsefulRows: 48,
+        currentSloAverageBuyerValueScore: 0.6,
+        remainingRowsFromSmokeProof: 97,
+        remainingRowsFromCurrentSlo: 84
+      },
+      rowDeltaTo100: {
+        alreadyChargeableRows: 3,
+        remainingSellableRowsNeeded: 97,
+        additiveBucketRows: 97,
+        bucketMathIsAdditive: true
+      },
+      fakeMetricGuard: {
+        apifyStoreViews: "external_unknown",
+        apifyActorRuns: "external_unknown",
+        apifyPaidRuns: "external_unknown",
+        apifyRevenueUsd: null,
+        apifyPayoutState: "external_unknown",
+        conversionRate: null,
+        noSyntheticFallback: true
+      }
+    });
+    expect((response.paidReleaseTruthBoard as { blockerBuckets: Array<{ blocker: string; countsTowardPaidFloorNow: boolean; coordinationFile: string; fastestNextTask: string }> }).blockerBuckets.map((bucket) => bucket.blocker)).toEqual(expect.arrayContaining(["already_chargeable", "missing_public_support", "parser_repair", "freshness", "alias_collision", "source_family_gap", "dark_metadata_public_support", "no_leak_proof", "marketplace_output_gap"]));
+    expect((response.paidReleaseTruthBoard as { blockerBuckets: Array<{ blocker: string; countsTowardPaidFloorNow: boolean; coordinationFile: string; fastestNextTask: string }> }).blockerBuckets.filter((bucket) => bucket.blocker !== "already_chargeable").every((bucket) => bucket.countsTowardPaidFloorNow === false && bucket.coordinationFile.endsWith(".md") && bucket.fastestNextTask.length > 0)).toBe(true);
+    expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
+    expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
       schemaVersion: string;
       baselineRunId: string;
@@ -2423,6 +2492,17 @@ describe("api v1", () => {
         marketplaceTelemetryDescriptors: Array<{ field: string; currentValue: string; sourceOfTruth: string; noSyntheticFallback: boolean }>;
         noFakeProof: Record<string, boolean>;
       };
+      paidReleaseTruthBoard: {
+        schemaVersion: string;
+        routeVisibleOn: string[];
+        productionSellableFloor: number;
+        paidTrafficAllowed: boolean;
+        observedProof: Record<string, unknown>;
+        rowDeltaTo100: Record<string, unknown>;
+        fakeMetricGuard: Record<string, unknown>;
+        blockerBuckets: Array<{ blocker: string }>;
+        exclusionProof: Array<{ countsTowardPaidFloor: boolean }>;
+      };
       conversionExperiments: Array<{ id: string; expectedBuyer: string; successCriteria: string[]; stopLossCriteria: string[]; datasetValueProofField: string; buyerVisibleFields: string[]; noLeakRequired: boolean }>;
       buyerSampleRows: Array<{ id: string; rowClass: string; buyerVisibleFields: { actorSummary: string; freshClaimOrActivity: string; confidence: number; provenanceHash: string; noLeakProof: string; nextAnalystPivots: string[] } }>;
       operatorBlockerBoard: Array<{ owner: string; blocker: string; conversionImpact: string; nextAction: string }>;
@@ -3988,6 +4068,37 @@ describe("api v1", () => {
       noCaveatOnlyRowsUsed: true,
       noRestrictedOnlyRowsUsed: true
     });
+    expect(apifyStoreReadiness.paidReleaseTruthBoard).toMatchObject({
+      schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"]),
+      productionSellableFloor: 100,
+      paidTrafficAllowed: false,
+      observedProof: {
+        proofDecision: "shape_safety_proof",
+        apifySmokeRows: 12,
+        apifySmokeSellableRows: 3,
+        apifySmokeBuyerUsefulRows: 9,
+        apifySmokeAverageBuyerValueScore: 0.558,
+        remainingRowsFromSmokeProof: 97
+      },
+      rowDeltaTo100: {
+        alreadyChargeableRows: 3,
+        remainingSellableRowsNeeded: 97,
+        additiveBucketRows: 97,
+        bucketMathIsAdditive: true
+      },
+      fakeMetricGuard: {
+        apifyStoreViews: "external_unknown",
+        apifyActorRuns: "external_unknown",
+        apifyPaidRuns: "external_unknown",
+        apifyRevenueUsd: null,
+        apifyPayoutState: "external_unknown",
+        conversionRate: null,
+        noSyntheticFallback: true
+      }
+    });
+    expect(apifyStoreReadiness.paidReleaseTruthBoard.blockerBuckets.map((row) => row.blocker)).toEqual(expect.arrayContaining(["already_chargeable", "missing_public_support", "parser_repair", "freshness", "alias_collision", "source_family_gap", "dark_metadata_public_support", "no_leak_proof", "marketplace_output_gap"]));
+    expect(apifyStoreReadiness.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(apifyStoreReadiness.revenueConversionChecklist).toMatchObject({
       schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
       telemetryState: "missing",

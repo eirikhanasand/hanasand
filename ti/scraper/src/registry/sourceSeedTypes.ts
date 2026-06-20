@@ -1379,6 +1379,72 @@ export interface TiSourceAtlasReliabilityEconomicsPacket {
     darkMetadataCorroborationValue: number;
     enterpriseStixExportValue: number;
   };
+  sourcePackCandidates: {
+    schemaVersion: "ti.source_atlas.source_pack_candidates.v1";
+    routeHint: "/v1/sources/atlas";
+    dryRun: true;
+    willMutate: false;
+    willImportSourcePacks: false;
+    willStartCrawling: false;
+    baseline: {
+      evaluatedCandidateCount: number;
+      currentPayworthySourceCount: number;
+      targetPayworthySourceCount: number;
+      additionalPayworthySourcesNeeded: number;
+      targetPayworthyRate: 0.72;
+    };
+    candidatePackCount: number;
+    projectedPayworthyLift: number;
+    projectedPayworthySourceCount: number;
+    projectedPayworthyRate: number;
+    packs: Array<{
+      rank: number;
+      packId: string;
+      packLabel: string;
+      family: TiSourceAtlasFamily;
+      acquisitionMode: "public_source_pack" | "parser_repair_pack" | "legal_review_pack" | "replacement_pack";
+      sourceIds: string[];
+      safeSourceHashes: string[];
+      expectedPayworthyLift: number;
+      expectedFreshRowsPerDay: number;
+      expectedUsefulEvidenceItemsPerDay: number;
+      expectedSchedulerTasksPerDay: number;
+      estimatedCostUnitsPerUsefulEvidence: number;
+      buyerVisibleUseCase: string;
+      requiredProof: Array<"operator_approval" | "legal_review_current" | "parser_certified" | "dedupe_pass" | "daily_actor_run_delta" | "no_leak_review">;
+      ownerHandoffs: {
+        agent01SourceRegistry: string;
+        agent03Parser: string;
+        agent07Quality: string;
+        agent09Marketplace: string;
+        agent10Slo: string;
+      };
+      noActivationBoundary: {
+        sourcePackImported: false;
+        sourceActivationApplied: false;
+        registryMutationPlanned: false;
+        crawlEnqueued: false;
+        rawUrlsExposed: false;
+        rawPayloadsExposed: false;
+      };
+    }>;
+    guardrails: {
+      noRegistryMutation: true;
+      noSourcePackImport: true;
+      noSourceActivation: true;
+      noCrawling: true;
+      noRawUnsafeUrls: true;
+      noPayloadDownloads: true;
+      publicOrMetadataOnly: true;
+    };
+    handoffs: {
+      agent01SourcePackReview: string[];
+      agent03ParserCertification: string[];
+      agent07QualityGate: string[];
+      agent09MarketplaceProof: string[];
+      agent10RevenueMeasurement: string[];
+    };
+  };
   degradationQueues: Array<{
     queue: "stale" | "noisy_duplicate" | "legal_blocked" | "parser_broken" | "low_yield" | "high_cost";
     sourceIds: string[];

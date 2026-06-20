@@ -1020,6 +1020,67 @@ if (
 ) {
   throw new Error("Program CL no-fake proof must block invented analytics and non-real-row proof");
 }
+const paidReleaseTruthBoard = outputRecord.paidReleaseTruthBoard as Record<string, unknown> | undefined;
+if (
+  !paidReleaseTruthBoard
+  || paidReleaseTruthBoard.schemaVersion !== "ti.program_cq_paid_release_truth_board.v1"
+  || paidReleaseTruthBoard.productionSellableFloor !== 100
+  || paidReleaseTruthBoard.paidTrafficAllowed !== false
+  || !Array.isArray(paidReleaseTruthBoard.routeVisibleOn)
+  || !paidReleaseTruthBoard.routeVisibleOn.includes("Apify OUTPUT")
+  || !Array.isArray(paidReleaseTruthBoard.blockerBuckets)
+  || !Array.isArray(paidReleaseTruthBoard.exclusionProof)
+) {
+  throw new Error("OUTPUT record must expose Program CQ paid release truth board");
+}
+const paidReleaseObservedProof = paidReleaseTruthBoard.observedProof as Record<string, unknown> | undefined;
+const paidReleaseDelta = paidReleaseTruthBoard.rowDeltaTo100 as Record<string, unknown> | undefined;
+if (
+  !paidReleaseObservedProof
+  || paidReleaseObservedProof.proofDecision !== "shape_safety_proof"
+  || paidReleaseObservedProof.apifySmokeRows !== output.length
+  || paidReleaseObservedProof.apifySmokeSellableRows !== paidRowQuality.sellable
+  || paidReleaseObservedProof.apifySmokeBuyerUsefulRows !== paidRowQuality.usefulForBuyer
+  || paidReleaseObservedProof.apifySmokeAverageBuyerValueScore !== paidRowQuality.averageBuyerValueScore
+  || paidReleaseObservedProof.remainingRowsFromSmokeProof !== Math.max(0, 100 - Number(paidRowQuality.sellable))
+  || !paidReleaseDelta
+  || paidReleaseDelta.alreadyChargeableRows !== paidRowQuality.sellable
+  || paidReleaseDelta.remainingSellableRowsNeeded !== Math.max(0, 100 - Number(paidRowQuality.sellable))
+  || paidReleaseDelta.bucketMathIsAdditive !== true
+) {
+  throw new Error("Program CQ release board must use observed smoke rows and exact delta to 100");
+}
+const paidReleaseBuckets = paidReleaseTruthBoard.blockerBuckets as Array<Record<string, unknown>>;
+for (const blocker of ["already_chargeable", "missing_public_support", "parser_repair", "freshness", "alias_collision", "source_family_gap", "dark_metadata_public_support", "no_leak_proof", "marketplace_output_gap"]) {
+  if (!paidReleaseBuckets.some((bucket) => bucket.blocker === blocker)) throw new Error(`Program CQ release board missing ${blocker}`);
+}
+if (!paidReleaseBuckets.every((bucket) =>
+  typeof bucket.owner === "string"
+  && typeof bucket.rowDeltaTo100 === "number"
+  && typeof bucket.expectedRowGain === "number"
+  && typeof bucket.fastestNextTask === "string"
+  && typeof bucket.coordinationFile === "string"
+  && (bucket.blocker === "already_chargeable" ? bucket.countsTowardPaidFloorNow === true : bucket.countsTowardPaidFloorNow === false)
+)) {
+  throw new Error("Program CQ release board buckets must expose owner, row delta, task, and paid-floor truth");
+}
+const paidReleaseFakeMetricGuard = paidReleaseTruthBoard.fakeMetricGuard as Record<string, unknown> | undefined;
+if (
+  !paidReleaseFakeMetricGuard
+  || paidReleaseFakeMetricGuard.apifyStoreViews !== "external_unknown"
+  || paidReleaseFakeMetricGuard.apifyActorRuns !== "external_unknown"
+  || paidReleaseFakeMetricGuard.apifyPaidRuns !== "external_unknown"
+  || paidReleaseFakeMetricGuard.apifyRevenueUsd !== null
+  || paidReleaseFakeMetricGuard.apifyPayoutState !== "external_unknown"
+  || paidReleaseFakeMetricGuard.conversionRate !== null
+  || paidReleaseFakeMetricGuard.noSyntheticFallback !== true
+) {
+  throw new Error("Program CQ release board must not invent Apify analytics, revenue, payout, or conversion");
+}
+const paidReleaseExclusions = (paidReleaseTruthBoard.exclusionProof as Array<Record<string, unknown>>).map((row) => row.class);
+for (const excludedClass of ["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]) {
+  if (!paidReleaseExclusions.includes(excludedClass)) throw new Error(`Program CQ release board must exclude ${excludedClass}`);
+}
 const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
 if (
   !revenueConversionChecklist

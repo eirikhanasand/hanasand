@@ -3517,18 +3517,163 @@ function buildTiSourceAtlasReliabilityEconomicsPacket(records: TiSourceAtlasReco
       darkMetadataCorroborationValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["ransomware_victim", "infrastructure"]) * 0.68),
       enterpriseStixExportValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["actor", "campaign", "malware_tool", "cve", "infrastructure"]) * 0.9)
     },
+    sourcePackCandidates: buildSourceEconomicsSourcePackCandidates(sourceRows),
     degradationQueues,
     guardrails: { publicOnly: true, noRegistryMutation: true, noSourceActivation: true, noCrawling: true, noWorkerLeases: true, noPrivateInviteAuthCaptcha: true, noRawUnsafeUrls: true, noPayloadDownloads: true, descriptorOnlyPublicChannels: true },
     handoffs: {
-      agent01ActivationPlanning: ["sourceEconomics.rolloutScenarios", "sourceEconomics.sourceRows.decision", "sourceEconomics.degradationQueues"],
+      agent01ActivationPlanning: ["sourceEconomics.rolloutScenarios", "sourceEconomics.sourceRows.decision", "sourceEconomics.sourcePackCandidates", "sourceEconomics.degradationQueues"],
       agent02SchedulerBudget: ["rolloutScenarios.estimatedDailySchedulerTasks", "sourceRows.estimatedDailySchedulerTasks", "degradationQueues.high_cost"],
       agent03ParserRepair: ["sourceRows.parserRepairDependency", "degradationQueues.parser_broken"],
       agent06EvidenceStorage: ["rolloutScenarios.estimatedStorageMbPerDay", "sourceRows.uniqueEvidenceYield"],
       agent07QualityGates: ["sourceRows.expectedPublicTiAnswerLift", "marketplaceValueBreakdown", "degradationQueues.low_yield"],
-      agent09ApiFrontend: ["sourceEconomics.rolloutScenarios", "sourceEconomics.familyMetrics", "sourceEconomics.marketplaceValueBreakdown"],
+      agent09ApiFrontend: ["sourceEconomics.rolloutScenarios", "sourceEconomics.familyMetrics", "sourceEconomics.marketplaceValueBreakdown", "sourceEconomics.sourcePackCandidates"],
       agent10OpsBudgets: ["rolloutScenarios.estimatedCostUnitsPerUsefulEvidence", "degradationQueues.high_cost", "guardrails"]
     }
   };
+}
+
+function buildSourceEconomicsSourcePackCandidates(
+  sourceRows: Array<TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number] & { estimatedCostUnitsPerUsefulEvidence: number }>
+): TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"] {
+  const usableRows = sourceRows
+    .filter((row) => row.decision !== "retire_duplicate" && row.decision !== "degrade")
+    .sort((left, right) =>
+      sourcePackCandidateRowScore(right) - sourcePackCandidateRowScore(left) ||
+      right.expectedPublicTiAnswerLift - left.expectedPublicTiAnswerLift ||
+      left.atlasSourceId.localeCompare(right.atlasSourceId)
+    );
+  const familyOrder = uniqueStrings(usableRows.map((row) => row.family)) as TiSourceAtlasFamily[];
+  const packs = familyOrder
+    .map((family) => sourceEconomicsFamilyPackCandidate(family, usableRows))
+    .filter((pack): pack is TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number] => Boolean(pack))
+    .sort((left, right) =>
+      right.expectedPayworthyLift - left.expectedPayworthyLift ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.family.localeCompare(right.family)
+    )
+    .slice(0, 16)
+    .map((pack, index) => ({ ...pack, rank: index + 1 }));
+  const projectedPayworthyLift = Math.min(PAYWORTHY_REPAIR_SHORTFALL, packs.reduce((sum, pack) => sum + pack.expectedPayworthyLift, 0));
+  const projectedPayworthySourceCount = Math.min(PAYWORTHY_REPAIR_TARGET_COUNT, PAYWORTHY_REPAIR_CURRENT_COUNT + projectedPayworthyLift);
+  return {
+    schemaVersion: "ti.source_atlas.source_pack_candidates.v1",
+    routeHint: "/v1/sources/atlas",
+    dryRun: true,
+    willMutate: false,
+    willImportSourcePacks: false,
+    willStartCrawling: false,
+    baseline: {
+      evaluatedCandidateCount: PAYWORTHY_REPAIR_EVALUATED_COUNT,
+      currentPayworthySourceCount: PAYWORTHY_REPAIR_CURRENT_COUNT,
+      targetPayworthySourceCount: PAYWORTHY_REPAIR_TARGET_COUNT,
+      additionalPayworthySourcesNeeded: PAYWORTHY_REPAIR_SHORTFALL,
+      targetPayworthyRate: 0.72
+    },
+    candidatePackCount: packs.length,
+    projectedPayworthyLift,
+    projectedPayworthySourceCount,
+    projectedPayworthyRate: roundScore(projectedPayworthySourceCount / PAYWORTHY_REPAIR_EVALUATED_COUNT),
+    packs,
+    guardrails: {
+      noRegistryMutation: true,
+      noSourcePackImport: true,
+      noSourceActivation: true,
+      noCrawling: true,
+      noRawUnsafeUrls: true,
+      noPayloadDownloads: true,
+      publicOrMetadataOnly: true
+    },
+    handoffs: {
+      agent01SourcePackReview: ["Review sourceEconomics.sourcePackCandidates.packs before any source-pack import.", "Convert selected packs into explicit operator/legal packets only after proof requirements pass."],
+      agent03ParserCertification: ["Prioritize packs with parser_repair_pack mode and certify extraction fields before source value is counted."],
+      agent07QualityGate: ["Reject pack rows that do not improve useful/fresh paid Actor rows or source-family diversity."],
+      agent09MarketplaceProof: ["Surface pack label, buyer use case, projected lift, and no-activation boundaries in buyer-facing review views."],
+      agent10RevenueMeasurement: ["Measure payworthy-source count, useful-row rate, fresh-row rate, and cost/useful-row after explicit approval."]
+    }
+  };
+}
+
+function sourceEconomicsFamilyPackCandidate(
+  family: TiSourceAtlasFamily,
+  usableRows: Array<TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number] & { estimatedCostUnitsPerUsefulEvidence: number }>
+): TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number] | undefined {
+  const rows = usableRows.filter((row) => row.family === family).slice(0, 40);
+  if (rows.length === 0) return undefined;
+  const readyRows = rows.filter((row) => row.decision === "promote_candidate" || row.decision === "watch");
+  const parserRows = rows.filter((row) => row.parserRepairDependency);
+  const legalRows = rows.filter((row) => row.legalReviewDependency);
+  const acquisitionMode: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]["acquisitionMode"] =
+    legalRows.length > rows.length * 0.35
+      ? "legal_review_pack"
+      : parserRows.length > rows.length * 0.35
+        ? "parser_repair_pack"
+        : readyRows.length >= rows.length * 0.6
+          ? "public_source_pack"
+          : "replacement_pack";
+  const expectedPayworthyLift = Math.max(1, Math.min(
+    140,
+    readyRows.length * 4 + Math.floor(parserRows.length * 1.5) + Math.floor(Math.max(0, rows.length - readyRows.length - parserRows.length - legalRows.length) * 0.75)
+  ));
+  const expectedUsefulEvidenceItemsPerDay = roundScore(rows.reduce((sum, row) => sum + row.uniqueEvidenceYield, 0));
+  const expectedFreshRowsPerDay = roundScore(expectedUsefulEvidenceItemsPerDay * average(rows.map((row) => row.expectedPublicTiAnswerLift)));
+  const expectedSchedulerTasksPerDay = rows.reduce((sum, row) => sum + row.estimatedDailySchedulerTasks, 0);
+  const costUnits = rows.reduce((sum, row) => sum + row.estimatedDailySchedulerTasks + row.estimatedStorageMbPerDay / 8, 0);
+  return {
+    rank: 0,
+    packId: stableId("ti_source_atlas_source_pack_candidate", `${family}:${rows.map((row) => row.atlasSourceId).join(":")}`),
+    packLabel: `${family.replaceAll("_", " ")} source pack`,
+    family,
+    acquisitionMode,
+    sourceIds: rows.slice(0, 25).map((row) => row.atlasSourceId),
+    safeSourceHashes: rows.slice(0, 25).map((row) => row.sourceHash),
+    expectedPayworthyLift,
+    expectedFreshRowsPerDay,
+    expectedUsefulEvidenceItemsPerDay,
+    expectedSchedulerTasksPerDay,
+    estimatedCostUnitsPerUsefulEvidence: roundScore(costUnits / Math.max(0.1, expectedUsefulEvidenceItemsPerDay)),
+    buyerVisibleUseCase: sourceEconomicsPackBuyerUseCase(family, rows),
+    requiredProof: sourceEconomicsPackRequiredProof(acquisitionMode),
+    ownerHandoffs: {
+      agent01SourceRegistry: "Stage as a dry-run source-pack candidate only; require explicit operator/legal packet before registry mutation.",
+      agent03Parser: acquisitionMode === "parser_repair_pack" ? "Certify parser fixtures for this family before counting projected lift." : "Confirm existing parser coverage remains current.",
+      agent07Quality: "Prove useful/fresh row lift and reject generic, stale, duplicate, or caveat-only rows.",
+      agent09Marketplace: "Use pack label, buyer use case, and no-leak proof in source value review views.",
+      agent10Slo: "Count lift only after daily Actor proof improves payworthy density and cost/useful-row."
+    },
+    noActivationBoundary: {
+      sourcePackImported: false,
+      sourceActivationApplied: false,
+      registryMutationPlanned: false,
+      crawlEnqueued: false,
+      rawUrlsExposed: false,
+      rawPayloadsExposed: false
+    }
+  };
+}
+
+function sourcePackCandidateRowScore(row: TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number]): number {
+  const decisionBoost = row.decision === "promote_candidate" ? 0.24 : row.decision === "watch" ? 0.12 : 0;
+  const dependencyPenalty = row.parserRepairDependency || row.legalReviewDependency ? 0.08 : 0;
+  return roundScore(row.economicsScore * 0.42 + row.expectedPublicTiAnswerLift * 0.22 + row.expectedApiActorUsefulness * 0.18 + row.uniqueEvidenceYield * 0.04 + decisionBoost - dependencyPenalty);
+}
+
+function sourceEconomicsPackRequiredProof(
+  acquisitionMode: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]["acquisitionMode"]
+): TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]["requiredProof"] {
+  const proof: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]["requiredProof"] = ["operator_approval", "dedupe_pass", "daily_actor_run_delta", "no_leak_review"];
+  if (acquisitionMode === "legal_review_pack") proof.push("legal_review_current");
+  if (acquisitionMode === "parser_repair_pack") proof.push("parser_certified");
+  if (acquisitionMode === "public_source_pack" || acquisitionMode === "replacement_pack") proof.push("legal_review_current", "parser_certified");
+  return uniqueStrings(proof) as typeof proof;
+}
+
+function sourceEconomicsPackBuyerUseCase(
+  family: TiSourceAtlasFamily,
+  rows: TiSourceAtlasReliabilityEconomicsPacket["sourceRows"]
+): string {
+  const queryClasses = uniqueStrings(rows.flatMap((row) => row.expectedQueryClasses)).slice(0, 4).join(", ");
+  const regions = uniqueStrings(rows.flatMap((row) => row.regions)).slice(0, 3).join(", ");
+  return `${family.replaceAll("_", " ")} pack improves ${queryClasses || "actor monitoring"} coverage${regions ? ` across ${regions}` : ""} with reviewed public or metadata-only sources and no leaked payload access.`;
 }
 
 function tiSourceAtlasEconomicsDisplayRows(sourceRows: Array<TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number] & { estimatedCostUnitsPerUsefulEvidence: number }>): TiSourceAtlasReliabilityEconomicsPacket["sourceRows"] {

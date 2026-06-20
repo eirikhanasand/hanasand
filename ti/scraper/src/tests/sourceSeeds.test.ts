@@ -1464,6 +1464,52 @@ describe("source seed bundles", () => {
       darkMetadataCorroborationValue: expect.any(Number),
       enterpriseStixExportValue: expect.any(Number)
     });
+    expect(atlas.sourceEconomics.sourcePackCandidates).toMatchObject({
+      schemaVersion: "ti.source_atlas.source_pack_candidates.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      baseline: {
+        evaluatedCandidateCount: 4000,
+        currentPayworthySourceCount: 1468,
+        targetPayworthySourceCount: 2880,
+        additionalPayworthySourcesNeeded: 1412,
+        targetPayworthyRate: 0.72
+      },
+      guardrails: {
+        noRegistryMutation: true,
+        noSourcePackImport: true,
+        noSourceActivation: true,
+        noCrawling: true,
+        noRawUnsafeUrls: true,
+        noPayloadDownloads: true,
+        publicOrMetadataOnly: true
+      }
+    });
+    expect(atlas.sourceEconomics.sourcePackCandidates.candidatePackCount).toBe(atlas.sourceEconomics.sourcePackCandidates.packs.length);
+    expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthyLift).toBeLessThanOrEqual(1412);
+    expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthySourceCount).toBeLessThanOrEqual(2880);
+    expect(atlas.sourceEconomics.sourcePackCandidates.packs.length).toBeGreaterThan(5);
+    expect(atlas.sourceEconomics.sourcePackCandidates.packs.every((pack) =>
+      pack.packId.startsWith("ti_source_atlas_source_pack_candidate_") &&
+      pack.sourceIds.length > 0 &&
+      pack.sourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      pack.safeSourceHashes.every((sourceHash) => sourceHash.startsWith("ti_source_atlas_source_")) &&
+      pack.expectedPayworthyLift > 0 &&
+      pack.expectedFreshRowsPerDay >= 0 &&
+      pack.requiredProof.includes("operator_approval") &&
+      pack.requiredProof.includes("daily_actor_run_delta") &&
+      pack.noActivationBoundary.sourcePackImported === false &&
+      pack.noActivationBoundary.sourceActivationApplied === false &&
+      pack.noActivationBoundary.registryMutationPlanned === false &&
+      pack.noActivationBoundary.crawlEnqueued === false &&
+      pack.noActivationBoundary.rawUrlsExposed === false &&
+      pack.noActivationBoundary.rawPayloadsExposed === false
+    )).toBe(true);
+    expect(atlas.sourceEconomics.handoffs.agent01ActivationPlanning).toContain("sourceEconomics.sourcePackCandidates");
+    expect(atlas.sourceEconomics.handoffs.agent09ApiFrontend).toContain("sourceEconomics.sourcePackCandidates");
     expect(atlas.sourceEconomics.degradationQueues.map((queue) => queue.queue)).toEqual(expect.arrayContaining(["stale", "noisy_duplicate", "legal_blocked", "parser_broken", "low_yield", "high_cost"]));
     expect(atlas.sourceEconomics.degradationQueues.every((queue) => queue.willMutate === false && queue.willStartCrawling === false)).toBe(true);
     expect(atlas.sourceEconomics.handoffs.agent09ApiFrontend).toContain("sourceEconomics.rolloutScenarios");

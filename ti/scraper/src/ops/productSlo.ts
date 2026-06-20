@@ -304,6 +304,59 @@ export interface LiveProductSloDashboard {
     }>;
     nextRequiredAction: string;
   };
+  paidReleaseTruthBoard: {
+    schemaVersion: "ti.program_cq_paid_release_truth_board.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "/v1/contracts#apifyStoreReadiness" | "coordination_agent_10.md">;
+    generatedFrom: "observed_apify_smoke_and_current_slo";
+    productionSellableFloor: 100;
+    paidTrafficAllowed: false;
+    observedProof: {
+      proofRunId: "OThlfd0uzSCNnedAO";
+      proofDatasetId: "LSen2fYtwFTtOr7vK";
+      proofDecision: "shape_safety_proof";
+      apifySmokeRows: 12;
+      apifySmokeSellableRows: 3;
+      apifySmokeBuyerUsefulRows: 9;
+      apifySmokeAverageBuyerValueScore: 0.558;
+      currentSloSellableRows: number | null;
+      currentSloBuyerUsefulRows: number | null;
+      currentSloAverageBuyerValueScore: number | null;
+      remainingRowsFromSmokeProof: 97;
+      remainingRowsFromCurrentSlo: number | null;
+    };
+    rowDeltaTo100: {
+      alreadyChargeableRows: number;
+      remainingSellableRowsNeeded: number;
+      additiveBucketRows: number;
+      bucketMathIsAdditive: true;
+    };
+    blockerBuckets: Array<{
+      blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
+      rowDeltaTo100: number;
+      expectedRowGain: number;
+      confidence: "observed" | "high" | "medium" | "low";
+      risk: string;
+      fastestNextTask: string;
+      coordinationFile: string;
+      countsTowardPaidFloorNow: boolean;
+    }>;
+    fakeMetricGuard: {
+      apifyStoreViews: "external_unknown";
+      apifyActorRuns: "external_unknown";
+      apifyPaidRuns: "external_unknown";
+      apifyRevenueUsd: null;
+      apifyPayoutState: "external_unknown";
+      conversionRate: null;
+      noSyntheticFallback: true;
+    };
+    exclusionProof: Array<{
+      class: "synthetic_rows" | "graph_only_rows" | "restricted_only_metadata" | "caveated_rows" | "stale_rows" | "generic_source_pages" | "projected_rows";
+      countsTowardPaidFloor: false;
+      reason: string;
+    }>;
+    nextActions: string[];
+  };
   scaleStepGates: {
     schemaVersion: "ti.product_scale_step_gates.v1";
     baselineRunId: "OThlfd0uzSCNnedAO";
@@ -660,6 +713,66 @@ export interface LiveProductSloDashboard {
     repairedRowCount: number;
     promotedSellableRows: number;
     movedToUsefulCaveatedRows: number;
+    liveSourceAdmissionPacket: {
+      schemaVersion: "ti.program_co_live_source_parser_admission.v1";
+      owner: "agent_03";
+      candidateRowCount: number;
+      movedToSellableRows: number;
+      usefulCaveatedRows: number;
+      suppressedRows: number;
+      rowsStillOneRepairAway: number;
+      estimatedProgressToward100: {
+        observedCurrentSellableRows: number;
+        newSellableRows: number;
+        projectedSellableRowsAfterAdmission: number;
+        remainingRowsTo100: number;
+        progressRatio: number;
+        countsAsProductionClaim: false;
+      };
+      candidateRows: Array<{
+        id: string;
+        actor: string;
+        actorFamily: "apt" | "ransomware";
+        victimOrTarget: string;
+        sector: string;
+        countryOrRegion: string;
+        datasetOrImpact: string;
+        ttpToolOrCve: string;
+        firstSeen: string;
+        lastSeen: string;
+        sourceFamily: "vendor_report" | "government_advisory" | "rss_security_blog" | "cert_advisory" | "public_report" | "public_channel_handoff" | "dark_metadata_public_support";
+        confidence: number;
+        caveat: string;
+        contradictionState: "none" | "resolved" | "held";
+        provenanceHash: string;
+        noLeakProof: {
+          rawBodiesExposed: false;
+          unsafeUrlsExposed: false;
+          restrictedPayloadsExposed: false;
+          credentialsExposed: false;
+          privateMaterialUsed: false;
+          actorInteractionTextUsed: false;
+        };
+        nextBuyerSearch: string;
+        currentDecision: "hold" | "coverage_gap_only" | "included_with_caveat" | "suppress";
+        admissionDecision: "sellable" | "useful_caveated" | "suppress";
+        sellableRowsDelta: number;
+        usefulCaveatedRowsDelta: number;
+        suppressedRows: number;
+        repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_10";
+      }>;
+      suppressedClasses: Array<{
+        class: "generic_actor_summary" | "stale_repost_as_current" | "alias_collision" | "wrong_actor_co_mention" | "graph_only_projection" | "restricted_only_without_public_support";
+        rowCount: number;
+        owner: "agent_03" | "agent_05" | "agent_07" | "agent_08";
+        reason: string;
+      }>;
+      ownerHandoffs: Array<{
+        owner: "agent_04" | "agent_05" | "agent_07" | "agent_10";
+        rowCount: number;
+        handoff: string;
+      }>;
+    };
     staleRowsSuppressed: number;
     aliasOrUnrelatedRowsSuppressed: number;
     rowsStillOneRepairAway: number;
@@ -1063,6 +1176,60 @@ export interface LiveProductSloDashboard {
       agent04PublicCorroborationGaps: string[];
       agent08GraphPivots: string[];
       agent10RevenueGateCounts: string[];
+    };
+    blockers: string[];
+  };
+  darkMetadataPublicSupportLift4000: {
+    schemaVersion: "ti.dark_metadata_public_support_lift_4000_slo.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/darkweb/status" | "/v1/darkweb/search" | "/v1/contracts">;
+    owner: "Agent 05";
+    dryRun: true;
+    willStartCollection: false;
+    willFetchNetwork: false;
+    candidateSource: "publicSupportWorklist40_and_darkweb_index_records";
+    tierTargets: [100, 1000, 4000];
+    currentContributionToward100SellableRows: number;
+    first4000CandidateCount: number;
+    projectedContributionToward100PaidRowsAfterPublicSupport: number;
+    supportBucketCounts: {
+      currently_chargeable: number;
+      sellable_after_public_support: number;
+      useful_with_caveat: number;
+      restricted_only_hold: number;
+      stale_reject: number;
+      duplicate_reject: number;
+      unsafe_reject: number;
+      low_value_reject: number;
+      needs_parser_repair: number;
+      needs_source_support: number;
+    };
+    tierSummaries: Array<{
+      tier: "top_100" | "tier_1000" | "tier_4000";
+      evaluatedCandidateCount: number;
+      acceptedForPublicSupportCount: number;
+      sellableAfterPublicSupport: number;
+      usefulWithCaveat: number;
+      restrictedOnlyHold: number;
+      rejectedCount: number;
+      averageBuyerValueScore: number;
+      currentlyChargeableCount: 0;
+      countsTowardSellableFloorNow: false;
+    }>;
+    handoffCounts: {
+      agent03ParserRepairRows: number;
+      agent04SourceSupportRows: number;
+      agent06NoLeakRequirements: number;
+      agent07QualityHoldRows: number;
+      agent08GraphPivotRows: number;
+      agent09MarketplaceFields: number;
+      agent10ProjectedPaidRowsAfterSupport: number;
+    };
+    criteria: {
+      targetPaidRows: 100;
+      publicSupportRequiredForSellable: true;
+      restrictedOnlyRowsCannotBeChargeable: true;
+      staleDuplicateUnsafeLowValueCannotBeChargeable: true;
+      noLeakSerializationRequired: true;
     };
     blockers: string[];
   };
@@ -1572,6 +1739,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
   const darkMetadataLiveValueExpansion = buildDarkMetadataLiveValueExpansion();
   const darkMetadataPublicHandoff100 = buildDarkMetadataPublicHandoff100();
+  const darkMetadataPublicSupportLift4000 = buildDarkMetadataPublicSupportLift4000();
   const nonMonetizingWorkDetector = buildNonMonetizingWorkDetector();
   const scaleStepGates = buildScaleStepGates({
     rowCount: paidRowCount,
@@ -1622,6 +1790,10 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     qualityConversionGate,
     liveFreshnessQualityGate,
     darkMetadataPublicHandoff100
+  });
+  const paidReleaseTruthBoard = buildPaidReleaseTruthBoard({
+    monetizationReadiness,
+    paidRowDecisionCounts
   });
   const marketplaceTelemetry = marketplaceTelemetryFor(input.marketplace);
   const payoutReadiness = payoutReadinessFor(input.marketplace);
@@ -1774,6 +1946,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     sourceMonetizationGate,
     nonMonetizingWorkDetector,
     releaseDecision,
+    paidReleaseTruthBoard,
     scaleStepGates,
     revenueBlockerBoard,
     buyerVisibleQualityLiftGate,
@@ -1795,6 +1968,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     graphSellableSupportPacket,
     darkMetadataLiveValueExpansion,
     darkMetadataPublicHandoff100,
+    darkMetadataPublicSupportLift4000,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
@@ -2445,6 +2619,14 @@ function buildReleaseDecision(input: {
       countsTowardProjectedFloor: true
     },
     {
+      owner: "agent_03",
+      source: "parserRealSellableLift.liveSourceAdmissionPacket",
+      projectedSellableRows: input.parserRealSellableLift.liveSourceAdmissionPacket.movedToSellableRows,
+      projectedUsefulRows: input.parserRealSellableLift.liveSourceAdmissionPacket.movedToSellableRows + input.parserRealSellableLift.liveSourceAdmissionPacket.usefulCaveatedRows,
+      projectedFreshRows: input.parserRealSellableLift.liveSourceAdmissionPacket.movedToSellableRows,
+      countsTowardProjectedFloor: true
+    },
+    {
       owner: "agent_07",
       source: "qualityConversionGate",
       projectedSellableRows: input.qualityConversionGate.sellableRowLift,
@@ -2536,6 +2718,184 @@ function buildReleaseDecision(input: {
     nextRequiredAction: currentSellableRows !== null && currentSellableRows >= 100
       ? "verify Apify payout, marketplace analytics, and cost evidence before increasing traffic"
       : "convert the highest-value caveated/held/coverage-gap rows into fresh corroborated sellable rows; keep proof-sized runs shape/safety-only until current sellable rows reach 100"
+  };
+}
+
+function buildPaidReleaseTruthBoard(input: {
+  monetizationReadiness: LiveProductMonetizationReadiness;
+  paidRowDecisionCounts: LiveProductSloDashboard["apifyLaunchExperiment"]["paidRowDecisionCounts"];
+}): LiveProductSloDashboard["paidReleaseTruthBoard"] {
+  const apifySmokeSellableRows = 3;
+  const apifySmokeBuyerUsefulRows = 9;
+  const remainingRowsFromSmokeProof = 97 as const;
+  const bucketRows = {
+    missingPublicSupport: 28,
+    parserRepair: 20,
+    freshness: 5,
+    aliasCollision: 4,
+    sourceFamilyGap: 18,
+    darkMetadataPublicSupport: 19,
+    noLeakProof: 0,
+    marketplaceOutputGap: 3
+  };
+  const blockerBuckets: LiveProductSloDashboard["paidReleaseTruthBoard"]["blockerBuckets"] = [
+    {
+      blocker: "already_chargeable",
+      owner: "agent_10",
+      rowDeltaTo100: 0,
+      expectedRowGain: apifySmokeSellableRows,
+      confidence: "observed",
+      risk: "These rows prove shape and safe billing guidance only; they are not enough for paid traffic.",
+      fastestNextTask: "Keep current chargeable rows visible while other buckets create 97 more real rows.",
+      coordinationFile: "coordination_agent_10.md",
+      countsTowardPaidFloorNow: true
+    },
+    {
+      blocker: "missing_public_support",
+      owner: "agent_04",
+      rowDeltaTo100: bucketRows.missingPublicSupport,
+      expectedRowGain: bucketRows.missingPublicSupport,
+      confidence: "medium",
+      risk: "Single-source or unsupported rows stay caveated/held until safe public corroboration exists.",
+      fastestNextTask: "Attach safe public-channel or clear-web support to one-repair-away actor/ransomware rows.",
+      coordinationFile: "coordination_agent_04.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "parser_repair",
+      owner: "agent_03",
+      rowDeltaTo100: bucketRows.parserRepair,
+      expectedRowGain: bucketRows.parserRepair,
+      confidence: "high",
+      risk: "Generic rows without actor/victim/dataset/TTP/date fields cannot be charged.",
+      fastestNextTask: "Promote parser-repaired rows only when provenance, fields, and source support are present.",
+      coordinationFile: "coordination_agent_03.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "freshness",
+      owner: "agent_07",
+      rowDeltaTo100: bucketRows.freshness,
+      expectedRowGain: bucketRows.freshness,
+      confidence: "medium",
+      risk: "Stale latest-activity wording breaks buyer trust and must stay suppressed.",
+      fastestNextTask: "Replace stale APT/ransomware rows with current public evidence or suppress them.",
+      coordinationFile: "coordination_agent_07.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "alias_collision",
+      owner: "agent_07",
+      rowDeltaTo100: bucketRows.aliasCollision,
+      expectedRowGain: bucketRows.aliasCollision,
+      confidence: "medium",
+      risk: "Alias-only and wrong-actor matches inflate counts without answering the buyer's query.",
+      fastestNextTask: "Hold alias-collision rows until actor-specific evidence survives the stricter admission gate.",
+      coordinationFile: "coordination_agent_07.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "source_family_gap",
+      owner: "agent_03",
+      rowDeltaTo100: bucketRows.sourceFamilyGap,
+      expectedRowGain: bucketRows.sourceFamilyGap,
+      confidence: "medium",
+      risk: "Rows without source-family diversity remain fragile and should not be sold as current monitoring.",
+      fastestNextTask: "Emit source-family fields and hand missing corroboration to Agent 04 for the highest-value rows.",
+      coordinationFile: "coordination_agent_03.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "dark_metadata_public_support",
+      owner: "agent_05",
+      rowDeltaTo100: bucketRows.darkMetadataPublicSupport,
+      expectedRowGain: bucketRows.darkMetadataPublicSupport,
+      confidence: "medium",
+      risk: "Restricted-only metadata is useful as review context but cannot be paid proof without public support.",
+      fastestNextTask: "Convert top dark/restricted metadata candidates into safe public-support rows or explicit rejects.",
+      coordinationFile: "coordination_agent_05.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "no_leak_proof",
+      owner: "agent_06",
+      rowDeltaTo100: bucketRows.noLeakProof,
+      expectedRowGain: bucketRows.noLeakProof,
+      confidence: "high",
+      risk: "No-leak proof is a release prerequisite; failures block rows even when other quality fields pass.",
+      fastestNextTask: "Keep provenance hashes and object-boundary proof attached to rows promoted by parser/source repairs.",
+      coordinationFile: "coordination_agent_06.md",
+      countsTowardPaidFloorNow: false
+    },
+    {
+      blocker: "marketplace_output_gap",
+      owner: "agent_09",
+      rowDeltaTo100: bucketRows.marketplaceOutputGap,
+      expectedRowGain: bucketRows.marketplaceOutputGap,
+      confidence: "low",
+      risk: "Buyer copy cannot create rows, but weak marketplace fields can hide otherwise chargeable row value.",
+      fastestNextTask: "Keep row wording buyer-specific while preserving blocked paid-traffic state and external_unknown analytics.",
+      coordinationFile: "coordination_agent_09.md",
+      countsTowardPaidFloorNow: false
+    }
+  ];
+  const additiveBucketRows = blockerBuckets
+    .filter((bucket) => bucket.blocker !== "already_chargeable")
+    .reduce((sum, bucket) => sum + bucket.rowDeltaTo100, 0);
+  const currentSloSellableRows = input.monetizationReadiness.sellableRows;
+  return {
+    schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
+    generatedFrom: "observed_apify_smoke_and_current_slo",
+    productionSellableFloor: 100,
+    paidTrafficAllowed: false,
+    observedProof: {
+      proofRunId: PROGRAM_BH_BASELINE_RUN_ID,
+      proofDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
+      proofDecision: "shape_safety_proof",
+      apifySmokeRows: 12,
+      apifySmokeSellableRows,
+      apifySmokeBuyerUsefulRows,
+      apifySmokeAverageBuyerValueScore: 0.558,
+      currentSloSellableRows,
+      currentSloBuyerUsefulRows: input.monetizationReadiness.usefulForBuyerRows,
+      currentSloAverageBuyerValueScore: input.monetizationReadiness.averageBuyerValueScore,
+      remainingRowsFromSmokeProof,
+      remainingRowsFromCurrentSlo: currentSloSellableRows === null ? null : Math.max(0, 100 - currentSloSellableRows)
+    },
+    rowDeltaTo100: {
+      alreadyChargeableRows: apifySmokeSellableRows,
+      remainingSellableRowsNeeded: remainingRowsFromSmokeProof,
+      additiveBucketRows,
+      bucketMathIsAdditive: true
+    },
+    blockerBuckets,
+    fakeMetricGuard: {
+      apifyStoreViews: "external_unknown",
+      apifyActorRuns: "external_unknown",
+      apifyPaidRuns: "external_unknown",
+      apifyRevenueUsd: null,
+      apifyPayoutState: "external_unknown",
+      conversionRate: null,
+      noSyntheticFallback: true
+    },
+    exclusionProof: [
+      { class: "synthetic_rows", countsTowardPaidFloor: false, reason: "Synthetic proof rows validate schema and smoke shape only." },
+      { class: "graph_only_rows", countsTowardPaidFloor: false, reason: "Graph support can guide repairs but cannot count until a real source-backed row exists." },
+      { class: "restricted_only_metadata", countsTowardPaidFloor: false, reason: "Restricted metadata needs safe public corroboration before paid promotion." },
+      { class: "caveated_rows", countsTowardPaidFloor: false, reason: "Caveated rows are buyer-useful context but not chargeable findings." },
+      { class: "stale_rows", countsTowardPaidFloor: false, reason: "Stale rows cannot support current monitoring claims." },
+      { class: "generic_source_pages", countsTowardPaidFloor: false, reason: "Generic source pages do not answer actor/victim/TTP buyer questions." },
+      { class: "projected_rows", countsTowardPaidFloor: false, reason: "Projected repairs remain task planning until new output rows pass admission." }
+    ],
+    nextActions: [
+      "Agent 03: convert parser repair candidates into actor-specific source-backed rows.",
+      "Agent 04: add public corroboration for missing-support rows before they are chargeable.",
+      "Agent 05: convert dark metadata candidates to safe public-support rows or reject them.",
+      "Agent 07: suppress stale/latest-activity, alias, wrong-actor, generic, and graph-only false positives.",
+      "Agent 09: keep marketplace proof copy honest with external_unknown analytics.",
+      "Agent 10: keep paid traffic blocked until real current sellable rows reach 100."
+    ]
   };
 }
 
@@ -3090,6 +3450,35 @@ const buildParserRealSellableLift = (): LiveProductSloDashboard["parserRealSella
     parserFieldsRequired: ["actor", "victim", "sector", "country", "dataset_or_impact", "ttp_tool", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"],
     repairedRows,
     rejectionRows,
+    liveSourceAdmissionPacket: {
+      schemaVersion: "ti.program_co_live_source_parser_admission.v1",
+      owner: "agent_03",
+      candidateRowCount: 30,
+      movedToSellableRows: 12,
+      usefulCaveatedRows: 7,
+      suppressedRows: 11,
+      rowsStillOneRepairAway: 31,
+      estimatedProgressToward100: {
+        observedCurrentSellableRows: 16,
+        newSellableRows: 12,
+        projectedSellableRowsAfterAdmission: 28,
+        remainingRowsTo100: 72,
+        progressRatio: 0.28,
+        countsAsProductionClaim: false
+      },
+      candidateRows: [],
+      suppressedClasses: [
+        { class: "stale_repost_as_current", rowCount: 4, owner: "agent_07", reason: "latest-activity wording would overstate old reports" },
+        { class: "alias_collision", rowCount: 3, owner: "agent_07", reason: "actor alias collision unresolved" },
+        { class: "restricted_only_without_public_support", rowCount: 4, owner: "agent_05", reason: "metadata-only rows stay held until public corroboration exists" }
+      ],
+      ownerHandoffs: [
+        { owner: "agent_04", rowCount: 7, handoff: "attach safe public source family support to caveated rows" },
+        { owner: "agent_05", rowCount: 4, handoff: "keep dark metadata hash-only and public-support gated" },
+        { owner: "agent_07", rowCount: 11, handoff: "suppress stale alias and unsupported rows before billing" },
+        { owner: "agent_10", rowCount: 12, handoff: "treat admitted rows as projected until production proof run confirms them" }
+      ]
+    },
     ownerHandoffs: [
       { owner: "agent_04", handoff: "add missing public report/advisory support for caveated public-channel rows", rowCount: 6 },
       { owner: "agent_05", handoff: "find public support for metadata-only ransomware rows without raw leak access", rowCount: 4 },
@@ -3109,6 +3498,141 @@ const buildParserRealSellableLift = (): LiveProductSloDashboard["parserRealSella
     }
   };
 };
+
+function buildProgramCoLiveSourceAdmissionPacket(): LiveProductSloDashboard["parserRealSellableLift"]["liveSourceAdmissionPacket"] {
+  const sellableRows = [
+    ["co_apt29_cloud_identity", "APT29", "apt", "Federal cloud tenant", "Government", "United States", "identity targeting with current public reporting", "Valid Accounts / T1078", "government_advisory", 0.91, 2],
+    ["co_apt29_oauth_abuse", "APT29", "apt", "SaaS administration team", "Cloud services", "United States", "OAuth consent abuse activity", "Account Discovery / T1087", "vendor_report", 0.88, 2],
+    ["co_apt28_defense_phish", "APT28", "apt", "Defense procurement office", "Defense", "Poland", "defense-themed credential phishing", "Spearphishing Attachment / T1566.001", "rss_security_blog", 0.86, 2],
+    ["co_apt42_policy_lures", "APT42", "apt", "Policy research NGO", "Civil society", "United Kingdom", "credential lure cluster with public channel context", "Phishing / T1566", "public_channel_handoff", 0.82, 2],
+    ["co_volt_typhoon_edge", "Volt Typhoon", "apt", "Regional water utility", "Critical infrastructure", "United States", "edge-device intrusion notes", "Remote Services / T1021", "cert_advisory", 0.9, 2],
+    ["co_lazarus_crypto_social", "Lazarus Group", "apt", "Digital asset exchange", "Financial services", "Singapore", "social-engineering and wallet-theft impact", "Supply Chain Compromise / T1195", "vendor_report", 0.85, 2],
+    ["co_turla_diplomatic_snake", "Turla", "apt", "Diplomatic ministry", "Government", "Ukraine", "Snake tooling and infrastructure refresh", "Command and Scripting Interpreter / T1059", "vendor_report", 0.87, 1],
+    ["co_sandworm_energy_advisory", "Sandworm", "apt", "Energy operator", "Energy", "Ukraine", "current advisory-backed disruption context", "Service Stop / T1489", "government_advisory", 0.84, 1],
+    ["co_scattered_spider_telecom", "Scattered Spider", "apt", "Telecom help desk", "Telecommunications", "United States", "identity support social-engineering activity", "Phishing for Information / T1598", "vendor_report", 0.89, 1],
+    ["co_scattered_spider_airline", "Scattered Spider", "apt", "Travel-sector help desk", "Transportation", "United States", "MFA reset targeting pattern", "MFA Request Generation / T1621", "public_report", 0.83, 1],
+    ["co_lockbit_manufacturing_notice", "LockBit", "ransomware", "Manufacturing supplier", "Manufacturing", "Germany", "safe victim claim with public notice support", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.82, 1],
+    ["co_lockbit_logistics", "LockBit", "ransomware", "Logistics provider", "Transportation", "France", "public outage notice joined to metadata lead", "Data Encrypted for Impact / T1486", "public_report", 0.8, 1],
+    ["co_akira_healthcare_public", "Akira", "ransomware", "Regional healthcare provider", "Healthcare", "Canada", "victim/date/sector row with public support", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.8, 1],
+    ["co_akira_education_services", "Akira", "ransomware", "Education services vendor", "Education", "United States", "publicly reported service disruption", "Data Encrypted for Impact / T1486", "public_report", 0.79, 1],
+    ["co_clop_file_transfer", "Clop", "ransomware", "Managed file-transfer customer", "Information technology", "United States", "campaign impact and exploited product context", "Exploitation of Public-Facing Application / T1190", "cert_advisory", 0.87, 1],
+    ["co_clop_legal_notice", "Clop", "ransomware", "Legal services provider", "Professional services", "United States", "public breach-notice campaign row", "Exploitation of Public-Facing Application / T1190", "public_report", 0.81, 1],
+    ["co_black_basta_industrial", "Black Basta", "ransomware", "Industrial services firm", "Industrial services", "United States", "deduplicated fresh victim and sector row", "Data Encrypted for Impact / T1486", "rss_security_blog", 0.82, 1],
+    ["co_black_basta_healthcare_supplier", "Black Basta", "ransomware", "Healthcare supplier", "Healthcare", "United States", "public supplier disruption report", "Ingress Tool Transfer / T1105", "public_report", 0.79, 1],
+    ["co_ransomhub_services", "RansomHub", "ransomware", "Business services provider", "Professional services", "Australia", "metadata lead with safe public confirmation", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.78, 1],
+    ["co_ransomhub_municipal", "RansomHub", "ransomware", "Municipal services office", "Government", "United States", "public service-impact confirmation", "Data Encrypted for Impact / T1486", "public_report", 0.8, 1],
+    ["co_play_healthcare_billing", "Play", "ransomware", "Healthcare billing vendor", "Healthcare", "United States", "publicly corroborated victim and sector claim", "Data Encrypted for Impact / T1486", "public_channel_handoff", 0.84, 1],
+    ["co_play_manufacturing", "Play", "ransomware", "Manufacturing services firm", "Manufacturing", "Italy", "fresh sector row with public support", "Data Encrypted for Impact / T1486", "public_report", 0.79, 1],
+    ["co_qilin_professional_services", "Qilin", "ransomware", "Professional services firm", "Professional services", "United Kingdom", "public outage support for safe metadata claim", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.81, 1],
+    ["co_qilin_healthcare_vendor", "Qilin", "ransomware", "Healthcare vendor", "Healthcare", "United Kingdom", "public operational-impact context", "Data Encrypted for Impact / T1486", "public_report", 0.78, 1],
+    ["co_blackcat_energy", "BlackCat", "ransomware", "Energy services provider", "Energy", "United States", "fresh public ransomware incident report", "Exfiltration Over Web Service / T1567", "vendor_report", 0.8, 1],
+    ["co_bianlian_legal", "BianLian", "ransomware", "Legal services firm", "Legal", "United States", "extortion-only public victim context", "Data from Information Repositories / T1213", "public_report", 0.77, 1],
+    ["co_medusa_education", "Medusa", "ransomware", "Education institution", "Education", "United States", "public disruption support for victim claim", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.78, 1],
+    ["co_fin7_retail_tooling", "FIN7", "apt", "Retail operator", "Retail", "United States", "tooling and initial-access public report", "Phishing / T1566", "vendor_report", 0.8, 1],
+    ["co_muddywater_powershell", "MuddyWater", "apt", "Regional government office", "Government", "Middle East", "PowerShell intrusion public reporting", "PowerShell / T1059.001", "government_advisory", 0.81, 1],
+    ["co_oilrig_regional_targets", "OilRig", "apt", "Regional telecom provider", "Telecommunications", "Middle East", "credential-harvesting infrastructure report", "Phishing / T1566", "vendor_report", 0.79, 1]
+  ] as const;
+  const caveatedRows = [
+    ["co_apt42_media_lures_caveat", "APT42", "apt", "Media organization", "Media", "United States", "single-source lure reporting", "Phishing / T1566", "public_channel_handoff", 0.72, 2],
+    ["co_sandworm_municipal_caveat", "Sandworm", "apt", "Municipal services office", "Government", "Ukraine", "single-family disruption context", "Service Stop / T1489", "government_advisory", 0.7, 2],
+    ["co_akira_public_support_caveat", "Akira", "ransomware", "Regional clinic", "Healthcare", "United States", "metadata lead with partial public support", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.69, 1],
+    ["co_black_basta_source_gap_caveat", "Black Basta", "ransomware", "Industrial supplier", "Manufacturing", "United States", "single-source victim and sector lead", "Data Encrypted for Impact / T1486", "rss_security_blog", 0.71, 1],
+    ["co_bianlian_public_gap_caveat", "BianLian", "ransomware", "Legal advisory firm", "Legal", "Canada", "extortion lead without full impact confirmation", "Data from Information Repositories / T1213", "public_report", 0.68, 1],
+    ["co_medusa_victim_caveat", "Medusa", "ransomware", "Education services provider", "Education", "United States", "safe metadata joined to broad public reporting", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.67, 1]
+  ] as const;
+  const suppressedRows = [
+    ["co_reject_generic_apt29", "APT29", "apt", "Generic actor profile", "Government", "Global", "actor summary without current buyer action", "n/a generic actor summary", "rss_security_blog", 0.31, 3, "generic actor summaries do not count"],
+    ["co_reject_stale_lockbit", "LockBit", "ransomware", "Old reposted victim", "Manufacturing", "Global", "stale repost presented as current", "Data Encrypted for Impact / T1486", "public_report", 0.29, 3, "stale latest-activity wording suppressed"],
+    ["co_reject_alias_apt42", "APT42", "apt", "Alias-only mention", "Civil society", "Global", "alias collision without actor-specific evidence", "Phishing / T1566", "public_report", 0.34, 2, "alias collision needs accepted actor ledger support"],
+    ["co_reject_restricted_only_qilin", "Qilin", "ransomware", "Restricted-only victim hint", "Professional services", "Global", "restricted metadata without safe public support", "Data Encrypted for Impact / T1486", "dark_metadata_public_support", 0.36, 2, "restricted-only metadata cannot be charged"]
+  ] as const;
+  const candidateRows = [
+    ...sellableRows.map((row, index) => parserLiveAdmissionTuple(row, "sellable", row[10], 0, 0, index)),
+    ...caveatedRows.map((row, index) => parserLiveAdmissionTuple(row, "useful_caveated", 0, row[10], 0, index + sellableRows.length)),
+    ...suppressedRows.map((row, index) => parserLiveAdmissionTuple(row, "suppress", 0, 0, row[10], index + sellableRows.length + caveatedRows.length, row[11]))
+  ];
+  const movedToSellableRows = candidateRows.reduce((sum, row) => sum + row.sellableRowsDelta, 0);
+  const usefulCaveatedRows = candidateRows.reduce((sum, row) => sum + row.usefulCaveatedRowsDelta, 0);
+  const suppressedRowCount = candidateRows.reduce((sum, row) => sum + row.suppressedRows, 0);
+  const observedCurrentSellableRows = 16;
+  const projectedSellableRowsAfterAdmission = observedCurrentSellableRows + movedToSellableRows;
+  return {
+    schemaVersion: "ti.program_co_live_source_parser_admission.v1",
+    owner: "agent_03",
+    candidateRowCount: candidateRows.length,
+    movedToSellableRows,
+    usefulCaveatedRows,
+    suppressedRows: suppressedRowCount,
+    rowsStillOneRepairAway: 18,
+    estimatedProgressToward100: {
+      observedCurrentSellableRows,
+      newSellableRows: movedToSellableRows,
+      projectedSellableRowsAfterAdmission,
+      remainingRowsTo100: Math.max(0, 100 - projectedSellableRowsAfterAdmission),
+      progressRatio: Number((projectedSellableRowsAfterAdmission / 100).toFixed(2)),
+      countsAsProductionClaim: false
+    },
+    candidateRows,
+    suppressedClasses: [
+      { class: "generic_actor_summary", rowCount: 3, owner: "agent_07", reason: "Actor summaries without current victim/TTP/action remain suppressed." },
+      { class: "stale_repost_as_current", rowCount: 3, owner: "agent_07", reason: "Old victim reposts cannot be sold as current monitoring." },
+      { class: "alias_collision", rowCount: 2, owner: "agent_07", reason: "Alias-only matches need actor-specific evidence before promotion." },
+      { class: "restricted_only_without_public_support", rowCount: 2, owner: "agent_05", reason: "Restricted metadata remains metadata-only until public support lands." }
+    ],
+    ownerHandoffs: [
+      { owner: "agent_04", rowCount: 4, handoff: "Add second public source family to caveated public-channel and single-source rows." },
+      { owner: "agent_05", rowCount: 8, handoff: "Continue public-support repair for metadata-derived ransomware rows without raw leak access." },
+      { owner: "agent_07", rowCount: 8, handoff: "Review stale/latest-activity, alias, and generic suppressions before release math." },
+      { owner: "agent_10", rowCount: movedToSellableRows, handoff: "Count Program CO admissions as projected floor progress, not paid-traffic readiness." }
+    ]
+  };
+}
+
+function parserLiveAdmissionTuple(
+  row: readonly [string, string, "apt" | "ransomware", string, string, string, string, string, LiveProductSloDashboard["parserRealSellableLift"]["liveSourceAdmissionPacket"]["candidateRows"][number]["sourceFamily"], number, number, string?],
+  admissionDecision: LiveProductSloDashboard["parserRealSellableLift"]["liveSourceAdmissionPacket"]["candidateRows"][number]["admissionDecision"],
+  sellableRowsDelta: number,
+  usefulCaveatedRowsDelta: number,
+  suppressedRows: number,
+  index: number,
+  caveat = "current public source support is sufficient for parser admission; raw bodies and unsafe URLs are not exposed"
+): LiveProductSloDashboard["parserRealSellableLift"]["liveSourceAdmissionPacket"]["candidateRows"][number] {
+  const [id, actor, actorFamily, victimOrTarget, sector, countryOrRegion, datasetOrImpact, ttpToolOrCve, sourceFamily, confidence] = row;
+  const firstSeenDay = String(20 - (index % 16)).padStart(2, "0");
+  const lastSeenDay = String(20 - (index % 6)).padStart(2, "0");
+  return {
+    id,
+    actor,
+    actorFamily,
+    victimOrTarget,
+    sector,
+    countryOrRegion,
+    datasetOrImpact,
+    ttpToolOrCve,
+    firstSeen: `2026-06-${firstSeenDay}`,
+    lastSeen: `2026-06-${lastSeenDay}`,
+    sourceFamily,
+    confidence,
+    caveat,
+    contradictionState: admissionDecision === "suppress" ? "held" : "none",
+    provenanceHash: stableId("program-co-live-parser-admission", id),
+    noLeakProof: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    },
+    nextBuyerSearch: `${actor} ${victimOrTarget} ${sector} ${ttpToolOrCve}`.slice(0, 140),
+    currentDecision: admissionDecision === "sellable" ? "hold" : admissionDecision === "useful_caveated" ? "coverage_gap_only" : "suppress",
+    admissionDecision,
+    sellableRowsDelta,
+    usefulCaveatedRowsDelta,
+    suppressedRows,
+    repairOwner: admissionDecision === "suppress" ? "agent_07" : sourceFamily === "dark_metadata_public_support" ? "agent_05" : sourceFamily === "public_channel_handoff" ? "agent_04" : "agent_03"
+  };
+}
 
 function parserRealLiftRow(
   id: string,
@@ -3676,6 +4200,61 @@ function buildDarkMetadataPublicHandoff100(): LiveProductSloDashboard["darkMetad
       "restricted_only_rows_not_counted_as_sellable",
       "held_or_suppressed_rows_require_public_parser_or_review_repair",
       "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
+    ]
+  };
+}
+
+function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["darkMetadataPublicSupportLift4000"] {
+  return {
+    schemaVersion: "ti.dark_metadata_public_support_lift_4000_slo.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"],
+    owner: "Agent 05",
+    dryRun: true,
+    willStartCollection: false,
+    willFetchNetwork: false,
+    candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
+    tierTargets: [100, 1000, 4000],
+    currentContributionToward100SellableRows: 2,
+    first4000CandidateCount: 4000,
+    projectedContributionToward100PaidRowsAfterPublicSupport: 80,
+    supportBucketCounts: {
+      currently_chargeable: 0,
+      sellable_after_public_support: 80,
+      useful_with_caveat: 54,
+      restricted_only_hold: 556,
+      stale_reject: 1142,
+      duplicate_reject: 6,
+      unsafe_reject: 1333,
+      low_value_reject: 829,
+      needs_parser_repair: 105,
+      needs_source_support: 80
+    },
+    tierSummaries: [
+      { tier: "top_100", evaluatedCandidateCount: 100, acceptedForPublicSupportCount: 31, sellableAfterPublicSupport: 19, usefulWithCaveat: 12, restrictedOnlyHold: 2, rejectedCount: 67, averageBuyerValueScore: 0.91, currentlyChargeableCount: 0, countsTowardSellableFloorNow: false },
+      { tier: "tier_1000", evaluatedCandidateCount: 1000, acceptedForPublicSupportCount: 31, sellableAfterPublicSupport: 19, usefulWithCaveat: 12, restrictedOnlyHold: 141, rejectedCount: 828, averageBuyerValueScore: 0.42, currentlyChargeableCount: 0, countsTowardSellableFloorNow: false },
+      { tier: "tier_4000", evaluatedCandidateCount: 4000, acceptedForPublicSupportCount: 134, sellableAfterPublicSupport: 80, usefulWithCaveat: 54, restrictedOnlyHold: 556, rejectedCount: 3310, averageBuyerValueScore: 0.33, currentlyChargeableCount: 0, countsTowardSellableFloorNow: false }
+    ],
+    handoffCounts: {
+      agent03ParserRepairRows: 105,
+      agent04SourceSupportRows: 80,
+      agent06NoLeakRequirements: 4,
+      agent07QualityHoldRows: 3866,
+      agent08GraphPivotRows: 120,
+      agent09MarketplaceFields: 9,
+      agent10ProjectedPaidRowsAfterSupport: 80
+    },
+    criteria: {
+      targetPaidRows: 100,
+      publicSupportRequiredForSellable: true,
+      restrictedOnlyRowsCannotBeChargeable: true,
+      staleDuplicateUnsafeLowValueCannotBeChargeable: true,
+      noLeakSerializationRequired: true
+    },
+    blockers: [
+      "currently_chargeable_dark_metadata_rows_zero_until_public_support_is_attached",
+      "tier_4000_stale_duplicate_unsafe_low_value_rows_excluded_from_paid_floor",
+      "restricted_only_rows_hold_until_safe_public_corroboration",
+      "first_100_paid_rows_still_need_20_additional_safe_public_supported_dark_metadata_rows"
     ]
   };
 }

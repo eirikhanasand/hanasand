@@ -407,9 +407,9 @@ describe("ops controls", () => {
       productionSellableRowFloor: 100,
       usefulCaveatedRows: 32,
       rowsBlockedFromBilling: 82,
-      oneRepairAwayRows: 123,
-      projectedSellableRowsFromAcceptedRepairs: 123,
-      projectedSellableRowsAfterAcceptedRepairs: 139,
+      oneRepairAwayRows: 159,
+      projectedSellableRowsFromAcceptedRepairs: 159,
+      projectedSellableRowsAfterAcceptedRepairs: 175,
       costPerUsefulRowUsd: 0,
       topBlocker: "sellable_rows_below_100",
       revenueTruth: {
@@ -430,6 +430,11 @@ describe("ops controls", () => {
       projectedSellableRows: 20,
       countsTowardProjectedFloor: true
     });
+    expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "parserRealSellableLift.liveSourceAdmissionPacket")).toMatchObject({
+      owner: "agent_03",
+      projectedSellableRows: 36,
+      countsTowardProjectedFloor: true
+    });
     expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "hundredSellableRowGraphPivotPlan")).toMatchObject({
       owner: "agent_08",
       projectedSellableRows: 100,
@@ -448,6 +453,56 @@ describe("ops controls", () => {
       expect.objectContaining({ class: "restricted_only_rows", countsAsSellable: false, currentRows: 100 }),
       expect.objectContaining({ class: "caveat_only_rows", countsAsSellable: false, currentRows: 32 })
     ]));
+    expect(dashboard.paidReleaseTruthBoard).toMatchObject({
+      schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"]),
+      generatedFrom: "observed_apify_smoke_and_current_slo",
+      productionSellableFloor: 100,
+      paidTrafficAllowed: false,
+      observedProof: {
+        proofRunId: "OThlfd0uzSCNnedAO",
+        proofDatasetId: "LSen2fYtwFTtOr7vK",
+        proofDecision: "shape_safety_proof",
+        apifySmokeRows: 12,
+        apifySmokeSellableRows: 3,
+        apifySmokeBuyerUsefulRows: 9,
+        apifySmokeAverageBuyerValueScore: 0.558,
+        currentSloSellableRows: 16,
+        currentSloBuyerUsefulRows: 48,
+        currentSloAverageBuyerValueScore: 0.6,
+        remainingRowsFromSmokeProof: 97,
+        remainingRowsFromCurrentSlo: 84
+      },
+      rowDeltaTo100: {
+        alreadyChargeableRows: 3,
+        remainingSellableRowsNeeded: 97,
+        additiveBucketRows: 97,
+        bucketMathIsAdditive: true
+      },
+      fakeMetricGuard: {
+        apifyStoreViews: "external_unknown",
+        apifyActorRuns: "external_unknown",
+        apifyPaidRuns: "external_unknown",
+        apifyRevenueUsd: null,
+        apifyPayoutState: "external_unknown",
+        conversionRate: null,
+        noSyntheticFallback: true
+      }
+    });
+    expect(dashboard.paidReleaseTruthBoard.blockerBuckets.map((bucket) => bucket.blocker)).toEqual([
+      "already_chargeable",
+      "missing_public_support",
+      "parser_repair",
+      "freshness",
+      "alias_collision",
+      "source_family_gap",
+      "dark_metadata_public_support",
+      "no_leak_proof",
+      "marketplace_output_gap"
+    ]);
+    expect(dashboard.paidReleaseTruthBoard.blockerBuckets.filter((bucket) => bucket.blocker !== "already_chargeable").every((bucket) => bucket.countsTowardPaidFloorNow === false && bucket.coordinationFile.endsWith(".md") && bucket.fastestNextTask.length > 0)).toBe(true);
+    expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
+    expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
       schemaVersion: "ti.product_scale_step_gates.v1",
       baselineRunId: "OThlfd0uzSCNnedAO",
@@ -1066,6 +1121,46 @@ describe("ops controls", () => {
       "public_corroborated_dark_metadata_rows_below_100_sellable_floor",
       "restricted_only_rows_not_counted_as_sellable",
       "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
+    ]));
+    expect(dashboard.darkMetadataPublicSupportLift4000).toMatchObject({
+      schemaVersion: "ti.dark_metadata_public_support_lift_4000_slo.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),
+      owner: "Agent 05",
+      dryRun: true,
+      willStartCollection: false,
+      willFetchNetwork: false,
+      candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
+      tierTargets: [100, 1000, 4000],
+      currentContributionToward100SellableRows: 2,
+      first4000CandidateCount: 4000,
+      projectedContributionToward100PaidRowsAfterPublicSupport: 80
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.supportBucketCounts).toEqual({
+      currently_chargeable: 0,
+      sellable_after_public_support: 80,
+      useful_with_caveat: 54,
+      restricted_only_hold: 556,
+      stale_reject: 1142,
+      duplicate_reject: 6,
+      unsafe_reject: 1333,
+      low_value_reject: 829,
+      needs_parser_repair: 105,
+      needs_source_support: 80
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.tierSummaries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tier: "tier_4000", evaluatedCandidateCount: 4000, acceptedForPublicSupportCount: 134, sellableAfterPublicSupport: 80, usefulWithCaveat: 54, restrictedOnlyHold: 556, rejectedCount: 3310, currentlyChargeableCount: 0, countsTowardSellableFloorNow: false })
+    ]));
+    expect(dashboard.darkMetadataPublicSupportLift4000.criteria).toMatchObject({
+      targetPaidRows: 100,
+      publicSupportRequiredForSellable: true,
+      restrictedOnlyRowsCannotBeChargeable: true,
+      staleDuplicateUnsafeLowValueCannotBeChargeable: true,
+      noLeakSerializationRequired: true
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.blockers).toEqual(expect.arrayContaining([
+      "currently_chargeable_dark_metadata_rows_zero_until_public_support_is_attached",
+      "tier_4000_stale_duplicate_unsafe_low_value_rows_excluded_from_paid_floor",
+      "restricted_only_rows_hold_until_safe_public_corroboration"
     ]));
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);

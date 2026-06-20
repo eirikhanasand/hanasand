@@ -943,10 +943,16 @@ export type DarkwebIndexPublicSupportLiftOutcome =
   | "unsafe_reject"
   | "low_value_reject";
 
+export type DarkwebIndexPublicSupportLiftSupportBucket =
+  | "currently_chargeable"
+  | DarkwebIndexPublicSupportLiftOutcome
+  | "needs_parser_repair"
+  | "needs_source_support";
+
 export interface DarkwebIndexPublicSupportLift1000 {
   readonly schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1";
   readonly owner: "Agent 05";
-  readonly mode: "metadata_only_public_support_lift_100_to_1000";
+  readonly mode: "metadata_only_public_support_lift_100_to_4000";
   readonly candidateSource: "publicSupportWorklist40_and_darkweb_index_records";
   readonly sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim";
   readonly strictNoInflation: true;
@@ -961,6 +967,18 @@ export interface DarkwebIndexPublicSupportLift1000 {
     readonly unsafe: number;
     readonly lowValue: number;
   };
+  readonly first4000CandidateCount: number;
+  readonly first4000SellableAfterPublicSupport: number;
+  readonly first4000UsefulWithCaveat: number;
+  readonly first4000RestrictedOnlyHold: number;
+  readonly first4000RejectedCounts: {
+    readonly stale: number;
+    readonly duplicate: number;
+    readonly unsafe: number;
+    readonly lowValue: number;
+  };
+  readonly first4000SupportBucketCounts: Record<DarkwebIndexPublicSupportLiftSupportBucket, number>;
+  readonly projectedContributionToward100PaidRowsAfterPublicSupport: number;
   readonly tiers: readonly DarkwebIndexPublicSupportLiftTier[];
   readonly handoffs: {
     readonly agent03ParserFields: readonly string[];
@@ -974,6 +992,9 @@ export interface DarkwebIndexPublicSupportLift1000 {
       readonly currentContributionToward100SellableRows: number;
       readonly projectedTier1000SellableAfterPublicSupport: number;
       readonly projectedTier1000UsefulWithCaveat: number;
+      readonly projectedTier4000SellableAfterPublicSupport: number;
+      readonly projectedTier4000UsefulWithCaveat: number;
+      readonly projectedContributionToward100PaidRowsAfterPublicSupport: number;
       readonly countedOnlyAfterSafePublicSupport: true;
     };
   };
@@ -982,11 +1003,12 @@ export interface DarkwebIndexPublicSupportLift1000 {
 }
 
 export interface DarkwebIndexPublicSupportLiftTier {
-  readonly tier: "top_100" | "tier_1000";
-  readonly targetCandidateCount: 100 | 1000;
+  readonly tier: "top_100" | "tier_1000" | "tier_4000";
+  readonly targetCandidateCount: 100 | 1000 | 4000;
   readonly evaluatedCandidateCount: number;
   readonly acceptedForPublicSupportCount: number;
   readonly outcomeCounts: Record<DarkwebIndexPublicSupportLiftOutcome, number>;
+  readonly supportBucketCounts: Record<DarkwebIndexPublicSupportLiftSupportBucket, number>;
   readonly contributionToward100SellableRows: number;
   readonly averageBuyerValueScore: number;
   readonly rows: readonly DarkwebIndexPublicSupportLiftRow[];
@@ -1013,6 +1035,8 @@ export interface DarkwebIndexPublicSupportLiftRow {
   readonly whyBuyerWouldPayIfCorroborated: string;
   readonly graphPivot?: string;
   readonly rejectionReason?: "stale" | "duplicate" | "unsafe" | "low_value" | "restricted_only";
+  readonly exactMissingField: "none" | "actor" | "victim_or_dataset" | "public_support_source" | "fresh_current_claim" | "safe_public_evidence" | "not_chargeable_rejected";
+  readonly owningWorkerHandoff: "agent_03_parser_repair" | "agent_04_source_support" | "agent_05_restricted_metadata_hold" | "agent_07_quality_suppression" | "agent_08_graph_pivot_support" | "agent_09_marketplace_field_mapping" | "agent_10_release_gate";
   readonly countsTowardSellableFloorNow: false;
   readonly countsTowardSellableFloorAfterPublicSupport: boolean;
 }
@@ -1183,7 +1207,7 @@ export interface DarkwebIndexSearchDto {
     readonly liveValueExpansion: Pick<DarkwebIndexLiveValueExpansion, "schemaVersion" | "mode" | "sourceCountInflationBlocked" | "tiers">;
     readonly publicIntelligenceHandoff100: Pick<DarkwebIndexPublicIntelligenceHandoff100, "schemaVersion" | "mode" | "candidateCount" | "publicCorroboratedCount" | "usefulCaveatedCount" | "projectedContributionToward100SellableRows" | "decisionCounts" | "sampleRows" | "handoffs">;
     readonly publicSupportWorklist40: Pick<DarkwebIndexPublicSupportWorklist40, "schemaVersion" | "mode" | "topCandidateCount" | "publicSupportReadyCount" | "stillRestrictedOnlyCount" | "projectedCaveatedRows" | "projectedSellableRowsAfterPublicSupport" | "contributionToward100SellableRows" | "rows" | "handoffs">;
-    readonly publicSupportLift1000: Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "tiers" | "handoffs">;
+    readonly publicSupportLift1000: Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "first4000CandidateCount" | "first4000SellableAfterPublicSupport" | "first4000UsefulWithCaveat" | "first4000RestrictedOnlyHold" | "first4000RejectedCounts" | "first4000SupportBucketCounts" | "projectedContributionToward100PaidRowsAfterPublicSupport" | "tiers" | "handoffs">;
     readonly warnings: readonly ["metadata_only", "review_required", "no_raw_locations"];
   };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
@@ -1318,7 +1342,7 @@ export interface DarkwebIndexContractDto {
   readonly publicSupportLift1000: {
     readonly schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1";
     readonly candidateSource: "publicSupportWorklist40_and_darkweb_index_records";
-    readonly tierTargets: readonly [100, 1000];
+    readonly tierTargets: readonly [100, 1000, 4000];
     readonly routeFields: readonly ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000"];
     readonly sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim";
     readonly strictNoInflation: true;
@@ -1602,7 +1626,7 @@ export function darkwebIndexContract(): DarkwebIndexContractDto {
     publicSupportLift1000: {
       schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
       candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
-      tierTargets: [100, 1000],
+      tierTargets: [100, 1000, 4000],
       routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000"],
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
@@ -2628,7 +2652,7 @@ function publicSupportWorklistSearchHandoff(
 
 function publicSupportLiftSearchHandoff(
   lift: DarkwebIndexPublicSupportLift1000
-): Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "tiers" | "handoffs"> {
+): Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "first4000CandidateCount" | "first4000SellableAfterPublicSupport" | "first4000UsefulWithCaveat" | "first4000RestrictedOnlyHold" | "first4000RejectedCounts" | "first4000SupportBucketCounts" | "projectedContributionToward100PaidRowsAfterPublicSupport" | "tiers" | "handoffs"> {
   return {
     schemaVersion: lift.schemaVersion,
     mode: lift.mode,
@@ -2639,6 +2663,13 @@ function publicSupportLiftSearchHandoff(
     first1000UsefulWithCaveat: lift.first1000UsefulWithCaveat,
     first1000RestrictedOnlyHold: lift.first1000RestrictedOnlyHold,
     first1000RejectedCounts: lift.first1000RejectedCounts,
+    first4000CandidateCount: lift.first4000CandidateCount,
+    first4000SellableAfterPublicSupport: lift.first4000SellableAfterPublicSupport,
+    first4000UsefulWithCaveat: lift.first4000UsefulWithCaveat,
+    first4000RestrictedOnlyHold: lift.first4000RestrictedOnlyHold,
+    first4000RejectedCounts: lift.first4000RejectedCounts,
+    first4000SupportBucketCounts: lift.first4000SupportBucketCounts,
+    projectedContributionToward100PaidRowsAfterPublicSupport: lift.projectedContributionToward100PaidRowsAfterPublicSupport,
     tiers: lift.tiers,
     handoffs: lift.handoffs
   };
@@ -2993,30 +3024,30 @@ function buildDarkwebIndexPublicSupportWorklist40(records: readonly DarkwebIndex
 
 function buildDarkwebIndexPublicSupportLift1000(records: readonly DarkwebIndexRecord[]): DarkwebIndexPublicSupportLift1000 {
   const worklist40 = buildDarkwebIndexPublicSupportWorklist40(records);
-  const candidateRecords = records.length >= 1000 ? records : darkwebIndexFixtureRecords(1000);
-  const duplicateIds = new Set(darkwebIndexDedupePlan(candidateRecords).duplicateClusters.flatMap((cluster) => cluster.duplicateRecordIds));
-  const rankedRows = candidateRecords
-    .map((record) => {
-      const publicRow = publicHandoffRowFor(record, duplicateIds);
-      return { publicRow, selectionScore: publicSupportSelectionScore(publicRow) };
-    })
-    .sort((left, right) =>
-      right.selectionScore - left.selectionScore ||
-      right.publicRow.buyerValueScore - left.publicRow.buyerValueScore ||
-      left.publicRow.recordId.localeCompare(right.publicRow.recordId)
-    );
-  const top100 = publicSupportLiftTierFor("top_100", 100, rankedRows.slice(0, 100));
-  const tier1000 = publicSupportLiftTierFor("tier_1000", 1000, rankedRows.slice(0, 1000));
+  const candidateRecords = records.length >= 4000 ? records : darkwebIndexFixtureRecords(4000);
+  const first1000CandidateRecords = candidateRecords.slice(0, 1000);
+  const rankedRows1000 = publicSupportRankedRowsFor(first1000CandidateRecords);
+  const rankedRows4000 = publicSupportRankedRowsFor(candidateRecords);
+  const top100 = publicSupportLiftTierFor("top_100", 100, rankedRows1000.slice(0, 100));
+  const tier1000 = publicSupportLiftTierFor("tier_1000", 1000, rankedRows1000.slice(0, 1000));
+  const tier4000 = publicSupportLiftTierFor("tier_4000", 4000, rankedRows4000.slice(0, 4000));
   const first1000RejectedCounts = {
     stale: tier1000.outcomeCounts.stale_reject,
     duplicate: tier1000.outcomeCounts.duplicate_reject,
     unsafe: tier1000.outcomeCounts.unsafe_reject,
     lowValue: tier1000.outcomeCounts.low_value_reject
   };
+  const first4000RejectedCounts = {
+    stale: tier4000.outcomeCounts.stale_reject,
+    duplicate: tier4000.outcomeCounts.duplicate_reject,
+    unsafe: tier4000.outcomeCounts.unsafe_reject,
+    lowValue: tier4000.outcomeCounts.low_value_reject
+  };
+  const projectedContributionToward100PaidRowsAfterPublicSupport = Math.min(100, tier4000.outcomeCounts.sellable_after_public_support);
   return {
     schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
     owner: "Agent 05",
-    mode: "metadata_only_public_support_lift_100_to_1000",
+    mode: "metadata_only_public_support_lift_100_to_4000",
     candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
     sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
     strictNoInflation: true,
@@ -3026,11 +3057,20 @@ function buildDarkwebIndexPublicSupportLift1000(records: readonly DarkwebIndexRe
     first1000UsefulWithCaveat: tier1000.outcomeCounts.useful_with_caveat,
     first1000RestrictedOnlyHold: tier1000.outcomeCounts.restricted_only_hold,
     first1000RejectedCounts,
-    tiers: [top100, tier1000],
+    first4000CandidateCount: tier4000.evaluatedCandidateCount,
+    first4000SellableAfterPublicSupport: tier4000.outcomeCounts.sellable_after_public_support,
+    first4000UsefulWithCaveat: tier4000.outcomeCounts.useful_with_caveat,
+    first4000RestrictedOnlyHold: tier4000.outcomeCounts.restricted_only_hold,
+    first4000RejectedCounts,
+    first4000SupportBucketCounts: tier4000.supportBucketCounts,
+    projectedContributionToward100PaidRowsAfterPublicSupport,
+    tiers: [top100, tier1000, tier4000],
     handoffs: {
-      agent03ParserFields: uniqueSorted(tier1000.rows.flatMap((row) => row.parserFieldsNeeded.map((field) => `${field}:${row.recordId}`))).slice(0, 120),
-      agent04PublicSourceTargets: uniqueSorted(tier1000.rows
-        .filter((row) => row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat")
+      agent03ParserFields: uniqueSorted(tier4000.rows
+        .filter((row) => row.owningWorkerHandoff === "agent_03_parser_repair")
+        .flatMap((row) => row.parserFieldsNeeded.map((field) => `${field}:${row.recordId}`))).slice(0, 160),
+      agent04PublicSourceTargets: uniqueSorted(tier4000.rows
+        .filter((row) => row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat" || row.owningWorkerHandoff === "agent_04_source_support")
         .flatMap((row) => row.requiredPublicSupportSources.map((source) => `${source}:${row.publicSupportTarget}`))).slice(0, 120),
       agent06EvidenceNoLeakRequirements: [
         "hash_only_locator_storage",
@@ -3038,16 +3078,19 @@ function buildDarkwebIndexPublicSupportLift1000(records: readonly DarkwebIndexRe
         "no_payload_or_credential_capture",
         "restricted_claims_hold_until_public_corroboration"
       ],
-      agent07QualityHolds: uniqueSorted(tier1000.rows
+      agent07QualityHolds: uniqueSorted(tier4000.rows
         .filter((row) => row.outcome !== "sellable_after_public_support")
         .map((row) => `${row.outcome}:${row.recordId}`)).slice(0, 120),
-      agent08GraphSupportPivots: uniqueSorted(tier1000.rows.flatMap((row) => row.graphPivot ? [row.graphPivot] : [])).slice(0, 120),
+      agent08GraphSupportPivots: uniqueSorted(tier4000.rows.flatMap((row) => row.graphPivot ? [row.graphPivot] : [])).slice(0, 120),
       agent09MarketplaceFields: ["actorHints", "victimHints", "datasetHints", "sectorCountry", "lastSeen", "sourceFamily", "expectedBuyerValue", "whyBuyerWouldPayIfCorroborated", "noLeakProof"],
       agent10ReleaseMetrics: {
         productionSellableRowFloor: 100,
         currentContributionToward100SellableRows: worklist40.contributionToward100SellableRows,
         projectedTier1000SellableAfterPublicSupport: tier1000.outcomeCounts.sellable_after_public_support,
         projectedTier1000UsefulWithCaveat: tier1000.outcomeCounts.useful_with_caveat,
+        projectedTier4000SellableAfterPublicSupport: tier4000.outcomeCounts.sellable_after_public_support,
+        projectedTier4000UsefulWithCaveat: tier4000.outcomeCounts.useful_with_caveat,
+        projectedContributionToward100PaidRowsAfterPublicSupport,
         countedOnlyAfterSafePublicSupport: true
       }
     },
@@ -3065,6 +3108,20 @@ function buildDarkwebIndexPublicSupportLift1000(records: readonly DarkwebIndexRe
   };
 }
 
+function publicSupportRankedRowsFor(candidateRecords: readonly DarkwebIndexRecord[]): Array<{ publicRow: DarkwebIndexPublicHandoffRow; selectionScore: number }> {
+  const duplicateIds = new Set(darkwebIndexDedupePlan(candidateRecords).duplicateClusters.flatMap((cluster) => cluster.duplicateRecordIds));
+  return candidateRecords
+    .map((record) => {
+      const publicRow = publicHandoffRowFor(record, duplicateIds);
+      return { publicRow, selectionScore: publicSupportSelectionScore(publicRow) };
+    })
+    .sort((left, right) =>
+      right.selectionScore - left.selectionScore ||
+      right.publicRow.buyerValueScore - left.publicRow.buyerValueScore ||
+      left.publicRow.recordId.localeCompare(right.publicRow.recordId)
+    );
+}
+
 function publicSupportLiftTierFor(
   tier: DarkwebIndexPublicSupportLiftTier["tier"],
   targetCandidateCount: DarkwebIndexPublicSupportLiftTier["targetCandidateCount"],
@@ -3078,6 +3135,7 @@ function publicSupportLiftTierFor(
     evaluatedCandidateCount: rows.length,
     acceptedForPublicSupportCount: rows.filter((row) => row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat").length,
     outcomeCounts,
+    supportBucketCounts: publicSupportLiftSupportBucketCounts(rows),
     contributionToward100SellableRows: outcomeCounts.sellable_after_public_support,
     averageBuyerValueScore: rows.length === 0 ? 0 : Math.round((rows.reduce((sum, row) => sum + row.expectedBuyerValue, 0) / rows.length) * 100) / 100,
     rows
@@ -3093,6 +3151,22 @@ function publicSupportLiftOutcomeCounts(rows: readonly DarkwebIndexPublicSupport
     duplicate_reject: rows.filter((row) => row.outcome === "duplicate_reject").length,
     unsafe_reject: rows.filter((row) => row.outcome === "unsafe_reject").length,
     low_value_reject: rows.filter((row) => row.outcome === "low_value_reject").length
+  };
+}
+
+function publicSupportLiftSupportBucketCounts(rows: readonly DarkwebIndexPublicSupportLiftRow[]): Record<DarkwebIndexPublicSupportLiftSupportBucket, number> {
+  const outcomeCounts = publicSupportLiftOutcomeCounts(rows);
+  return {
+    currently_chargeable: rows.filter((row) => row.countsTowardSellableFloorNow).length,
+    sellable_after_public_support: outcomeCounts.sellable_after_public_support,
+    useful_with_caveat: outcomeCounts.useful_with_caveat,
+    restricted_only_hold: outcomeCounts.restricted_only_hold,
+    stale_reject: outcomeCounts.stale_reject,
+    duplicate_reject: outcomeCounts.duplicate_reject,
+    unsafe_reject: outcomeCounts.unsafe_reject,
+    low_value_reject: outcomeCounts.low_value_reject,
+    needs_parser_repair: rows.filter((row) => row.owningWorkerHandoff === "agent_03_parser_repair").length,
+    needs_source_support: rows.filter((row) => row.owningWorkerHandoff === "agent_04_source_support").length
   };
 }
 
@@ -3124,6 +3198,8 @@ function publicSupportLiftRowFor(
     whyBuyerWouldPayIfCorroborated: publicSupportBuyerReasonFor(row, publicSupportWorkOutcomeForLift(outcome)),
     graphPivot: row.graphPivot,
     rejectionReason: publicSupportLiftRejectionReasonFor(outcome),
+    exactMissingField: publicSupportLiftMissingFieldFor(row, outcome),
+    owningWorkerHandoff: publicSupportLiftOwnerFor(row, outcome),
     countsTowardSellableFloorNow: false,
     countsTowardSellableFloorAfterPublicSupport: outcome === "sellable_after_public_support"
   };
@@ -3154,6 +3230,31 @@ function publicSupportLiftRejectionReasonFor(outcome: DarkwebIndexPublicSupportL
   if (outcome === "low_value_reject") return "low_value";
   if (outcome === "restricted_only_hold") return "restricted_only";
   return undefined;
+}
+
+function publicSupportLiftMissingFieldFor(
+  row: DarkwebIndexPublicHandoffRow,
+  outcome: DarkwebIndexPublicSupportLiftOutcome
+): DarkwebIndexPublicSupportLiftRow["exactMissingField"] {
+  if (outcome === "stale_reject") return "fresh_current_claim";
+  if (outcome === "duplicate_reject" || outcome === "unsafe_reject" || outcome === "low_value_reject") return "not_chargeable_rejected";
+  if (row.actorHints.length === 0) return "actor";
+  if (row.victimHints.length === 0 && row.datasetHints.length === 0) return "victim_or_dataset";
+  if (row.publicSupportState === "restricted_only" || row.publicSupportState === "unsafe_or_held") return "safe_public_evidence";
+  if (outcome === "useful_with_caveat") return "public_support_source";
+  return "none";
+}
+
+function publicSupportLiftOwnerFor(
+  row: DarkwebIndexPublicHandoffRow,
+  outcome: DarkwebIndexPublicSupportLiftOutcome
+): DarkwebIndexPublicSupportLiftRow["owningWorkerHandoff"] {
+  if (outcome === "stale_reject" || outcome === "duplicate_reject" || outcome === "unsafe_reject" || outcome === "low_value_reject") return "agent_07_quality_suppression";
+  if (row.actorHints.length === 0 || (row.victimHints.length === 0 && row.datasetHints.length === 0)) return "agent_03_parser_repair";
+  if (row.publicSupportState === "restricted_only" || row.publicSupportState === "unsafe_or_held") return "agent_05_restricted_metadata_hold";
+  if (outcome === "sellable_after_public_support" || outcome === "useful_with_caveat") return "agent_04_source_support";
+  if (row.graphPivot) return "agent_08_graph_pivot_support";
+  return "agent_10_release_gate";
 }
 
 function publicSupportWorkOutcomeForLift(outcome: DarkwebIndexPublicSupportLiftOutcome): DarkwebIndexPublicSupportWorkRow["expectedOutcome"] {

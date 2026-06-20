@@ -7911,7 +7911,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "paidRowAudit100", "first100AdmissionQuality", "graphSellableSupportPacket", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "paidReleaseTruthBoard", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "paidRowAudit100", "first100AdmissionQuality", "graphSellableSupportPacket", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -10309,6 +10309,58 @@ function buildApifyStoreReadinessContract(input: {
       noRestrictedOnlyRowsUsed: true
     }
   };
+  const paidReleaseTruthBoard = {
+    schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
+    routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
+    generatedFrom: "observed_apify_smoke_and_current_slo",
+    productionSellableFloor: 100,
+    paidTrafficAllowed: false,
+    observedProof: {
+      proofRunId: "OThlfd0uzSCNnedAO",
+      proofDatasetId: "LSen2fYtwFTtOr7vK",
+      proofDecision: "shape_safety_proof",
+      apifySmokeRows: 12,
+      apifySmokeSellableRows: 3,
+      apifySmokeBuyerUsefulRows: 9,
+      apifySmokeAverageBuyerValueScore: 0.558,
+      remainingRowsFromSmokeProof: 97
+    },
+    rowDeltaTo100: {
+      alreadyChargeableRows: 3,
+      remainingSellableRowsNeeded: 97,
+      additiveBucketRows: 97,
+      bucketMathIsAdditive: true
+    },
+    blockerBuckets: [
+      { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
+      { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },
+      { blocker: "parser_repair", owner: "agent_03", rowDeltaTo100: 20, expectedRowGain: 20, confidence: "high", risk: "generic rows without actor/victim/dataset/TTP/date fields are not chargeable", fastestNextTask: "promote parser-repaired rows after source-backed provenance exists", coordinationFile: "coordination_agent_03.md", countsTowardPaidFloorNow: false },
+      { blocker: "freshness", owner: "agent_07", rowDeltaTo100: 5, expectedRowGain: 5, confidence: "medium", risk: "stale latest-activity rows break buyer trust", fastestNextTask: "replace stale claims with current public evidence or suppress them", coordinationFile: "coordination_agent_07.md", countsTowardPaidFloorNow: false },
+      { blocker: "alias_collision", owner: "agent_07", rowDeltaTo100: 4, expectedRowGain: 4, confidence: "medium", risk: "alias-only or wrong-actor rows inflate counts", fastestNextTask: "hold alias-collision rows until actor-specific evidence passes admission", coordinationFile: "coordination_agent_07.md", countsTowardPaidFloorNow: false },
+      { blocker: "source_family_gap", owner: "agent_03", rowDeltaTo100: 18, expectedRowGain: 18, confidence: "medium", risk: "rows without source-family diversity remain fragile", fastestNextTask: "emit source-family fields and route missing corroboration to Agent 04", coordinationFile: "coordination_agent_03.md", countsTowardPaidFloorNow: false },
+      { blocker: "dark_metadata_public_support", owner: "agent_05", rowDeltaTo100: 19, expectedRowGain: 19, confidence: "medium", risk: "restricted-only metadata cannot be paid proof without public support", fastestNextTask: "convert dark metadata candidates to safe public-supported rows or rejects", coordinationFile: "coordination_agent_05.md", countsTowardPaidFloorNow: false },
+      { blocker: "no_leak_proof", owner: "agent_06", rowDeltaTo100: 0, expectedRowGain: 0, confidence: "high", risk: "any no-leak failure blocks otherwise useful rows", fastestNextTask: "keep provenance and object-boundary proof attached to every promoted row", coordinationFile: "coordination_agent_06.md", countsTowardPaidFloorNow: false },
+      { blocker: "marketplace_output_gap", owner: "agent_09", rowDeltaTo100: 3, expectedRowGain: 3, confidence: "low", risk: "weak wording can hide real row value but cannot invent rows", fastestNextTask: "keep marketplace fields buyer-specific while analytics stay external_unknown", coordinationFile: "coordination_agent_09.md", countsTowardPaidFloorNow: false }
+    ],
+    fakeMetricGuard: {
+      apifyStoreViews: "external_unknown",
+      apifyActorRuns: "external_unknown",
+      apifyPaidRuns: "external_unknown",
+      apifyRevenueUsd: null,
+      apifyPayoutState: "external_unknown",
+      conversionRate: null,
+      noSyntheticFallback: true
+    },
+    exclusionProof: [
+      { class: "synthetic_rows", countsTowardPaidFloor: false, reason: "Synthetic proof rows validate schema and smoke shape only." },
+      { class: "graph_only_rows", countsTowardPaidFloor: false, reason: "Graph support can guide repairs but cannot count until a real source-backed row exists." },
+      { class: "restricted_only_metadata", countsTowardPaidFloor: false, reason: "Restricted metadata needs safe public corroboration before paid promotion." },
+      { class: "caveated_rows", countsTowardPaidFloor: false, reason: "Caveated rows are buyer-useful context but not chargeable findings." },
+      { class: "stale_rows", countsTowardPaidFloor: false, reason: "Stale rows cannot support current monitoring claims." },
+      { class: "generic_source_pages", countsTowardPaidFloor: false, reason: "Generic source pages do not answer actor/victim/TTP buyer questions." },
+      { class: "projected_rows", countsTowardPaidFloor: false, reason: "Projected repairs remain task planning until new output rows pass admission." }
+    ]
+  };
 
   return {
     schemaVersion: "ti.apify_store_readiness.v1",
@@ -10493,6 +10545,7 @@ function buildApifyStoreReadinessContract(input: {
     },
     hundredRowConversionProgress,
     marketplaceConversionRealRowSamplePack,
+    paidReleaseTruthBoard,
     conversionExperiments,
     buyerSampleRows,
     operatorBlockerBoard: [

@@ -292,7 +292,7 @@ describe("darkweb metadata index contracts", () => {
     expect(status.publicSupportLift1000).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
       owner: "Agent 05",
-      mode: "metadata_only_public_support_lift_100_to_1000",
+      mode: "metadata_only_public_support_lift_100_to_4000",
       candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
@@ -307,6 +307,29 @@ describe("darkweb metadata index contracts", () => {
         unsafe: 333,
         lowValue: 204
       },
+      first4000CandidateCount: 4000,
+      first4000SellableAfterPublicSupport: 80,
+      first4000UsefulWithCaveat: 54,
+      first4000RestrictedOnlyHold: 556,
+      first4000RejectedCounts: {
+        stale: 1142,
+        duplicate: 6,
+        unsafe: 1333,
+        lowValue: 829
+      },
+      first4000SupportBucketCounts: {
+        currently_chargeable: 0,
+        sellable_after_public_support: 80,
+        useful_with_caveat: 54,
+        restricted_only_hold: 556,
+        stale_reject: 1142,
+        duplicate_reject: 6,
+        unsafe_reject: 1333,
+        low_value_reject: 829,
+        needs_parser_repair: 105,
+        needs_source_support: 80
+      },
+      projectedContributionToward100PaidRowsAfterPublicSupport: 80,
       safety: {
         metadataOnly: true,
         willFetchNetwork: false,
@@ -318,7 +341,7 @@ describe("darkweb metadata index contracts", () => {
         actorInteraction: false
       }
     });
-    expect(status.publicSupportLift1000.tiers).toHaveLength(2);
+    expect(status.publicSupportLift1000.tiers).toHaveLength(3);
     expect(status.publicSupportLift1000.tiers[0]).toMatchObject({
       tier: "top_100",
       targetCandidateCount: 100,
@@ -353,13 +376,59 @@ describe("darkweb metadata index contracts", () => {
         low_value_reject: 204
       }
     });
+    expect(status.publicSupportLift1000.tiers[2]).toMatchObject({
+      tier: "tier_4000",
+      targetCandidateCount: 4000,
+      evaluatedCandidateCount: 4000,
+      acceptedForPublicSupportCount: 134,
+      contributionToward100SellableRows: 80,
+      averageBuyerValueScore: 0.42,
+      outcomeCounts: {
+        sellable_after_public_support: 80,
+        useful_with_caveat: 54,
+        restricted_only_hold: 556,
+        stale_reject: 1142,
+        duplicate_reject: 6,
+        unsafe_reject: 1333,
+        low_value_reject: 829
+      },
+      supportBucketCounts: {
+        currently_chargeable: 0,
+        sellable_after_public_support: 80,
+        useful_with_caveat: 54,
+        restricted_only_hold: 556,
+        stale_reject: 1142,
+        duplicate_reject: 6,
+        unsafe_reject: 1333,
+        low_value_reject: 829,
+        needs_parser_repair: 105,
+        needs_source_support: 80
+      }
+    });
     expect(status.publicSupportLift1000.tiers[1].rows).toHaveLength(1000);
+    expect(status.publicSupportLift1000.tiers[2].rows).toHaveLength(4000);
     expect(status.publicSupportLift1000.tiers[1].rows.every((row) =>
       row.safeLocatorHash.length > 0 &&
       row.requiredPublicSupportSources.length > 0 &&
       row.parserFieldsNeeded.join(",") === "actor,victim,dataset,sector_country,claimed_date,source_family,public_support_family,provenance_hash" &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
       !row.countsTowardSellableFloorNow
+    )).toBe(true);
+    expect(status.publicSupportLift1000.tiers[2].rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.exactMissingField.length > 0 &&
+      row.owningWorkerHandoff.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      !row.countsTowardSellableFloorNow
+    )).toBe(true);
+    expect(status.publicSupportLift1000.tiers[2].rows.filter((row) => row.outcome !== "sellable_after_public_support").every((row) =>
+      !row.countsTowardSellableFloorAfterPublicSupport
+    )).toBe(true);
+    expect(status.publicSupportLift1000.tiers[2].rows.filter((row) => row.owningWorkerHandoff === "agent_03_parser_repair").every((row) =>
+      row.exactMissingField === "actor" || row.exactMissingField === "victim_or_dataset"
+    )).toBe(true);
+    expect(status.publicSupportLift1000.tiers[2].rows.filter((row) => row.owningWorkerHandoff === "agent_04_source_support").every((row) =>
+      row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat"
     )).toBe(true);
     expect(status.publicSupportLift1000.tiers[1].rows.filter((row) => row.outcome !== "sellable_after_public_support").every((row) =>
       !row.countsTowardSellableFloorAfterPublicSupport
@@ -374,6 +443,9 @@ describe("darkweb metadata index contracts", () => {
       currentContributionToward100SellableRows: 2,
       projectedTier1000SellableAfterPublicSupport: 19,
       projectedTier1000UsefulWithCaveat: 12,
+      projectedTier4000SellableAfterPublicSupport: 80,
+      projectedTier4000UsefulWithCaveat: 54,
+      projectedContributionToward100PaidRowsAfterPublicSupport: 80,
       countedOnlyAfterSafePublicSupport: true
     });
     expect(contract.storageHandoff).toMatchObject({
@@ -989,7 +1061,7 @@ describe("darkweb metadata index contracts", () => {
     expect(contract.publicSupportLift1000).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
       candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
-      tierTargets: [100, 1000],
+      tierTargets: [100, 1000, 4000],
       routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000"],
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
@@ -1150,7 +1222,7 @@ describe("darkweb metadata index contracts", () => {
     )).toBe(true);
     expect(firstPage.productHandoff.publicSupportLift1000).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
-      mode: "metadata_only_public_support_lift_100_to_1000",
+      mode: "metadata_only_public_support_lift_100_to_4000",
       strictNoInflation: true,
       currentContributionToward100SellableRows: 2,
       first1000CandidateCount: 1000,
@@ -1162,9 +1234,22 @@ describe("darkweb metadata index contracts", () => {
         duplicate: 6,
         unsafe: 333,
         lowValue: 204
-      }
+      },
+      first4000CandidateCount: 4000,
+      first4000SellableAfterPublicSupport: 80,
+      first4000UsefulWithCaveat: 54,
+      first4000RestrictedOnlyHold: 556,
+      first4000RejectedCounts: {
+        stale: 1142,
+        duplicate: 6,
+        unsafe: 1333,
+        lowValue: 829
+      },
+      projectedContributionToward100PaidRowsAfterPublicSupport: 80
     });
     expect(firstPage.productHandoff.publicSupportLift1000.tiers[1]?.rows).toHaveLength(1000);
+    expect(firstPage.productHandoff.publicSupportLift1000.tiers[2]?.rows).toHaveLength(4000);
+    expect(firstPage.productHandoff.publicSupportLift1000.first4000SupportBucketCounts.currently_chargeable).toBe(0);
     expect(firstPage.productHandoff.publicSupportLift1000.handoffs.agent04PublicSourceTargets.length).toBeGreaterThan(0);
     expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
       row.recordId.length > 0 &&
