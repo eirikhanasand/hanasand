@@ -1791,6 +1791,59 @@ export interface TiSourceAtlasProductSourceLadderPacket {
           agent10Revenue: string[];
         };
       };
+      freshnessPriorityQueue: {
+        schemaVersion: "ti.source_atlas.high_value_freshness_priority_queue.v1";
+        dryRun: true;
+        willMutate: false;
+        willStartCrawling: false;
+        queueSourceCount: number;
+        p0SourceCount: number;
+        p1SourceCount: number;
+        heldSourceCount: number;
+        expectedFreshRowsPerDay: number;
+        expectedUsefulRowsPerDay: number;
+        expectedPayworthyLift: number;
+        rows: Array<{
+          rank: number;
+          priority: "p0_fresh_paid_row_lift" | "p1_actor_or_ransomware_gap" | "p2_hold_until_review";
+          atlasSourceId: string;
+          sourceName: string;
+          sourceFamily: TiSourceAtlasFamily;
+          safeSourceHash: string;
+          actors: string[];
+          ransomwareGroups: string[];
+          blockerAddressed: "low_source_value" | "low_freshness" | "low_evidence_yield" | "low_public_answer_impact";
+          freshnessWindowHours: 6 | 24 | 72;
+          expectedFreshRowsPerDay: number;
+          expectedUsefulRowsPerDay: number;
+          expectedPayworthyLift: number;
+          sourceAction: "stage_day1_canary_packet" | "repair_parser_then_stage" | "refresh_legal_or_robots_review" | "hold_for_replacement";
+          schedulerCadenceSeconds: number;
+          measurementGate: string;
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+            actorInteractionRequired: false;
+          };
+        }>;
+        actorRollup: Array<{
+          actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
+          p0SourceIds: string[];
+          expectedFreshRowsPerDay: number;
+          primaryFreshnessGap: "stale_actor_rows" | "thin_source_family_diversity" | "ransomware_victim_gap" | "parser_or_review_hold";
+          nextAction: string;
+        }>;
+        familyRollup: Array<{
+          family: TiSourceAtlasFamily;
+          sourceCount: number;
+          p0SourceCount: number;
+          expectedFreshRowsPerDay: number;
+          expectedUsefulRowsPerDay: number;
+          nextAction: string;
+        }>;
+      };
       aggregate: {
         sampledReplacementCount: number;
         projectedAdditionalPayworthySources: number;

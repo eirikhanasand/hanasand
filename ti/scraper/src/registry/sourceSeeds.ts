@@ -1586,6 +1586,7 @@ function buildHighValueReplacementBatch(
     familyPlans: buildHighValueReplacementFamilyPlans(replacementRows, weakRecords, minimumSourceValueScore),
     actorPlans: buildHighValueReplacementActorPlans(replacementRows, weakRecords, minimumSourceValueScore),
     activationRunbook: buildHighValueReplacementActivationRunbook(replacementRows),
+    freshnessPriorityQueue: buildHighValueFreshnessPriorityQueue(replacementRows),
     aggregate: {
       sampledReplacementCount: replacementRows.length,
       projectedAdditionalPayworthySources,
@@ -1596,6 +1597,151 @@ function buildHighValueReplacementBatch(
       expectedActorRowsPerDay,
       nextMeasuredPass: "Replace low-value/stale/low-yield candidates with these high-value public sources, then rerun sourceMonetizationGate and daily Actor proof before advancing 4k or 10k claims."
     }
+  };
+}
+
+function buildHighValueFreshnessPriorityQueue(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"] {
+  const rankedRows = rows
+    .map((row) => highValueFreshnessPriorityRow(row))
+    .sort((left, right) =>
+      highValueFreshnessPriorityScore(right) - highValueFreshnessPriorityScore(left) ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.atlasSourceId.localeCompare(right.atlasSourceId)
+    )
+    .slice(0, 80)
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+  const expectedFreshRowsPerDay = roundScore(rankedRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedUsefulRowsPerDay = roundScore(rankedRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+  const expectedPayworthyLift = rankedRows.reduce((sum, row) => sum + row.expectedPayworthyLift, 0);
+  return {
+    schemaVersion: "ti.source_atlas.high_value_freshness_priority_queue.v1",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    queueSourceCount: rankedRows.length,
+    p0SourceCount: rankedRows.filter((row) => row.priority === "p0_fresh_paid_row_lift").length,
+    p1SourceCount: rankedRows.filter((row) => row.priority === "p1_actor_or_ransomware_gap").length,
+    heldSourceCount: rankedRows.filter((row) => row.priority === "p2_hold_until_review").length,
+    expectedFreshRowsPerDay,
+    expectedUsefulRowsPerDay,
+    expectedPayworthyLift,
+    rows: rankedRows,
+    actorRollup: HIGH_VALUE_REPLACEMENT_ACTORS.map((actor) => highValueFreshnessActorRollup(actor, rankedRows)),
+    familyRollup: (uniqueStrings(rankedRows.map((row) => row.sourceFamily)) as TiSourceAtlasFamily[]).map((family) => highValueFreshnessFamilyRollup(family, rankedRows))
+      .sort((left, right) => right.p0SourceCount - left.p0SourceCount || right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay || left.family.localeCompare(right.family))
+  };
+}
+
+function highValueFreshnessPriorityRow(
+  row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"][number] {
+  const expectedUsefulRowsPerDay = roundScore(row.expectedFreshRowsPerDay * (row.expectedActorCoverage.length > 0 ? 0.82 : 0.62));
+  const sourceAction = row.canImprovePaidRowsWithin1To3Days && row.parserReadiness === "certified" && row.legalReview === "current" && (row.robotsReview === "current" || row.robotsReview === "not_required")
+    ? "stage_day1_canary_packet"
+    : row.parserReadiness !== "certified"
+      ? "repair_parser_then_stage"
+      : row.legalReview !== "current" || row.robotsReview === "missing" || row.robotsReview === "stale"
+        ? "refresh_legal_or_robots_review"
+        : "hold_for_replacement";
+  const priority = sourceAction === "stage_day1_canary_packet" && row.expectedFreshRowsPerDay >= 0.75
+    ? "p0_fresh_paid_row_lift"
+    : sourceAction !== "hold_for_replacement" && (row.expectedActorCoverage.length > 0 || row.expectedRansomwareCoverage.length > 0)
+      ? "p1_actor_or_ransomware_gap"
+      : "p2_hold_until_review";
+  const freshnessWindowHours = row.expectedFreshRowsPerDay >= 1.5 ? 6 : row.expectedFreshRowsPerDay >= 0.5 ? 24 : 72;
+  const expectedPayworthyLift = priority === "p0_fresh_paid_row_lift" ? 1 : priority === "p1_actor_or_ransomware_gap" ? 1 : 0;
+  return {
+    rank: row.rank,
+    priority,
+    atlasSourceId: row.atlasSourceId,
+    sourceName: row.sourceName,
+    sourceFamily: row.family,
+    safeSourceHash: row.safeSourceHash,
+    actors: row.expectedActorCoverage,
+    ransomwareGroups: row.expectedRansomwareCoverage,
+    blockerAddressed: row.replacementForBlocker,
+    freshnessWindowHours,
+    expectedFreshRowsPerDay: row.expectedFreshRowsPerDay,
+    expectedUsefulRowsPerDay,
+    expectedPayworthyLift,
+    sourceAction,
+    schedulerCadenceSeconds: highValueFreshnessCadenceSeconds(freshnessWindowHours, priority),
+    measurementGate: `After explicit approval, require ${row.sourceName} to produce fresh safe metadata for ${row.expectedActorCoverage.slice(0, 4).join(", ") || "the default watchlist"} and improve useful/fresh paid Actor rows before counting this source as payworthy.`,
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawPayloadExposed: false,
+      privateAuthCaptchaRequired: false,
+      crawlStarted: false,
+      actorInteractionRequired: false
+    }
+  };
+}
+
+function highValueFreshnessPriorityScore(
+  row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"][number]
+): number {
+  const priority = row.priority === "p0_fresh_paid_row_lift" ? 0.35 : row.priority === "p1_actor_or_ransomware_gap" ? 0.18 : -0.12;
+  const actorCoverage = Math.min(0.2, row.actors.length * 0.035 + row.ransomwareGroups.length * 0.05);
+  const blocker = row.blockerAddressed === "low_freshness" ? 0.16 : row.blockerAddressed === "low_public_answer_impact" ? 0.1 : 0.04;
+  const window = row.freshnessWindowHours === 6 ? 0.12 : row.freshnessWindowHours === 24 ? 0.06 : 0;
+  return roundScore(row.expectedFreshRowsPerDay * 0.18 + row.expectedUsefulRowsPerDay * 0.16 + priority + actorCoverage + blocker + window);
+}
+
+function highValueFreshnessCadenceSeconds(
+  freshnessWindowHours: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"][number]["freshnessWindowHours"],
+  priority: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"][number]["priority"]
+): number {
+  if (priority === "p2_hold_until_review") return 86_400;
+  if (freshnessWindowHours === 6) return 21_600;
+  if (freshnessWindowHours === 24) return 43_200;
+  return 86_400;
+}
+
+function highValueFreshnessActorRollup(
+  actor: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["actorRollup"][number]["actor"],
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["actorRollup"][number] {
+  const actorRows = rows.filter((row) => row.actors.includes(actor) || row.ransomwareGroups.includes(actor));
+  const p0Rows = actorRows.filter((row) => row.priority === "p0_fresh_paid_row_lift");
+  const expectedFreshRowsPerDay = roundScore(actorRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const hasRansomware = actorRows.some((row) => row.ransomwareGroups.includes(actor));
+  const hasReviewHold = actorRows.some((row) => row.sourceAction !== "stage_day1_canary_packet");
+  const families = uniqueStrings(actorRows.map((row) => row.sourceFamily));
+  const primaryFreshnessGap = hasReviewHold
+    ? "parser_or_review_hold"
+    : hasRansomware ? "ransomware_victim_gap"
+      : families.length < 2 ? "thin_source_family_diversity"
+        : "stale_actor_rows";
+  return {
+    actor,
+    p0SourceIds: p0Rows.slice(0, 8).map((row) => row.atlasSourceId),
+    expectedFreshRowsPerDay,
+    primaryFreshnessGap,
+    nextAction: p0Rows.length > 0
+      ? `Stage ${p0Rows.length} approval-only canary source candidates for ${actor}; measure fresh/useful paid rows before counting lift.`
+      : `Keep ${actor} in source-gap or review state until parser/legal holds clear or stronger fresh public sources are acquired.`
+  };
+}
+
+function highValueFreshnessFamilyRollup(
+  family: TiSourceAtlasFamily,
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["familyRollup"][number] {
+  const familyRows = rows.filter((row) => row.sourceFamily === family);
+  const p0SourceCount = familyRows.filter((row) => row.priority === "p0_fresh_paid_row_lift").length;
+  const expectedFreshRowsPerDay = roundScore(familyRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedUsefulRowsPerDay = roundScore(familyRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+  return {
+    family,
+    sourceCount: familyRows.length,
+    p0SourceCount,
+    expectedFreshRowsPerDay,
+    expectedUsefulRowsPerDay,
+    nextAction: p0SourceCount > 0
+      ? `Prioritize ${family} canary approval packets first because this family has near-term fresh paid-row lift.`
+      : `Hold ${family} rows for parser/legal/source replacement before adding more candidates.`
   };
 }
 

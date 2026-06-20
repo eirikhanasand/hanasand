@@ -1832,6 +1832,62 @@ describe("source seed bundles", () => {
     )).toBe(true);
     expect(replacementRunbook.ownerHandoffs.agent02Scheduler.join(" ")).toContain("canary budgets");
     expect(replacementRunbook.ownerHandoffs.agent10Revenue.join(" ")).toContain("cost per useful row");
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.freshnessPriorityQueue).toMatchObject({
+      schemaVersion: "ti.source_atlas.high_value_freshness_priority_queue.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false
+    });
+    const freshnessQueue = atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.freshnessPriorityQueue;
+    expect(freshnessQueue.queueSourceCount).toBe(freshnessQueue.rows.length);
+    expect(freshnessQueue.p0SourceCount).toBeGreaterThan(0);
+    expect(freshnessQueue.expectedFreshRowsPerDay).toBeGreaterThan(0);
+    expect(freshnessQueue.expectedUsefulRowsPerDay).toBeGreaterThan(0);
+    expect(freshnessQueue.expectedPayworthyLift).toBeGreaterThan(0);
+    expect(freshnessQueue.rows[0]).toMatchObject({
+      rank: 1,
+      priority: expect.stringMatching(/^p[01]_/) as unknown as string
+    });
+    expect(freshnessQueue.rows.every((row) =>
+      row.atlasSourceId.startsWith("atlas_src_") &&
+      row.safeSourceHash.startsWith("ti_source_atlas_source_") &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.expectedUsefulRowsPerDay >= 0 &&
+      row.schedulerCadenceSeconds > 0 &&
+      row.measurementGate.includes("fresh safe metadata") &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false &&
+      row.noLeakBoundary.actorInteractionRequired === false
+    )).toBe(true);
+    expect(freshnessQueue.rows.filter((row) => row.priority === "p0_fresh_paid_row_lift").every((row) =>
+      row.sourceAction === "stage_day1_canary_packet" &&
+      row.expectedPayworthyLift === 1 &&
+      (row.freshnessWindowHours === 6 || row.freshnessWindowHours === 24)
+    )).toBe(true);
+    expect(freshnessQueue.actorRollup.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT28",
+      "APT42",
+      "Volt Typhoon",
+      "Lazarus",
+      "Scattered Spider",
+      "FIN7",
+      "LockBit",
+      "Akira"
+    ]));
+    expect(freshnessQueue.actorRollup.every((row) =>
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.nextAction.length > 60 &&
+      ["stale_actor_rows", "thin_source_family_diversity", "ransomware_victim_gap", "parser_or_review_hold"].includes(row.primaryFreshnessGap)
+    )).toBe(true);
+    expect(freshnessQueue.familyRollup.every((row) =>
+      row.sourceCount > 0 &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.expectedUsefulRowsPerDay >= 0 &&
+      row.nextAction.length > 40
+    )).toBe(true);
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.projectedPayworthySourceCount).toBeGreaterThan(
       atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.currentPayworthySourceCount
     );

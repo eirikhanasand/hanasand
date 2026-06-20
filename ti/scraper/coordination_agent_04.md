@@ -23,6 +23,9 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added `paidSourceTierPlan.highValueReplacementBatch.freshnessPriorityQueue` for the 4,000-source monetization gate, ranking concrete atlas source ids by p0/p1 freshness lift, expected useful/fresh rows per day, scheduler cadence, actor/ransomware coverage, parser/legal action, measurement gates, and no-leak boundaries.
+- Added freshness actor/family rollups for APT29, APT28, APT42, Volt Typhoon, Lazarus, Scattered Spider, FIN7, LockBit, and Akira so the next acquisition pass is driven by buyer-visible fresh-row lift instead of source-count padding.
+- Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Continued Program BG high-value source replacement for the 4,000 -> 10,000 source ladder.
 - Added `paidSourceTierPlan.payworthyRepairQueue` with dry-run queues for `duplicate_suppressed`, `legal_review_not_current`, and `not_ready_for_dry_run`, including repair/replace/retire decisions, exact unblock actions, safe source hashes, buyer-visible row lift, legal/robots evidence, replacement candidate ids, and no-leak boundaries.
 - Added `paidSourceTierPlan.highValueReplacementBatch` for low source value, low freshness, low evidence yield, and low public-answer-impact blockers, with expected fresh rows/day, evidence yield, actor/ransomware coverage, parser readiness, legal/robots state, source-family/actor plans, buyer-visible row effect, and projected payworthy-source lift.
