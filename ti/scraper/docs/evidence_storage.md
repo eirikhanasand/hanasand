@@ -137,6 +137,8 @@ Execution receipts now have Postgres-style audit row mappers for future durable 
 
 `actorDatasetConsumerAuditReplay` persists the same execution receipt into Postgres-style audit rows for future repository cutover as `ti.evidence_actor_dataset_consumer_audit_replay.v1`. The modeled tables are `evidence_actor_dataset_consumer_execution_receipts`, `evidence_actor_dataset_consumer_dataset_receipts`, and `evidence_actor_dataset_consumer_cache_receipts`. Rows contain only execution ids, dataset/cache receipt ids, source-promotion row ids, cache keys, intended actions, held states, blocker reasons, counts, and no-leak flags; there are still no live backend connections or production writes.
 
+`actorDatasetConsumerAuditRepository` adds the disabled repository factory/status as `ti.evidence_actor_dataset_consumer_audit_repository.v1`. It accepts the audit row set, reports the required feature flag and tables, keeps persisted row counts at zero, and holds every row with `actor_dataset_consumer_audit_repository_disabled` until a real Postgres repository is explicitly configured. This gives the Actor/public-answer consumer path a concrete fail-closed persistence boundary without writing Apify datasets, answer caches, or audit tables.
+
 This is the first implementation slice behind the earlier migration/readiness packets. It does not connect to external services, mutate OpenSearch/pgvector/Postgres, or serialize raw bodies, object keys, unsafe URLs, credentials, restricted raw content, private material, or actor-interaction content.
 
 ## Object Integrity Repair Runtime

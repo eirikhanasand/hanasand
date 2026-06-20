@@ -791,6 +791,35 @@ export interface EvidenceActorDatasetConsumerAuditReplay {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceActorDatasetConsumerAuditRepositoryStatus {
+  schemaVersion: "ti.evidence_actor_dataset_consumer_audit_repository.v1";
+  generatedAt: string;
+  backend: "postgres_actor_dataset_consumer_audit";
+  enabled: false;
+  disabledByDefault: true;
+  liveBackendConnection: false;
+  willPersistRows: false;
+  failClosedWithoutExplicitEnable: true;
+  requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_AUDIT_REPOSITORY_ENABLED"];
+  requiredTables: EvidenceActorDatasetConsumerAuditReplay["repository"]["requiredTables"];
+  acceptedRowCounts: EvidenceActorDatasetConsumerAuditReplay["rowCounts"];
+  persistedRowCounts: EvidenceActorDatasetConsumerAuditReplay["rowCounts"];
+  heldRowCounts: EvidenceActorDatasetConsumerAuditReplay["rowCounts"];
+  blockedReasons: string[];
+  replayReady: boolean;
+  canReplayWithoutRawEvidence: true;
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetConsumerAuditRepository {
+  readonly backend: "postgres_actor_dataset_consumer_audit";
+  readonly enabled: false;
+  persistAuditRows(
+    rows: EvidenceActorDatasetConsumerExecutionPostgresRows,
+    input?: { generatedAt?: string }
+  ): EvidenceActorDatasetConsumerAuditRepositoryStatus;
+}
+
 export interface EvidenceActorDatasetConsumerRow {
   datasetRowId: string;
   sourcePromotionRowId: string;
@@ -1875,6 +1904,57 @@ export function buildEvidenceActorDatasetConsumerAuditReplay(
     canReplayWithoutRawEvidence: true,
     safeOutput: SAFE_OUTPUT
   };
+}
+
+export function buildDisabledEvidenceActorDatasetConsumerAuditRepositoryStatus(
+  rows: EvidenceActorDatasetConsumerExecutionPostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceActorDatasetConsumerAuditRepositoryStatus {
+  const replay = buildEvidenceActorDatasetConsumerAuditReplay(rows, input);
+  const acceptedRowCounts = replay.rowCounts;
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_consumer_audit_repository.v1",
+    generatedAt: replay.generatedAt,
+    backend: "postgres_actor_dataset_consumer_audit",
+    enabled: false,
+    disabledByDefault: true,
+    liveBackendConnection: false,
+    willPersistRows: false,
+    failClosedWithoutExplicitEnable: true,
+    requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_AUDIT_REPOSITORY_ENABLED"],
+    requiredTables: replay.repository.requiredTables,
+    acceptedRowCounts,
+    persistedRowCounts: {
+      executionReceipts: 0,
+      actorDatasetReceipts: 0,
+      publicAnswerCacheReceipts: 0
+    },
+    heldRowCounts: acceptedRowCounts,
+    blockedReasons: [
+      "actor_dataset_consumer_audit_repository_disabled",
+      "postgres_actor_dataset_consumer_audit_not_configured"
+    ],
+    replayReady: replay.replayReady,
+    canReplayWithoutRawEvidence: true,
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+class DisabledEvidenceActorDatasetConsumerAuditRepository implements EvidenceActorDatasetConsumerAuditRepository {
+  readonly backend = "postgres_actor_dataset_consumer_audit" as const;
+  readonly enabled = false as const;
+
+  persistAuditRows(
+    rows: EvidenceActorDatasetConsumerExecutionPostgresRows,
+    input: { generatedAt?: string } = {}
+  ): EvidenceActorDatasetConsumerAuditRepositoryStatus {
+    return buildDisabledEvidenceActorDatasetConsumerAuditRepositoryStatus(rows, input);
+  }
+}
+
+export function createEvidenceActorDatasetConsumerAuditRepository(): EvidenceActorDatasetConsumerAuditRepository {
+  return new DisabledEvidenceActorDatasetConsumerAuditRepository();
 }
 
 class InMemoryEvidenceSearchReadModelRepository implements EvidenceSearchReadModelRepository {

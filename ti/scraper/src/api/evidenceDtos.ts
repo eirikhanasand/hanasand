@@ -27,6 +27,7 @@ import {
   buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
+  createEvidenceActorDatasetConsumerAuditRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
@@ -35,6 +36,7 @@ import {
   executeEvidencePromotionTransactionPlan,
   type EvidenceActorProductImpactReplay,
   type EvidenceActorDatasetConsumerAuditReplay,
+  type EvidenceActorDatasetConsumerAuditRepositoryStatus,
   type EvidenceActorDatasetConsumerHandoff,
   type EvidenceActorDatasetConsumerExecutionReceipt,
   type EvidenceActorDatasetPromotionPreview,
@@ -210,6 +212,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   actorDatasetConsumerHandoff: EvidenceActorDatasetConsumerHandoff;
   actorDatasetConsumerExecution: EvidenceActorDatasetConsumerExecutionReceipt;
   actorDatasetConsumerAuditReplay: EvidenceActorDatasetConsumerAuditReplay;
+  actorDatasetConsumerAuditRepository: EvidenceActorDatasetConsumerAuditRepositoryStatus;
   safeOutput: {
     rawBodiesExposed: false;
     objectKeysExposed: false;
@@ -443,6 +446,10 @@ function buildEvidenceSearchReadModelCutoverDto(
   const actorDatasetConsumerExecution = executeEvidenceActorDatasetConsumerHandoff(actorDatasetConsumerHandoff, { generatedAt });
   const actorDatasetConsumerAuditRows = evidenceActorDatasetConsumerExecutionToPostgresRows(actorDatasetConsumerExecution);
   const actorDatasetConsumerAuditReplay = buildEvidenceActorDatasetConsumerAuditReplay(actorDatasetConsumerAuditRows, { generatedAt });
+  const actorDatasetConsumerAuditRepository = createEvidenceActorDatasetConsumerAuditRepository().persistAuditRows(
+    actorDatasetConsumerAuditRows,
+    { generatedAt }
+  );
   const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
   const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
   const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
@@ -498,6 +505,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     actorDatasetConsumerHandoff,
     actorDatasetConsumerExecution,
     actorDatasetConsumerAuditReplay,
+    actorDatasetConsumerAuditRepository,
     safeOutput: {
       rawBodiesExposed: false,
       objectKeysExposed: false,

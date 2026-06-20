@@ -4731,6 +4731,50 @@ describe("api v1", () => {
           actorInteractionExposed: false
         }
       },
+      actorDatasetConsumerAuditRepository: {
+        schemaVersion: "ti.evidence_actor_dataset_consumer_audit_repository.v1",
+        backend: "postgres_actor_dataset_consumer_audit",
+        enabled: false,
+        disabledByDefault: true,
+        liveBackendConnection: false,
+        willPersistRows: false,
+        failClosedWithoutExplicitEnable: true,
+        requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_AUDIT_REPOSITORY_ENABLED"],
+        requiredTables: [
+          "evidence_actor_dataset_consumer_execution_receipts",
+          "evidence_actor_dataset_consumer_dataset_receipts",
+          "evidence_actor_dataset_consumer_cache_receipts"
+        ],
+        acceptedRowCounts: {
+          executionReceipts: 1,
+          actorDatasetReceipts: expect.any(Number),
+          publicAnswerCacheReceipts: expect.any(Number)
+        },
+        persistedRowCounts: {
+          executionReceipts: 0,
+          actorDatasetReceipts: 0,
+          publicAnswerCacheReceipts: 0
+        },
+        heldRowCounts: {
+          executionReceipts: 1,
+          actorDatasetReceipts: expect.any(Number),
+          publicAnswerCacheReceipts: expect.any(Number)
+        },
+        blockedReasons: [
+          "actor_dataset_consumer_audit_repository_disabled",
+          "postgres_actor_dataset_consumer_audit_not_configured"
+        ],
+        replayReady: true,
+        canReplayWithoutRawEvidence: true,
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
       safeOutput: {
         rawBodiesExposed: false,
         objectKeysExposed: false,

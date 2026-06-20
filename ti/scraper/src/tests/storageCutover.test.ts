@@ -55,6 +55,7 @@ import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
   buildEvidenceActorDatasetConsumerAuditReplay,
+  createEvidenceActorDatasetConsumerAuditRepository,
   buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
@@ -2321,6 +2322,60 @@ describe("evidence storage cutover", () => {
     expect(actorConsumerAuditSerialized).not.toContain(restrictedRaw);
     expect(actorConsumerAuditSerialized).not.toContain("tenant/source/private-key");
     expect(actorConsumerAuditSerialized).not.toContain(".onion");
+
+    const actorDatasetConsumerAuditRepository = createEvidenceActorDatasetConsumerAuditRepository();
+    const actorDatasetConsumerAuditRepositoryStatus = actorDatasetConsumerAuditRepository.persistAuditRows(
+      actorDatasetConsumerAuditRows,
+      { generatedAt: "2026-05-24T21:45:00.000Z" }
+    );
+    expect(actorDatasetConsumerAuditRepositoryStatus).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_consumer_audit_repository.v1",
+      backend: "postgres_actor_dataset_consumer_audit",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      willPersistRows: false,
+      failClosedWithoutExplicitEnable: true,
+      requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_AUDIT_REPOSITORY_ENABLED"],
+      requiredTables: [
+        "evidence_actor_dataset_consumer_execution_receipts",
+        "evidence_actor_dataset_consumer_dataset_receipts",
+        "evidence_actor_dataset_consumer_cache_receipts"
+      ],
+      acceptedRowCounts: {
+        executionReceipts: 1,
+        actorDatasetReceipts: actorDatasetConsumerExecution.actorDatasetReceipts.length,
+        publicAnswerCacheReceipts: actorDatasetConsumerExecution.publicAnswerCacheReceipts.length
+      },
+      persistedRowCounts: {
+        executionReceipts: 0,
+        actorDatasetReceipts: 0,
+        publicAnswerCacheReceipts: 0
+      },
+      heldRowCounts: {
+        executionReceipts: 1,
+        actorDatasetReceipts: actorDatasetConsumerExecution.actorDatasetReceipts.length,
+        publicAnswerCacheReceipts: actorDatasetConsumerExecution.publicAnswerCacheReceipts.length
+      },
+      blockedReasons: [
+        "actor_dataset_consumer_audit_repository_disabled",
+        "postgres_actor_dataset_consumer_audit_not_configured"
+      ],
+      replayReady: true,
+      canReplayWithoutRawEvidence: true,
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    const actorConsumerAuditRepositorySerialized = JSON.stringify(actorDatasetConsumerAuditRepositoryStatus);
+    expect(actorConsumerAuditRepositorySerialized).not.toContain(restrictedRaw);
+    expect(actorConsumerAuditRepositorySerialized).not.toContain("tenant/source/private-key");
+    expect(actorConsumerAuditRepositorySerialized).not.toContain(".onion");
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");
