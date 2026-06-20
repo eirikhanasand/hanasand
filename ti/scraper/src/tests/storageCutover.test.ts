@@ -84,6 +84,7 @@ import {
   tiSourceAtlasRecordFromPostgresRow,
   tiSourceAtlasRecordToPostgresRow,
   tiSourceAtlasRepairActivationPacketInputsToPostgresRows,
+  tiSourceAtlasSourcePackCandidatesToPostgresRows,
   sourceRecordFromPostgresRows,
   sourceRecordToPostgresRows
 } from "../storage/sourceRegistryPostgres.ts";
@@ -156,12 +157,15 @@ describe("evidence storage cutover", () => {
     expect(sql).toContain("CREATE TABLE source_atlas_review_queue");
     expect(sql).toContain("CREATE TABLE source_atlas_export_manifest");
     expect(sql).toContain("CREATE TABLE source_atlas_activation_packet_audit");
+    expect(sql).toContain("CREATE TABLE source_atlas_source_pack_candidate_review");
     expect(sql).toContain("reject_unapproved_active_sources");
     expect(sql).toContain("metadata source % must be governed as metadata-only");
     expect(sql).toContain("approval_required boolean NOT NULL DEFAULT true CHECK (approval_required = true)");
     expect(sql).toContain("auto_activation_allowed boolean NOT NULL DEFAULT false CHECK (auto_activation_allowed = false)");
     expect(sql).toContain("will_start_crawling boolean NOT NULL DEFAULT false CHECK (will_start_crawling = false)");
+    expect(sql).toContain("will_import_source_packs boolean NOT NULL DEFAULT false CHECK (will_import_source_packs = false)");
     expect(sql).toContain("source_activation_applied boolean NOT NULL DEFAULT false CHECK (source_activation_applied = false)");
+    expect(sql).toContain("source_pack_imported boolean NOT NULL DEFAULT false CHECK (source_pack_imported = false)");
     expect(sql).toContain("source_atlas_records_tenant_family_idx");
     expect(sql).toContain("source_atlas_review_queue_tenant_decision_idx");
     expect(sql).toContain("source_atlas_export_manifest_tenant_plan_idx");
@@ -334,7 +338,8 @@ describe("evidence storage cutover", () => {
       "source_atlas_records",
       "source_atlas_review_queue",
       "source_atlas_export_manifest",
-      "source_atlas_activation_packet_audit"
+      "source_atlas_activation_packet_audit",
+      "source_atlas_source_pack_candidate_review"
     ]));
     expect(readiness.guardrails).toEqual(expect.arrayContaining([
       "source registry persistence does not lease work or start crawling",
@@ -404,6 +409,7 @@ describe("evidence storage cutover", () => {
     expect(rows.source_atlas_review_queue).toHaveLength(100);
     expect(rows.source_atlas_export_manifest).toHaveLength(100);
     expect(rows.source_atlas_activation_packet_audit).toEqual([]);
+    expect(rows.source_atlas_source_pack_candidate_review).toEqual([]);
     expect(rows.source_atlas_review_queue.every((row) => row.dry_run && !row.will_mutate && !row.will_start_crawling)).toBe(true);
     expect(rows.source_atlas_export_manifest.every((row) => row.approval_required && !row.auto_activation_allowed && row.manifest_schema_version === "ti.source_atlas_export.v1")).toBe(true);
     expect(rows.source_atlas_review_queue.map((row) => row.decision)).toContain("stage_for_canary");
@@ -438,10 +444,43 @@ describe("evidence storage cutover", () => {
       row.source_activation_applied === false
     )).toBe(true);
 
-    const serialized = JSON.stringify({ rows, activationAuditRows });
+    const sourcePackCandidateRows = tiSourceAtlasSourcePackCandidatesToPostgresRows(atlas.sourceEconomics.sourcePackCandidates, {
+      tenantId,
+      generatedAt
+    });
+    expect(sourcePackCandidateRows).toHaveLength(atlas.sourceEconomics.sourcePackCandidates.candidatePackCount);
+    expect(sourcePackCandidateRows.length).toBeGreaterThan(0);
+    expect(sourcePackCandidateRows.every((row) =>
+      row.tenant_id === tenantId &&
+      row.pack_id.startsWith("ti_source_atlas_source_pack_candidate_") &&
+      row.rank > 0 &&
+      row.source_ids.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.safe_source_hashes.every((sourceHash) => sourceHash.startsWith("ti_source_atlas_source_")) &&
+      row.expected_payworthy_lift > 0 &&
+      row.expected_fresh_rows_per_day >= 0 &&
+      row.expected_useful_evidence_items_per_day >= 0 &&
+      row.expected_scheduler_tasks_per_day >= 0 &&
+      row.estimated_cost_units_per_useful_evidence >= 0 &&
+      row.required_proof.includes("operator_approval") &&
+      row.required_proof.includes("daily_actor_run_delta") &&
+      row.dry_run === true &&
+      row.will_mutate === false &&
+      row.will_import_source_packs === false &&
+      row.will_start_crawling === false &&
+      row.source_pack_imported === false &&
+      row.source_activation_applied === false &&
+      row.registry_mutation_planned === false &&
+      row.crawl_enqueued === false &&
+      row.raw_urls_exposed === false &&
+      row.raw_payloads_exposed === false
+    )).toBe(true);
+
+    const serialized = JSON.stringify({ rows, activationAuditRows, sourcePackCandidateRows });
     expect(serialized).not.toContain('"auto_activation_allowed":true');
     expect(serialized).not.toContain('"will_mutate":true');
     expect(serialized).not.toContain('"will_start_crawling":true');
+    expect(serialized).not.toContain('"will_import_source_packs":true');
+    expect(serialized).not.toContain('"source_pack_imported":true');
     expect(serialized).not.toContain('"source_activation_applied":true');
   });
 

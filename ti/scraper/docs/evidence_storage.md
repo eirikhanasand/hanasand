@@ -221,6 +221,7 @@ Postgres should hold operational metadata:
 - `metadata_review_tasks`: review inbox rows for leak/threat-actor claims with company/victim, affected accounts, dataset size, actor statement summary, source hash, provenance, allowed actions, confidence, and explicit unsafe-material non-access checks.
 - `source_activation_packets`: dry-run-only restore/approval packets with expected effect and rollback notes.
 - `source_atlas_activation_packet_audit`: source-atlas repair packet inputs for operator/legal review, including atlas source ids, replacement candidates, prerequisites, forbidden actions, expected payworthy/fresh-row lift, and hard no-mutation/no-crawl/no-activation/no-leak flags.
+- `source_atlas_source_pack_candidate_review`: source-atlas source economics pack candidates for operator/legal/source-governance review, including safe source ids/hashes, family, acquisition mode, required proof, expected payworthy/fresh/useful lift, owner handoffs, and hard no-import/no-mutation/no-crawl/no-activation/no-leak flags.
 - `victim_notification_packets`: safe redacted notification drafts with confidence, provenance, redactions, and what was not accessed.
 - `claim_ledger_entries`: deduplicated metadata claim ledger rows keyed by query/source hash/claim kind/company.
 - `analyst_loop_snapshots`: compact polling snapshots for queued/review/blocked/activation/ready state and next-step visibility.
