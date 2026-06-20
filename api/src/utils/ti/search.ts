@@ -1,3 +1,5 @@
+import { XMLParser } from 'fast-xml-parser'
+
 export interface TiSearchRequest {
     query: string
 }
@@ -326,11 +328,12 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
     const matches = filterLiveMatchesForQuery(query, await searchClearWeb(query), Boolean(known))
     if (matches.length) {
         const generatedAt = new Date().toISOString()
-        const activity = matches.slice(0, 6).map((match, index) => ({
-            date: generatedAt.slice(0, 10),
+        const activityMatches = matches.filter(match => match.kind === 'news' && match.publishedAt).slice(0, 6)
+        const activity = activityMatches.map((match, index) => ({
+            date: match.publishedAt!.slice(0, 10),
             title: match.title,
             detail: match.snippet || `Live public result for ${query}: ${match.url}`,
-            confidence: Math.max(0.28, 0.52 - index * 0.04),
+            confidence: Math.max(0.4, 0.68 - index * 0.04),
             sourceIds: [match.id],
             url: safeTiLink(match.url)
         }))
@@ -342,7 +345,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             refreshAfterSeconds: 3,
             summary: summarizeLiveResult(query, matches, known),
             confidence: known ? 0.62 : 0.48,
-            lastSeen: generatedAt,
+            lastSeen: activityMatches[0]?.publishedAt ?? generatedAt,
             aliases: known?.aliases ?? [],
             recentActivity: activity,
             targets: mergeTargets(inferLiveTargets(query, matches), known?.targets ?? []),
@@ -350,8 +353,8 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             datasets: liveDatasets(),
             sources: matches.slice(0, 8).map(match => ({
                 id: match.id,
-                name: match.title,
-                type: 'live_clear_web',
+                name: match.publisher ? `${match.publisher}: ${match.title}` : match.title,
+                type: match.kind === 'news' ? 'live_news' : match.kind === 'background' ? 'background_reference' : 'live_clear_web',
                 provenance: match.url,
                 url: safeTiLink(match.url)
             })),
@@ -1042,15 +1045,19 @@ interface LiveSearchMatch {
     title: string
     url: string
     snippet: string
+    publishedAt?: string
+    publisher?: string
+    kind: 'news' | 'web' | 'background'
 }
 
 async function searchClearWeb(query: string): Promise<LiveSearchMatch[]> {
-    const [duckDuckGo, wikipedia] = await Promise.all([
+    const [news, duckDuckGo, wikipedia] = await Promise.all([
+        searchGoogleNewsRss(query),
         searchDuckDuckGoHtml(query),
         searchWikipedia(query)
     ])
     const merged: LiveSearchMatch[] = []
-    for (const match of [...duckDuckGo, ...wikipedia]) {
+    for (const match of [...news, ...duckDuckGo, ...wikipedia]) {
         if (!merged.some(existing => existing.url === match.url || existing.title.toLowerCase() === match.title.toLowerCase())) {
             merged.push(match)
         }
@@ -1118,6 +1125,82 @@ async function searchDuckDuckGoHtml(query: string): Promise<LiveSearchMatch[]> {
     }
 }
 
+async function searchGoogleNewsRss(query: string): Promise<LiveSearchMatch[]> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    try {
+        const search = new URL('https://news.google.com/rss/search')
+        search.searchParams.set('q', `"${query}" (cyber OR malware OR ransomware OR espionage)`)
+        search.searchParams.set('hl', 'en-US')
+        search.searchParams.set('gl', 'US')
+        search.searchParams.set('ceid', 'US:en')
+        const response = await fetch(search, {
+            headers: {
+                accept: 'application/rss+xml,application/xml,text/xml',
+                'user-agent': 'hanasand-ti-scraper/0.2 (+https://hanasand.com/ti)'
+            },
+            signal: controller.signal
+        })
+        if (!response.ok) return []
+        return parseGoogleNewsRss(await response.text())
+    } catch {
+        return []
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
+export function parseGoogleNewsRss(xml: string): LiveSearchMatch[] {
+    try {
+        const body = new XMLParser({ ignoreAttributes: false, trimValues: true }).parse(xml) as {
+            rss?: { channel?: { item?: GoogleNewsItem | GoogleNewsItem[] } }
+        }
+        const rawItems = body.rss?.channel?.item
+        const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : []
+        return items
+            .map((item): LiveSearchMatch | null => {
+                const title = stringValue(item.title)
+                const url = stringValue(item.link)
+                const publishedAt = parsePublishedAt(item.pubDate)
+                if (!title || !url || !publishedAt) return null
+                const publisher = sourceName(item.source)
+                return {
+                    id: `live:${hashString(`google-news:${title}:${url}`).slice(0, 16)}`,
+                    title,
+                    url,
+                    snippet: cleanHtml(stringValue(item.description) ?? ''),
+                    publishedAt,
+                    publisher,
+                    kind: 'news'
+                }
+            })
+            .filter((item): item is LiveSearchMatch => Boolean(item))
+            .slice(0, 8)
+    } catch {
+        return []
+    }
+}
+
+interface GoogleNewsItem {
+    title?: unknown
+    link?: unknown
+    description?: unknown
+    pubDate?: unknown
+    source?: unknown
+}
+
+function parsePublishedAt(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined
+    const timestamp = Date.parse(value)
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined
+}
+
+function sourceName(value: unknown): string | undefined {
+    if (typeof value === 'string') return value
+    if (!value || typeof value !== 'object') return undefined
+    return stringValue((value as Record<string, unknown>)['#text'])
+}
+
 async function searchWikipedia(query: string): Promise<LiveSearchMatch[]> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 4500)
@@ -1152,7 +1235,8 @@ async function searchWikipedia(query: string): Promise<LiveSearchMatch[]> {
                     id: `live:${hashString(`wikipedia:${title}:${url}`).slice(0, 16)}`,
                     title: `${title} - Wikipedia live search`,
                     url,
-                    snippet
+                    snippet,
+                    kind: 'background'
                 }
             })
     } catch {
@@ -1172,7 +1256,7 @@ function parseDuckDuckGoResults(html: string): LiveSearchMatch[] {
         if (!url || !title) continue
         const id = `live:${hashString(`${title}:${url}`).slice(0, 16)}`
         if (!matches.some(existing => existing.url === url)) {
-            matches.push({ id, title, url, snippet })
+            matches.push({ id, title, url, snippet, kind: 'web' })
         }
         if (matches.length >= 8) break
     }
