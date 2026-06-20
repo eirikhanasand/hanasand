@@ -1,39 +1,25 @@
-Status: active_program_bi_source_reliability_economics
+Status: active_product_focus_source_ladder_100_to_1000
 
 # Agent 01 Coordination
 
-## Current Assignment - Program BI: Source Reliability Economics And Activation Planning
+Read `coordination_product_focus.md` first. Your current task is to turn completed source economics into the first 100 vetted public TI sources, then prepare the 1,000-source candidate tier. Do not add more source portfolio theory until the 100-source pack has product-value proof for Apify/public search.
 
-You are no longer waiting for a task. Continue the source-governance lane until source onboarding can prioritize thousands of candidate public TI sources by value, cost, legality, freshness, and product impact.
+Deliverables:
+- `first100` source pack: source id/name/family/public URL or safe locator hash, legal/robots note, parser family, actors/query classes improved, expected freshness, expected entities, dedupe group, rejection reason if rejected, and buyer-value score.
+- Candidate pipeline for 1,000 ranked sources with dedupe/rejection metrics.
+- Handoff to Agent 03 parser coverage and Agent 02 scheduler cadence.
+- Proof commands and a compact summary of how the pack improves daily 20-group Actor output.
 
-Mission:
-- Turn the source atlas from approval packets into a source portfolio optimizer for the Apify Actor, `/ti`, and thesis evaluation.
-- Score sources by real product value, not just presence in a list: unique evidence yield, freshness, actor coverage, parser stability, legal/robots state, duplicate rate, source-family diversity, and downstream answer improvement.
-- Produce activation plans that can safely feed Agent 02 scheduler, Agent 03 adapters, Agent 06 evidence storage, Agent 07 quality gates, Agent 09 API/frontend, and Agent 10 ops budgets.
+## Completed Slice - Program BI: Source Reliability Economics And Activation Planning
 
-Build:
-- Add source reliability/economics DTOs for first-50, first-500, and first-5000 public-source rollout scenarios.
-- Include per-source and per-source-family metrics: expected actors covered, expected query classes, unique evidence yield, duplicate risk, parser repair dependency, language/region coverage, legal status, crawl frequency, estimated storage cost, expected API/Actor usefulness, and rollback state.
-- Add marketplace-focused score breakdowns for actor profile value, ransomware victim-claim value, CVE/advisory value, public-channel value, dark-metadata-corroboration value, and enterprise STIX/export value.
-- Add degradation/burn-rate queues for stale, noisy, duplicate-heavy, legally blocked, broken parser, low-yield, or high-cost sources.
-- Keep all outputs dry-run and source-id/hash oriented; no source activation, crawling, credential use, private/invite source handling, CAPTCHA/auth bypass, raw unsafe URLs, payload downloads, or leaked-data redistribution.
+- Added `/v1/sources/atlas.sourceEconomics` as a dry-run source portfolio economics packet for first-50, first-500, and first-5000 public-source rollout planning.
+- Included per-source rows with source ids/hashes, family, query-class coverage, expected actor/query coverage, unique evidence yield, duplicate risk, parser/legal dependencies, language/region coverage, storage and scheduler cost, API/Actor usefulness, public-answer lift, economics score, decision, and rollback state.
+- Included source-family metrics, marketplace value breakdowns for actor profile, ransomware victim claim, CVE/advisory, public-channel, dark-metadata corroboration, and STIX/export value, plus stale/noisy/legal/parser/low-yield/high-cost degradation queues.
+- Kept all outputs source-id/hash oriented and dry-run only: no registry mutation, no source activation, no source-pack import, no worker lease, no crawling, no raw unsafe URLs, no payload downloads, and no private/invite/auth/CAPTCHA sources.
+- Updated shared `/v1/sources/atlas` coordination contract and `docs/source_registry.md` before changing the shared API response.
+- Verification is green: `bun run check`, `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts src/tests/productionAdapterRuntime.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (526 pass).
 
-Proof before status change:
-- `bun run check`
-- `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts src/tests/productionAdapterRuntime.test.ts`
-- `bun run check:route-inventory`
-- `bun run check:contract-index`
-- `bun run check:api-regression`
-- update `docs/source_registry.md`
+## Next Agent 01 Task Request
 
-If this phase completes, continue immediately into Program BJ: tenant-aware source policy overlays and paid-product source pack segmentation.
-
-## Previous Completed Slice
-
-- Added `/v1/sources/atlas.lifecycleReview`: dry-run source lifecycle review packets for degradation, quarantine, parser repair, legal review, duplicate retirement, and descriptor-only holds.
-- Lifecycle review rows stay source-id/hash only, include scheduler dry-run impact, rollback notes, replacement candidates, no-mutation boundaries, and Agent 02/03/06/09/10 handoff fields.
-- Updated shared coordination and source registry docs for the lifecycle review contract before changing the shared `/v1/sources/atlas` response.
-- Repaired verification drift encountered in graph product packets: unknown actors no longer inherit unrelated graph evidence, STIX readiness gets an actor-focused product packet when actor nodes exist, and graph test fixtures match current provenance contracts.
-- Proof is green: `bun run check`, `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts`, `bun test src/tests/graphViews.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` (526 pass).
-
-Historical note: Agent 01 previously requested the next explicit source-governance task. The active Program BI assignment above supersedes that request.
+- Program BJ is the next named continuation: tenant-aware source policy overlays and paid-product source pack segmentation.
+- Please provide the BJ scope or confirm the expected shared contract fields/routes for tenant overlays, paid/free source-pack tiers, buyer-facing entitlements, and activation boundaries.

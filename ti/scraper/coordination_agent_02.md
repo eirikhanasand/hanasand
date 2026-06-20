@@ -1,6 +1,8 @@
-Status: active_program_ba
+Status: active_program_followon
 
 # Agent 02 Coordination
+
+Read `coordination_product_focus.md` first. Continue current scheduler work only where it supports daily 20-group Actor runs, source/dark-metadata scale ladder scheduling, live freshness, and marketplace row quality. Queue theory without buyer-visible output is lower priority.
 
 ## CONTINUATION DIRECTIVE
 
@@ -10,6 +12,33 @@ Side-tool support priority:
 - Support Agent 05 dark-web metadata index with periodic refresh scheduling for roughly 60k metadata records, safe liveness batches, queue partitions, retry/dead-letter behavior, and resource budgets.
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
+
+## Progress - 2026-06-20 15:48 CEST
+
+- Completed the next Apify monitor listing-readiness slice by strengthening `check:publication` from text checks into schema and fixture contract validation.
+- The publication gate now requires scheduler polling, retry/backoff, duplicate-run reuse, source coverage state/gaps, coverage-gap actions, review reasons, analysis facets, safe output constants, and a fixture that exercises active-run reuse plus public-channel coverage gaps.
+- Updated the launch checklist and changelog so scheduler/source-coverage visibility is treated as a hard launch gate.
+- Helped clear shared type/test drift in live capture and graph product packet helpers so root gates stay green.
+- Green: `bun run check`, full `bun test`, `bun run check:apify-threat-actor-monitor`, `bun run check:apify-publication`, `bun run smoke:apify-threat-actor-monitor`, and focused `bun test src/tests/graphViews.test.ts`.
+- Next: keep improving live data freshness/source coverage feeding the Apify monitor, especially scheduler-visible source-gap handoffs and freshness cadence quality.
+
+## Progress - 2026-06-20 16:30 CEST
+
+- Completed the current revenue-wrapper scheduler visibility task for `apify/public-threat-actor-monitor`.
+- Finished the partial Actor coverage-quality work by adding coverage-gap rows, source-family arrays, missing-family arrays, coverage status, collection priority, recommended collection actions, and required review reasons to the safe metadata dataset contract.
+- Wired public API scheduler/source-coverage state into every Actor dataset row: scheduler state/decision, next poll, retry-after, duplicate-run reuse, active-run attachment, queued task count, deferred workloads, scheduler badges, source coverage state, source coverage gaps, and a polling hint.
+- Updated the fixture, smoke assertions, Apify dataset/input schemas, README, and changelog so the marketplace output shows queue/freshness/backoff/source-gap state instead of static intelligence rows only.
+- Green: `bun run check`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, `bun test src/tests/sourceSeeds.test.ts`, and `bun test src/tests/graphViews.test.ts`.
+- Next: keep improving the Apify monitor and live data freshness/source coverage feeding it.
+
+## Progress - 2026-05-24 23:16 CEST
+
+- Completed current Task Z / final RC scheduler canary-control-plane validation: `scheduler.canaryControlPlane` is route-visible on frontier status, scheduler DTOs, apply-plan previews, and `/v1/contracts`.
+- Confirmed the scheduler surface now reports dry-run canary controls, queue/headroom, memory target/ceiling, worker partition effects, warning codes, rollback steps, cursor replay guarantees, duplicate public polling/run reuse, and Agent 10 release decisions.
+- Restored shared source-atlas helper block after cross-agent truncation so source atlas, export manifests, reliability economics, portfolio migration, SLO burn-rate, tenant activation, and source import canary routes load again.
+- Helped finish Agent 08 graph/STIX DTO drift by ensuring every STIX readiness path carries the required `releaseCandidate` gate.
+- Green: `bun run check`, focused scheduler/API tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (511 pass).
+- Next: continue the longer scheduler vision from the backlog rather than stopping here, with priority on turning the dry-run canary/control-plane semantics into concrete worker-loop execution paths, Postgres-backed queue migration steps, and UI-visible queue/fairness/freshness behavior.
 
 ## Progress - 2026-05-24 21:58 CEST
 

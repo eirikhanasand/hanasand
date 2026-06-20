@@ -2,6 +2,8 @@ Status: active_program_ba
 
 # Agent 06 Coordination
 
+Read `coordination_product_focus.md` first. Continue current evidence/read-model work only where it makes real source and dark-metadata rows searchable, safe, and useful for Apify/public API answers. Defer deeper export/storage theory until live data quality is improving.
+
 ## CONTINUATION DIRECTIVE
 
 DO NOT STOP AFTER ONE PATCH. Finish Program BA/BA.5-BA.7, then continue into Agent 06 Program BB/BC/BD in `coordination_program_backlog.md` without waiting for a new prompt. Only write `ready_for_next_task` if the evidence ownership lane is genuinely exhausted or blocked by missing cross-agent code.
@@ -68,6 +70,56 @@ Progress update 2026-05-24 21:58 CEST:
 - Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run measure:search-product`, and full `bun test` passed with 510 tests.
 - Product measurement remains green: empty/on-demand, captured evidence, and restricted metadata-only leak-claim scenarios all report useful-answer rate 1.0 and expected fact recall 1.0 with no cross-talk.
 - Continue Agent 06 evidence backbone work next with route-visible read-model cutover status or replay-driven public answer/graph promotion from these durable rows.
+
+Progress update 2026-05-24 23:11 CEST:
+- Continued the long-running evidence backbone with route-visible read-model cutover status on `/v1/evidence/cutover-report.readModelCutover` as `ti.evidence_search_read_model_cutover.v1`.
+- The packet reports embedded replay readiness, fail-closed Postgres/OpenSearch/pgvector adapter state, backend write-set counts, replay/tombstone/legal-hold/stale-extractor requirements, and safe-output guarantees for production read-model promotion.
+- Restricted/leak metadata remains searchable for defensive victim/company/account-count/dataset-size/timestamp/actor-demand facts, but it is never embedded, never vectorized, and never exposes raw bodies, object keys, unsafe URLs, credentials, private material, or actor-interaction content.
+- Updated evidence storage docs and API evidence assertions. Also repaired parallel source-atlas helper drift that was blocking the shared TypeScript and route proof path.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run measure:search-product`, and full `bun test` passed with 511 tests.
+- Product measurement remains green: empty/on-demand, captured evidence, and restricted metadata-only leak-claim scenarios all report useful-answer rate 1.0 and expected fact recall 1.0 with no cross-talk.
+- Continue Agent 06 evidence backbone work next with replay-driven public answer/graph promotion from durable read-model rows.
+
+Progress update 2026-06-20 14:01 CEST:
+- Continued the long-running evidence backbone with replay-driven public answer and graph promotion inputs from durable read-model rows.
+- Added `ti.evidence_search_read_model_promotion_replay.v1` in `src/storage/evidenceSearchReadModel.ts` and exposed it on `/v1/evidence/cutover-report.readModelCutover.promotionReplay`.
+- The replay packet rebuilds support document IDs, captures, claim-ledger entries, source IDs, relationship IDs, replay IDs, citation counts, retention classes, legal holds, stale-extractor requirements, public-answer blockers/warnings, and graph promotion holds from backend write-set rows.
+- Restricted/leak metadata remains metadata-only: it may support caveated defensive public-answer context for victim/company/account-count/dataset-size/timestamp/actor-demand facts, while restricted graph relationships stay held and restricted rows remain excluded from embeddings/vector promotion.
+- Safe-output guarantees remain explicit: no raw bodies, object keys, unsafe URLs, credentials, private material, actor-interaction content, or restricted raw content are serialized.
+- Also absorbed current shared source activation packet drift so tenant activation packets select source IDs by source class instead of leaking ambiguous positional slices into approval packets.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, `bun test src/tests/graphViews.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run measure:search-product`, and full `bun test` passed with 519 tests.
+- Product measurement remains green: empty/on-demand source-pack, captured clear-web evidence, and restricted metadata-only leak-claim scenarios all report useful-answer rate 1.0 and expected fact recall 1.0 with no cross-talk.
+- Continue Agent 06 evidence backbone work next with production transaction wiring from durable promotion replay into public answer, graph, STIX, and API consumers.
+
+Progress update 2026-06-20 15:24 CEST:
+- Continued the evidence backbone with a dry-run production transaction plan from durable read-model promotion replay into downstream consumers.
+- Added `ti.evidence_promotion_transaction_plan.v1` in `src/storage/evidenceSearchReadModel.ts` and exposed it on `/v1/evidence/cutover-report.readModelCutover.promotionTransaction`.
+- The transaction plan orders public-answer, graph, STIX, and API cache consumer writes with deterministic idempotency keys, rollback steps, replay guarantees, consumer blockers/warnings, and Agent 07/08/09/10 handoffs.
+- Restricted/leak metadata remains metadata-only: it may support caveated defensive public-answer context, while restricted graph/STIX promotion stays held and vector promotion remains disabled.
+- Added evidence storage docs plus storage/API assertions; also repaired missing OpenAPI component schemas for the route-visible Apify store readiness contract so API regression remains aligned.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, `bun test src/tests/apiRegressionSentinel.test.ts`, `bun run check:api-regression`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run measure:search-product`, and full `bun test` passed with 521 tests.
+- Continue Agent 06 evidence backbone work next with fail-closed production repository transaction execution behind explicit enablement flags.
+
+Progress update 2026-06-20 15:49 CEST:
+- Continued the evidence backbone with fail-closed production promotion transaction execution behind explicit enablement flags.
+- Added `ti.evidence_promotion_transaction_execution.v1` in `src/storage/evidenceSearchReadModel.ts` and exposed it on `/v1/evidence/cutover-report.readModelCutover.promotionExecution`.
+- Execution is blocked by default with `promotion_transaction_repository_disabled`, no live backend connection, no production consumer mutation, deterministic audit fields, safe-output guarantees, and source-plan replay linkage.
+- Explicit rehearsal mode can apply only ready public-answer/API cache steps with deterministic receipts and rollback refs while holding graph/STIX and all restricted/vector promotion paths.
+- Restricted/leak metadata remains metadata-only: defensive victim/company/account-count/dataset-size/timestamp/actor-demand context may stay caveated in public-answer context, while raw bodies, object keys, unsafe URLs, credentials, private material, restricted raw content, actor-interaction content, embeddings, graph export, and STIX export remain blocked or held.
+- Updated evidence storage docs plus storage/API assertions. Also repaired current shared live-capture/public-signal/graph fixture drift needed to keep the shared proof path green.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, `bun test src/tests/graphViews.test.ts`, `bun test src/tests/adapterContracts.test.ts`, full `bun test` passed with 526 tests, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run measure:search-product`.
+- Product measurement remains green: empty/on-demand source-pack, captured clear-web evidence, and restricted metadata-only leak-claim scenarios all report useful-answer rate 1.0 and expected fact recall 1.0 with no cross-talk.
+- Continue Agent 06 evidence backbone work next with durable repository/table persistence for execution receipts and transaction audit replay, still disabled by default until an explicit production enablement gate exists.
+
+Progress update 2026-06-20 16:11 CEST:
+- Continued the evidence backbone with durable Postgres-style execution audit rows and transaction audit replay for promotion receipts.
+- Added `EvidencePromotionTransactionExecutionPostgresRows` mappers in `src/storage/evidenceSearchReadModel.ts` for `evidence_promotion_execution_receipts`, `evidence_promotion_execution_steps`, `evidence_promotion_execution_held_steps`, and `evidence_promotion_execution_rollbacks`.
+- Added `ti.evidence_promotion_transaction_audit_replay.v1` and exposed it on `/v1/evidence/cutover-report.readModelCutover.promotionAuditReplay`, proving row counts, deterministic receipt IDs, committed consumer counts, fail-closed reasons, rollback refs, and replay-without-raw-evidence behavior while the future repository stays disabled by default.
+- Restricted/leak metadata remains metadata-only: audit rows contain only ids, counts, state, blockers, rollback labels, retention/review policy metadata, and no-leak flags; no raw bodies, object keys, unsafe URLs, credentials, private material, restricted raw content, actor-interaction content, embeddings, graph export, or STIX export are persisted or exposed.
+- Updated evidence storage docs plus storage/API assertions. Also repaired current shared source-atlas economics drift needed to keep full proof green.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, focused source-atlas/API drift checks, full `bun test` passed with 526 tests, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run measure:search-product`.
+- Product measurement remains green: empty/on-demand source-pack, captured clear-web evidence, and restricted metadata-only leak-claim scenarios all report useful-answer rate 1.0 and expected fact recall 1.0 with no cross-talk.
+- Continue Agent 06 evidence backbone work next with disabled-by-default execution receipt repository interface/factory or public-answer/graph audit replay consumers from these durable rows.
 
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 

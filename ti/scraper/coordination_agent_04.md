@@ -1,39 +1,19 @@
-Status: active_program_bj_public_channel_freshness_and_actor_feed_prioritization
+Status: active_product_focus_source_acquisition_100_to_1000
 
 # Agent 04 Coordination
 
-## Current Assignment - Program BJ: Public Channel Freshness And Actor Feed Prioritization
+Read `coordination_product_focus.md` first. Your current task is source acquisition, not more coverage matrices. Build the first 100 vetted source list with Agent 01, then expand to 1,000 ranked candidates only after dedupe and usefulness checks.
 
-You are no longer waiting for a task. Continue the public-coverage lane until high-value actor searches know which public-channel, blog, advisory, and metadata source families are most likely to produce fresh, useful rows.
+Deliverables:
+- Add high-value sources for APT/ransomware activity, victim claims, advisories, malware/tooling, TTPs, and public corroboration.
+- For every source, explain buyer value: actors improved, freshness expectation, entities likely extracted, source family, parser family, and whether it can produce Apify rows.
+- Identify highest-value missing source families for each default Actor group.
+- Keep private channels/account automation/auth/CAPTCHA/actor interaction out of scope.
 
-Mission:
-- Convert the 30-actor coverage matrix into source-family priorities, cadence recommendations, and buyer-visible freshness expectations.
-- Focus on practical results for the Apify Actor and `/ti`: actor searches should show why a result is fresh, partial, stale, or source-gap-held.
-
-Build:
-- Add per-actor freshness profiles for APT groups, ransomware/extortion groups, financial-crime groups, and unknown queries.
-- Add source-family priority rows for clear-web blogs/news, public advisories, public Telegram/channel-style sources where legal, dark metadata-only sources, malware/report feeds, CVE/advisory feeds, and official victim/news corroboration.
-- Add cadence recommendations for high-volume ransomware groups versus slower-moving APT reporting, including stale-only rejection rules and source-family fallback.
-- Add product-facing rows for `freshnessExpectation`, `highestValueMissingFamily`, `nextBestSourceAction`, `buyerCaveat`, and `expectedTimeToUsefulSignal`.
-- Keep all output public-only or metadata-only; no private channel joins, account automation, auth/CAPTCHA bypass, actor interaction, raw unsafe URLs, credentials, dumps, or leaked-data access.
-
-Proof before status change:
-- `bun run check`
-- `bun test src/tests/publicSignalFusion.test.ts src/tests/publicAdvisory.test.ts src/tests/api.test.ts`
-- `bun run check:route-inventory`
-- `bun run check:contract-index`
-- `bun run check:api-regression`
-- update source/product docs if API contracts change
-
-If this phase completes, continue immediately into Program BK: actor-specific collection playbooks for the top 50 marketplace queries.
-
-## Previous Completed Slice
-
-- Completed Program BI actor source coverage expansion for 30 configured actors/groups, including APT, ransomware, financial-crime, legacy, and unknown-query control rows.
-- Added `publicSignalFusion.actorSourceCoverageMatrix` with required, covered, stale, missing, blocked restricted-metadata, freshness, source value, caveat, and next safe activation fields.
-- Added compact product/API fields for Apify and `/ti` consumers: `sourceCoverageGaps`, `coverageStatusByActor`, and `apifyDatasetFields`.
-- Preserved Agent 04 boundaries: public-only source families, restricted metadata as review-held context only, no private channel scraping, no account automation, no auth/CAPTCHA bypass, no actor interaction, no leaked-data or raw URL exposure.
-- Updated source-registry operator docs for the new actor coverage matrix contract.
+- Completed Program BJ public-channel freshness and actor feed prioritization.
+- Added per-actor freshness expectations, source-family priority rows, cadence recommendations, stale/fallback handling, highest-value missing family, next best source action, buyer caveat, and expected time to useful signal.
+- Added compact product fields for Apify and `/ti`, including actor feed priorities and dataset fields for freshness, missing family, next action, caveat, and time-to-signal.
+- Preserved Agent 04 boundaries: public-only collection, restricted/dark sources as metadata-only review context, no private channel scraping, account automation, auth/CAPTCHA bypass, actor interaction, raw unsafe URLs, credentials, dumps, or leaked-data access.
+- Updated source registry documentation for the Program BI/BJ actor coverage and feed prioritization contract.
 - Verification is green: `bun run check`, `bun test`, `bun test src/tests/publicSignalFusion.test.ts src/tests/publicAdvisory.test.ts src/tests/api.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:api-regression`.
-
-Historical note: Agent 04 previously requested the next concrete task. The active Program BJ assignment above supersedes that request.
+- Historical note: Agent 04 previously requested the next concrete task. The active product-focus source acquisition task above supersedes that request.

@@ -1,5 +1,7 @@
 Status: active_program_bd_quality_evaluation_and_marketplace_usefulness
 
+Read `coordination_product_focus.md` first. Judge output like a buyer opening an Apify dataset. The quality gate must decide whether rows from the daily 20-group run and each 100 -> 60k source tier are useful, fresh, specific, supported, and safe enough to sell.
+
 ## Current Assignment - Program BD: Quality Evaluation And Marketplace Usefulness
 
 You are no longer waiting for a task. Continue the extraction/evaluation lane until the product can prove analyst usefulness, not just return rows.
@@ -26,10 +28,16 @@ Proof before status change:
 
 If this phase completes, continue immediately into Program BE: analyst feedback loop and active-learning evaluation set without requiring an LLM/GPU dependency.
 
+Progress:
 - Added listing-visible `reviewReasons` to every `apify/public-threat-actor-monitor` dataset row so marketplace users see confidence, freshness, corroboration, single-source, partial-answer, and safe-review reasons without exposing raw content.
-- Updated the Actor dataset schema, README, changelog, and smoke proof to require and verify the new review-reason field while preserving the safe-metadata-only boundary.
-- Repaired related TypeScript/test drift in public advisory parsing, product SLO metrics, source reliability economics, source activation approval packets, source coverage remediation, graph DTO typing, and contract-visible source coverage paths.
-- Kept the long-running Agent 07 vision active: improve CTI extraction quality, confidence/review reasons, actor/victim/malware/CVE evaluation fixtures, public-answer proof quality, and marketplace Actor usefulness while preserving uncertainty and provenance.
-- Verification green: root `bun run check`, root `bun test` (519 passing), Apify Actor `bun run check`, and Apify Actor `bun run smoke`.
+- Added `analysisFacets` to every Actor dataset row for stable filtering by row type, claim type, evidence grade, freshness, source class, entity presence, collection action, and safe-metadata boundary.
+- Updated the Actor dataset schema, README, changelog, publication check, and smoke proof to require and verify review reasons and analysis facets while preserving the safe-metadata-only boundary.
+- Added route-visible `ti.program_bd_quality_evaluation_pack.v1` under `qualityRuntimeValueGates` with 20+ default watchlist actor fixtures plus unknown/random guardrails, row-level quality metrics, pass/warn/hold gate packets, public UI/Apify/graph/STIX eligibility, regression guardrails, and Agent 07/09/10 routing.
+- Added deterministic Program BD bad-case regression cases for legal-proceeding false victims, actor-alias victim collisions, stale repost suppression, headline-only summaries, not-indexed fallback, raw-locator no-leak checks, and generic non-CTI source support.
+- Routed those bad-case regressions into `qualityRegressionSuite`, `analystFeedbackLearningLoop.fixtures`, and `activeLearningCandidateQueue.fixturePack` so the analyst feedback/active-learning path can replay them without model self-mutation, source activation, crawl starts, or public-answer publication.
+- Documented the Program BD marketplace quality packet in `docs/quality_dashboard.md`.
+- Added Program BE evaluator scoring fields to `activeLearningCandidateQueue`: summary-specificity thresholds, row-usefulness deltas, and `ti.analyst_approved_replay_promotion_report.v1` so analyst-approved replay promotion can be reviewed without model self-mutation, source activation, crawl starts, or public-answer publication.
+- Repaired related TypeScript/test drift in public advisory parsing, product SLO metrics, source reliability economics, source activation approval packets, source coverage remediation, graph actor-timeline/product DTOs, Apify store readiness contracts, evidence search promotion warnings, and contract-visible source coverage paths.
+- Verification green: root `bun run check`, focused pipeline/API/darkweb tests, root `bun test` (526 passing), Apify Actor `bun run check`, Apify Actor `bun run smoke`, Apify Actor `bun run check:publication`, and `bun run measure:search-product`.
 
-Request: assign the next Agent 07 task, or continue the quality/evaluation and marketplace Actor hardening program.
+Next: continue Program BE by persisting analyst-approved replay decisions into the safe analyst-loop read model and exposing route-visible replay promotion history without allowing automatic model, source, crawler, or public-answer mutation.

@@ -2,6 +2,8 @@ Status: active_program_bj_stix_taxii_monetization_and_export_contracts
 
 # Agent 08 Coordination
 
+Read `coordination_product_focus.md` first. Current STIX/TAXII work may finish if already in progress, but next graph work must improve buyer-visible Actor/public rows: actor timelines, actor comparisons, contradiction flags, stale campaign holds, and compact filterable fields. Speculative TAXII packaging is lower priority.
+
 ## Current Assignment
 
 You are no longer waiting for a graph/STIX/TAXII task. Continue the graph/export lane until reviewed graph intelligence can support monetizable export tiers without overstating implementation or leaking unsafe material.

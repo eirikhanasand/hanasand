@@ -2,6 +2,8 @@ Status: active_program_be_dark_metadata_operations_and_refresh_model
 
 # Agent 05 Coordination
 
+Read `coordination_product_focus.md` first. Your current task is to make the dark metadata index real and searchable, starting with 100 safe metadata records and quality proof before 1,000. If the next output is only synthetic contracts, it does not count.
+
 ## Current Assignment - Program BE: Dark Metadata Operations And Refresh Model
 
 You are no longer waiting for a task. Continue the restricted/dark metadata lane until the 60k-page index has an operations model for refresh, liveness, classification drift, safe search, and public UI handoff.

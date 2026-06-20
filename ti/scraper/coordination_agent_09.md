@@ -1,5 +1,7 @@
 Status: active_program_be_apify_store_and_public_api_conversion
 
+Read `coordination_product_focus.md` first. The Actor is the first revenue vehicle. Prioritize daily 20-group run proof, Store/pricing/payout clarity, dataset sample quality, useful/fresh row metrics, and Apify usage/conversion tracking over internal frontend/API abstractions.
+
 ## Current Assignment - Program BE: Apify Store And Public API Conversion
 
 You are no longer waiting for a task. Continue the API/product-surface lane until the Apify Actor and `/ti` public API look buyer-ready, explainable, and monetizable.

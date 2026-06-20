@@ -1,0 +1,52 @@
+# Product Focus Directive
+
+Current risk: the scraper can look enterprise-ready while still failing to produce sellable, fresh, useful data. For the next 24 hours, every worker should treat buyer-visible data quality and marketplace conversion as the main objective.
+
+## Non-Negotiable Direction
+
+- Finish any patch already in progress, but do not start new internal DTO/contract/readiness work unless it directly improves live data quality, Apify output, source growth, dark metadata search, or marketplace conversion.
+- STIX/TAXII/export packaging is secondary. Only continue it where it improves current Actor/public dataset rows or creates a concrete reviewed sample.
+- Coordination notes are not progress unless they unblock workers or redirect them to sellable output.
+- The first revenue vehicle is the Apify Actor. Optimize for a buyer opening the dataset and deciding it is worth paying for.
+
+## Source And Metadata Scale Ladder
+
+Progress gradually, with proof at each tier:
+
+1. 100 vetted public TI sources or dark/hidden metadata records.
+2. 1,000 ranked candidates/records.
+3. 4,000 candidates/records.
+4. 10,000 candidates/records.
+5. 20,000 candidates/records.
+6. 60,000 searchable, refreshed, safe metadata records.
+
+Do not advance a tier until the previous tier has dedupe, rejection metrics, search quality, freshness expectations, safe summaries, and product-value proof.
+
+## Buyer-Visible Metrics
+
+Every agent should prefer work that improves one or more of:
+
+- daily 20-group Actor run success;
+- useful-row rate;
+- fresh-row rate;
+- source-family diversity;
+- actor/victim/target/TTP extraction quality;
+- stale-only answer rejection;
+- unknown-query honesty;
+- no-leak confidence;
+- Apify Store listing clarity;
+- pricing/payout/conversion readiness;
+- cost per useful row.
+
+## Agent Focus
+
+- Agent 01: real source packs and source economics for the 100 -> 60k ladder.
+- Agent 02: daily Actor/default-watchlist scheduling and source/dark-metadata ladder scheduling, not queue theory.
+- Agent 03: parser coverage for vetted sources; rank failures by revenue impact.
+- Agent 04: source acquisition and freshness priorities, not more matrices.
+- Agent 05: real searchable dark metadata, safe summaries, liveness, and no-leak proof.
+- Agent 06: searchable read models for real source/dark metadata rows.
+- Agent 07: buyer-style quality gates for Apify rows and source tiers.
+- Agent 08: graph insights only where they improve Actor/public rows; defer speculative STIX/TAXII.
+- Agent 09: Store/listing/pricing/daily run proof/conversion metrics.
+- Agent 10: monetization SLOs, run proof, cost per useful row, and deploy blockers.
