@@ -4569,7 +4569,7 @@ function graphSellableSupportSloExample(
   };
 }
 
-function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"] {
+function buildGraphPublicCorroborationPivotPacketExpandedUnused(): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"] {
   type Candidate = LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number];
   type Pivot = Candidate["nextPublicCorroborationPivot"];
   const seeds: Array<{ actor: string; family: Candidate["family"]; field: Pivot["repairsRowField"]; entity: Pivot["entityType"]; source: Pivot["expectedSourceFamily"]; owner: Pivot["ownerHandoff"] }> = [
@@ -4915,7 +4915,7 @@ function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["dark
   };
 }
 
-function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"] {
+function buildGraphPublicCorroborationPivotPacketCompactUnused(): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"] {
   const candidates: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"] = [
     {
       id: "graph_public_apt29_identity_targeting",

@@ -977,6 +977,32 @@ describe("api v1", () => {
     expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "useful_caveated")).toHaveLength(6);
     expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "suppress")).toHaveLength(4);
     expect(liveSourceAdmissionPacket.suppressedClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_actor_summary", "stale_repost_as_current", "alias_collision", "restricted_only_without_public_support"]));
+    expect((response.darkMetadataPublicSupportLift4000 as {
+      first100RepairQueue: Array<{ countsTowardSellableFloorNow: boolean; noLeakProof: string }>;
+      tier10000Preview: { evaluatedCandidateCount: number; projectedSellableAfterPublicSupport: number; usefulWithCaveat: number; acceptedValueDensity: number; expansionDecision: string; countsTowardSellableFloorNow: boolean };
+      metricMovement: { repairCandidatesAdded: number; likelySellableRowsAfterPublicSupport: number; usefulCaveatedRows: number; suppressedRows: number; remainingRowsToFirst100FloorAfterPublicSupport: number; countsTowardSellableFloorNow: boolean };
+    })).toMatchObject({
+      tier10000Preview: {
+        evaluatedCandidateCount: 10000,
+        projectedSellableAfterPublicSupport: 198,
+        usefulWithCaveat: 142,
+        acceptedValueDensity: 0.034,
+        expansionDecision: "hold_for_value_density",
+        countsTowardSellableFloorNow: false
+      },
+      metricMovement: {
+        repairCandidatesAdded: 100,
+        likelySellableRowsAfterPublicSupport: 80,
+        usefulCaveatedRows: 20,
+        suppressedRows: 3866,
+        remainingRowsToFirst100FloorAfterPublicSupport: 20,
+        countsTowardSellableFloorNow: false
+      }
+    });
+    expect((response.darkMetadataPublicSupportLift4000 as { first100RepairQueue: Array<{ countsTowardSellableFloorNow: boolean; noLeakProof: string }> }).first100RepairQueue.every((row) =>
+      row.countsTowardSellableFloorNow === false &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
+    )).toBe(true);
     expect((response.first100AdmissionQuality as {
       schemaVersion: string;
       routeVisibleOn: string[];
