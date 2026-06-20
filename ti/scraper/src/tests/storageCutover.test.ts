@@ -62,6 +62,7 @@ import {
   createEvidenceSearchReadModelRepository,
   evidencePromotionExecutionFromPostgresRows,
   evidencePromotionExecutionToPostgresRows,
+  executeEvidenceActorDatasetConsumerHandoff,
   executeEvidencePromotionTransactionPlan,
   evidenceSearchDocumentFromPostgresRow,
   evidenceSearchDocumentToPgvectorCandidate,
@@ -2221,6 +2222,56 @@ describe("evidence storage cutover", () => {
     expect(actorConsumerSerialized).not.toContain(restrictedRaw);
     expect(actorConsumerSerialized).not.toContain("tenant/source/private-key");
     expect(actorConsumerSerialized).not.toContain(".onion");
+
+    const actorDatasetConsumerExecution = executeEvidenceActorDatasetConsumerHandoff(actorDatasetConsumerHandoff, {
+      generatedAt: "2026-05-24T21:45:00.000Z"
+    });
+    expect(actorDatasetConsumerExecution).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_consumer_execution.v1",
+      sourceHandoff: "ti.evidence_actor_dataset_consumer_handoff.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      status: "blocked_repository_disabled",
+      enabled: false,
+      dryRun: true,
+      liveBackendConnection: false,
+      willWriteActorDataset: false,
+      willWritePublicAnswerCache: false,
+      repositoryBoundary: {
+        actorDatasetRepository: "disabled_actor_dataset_repository",
+        publicAnswerCacheRepository: "disabled_public_answer_cache_repository",
+        requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_WRITES_ENABLED", "TI_PUBLIC_ANSWER_CACHE_WRITES_ENABLED"],
+        failClosedWithoutExplicitEnable: true
+      },
+      counts: {
+        actorDatasetRowsHeld: actorDatasetConsumerHandoff.counts.actorDatasetRows,
+        publicAnswerCacheWritesHeld: actorDatasetConsumerHandoff.counts.publicAnswerCacheWrites,
+        actorDatasetRowsWritten: 0,
+        publicAnswerCacheWritesWritten: 0
+      },
+      blockedReasons: ["actor_dataset_repository_disabled", "public_answer_cache_repository_disabled"],
+      rollbackRefs: [],
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(actorDatasetConsumerExecution.actorDatasetReceipts.length).toBe(actorDatasetConsumerHandoff.counts.actorDatasetRows);
+    expect(actorDatasetConsumerExecution.publicAnswerCacheReceipts.length).toBe(actorDatasetConsumerHandoff.counts.publicAnswerCacheWrites);
+    expect(actorDatasetConsumerExecution.actorDatasetReceipts.every((receipt) => receipt.state === "held" && receipt.noLeak === true)).toBe(true);
+    expect(actorDatasetConsumerExecution.publicAnswerCacheReceipts.every((receipt) =>
+      receipt.state === "held" &&
+      receipt.reason === "public_answer_cache_repository_disabled" &&
+      receipt.noLeak === true
+    )).toBe(true);
+    const actorExecutionSerialized = JSON.stringify(actorDatasetConsumerExecution);
+    expect(actorExecutionSerialized).not.toContain(restrictedRaw);
+    expect(actorExecutionSerialized).not.toContain("tenant/source/private-key");
+    expect(actorExecutionSerialized).not.toContain(".onion");
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");

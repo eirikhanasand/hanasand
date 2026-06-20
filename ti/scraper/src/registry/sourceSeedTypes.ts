@@ -1699,6 +1699,55 @@ export interface TiSourceAtlasProductSourceLadderPacket {
         expectedFreshRowsPerDay: number;
         buyerVisibleEffect: string;
       }>;
+      activationRunbook: {
+        schemaVersion: "ti.source_atlas.high_value_replacement_activation_runbook.v1";
+        dryRun: true;
+        willMutate: false;
+        willStartCrawling: false;
+        batchSourceCount: number;
+        day1CandidateCount: number;
+        day3CandidateCount: number;
+        heldCandidateCount: number;
+        expectedFreshRowsPerDay: number;
+        expectedActorRowsPerDay: number;
+        expectedRansomwareRowsPerDay: number;
+        expectedPayworthyLift: number;
+        actionRows: Array<{
+          sequence: number;
+          actionId: string;
+          phase: "day_1_canary" | "day_3_parser_or_legal_clearance" | "hold_for_replacement";
+          atlasSourceIds: string[];
+          sourceFamilies: TiSourceAtlasFamily[];
+          actors: string[];
+          blockersAddressed: Array<"low_source_value" | "low_freshness" | "low_evidence_yield" | "low_public_answer_impact">;
+          expectedFreshRowsPerDay: number;
+          expectedActorRowsPerDay: number;
+          expectedRansomwareRowsPerDay: number;
+          expectedPayworthyLift: number;
+          publicAccessMethods: Array<"public_http" | "official_api" | "public_rss" | "public_dataset" | "public_channel_descriptor">;
+          parserFamilies: SourceMarketplaceParserProfile[];
+          parserWork: "none" | "certify_parser" | "descriptor_review";
+          legalWork: "none" | "refresh_legal_review" | "robots_review";
+          schedulerWork: "stage_canary_packet" | "hold_until_review";
+          measurementWork: string;
+          buyerVisibleRowEffect: string;
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+            actorInteractionRequired: false;
+          };
+        }>;
+        ownerHandoffs: {
+          agent01SourceRegistry: string[];
+          agent02Scheduler: string[];
+          agent03Parser: string[];
+          agent07Quality: string[];
+          agent09ApiApify: string[];
+          agent10Revenue: string[];
+        };
+      };
       aggregate: {
         sampledReplacementCount: number;
         projectedAdditionalPayworthySources: number;

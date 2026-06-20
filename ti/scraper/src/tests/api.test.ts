@@ -4191,6 +4191,57 @@ describe("api v1", () => {
           actorInteractionExposed: false
         }
       },
+      actorDatasetConsumerExecution: {
+        schemaVersion: "ti.evidence_actor_dataset_consumer_execution.v1",
+        sourceHandoff: "ti.evidence_actor_dataset_consumer_handoff.v1",
+        productSurface: "apify_public_threat_actor_monitor",
+        actorBuild: "0.6.4",
+        status: "blocked_repository_disabled",
+        enabled: false,
+        dryRun: true,
+        liveBackendConnection: false,
+        willWriteActorDataset: false,
+        willWritePublicAnswerCache: false,
+        repositoryBoundary: {
+          actorDatasetRepository: "disabled_actor_dataset_repository",
+          publicAnswerCacheRepository: "disabled_public_answer_cache_repository",
+          requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_WRITES_ENABLED", "TI_PUBLIC_ANSWER_CACHE_WRITES_ENABLED"],
+          failClosedWithoutExplicitEnable: true
+        },
+        counts: {
+          actorDatasetRowsHeld: expect.any(Number),
+          publicAnswerCacheWritesHeld: expect.any(Number),
+          sellableRowsHeld: expect.any(Number),
+          caveatedContextRowsHeld: expect.any(Number),
+          suppressedRowsHeld: expect.any(Number),
+          coverageGapRowsHeld: expect.any(Number),
+          actorDatasetRowsWritten: 0,
+          publicAnswerCacheWritesWritten: 0
+        },
+        actorDatasetReceipts: expect.arrayContaining([
+          expect.objectContaining({
+            state: "held",
+            noLeak: true
+          })
+        ]),
+        publicAnswerCacheReceipts: expect.arrayContaining([
+          expect.objectContaining({
+            state: "held",
+            reason: "public_answer_cache_repository_disabled",
+            noLeak: true
+          })
+        ]),
+        blockedReasons: ["actor_dataset_repository_disabled", "public_answer_cache_repository_disabled"],
+        rollbackRefs: [],
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
       safeOutput: {
         rawBodiesExposed: false,
         objectKeysExposed: false,
@@ -6438,6 +6489,20 @@ describe("api v1", () => {
           safety: Record<string, boolean>;
           noLeakSerialization: { passed: boolean };
         };
+        tier4000Admission: {
+          schemaVersion: string;
+          tier: string;
+          baselineTier: string;
+          targetRecordCount: number;
+          evaluatedCandidateCount: number;
+          admittedCandidateCount: number;
+          rejectedCandidateCount: number;
+          admissionRules: { minBuyerValueScore: number; requiredSignals: string[]; requireApprovedMetadataOnly: boolean };
+          qualityMetrics: { productQualifiedRate: number; searchHitQualityRate: number; costRiskPerUsefulMetadataRow: string };
+          importRefreshGate: Record<string, boolean>;
+          buyerSearchProof: { sampleSearchRows: Array<{ safeSummary: string; whyItMatters: string; provenanceHash: string; searchBoostTerms: string[] }>; activationDecision: string; blockers: string[] };
+          noLeakSerialization: { passed: boolean };
+        };
         operatorRunbook: {
           schemaVersion: string;
           mode: string;
@@ -6510,6 +6575,14 @@ describe("api v1", () => {
           routeFields: string[];
           requiredRecordFields: string[];
           advancementTarget: string;
+          requireNoLeakProof: boolean;
+        };
+        tier4000Admission: {
+          schemaVersion: string;
+          tier: string;
+          targetRecordCount: number;
+          routeFields: string[];
+          admissionDecisionField: string;
           requireNoLeakProof: boolean;
         };
       };
@@ -6796,6 +6869,41 @@ describe("api v1", () => {
       requireNoLeakProof: true,
       requireActorDatasetLift: true
     });
+    expect(statusResponse.status.tier4000Admission).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier4000_admission.v1",
+      tier: "tier_4000",
+      baselineTier: "tier_1000",
+      targetRecordCount: 4000,
+      evaluatedCandidateCount: 100,
+      admissionRules: {
+        minBuyerValueScore: 0.66,
+        requireApprovedMetadataOnly: true
+      },
+      importRefreshGate: {
+        disposableIsolationRequired: true,
+        approvedProxyRequired: true,
+        rawUnsafeUrlSerializationAllowed: false,
+        credentialOrPayloadCollectionAllowed: false,
+        authCaptchaPrivateAccessAllowed: false,
+        threatActorInteractionAllowed: false,
+        rejectLowValueInsteadOfInflatingCount: true
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(statusResponse.status.tier4000Admission.admittedCandidateCount).toBeGreaterThan(0);
+    expect(statusResponse.status.tier4000Admission.rejectedCandidateCount).toBeGreaterThan(0);
+    expect(statusResponse.status.tier4000Admission.qualityMetrics.productQualifiedRate).toBeGreaterThan(0);
+    expect(statusResponse.status.tier4000Admission.qualityMetrics.searchHitQualityRate).toBeGreaterThan(0);
+    expect(statusResponse.status.tier4000Admission.buyerSearchProof.sampleSearchRows.length).toBeGreaterThan(0);
+    expect(statusResponse.status.tier4000Admission.buyerSearchProof.sampleSearchRows.every((row) =>
+      row.safeSummary.length >= 80 &&
+      row.searchBoostTerms.length > 0 &&
+      row.whyItMatters.includes("without exposing raw locations") &&
+      row.provenanceHash.length > 0
+    )).toBe(true);
+    expect(statusResponse.status.tier4000Admission.buyerSearchProof.activationDecision).toBe("hold_for_value_density");
     expect(statusResponse.status.operatorRunbook).toMatchObject({
       schemaVersion: "ti.darkweb_index_operator_runbook.v1",
       mode: "operator_controls_no_live_collection",
@@ -6921,6 +7029,14 @@ describe("api v1", () => {
       "provenanceHash",
       "buyerValue"
     ]));
+    expect(statusResponse.contract.tier4000Admission).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier4000_admission.v1",
+      tier: "tier_4000",
+      targetRecordCount: 4000,
+      routeFields: ["status.tier4000Admission", "darkwebIndex.productHandoff.buyerSearchRows"],
+      admissionDecisionField: "buyerSearchProof.activationDecision",
+      requireNoLeakProof: true
+    });
     expect(statusResponse.contract.sourceIngest).toMatchObject({
       runtimeMode: "contract_only_no_network",
       sourceTypes: expect.arrayContaining(["directory", "seed_list", "analyst_import", "public_report"]),
@@ -6966,6 +7082,7 @@ describe("api v1", () => {
         publicSearchUse: string;
         recordIds: string[];
         tier1000ReadyRecordIds: string[];
+        buyerSearchRows: Array<{ recordId: string; safeSummary: string; sourceFamily: string; refreshCadenceMinutes: number; buyerValueScore: number; whyItMatters: string; provenanceHash: string }>;
         warnings: string[];
       };
       noLeakSerialization: { passed: boolean };
@@ -6997,6 +7114,16 @@ describe("api v1", () => {
     expect(darkwebIndex.productHandoff.freshnessFields).toEqual(["lastSeen", "lastChecked", "liveness", "refreshCadenceMinutes"]);
     expect(darkwebIndex.productHandoff.recordIds).toEqual(darkwebIndex.records.map((record) => record.id));
     expect(darkwebIndex.productHandoff.tier1000ReadyRecordIds.every((recordId) => darkwebIndex.productHandoff.recordIds.includes(recordId))).toBe(true);
+    expect(darkwebIndex.productHandoff.buyerSearchRows).toHaveLength(darkwebIndex.records.length);
+    expect(darkwebIndex.productHandoff.buyerSearchRows.every((row) =>
+      row.recordId.length > 0 &&
+      row.safeSummary.length >= 80 &&
+      row.sourceFamily.length > 0 &&
+      row.refreshCadenceMinutes > 0 &&
+      row.buyerValueScore >= 0 &&
+      row.whyItMatters.includes("without exposing raw locations") &&
+      row.provenanceHash.length > 0
+    )).toBe(true);
     expect(darkwebIndex.records.every((record) =>
       record.network === "tor" &&
       record.actorHints.includes("akira") &&
@@ -10123,6 +10250,20 @@ describe("api v1", () => {
           metricThresholds: Array<{ metric: string }>;
           sourceTierGates: Array<{ tier: number }>;
           apifyDatasetFields: string[];
+          buyerVisibleQualityLiftGate: {
+            schemaVersion: string;
+            routeVisibleOn: string[];
+            qualityLiftAcceptedCount: number;
+            qualityLiftRejectedCount: number;
+            sellableRowsAdded: number;
+            freshRowsAdded: number;
+            projectedRowRevenueDeltaUsd: number;
+            passCriteria: {
+              acceptedRequiresDecisionLift: boolean;
+              rejectedRepairsDoNotCountTowardPayworthyRate: boolean;
+            };
+            rejectedExamples: Array<{ rejectionReason: string }>;
+          };
         };
         watchlistFixtures: Array<{
           actor: string;
@@ -10588,6 +10729,26 @@ describe("api v1", () => {
     ]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.sourceTierGates.map((gate) => gate.tier)).toEqual([100, 1000, 4000, 10000, 20000, 60000]);
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.apifyDatasetFields).toEqual(expect.arrayContaining(["reviewReasons", "analysisFacets", "buyerCaveat"]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.buyerVisibleQualityLiftGate).toMatchObject({
+      schemaVersion: "ti.program_bg_buyer_visible_quality_lift_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
+      qualityLiftAcceptedCount: 5,
+      qualityLiftRejectedCount: 5,
+      sellableRowsAdded: 2,
+      freshRowsAdded: 5,
+      projectedRowRevenueDeltaUsd: 0.015,
+      passCriteria: {
+        acceptedRequiresDecisionLift: true,
+        rejectedRepairsDoNotCountTowardPayworthyRate: true
+      }
+    });
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.buyerVisibleQualityLiftGate.rejectedExamples.map((row) => row.rejectionReason)).toEqual(expect.arrayContaining([
+      "no_sellable_row_lift",
+      "still_single_source",
+      "stale_after_repair",
+      "unsafe_or_unapproved_source",
+      "cost_exceeds_value"
+    ]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT42",

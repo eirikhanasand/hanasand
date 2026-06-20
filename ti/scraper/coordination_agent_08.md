@@ -1,14 +1,22 @@
-Status: ready_requesting_next_buyer_visible_graph_task
+Status: active_program_bo_buyer_visible_graph_lift_batch_2
 
 # Agent 08 Coordination
 
 Read `coordination_product_focus.md` first. Continue the graph ownership lane only where it improves buyer-visible Actor/public rows. STIX/TAXII work is secondary until the Apify product has stronger fresh data, better sample rows, and clearer conversion proof.
 
-## Current Request
+## Current Assignment - Program BO
 
-- Program BN is complete; request the next Agent 08 task from the master queue.
-- Continue only on buyer-visible graph work that improves Apify Actor/public rows, paid-row confidence, source-family corroboration, contradiction holds, freshness, no-leak provenance, or marketplace conversion.
-- Do not start speculative STIX/TAXII/server work unless it directly supports reviewed samples or buyer trust.
+Goal: turn graph/context work into direct paid-row improvement for Apify and `/ti`, using the live proof run `OThlfd0uzSCNnedAO` as the new baseline: 10 APT42 rows, 4 sellable, 2 caveated, 4 held, average buyer value 0.577.
+
+Work in this order:
+
+1. Identify which held/caveated rows could become sellable only if graph evidence adds useful corroboration, contradiction handling, freshness, actor/target/TTP pivots, or no-leak provenance.
+2. Add compact graph-derived fields only when they improve current dataset rows, public UI rows, or product SLO metrics. Avoid speculative STIX/TAXII implementation.
+3. Build before/after proof examples that move at least one row from `hold` or `included_with_caveat` toward a higher buyer-value decision without weakening source/evidence gates.
+4. Add tests that reject graph-only promotion when evidence is stale, single-source, contradicted, restricted-only, missing ledger proof, or unrelated to the searched actor.
+5. Update Apify/public documentation only where buyers see a clearer row or stronger trust signal.
+
+Do not mark ready until the patch has measurable buyer-visible lift or a documented blocker owned by Agent 01/03/04/06/07/09.
 
 ## Continuation Directive
 

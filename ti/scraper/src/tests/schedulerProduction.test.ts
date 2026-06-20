@@ -1546,6 +1546,50 @@ describe("scheduler production readiness", () => {
       expect.objectContaining({ query: "APT42", reason: "missing_public_channel", action: "enqueue_gap_fill" }),
       expect.objectContaining({ query: "LockBit", reason: "missing_dark_metadata", action: "metadata_review" })
     ]));
+    expect(daily.sourceGapClosurePlan).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_closure_plan.v1",
+      routeVisible: true,
+      targetFreshEvidenceWithinSeconds: 120,
+      duplicateRunReuseKeyPattern: "tenant:query:source_family:daily_actor",
+      workerLimits: {
+        maxParallelGapClosures: 8,
+        perSourceConcurrency: 1,
+        backgroundSweepMayYieldToInteractive: true
+      },
+      promotionRules: {
+        requireFreshOrPartialEvidence: true,
+        requireNoLeakProof: true,
+        staleOnlyRowsRemainBlocked: true,
+        metadataOnlyRowsRemainCaveated: true
+      }
+    });
+    expect(daily.sourceGapClosurePlan.gapClosures).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        query: "APT29",
+        missingSourceFamily: "safe_public_sources",
+        queueAction: "suppress_ready_until_gap_closes",
+        expectedVisibleState: "searching",
+        paidRowEffect: "freshen_stale_row"
+      }),
+      expect.objectContaining({
+        query: "APT42",
+        missingSourceFamily: "public_channel",
+        sourceTier: "tier_1000",
+        workClass: "public_channel_probe",
+        queueAction: "enqueue_gap_probe",
+        reuseKey: "public:APT42:public_channel:daily_actor",
+        expectedVisibleState: "partial"
+      }),
+      expect.objectContaining({
+        query: "LockBit",
+        missingSourceFamily: "approved_dark_metadata",
+        sourceTier: "tier_4000",
+        workClass: "restricted_darknet_metadata_sweep",
+        queueAction: "metadata_review_hold",
+        expectedVisibleState: "metadata_review",
+        paidRowEffect: "metadata_context_only"
+      })
+    ]));
     expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));
     expect(daily.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_daily_actor_run_plan");
     expect(daily.releaseGate.proofCommands).toContain("bun run check:apify-publication");

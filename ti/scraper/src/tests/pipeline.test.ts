@@ -1995,6 +1995,32 @@ describe("pipeline", () => {
     expect(pack.paidRowQualityGate.sourceTierGates.map((gate) => gate.tier)).toEqual([100, 1000, 4000, 10000, 20000, 60000]);
     expect(pack.paidRowQualityGate.sourceTierGates.every((gate) => gate.noLeakRequired && gate.requiredBeforeAdvance.length > 0)).toBe(true);
     expect(pack.paidRowQualityGate.apifyDatasetFields).toEqual(expect.arrayContaining(["reviewReasons", "analysisFacets", "buyerCaveat"]));
+    expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate).toMatchObject({
+      schemaVersion: "ti.program_bg_buyer_visible_quality_lift_gate.v1",
+      baselineRunId: "iMQGeezZ8bx7WtlhQ",
+      baselineDatasetId: "5PLmkE30luBA5Lbgc",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      qualityLiftAcceptedCount: 5,
+      qualityLiftRejectedCount: 5,
+      sellableRowsAdded: 2,
+      freshRowsAdded: 5,
+      costPerUsefulRowDelta: -0.0018,
+      projectedRowRevenueDeltaUsd: 0.015
+    });
+    expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.routeVisibleOn).toEqual(expect.arrayContaining([
+      "/v1/quality/evaluate",
+      "/v1/intel/search",
+      "/v1/contracts"
+    ]));
+    expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.acceptedExamples.some((row) =>
+      row.beforeDecision === "suppress" &&
+      row.afterDecision === "included_with_caveat" &&
+      row.buyerVisibleLift.includes("safe_metadata_corroboration")
+    )).toBe(true);
+    expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate)).toBe(true);
+    expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

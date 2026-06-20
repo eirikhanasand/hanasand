@@ -1981,9 +1981,75 @@ export function buildSchedulerDailyActorRunPlan(input: {
   const darkMetadataGapQueries = watchlist
     .filter((row) => row.sourceFamilyFocus.includes("approved_dark_metadata") && row.currentFreshness !== "fresh")
     .map((row) => row.query);
+  const staleActorGapQueries = watchlist
+    .filter((row) => row.staleSuppression === "drop_stale_only_activity")
+    .map((row) => row.query);
   const tier100 = sourceTierCadence.find((tier) => tier.tier === "tier_100") ?? sourceTierCadence[0];
   const tier1000 = sourceTierCadence.find((tier) => tier.tier === "tier_1000") ?? sourceTierCadence[1] ?? tier100;
   const tier4000 = sourceTierCadence.find((tier) => tier.tier === "tier_4000") ?? sourceTierCadence[2] ?? tier1000;
+  const sourceGapClosurePlan: SchedulerDailyActorRunPlanDto["sourceGapClosurePlan"] = {
+    schemaVersion: "ti.scheduler_source_gap_closure_plan.v1",
+    routeVisible: true,
+    targetFreshEvidenceWithinSeconds: 120,
+    duplicateRunReuseKeyPattern: "tenant:query:source_family:daily_actor",
+    gapClosures: Array.from(new Map([
+      ...staleActorGapQueries.map((query) => ({
+        query,
+        missingSourceFamily: "safe_public_sources" as const,
+        sourceTier: "tier_100" as const,
+        workClass: "interactive_live_search" as const,
+        queueAction: "suppress_ready_until_gap_closes" as const,
+        reuseKey: `public:${query}:safe_public_sources:daily_actor`,
+        maxAttempts: 3,
+        backoffSeconds: [3, 15, 60],
+        deadlineSeconds: 120,
+        fairnessGroup: `actor:${query}:freshness`,
+        expectedVisibleState: "searching" as const,
+        paidRowEffect: "freshen_stale_row" as const
+      })),
+      ...publicChannelGapQueries.map((query) => ({
+        query,
+        missingSourceFamily: "public_channel" as const,
+        sourceTier: "tier_1000" as const,
+        workClass: "public_channel_probe" as const,
+        queueAction: "enqueue_gap_probe" as const,
+        reuseKey: `public:${query}:public_channel:daily_actor`,
+        maxAttempts: 3,
+        backoffSeconds: [15, 60, 180],
+        deadlineSeconds: 180,
+        fairnessGroup: `actor:${query}:public_channel`,
+        expectedVisibleState: "partial" as const,
+        paidRowEffect: "raise_caveat_quality" as const
+      })),
+      ...darkMetadataGapQueries.map((query) => ({
+        query,
+        missingSourceFamily: "approved_dark_metadata" as const,
+        sourceTier: "tier_4000" as const,
+        workClass: "restricted_darknet_metadata_sweep" as const,
+        queueAction: "metadata_review_hold" as const,
+        reuseKey: `public:${query}:approved_dark_metadata:daily_actor`,
+        maxAttempts: 2,
+        backoffSeconds: [60, 300],
+        deadlineSeconds: 600,
+        fairnessGroup: `actor:${query}:approved_metadata`,
+        expectedVisibleState: "metadata_review" as const,
+        paidRowEffect: "metadata_context_only" as const
+      }))
+    ].map((row) => [`${row.query}:${row.missingSourceFamily}`, row])).values()),
+    workerLimits: {
+      maxParallelGapClosures: 8,
+      perSourceConcurrency: 1,
+      publicChannelReservedSlots: partitions.get("public_channel_window")?.reservedWorkerSlots ?? 1,
+      darkMetadataReservedSlots: partitions.get("restricted_metadata_approval")?.reservedWorkerSlots ?? 1,
+      backgroundSweepMayYieldToInteractive: true
+    },
+    promotionRules: {
+      requireFreshOrPartialEvidence: true,
+      requireNoLeakProof: true,
+      staleOnlyRowsRemainBlocked: true,
+      metadataOnlyRowsRemainCaveated: true
+    }
+  };
   const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {
     enqueueWindow: "source_sweeps_before_actor_run",
     duplicateRunReuseBeforeEnqueue: true,
@@ -2189,6 +2255,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
       ]
     },
     executionQueuePlan,
+    sourceGapClosurePlan,
     routeContracts: {
       frontierStatusField: "scheduler.dailyActorRunPlan",
       searchSchedulerField: "scheduler.dailyActorRunPlan",

@@ -516,6 +516,48 @@ describe("darkweb metadata index contracts", () => {
       requireNoLeakProof: true,
       requireActorDatasetLift: true
     });
+    expect(status.tier4000Admission).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier4000_admission.v1",
+      owner: "Agent 05",
+      tier: "tier_4000",
+      baselineTier: "tier_1000",
+      targetRecordCount: 4000,
+      evaluatedCandidateCount: 100,
+      admissionRules: {
+        minBuyerValueScore: 0.66,
+        minSafeSummaryLength: 80,
+        allowedLiveness: ["live", "intermittent"],
+        requireApprovedMetadataOnly: true
+      },
+      importRefreshGate: {
+        disposableIsolationRequired: true,
+        approvedProxyRequired: true,
+        rawUnsafeUrlSerializationAllowed: false,
+        credentialOrPayloadCollectionAllowed: false,
+        authCaptchaPrivateAccessAllowed: false,
+        threatActorInteractionAllowed: false,
+        rejectLowValueInsteadOfInflatingCount: true
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.tier4000Admission.admittedCandidateCount).toBeGreaterThan(0);
+    expect(status.tier4000Admission.rejectedCandidateCount).toBeGreaterThan(0);
+    expect(status.tier4000Admission.qualityMetrics).toMatchObject({
+      costRiskPerUsefulMetadataRow: expect.stringMatching(/low|medium|high/)
+    });
+    expect(status.tier4000Admission.qualityMetrics.productQualifiedRate).toBeGreaterThan(0);
+    expect(status.tier4000Admission.qualityMetrics.searchHitQualityRate).toBeGreaterThan(0);
+    expect(status.tier4000Admission.buyerSearchProof.sampleSearchRows.length).toBeGreaterThan(0);
+    expect(status.tier4000Admission.buyerSearchProof.sampleSearchRows.every((row) =>
+      row.safeSummary.length >= 80 &&
+      row.searchBoostTerms.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.whyItMatters.includes("without exposing raw locations")
+    )).toBe(true);
+    expect(status.tier4000Admission.buyerSearchProof.activationDecision).toBe("hold_for_value_density");
+    expect(status.tier4000Admission.buyerSearchProof.blockers).toEqual(expect.arrayContaining(["reject_low_value_candidates_before_count_expansion"]));
     expect(contract.tier100Product).toMatchObject({
       schemaVersion: "ti.darkweb_index_tier100_product.v1",
       tier: "tier_100",
@@ -529,6 +571,14 @@ describe("darkweb metadata index contracts", () => {
       targetRecordCount: 1000,
       routeFields: ["status.tier1000Readiness", "darkwebIndex.productHandoff"],
       advancementTarget: "tier_4000",
+      requireNoLeakProof: true
+    });
+    expect(contract.tier4000Admission).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier4000_admission.v1",
+      tier: "tier_4000",
+      targetRecordCount: 4000,
+      routeFields: ["status.tier4000Admission", "darkwebIndex.productHandoff.buyerSearchRows"],
+      admissionDecisionField: "buyerSearchProof.activationDecision",
       requireNoLeakProof: true
     });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
@@ -641,6 +691,16 @@ describe("darkweb metadata index contracts", () => {
     expect(firstPage.productHandoff.freshnessFields).toEqual(["lastSeen", "lastChecked", "liveness", "refreshCadenceMinutes"]);
     expect(firstPage.productHandoff.recordIds).toEqual(firstPage.records.map((record) => record.id));
     expect(firstPage.productHandoff.tier1000ReadyRecordIds.every((recordId) => firstPage.productHandoff.recordIds.includes(recordId))).toBe(true);
+    expect(firstPage.productHandoff.buyerSearchRows).toHaveLength(firstPage.records.length);
+    expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
+      row.recordId.length > 0 &&
+      row.safeSummary.length >= 80 &&
+      row.sourceFamily.length > 0 &&
+      row.refreshCadenceMinutes > 0 &&
+      row.buyerValueScore >= 0 &&
+      row.whyItMatters.includes("without exposing raw locations") &&
+      row.provenanceHash.length > 0
+    )).toBe(true);
     expect(firstPage.noLeakSerialization.passed).toBe(true);
 
     const serialized = JSON.stringify({ firstPage, secondPage, status: buildDarkwebIndexStatus(records), contract: darkwebIndexContract() });

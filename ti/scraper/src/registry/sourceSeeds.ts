@@ -1455,6 +1455,7 @@ function buildHighValueReplacementBatch(
     replacementRows,
     familyPlans: buildHighValueReplacementFamilyPlans(replacementRows, weakRecords, minimumSourceValueScore),
     actorPlans: buildHighValueReplacementActorPlans(replacementRows, weakRecords, minimumSourceValueScore),
+    activationRunbook: buildHighValueReplacementActivationRunbook(replacementRows),
     aggregate: {
       sampledReplacementCount: replacementRows.length,
       projectedAdditionalPayworthySources,
@@ -1466,6 +1467,146 @@ function buildHighValueReplacementBatch(
       nextMeasuredPass: "Replace low-value/stale/low-yield candidates with these high-value public sources, then rerun sourceMonetizationGate and daily Actor proof before advancing 4k or 10k claims."
     }
   };
+}
+
+function buildHighValueReplacementActivationRunbook(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"] {
+  const day1Rows = rows
+    .filter((row) => row.canImprovePaidRowsWithin1To3Days && (row.activationPriority === "urgent" || row.activationPriority === "high"))
+    .slice(0, 36);
+  const day3Rows = rows
+    .filter((row) => !day1Rows.some((candidate) => candidate.atlasSourceId === row.atlasSourceId && candidate.replacementForBlocker === row.replacementForBlocker))
+    .filter((row) => row.parserReadiness !== "certified" || row.legalReview !== "current" || row.robotsReview === "missing" || row.robotsReview === "stale")
+    .slice(0, 36);
+  const heldRows = rows
+    .filter((row) => !day1Rows.some((candidate) => candidate.atlasSourceId === row.atlasSourceId && candidate.replacementForBlocker === row.replacementForBlocker))
+    .filter((row) => !day3Rows.some((candidate) => candidate.atlasSourceId === row.atlasSourceId && candidate.replacementForBlocker === row.replacementForBlocker))
+    .slice(0, 24);
+  const actionRows = [
+    ...highValueReplacementActionRows(day1Rows, "day_1_canary", 0),
+    ...highValueReplacementActionRows(day3Rows, "day_3_parser_or_legal_clearance", 100),
+    ...highValueReplacementActionRows(heldRows, "hold_for_replacement", 200)
+  ].map((row, index) => ({ ...row, sequence: index + 1 }));
+  const expectedFreshRowsPerDay = roundScore(actionRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedActorRowsPerDay = roundScore(actionRows.reduce((sum, row) => sum + row.expectedActorRowsPerDay, 0));
+  const expectedRansomwareRowsPerDay = roundScore(actionRows.reduce((sum, row) => sum + row.expectedRansomwareRowsPerDay, 0));
+  const expectedPayworthyLift = actionRows.reduce((sum, row) => sum + row.expectedPayworthyLift, 0);
+  return {
+    schemaVersion: "ti.source_atlas.high_value_replacement_activation_runbook.v1",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    batchSourceCount: rows.length,
+    day1CandidateCount: day1Rows.length,
+    day3CandidateCount: day3Rows.length,
+    heldCandidateCount: heldRows.length,
+    expectedFreshRowsPerDay,
+    expectedActorRowsPerDay,
+    expectedRansomwareRowsPerDay,
+    expectedPayworthyLift,
+    actionRows,
+    ownerHandoffs: {
+      agent01SourceRegistry: ["Review actionRows.atlasSourceIds and legalWork before creating source activation packets.", "Retire or replace weak source candidates only after explicit operator approval."],
+      agent02Scheduler: ["Use schedulerWork and expectedFreshRowsPerDay to stage canary budgets without worker leases.", "Keep hold_until_review rows out of live queues."],
+      agent03Parser: ["Prioritize actionRows with parserWork=certify_parser or descriptor_review before day-3 measurement."],
+      agent07Quality: ["Score buyerVisibleRowEffect and measurementWork before paid-row promotion."],
+      agent09ApiApify: ["Expose action summaries, source ids, families, and row effects only; no raw URLs or source payloads."],
+      agent10Revenue: ["Measure useful/fresh/sellable row deltas and cost per useful row after canary approval."]
+    }
+  };
+}
+
+function highValueReplacementActionRows(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"],
+  phase: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"][number]["phase"],
+  orderOffset: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"] {
+  const groupMap = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const actorKey = highValueActionPrimaryActor(row);
+    const key = `${phase}:${row.family}:${row.replacementForBlocker}:${actorKey}`;
+    groupMap.set(key, [...(groupMap.get(key) ?? []), row]);
+  }
+  return [...groupMap.values()]
+    .map((group, index) => highValueReplacementActionRow(group, phase, orderOffset + index + 1))
+    .sort((left, right) =>
+      highValueActionPhaseRank(left.phase) - highValueActionPhaseRank(right.phase) ||
+      right.expectedPayworthyLift - left.expectedPayworthyLift ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.actionId.localeCompare(right.actionId)
+    );
+}
+
+function highValueReplacementActionRow(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"],
+  phase: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"][number]["phase"],
+  sequence: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"][number] {
+  const atlasSourceIds = uniqueStrings(rows.map((row) => row.atlasSourceId)).slice(0, 12);
+  const sourceFamilies = uniqueStrings(rows.map((row) => row.family)) as TiSourceAtlasFamily[];
+  const actors = uniqueStrings(rows.flatMap((row) => row.expectedActorCoverage)).slice(0, 10);
+  const blockersAddressed = uniqueStrings(rows.map((row) => row.replacementForBlocker)) as TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"][number]["blockersAddressed"];
+  const expectedFreshRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedRansomwareRowsPerDay = roundScore(rows
+    .filter((row) => row.expectedRansomwareCoverage.length > 0 || row.buyerVisibleRowEffect === "ransomware_victim_activity")
+    .reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedActorRowsPerDay = roundScore(Math.max(0, expectedFreshRowsPerDay - expectedRansomwareRowsPerDay));
+  const publicAccessMethods = uniqueStrings(rows.map((row) => row.publicAccessMethod)) as TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"][number]["publicAccessMethods"];
+  const parserFamilies = uniqueStrings(rows.map((row) => row.parserFamily)) as SourceMarketplaceParserProfile[];
+  const parserWork = rows.some((row) => row.parserReadiness === "parser_repair_needed")
+    ? "certify_parser"
+    : rows.some((row) => row.parserReadiness === "descriptor_review_only") ? "descriptor_review" : "none";
+  const legalWork = rows.some((row) => row.legalReview !== "current")
+    ? "refresh_legal_review"
+    : rows.some((row) => row.robotsReview === "missing" || row.robotsReview === "stale") ? "robots_review" : "none";
+  const schedulerWork = phase === "day_1_canary" && parserWork === "none" && legalWork === "none"
+    ? "stage_canary_packet"
+    : "hold_until_review";
+  const expectedPayworthyLift = phase === "day_1_canary"
+    ? rows.filter((row) => row.canImprovePaidRowsWithin1To3Days).length
+    : phase === "day_3_parser_or_legal_clearance"
+      ? Math.ceil(rows.length * 0.55)
+      : Math.ceil(rows.length * 0.25);
+  const effectList = uniqueStrings(rows.map((row) => row.buyerVisibleRowEffect.replaceAll("_", " "))).slice(0, 4);
+  const actorText = actors.slice(0, 5).join(", ") || "default watchlist actors";
+  return {
+    sequence,
+    actionId: stableId("ti_source_atlas_replacement_action", `${phase}:${sequence}:${atlasSourceIds.join(":")}:${blockersAddressed.join(":")}`),
+    phase,
+    atlasSourceIds,
+    sourceFamilies,
+    actors,
+    blockersAddressed,
+    expectedFreshRowsPerDay,
+    expectedActorRowsPerDay,
+    expectedRansomwareRowsPerDay,
+    expectedPayworthyLift,
+    publicAccessMethods,
+    parserFamilies,
+    parserWork,
+    legalWork,
+    schedulerWork,
+    measurementWork: `After operator approval, compare useful/fresh/sellable row deltas for ${actorText}; require source-family diversity and ${effectList.join(", ")} lift before counting these as paid-row improvements.`,
+    buyerVisibleRowEffect: `${sourceFamilies.join(", ")} replacement action addresses ${blockersAddressed.join(", ")} for ${actorText} with ${expectedFreshRowsPerDay} expected fresh rows/day and ${expectedPayworthyLift} projected payworthy-source lift.`,
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawPayloadExposed: false,
+      privateAuthCaptchaRequired: false,
+      crawlStarted: false,
+      actorInteractionRequired: false
+    }
+  };
+}
+
+function highValueActionPrimaryActor(row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]): string {
+  return HIGH_VALUE_REPLACEMENT_ACTORS.find((actor) => row.expectedActorCoverage.includes(actor)) ?? row.expectedActorCoverage[0] ?? "unassigned";
+}
+
+function highValueActionPhaseRank(phase: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["activationRunbook"]["actionRows"][number]["phase"]): number {
+  if (phase === "day_1_canary") return 0;
+  if (phase === "day_3_parser_or_legal_clearance") return 1;
+  return 2;
 }
 
 function highValueReplacementRow(

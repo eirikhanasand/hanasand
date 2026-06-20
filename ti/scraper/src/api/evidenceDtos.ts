@@ -29,9 +29,11 @@ import {
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidencePromotionExecutionToPostgresRows,
+  executeEvidenceActorDatasetConsumerHandoff,
   executeEvidencePromotionTransactionPlan,
   type EvidenceActorProductImpactReplay,
   type EvidenceActorDatasetConsumerHandoff,
+  type EvidenceActorDatasetConsumerExecutionReceipt,
   type EvidenceActorDatasetPromotionPreview,
   evidenceSearchReadModelReadiness,
   type EvidencePromotionTransactionAuditReplay,
@@ -203,6 +205,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   actorProductImpactReplay: EvidenceActorProductImpactReplay;
   actorDatasetPromotionPreview: EvidenceActorDatasetPromotionPreview;
   actorDatasetConsumerHandoff: EvidenceActorDatasetConsumerHandoff;
+  actorDatasetConsumerExecution: EvidenceActorDatasetConsumerExecutionReceipt;
   safeOutput: {
     rawBodiesExposed: false;
     objectKeysExposed: false;
@@ -433,6 +436,7 @@ function buildEvidenceSearchReadModelCutoverDto(
   const actorProductImpactReplay = buildEvidenceActorProductImpactReplay(writeSet, promotionTransaction, promotionAuditReplay, { generatedAt });
   const actorDatasetPromotionPreview = buildEvidenceActorDatasetPromotionPreview(actorProductImpactReplay, promotionTransaction);
   const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
+  const actorDatasetConsumerExecution = executeEvidenceActorDatasetConsumerHandoff(actorDatasetConsumerHandoff, { generatedAt });
   const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
   const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
   const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
@@ -486,6 +490,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     actorProductImpactReplay,
     actorDatasetPromotionPreview,
     actorDatasetConsumerHandoff,
+    actorDatasetConsumerExecution,
     safeOutput: {
       rawBodiesExposed: false,
       objectKeysExposed: false,

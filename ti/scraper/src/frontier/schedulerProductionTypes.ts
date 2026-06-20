@@ -1352,6 +1352,39 @@ export interface SchedulerDailyActorRunPlanDto {
       visibleState: "searching" | "partial" | "metadata_review";
     }>;
   };
+  sourceGapClosurePlan: {
+    schemaVersion: "ti.scheduler_source_gap_closure_plan.v1";
+    routeVisible: true;
+    targetFreshEvidenceWithinSeconds: number;
+    duplicateRunReuseKeyPattern: "tenant:query:source_family:daily_actor";
+    gapClosures: Array<{
+      query: string;
+      missingSourceFamily: "safe_public_sources" | "public_channel" | "approved_dark_metadata";
+      sourceTier: "tier_100" | "tier_1000" | "tier_4000";
+      workClass: SchedulerWorkClass;
+      queueAction: "reuse_active_run" | "enqueue_gap_probe" | "metadata_review_hold" | "suppress_ready_until_gap_closes";
+      reuseKey: string;
+      maxAttempts: number;
+      backoffSeconds: number[];
+      deadlineSeconds: number;
+      fairnessGroup: string;
+      expectedVisibleState: "searching" | "partial" | "metadata_review";
+      paidRowEffect: "freshen_stale_row" | "raise_caveat_quality" | "metadata_context_only" | "suppress_until_fresh";
+    }>;
+    workerLimits: {
+      maxParallelGapClosures: number;
+      perSourceConcurrency: number;
+      publicChannelReservedSlots: number;
+      darkMetadataReservedSlots: number;
+      backgroundSweepMayYieldToInteractive: true;
+    };
+    promotionRules: {
+      requireFreshOrPartialEvidence: true;
+      requireNoLeakProof: true;
+      staleOnlyRowsRemainBlocked: true;
+      metadataOnlyRowsRemainCaveated: true;
+    };
+  };
   routeContracts: {
     frontierStatusField: "scheduler.dailyActorRunPlan";
     searchSchedulerField: "scheduler.dailyActorRunPlan";

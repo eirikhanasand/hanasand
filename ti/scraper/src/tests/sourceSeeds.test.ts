@@ -1753,6 +1753,44 @@ describe("source seed bundles", () => {
       row.topReplacementSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
       row.buyerVisibleEffect.length > 60
     )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.activationRunbook).toMatchObject({
+      schemaVersion: "ti.source_atlas.high_value_replacement_activation_runbook.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false
+    });
+    const replacementRunbook = atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.activationRunbook;
+    expect(replacementRunbook.batchSourceCount).toBe(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.length);
+    expect(replacementRunbook.day1CandidateCount).toBeGreaterThan(0);
+    expect(replacementRunbook.day3CandidateCount).toBeGreaterThan(0);
+    expect(replacementRunbook.expectedPayworthyLift).toBeGreaterThan(0);
+    expect(replacementRunbook.actionRows.map((row) => row.phase)).toEqual(expect.arrayContaining([
+      "day_1_canary",
+      "day_3_parser_or_legal_clearance",
+      "hold_for_replacement"
+    ]));
+    expect(replacementRunbook.actionRows.every((row) =>
+      row.actionId.startsWith("ti_source_atlas_replacement_action_") &&
+      row.atlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.sourceFamilies.length > 0 &&
+      row.blockersAddressed.length > 0 &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.expectedPayworthyLift >= 0 &&
+      row.measurementWork.includes("useful/fresh/sellable row deltas") &&
+      row.buyerVisibleRowEffect.includes("projected payworthy-source lift") &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false &&
+      row.noLeakBoundary.actorInteractionRequired === false
+    )).toBe(true);
+    expect(replacementRunbook.actionRows.filter((row) => row.phase === "day_1_canary").every((row) =>
+      row.schedulerWork === "stage_canary_packet" &&
+      row.parserWork === "none" &&
+      row.legalWork === "none"
+    )).toBe(true);
+    expect(replacementRunbook.ownerHandoffs.agent02Scheduler.join(" ")).toContain("canary budgets");
+    expect(replacementRunbook.ownerHandoffs.agent10Revenue.join(" ")).toContain("cost per useful row");
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.projectedPayworthySourceCount).toBeGreaterThan(
       atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.currentPayworthySourceCount
     );

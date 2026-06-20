@@ -659,6 +659,59 @@ export interface EvidenceActorDatasetConsumerHandoff {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceActorDatasetConsumerExecutionReceipt {
+  schemaVersion: "ti.evidence_actor_dataset_consumer_execution.v1";
+  generatedAt: string;
+  executionId: string;
+  sourceHandoff: "ti.evidence_actor_dataset_consumer_handoff.v1";
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  status: "blocked_repository_disabled";
+  enabled: false;
+  dryRun: true;
+  liveBackendConnection: false;
+  willWriteActorDataset: false;
+  willWritePublicAnswerCache: false;
+  repositoryBoundary: {
+    actorDatasetRepository: "disabled_actor_dataset_repository";
+    publicAnswerCacheRepository: "disabled_public_answer_cache_repository";
+    requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_WRITES_ENABLED", "TI_PUBLIC_ANSWER_CACHE_WRITES_ENABLED"];
+    failClosedWithoutExplicitEnable: true;
+  };
+  counts: {
+    actorDatasetRowsHeld: number;
+    publicAnswerCacheWritesHeld: number;
+    sellableRowsHeld: number;
+    caveatedContextRowsHeld: number;
+    suppressedRowsHeld: number;
+    coverageGapRowsHeld: number;
+    actorDatasetRowsWritten: 0;
+    publicAnswerCacheWritesWritten: 0;
+  };
+  actorDatasetReceipts: Array<{
+    receiptId: string;
+    datasetRowId: string;
+    sourcePromotionRowId: string;
+    state: "held";
+    reason: "actor_dataset_repository_disabled" | "restricted_or_non_billable_row_held";
+    intendedAction: EvidenceActorDatasetConsumerRow["actorDatasetAction"];
+    noLeak: true;
+  }>;
+  publicAnswerCacheReceipts: Array<{
+    receiptId: string;
+    cacheWriteId: string;
+    cacheKey: string;
+    state: "held";
+    reason: "public_answer_cache_repository_disabled";
+    intendedAction: EvidenceActorPublicAnswerCacheWrite["action"];
+    noLeak: true;
+  }>;
+  blockedReasons: Array<"actor_dataset_repository_disabled" | "public_answer_cache_repository_disabled">;
+  rollbackRefs: string[];
+  noLeakGuarantees: EvidenceActorProductImpactReplay["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
 export interface EvidenceActorDatasetConsumerRow {
   datasetRowId: string;
   sourcePromotionRowId: string;
@@ -1583,6 +1636,70 @@ export function buildEvidenceActorDatasetConsumerHandoff(
     suppressionReceipts,
     coverageGapRows,
     noLeakGuarantees: { ...preview.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function executeEvidenceActorDatasetConsumerHandoff(
+  handoff: EvidenceActorDatasetConsumerHandoff,
+  input: { generatedAt?: string } = {}
+): EvidenceActorDatasetConsumerExecutionReceipt {
+  const generatedAt = input.generatedAt ?? handoff.generatedAt;
+  const actorDatasetReceipts = handoff.actorDatasetRows.map((row) => ({
+    receiptId: stableId("evidence-actor-dataset-consumer-execution", `${handoff.handoffId}:${row.datasetRowId}:held`),
+    datasetRowId: row.datasetRowId,
+    sourcePromotionRowId: row.sourcePromotionRowId,
+    state: "held" as const,
+    reason: row.actorDatasetAction === "render_sellable_candidate"
+      ? "actor_dataset_repository_disabled" as const
+      : "restricted_or_non_billable_row_held" as const,
+    intendedAction: row.actorDatasetAction,
+    noLeak: true as const
+  }));
+  const publicAnswerCacheReceipts = handoff.publicAnswerCacheWrites.map((write) => ({
+    receiptId: stableId("evidence-public-answer-cache-consumer-execution", `${handoff.handoffId}:${write.cacheWriteId}:held`),
+    cacheWriteId: write.cacheWriteId,
+    cacheKey: write.cacheKey,
+    state: "held" as const,
+    reason: "public_answer_cache_repository_disabled" as const,
+    intendedAction: write.action,
+    noLeak: true as const
+  }));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_consumer_execution.v1",
+    generatedAt,
+    executionId: stableId("evidence-actor-dataset-consumer-execution", `${handoff.handoffId}:${generatedAt}`),
+    sourceHandoff: handoff.schemaVersion,
+    productSurface: handoff.productSurface,
+    actorBuild: handoff.actorBuild,
+    status: "blocked_repository_disabled",
+    enabled: false,
+    dryRun: true,
+    liveBackendConnection: false,
+    willWriteActorDataset: false,
+    willWritePublicAnswerCache: false,
+    repositoryBoundary: {
+      actorDatasetRepository: "disabled_actor_dataset_repository",
+      publicAnswerCacheRepository: "disabled_public_answer_cache_repository",
+      requiredFeatureFlags: ["TI_ACTOR_DATASET_CONSUMER_WRITES_ENABLED", "TI_PUBLIC_ANSWER_CACHE_WRITES_ENABLED"],
+      failClosedWithoutExplicitEnable: true
+    },
+    counts: {
+      actorDatasetRowsHeld: actorDatasetReceipts.length,
+      publicAnswerCacheWritesHeld: publicAnswerCacheReceipts.length,
+      sellableRowsHeld: handoff.counts.sellableCandidates,
+      caveatedContextRowsHeld: handoff.counts.caveatedContextRows,
+      suppressedRowsHeld: handoff.counts.suppressedRows,
+      coverageGapRowsHeld: handoff.counts.coverageGapRows,
+      actorDatasetRowsWritten: 0,
+      publicAnswerCacheWritesWritten: 0
+    },
+    actorDatasetReceipts,
+    publicAnswerCacheReceipts,
+    blockedReasons: ["actor_dataset_repository_disabled", "public_answer_cache_repository_disabled"],
+    rollbackRefs: [],
+    noLeakGuarantees: { ...handoff.noLeakGuarantees },
     safeOutput: SAFE_OUTPUT
   };
 }
