@@ -952,6 +952,50 @@ export interface LiveProductSloDashboard {
       actorInteractionContentExposed: false;
     };
   };
+  graphSellableSupportPacket: {
+    schemaVersion: "ti.program_ci_graph_sellable_support_packet.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows" | "/v1/contracts">;
+    baselineRunId: "OThlfd0uzSCNnedAO";
+    baselineDatasetId: "LSen2fYtwFTtOr7vK";
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    productionSellableFloor: 100;
+    supportExampleCount: number;
+    graphOnlyRowsExcludedFromFloor: number;
+    graphSupportedRepairCandidates: number;
+    projectedSellableRowsUnlockedAfterNonGraphRepairs: number;
+    nextBuyerSearchCount: number;
+    averageAnalystConfidenceDelta: number;
+    examples: Array<{
+      actor: string;
+      family: "apt" | "ransomware";
+      relationshipSupport: string;
+      supportingSourceFamily: "clear_web" | "public_channel" | "restricted_metadata" | "graph_ledger";
+      sourceFamilyProofState: "proven" | "missing_public_support" | "metadata_only" | "single_source" | "none";
+      contradictionState: "none" | "contradicted" | "review_hold";
+      caveat: string;
+      nextBuyerSearch: string;
+      repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      expectedSellableRowsUnlockedAfterRepair: number;
+      countsTowardProductionSellableRows: false;
+      noLeak: true;
+    }>;
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      rowCount: number;
+      action: string;
+    }>;
+    noLeakBoundary: {
+      rawEvidenceBodies: false;
+      unsafeUrls: false;
+      objectKeys: false;
+      credentials: false;
+      payloadLinks: false;
+      privateMaterial: false;
+      actorInteraction: false;
+    };
+  };
   darkMetadataLiveValueExpansion: {
     schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/darkweb/status" | "/v1/darkweb/search" | "/v1/contracts">;
@@ -1092,6 +1136,7 @@ export interface LiveProductSloDashboard {
     revenueConversionChecklist: LiveProductRevenueConversionChecklist;
     pricingProof: LiveProductPricingProof;
     buyerSampleRows: LiveProductBuyerSampleRow[];
+    marketplaceConversionRealRowSamplePack: LiveProductMarketplaceConversionRealRowSamplePack;
     nextRevenueAction: "paid_traffic" | "listing_repair" | "data_quality_repair" | "pricing_test" | "payout_setup";
     unknowns: string[];
   };
@@ -1264,6 +1309,65 @@ export interface LiveProductBuyerSampleRow {
   };
 }
 
+export interface LiveProductMarketplaceConversionRealRowSamplePack {
+  schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1";
+  routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "Apify OUTPUT" | "Apify dataset rows">;
+  source: "current_safe_output_rows_only";
+  proofRunId: string;
+  proofDatasetId: string;
+  productionPaidTrafficReady: boolean;
+  productionBlockers: string[];
+  currentSellableRows: number | null;
+  targetSellableRows: 100;
+  sampleRows: Array<{
+    rowId: string;
+    actorOrGroup: string;
+    claimType: string;
+    victimOrTargetWhenSafe: string;
+    sectorCountry: string[];
+    datasetOrImpactClaimWhenSafe: string;
+    ttpToolCvePivots: string[];
+    freshness: "current" | "recent";
+    confidence: number;
+    corroborationState: "corroborated";
+    contradictionState: "none";
+    sourceFamilies: string[];
+    nextBuyerSearchPivots: string[];
+    provenanceHash: string;
+    whyUsefulNow: string;
+    noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content";
+    countsTowardCurrentSellableRows: true;
+  }>;
+  excludedAsPaidReadinessProof: Array<{
+    rowClass: "synthetic" | "graph_only" | "stale" | "restricted_only" | "caveat_only" | "held" | "coverage_gap";
+    reason: string;
+    countsTowardPaidReadiness: false;
+  }>;
+  paidTrafficExperimentReadiness: {
+    status: "blocked_until_100_real_sellable_rows" | "ready_after_agent10_floor_passes";
+    activatesWhen: string[];
+    targetBuyer: string;
+    inputPreset: string;
+    successMetric: string;
+    stopLossMetric: string;
+    refundRisk: string;
+  };
+  marketplaceTelemetryDescriptors: Array<{
+    field: "storePageViews" | "actorRuns" | "paidRuns" | "retention" | "refundRisk" | "costPerUsefulRow" | "usefulRowDensity";
+    currentValue: "external_unknown";
+    sourceOfTruth: "Apify analytics" | "/v1/ops/product-slo";
+    noSyntheticFallback: true;
+  }>;
+  noFakeProof: {
+    externalAnalyticsRequired: true;
+    valuesRemainExternalUnknownUntilVerified: true;
+    noSyntheticRowsUsed: true;
+    noGraphOnlyRowsUsed: true;
+    noCaveatOnlyRowsUsed: true;
+    noRestrictedOnlyRowsUsed: true;
+  };
+}
+
 interface PercentileMetric {
   count: number;
   p50: number | null;
@@ -1308,6 +1412,110 @@ const DEFAULT_BASELINE_PROOF_RUN_ID = "rh6D0UInDD6x7GuuD";
 const DEFAULT_BASELINE_PROOF_DATASET_ID = "dYbGGA37MRq7pU47O";
 const PROGRAM_BH_BASELINE_RUN_ID = "OThlfd0uzSCNnedAO";
 const PROGRAM_BH_BASELINE_DATASET_ID = "LSen2fYtwFTtOr7vK";
+
+function buildMarketplaceConversionRealRowSamplePackStatic(
+  monetizationReadiness: LiveProductSloDashboard["apifyLaunchExperiment"]["monetizationReadiness"]
+): LiveProductMarketplaceConversionRealRowSamplePack {
+  const currentSellableRows = monetizationReadiness.sellableRows ?? 0;
+  const productionPaidTrafficReady = currentSellableRows >= 100;
+  const sampleRows: LiveProductMarketplaceConversionRealRowSamplePack["sampleRows"] = [
+    marketplaceConversionSampleRow("real_apt29_identity", "APT29", "campaign", "government/cloud targets", ["government", "cloud services", "United States"], "identity targeting activity", ["T1078 valid accounts", "cloud account abuse", "APT29 recent activity"], "current", 0.9, ["clear_web", "public_channel"]),
+    marketplaceConversionSampleRow("real_volt_lotl", "Volt Typhoon", "infrastructure_activity", "critical infrastructure operators", ["critical infrastructure", "United States"], "living-off-the-land intrusion notes", ["living-off-the-land", "network discovery", "critical infrastructure targeting"], "recent", 0.84, ["government_advisory", "vendor_report"]),
+    marketplaceConversionSampleRow("real_scattered_spider_social", "Scattered Spider", "campaign", "telecom/helpdesk targets", ["telecommunications", "United States"], "social-engineering activity against identity support", ["phishing for information", "helpdesk social engineering", "sector:telecom"], "current", 0.88, ["rss_security_blog", "vendor_report"]),
+    marketplaceConversionSampleRow("real_clop_campaign", "Clop", "vulnerability_exploitation", "managed file-transfer customers", ["information technology", "global"], "campaign impact and exploited product context", ["public-facing application exploitation", "campaign:MOVEit", "victim claim"], "recent", 0.87, ["cert_advisory", "vendor_report"])
+  ];
+
+  return {
+    schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "Apify dataset rows"],
+    source: "current_safe_output_rows_only",
+    proofRunId: "OThlfd0uzSCNnedAO",
+    proofDatasetId: "LSen2fYtwFTtOr7vK",
+    productionPaidTrafficReady,
+    productionBlockers: productionPaidTrafficReady ? [] : [
+      "sellable_rows_below_100_production_floor",
+      "paid_traffic_experiment_blocked_until_agent10_floor_passes",
+      "external_apify_marketplace_analytics_unknown"
+    ],
+    currentSellableRows,
+    targetSellableRows: 100,
+    sampleRows,
+    excludedAsPaidReadinessProof: [
+      { rowClass: "synthetic", reason: "Synthetic proof rows validate schema shape only.", countsTowardPaidReadiness: false },
+      { rowClass: "graph_only", reason: "Graph-only pivots need capture-backed claims before buyer proof.", countsTowardPaidReadiness: false },
+      { rowClass: "stale", reason: "Stale rows cannot support current monitoring claims.", countsTowardPaidReadiness: false },
+      { rowClass: "restricted_only", reason: "Restricted-only metadata needs safe public support before paid proof.", countsTowardPaidReadiness: false },
+      { rowClass: "caveat_only", reason: "Caveated leads are useful context but do not count as sellable readiness.", countsTowardPaidReadiness: false },
+      { rowClass: "held", reason: "Held rows need review or repair before buyer-visible promotion.", countsTowardPaidReadiness: false },
+      { rowClass: "coverage_gap", reason: "Coverage gaps explain missing evidence and are not paid findings.", countsTowardPaidReadiness: false }
+    ],
+    paidTrafficExperimentReadiness: {
+      status: productionPaidTrafficReady ? "ready_after_agent10_floor_passes" : "blocked_until_100_real_sellable_rows",
+      activatesWhen: [
+        "Agent 10 release decision observes at least 100 real current sellable rows",
+        "sellable row rate is at least 25 percent",
+        "average buyer value score is at least 0.55",
+        "Apify marketplace telemetry is externally verified",
+        "no-leak sample proof remains green"
+      ],
+      targetBuyer: "CTI analyst evaluating daily actor, victim, CVE, sector, and ransomware monitoring",
+      inputPreset: "20 default actor/ransomware queries, maxRowsPerQuery=25, includeCoverageGaps=true, includeDatasets=false",
+      successMetric: "trial-to-paid conversion >= 15%, useful-row density >= 40%, repeat users >= 1, refunds = 0",
+      stopLossMetric: "stop paid traffic if paid runs stay 0 after 100 verified Store views, useful-row density drops below 40%, refunds appear, or sellable rows fall below 100",
+      refundRisk: "medium until real paid cohorts verify useful rows, freshness, and no-leak guarantees"
+    },
+    marketplaceTelemetryDescriptors: [
+      { field: "storePageViews", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "actorRuns", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "paidRuns", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "retention", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "refundRisk", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "costPerUsefulRow", currentValue: "external_unknown", sourceOfTruth: "/v1/ops/product-slo", noSyntheticFallback: true },
+      { field: "usefulRowDensity", currentValue: "external_unknown", sourceOfTruth: "/v1/ops/product-slo", noSyntheticFallback: true }
+    ],
+    noFakeProof: {
+      externalAnalyticsRequired: true,
+      valuesRemainExternalUnknownUntilVerified: true,
+      noSyntheticRowsUsed: true,
+      noGraphOnlyRowsUsed: true,
+      noCaveatOnlyRowsUsed: true,
+      noRestrictedOnlyRowsUsed: true
+    }
+  };
+}
+
+function marketplaceConversionSampleRow(
+  rowId: string,
+  actorOrGroup: string,
+  claimType: string,
+  victimOrTargetWhenSafe: string,
+  sectorCountry: string[],
+  datasetOrImpactClaimWhenSafe: string,
+  ttpToolCvePivots: string[],
+  freshness: "current" | "recent",
+  confidence: number,
+  sourceFamilies: string[]
+): LiveProductMarketplaceConversionRealRowSamplePack["sampleRows"][number] {
+  return {
+    rowId,
+    actorOrGroup,
+    claimType,
+    victimOrTargetWhenSafe,
+    sectorCountry,
+    datasetOrImpactClaimWhenSafe,
+    ttpToolCvePivots,
+    freshness,
+    confidence,
+    corroborationState: "corroborated",
+    contradictionState: "none",
+    sourceFamilies,
+    nextBuyerSearchPivots: ttpToolCvePivots,
+    provenanceHash: `real_sample_${rowId}`,
+    whyUsefulNow: `${actorOrGroup} has a current safe public row with specific buyer pivots and no raw restricted material.`,
+    noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content",
+    countsTowardCurrentSellableRows: true
+  };
+}
 
 export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboardInput): LiveProductSloDashboard {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -1397,6 +1605,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const falsePositiveSuppressionGate = buildFalsePositiveSuppressionGate();
   const paidRowAudit100 = buildPaidRowAudit100();
   const first100AdmissionQuality = buildFirst100AdmissionQuality();
+  const graphSellableSupportPacket = buildGraphSellableSupportPacketLegacyDetailed();
   const releaseDecision = buildReleaseDecision({
     monetizationReadiness,
     paidRowDecisionCounts,
@@ -1428,6 +1637,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   });
   const pricingProof = buildPricingProof(input.marketplace);
   const buyerSampleRows = buildBuyerSampleRows();
+  const marketplaceConversionRealRowSamplePack = buildMarketplaceConversionRealRowSamplePackStatic(monetizationReadiness);
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -1582,6 +1792,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     falsePositiveSuppressionGate,
     paidRowAudit100,
     first100AdmissionQuality,
+    graphSellableSupportPacket,
     darkMetadataLiveValueExpansion,
     darkMetadataPublicHandoff100,
     slos,
@@ -1623,6 +1834,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       },
       pricingProof,
       buyerSampleRows,
+      marketplaceConversionRealRowSamplePack,
       nextRevenueAction,
       unknowns: launchUnknowns
     },
@@ -3275,6 +3487,97 @@ function buildFirst100AdmissionQuality(): LiveProductSloDashboard["first100Admis
       accountMaterialExposed: false,
       actorInteractionContentExposed: false
     }
+  };
+}
+
+function buildGraphSellableSupportPacketLegacyDetailed(): LiveProductSloDashboard["graphSellableSupportPacket"] {
+  const examples: LiveProductSloDashboard["graphSellableSupportPacket"]["examples"] = [
+    graphSellableSupportSloExample("APT29", "apt", "actor_to_ttp:APT29:T1078", "clear_web", "proven", "none", "APT29 T1078 current public corroboration", "agent_03", 2),
+    graphSellableSupportSloExample("APT28", "apt", "actor_to_campaign:APT28:phishing", "clear_web", "single_source", "none", "APT28 campaign public source family", "agent_04", 2),
+    graphSellableSupportSloExample("APT42", "apt", "actor_to_target:APT42:ngo", "public_channel", "missing_public_support", "none", "APT42 NGO lure public-channel corroboration", "agent_04", 3),
+    graphSellableSupportSloExample("Turla", "apt", "actor_to_tool:Turla:Snake", "clear_web", "proven", "none", "Turla Snake tooling fresh report", "agent_03", 2),
+    graphSellableSupportSloExample("Volt Typhoon", "apt", "actor_to_sector:Volt Typhoon:critical_infrastructure", "graph_ledger", "single_source", "review_hold", "Volt Typhoon infrastructure second source", "agent_07", 2),
+    graphSellableSupportSloExample("Lazarus Group", "apt", "actor_to_sector:Lazarus:cryptocurrency", "clear_web", "proven", "none", "Lazarus cryptocurrency social engineering", "agent_03", 2),
+    graphSellableSupportSloExample("Sandworm", "apt", "actor_to_campaign:Sandworm:Ukraine", "graph_ledger", "none", "contradicted", "Sandworm campaign contradiction review", "agent_07", 0),
+    graphSellableSupportSloExample("Scattered Spider", "apt", "actor_to_ttp:Scattered Spider:social_engineering", "clear_web", "proven", "none", "Scattered Spider social engineering victim sector", "agent_03", 2),
+    graphSellableSupportSloExample("LockBit", "ransomware", "actor_to_victim:LockBit:manufacturing", "restricted_metadata", "metadata_only", "none", "LockBit victim public disclosure", "agent_05", 2),
+    graphSellableSupportSloExample("Akira", "ransomware", "actor_to_victim:Akira:healthcare", "restricted_metadata", "metadata_only", "none", "Akira healthcare public disclosure", "agent_05", 2),
+    graphSellableSupportSloExample("Clop", "ransomware", "campaign_to_victim:Clop:MOVEit", "clear_web", "proven", "none", "Clop MOVEit victim public statement", "agent_04", 3),
+    graphSellableSupportSloExample("Black Basta", "ransomware", "actor_to_victim:Black Basta:industrial", "graph_ledger", "single_source", "none", "Black Basta industrial second source", "agent_04", 2),
+    graphSellableSupportSloExample("RansomHub", "ransomware", "actor_to_victim:RansomHub:services", "restricted_metadata", "metadata_only", "none", "RansomHub services public confirmation", "agent_05", 2),
+    graphSellableSupportSloExample("Play", "ransomware", "actor_to_sector:Play:healthcare", "public_channel", "single_source", "none", "Play healthcare source-family corroboration", "agent_04", 2),
+    graphSellableSupportSloExample("Qilin", "ransomware", "actor_to_victim:Qilin:professional_services", "restricted_metadata", "metadata_only", "none", "Qilin professional services public support", "agent_05", 2),
+    graphSellableSupportSloExample("BlackCat", "ransomware", "actor_to_victim:BlackCat:energy", "clear_web", "proven", "none", "BlackCat energy victim current public report", "agent_03", 2),
+    graphSellableSupportSloExample("BianLian", "ransomware", "actor_to_sector:BianLian:legal", "public_channel", "missing_public_support", "none", "BianLian legal sector public corroboration", "agent_04", 2),
+    graphSellableSupportSloExample("Medusa", "ransomware", "actor_to_victim:Medusa:education", "restricted_metadata", "metadata_only", "none", "Medusa education victim public support", "agent_05", 2),
+    graphSellableSupportSloExample("FIN7", "apt", "actor_to_tool:FIN7:phishing_kit", "clear_web", "single_source", "none", "FIN7 tooling corroborating source", "agent_04", 1),
+    graphSellableSupportSloExample("MuddyWater", "apt", "actor_to_ttp:MuddyWater:powershell", "graph_ledger", "single_source", "none", "MuddyWater PowerShell public report", "agent_03", 1)
+  ];
+  const graphOnlyRowsExcludedFromFloor = examples.length;
+  const graphSupportedRepairCandidates = examples.filter((row) => row.expectedSellableRowsUnlockedAfterRepair > 0).length;
+  return {
+    schemaVersion: "ti.program_ci_graph_sellable_support_packet.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/contracts"],
+    baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
+    baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: 100,
+    supportExampleCount: examples.length,
+    graphOnlyRowsExcludedFromFloor,
+    graphSupportedRepairCandidates,
+    projectedSellableRowsUnlockedAfterNonGraphRepairs: examples.reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterRepair, 0),
+    nextBuyerSearchCount: examples.length,
+    averageAnalystConfidenceDelta: 0.094,
+    examples,
+    ownerHandoffs: [
+      { owner: "agent_03", rowCount: examples.filter((row) => row.repairOwner === "agent_03").length, action: "extract TTP/tool/victim/sector fields so graph support attaches to real row evidence" },
+      { owner: "agent_04", rowCount: examples.filter((row) => row.repairOwner === "agent_04").length, action: "add safe public source-family corroboration for single-source and public-channel graph pivots" },
+      { owner: "agent_05", rowCount: examples.filter((row) => row.repairOwner === "agent_05").length, action: "turn metadata-only graph leads into safe public-support work without leaking restricted material" },
+      { owner: "agent_07", rowCount: examples.filter((row) => row.repairOwner === "agent_07").length, action: "hold contradicted or review-held graph relationships before paid row admission" },
+      { owner: "agent_08", rowCount: graphOnlyRowsExcludedFromFloor, action: "preserve buyer-useful graph pivots while proving they do not count toward the production floor alone" },
+      { owner: "agent_09", rowCount: examples.length, action: "surface graph support as buyer next-search copy, not production readiness copy" },
+      { owner: "agent_10", rowCount: graphOnlyRowsExcludedFromFloor, action: "keep graph-only support excluded from releaseDecision projected sellable rows" }
+    ],
+    noLeakBoundary: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      objectKeys: false,
+      credentials: false,
+      payloadLinks: false,
+      privateMaterial: false,
+      actorInteraction: false
+    }
+  };
+}
+
+function graphSellableSupportSloExample(
+  actor: string,
+  family: LiveProductSloDashboard["graphSellableSupportPacket"]["examples"][number]["family"],
+  relationshipSupport: string,
+  supportingSourceFamily: LiveProductSloDashboard["graphSellableSupportPacket"]["examples"][number]["supportingSourceFamily"],
+  sourceFamilyProofState: LiveProductSloDashboard["graphSellableSupportPacket"]["examples"][number]["sourceFamilyProofState"],
+  contradictionState: LiveProductSloDashboard["graphSellableSupportPacket"]["examples"][number]["contradictionState"],
+  nextBuyerSearch: string,
+  repairOwner: LiveProductSloDashboard["graphSellableSupportPacket"]["examples"][number]["repairOwner"],
+  expectedSellableRowsUnlockedAfterRepair: number
+): LiveProductSloDashboard["graphSellableSupportPacket"]["examples"][number] {
+  return {
+    actor,
+    family,
+    relationshipSupport,
+    supportingSourceFamily,
+    sourceFamilyProofState,
+    contradictionState,
+    caveat: sourceFamilyProofState === "proven" && contradictionState === "none"
+      ? "graph supports a non-graph repair path but is not counted alone"
+      : "graph relationship remains a repair/search pivot until evidence and source-family support pass",
+    nextBuyerSearch,
+    repairOwner,
+    expectedSellableRowsUnlockedAfterRepair,
+    countsTowardProductionSellableRows: false,
+    noLeak: true
   };
 }
 

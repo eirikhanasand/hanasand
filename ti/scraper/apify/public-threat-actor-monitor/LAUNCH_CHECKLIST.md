@@ -99,7 +99,7 @@ TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search
 TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search
 ```
 
-`GET /v1/contracts` returns the `apifyStoreReadiness` field. It is the source of truth for the exact default input, verified sample output DTOs, frontend partial/ready/queued/searching/empty-delta states, pricing hooks, conversion metric handoff, Program CF 100-row conversion progress, safety contract, proof commands, and known blockers.
+`GET /v1/contracts` returns the `apifyStoreReadiness` field. It is the source of truth for the exact default input, verified sample output DTOs, frontend partial/ready/queued/searching/empty-delta states, pricing hooks, conversion metric handoff, Program CF 100-row conversion progress, Program CL real-row conversion sample pack, safety contract, proof commands, and known blockers.
 
 ## Launch Pricing
 
@@ -124,8 +124,9 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 - Track store page views, unique users, trial runs, paid runs, repeat users, conversion rate, useful-row rate, fresh-row rate, no-leak failures, and cost per useful row in `/v1/ops/product-slo.apifyLaunchExperiment`; leave unknown Apify analytics as `null` until copied from the account.
 - Actor pricing is scheduled to switch to pay-per-event on July 4, 2026. Payout/beneficiary readiness still needs to be verified in Apify billing before assuming cash can be withdrawn.
 - Do not store beneficiary, payout, token, or account identifiers in this repository.
-- Before buying traffic, verify `revenueConversionChecklist`, `pricingProof`, `hundredRowConversionProof`, and 12 `buyerSampleRows` are visible in `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo.apifyLaunchExperiment`, and Actor `OUTPUT`. Telemetry and payout fields must remain `null`/`unknown` until copied from Apify analytics or billing.
+- Before buying traffic, verify `revenueConversionChecklist`, `pricingProof`, `hundredRowConversionProof`, `marketplaceConversionRealRowSamplePack`, and 12 `buyerSampleRows` are visible in `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo.apifyLaunchExperiment`, and Actor `OUTPUT`. Telemetry and payout fields must remain `null`/`unknown` or `external_unknown` until copied from Apify analytics or billing.
 - Treat the current proof as useful safe metadata monitoring, not production paid-traffic readiness. The 100-row progress packet must show current sellable rows, projected sellable rows from accepted repairs, one-repair-away rows, caveated useful rows, blocked rows, exact blockers, and `blocked_until_100_sellable_rows` for the first paid-traffic experiment.
+- Treat the real-row sample pack as evaluation proof only. It may show current safe sellable examples, but synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows must stay excluded from paid-readiness proof until Agent 10 confirms the real 100-row floor.
 
 ### Marketplace Telemetry Snapshot
 

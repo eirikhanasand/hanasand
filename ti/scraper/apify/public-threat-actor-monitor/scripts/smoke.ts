@@ -896,6 +896,130 @@ const first100Exclusions = (first100AdmissionQuality.nonSellableExclusionProof a
 for (const excludedClass of ["graph_only", "synthetic_proof_only", "stale_duplicate", "restricted_only", "caveated_useful", "generic_market_source_page", "low_buyer_value", "alias_or_wrong_actor"]) {
   if (!first100Exclusions.includes(excludedClass)) throw new Error(`Program CN admission quality must exclude ${excludedClass}`);
 }
+const graphSellableSupportPacket = outputRecord.graphSellableSupportPacket as Record<string, unknown> | undefined;
+if (
+  !graphSellableSupportPacket
+  || graphSellableSupportPacket.schemaVersion !== "ti.apify_graph_sellable_support_packet.v1"
+  || graphSellableSupportPacket.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || graphSellableSupportPacket.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || graphSellableSupportPacket.dryRun !== true
+  || graphSellableSupportPacket.willMutateSources !== false
+  || graphSellableSupportPacket.willStartCollection !== false
+  || graphSellableSupportPacket.productionSellableFloor !== 100
+  || Number(graphSellableSupportPacket.supportExampleCount) < 20
+  || Number(graphSellableSupportPacket.graphOnlyRowsExcludedFromFloor) < 20
+  || Number(graphSellableSupportPacket.graphSupportedRepairCandidates) < 15
+  || Number(graphSellableSupportPacket.projectedSellableRowsUnlockedAfterNonGraphRepairs) <= 0
+  || Number(graphSellableSupportPacket.nextBuyerSearchCount) < 20
+  || Number(graphSellableSupportPacket.averageAnalystConfidenceDelta) <= 0
+  || !Array.isArray(graphSellableSupportPacket.examples)
+  || graphSellableSupportPacket.examples.length < 20
+  || !Array.isArray(graphSellableSupportPacket.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program CI graph sellable support packet");
+}
+const graphSupportExamples = graphSellableSupportPacket.examples as Array<Record<string, unknown>>;
+const graphSupportActors = graphSupportExamples.map((row) => row.actor);
+for (const actor of ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "BlackCat", "BianLian", "Medusa", "FIN7", "MuddyWater"]) {
+  if (!graphSupportActors.includes(actor)) throw new Error(`Program CI graph support packet must include ${actor}`);
+}
+if (!graphSupportExamples.every((row) =>
+  typeof row.relationshipSupport === "string"
+  && typeof row.supportingSourceFamily === "string"
+  && ["proven", "missing_public_support", "metadata_only", "single_source", "none"].includes(String(row.sourceFamilyProofState))
+  && ["none", "contradicted", "review_hold"].includes(String(row.contradictionState))
+  && typeof row.caveat === "string"
+  && typeof row.nextBuyerSearch === "string"
+  && typeof row.repairOwner === "string"
+  && row.countsTowardProductionSellableRows === false
+  && row.noLeak === true
+)) {
+  throw new Error("Program CI graph examples must expose relationship support, caveats, next search, no-leak proof, and floor exclusion");
+}
+const graphSupportOwners = (graphSellableSupportPacket.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
+for (const owner of ["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
+  if (!graphSupportOwners.includes(owner)) throw new Error(`Program CI graph support packet must include ${owner} handoff`);
+}
+const graphSupportNoLeak = graphSellableSupportPacket.noLeakBoundary as Record<string, unknown> | undefined;
+if (
+  !graphSupportNoLeak
+  || graphSupportNoLeak.rawEvidenceBodies !== false
+  || graphSupportNoLeak.unsafeUrls !== false
+  || graphSupportNoLeak.objectKeys !== false
+  || graphSupportNoLeak.credentials !== false
+  || graphSupportNoLeak.payloadLinks !== false
+  || graphSupportNoLeak.privateMaterial !== false
+  || graphSupportNoLeak.actorInteraction !== false
+) {
+  throw new Error("Program CI graph support packet must keep no-leak boundaries closed");
+}
+const marketplaceConversionRealRowSamplePack = outputRecord.marketplaceConversionRealRowSamplePack as Record<string, unknown> | undefined;
+if (
+  !marketplaceConversionRealRowSamplePack
+  || marketplaceConversionRealRowSamplePack.schemaVersion !== "ti.apify_marketplace_conversion_real_row_sample_pack.v1"
+  || marketplaceConversionRealRowSamplePack.source !== "current_safe_output_rows_only"
+  || marketplaceConversionRealRowSamplePack.proofRunId !== "OThlfd0uzSCNnedAO"
+  || marketplaceConversionRealRowSamplePack.proofDatasetId !== "LSen2fYtwFTtOr7vK"
+  || marketplaceConversionRealRowSamplePack.productionPaidTrafficReady !== false
+  || Number(marketplaceConversionRealRowSamplePack.currentSellableRows) < 1
+  || marketplaceConversionRealRowSamplePack.targetSellableRows !== 100
+  || !Array.isArray(marketplaceConversionRealRowSamplePack.sampleRows)
+  || !Array.isArray(marketplaceConversionRealRowSamplePack.excludedAsPaidReadinessProof)
+  || !Array.isArray(marketplaceConversionRealRowSamplePack.marketplaceTelemetryDescriptors)
+) {
+  throw new Error("OUTPUT record must expose Program CL real-row marketplace conversion sample pack");
+}
+for (const row of marketplaceConversionRealRowSamplePack.sampleRows as Array<Record<string, unknown>>) {
+  if (
+    typeof row.actorOrGroup !== "string"
+    || typeof row.claimType !== "string"
+    || typeof row.victimOrTargetWhenSafe !== "string"
+    || !Array.isArray(row.sectorCountry)
+    || !Array.isArray(row.ttpToolCvePivots)
+    || !["current", "recent"].includes(String(row.freshness))
+    || Number(row.confidence) <= 0
+    || row.corroborationState !== "corroborated"
+    || row.contradictionState !== "none"
+    || !Array.isArray(row.sourceFamilies)
+    || !Array.isArray(row.nextBuyerSearchPivots)
+    || typeof row.provenanceHash !== "string"
+    || typeof row.whyUsefulNow !== "string"
+    || row.noLeakProof !== "metadata_only_no_raw_body_no_credentials_no_private_content"
+    || row.countsTowardCurrentSellableRows !== true
+  ) {
+    throw new Error("Program CL sample rows must be current sellable, corroborated, buyer-readable, and no-leak");
+  }
+}
+const marketplaceConversionExcludedClasses = (marketplaceConversionRealRowSamplePack.excludedAsPaidReadinessProof as Array<Record<string, unknown>>).map((row) => row.rowClass);
+for (const excludedClass of ["synthetic", "graph_only", "stale", "restricted_only", "caveat_only", "held", "coverage_gap"]) {
+  if (!marketplaceConversionExcludedClasses.includes(excludedClass)) throw new Error(`Program CL sample pack must exclude ${excludedClass} from paid readiness proof`);
+}
+const paidTrafficExperimentReadiness = marketplaceConversionRealRowSamplePack.paidTrafficExperimentReadiness as Record<string, unknown> | undefined;
+if (
+  !paidTrafficExperimentReadiness
+  || paidTrafficExperimentReadiness.status !== "blocked_until_100_real_sellable_rows"
+  || !Array.isArray(paidTrafficExperimentReadiness.activatesWhen)
+  || !String(paidTrafficExperimentReadiness.stopLossMetric).includes("sellable rows fall below 100")
+) {
+  throw new Error("Program CL paid-traffic experiment readiness must stay blocked until 100 real sellable rows");
+}
+for (const descriptor of marketplaceConversionRealRowSamplePack.marketplaceTelemetryDescriptors as Array<Record<string, unknown>>) {
+  if (descriptor.currentValue !== "external_unknown" || descriptor.noSyntheticFallback !== true) {
+    throw new Error("Program CL marketplace telemetry descriptors must remain external_unknown without synthetic fallback");
+  }
+}
+const marketplaceRealRowNoFakeProof = marketplaceConversionRealRowSamplePack.noFakeProof as Record<string, unknown> | undefined;
+if (
+  !marketplaceRealRowNoFakeProof
+  || marketplaceRealRowNoFakeProof.externalAnalyticsRequired !== true
+  || marketplaceRealRowNoFakeProof.valuesRemainExternalUnknownUntilVerified !== true
+  || marketplaceRealRowNoFakeProof.noSyntheticRowsUsed !== true
+  || marketplaceRealRowNoFakeProof.noGraphOnlyRowsUsed !== true
+  || marketplaceRealRowNoFakeProof.noCaveatOnlyRowsUsed !== true
+  || marketplaceRealRowNoFakeProof.noRestrictedOnlyRowsUsed !== true
+) {
+  throw new Error("Program CL no-fake proof must block invented analytics and non-real-row proof");
+}
 const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
 if (
   !revenueConversionChecklist
@@ -1154,6 +1278,8 @@ const allowedPaidGraphPackQueryTypes = new Set(["actor", "victim", "sector", "co
 const allowedPaidGraphPackCorroboration = new Set(["corroborated", "single_source", "metadata_only", "unverified"]);
 const allowedPaidGraphPackCaveats = new Set(["none", "caveated", "contradicted", "held"]);
 const allowedPaidGraphPackExport = new Set(["eligible", "review_required", "not_exportable"]);
+const allowedGraphSupportProofStates = new Set(["proven", "missing_public_support", "metadata_only", "single_source", "none"]);
+const allowedGraphSupportContradictions = new Set(["none", "contradicted", "review_hold"]);
 for (const row of output) {
   const pack = row.paidGraphSearchPack as Record<string, unknown> | undefined;
   if (
@@ -1173,6 +1299,23 @@ for (const row of output) {
     || pack.noLeak !== true
   ) {
     throw new Error("Every marketplace row must expose a buyer-useful no-leak paid graph search pack");
+  }
+  const graphSupport = row.graphSellableSupport as Record<string, unknown> | undefined;
+  if (
+    !graphSupport
+    || graphSupport.schemaVersion !== "ti.apify_graph_sellable_support.v1"
+    || typeof graphSupport.relationshipSupport !== "string"
+    || typeof graphSupport.supportingSourceFamily !== "string"
+    || !allowedGraphSupportProofStates.has(String(graphSupport.sourceFamilyProofState))
+    || !allowedGraphSupportContradictions.has(String(graphSupport.contradictionState))
+    || typeof graphSupport.caveat !== "string"
+    || typeof graphSupport.nextBuyerSearch !== "string"
+    || typeof graphSupport.repairOwner !== "string"
+    || !["sellable", "included_with_caveat", "coverage_gap_only", "hold", "suppress"].includes(String(graphSupport.supportsPaidDecision))
+    || graphSupport.countsTowardProductionSellableRows !== false
+    || graphSupport.noLeak !== true
+  ) {
+    throw new Error("Every marketplace row must expose Program CI graph sellable support without counting graph-only rows");
   }
 }
 if (activity?.paidRowDecision !== "included_with_caveat" || activity?.billingGuidance !== "include_as_context") {

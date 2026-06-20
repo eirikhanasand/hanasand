@@ -7911,7 +7911,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "paidRowAudit100", "first100AdmissionQuality", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "paidRowAudit100", "first100AdmissionQuality", "graphSellableSupportPacket", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -10217,6 +10217,36 @@ function buildApifyStoreReadinessContract(input: {
       conversionRate: null
     }
   };
+  const apifyRealSellableSampleRowForContract = (
+    id: string,
+    actorOrGroup: string,
+    claimType: string,
+    victimOrTargetWhenSafe: string,
+    sectorCountry: string[],
+    datasetOrImpactClaimWhenSafe: string,
+    ttpToolCvePivots: string[],
+    freshness: "current" | "recent",
+    confidence: number,
+    sourceFamilies: string[]
+  ) => ({
+    rowId: id,
+    actorOrGroup,
+    claimType,
+    victimOrTargetWhenSafe,
+    sectorCountry,
+    datasetOrImpactClaimWhenSafe,
+    ttpToolCvePivots,
+    freshness,
+    confidence,
+    corroborationState: "corroborated",
+    contradictionState: "none",
+    sourceFamilies,
+    nextBuyerSearchPivots: ttpToolCvePivots,
+    provenanceHash: `real_sample_${id}`,
+    whyUsefulNow: `${actorOrGroup} has a current safe public row with specific buyer pivots and no raw restricted material.`,
+    noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content",
+    countsTowardCurrentSellableRows: true
+  });
   const marketplaceConversionRealRowSamplePack = {
     schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1",
     routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "Apify dataset rows", "/v1/ops/product-slo"],
@@ -10232,10 +10262,10 @@ function buildApifyStoreReadinessContract(input: {
     currentSellableRows: 4,
     targetSellableRows: 100,
     sampleRows: [
-      apifyRealSellableSampleRow("real_apt29_identity", "APT29", "campaign", "government/cloud targets", ["government", "cloud services", "United States"], "identity targeting activity", ["T1078 valid accounts", "cloud account abuse", "APT29 recent activity"], "current", 0.9, ["clear_web", "public_channel"]),
-      apifyRealSellableSampleRow("real_volt_lotl", "Volt Typhoon", "infrastructure_activity", "critical infrastructure operators", ["critical infrastructure", "United States"], "living-off-the-land intrusion notes", ["living-off-the-land", "network discovery", "critical infrastructure targeting"], "recent", 0.84, ["government_advisory", "vendor_report"]),
-      apifyRealSellableSampleRow("real_scattered_spider_social", "Scattered Spider", "campaign", "telecom/helpdesk targets", ["telecommunications", "United States"], "social-engineering activity against identity support", ["phishing for information", "helpdesk social engineering", "sector:telecom"], "current", 0.88, ["rss_security_blog", "vendor_report"]),
-      apifyRealSellableSampleRow("real_clop_campaign", "Clop", "vulnerability_exploitation", "managed file-transfer customers", ["information technology", "global"], "campaign impact and exploited product context", ["public-facing application exploitation", "campaign:MOVEit", "victim claim"], "recent", 0.87, ["cert_advisory", "vendor_report"])
+      apifyRealSellableSampleRowForContract("real_apt29_identity", "APT29", "campaign", "government/cloud targets", ["government", "cloud services", "United States"], "identity targeting activity", ["T1078 valid accounts", "cloud account abuse", "APT29 recent activity"], "current", 0.9, ["clear_web", "public_channel"]),
+      apifyRealSellableSampleRowForContract("real_volt_lotl", "Volt Typhoon", "infrastructure_activity", "critical infrastructure operators", ["critical infrastructure", "United States"], "living-off-the-land intrusion notes", ["living-off-the-land", "network discovery", "critical infrastructure targeting"], "recent", 0.84, ["government_advisory", "vendor_report"]),
+      apifyRealSellableSampleRowForContract("real_scattered_spider_social", "Scattered Spider", "campaign", "telecom/helpdesk targets", ["telecommunications", "United States"], "social-engineering activity against identity support", ["phishing for information", "helpdesk social engineering", "sector:telecom"], "current", 0.88, ["rss_security_blog", "vendor_report"]),
+      apifyRealSellableSampleRowForContract("real_clop_campaign", "Clop", "vulnerability_exploitation", "managed file-transfer customers", ["information technology", "global"], "campaign impact and exploited product context", ["public-facing application exploitation", "campaign:MOVEit", "victim claim"], "recent", 0.87, ["cert_advisory", "vendor_report"])
     ],
     excludedAsPaidReadinessProof: [
       { rowClass: "synthetic", reason: "Synthetic proof rows validate schema shape only.", countsTowardPaidReadiness: false },
