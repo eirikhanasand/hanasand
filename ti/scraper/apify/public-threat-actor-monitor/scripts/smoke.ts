@@ -1078,6 +1078,46 @@ if (
 ) {
   throw new Error("Program CL no-fake proof must block invented analytics and non-real-row proof");
 }
+const first100BuyerPreview = marketplaceConversionRealRowSamplePack.first100BuyerPreview as Record<string, unknown> | undefined;
+if (
+  !first100BuyerPreview
+  || first100BuyerPreview.schemaVersion !== "ti.apify_first_100_real_rows_buyer_preview.v1"
+  || first100BuyerPreview.status !== "blocked_preview_until_100_real_sellable_rows"
+  || Number(first100BuyerPreview.currentSellableRows) < 1
+  || Number(first100BuyerPreview.remainingSellableRowsNeeded) <= 0
+  || first100BuyerPreview.sampleRowsRequiredBeforePaidTraffic !== 100
+  || !Array.isArray(first100BuyerPreview.topBlockerBuckets)
+  || !Array.isArray(first100BuyerPreview.requiredBuyerFields)
+  || !Array.isArray(first100BuyerPreview.activationGate)
+) {
+  throw new Error("Program CT first-100 buyer preview must stay blocked until 100 real sellable rows");
+}
+if (!(first100BuyerPreview.topBlockerBuckets as Array<Record<string, unknown>>).every((bucket) =>
+  bucket.countsTowardPaidFloorNow === false
+  && typeof bucket.buyerVisibleFix === "string"
+  && String(bucket.buyerVisibleFix).length > 0
+)) {
+  throw new Error("Program CT blocker buckets must explain buyer-visible repairs without counting toward paid floor");
+}
+for (const requiredField of ["actorOrGroup", "claimType", "victimOrTargetWhenSafe", "sectorCountry", "ttpToolCvePivots", "freshness", "confidence", "provenanceHash", "noLeakProof"]) {
+  if (!(first100BuyerPreview.requiredBuyerFields as string[]).includes(requiredField)) {
+    throw new Error(`Program CT first-100 preview must require ${requiredField}`);
+  }
+}
+const first100NoLeakProof = first100BuyerPreview.noLeakProof as Record<string, unknown> | undefined;
+const first100FreshnessProof = first100BuyerPreview.freshnessProof as Record<string, unknown> | undefined;
+if (
+  !first100NoLeakProof
+  || first100NoLeakProof.rawEvidenceBodies !== false
+  || first100NoLeakProof.unsafeUrls !== false
+  || first100NoLeakProof.credentials !== false
+  || first100NoLeakProof.privateContent !== false
+  || first100NoLeakProof.restrictedOnlyRowsPromoted !== false
+  || !first100FreshnessProof
+  || first100FreshnessProof.staleRowsCountTowardPaidFloor !== false
+) {
+  throw new Error("Program CT first-100 preview must prove no-leak and stale-row exclusions");
+}
 const paidReleaseTruthBoard = outputRecord.paidReleaseTruthBoard as Record<string, unknown> | undefined;
 if (
   !paidReleaseTruthBoard
@@ -1111,6 +1151,35 @@ if (
 const paidReleaseBuckets = paidReleaseTruthBoard.blockerBuckets as Array<Record<string, unknown>>;
 for (const blocker of ["already_chargeable", "missing_public_support", "parser_repair", "freshness", "alias_collision", "source_family_gap", "dark_metadata_public_support", "no_leak_proof", "marketplace_output_gap"]) {
   if (!paidReleaseBuckets.some((bucket) => bucket.blocker === blocker)) throw new Error(`Program CQ release board missing ${blocker}`);
+}
+const paidReleaseConversionObservability = paidReleaseTruthBoard.conversionObservability as Record<string, unknown> | undefined;
+const paidReleaseCurrentSellable = paidReleaseConversionObservability?.current_sellable as Record<string, unknown> | undefined;
+const paidReleaseProjectedAfterRepair = paidReleaseConversionObservability?.projected_after_repair as Record<string, unknown> | undefined;
+const paidReleaseExternalUnknown = paidReleaseConversionObservability?.external_marketplace_unknown as Record<string, unknown> | undefined;
+if (
+  !paidReleaseConversionObservability
+  || paidReleaseConversionObservability.schemaVersion !== "ti.program_cw_paid_conversion_observability.v1"
+  || paidReleaseConversionObservability.releaseTrafficDecision !== "hold_paid_traffic"
+  || !paidReleaseCurrentSellable
+  || paidReleaseCurrentSellable.currentRows !== paidRowQuality.sellable
+  || paidReleaseCurrentSellable.canCountNow !== true
+  || !paidReleaseProjectedAfterRepair
+  || paidReleaseProjectedAfterRepair.projectedRows !== 159
+  || paidReleaseProjectedAfterRepair.canCountNow !== false
+  || !paidReleaseExternalUnknown
+  || paidReleaseExternalUnknown.state !== "external_unknown"
+  || paidReleaseExternalUnknown.observedStoreViews !== null
+  || paidReleaseExternalUnknown.observedActorRuns !== null
+  || paidReleaseExternalUnknown.observedPaidRuns !== null
+  || paidReleaseExternalUnknown.observedConversionRate !== null
+) {
+  throw new Error("Program CW conversion observability must separate current sellable rows, projected repairs, and external_unknown marketplace metrics");
+}
+for (const bucket of ["blocked_by_public_support", "blocked_by_parser", "blocked_by_freshness", "blocked_by_suppression", "blocked_by_no_leak"]) {
+  const row = paidReleaseConversionObservability[bucket] as Record<string, unknown> | undefined;
+  if (!row || typeof row.owner !== "string" || typeof row.nextTask !== "string" || typeof row.expectedRowGain !== "number" || typeof row.proofCommand !== "string" || row.canCountNow !== false) {
+    throw new Error(`Program CW conversion observability bucket ${bucket} must expose owner, next task, expected gain, proof command, and non-current count state`);
+  }
 }
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"
@@ -1387,11 +1456,11 @@ if (output.some((row) => Array.isArray(row.warningCodes) && row.warningCodes.inc
   throw new Error("Coverage capability alone must not produce a darknet evidence warning");
 }
 const activity = output.find((row) => row.rowType === "activity");
-if (activity?.claimType !== "campaign" || activity?.publisherCount !== 1) {
-  throw new Error("Activity rows must preserve claim classification and publisher count");
+if (activity?.claimType !== "campaign" || activity?.publisherCount !== 4) {
+  throw new Error("Activity rows must preserve claim classification and corroborated publisher count");
 }
-if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes("review:single_source")) {
-  throw new Error("Activity rows must explain single-source review state");
+if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes("evidence:corroborated")) {
+  throw new Error("Activity rows must explain corroborated public support state");
 }
 const allowedPaidGraphPackQueryTypes = new Set(["actor", "victim", "sector", "country", "ttp", "tool", "campaign", "ransomware_group", "unknown", "alias_collision"]);
 const allowedPaidGraphPackCorroboration = new Set(["corroborated", "single_source", "metadata_only", "unverified"]);
@@ -1437,16 +1506,16 @@ for (const row of output) {
     throw new Error("Every marketplace row must expose Program CI graph sellable support without counting graph-only rows");
   }
 }
-if (activity?.paidRowDecision !== "included_with_caveat" || activity?.billingGuidance !== "include_as_context") {
-  throw new Error("Single-source activity rows must be caveated instead of treated as fully sellable");
+if (activity?.paidRowDecision !== "sellable" || activity?.billingGuidance !== "charge") {
+  throw new Error("Corroborated parser-admitted activity rows must become chargeable");
 }
-if (activity?.graphQualityLift !== "rejected_caveat") {
-  throw new Error("Single-source activity graph lift must stay rejected/caveated until corroborated");
+if (activity?.graphQualityLift !== "accepted_sellable_lift") {
+  throw new Error("Corroborated parser-admitted activity graph lift must become buyer-ready");
 }
-if (!Array.isArray(activity?.analysisFacets) || !activity.analysisFacets.includes("claim:campaign") || !activity.analysisFacets.includes("evidence:single_source")) {
-  throw new Error("Activity rows must expose claim and evidence analysis facets");
+if (!Array.isArray(activity?.analysisFacets) || !activity.analysisFacets.includes("claim:campaign") || !activity.analysisFacets.includes("evidence:corroborated") || !activity.analysisFacets.includes("entity:attack_technique")) {
+  throw new Error("Activity rows must expose claim, corroborated evidence, and extracted TTP analysis facets");
 }
-if (!activity.analysisFacets.includes("paid:included_with_caveat") || !activity.analysisFacets.includes("billing:include_as_context")) {
+if (!activity.analysisFacets.includes("paid:sellable") || !activity.analysisFacets.includes("billing:charge") || !activity.analysisFacets.includes("parser_admission:sellable")) {
   throw new Error("Activity rows must expose paid-row analysis facets");
 }
 if (
@@ -1454,10 +1523,36 @@ if (
   || !activity.relationshipSummary.includes("campaign")
   || !Array.isArray(activity.relationshipPivots)
   || !activity.relationshipPivots.includes("claim:campaign")
+  || !activity.relationshipPivots.includes("ttp:Phishing")
+  || !activity.relationshipPivots.includes("attack:T1566")
   || !Array.isArray(activity.nextSearchPivots)
   || !activity.nextSearchPivots.includes("APT42 public channel")
 ) {
   throw new Error("Activity rows must expose graph-style relationship pivots and next searches");
+}
+const activityParserProof = activity.parserAdmissionRuntimeProof as Record<string, unknown> | undefined;
+if (
+  !activityParserProof
+  || activityParserProof.schemaVersion !== "ti.apify_parser_admission_runtime_proof.v1"
+  || activityParserProof.owner !== "agent_03"
+  || activityParserProof.admissionDecision !== "sellable"
+  || activityParserProof.countsTowardCurrentSellableRows !== true
+  || activityParserProof.sourceEvidenceCount !== 4
+  || !Array.isArray(activityParserProof.requiredFieldsPresent)
+  || !Array.isArray(activityParserProof.missingFields)
+  || (activityParserProof.missingFields as string[]).length !== 0
+  || !(activityParserProof.requiredFieldsPresent as string[]).includes("ttp_tool_or_cve")
+  || !(activityParserProof.requiredFieldsPresent as string[]).includes("source_family_support")
+  || activityParserProof.contradictionState !== "none"
+  || typeof activityParserProof.provenanceHash !== "string"
+  || typeof activityParserProof.nextBuyerSearch !== "string"
+  || activityParserProof.repairOwner !== "agent_03"
+) {
+  throw new Error("Activity rows must expose complete Agent 03 parser runtime admission proof");
+}
+const activityNoLeak = activityParserProof.noLeakProof as Record<string, unknown> | undefined;
+if (!activityNoLeak || Object.values(activityNoLeak).some((value) => value !== false)) {
+  throw new Error("Parser runtime admission proof must preserve no-leak boundaries");
 }
 if (activity?.pollingHint !== "source_gap_review" || activity?.schedulerDecision !== "reuse_active_run") {
   throw new Error("Activity rows must expose scheduler decision and polling hint");
@@ -1484,6 +1579,26 @@ if (!Array.isArray(suppressed.paidRowReasonCodes) || !suppressed.paidRowReasonCo
 }
 if (!Array.isArray(suppressed.paidRowRemediationActions) || !suppressed.paidRowRemediationActions.some((action) => action.owner === "agent_05")) {
   throw new Error("Suppressed rows must route remediation to the source/metadata owner");
+}
+const suppressedProof = suppressed.parserAdmissionRuntimeProof as Record<string, unknown> | undefined;
+if (
+  !suppressedProof
+  || suppressedProof.admissionDecision !== "suppress"
+  || suppressedProof.countsTowardCurrentSellableRows !== false
+  || suppressedProof.blockedReason !== "restricted_only_without_public_support"
+) {
+  throw new Error("Restricted-only metadata rows must carry parser suppression proof");
+}
+const sourceProofs = output
+  .filter((row) => row.rowType === "source")
+  .map((row) => row.parserAdmissionRuntimeProof as Record<string, unknown> | undefined);
+if (sourceProofs.length < 1 || !sourceProofs.every((proof) =>
+  proof
+  && proof.admissionDecision === "suppress"
+  && proof.countsTowardCurrentSellableRows === false
+  && proof.blockedReason === "generic_source_page"
+)) {
+  throw new Error("Generic source-page rows must not become parser-admitted sellable rows");
 }
 
 console.log(JSON.stringify({

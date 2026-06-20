@@ -6,6 +6,7 @@
 - Updated buyer-visible README and launch-checklist proof copy so the Store-facing surface points at the latest hosted proof while production paid traffic stays blocked until at least `100 sellable rows` are present and runtime/platform usage stay external analytics fields until copied from Apify.
 - Added Program CF `hundredRowConversionProof` / `hundredRowConversionProgress` so Actor `OUTPUT` and `/v1/contracts#apifyStoreReadiness` show current sellable rows, projected sellable rows from accepted repairs, one-repair-away rows, caveated useful rows, blocked rows, exact blockers, and a first paid-traffic experiment that stays `blocked_until_100_sellable_rows`.
 - Added Program CL `marketplaceConversionRealRowSamplePack` so Actor `OUTPUT` and `/v1/contracts#apifyStoreReadiness` expose only current safe sellable sample rows, exclude synthetic/graph-only/stale/restricted-only/caveat-only/held/coverage-gap rows from readiness proof, and keep marketplace telemetry descriptors as `external_unknown` until externally verified.
+- Added Program CT `first100BuyerPreview` under the real-row sample pack so Actor `OUTPUT`, `/v1/contracts#apifyStoreReadiness`, and `/v1/ops/product-slo` show the first-100 sample format, current sellable/useful-not-chargeable counts, blocker buckets, required buyer fields, no-leak proof, freshness proof, and activation gates while staying blocked until the real 100-row floor passes.
 
 ## 0.6.4 - 2026-06-20
 

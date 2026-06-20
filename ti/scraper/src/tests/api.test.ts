@@ -414,6 +414,16 @@ describe("api v1", () => {
         remainingRowsFromCurrentSlo: number;
       };
       rowDeltaTo100: { alreadyChargeableRows: number; remainingSellableRowsNeeded: number; additiveBucketRows: number; bucketMathIsAdditive: boolean };
+      conversionObservability: {
+        current_sellable: { currentRows: number; currentSloSellableRows: number | null; canCountNow: boolean };
+        projected_after_repair: { projectedRows: number; projectedSellableRowsAfterAcceptedRepairs: number | null; canCountNow: boolean };
+        blocked_by_public_support: { owner: string; expectedRowGain: number; proofCommand: string; canCountNow: boolean };
+        blocked_by_parser: { owner: string; expectedRowGain: number; proofCommand: string; canCountNow: boolean };
+        blocked_by_freshness: { owner: string; expectedRowGain: number; canCountNow: boolean };
+        blocked_by_suppression: { owner: string; expectedRowGain: number; canCountNow: boolean };
+        blocked_by_no_leak: { owner: string; expectedRowGain: number; proofCommand: string; canCountNow: boolean };
+        external_marketplace_unknown: { state: string; observedStoreViews: null; observedActorRuns: null; observedPaidRuns: null; observedConversionRate: null; canCountNow: boolean };
+      };
       blockerBuckets: Array<{ blocker: string; owner: string; rowDeltaTo100: number; expectedRowGain: number; countsTowardPaidFloorNow: boolean; coordinationFile: string; fastestNextTask: string }>;
       fakeMetricGuard: { apifyStoreViews: string; apifyActorRuns: string; apifyPaidRuns: string; apifyRevenueUsd: null; apifyPayoutState: string; conversionRate: null; noSyntheticFallback: boolean };
       exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }>;
@@ -443,6 +453,26 @@ describe("api v1", () => {
         additiveBucketRows: 97,
         bucketMathIsAdditive: true
       },
+      conversionObservability: {
+        current_sellable: {
+          currentRows: 3,
+          currentSloSellableRows: 16,
+          canCountNow: true
+        },
+        projected_after_repair: {
+          projectedRows: 159,
+          projectedSellableRowsAfterAcceptedRepairs: 175,
+          canCountNow: false
+        },
+        external_marketplace_unknown: {
+          state: "external_unknown",
+          observedStoreViews: null,
+          observedActorRuns: null,
+          observedPaidRuns: null,
+          observedConversionRate: null,
+          canCountNow: false
+        }
+      },
       fakeMetricGuard: {
         apifyStoreViews: "external_unknown",
         apifyActorRuns: "external_unknown",
@@ -455,6 +485,28 @@ describe("api v1", () => {
     });
     expect((response.paidReleaseTruthBoard as { blockerBuckets: Array<{ blocker: string; countsTowardPaidFloorNow: boolean; coordinationFile: string; fastestNextTask: string }> }).blockerBuckets.map((bucket) => bucket.blocker)).toEqual(expect.arrayContaining(["already_chargeable", "missing_public_support", "parser_repair", "freshness", "alias_collision", "source_family_gap", "dark_metadata_public_support", "no_leak_proof", "marketplace_output_gap"]));
     expect((response.paidReleaseTruthBoard as { blockerBuckets: Array<{ blocker: string; countsTowardPaidFloorNow: boolean; coordinationFile: string; fastestNextTask: string }> }).blockerBuckets.filter((bucket) => bucket.blocker !== "already_chargeable").every((bucket) => bucket.countsTowardPaidFloorNow === false && bucket.coordinationFile.endsWith(".md") && bucket.fastestNextTask.length > 0)).toBe(true);
+    const conversionObservability = (response.paidReleaseTruthBoard as {
+      conversionObservability: {
+        current_sellable: { currentRows: number; canCountNow: boolean };
+        projected_after_repair: { projectedRows: number; canCountNow: boolean };
+        blocked_by_public_support: { owner: string; expectedRowGain: number; proofCommand: string; canCountNow: boolean };
+        blocked_by_parser: { owner: string; expectedRowGain: number; proofCommand: string; canCountNow: boolean };
+        blocked_by_freshness: { owner: string; expectedRowGain: number; canCountNow: boolean };
+        blocked_by_suppression: { owner: string; expectedRowGain: number; canCountNow: boolean };
+        blocked_by_no_leak: { owner: string; expectedRowGain: number; proofCommand: string; canCountNow: boolean };
+        external_marketplace_unknown: { state: string; observedStoreViews: null; observedActorRuns: null; observedPaidRuns: null; observedConversionRate: null; canCountNow: boolean };
+      };
+    }).conversionObservability;
+    expect(Object.keys(conversionObservability)).toEqual(expect.arrayContaining(["current_sellable", "projected_after_repair", "blocked_by_public_support", "blocked_by_parser", "blocked_by_freshness", "blocked_by_suppression", "blocked_by_no_leak", "external_marketplace_unknown"]));
+    expect(conversionObservability.current_sellable).toMatchObject({ currentRows: 3, canCountNow: true });
+    expect(conversionObservability.projected_after_repair).toMatchObject({ projectedRows: 159, canCountNow: false });
+    expect(conversionObservability.projected_after_repair.projectedRows).not.toBe(conversionObservability.current_sellable.currentRows);
+    expect(conversionObservability.blocked_by_public_support).toMatchObject({ owner: "agent_04", expectedRowGain: 47, proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts", canCountNow: false });
+    expect(conversionObservability.blocked_by_parser).toMatchObject({ owner: "agent_03", expectedRowGain: 38, proofCommand: "bun run check:apify-threat-actor-monitor", canCountNow: false });
+    expect(conversionObservability.blocked_by_freshness).toMatchObject({ owner: "agent_07", expectedRowGain: 5, canCountNow: false });
+    expect(conversionObservability.blocked_by_suppression).toMatchObject({ owner: "agent_07", expectedRowGain: 4, canCountNow: false });
+    expect(conversionObservability.blocked_by_no_leak).toMatchObject({ owner: "agent_06", expectedRowGain: 0, proofCommand: "bun run smoke:apify-threat-actor-monitor", canCountNow: false });
+    expect(conversionObservability.external_marketplace_unknown).toMatchObject({ state: "external_unknown", observedStoreViews: null, observedActorRuns: null, observedPaidRuns: null, observedConversionRate: null, canCountNow: false });
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -2557,6 +2609,20 @@ describe("api v1", () => {
         paidTrafficExperimentReadiness: { status: string; activatesWhen: string[]; stopLossMetric: string };
         marketplaceTelemetryDescriptors: Array<{ field: string; currentValue: string; sourceOfTruth: string; noSyntheticFallback: boolean }>;
         noFakeProof: Record<string, boolean>;
+        first100BuyerPreview: {
+          schemaVersion: string;
+          status: string;
+          currentSellableRows: number;
+          usefulButNotChargeableRows: number;
+          remainingSellableRowsNeeded: number;
+          sampleRowsShownNow: number;
+          sampleRowsRequiredBeforePaidTraffic: number;
+          topBlockerBuckets: Array<{ blocker: string; buyerVisibleFix: string; countsTowardPaidFloorNow: boolean }>;
+          requiredBuyerFields: string[];
+          noLeakProof: Record<string, boolean>;
+          freshnessProof: Record<string, boolean | string[]>;
+          activationGate: string[];
+        };
       };
       paidReleaseTruthBoard: {
         schemaVersion: string;
@@ -4134,6 +4200,35 @@ describe("api v1", () => {
       noCaveatOnlyRowsUsed: true,
       noRestrictedOnlyRowsUsed: true
     });
+    expect(apifyStoreReadiness.marketplaceConversionRealRowSamplePack.first100BuyerPreview).toMatchObject({
+      schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1",
+      status: "blocked_preview_until_100_real_sellable_rows",
+      currentSellableRows: 4,
+      usefulButNotChargeableRows: 2,
+      remainingSellableRowsNeeded: 96,
+      sampleRowsShownNow: 4,
+      sampleRowsRequiredBeforePaidTraffic: 100,
+      noLeakProof: {
+        rawEvidenceBodies: false,
+        unsafeUrls: false,
+        credentials: false,
+        privateContent: false,
+        restrictedOnlyRowsPromoted: false
+      },
+      freshnessProof: {
+        staleRowsCountTowardPaidFloor: false
+      }
+    });
+    expect(apifyStoreReadiness.marketplaceConversionRealRowSamplePack.first100BuyerPreview.topBlockerBuckets.map((bucket) => bucket.blocker)).toEqual(expect.arrayContaining([
+      "missing_public_support",
+      "parser_repair",
+      "dark_metadata_public_support",
+      "freshness",
+      "marketplace_output_gap"
+    ]));
+    expect(apifyStoreReadiness.marketplaceConversionRealRowSamplePack.first100BuyerPreview.topBlockerBuckets.every((bucket) => bucket.countsTowardPaidFloorNow === false && bucket.buyerVisibleFix.length > 0)).toBe(true);
+    expect(apifyStoreReadiness.marketplaceConversionRealRowSamplePack.first100BuyerPreview.requiredBuyerFields).toEqual(expect.arrayContaining(["actorOrGroup", "claimType", "victimOrTargetWhenSafe", "sectorCountry", "ttpToolCvePivots", "freshness", "confidence", "provenanceHash", "noLeakProof"]));
+    expect(apifyStoreReadiness.marketplaceConversionRealRowSamplePack.first100BuyerPreview.activationGate.join(" ")).toContain("100 real current sellable rows");
     expect(apifyStoreReadiness.paidReleaseTruthBoard).toMatchObject({
       schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"]),
@@ -4152,6 +4247,27 @@ describe("api v1", () => {
         remainingSellableRowsNeeded: 97,
         additiveBucketRows: 97,
         bucketMathIsAdditive: true
+      },
+      conversionObservability: {
+        current_sellable: {
+          currentRows: 3,
+          currentSloSellableRows: 16,
+          canCountNow: true
+        },
+        projected_after_repair: {
+          projectedRows: 159,
+          projectedSellableRowsAfterAcceptedRepairs: 175,
+          expectedRowGain: 159,
+          canCountNow: false
+        },
+        external_marketplace_unknown: {
+          state: "external_unknown",
+          observedStoreViews: null,
+          observedActorRuns: null,
+          observedPaidRuns: null,
+          observedConversionRate: null,
+          canCountNow: false
+        }
       },
       fakeMetricGuard: {
         apifyStoreViews: "external_unknown",

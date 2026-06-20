@@ -211,6 +211,7 @@ const contractMentions: Array<[string, string[]]> = [
   ["100 sellable row progress", ["current sellable rows", "projected sellable rows", "one-repair-away rows"]],
   ["paid-traffic floor blocker", ["blocked_until_100_sellable_rows", "production paid traffic remains blocked until"]],
   ["real-row conversion sample pack", ["marketplaceConversionRealRowSamplePack", "ti.apify_marketplace_conversion_real_row_sample_pack.v1"]],
+  ["first-100 buyer preview", ["first100BuyerPreview", "ti.apify_first_100_real_rows_buyer_preview.v1", "blocked_preview_until_100_real_sellable_rows"]],
   ["real-row proof exclusions", ["synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows", "excluded from paid-readiness proof"]],
   ["external unknown marketplace telemetry", ["external_unknown", "cost/useful row", "useful-row density"]],
   ["external analytics only", ["Store views", "paid runs", "runtime", "platform usage", "conversion rates"]]

@@ -438,6 +438,64 @@ describe("darkweb metadata index contracts", () => {
       (row.victimHints.length > 0 || row.datasetHints.length > 0) &&
       row.countsTowardSellableFloorAfterPublicSupport
     )).toBe(true);
+    expect(status.publicSupportLift1000.first100RepairQueue).toHaveLength(100);
+    expect(status.publicSupportLift1000.first100RepairQueue.filter((row) => row.rowDecision === "repair_for_sellable_after_public_support")).toHaveLength(80);
+    expect(status.publicSupportLift1000.first100RepairQueue.filter((row) => row.rowDecision === "repair_for_useful_caveat")).toHaveLength(20);
+    expect(status.publicSupportLift1000.first100RepairQueue.every((row) =>
+      row.sourceTier === "tier_4000" &&
+      row.actorOrGroupHint.length > 0 &&
+      row.victimOrDatasetHint.length > 0 &&
+      row.sectorCountry.length > 0 &&
+      row.safeLocatorHash.length > 0 &&
+      row.requiredPublicSupportFamily.length > 0 &&
+      row.buyerValueReason.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.countsTowardSellableFloorNow === false
+    )).toBe(true);
+    expect(status.publicSupportLift1000.metricMovement).toMatchObject({
+      repairCandidatesAdded: 100,
+      likelySellableRowsAfterPublicSupport: 80,
+      usefulCaveatedRows: 20,
+      suppressedRows: 3866,
+      remainingRowsToFirst100FloorAfterPublicSupport: 20,
+      countsTowardSellableFloorNow: false
+    });
+    expect(status.publicSupportLift1000.tier10000Preview).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
+      baselineTier: "tier_4000",
+      targetTier: "tier_10000",
+      evaluatedCandidateCount: 10000,
+      valueQualifiedCandidateCount: 340,
+      projectedSellableAfterPublicSupport: 198,
+      usefulWithCaveat: 142,
+      restrictedOnlyHold: 1386,
+      rejectedCounts: {
+        stale: 2856,
+        duplicate: 6,
+        unsafe: 3333,
+        lowValue: 2079
+      },
+      supportBucketCounts: {
+        currently_chargeable: 0,
+        sellable_after_public_support: 198,
+        useful_with_caveat: 142,
+        restricted_only_hold: 1386,
+        stale_reject: 2856,
+        duplicate_reject: 6,
+        unsafe_reject: 3333,
+        low_value_reject: 2079,
+        needs_parser_repair: 266,
+        needs_source_support: 198
+      },
+      acceptedValueDensity: 0.034,
+      expansionDecision: "hold_for_value_density",
+      countsTowardSellableFloorNow: false
+    });
+    expect(status.publicSupportLift1000.tier10000Preview.sampleRepairRows).toHaveLength(20);
+    expect(status.publicSupportLift1000.tier10000Preview.sampleRepairRows.every((row) =>
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.countsTowardSellableFloorNow === false
+    )).toBe(true);
     expect(status.publicSupportLift1000.handoffs.agent10ReleaseMetrics).toMatchObject({
       productionSellableRowFloor: 100,
       currentContributionToward100SellableRows: 2,
@@ -1061,8 +1119,10 @@ describe("darkweb metadata index contracts", () => {
     expect(contract.publicSupportLift1000).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
       candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
-      tierTargets: [100, 1000, 4000],
-      routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000"],
+      tierTargets: [100, 1000, 4000, 10000],
+      routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000", "ops.productSlo.darkMetadataPublicSupportLift4000"],
+      repairQueueField: "publicSupportLift1000.first100RepairQueue",
+      tier10000PreviewField: "publicSupportLift1000.tier10000Preview",
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
       requireNoLeakProof: true
@@ -1250,6 +1310,22 @@ describe("darkweb metadata index contracts", () => {
     expect(firstPage.productHandoff.publicSupportLift1000.tiers[1]?.rows).toHaveLength(1000);
     expect(firstPage.productHandoff.publicSupportLift1000.tiers[2]?.rows).toHaveLength(4000);
     expect(firstPage.productHandoff.publicSupportLift1000.first4000SupportBucketCounts.currently_chargeable).toBe(0);
+    expect(firstPage.productHandoff.publicSupportLift1000.first100RepairQueue).toHaveLength(100);
+    expect(firstPage.productHandoff.publicSupportLift1000.metricMovement).toMatchObject({
+      repairCandidatesAdded: 100,
+      likelySellableRowsAfterPublicSupport: 80,
+      usefulCaveatedRows: 20,
+      remainingRowsToFirst100FloorAfterPublicSupport: 20,
+      countsTowardSellableFloorNow: false
+    });
+    expect(firstPage.productHandoff.publicSupportLift1000.tier10000Preview).toMatchObject({
+      evaluatedCandidateCount: 10000,
+      projectedSellableAfterPublicSupport: 198,
+      usefulWithCaveat: 142,
+      acceptedValueDensity: 0.034,
+      expansionDecision: "hold_for_value_density",
+      countsTowardSellableFloorNow: false
+    });
     expect(firstPage.productHandoff.publicSupportLift1000.handoffs.agent04PublicSourceTargets.length).toBeGreaterThan(0);
     expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
       row.recordId.length > 0 &&

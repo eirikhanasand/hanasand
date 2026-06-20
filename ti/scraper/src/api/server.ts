@@ -10307,6 +10307,40 @@ function buildApifyStoreReadinessContract(input: {
       noGraphOnlyRowsUsed: true,
       noCaveatOnlyRowsUsed: true,
       noRestrictedOnlyRowsUsed: true
+    },
+    first100BuyerPreview: {
+      schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1",
+      status: "blocked_preview_until_100_real_sellable_rows",
+      currentSellableRows: 4,
+      usefulButNotChargeableRows: 2,
+      remainingSellableRowsNeeded: 96,
+      sampleRowsShownNow: 4,
+      sampleRowsRequiredBeforePaidTraffic: 100,
+      topBlockerBuckets: [
+        { blocker: "missing_public_support", owner: "agent_04", rowCount: 28, buyerVisibleFix: "add safe public corroboration for single-source actor/ransomware rows", countsTowardPaidFloorNow: false },
+        { blocker: "parser_repair", owner: "agent_03", rowCount: 20, buyerVisibleFix: "extract actor, victim or target, sector/country, TTP/tool, dates, confidence, and provenance", countsTowardPaidFloorNow: false },
+        { blocker: "dark_metadata_public_support", owner: "agent_05", rowCount: 19, buyerVisibleFix: "convert metadata-only leads into public-supported safe rows or explicit rejects", countsTowardPaidFloorNow: false },
+        { blocker: "freshness", owner: "agent_07", rowCount: 5, buyerVisibleFix: "replace stale latest-activity rows with current evidence or suppress them", countsTowardPaidFloorNow: false },
+        { blocker: "marketplace_output_gap", owner: "agent_09", rowCount: 3, buyerVisibleFix: "keep row examples specific to real safe evidence and preserve external_unknown analytics", countsTowardPaidFloorNow: false }
+      ],
+      requiredBuyerFields: ["actorOrGroup", "claimType", "victimOrTargetWhenSafe", "sectorCountry", "datasetOrImpactClaimWhenSafe", "ttpToolCvePivots", "freshness", "confidence", "corroborationState", "contradictionState", "sourceFamilies", "nextBuyerSearchPivots", "provenanceHash", "noLeakProof"],
+      noLeakProof: {
+        rawEvidenceBodies: false,
+        unsafeUrls: false,
+        credentials: false,
+        privateContent: false,
+        restrictedOnlyRowsPromoted: false
+      },
+      freshnessProof: {
+        allowedFreshness: ["current", "recent"],
+        staleRowsCountTowardPaidFloor: false
+      },
+      activationGate: [
+        "Agent 10 paidReleaseTruthBoard confirms at least 100 real current sellable rows",
+        "every preview row has required buyer fields, provenance hash, and no-leak proof",
+        "useful-but-not-chargeable rows remain caveated or held outside the paid floor",
+        "Apify analytics, payout, revenue, and conversion metrics remain external_unknown until observed"
+      ]
     }
   };
   const paidReleaseTruthBoard = {
@@ -10330,6 +10364,83 @@ function buildApifyStoreReadinessContract(input: {
       remainingSellableRowsNeeded: 97,
       additiveBucketRows: 97,
       bucketMathIsAdditive: true
+    },
+    conversionObservability: {
+      schemaVersion: "ti.program_cw_paid_conversion_observability.v1",
+      releaseTrafficDecision: "hold_paid_traffic",
+      current_sellable: {
+        currentRows: 3,
+        currentSloSellableRows: 16,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_10",
+        nextTask: "Keep the observed smoke proof visible while repair owners convert one-repair-away rows into current output rows.",
+        expectedRowGain: 0,
+        canCountNow: true
+      },
+      projected_after_repair: {
+        projectedRows: 159,
+        projectedSellableRowsAfterAcceptedRepairs: 175,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_10",
+        nextTask: "Require repair owners to land rows in live output before projected rows can become current sellable rows.",
+        expectedRowGain: 159,
+        canCountNow: false
+      },
+      blocked_by_public_support: {
+        rowsBlocked: 47,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_04",
+        nextTask: "Attach safe public-source corroboration to the highest-value one-repair-away rows.",
+        expectedRowGain: 47,
+        canCountNow: false
+      },
+      blocked_by_parser: {
+        rowsBlocked: 38,
+        proofCommand: "bun run check:apify-threat-actor-monitor",
+        owner: "agent_03",
+        nextTask: "Repair actor, victim, sector, country, TTP/tool, date, source-family, and provenance fields.",
+        expectedRowGain: 38,
+        canCountNow: false
+      },
+      blocked_by_freshness: {
+        rowsBlocked: 5,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_07",
+        nextTask: "Replace stale latest-activity claims with current public evidence or suppress them.",
+        expectedRowGain: 5,
+        canCountNow: false
+      },
+      blocked_by_suppression: {
+        rowsBlocked: 4,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_07",
+        nextTask: "Keep alias, wrong-actor, generic, graph-only, stale, and caveat-only rows out of the paid floor.",
+        expectedRowGain: 4,
+        canCountNow: false
+      },
+      blocked_by_no_leak: {
+        rowsBlocked: 0,
+        proofCommand: "bun run smoke:apify-threat-actor-monitor",
+        owner: "agent_06",
+        nextTask: "Keep no-leak proof attached to every row before it can be promoted.",
+        expectedRowGain: 0,
+        canCountNow: false
+      },
+      external_marketplace_unknown: {
+        state: "external_unknown",
+        observedStoreViews: null,
+        observedActorRuns: null,
+        observedPaidRuns: null,
+        observedPricingState: "external_unknown",
+        observedPayoutState: "external_unknown",
+        observedRefunds: null,
+        observedConversionRate: null,
+        proofCommand: "manual_external_apify_console_or_api_verification_required",
+        owner: "agent_10",
+        nextTask: "Record Apify Store views, runs, paid runs, pricing, payout, refunds, and conversion only after external verification.",
+        expectedRowGain: 0,
+        canCountNow: false
+      }
     },
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },

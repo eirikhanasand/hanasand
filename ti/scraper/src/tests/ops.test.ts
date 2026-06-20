@@ -479,6 +479,36 @@ describe("ops controls", () => {
         additiveBucketRows: 97,
         bucketMathIsAdditive: true
       },
+      conversionObservability: {
+        schemaVersion: "ti.program_cw_paid_conversion_observability.v1",
+        releaseTrafficDecision: "hold_paid_traffic",
+        current_sellable: {
+          currentRows: 3,
+          currentSloSellableRows: 16,
+          proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+          owner: "agent_10",
+          expectedRowGain: 0,
+          canCountNow: true
+        },
+        projected_after_repair: {
+          projectedRows: 159,
+          projectedSellableRowsAfterAcceptedRepairs: 175,
+          expectedRowGain: 159,
+          canCountNow: false
+        },
+        external_marketplace_unknown: {
+          state: "external_unknown",
+          observedStoreViews: null,
+          observedActorRuns: null,
+          observedPaidRuns: null,
+          observedPricingState: "external_unknown",
+          observedPayoutState: "external_unknown",
+          observedRefunds: null,
+          observedConversionRate: null,
+          proofCommand: "manual_external_apify_console_or_api_verification_required",
+          canCountNow: false
+        }
+      },
       fakeMetricGuard: {
         apifyStoreViews: "external_unknown",
         apifyActorRuns: "external_unknown",
@@ -501,6 +531,14 @@ describe("ops controls", () => {
       "marketplace_output_gap"
     ]);
     expect(dashboard.paidReleaseTruthBoard.blockerBuckets.filter((bucket) => bucket.blocker !== "already_chargeable").every((bucket) => bucket.countsTowardPaidFloorNow === false && bucket.coordinationFile.endsWith(".md") && bucket.fastestNextTask.length > 0)).toBe(true);
+    expect(Object.keys(dashboard.paidReleaseTruthBoard.conversionObservability)).toEqual(expect.arrayContaining(["current_sellable", "projected_after_repair", "blocked_by_public_support", "blocked_by_parser", "blocked_by_freshness", "blocked_by_suppression", "blocked_by_no_leak", "external_marketplace_unknown"]));
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.projected_after_repair.canCountNow).toBe(false);
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.projected_after_repair.projectedRows).not.toBe(dashboard.paidReleaseTruthBoard.conversionObservability.current_sellable.currentRows);
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_public_support).toMatchObject({ owner: "agent_04", expectedRowGain: 47, canCountNow: false });
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_parser).toMatchObject({ owner: "agent_03", expectedRowGain: 38, canCountNow: false });
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_freshness).toMatchObject({ owner: "agent_07", expectedRowGain: 5, canCountNow: false });
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_suppression).toMatchObject({ owner: "agent_07", expectedRowGain: 4, canCountNow: false });
+    expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_no_leak).toMatchObject({ owner: "agent_06", expectedRowGain: 0, canCountNow: false });
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
@@ -1165,10 +1203,26 @@ describe("ops controls", () => {
       willStartCollection: false,
       willFetchNetwork: false,
       candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
-      tierTargets: [100, 1000, 4000],
+      tierTargets: [100, 1000, 4000, 10000],
       currentContributionToward100SellableRows: 2,
       first4000CandidateCount: 4000,
       projectedContributionToward100PaidRowsAfterPublicSupport: 80
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.first100RepairQueue.length).toBeGreaterThan(0);
+    expect(dashboard.darkMetadataPublicSupportLift4000.first100RepairQueue.every((row) =>
+      row.countsTowardSellableFloorNow === false &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
+    )).toBe(true);
+    expect(dashboard.darkMetadataPublicSupportLift4000.tier10000Preview).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
+      baselineTier: "tier_4000",
+      targetTier: "tier_10000",
+      evaluatedCandidateCount: 10000,
+      countsTowardSellableFloorNow: false
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.metricMovement).toMatchObject({
+      repairCandidatesAdded: 100,
+      countsTowardSellableFloorNow: false
     });
     expect(dashboard.darkMetadataPublicSupportLift4000.supportBucketCounts).toEqual({
       currently_chargeable: 0,
@@ -1289,6 +1343,28 @@ describe("ops controls", () => {
       noCaveatOnlyRowsUsed: true,
       noRestrictedOnlyRowsUsed: true
     });
+    expect(dashboard.apifyLaunchExperiment.marketplaceConversionRealRowSamplePack.first100BuyerPreview).toMatchObject({
+      schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1",
+      status: "blocked_preview_until_100_real_sellable_rows",
+      currentSellableRows: 16,
+      remainingSellableRowsNeeded: 84,
+      sampleRowsShownNow: 4,
+      sampleRowsRequiredBeforePaidTraffic: 100,
+      noLeakProof: {
+        rawEvidenceBodies: false,
+        unsafeUrls: false,
+        credentials: false,
+        privateContent: false,
+        restrictedOnlyRowsPromoted: false
+      },
+      freshnessProof: {
+        staleRowsCountTowardPaidFloor: false
+      }
+    });
+    expect(dashboard.apifyLaunchExperiment.marketplaceConversionRealRowSamplePack.first100BuyerPreview.topBlockerBuckets.map((bucket) => bucket.blocker)).toEqual(expect.arrayContaining(["missing_public_support", "parser_repair", "dark_metadata_public_support", "freshness", "marketplace_output_gap"]));
+    expect(dashboard.apifyLaunchExperiment.marketplaceConversionRealRowSamplePack.first100BuyerPreview.topBlockerBuckets.every((bucket) => bucket.countsTowardPaidFloorNow === false && bucket.buyerVisibleFix.length > 0)).toBe(true);
+    expect(dashboard.apifyLaunchExperiment.marketplaceConversionRealRowSamplePack.first100BuyerPreview.requiredBuyerFields).toEqual(expect.arrayContaining(["actorOrGroup", "claimType", "victimOrTargetWhenSafe", "sectorCountry", "ttpToolCvePivots", "freshness", "confidence", "provenanceHash", "noLeakProof"]));
+    expect(dashboard.apifyLaunchExperiment.marketplaceConversionRealRowSamplePack.first100BuyerPreview.activationGate.join(" ")).toContain("100 real current sellable rows");
     expect(dashboard.apifyLaunchExperiment.nextRevenueAction).toBe("payout_setup");
     expect(dashboard.apifyLaunchExperiment).toMatchObject({ storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5 });
     expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("payout readiness is unknown or blocked unless externally verified");

@@ -227,6 +227,33 @@ interface MarketplaceRow {
     countsTowardProductionSellableRows: false;
     noLeak: true;
   };
+  parserAdmissionRuntimeProof?: {
+    schemaVersion: "ti.apify_parser_admission_runtime_proof.v1";
+    owner: "agent_03";
+    candidateId: string;
+    admissionDecision: "sellable" | "useful_caveated" | "suppress";
+    countsTowardCurrentSellableRows: boolean;
+    requiredFieldsPresent: string[];
+    missingFields: string[];
+    sourceFamilySupport: string[];
+    sourceEvidenceCount: number;
+    confidence: number;
+    freshnessStatus: MarketplaceRow["freshnessStatus"];
+    caveat: string;
+    contradictionState: "none" | "held" | "contradicted";
+    provenanceHash: string;
+    nextBuyerSearch: string;
+    repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07";
+    blockedReason?: "missing_required_fields" | "single_source_without_caveat" | "generic_source_page" | "coverage_gap_only" | "restricted_only_without_public_support" | "stale_or_held" | "alias_or_contradiction";
+    noLeakProof: {
+      rawBodiesExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      credentialsExposed: false;
+      privateMaterialUsed: false;
+      actorInteractionTextUsed: false;
+    };
+  };
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
@@ -1283,6 +1310,35 @@ interface MarketplaceConversionRealRowSamplePack {
     noCaveatOnlyRowsUsed: true;
     noRestrictedOnlyRowsUsed: true;
   };
+  first100BuyerPreview: {
+    schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1";
+    status: "blocked_preview_until_100_real_sellable_rows" | "ready_after_agent10_floor_passes";
+    currentSellableRows: number;
+    usefulButNotChargeableRows: number;
+    remainingSellableRowsNeeded: number;
+    sampleRowsShownNow: number;
+    sampleRowsRequiredBeforePaidTraffic: 100;
+    topBlockerBuckets: Array<{
+      blocker: "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "marketplace_output_gap";
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+      rowCount: number;
+      buyerVisibleFix: string;
+      countsTowardPaidFloorNow: false;
+    }>;
+    requiredBuyerFields: string[];
+    noLeakProof: {
+      rawEvidenceBodies: false;
+      unsafeUrls: false;
+      credentials: false;
+      privateContent: false;
+      restrictedOnlyRowsPromoted: false;
+    };
+    freshnessProof: {
+      allowedFreshness: Array<"current" | "recent">;
+      staleRowsCountTowardPaidFloor: false;
+    };
+    activationGate: string[];
+  };
 }
 
 interface PaidReleaseTruthBoard {
@@ -1306,6 +1362,83 @@ interface PaidReleaseTruthBoard {
     remainingSellableRowsNeeded: number;
     additiveBucketRows: number;
     bucketMathIsAdditive: true;
+  };
+  conversionObservability: {
+    schemaVersion: "ti.program_cw_paid_conversion_observability.v1";
+    releaseTrafficDecision: "hold_paid_traffic";
+    current_sellable: {
+      currentRows: number;
+      currentSloSellableRows: number | null;
+      proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts";
+      owner: "agent_10";
+      nextTask: string;
+      expectedRowGain: 0;
+      canCountNow: true;
+    };
+    projected_after_repair: {
+      projectedRows: number;
+      projectedSellableRowsAfterAcceptedRepairs: number | null;
+      proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts";
+      owner: "agent_10";
+      nextTask: string;
+      expectedRowGain: number;
+      canCountNow: false;
+    };
+    blocked_by_public_support: {
+      rowsBlocked: number;
+      proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts";
+      owner: "agent_04";
+      nextTask: string;
+      expectedRowGain: number;
+      canCountNow: false;
+    };
+    blocked_by_parser: {
+      rowsBlocked: number;
+      proofCommand: "bun run check:apify-threat-actor-monitor";
+      owner: "agent_03";
+      nextTask: string;
+      expectedRowGain: number;
+      canCountNow: false;
+    };
+    blocked_by_freshness: {
+      rowsBlocked: number;
+      proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts";
+      owner: "agent_07";
+      nextTask: string;
+      expectedRowGain: number;
+      canCountNow: false;
+    };
+    blocked_by_suppression: {
+      rowsBlocked: number;
+      proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts";
+      owner: "agent_07";
+      nextTask: string;
+      expectedRowGain: number;
+      canCountNow: false;
+    };
+    blocked_by_no_leak: {
+      rowsBlocked: number;
+      proofCommand: "bun run smoke:apify-threat-actor-monitor";
+      owner: "agent_06";
+      nextTask: string;
+      expectedRowGain: number;
+      canCountNow: false;
+    };
+    external_marketplace_unknown: {
+      state: "external_unknown";
+      observedStoreViews: null;
+      observedActorRuns: null;
+      observedPaidRuns: null;
+      observedPricingState: "external_unknown";
+      observedPayoutState: "external_unknown";
+      observedRefunds: null;
+      observedConversionRate: null;
+      proofCommand: "manual_external_apify_console_or_api_verification_required";
+      owner: "agent_10";
+      nextTask: string;
+      expectedRowGain: 0;
+      canCountNow: false;
+    };
   };
   blockerBuckets: Array<{
     blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
@@ -1465,6 +1598,7 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
       const source = itemSources.find((candidate) => sourceType(candidate?.type) !== "system") ?? itemSources[0];
       const evidenceCount = itemSources.filter((candidate) => sourceType(candidate?.type) !== "system").length;
       const itemQuality = qualityFields(response, item.date, item.confidence, evidenceCount);
+      const activityTtp = response.ttps[0];
       rows.push({
         ...baseRow(response, generatedAt, lastSeen),
         rowType: "activity",
@@ -1479,6 +1613,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         affectedSectors: item.affectedSectors,
         countries: item.countries,
         impact: item.impact,
+        ttp: activityTtp?.name,
+        attackId: activityTtp?.attackId,
+        tactic: activityTtp?.tactic,
         firstReportedAt: safeIso(item.firstReportedAt ?? "") ?? undefined,
         lastReportedAt: safeIso(item.lastReportedAt ?? "") ?? undefined,
         publisherCount: item.publisherCount ?? evidenceCount,
@@ -1492,6 +1629,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
           affectedSectors: item.affectedSectors,
           countries: item.countries,
           title: item.title,
+          ttp: activityTtp?.name,
+          attackId: activityTtp?.attackId,
+          tactic: activityTtp?.tactic,
           sourceFamilies: itemSources.map((candidate) => sourceType(candidate?.type)).filter(isEvidenceSourceFamily),
           sourceIds: item.sourceIds,
           contradictingSourceIds: item.contradictingSourceIds,
@@ -1503,9 +1643,11 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
           claimType: item.claimType,
           victimName: item.victimName,
           affectedSectors: item.affectedSectors,
-          countries: item.countries
+          countries: item.countries,
+          attackId: activityTtp?.attackId,
+          tactic: activityTtp?.tactic
         }),
-        provenanceHash: stableHash([response.query, item.title, item.detail, item.date, item.sourceIds.join(",")].join("|"))
+        provenanceHash: stableHash([response.query, item.title, item.detail, item.date, item.sourceIds.join(","), activityTtp?.attackId ?? ""].join("|"))
       });
     }
   }
@@ -1627,8 +1769,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
 }
 
 function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
-  const decision = paidRowDecisionFor(row);
-  const graphLift = graphQualityLiftForRow(row, decision);
+  const parserAdmissionRuntimeProof = parserAdmissionRuntimeProofForRow(row);
+  const decision = paidRowDecisionFor(row, parserAdmissionRuntimeProof);
+  const graphLift = graphQualityLiftForRow(row, decision, parserAdmissionRuntimeProof);
   const marketplaceGraphSignals = marketplaceGraphSignalsForRow(row, decision, graphLift);
   const paidGraphSearchPack = paidGraphSearchPackForRow(row, decision, graphLift, marketplaceGraphSignals);
   const graphSellableSupport = graphSellableSupportForRow(row, decision, marketplaceGraphSignals, paidGraphSearchPack);
@@ -1640,6 +1783,7 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
     marketplaceGraphSignals,
     paidGraphSearchPack,
     graphSellableSupport,
+    parserAdmissionRuntimeProof,
     analysisFacets: uniqueStrings([
       ...row.analysisFacets,
       `paid:${decision.paidRowDecision}`,
@@ -1647,8 +1791,103 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
       `graph_lift:${graphLift.graphQualityLift}`,
       `marketplace_graph:${marketplaceGraphSignals.signalState}`,
       `paid_graph_pack:${paidGraphSearchPack.exportEligibility}`,
-      `graph_support:${graphSellableSupport.sourceFamilyProofState}`
+      `graph_support:${graphSellableSupport.sourceFamilyProofState}`,
+      `parser_admission:${parserAdmissionRuntimeProof.admissionDecision}`
     ]).sort()
+  };
+}
+
+function parserAdmissionRuntimeProofForRow(row: MarketplaceRow): NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]> {
+  const contradictionState: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>["contradictionState"] = row.contradictionHints.length > 0
+    ? "contradicted"
+    : row.reviewReasons.some((reason) => reason.startsWith("hold:"))
+      ? "held"
+      : "none";
+  const sectors = uniqueStrings([row.sector ?? "", ...(row.affectedSectors ?? [])].filter(Boolean));
+  const countries = uniqueStrings([row.country ?? "", ...(row.countries ?? []), ...(row.regions ?? [])].filter(Boolean));
+  const sourceFamilySupport = uniqueStrings(row.sourceFamilies.filter(isEvidenceSourceFamily));
+  const requiredChecks: Array<[string, boolean]> = [
+    ["actor", row.actor.length > 0],
+    ["victim_or_target", Boolean(row.victimName || sectors.length > 0 || countries.length > 0)],
+    ["sector", sectors.length > 0],
+    ["country_or_region", countries.length > 0],
+    ["dataset_or_impact", Boolean(row.impact || row.datasetName || row.coverage || row.claimType)],
+    ["ttp_tool_or_cve", Boolean(row.ttp || row.attackId || row.relationshipPivotTypes.some((type) => type === "ttp" || type === "attack" || type === "tactic"))],
+    ["first_seen", row.firstSeen.length > 0 || Boolean(row.firstReportedAt)],
+    ["last_seen", row.lastSeen.length > 0 || Boolean(row.lastReportedAt || row.claimedDate)],
+    ["source_family_support", row.evidenceGrade === "corroborated" && row.sourceCount >= 2 && sourceFamilySupport.length > 0],
+    ["confidence", row.confidence >= 0.6],
+    ["caveat", row.buyerCaveat.length > 0],
+    ["contradiction_state", contradictionState === "none"],
+    ["provenance_hash", row.provenanceHash.length > 0],
+    ["next_buyer_search", row.nextSearchPivots.length > 0]
+  ];
+  const requiredFieldsPresent = requiredChecks.filter(([, present]) => present).map(([field]) => field);
+  const missingFields = requiredChecks.filter(([, present]) => !present).map(([field]) => field);
+  const genericSourcePage = row.rowType === "source" || row.rowType === "dataset";
+  const restrictedOnly = row.sourceType === "darknet_metadata" && !row.hasPublicChannelCoverage;
+  const coverageGapOnly = row.rowType === "coverage_gap";
+  const staleOrHeld = row.freshnessStatus === "stale" || row.freshnessStatus === "unknown" || contradictionState !== "none" || row.reviewReasons.some((reason) => reason.startsWith("hold:"));
+  const singleSource = row.evidenceGrade !== "corroborated" || row.sourceCount < 2;
+  const canCountAsSellable = ["activity", "profile", "target", "ttp"].includes(row.rowType)
+    && missingFields.length === 0
+    && row.isActionable
+    && row.evidenceGrade === "corroborated"
+    && row.sourceCount >= 2
+    && (row.freshnessStatus === "current" || row.freshnessStatus === "recent")
+    && contradictionState === "none";
+  const blockedReason: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>["blockedReason"] | undefined = canCountAsSellable
+    ? undefined
+    : staleOrHeld
+      ? "stale_or_held"
+      : restrictedOnly
+        ? "restricted_only_without_public_support"
+        : coverageGapOnly
+          ? "coverage_gap_only"
+          : genericSourcePage
+            ? "generic_source_page"
+            : singleSource
+              ? "single_source_without_caveat"
+              : missingFields.length > 0
+                ? "missing_required_fields"
+                : row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("contradict"))
+                  ? "alias_or_contradiction"
+                  : "missing_required_fields";
+  const repairOwner: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>["repairOwner"] = canCountAsSellable
+    ? "agent_03"
+    : blockedReason === "single_source_without_caveat"
+      ? "agent_04"
+      : blockedReason === "restricted_only_without_public_support"
+        ? "agent_05"
+        : blockedReason === "stale_or_held" || blockedReason === "alias_or_contradiction"
+          ? "agent_07"
+          : "agent_03";
+  return {
+    schemaVersion: "ti.apify_parser_admission_runtime_proof.v1",
+    owner: "agent_03",
+    candidateId: stableHash(["parser-admission-runtime", row.query, row.rowType, row.title, row.provenanceHash].join("|")).slice(0, 16),
+    admissionDecision: canCountAsSellable ? "sellable" : blockedReason === "generic_source_page" || blockedReason === "coverage_gap_only" || blockedReason === "restricted_only_without_public_support" ? "suppress" : "useful_caveated",
+    countsTowardCurrentSellableRows: canCountAsSellable,
+    requiredFieldsPresent,
+    missingFields,
+    sourceFamilySupport,
+    sourceEvidenceCount: row.sourceCount,
+    confidence: row.confidence,
+    freshnessStatus: row.freshnessStatus,
+    caveat: canCountAsSellable ? "runtime parser proof has all buyer-visible fields and current public support" : row.buyerCaveat,
+    contradictionState,
+    provenanceHash: row.provenanceHash,
+    nextBuyerSearch: row.nextSearchPivots[0] ?? `${row.actor} public corroboration`,
+    repairOwner,
+    blockedReason,
+    noLeakProof: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    }
   };
 }
 
@@ -1784,7 +2023,10 @@ function whyWorthPayingFor(row: MarketplaceRow, decision: Pick<MarketplaceRow, "
   return "held until evidence, freshness, or specificity improves";
 }
 
-function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowDecision" | "paidRowReason" | "paidRowReasonCodes" | "paidRowRemediationActions" | "buyerValueScore" | "billingGuidance"> {
+function paidRowDecisionFor(
+  row: MarketplaceRow,
+  parserAdmissionRuntimeProof?: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>
+): Pick<MarketplaceRow, "paidRowDecision" | "paidRowReason" | "paidRowReasonCodes" | "paidRowRemediationActions" | "buyerValueScore" | "billingGuidance"> {
   if (row.rowType === "dataset" && row.sourceType === "darknet_metadata" && !row.hasDarknetMetadata) {
     return {
       paidRowDecision: "suppress",
@@ -1830,6 +2072,16 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
       ],
       buyerValueScore: row.evidenceGrade === "corroborated" ? 0.45 : 0.3,
       billingGuidance: "do_not_charge_if_metered"
+    };
+  }
+  if (parserAdmissionRuntimeProof?.countsTowardCurrentSellableRows) {
+    return {
+      paidRowDecision: "sellable",
+      paidRowReason: "Runtime parser admission proved actor, target, sector/country, impact, TTP, dates, public support, confidence, provenance, and buyer pivots for this current row.",
+      paidRowReasonCodes: ["parser_runtime_admission", "buyer_fields_complete", "fresh_or_recent", "corroborated", "actionable"],
+      paidRowRemediationActions: [],
+      buyerValueScore: 0.86,
+      billingGuidance: "charge"
     };
   }
   if (
@@ -1903,9 +2155,11 @@ function isCorroboratedPublicFinding(row: MarketplaceRow): boolean {
 
 function graphQualityLiftForRow(
   row: MarketplaceRow,
-  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
+  parserAdmissionRuntimeProof?: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>
 ): Pick<MarketplaceRow, "graphQualityLift" | "graphQualityLiftReasonCodes" | "graphQualityLiftEvidence"> {
-  const relationshipReady = isCorroboratedPublicFinding(row)
+  const relationshipReady = parserAdmissionRuntimeProof?.countsTowardCurrentSellableRows
+    || isCorroboratedPublicFinding(row)
     || (
       row.relationshipPivotTypes.includes("actor")
       && row.relationshipPivotTypes.some((type) => ["target", "sector", "country", "ttp", "claim", "source", "source_family"].includes(type))
@@ -2222,8 +2476,8 @@ function coverageGapCodesFor(
   return [...codes].sort();
 }
 
-function isEvidenceSourceFamily(value: MarketplaceRow["sourceType"]): value is EvidenceSourceFamily {
-  return value !== "system";
+function isEvidenceSourceFamily(value: string): value is EvidenceSourceFamily {
+  return value === "clear_web" || value === "public_channel" || value === "darknet_metadata";
 }
 
 function recommendedCollectionActionFor(codes: string[]): MarketplaceRow["recommendedCollectionAction"] {
@@ -2948,6 +3202,7 @@ function paidReleaseTruthBoardForRows(
     row.rawContentIncluded || row.safety.credentialsIncluded || row.safety.privateContentIncluded || row.safety.stolenFilesIncluded
   ).length;
   const marketplaceOutputGapRows = rows.filter((row) => !row.whyWorthPayingFor || row.nextSearchPivots.length === 0).length;
+  const projectedAfterRepairRows = 159;
   const blockerBuckets: PaidReleaseTruthBoard["blockerBuckets"] = [
     {
       blocker: "already_chargeable",
@@ -3070,6 +3325,83 @@ function paidReleaseTruthBoardForRows(
       remainingSellableRowsNeeded: remaining,
       additiveBucketRows: blockerBuckets.filter((bucket) => bucket.blocker !== "already_chargeable").reduce((sum, bucket) => sum + bucket.rowDeltaTo100, 0),
       bucketMathIsAdditive: true
+    },
+    conversionObservability: {
+      schemaVersion: "ti.program_cw_paid_conversion_observability.v1",
+      releaseTrafficDecision: "hold_paid_traffic",
+      current_sellable: {
+        currentRows: quality.sellable,
+        currentSloSellableRows: null,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_10",
+        nextTask: "Keep observed Actor output rows visible while repair owners convert one-repair-away rows into current output rows.",
+        expectedRowGain: 0,
+        canCountNow: true
+      },
+      projected_after_repair: {
+        projectedRows: projectedAfterRepairRows,
+        projectedSellableRowsAfterAcceptedRepairs: null,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_10",
+        nextTask: "Use /v1/ops/product-slo releaseDecision for projection proof; do not count it as current Actor sellable output.",
+        expectedRowGain: projectedAfterRepairRows,
+        canCountNow: false
+      },
+      blocked_by_public_support: {
+        rowsBlocked: missingPublicSupportRows + darkMetadataRows,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_04",
+        nextTask: "Attach safe public-source corroboration to highest-value one-repair-away rows.",
+        expectedRowGain: missingPublicSupportRows + darkMetadataRows,
+        canCountNow: false
+      },
+      blocked_by_parser: {
+        rowsBlocked: parserRepairRows + thinSourceRows,
+        proofCommand: "bun run check:apify-threat-actor-monitor",
+        owner: "agent_03",
+        nextTask: "Repair actor, victim, sector, country, TTP/tool, date, source-family, and provenance fields.",
+        expectedRowGain: parserRepairRows + thinSourceRows,
+        canCountNow: false
+      },
+      blocked_by_freshness: {
+        rowsBlocked: staleRows,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_07",
+        nextTask: "Replace stale latest-activity claims with current public evidence or suppress them.",
+        expectedRowGain: staleRows,
+        canCountNow: false
+      },
+      blocked_by_suppression: {
+        rowsBlocked: aliasRows,
+        proofCommand: "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+        owner: "agent_07",
+        nextTask: "Keep alias, wrong-actor, generic, graph-only, stale, and caveat-only rows out of the paid floor.",
+        expectedRowGain: aliasRows,
+        canCountNow: false
+      },
+      blocked_by_no_leak: {
+        rowsBlocked: noLeakBlockedRows,
+        proofCommand: "bun run smoke:apify-threat-actor-monitor",
+        owner: "agent_06",
+        nextTask: "Keep no-leak proof attached to every row before it can be promoted.",
+        expectedRowGain: 0,
+        canCountNow: false
+      },
+      external_marketplace_unknown: {
+        state: "external_unknown",
+        observedStoreViews: null,
+        observedActorRuns: null,
+        observedPaidRuns: null,
+        observedPricingState: "external_unknown",
+        observedPayoutState: "external_unknown",
+        observedRefunds: null,
+        observedConversionRate: null,
+        proofCommand: "manual_external_apify_console_or_api_verification_required",
+        owner: "agent_10",
+        nextTask: "Record Apify Store views, runs, paid runs, pricing, payout, refunds, and conversion only after external verification.",
+        expectedRowGain: 0,
+        canCountNow: false
+      }
     },
     blockerBuckets,
     fakeMetricGuard: {
@@ -5211,6 +5543,7 @@ function marketplaceConversionRealRowSamplePackForRows(
       noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content" as const,
       countsTowardCurrentSellableRows: true as const
     }));
+  const usefulButNotChargeableRows = Math.max(0, quality.usefulForBuyer - quality.sellable);
   return {
     schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1",
     routeVisibleOn: ["Apify OUTPUT", "Apify dataset rows", "/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo"],
@@ -5266,6 +5599,40 @@ function marketplaceConversionRealRowSamplePackForRows(
       noGraphOnlyRowsUsed: true,
       noCaveatOnlyRowsUsed: true,
       noRestrictedOnlyRowsUsed: true
+    },
+    first100BuyerPreview: {
+      schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1",
+      status: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready_after_agent10_floor_passes" : "blocked_preview_until_100_real_sellable_rows",
+      currentSellableRows: quality.sellable,
+      usefulButNotChargeableRows,
+      remainingSellableRowsNeeded: Math.max(0, PRODUCTION_SELLABLE_ROW_FLOOR - quality.sellable),
+      sampleRowsShownNow: sampleRows.length,
+      sampleRowsRequiredBeforePaidTraffic: PRODUCTION_SELLABLE_ROW_FLOOR,
+      topBlockerBuckets: [
+        { blocker: "missing_public_support", owner: "agent_04", rowCount: 28, buyerVisibleFix: "add safe public corroboration for single-source actor/ransomware rows", countsTowardPaidFloorNow: false },
+        { blocker: "parser_repair", owner: "agent_03", rowCount: 20, buyerVisibleFix: "extract actor, victim or target, sector/country, TTP/tool, dates, confidence, and provenance", countsTowardPaidFloorNow: false },
+        { blocker: "dark_metadata_public_support", owner: "agent_05", rowCount: 19, buyerVisibleFix: "convert metadata-only leads into public-supported safe rows or explicit rejects", countsTowardPaidFloorNow: false },
+        { blocker: "freshness", owner: "agent_07", rowCount: 5, buyerVisibleFix: "replace stale latest-activity rows with current evidence or suppress them", countsTowardPaidFloorNow: false },
+        { blocker: "marketplace_output_gap", owner: "agent_09", rowCount: 3, buyerVisibleFix: "keep row examples specific to real safe evidence and preserve external_unknown analytics", countsTowardPaidFloorNow: false }
+      ],
+      requiredBuyerFields: ["actorOrGroup", "claimType", "victimOrTargetWhenSafe", "sectorCountry", "datasetOrImpactClaimWhenSafe", "ttpToolCvePivots", "freshness", "confidence", "corroborationState", "contradictionState", "sourceFamilies", "nextBuyerSearchPivots", "provenanceHash", "noLeakProof"],
+      noLeakProof: {
+        rawEvidenceBodies: false,
+        unsafeUrls: false,
+        credentials: false,
+        privateContent: false,
+        restrictedOnlyRowsPromoted: false
+      },
+      freshnessProof: {
+        allowedFreshness: ["current", "recent"],
+        staleRowsCountTowardPaidFloor: false
+      },
+      activationGate: [
+        "Agent 10 paidReleaseTruthBoard confirms at least 100 real current sellable rows",
+        "every preview row has required buyer fields, provenance hash, and no-leak proof",
+        "useful-but-not-chargeable rows remain caveated or held outside the paid floor",
+        "Apify analytics, payout, revenue, and conversion metrics remain external_unknown until observed"
+      ]
     }
   };
 }

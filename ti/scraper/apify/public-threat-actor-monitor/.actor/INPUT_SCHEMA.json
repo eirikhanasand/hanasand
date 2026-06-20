@@ -6,7 +6,7 @@
     "queries": {
       "title": "Actors or groups",
       "type": "array",
-      "description": "Threat actor, ransomware group, malware, or campaign names to monitor. The default watchlist is the buyer evaluation preset used by the marketplace conversion sample pack; paid traffic is still blocked until output quality reaches the real 100-row floor.",
+      "description": "Threat actor, ransomware group, malware, or campaign names to monitor. The default watchlist is the buyer evaluation preset used by the marketplace conversion sample pack and first-100 buyer preview; paid traffic is still blocked until output quality reaches the real 100-row floor.",
       "editor": "stringList",
       "prefill": ["APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon", "Salt Typhoon", "Turla", "Sandworm", "Kimsuky", "MuddyWater", "Charming Kitten", "Scattered Spider", "LockBit", "Clop", "Akira", "Black Basta", "Play", "RansomHub", "ALPHV", "Hunters International"]
     },
