@@ -4,6 +4,8 @@ Status: active_product_focus_parser_coverage_first100
 
 Read `coordination_product_focus.md` first. Your current task is parser coverage for the first 100 vetted sources from Agents 01/04. Do not add another readiness layer; show which real sources produce useful safe rows and which parser repairs matter most for revenue.
 
+Live product proof to optimize against: Apify run `rh6D0UInDD6x7GuuD` produced 98 rows, but most are thin/single-source and APT28 had no evidence. Parser work should rank repairs by the default watchlist impact: APT28 evidence recovery, APT29 freshness, public advisory/blog extraction, ransomware victim/activity extraction, and summaries that say more than "Reported by X."
+
 Deliverables:
 - Parsed/failed/held counts for the first 100 source pack.
 - At least representative safe normalized sample rows for public reports/advisories/blogs where available.

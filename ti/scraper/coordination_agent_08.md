@@ -1,35 +1,26 @@
-Status: active_program_bj_stix_taxii_monetization_and_export_contracts
+Status: active_product_focus_actor_row_relationship_insights
 
 # Agent 08 Coordination
 
-Read `coordination_product_focus.md` first. Current STIX/TAXII work may finish if already in progress, but next graph work must improve buyer-visible Actor/public rows: actor timelines, actor comparisons, contradiction flags, stale campaign holds, and compact filterable fields. Speculative TAXII packaging is lower priority.
+Read `coordination_product_focus.md` first. Continue the graph ownership lane only where it improves buyer-visible Actor/public rows. STIX/TAXII work is secondary until the Apify product has stronger fresh data, better sample rows, and clearer conversion proof.
 
 ## Current Assignment
 
-You are no longer waiting for a graph/STIX/TAXII task. Continue the graph/export lane until reviewed graph intelligence can support monetizable export tiers without overstating implementation or leaking unsafe material.
+Program BL: Actor Row Relationship Insights For Marketplace Datasets.
 
-Program BJ: STIX/TAXII Monetization And Export Contracts.
+Make each Apify/public result row more useful to a CTI analyst without adding speculative platform layers. Focus on compact, evidence-backed relationship insight fields that help a buyer understand why a row matters:
 
-Mission:
-- Convert reviewed graph/STIX readiness into product-grade export contracts for Apify dataset consumers, public `/ti` previews, future TAXII descriptor-only integrations, and enterprise export packages.
-- Be precise about what is implemented versus planned: no mounted TAXII server claim unless it exists, no authoritative STIX for held/unreviewed claims, and no raw unsafe evidence.
+- actor-to-victim, actor-to-sector, actor-to-country, actor-to-malware/tool, actor-to-TTP, actor-to-campaign, and actor-to-source-family relationship summaries;
+- relationship freshness and confidence deltas compared with previous observations;
+- "why this is actionable" bullets based on concrete evidence, not generic text;
+- contradiction and uncertainty hints that fit in a dataset row;
+- source-family diversity and corroboration state;
+- graph-backed next pivots a user can search next;
+- no-leak public output that does not reveal raw unsafe URLs, stolen content, credentials, payloads, private-channel content, or actor interaction.
 
-Build:
-- Add export contract DTOs for free sample, analyst, and enterprise tiers with row limits, reviewed object eligibility, evidence requirements, confidence thresholds, freshness windows, update cadence, and pricing-readiness notes.
-- Add STIX object eligibility matrices for `intrusion-set`, `campaign`, `malware`, `tool`, `attack-pattern`, `identity`, `relationship`, `sighting`, `indicator`, and `report`.
-- Add held/export-blocked reasons for weak evidence, stale activity, contradiction, restricted metadata-only, public-channel-only, missing ledger, missing analyst review, unsafe source, and tenant policy hold.
-- Add Apify-facing compact fields for `stixReady`, `taxiiDescriptorReady`, `exportTier`, `exportBlockers`, and `reviewedObjectTypes` where appropriate.
-- Preserve no raw URLs, leaked content, credentials, payloads, private-channel material, object keys, actor interaction, or unsafe darkweb details.
+Your deliverable should update graph/public packaging only where those fields are consumed by the Apify Actor, public search API, `/ti`, or a concrete sample dataset. Avoid starting new TAXII server work, export tier theory, or large DTO families unless directly needed for the row-level buyer experience.
 
-Proof before status change:
-- `bun run check`
-- `bun test src/tests/graphViews.test.ts src/tests/api.test.ts src/tests/sourceSeeds.test.ts`
-- `bun run check:route-inventory`
-- `bun run check:contract-index`
-- `bun run check:api-regression`
-- update `docs/export/relationship_model.md`
-
-If this phase completes, continue immediately into Program BK: graph-backed actor comparison and buyer-ready investigation notebooks.
+When Program BL is complete, continue into Program BM: graph-backed tier-quality scoring for the 100 -> 1,000 -> 60k source/dark-metadata ladder, using only fields that improve product-data quality gates.
 
 ## Continuation Directive
 
@@ -77,7 +68,16 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 - Added descriptor-only TAXII collection and pricing readiness for `ti-graph-reviewed-stix-21` with free sample, analyst, and enterprise tiers, explicit `serverImplemented: false`, no mounted TAXII server claim, and no object-key exposure.
 - Updated `docs/export/relationship_model.md` with the Program BI marketplace/STIX/TAXII boundary.
 - Verification is green for `bun run check`, `bun test src/tests/graphViews.test.ts src/tests/api.test.ts src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (526 pass).
+- Completed Program BJ STIX/TAXII Monetization And Export Contracts.
+- Added `GraphStixTaxiiMonetizationExportContractsDto` across graph query, investigation workspace, runtime graph API, and STIX readiness with free sample, analyst, and enterprise tier contracts.
+- Added STIX object eligibility matrices for `intrusion-set`, `campaign`, `malware`, `tool`, `attack-pattern`, `identity`, `relationship`, `sighting`, `indicator`, and `report`; normalized buyer-safe export blockers for weak evidence, stale activity, contradiction, restricted metadata-only, public-channel-only, missing ledger, missing analyst review, unsafe source, tenant policy hold, and TAXII server not implemented.
+- Added Apify compact fields for `stixReady`, `taxiiDescriptorReady`, `exportTier`, `exportBlockers`, and `reviewedObjectTypes` while preserving descriptor-only TAXII and no-leak metadata-only output.
+- Completed Program BK graph-backed actor comparison and buyer-ready investigation notebooks.
+- Added `GraphActorComparisonNotebookDto` across graph query, investigation workspace, runtime graph API, and STIX readiness with actor comparison rows, shared pivots, notebook contracts for Apify listing samples, public `/ti` investigations, and enterprise export review, plus buyer readiness fields.
+- Repaired source-atlas display row selection so required decision rows such as `retire_duplicate` remain visible in route/API proof without mutating source activation semantics.
+- Updated `docs/export/relationship_model.md` with Program BJ/BK export-contract and notebook boundaries.
+- Verification is green for `bun run check`, `bun test src/tests/graphViews.test.ts src/tests/api.test.ts src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (526 pass).
 
 ## Active Next Work
 
-Historical note: Agent 08 previously requested the next task. The active Program BJ assignment above supersedes that request.
+Program BL is active. Do not mark ready until the relationship-insight fields are route-visible, tested, documented, and demonstrably useful in Apify/public result samples.

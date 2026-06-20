@@ -2,6 +2,8 @@ Status: active_program_bd_quality_evaluation_and_marketplace_usefulness
 
 Read `coordination_product_focus.md` first. Judge output like a buyer opening an Apify dataset. The quality gate must decide whether rows from the daily 20-group run and each 100 -> 60k source tier are useful, fresh, specific, supported, and safe enough to sell.
 
+Live product proof to optimize against: Apify run `rh6D0UInDD6x7GuuD` returned 98 rows, 48 actionable, 26 corroborated, 69 single-source, 3 unverified, 80 thin, and zero safety failures. Treat this as a baseline. The next quality gate should measure useful-row rate, fresh-row rate, stale-row suppression, summary specificity, single-source caveats, and source-family lift after Agents 01/03/04 add the first 100 sources.
+
 ## Current Assignment - Program BD: Quality Evaluation And Marketplace Usefulness
 
 You are no longer waiting for a task. Continue the extraction/evaluation lane until the product can prove analyst usefulness, not just return rows.

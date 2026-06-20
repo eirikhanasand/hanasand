@@ -4,6 +4,8 @@ Status: active_product_focus_source_acquisition_100_to_1000
 
 Read `coordination_product_focus.md` first. Your current task is source acquisition, not more coverage matrices. Build the first 100 vetted source list with Agent 01, then expand to 1,000 ranked candidates only after dedupe and usefulness checks.
 
+Live product proof to optimize against: Apify run `rh6D0UInDD6x7GuuD` returned 98 rows, but 80 were thin, 69 were single-source, APT28 had no public evidence, and APT29 was stale. Your source acquisition should prioritize sources that add fresh/corroborating evidence for the 20 default groups, especially APT28/APT29 and ransomware activity rows.
+
 Deliverables:
 - Add high-value sources for APT/ransomware activity, victim claims, advisories, malware/tooling, TTPs, and public corroboration.
 - For every source, explain buyer value: actors improved, freshness expectation, entities likely extracted, source family, parser family, and whether it can produce Apify rows.

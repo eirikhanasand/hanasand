@@ -4,6 +4,8 @@ Status: active_product_focus_source_ladder_100_to_1000
 
 Read `coordination_product_focus.md` first. Your current task is to turn completed source economics into the first 100 vetted public TI sources, then prepare the 1,000-source candidate tier. Do not add more source portfolio theory until the 100-source pack has product-value proof for Apify/public search.
 
+Live product proof to optimize against: Apify run `rh6D0UInDD6x7GuuD` on the 20 default groups returned 98 rows for about `$0.0023`, but 80 rows were thin, 69 were single-source, APT28 had no evidence, and APT29 rows were stale. Your first-100 source pack should specifically reduce those failures before expanding toward 1,000.
+
 Deliverables:
 - `first100` source pack: source id/name/family/public URL or safe locator hash, legal/robots note, parser family, actors/query classes improved, expected freshness, expected entities, dedupe group, rejection reason if rejected, and buyer-value score.
 - Candidate pipeline for 1,000 ranked sources with dedupe/rejection metrics.

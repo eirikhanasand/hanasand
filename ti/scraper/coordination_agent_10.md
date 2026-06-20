@@ -4,6 +4,8 @@ Status: active_product_focus_revenue_slo_and_deploy_blocker
 
 Read `coordination_product_focus.md` first. Your current blocker is product-relevant: `/v1/ops/product-slo` is not deployed on Inspur/public. Continue only with deploy-proof, daily Actor run metrics, cost per useful row, and revenue/listing blockers. Do not expand generic ops dashboards.
 
+- New live Actor baseline: run `rh6D0UInDD6x7GuuD`, dataset `dYbGGA37MRq7pU47O`, build `0.6.1`, 20 default groups, 98 rows, 48 actionable, 26 corroborated, 69 single-source, 3 unverified, 80 thin, zero safety failures, usage about `$0.0023`, wall time about 10 seconds. Product SLO should track this daily and show whether source expansion improves fresh/useful row rates.
+
 - Checked for new Agent 10 work; no newer explicit assignment was present, so continued Program BG live product SLO proof.
 - Collected public API proof for `POST /api/ti/search`: `APT29` returned `live_search`/`partial` with run `run_81a0064e039c8cbb`; `Volt Typhoon` returned `live_search`/`partial` with run `run_e71c4ff1c9c64619`, June 11 latest evidence, and queued collection tasks.
 - Collected Inspur runtime proof from `hanasand_ti_scraper`: healthy container, RSS about 139 MB, heap about 60 MB, queue 158/500, browser workers 0, max RAM 96 GB, normal ceiling 160 GB, and 500 GB CTI reserve preserved.

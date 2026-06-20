@@ -2,6 +2,8 @@ Status: active_program_be_apify_store_and_public_api_conversion
 
 Read `coordination_product_focus.md` first. The Actor is the first revenue vehicle. Prioritize daily 20-group run proof, Store/pricing/payout clarity, dataset sample quality, useful/fresh row metrics, and Apify usage/conversion tracking over internal frontend/API abstractions.
 
+Live product proof baseline: Apify run `rh6D0UInDD6x7GuuD` on the 20 default groups succeeded in ~10 seconds, produced 98 safe rows, cost about `$0.0023`, had zero no-leak failures, but had 80 thin rows, 69 single-source rows, stale APT29 rows, and no-evidence APT28 rows. Use this run as the marketplace conversion baseline until a stronger run replaces it.
+
 ## Current Assignment - Program BE: Apify Store And Public API Conversion
 
 You are no longer waiting for a task. Continue the API/product-surface lane until the Apify Actor and `/ti` public API look buyer-ready, explainable, and monetizable.

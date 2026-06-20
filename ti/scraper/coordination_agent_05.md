@@ -1,39 +1,29 @@
-Status: active_program_be_dark_metadata_operations_and_refresh_model
+Status: active_product_focus_dark_metadata_tier100
 
 # Agent 05 Coordination
 
-Read `coordination_product_focus.md` first. Your current task is to make the dark metadata index real and searchable, starting with 100 safe metadata records and quality proof before 1,000. If the next output is only synthetic contracts, it does not count.
+Read `coordination_product_focus.md` first. Your next work is not another dark-web readiness contract. It is the first buyer-visible dark/hidden metadata tier: real, searchable, safe summaries that can make the Apify Actor and `/ti/darkweb/index` more useful.
 
-## Current Assignment - Program BE: Dark Metadata Operations And Refresh Model
+## Current Assignment: Program BF Real Dark Metadata Tier 100
 
-You are no longer waiting for a task. Continue the restricted/dark metadata lane until the 60k-page index has an operations model for refresh, liveness, classification drift, safe search, and public UI handoff.
+Build the first production-shaped tier of the dark/hidden metadata index. The goal is 100 real candidate records from allowed discovery surfaces, with safe metadata summaries, search fields, liveness state, legal-risk classification, source-family tags, dedupe state, and proof that no raw stolen data, credentials, payloads, unsafe URLs, private/auth/CAPTCHA material, or actor-interaction content enters public output.
 
-Mission:
-- Turn the dark metadata side tool from a contract/index model into an operator-manageable refresh and quality system.
-- Keep it useful for TI without becoming unsafe: metadata-only, isolated, discardable, hash/redaction-first, and review-held until corroborated.
+Priorities:
 
-Build:
-- Add refresh-plan DTOs for 60k records with lanes for Tor, I2P, Freenet, directories, analyst imports, and public report-derived references.
-- Add liveness/classification drift packets: newly alive, newly dead, category changed, legal risk changed, source reputation changed, duplicate cluster changed, review priority changed, and graph/export hold changed.
-- Add search-quality metrics for dark metadata: category coverage, language hints, title/summary usefulness, actor/victim/dataset/entity extraction confidence, blocked unsafe evidence counts, false-positive review rows, and public-safe display readiness.
-- Add operator runbook fields for isolated collector pool, proxy boundary, disk budget, content-size cap, quarantine retention, emergency stop, and rollback.
-- Keep all fetch/execution behavior disabled unless already controlled by an approved isolated harness; never output raw onion/full unsafe URLs, raw HTML/body/text, credentials, payloads, dumps, object keys, private messages, auth/CAPTCHA/private access, or actor interaction.
+- Convert the operations model into a tier-100 import/search path using safe discovery sources first: public reports, analyst-imported onion/domain lists, directory/search result metadata, public ransomware tracker references, and existing approved source seeds.
+- Produce a clear split between accepted, duplicate, blocked, review-needed, and stale/dead records.
+- Add or update fixtures so `/v1/darkweb/status`, `/ti/darkweb/index` contracts, and Apify/public search can show useful dark metadata summaries without exposing raw locations or unsafe evidence.
+- Define the exact criteria for advancing from 100 to 1,000 records: dedupe rate, summary usefulness, category coverage, liveness confidence, legal-risk distribution, false-positive review count, and no-leak proof.
+- Coordinate with Agents 01/04 for source candidates, Agent 03 for parser failures, Agent 06 for search/read model shape, Agent 07 for quality gates, Agent 09 for public/API display, and Agent 10 for cost/run proof.
 
-Proof before status change:
-- `bun run check`
-- `bun test src/tests/darkwebIndex.test.ts src/tests/api.test.ts src/tests/ops.test.ts`
-- `bun run check:route-inventory`
-- `bun run check:contract-index`
-- `bun run check:deploy-hygiene`
-- update `docs/operations.md`
+Do not spend this pass on more synthetic 60k scale planning unless it directly helps tier 100 become real and searchable. When tier 100 is proven, continue into tier 1,000 candidate ingestion and ranking without waiting for another prompt.
 
-If this phase completes, continue immediately into Program BF: dark metadata review queue and actor-search corroboration bridge.
+## Completed Summary
 
-## Previous Completed Slice
-
-- Built the dangerous dark-web metadata index side-tool contract for Tor/I2P/Freenet metadata-only records, 60k target scale, 100 synthetic fixtures, status/search/contracts, and `/ti/darkweb/index` handoff.
-- Added source ingest/dedupe/runtime, storage/search, scheduler/parser, quality/graph/UI/ops downstream, and restricted metadata reconciliation handoffs.
-- Preserved strict safety boundaries: no stolen-file downloads, credentials, auth/CAPTCHA bypass, stealth, private access, malware execution, payload following, threat-actor interaction, or raw unsafe URL exposure.
-- Verification green: `bun run check`, `bun test`, focused darkweb/API tests, route inventory, contract index, deploy hygiene, and restricted metadata apply-plan.
-
-Historical note: Agent 05 previously requested a new task. The active Program BE assignment above supersedes that request.
+- Added the dark-web operations model for the 60k metadata-only index with Tor, I2P, Freenet, directory, analyst-import, and public-report refresh lanes.
+- Added liveness/classification drift packets for newly alive/dead, category, legal-risk, source-reputation, duplicate-cluster, review-priority, and graph/export-hold changes.
+- Added dark metadata search-quality metrics for category coverage, language hints, title/summary usefulness, entity extraction confidence, blocked unsafe evidence counts, false-positive rows, and public-safe display readiness.
+- Added operator runbook controls for isolated collector pool, approved proxy boundary, disk budget, content-size cap, quarantine retention, emergency stop, rollback, and proof commands.
+- Wired the model into `/v1/darkweb/status`, `/v1/contracts.semantics.darkwebIndex.operationsModel`, API tests, and `docs/operations.md`.
+- Preserved strict metadata-only safety boundaries: no live collection, stolen-file downloads, credential retrieval, payload following, private/auth/CAPTCHA access, raw unsafe URL output, or threat-actor interaction.
+- Verification was green at completion: `bun run check`, `bun test`, `bun test src/tests/darkwebIndex.test.ts src/tests/api.test.ts src/tests/ops.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:deploy-hygiene`.
