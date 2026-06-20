@@ -2648,6 +2648,7 @@ export function rehearseSchedulerSourceGapEnqueue(
       : [])
   ];
   const willMutate = blockedReasons.length === 0;
+  const uniqueBlockedReasons: SchedulerSourceGapEnqueueRehearsalReceipt["blockedReasons"] = [...new Set(blockedReasons)];
   const taskById = new Map(plan.sourceGapExecutionReadiness.queueTaskSpecs.map((spec) => [spec.task.id, spec.task]));
   let mutatedRunCount = 0;
   let mutatedTaskCount = 0;
@@ -2702,7 +2703,7 @@ export function rehearseSchedulerSourceGapEnqueue(
     generatedAt: now.toISOString(),
     mode: willMutate ? "applied_explicitly" : "blocked_dry_run",
     willMutate,
-    blockedReasons: uniqueStrings(blockedReasons),
+    blockedReasons: uniqueBlockedReasons,
     repositoryCalls,
     mutatedRunCount,
     mutatedTaskCount,

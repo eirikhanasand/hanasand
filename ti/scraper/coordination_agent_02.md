@@ -13,6 +13,14 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 01:44 CEST
+
+- Added `rehearseSchedulerSourceGapEnqueue`, a guarded source-gap adapter harness that consumes `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.
+- Default rehearsal is fail-closed and returns blocked no-mutation receipts without touching the queue repository; the explicit apply path requires source-gap enqueue, Postgres queue, DSN, executor, source-policy, paid-row, and metadata-review gates before calling `findOrRegisterRun` and `enqueueTasks`.
+- Tests now prove both blocked/no-mutation behavior and explicit in-memory repository run/task materialization from the daily Actor source-gap plan.
+- Green: `bun test src/tests/schedulerProduction.test.ts` and `bun run check`.
+- Next: wire this guarded harness into a route/apply-plan or worker entry point only after shared API/ops files settle, preserving default no-mutation behavior.
+
 ## Progress - 2026-06-21 01:13 CEST
 
 - Added a disabled-by-default source-gap enqueue adapter preview under `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.
