@@ -742,6 +742,15 @@ describe("darkweb metadata index contracts", () => {
       decisionField: "activationDecision",
       requireNoLeakProof: true
     });
+    expect(contract.liveValueExpansion).toMatchObject({
+      schemaVersion: "ti.darkweb_index_live_value_expansion.v1",
+      tiers: ["tier_1000", "tier_4000"],
+      routeFields: ["status.liveValueExpansion", "darkwebIndex.productHandoff.liveValueExpansion", "ops.productSlo.darkMetadataLiveValueExpansion"],
+      requiredSampleRowsPerTier: 12,
+      requiredUsefulQueriesPerTier: 20,
+      sourceCountInflationBlocked: true,
+      requireNoLeakProof: true
+    });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
     expect(status.sourceIngestReadiness.sources.every((source) =>
       source.sourceHash.length > 0 &&
@@ -860,6 +869,18 @@ describe("darkweb metadata index contracts", () => {
       newSinceLastRunQueries: expect.any(Array)
     });
     expect(firstPage.productHandoff.tier10000SearchProof.sampleRows.length).toBeGreaterThan(0);
+    expect(firstPage.productHandoff.liveValueExpansion).toMatchObject({
+      schemaVersion: "ti.darkweb_index_live_value_expansion.v1",
+      mode: "metadata_only_ready_to_import_value_expansion",
+      sourceCountInflationBlocked: true
+    });
+    expect(firstPage.productHandoff.liveValueExpansion.tiers).toHaveLength(2);
+    expect(firstPage.productHandoff.liveValueExpansion.tiers.every((tier) =>
+      tier.candidateRows.length >= 12 &&
+      tier.buyerSearchProof.usefulQueryCount >= 20 &&
+      tier.buyerSearchProof.sampleRows.length === 12 &&
+      tier.advancementDecision === "hold_for_value_density"
+    )).toBe(true);
     expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
       row.recordId.length > 0 &&
       row.safeSummary.length >= 80 &&

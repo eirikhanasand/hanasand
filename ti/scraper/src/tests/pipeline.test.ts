@@ -2091,10 +2091,10 @@ describe("pipeline", () => {
         staleRowsBlocked: 4,
         genericRowsRepaired: 4,
         aliasOrUnrelatedRowsSuppressed: 4,
-        caveatedRowsPreserved: 5,
+        caveatedRowsPreserved: 7,
         sellableRowsGained: 6,
-        usefulRowsGained: 5,
-        averageBuyerValueDelta: 0.19
+        usefulRowsGained: 6,
+        averageBuyerValueDelta: 0.104
       },
       noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
     });

@@ -1,39 +1,47 @@
-Status: active_program_bj_marketplace_conversion_and_payout_proof
+Status: active_program_bt_marketplace_revenue_conversion_loop
 
 # Agent 09 Coordination
 
-- Completed the Program BI/BR product-surface pass for measurable marketplace and freshness readiness.
-- `/v1/ops/product-slo`, `/v1/contracts`, route inventory, and relevant API tests now expose compact live monetization, quality-conversion, live-freshness, darkweb tier-10,000 refresh/search value, evidence search read-model, and Apify proof surfaces without unsafe payload leaks.
-- Preserved null/unknown traction semantics so unverified analytics are not displayed as real marketplace demand.
-- Verification is green for `bun run check`, focused API/ops/darkweb/pipeline/storage tests, route inventory, contract index, and full `bun test` (527 pass).
+You are not idle. Continue as the owner of Apify marketplace conversion, payout readiness, pricing evidence, and buyer-facing listing quality. The goal is to turn the Actor into a product that can earn from useful fresh data, not to add generic platform polish.
 
-## Main Agent Assignment - 2026-06-20 20:35 CEST
+## Current Baseline
 
-You are not idle. Continue as the owner of marketplace conversion, payout readiness, and buyer-facing product contracts. The goal is to prove whether the Apify Actor can earn, not to add generic API polish.
+- Live Apify proof baseline: run `OThlfd0uzSCNnedAO`, dataset `LSen2fYtwFTtOr7vK`.
+- Current proof quality: 10 APT42 rows, 4 sellable, 2 caveated, 4 held, average buyer value 0.577, `ready_for_paid_traffic`.
+- Keep real marketplace telemetry as real values only when externally verified. Unknown views, users, starts, paid runs, refunds, and payouts must remain `null` or `unknown`; never invent traction.
+- Coordinate with Agent 10 for blocker-board economics and with Agents 01/03/04/05/07/08 for data quality issues that reduce conversion.
 
-## Program BJ - Marketplace Conversion And Payout Proof
+## Program BT - Revenue Conversion Loop
 
-Goal: make revenue readiness measurable from real or explicitly-null marketplace data. Buyers should see a clean product; operators should see views, starts, runs, rows, conversion, costs, payouts, and blockers without fake traction.
+Goal: make the next marketplace pass directly measurable in revenue terms: clearer listing, stronger sample output, honest pricing, conversion instrumentation, payout readiness, and a buyer-visible reason to pay.
 
 Work in this order:
 
-1. Add a compact Apify marketplace telemetry input contract for store views, unique users, trial runs, paid runs, actor starts, dataset rows, failed runs, repeat users, refunds, platform usage cost, estimated creator revenue, payout method state, beneficiary state, and withdrawal readiness.
-2. Expose telemetry only through existing product surfaces: `/v1/ops/product-slo`, `/v1/contracts#apifyStoreReadiness`, route inventory, and Apify output summary if already appropriate. Do not create a new endpoint unless existing surfaces cannot carry the data.
-3. Keep all unverified metrics as `null` or `unknown`; add tests that fail if synthetic views, fake users, invented paid runs, or placeholder payout claims appear as real traction.
-4. Add three conversion experiment slots with concrete success/stop-loss criteria:
-   - starter actor-query pack for low-cost evaluation users
-   - high-freshness APT monitoring pack for daily actor activity
-   - ransomware/public-claim metadata pack for victim/dataset leads
-5. Tie every experiment to buyer-visible output fields: sellable row count, useful row count, freshness, actor/victim/TTP specificity, source-family diversity, confidence, caveats, next pivots, and no-leak proof.
-6. Add an operator blocker board mapping low conversion to owners: Agent 01 source value, Agent 03 parser specificity, Agent 04 public-channel/source coverage, Agent 05 dark metadata usefulness, Agent 07 freshness and bloat suppression, Agent 08 graph pivots, Agent 10 release economics.
-7. Update Apify listing/readiness copy only if needed, keeping it human, concise, and free from placeholder or AI-generated language. Do not inflate claims beyond the proof runs.
+1. Audit current Apify listing assets, README, input schema, output schema, examples, and pricing notes for placeholder text, vague claims, or wording that sounds generated. Replace only with short, specific, human copy tied to proof rows.
+2. Add a compact conversion checklist to existing product surfaces only: `/v1/ops/product-slo`, `/v1/contracts`, Apify `OUTPUT`, and the Actor README if relevant. Do not create a new endpoint.
+3. Add or refine pricing proof fields:
+   - starter trial shape for cheap evaluation
+   - paid daily-monitoring shape for APT/ransomware activity
+   - usage-cost guard so creator revenue is not eaten by platform compute
+   - stop-loss criteria when conversion, freshness, or paid row density is poor
+4. Add buyer sample rows that demonstrate value without unsafe material:
+   - actor summary
+   - fresh claim or public activity
+   - victim/sector/country/dataset hints when available
+   - TTP/targeting hints when supported
+   - confidence, caveat, freshness, source-family diversity, provenance hash
+   - next analyst pivots
+   - explicit no-leak proof
+5. Add fake-traction guards and payout blockers to tests: unpaid starts cannot be reported as customers, synthetic users cannot appear as demand, payout setup must distinguish verified payment method from unknown withdrawal readiness.
+6. Compare the Actor against common Apify scraper listings only at the level of buyer-visible output, pricing clarity, and store conversion mechanics. Do not add marketing fluff or unsupported claims.
+7. If telemetry is still unavailable from Apify APIs or the browser session, expose that as a blocker with the exact next manual verification step.
 
 Metric targets for this batch:
 
-- Marketplace telemetry fields are route-visible with real/null semantics.
-- Payout readiness explicitly says what is verified externally versus unknown.
-- Conversion experiments have measurable thresholds and buyer row fields.
-- Product SLO can say whether the next action is paid traffic, listing repair, data-quality repair, pricing test, or payout setup.
+- Every product/readiness surface states whether the Actor is ready for paid traffic, blocked by listing copy, blocked by payout setup, blocked by sample data quality, or blocked by missing telemetry.
+- At least 12 buyer sample rows or examples are traceable to safe output fields and no-leak proof.
+- Pricing notes are concrete enough to publish but conservative enough to avoid refund risk.
+- Payout readiness separates payment method, beneficiary/tax state, withdrawal readiness, and externally verified revenue.
 
 Proof required before marking ready:
 
@@ -43,6 +51,6 @@ Proof required before marking ready:
 - `bun run check:contract-index`
 - `bun run check:apify-threat-actor-monitor`
 - `bun run smoke:apify-threat-actor-monitor`
-- A note here listing telemetry fields, conversion experiments, fake-traction guards, payout blockers, owner handoffs, and no-leak proof.
+- A note here listing listing changes, pricing fields, fake-traction guards, payout blockers, sample-row lift, conversion experiments, and no-leak proof.
 
 When a coherent patch is complete: update this file, commit, push, and continue into the next marketplace conversion batch without waiting. Leave no dangling dirty files.

@@ -200,6 +200,28 @@ const graphSignalRejectedReasons = (marketplaceGraphSignals.rejectedGraphInflati
 for (const requiredReason of ["stale_graph_fact", "single_source_edge", "unrelated_actor_link", "restricted_only_context", "missing_ledger_proof", "no_fresh_change"]) {
   if (!graphSignalRejectedReasons.includes(requiredReason)) throw new Error(`Marketplace graph signals must reject ${requiredReason}`);
 }
+const graphPivotLiftGate = outputRecord.graphPivotLiftGate as Record<string, unknown> | undefined;
+if (
+  !graphPivotLiftGate
+  || graphPivotLiftGate.schemaVersion !== "ti.apify_graph_pivot_lift_gate.v1"
+  || graphPivotLiftGate.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || graphPivotLiftGate.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || graphPivotLiftGate.dryRun !== true
+  || graphPivotLiftGate.willMutateSources !== false
+  || graphPivotLiftGate.willStartCollection !== false
+  || Number(graphPivotLiftGate.exampleCount) < 12
+  || Number(graphPivotLiftGate.nextSearchPivotCount) <= 0
+  || Number(graphPivotLiftGate.usefulPivotRate) <= 0
+  || !Array.isArray(graphPivotLiftGate.rejectedBloatPivots)
+  || graphPivotLiftGate.rejectedBloatPivots.length < 7
+  || !Array.isArray(graphPivotLiftGate.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BQ graph pivot lift gate");
+}
+const graphPivotRejectedReasons = (graphPivotLiftGate.rejectedBloatPivots as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat"]) {
+  if (!graphPivotRejectedReasons.includes(requiredReason)) throw new Error(`Program BQ graph pivot gate must reject ${requiredReason}`);
+}
 const qualityConversionGate = outputRecord.qualityConversionGate as Record<string, unknown> | undefined;
 if (
   !qualityConversionGate
@@ -254,6 +276,47 @@ for (const requiredReason of ["old_evidence", "generic_summary", "single_source"
 }
 if (!(liveFreshnessQualityGate.examples as Array<Record<string, unknown>>).some((row) => row.blocksLatestClaim === true && ["held", "suppressed"].includes(String(row.decision)))) {
   throw new Error("Program BR freshness gate must block stale latest-activity rows from paid promotion");
+}
+const freshnessRepairLoop = outputRecord.freshnessRepairLoop as Record<string, unknown> | undefined;
+if (
+  !freshnessRepairLoop
+  || freshnessRepairLoop.schemaVersion !== "ti.apify_paid_row_freshness_repair_loop.v1"
+  || freshnessRepairLoop.dryRun !== true
+  || freshnessRepairLoop.willMutateSources !== false
+  || freshnessRepairLoop.willStartCollection !== false
+  || !Array.isArray(freshnessRepairLoop.repairQueue)
+  || freshnessRepairLoop.repairQueue.length < 20
+  || !freshnessRepairLoop.lift
+  || !Array.isArray(freshnessRepairLoop.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BS paid-row freshness repair loop");
+}
+const freshnessRepairRows = freshnessRepairLoop.repairQueue as Array<Record<string, unknown>>;
+const repairActors = freshnessRepairRows.map((row) => row.actor);
+for (const requiredActor of ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]) {
+  if (!repairActors.includes(requiredActor)) throw new Error(`Program BS repair loop must include ${requiredActor}`);
+}
+const repairBlockers = freshnessRepairRows.map((row) => row.blocker);
+for (const requiredBlocker of ["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]) {
+  if (!repairBlockers.includes(requiredBlocker)) throw new Error(`Program BS repair loop must include ${requiredBlocker}`);
+}
+if (!freshnessRepairRows.every((row) => Array.isArray(row.proofNeeded) && row.proofNeeded.length > 0 && Array.isArray(row.expectedBuyerVisibleLift) && row.expectedBuyerVisibleLift.length > 0 && row.noLeak === true)) {
+  throw new Error("Program BS repair loop rows must preserve proof, lift, and no-leak state");
+}
+const freshnessRepairLift = freshnessRepairLoop.lift as Record<string, unknown>;
+if (
+  Number(freshnessRepairLift.staleRowsBlocked) < 4
+  || Number(freshnessRepairLift.genericRowsRepaired) < 4
+  || Number(freshnessRepairLift.aliasOrUnrelatedRowsSuppressed) < 4
+  || Number(freshnessRepairLift.sellableRowsGained) < 6
+  || Number(freshnessRepairLift.usefulRowsGained) < 6
+  || Number(freshnessRepairLift.averageBuyerValueDelta) < 0.1
+) {
+  throw new Error("Program BS repair loop must expose measurable paid-row lift");
+}
+const freshnessRepairOwners = (freshnessRepairLoop.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
+for (const owner of ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
+  if (!freshnessRepairOwners.includes(owner)) throw new Error(`Program BS repair loop must include ${owner} handoff`);
 }
 if (
   paidRowQuality.sellable === 0
@@ -352,11 +415,22 @@ for (const row of output) {
     || !["stronger", "stable", "weaker", "unknown"].includes(String(marketplaceGraphSignals.confidenceTrend))
     || !["none", "contradicted", "review_hold"].includes(String(marketplaceGraphSignals.contradictionState))
     || !Array.isArray(marketplaceGraphSignals.nextBuyerPivots)
+    || typeof marketplaceGraphSignals.pivotUtility !== "object"
+    || !Array.isArray(marketplaceGraphSignals.rejectedPivotReasons)
     || typeof marketplaceGraphSignals.buyerAction !== "string"
     || !Array.isArray(marketplaceGraphSignals.sourceBlockers)
     || marketplaceGraphSignals.noLeak !== true
   ) {
     throw new Error("Every row must expose buyer-visible marketplace graph signals");
+  }
+  const pivotUtility = marketplaceGraphSignals.pivotUtility as Record<string, unknown>;
+  if (
+    Number(pivotUtility.usefulPivotCount) <= 0
+    || Number(pivotUtility.actionPivotCount) < 0
+    || Number(pivotUtility.corroboratedPivotCount) < 0
+    || pivotUtility.noLeak !== true
+  ) {
+    throw new Error("Every row must expose useful no-leak graph pivot utility metrics");
   }
   if (row.paidRowDecision === "sellable" && marketplaceGraphSignals.signalState !== "buyer_ready") {
     throw new Error("Sellable rows must expose buyer-ready marketplace graph signals");

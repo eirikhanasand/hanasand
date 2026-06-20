@@ -412,6 +412,25 @@ describe("ops controls", () => {
       "no_fresh_change"
     ]));
     expect(dashboard.marketplaceGraphSignals.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05"]));
+    expect(dashboard.graphPivotLiftGate).toMatchObject({
+      schemaVersion: "ti.apify_graph_pivot_lift_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"]),
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      exampleCount: 12,
+      usefulPivotRate: 1,
+      corroboratedPivotRate: 0.58,
+      nextSearchPivotCount: 36,
+      suppressedGenericPivotCount: 7,
+      sellableRowsAdded: 6,
+      usefulRowsAdded: 10,
+      averageBuyerValueDelta: 0.035,
+      rejectedBloatReasons: expect.arrayContaining(["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat"])
+    });
+    expect(dashboard.graphPivotLiftGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_09", "agent_10"]));
     expect(dashboard.qualityConversionGate).toMatchObject({
       schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
@@ -456,15 +475,42 @@ describe("ops controls", () => {
       staleRowsBlocked: 4,
       genericRowsRepaired: 4,
       aliasOrUnrelatedRowsSuppressed: 4,
-      caveatedRowsPreserved: 5,
+      caveatedRowsPreserved: 7,
       sellableRowsGained: 6,
-      usefulRowsGained: 5,
-      averageBuyerValueDelta: 0.19,
+      usefulRowsGained: 6,
+      averageBuyerValueDelta: 0.104,
       blockerReasons: expect.arrayContaining(["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"])
     });
     expect(dashboard.freshnessRepairLoop.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]));
     expect(dashboard.freshnessRepairLoop.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.freshnessRepairLoop.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false });
+    expect(dashboard.darkMetadataLiveValueExpansion).toMatchObject({
+      schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),
+      owner: "Agent 05",
+      dryRun: true,
+      willStartCollection: false,
+      willFetchNetwork: false,
+      sourceCountInflationBlocked: true,
+      criteria: {
+        minimumAverageBuyerValueScore: 0.68,
+        maximumStaleRate: 0.28,
+        maximumDuplicateRate: 0.16,
+        maximumBlockedOrReviewRate: 0.18,
+        minimumUsefulQueriesPerTier: 20,
+        minimumSafeSampleRowsPerTier: 12,
+        noLeakSerializationRequired: true
+      }
+    });
+    expect(dashboard.darkMetadataLiveValueExpansion.tiers).toEqual([
+      { tier: 1000, evaluatedCandidateCount: 100, valueQualifiedCandidateCount: 2, usefulRowRate: 0.02, averageBuyerValueScore: 0.41, staleRate: 0.92, duplicateRate: 0.06, blockedOrReviewRate: 0.74, decision: "hold_for_value_density" },
+      { tier: 4000, evaluatedCandidateCount: 100, valueQualifiedCandidateCount: 2, usefulRowRate: 0.02, averageBuyerValueScore: 0.41, staleRate: 0.92, duplicateRate: 0.06, blockedOrReviewRate: 0.74, decision: "hold_for_value_density" }
+    ]);
+    expect(dashboard.darkMetadataLiveValueExpansion.blockers).toEqual(expect.arrayContaining([
+      "dark_metadata_value_density_below_paid_threshold",
+      "source_count_inflation_blocked_until_sample_rows_and_queries_pass",
+      "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
+    ]));
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);
