@@ -277,6 +277,40 @@ CREATE TABLE source_atlas_activation_packet_audit (
   generated_at timestamptz NOT NULL
 );
 
+CREATE TABLE source_atlas_source_pack_candidate_review (
+  pack_id text PRIMARY KEY,
+  tenant_id text,
+  rank integer NOT NULL CHECK (rank > 0),
+  pack_label text NOT NULL CHECK (length(btrim(pack_label)) >= 8),
+  family text NOT NULL,
+  acquisition_mode text NOT NULL CHECK (acquisition_mode IN ('public_source_pack', 'parser_repair_pack', 'legal_review_pack', 'replacement_pack')),
+  source_ids text[] NOT NULL DEFAULT '{}',
+  safe_source_hashes text[] NOT NULL DEFAULT '{}',
+  expected_payworthy_lift integer NOT NULL CHECK (expected_payworthy_lift >= 0),
+  expected_fresh_rows_per_day double precision NOT NULL CHECK (expected_fresh_rows_per_day >= 0),
+  expected_useful_evidence_items_per_day double precision NOT NULL CHECK (expected_useful_evidence_items_per_day >= 0),
+  expected_scheduler_tasks_per_day integer NOT NULL CHECK (expected_scheduler_tasks_per_day >= 0),
+  estimated_cost_units_per_useful_evidence double precision NOT NULL CHECK (estimated_cost_units_per_useful_evidence >= 0),
+  buyer_visible_use_case text NOT NULL CHECK (length(btrim(buyer_visible_use_case)) >= 40),
+  required_proof text[] NOT NULL DEFAULT '{}',
+  agent01_source_registry_handoff text NOT NULL,
+  agent03_parser_handoff text NOT NULL,
+  agent07_quality_handoff text NOT NULL,
+  agent09_marketplace_handoff text NOT NULL,
+  agent10_slo_handoff text NOT NULL,
+  dry_run boolean NOT NULL DEFAULT true CHECK (dry_run = true),
+  will_mutate boolean NOT NULL DEFAULT false CHECK (will_mutate = false),
+  will_import_source_packs boolean NOT NULL DEFAULT false CHECK (will_import_source_packs = false),
+  will_start_crawling boolean NOT NULL DEFAULT false CHECK (will_start_crawling = false),
+  source_pack_imported boolean NOT NULL DEFAULT false CHECK (source_pack_imported = false),
+  source_activation_applied boolean NOT NULL DEFAULT false CHECK (source_activation_applied = false),
+  registry_mutation_planned boolean NOT NULL DEFAULT false CHECK (registry_mutation_planned = false),
+  crawl_enqueued boolean NOT NULL DEFAULT false CHECK (crawl_enqueued = false),
+  raw_urls_exposed boolean NOT NULL DEFAULT false CHECK (raw_urls_exposed = false),
+  raw_payloads_exposed boolean NOT NULL DEFAULT false CHECK (raw_payloads_exposed = false),
+  generated_at timestamptz NOT NULL
+);
+
 CREATE INDEX sources_tenant_status_idx ON sources (tenant_id, status);
 CREATE INDEX sources_type_status_idx ON sources (type, status);
 CREATE INDEX sources_risk_status_idx ON sources (risk, status);
@@ -287,6 +321,8 @@ CREATE INDEX source_atlas_records_activation_idx ON source_atlas_records (activa
 CREATE INDEX source_atlas_review_queue_tenant_decision_idx ON source_atlas_review_queue (tenant_id, decision, generated_at DESC);
 CREATE INDEX source_atlas_export_manifest_tenant_plan_idx ON source_atlas_export_manifest (tenant_id, requested_plan, generated_at DESC);
 CREATE INDEX source_atlas_activation_packet_tenant_action_idx ON source_atlas_activation_packet_audit (tenant_id, action, generated_at DESC);
+CREATE INDEX source_atlas_source_pack_candidate_tenant_family_idx ON source_atlas_source_pack_candidate_review (tenant_id, family, generated_at DESC);
+CREATE INDEX source_atlas_source_pack_candidate_mode_idx ON source_atlas_source_pack_candidate_review (acquisition_mode, expected_payworthy_lift DESC);
 
 CREATE OR REPLACE FUNCTION reject_unapproved_active_sources()
 RETURNS trigger

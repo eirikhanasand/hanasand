@@ -37,6 +37,7 @@ import {
   schedulerWorkerLoopContract,
   schedulerWorkerRuntimeFixtures,
   schedulerApplyPlanApiContract,
+  rehearseSchedulerSourceGapEnqueue,
   simulateSchedulerExecution,
   simulateFairnessEnforcement,
   SCHEDULER_CUTOVER_DESIGN
@@ -1793,6 +1794,49 @@ describe("scheduler production readiness", () => {
         run: expect.objectContaining({ reviewTaskCount: 1 }),
         blockedUntil: expect.arrayContaining(["metadata_review_current"])
       })
+    ]));
+    const blockedRepository = new InMemorySchedulerQueueRepository();
+    const blockedReceipt = rehearseSchedulerSourceGapEnqueue(daily, blockedRepository, { now });
+    expect(blockedReceipt).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_enqueue_rehearsal.v1",
+      mode: "blocked_dry_run",
+      willMutate: false,
+      mutatedRunCount: 0,
+      mutatedTaskCount: 0,
+      emittedDeltaCount: 0
+    });
+    expect(blockedReceipt.blockedReasons).toEqual(expect.arrayContaining(["apply_not_requested", "source_gap_enqueue_flag_disabled", "postgres_queue_disabled", "paid_row_gate_closed"]));
+    expect(blockedReceipt.repositoryCalls.every((call) => call.executed === false && call.skippedReason === "blocked_by_preflight")).toBe(true);
+    expect(blockedRepository.runs()).toEqual([]);
+    expect(blockedRepository.tasks()).toEqual([]);
+
+    const appliedRepository = new InMemorySchedulerQueueRepository();
+    const appliedReceipt = rehearseSchedulerSourceGapEnqueue(daily, appliedRepository, {
+      apply: true,
+      sourceGapEnqueueEnabled: true,
+      postgresQueueEnabled: true,
+      postgresDsnConfigured: true,
+      executorAvailable: true,
+      sourcePolicyCurrent: true,
+      paidRowGateOpen: true,
+      metadataReviewCurrent: true,
+      now
+    });
+    expect(appliedReceipt).toMatchObject({
+      mode: "applied_explicitly",
+      willMutate: true,
+      blockedReasons: [],
+      mutatedRunCount: queueTaskSpecs.length,
+      mutatedTaskCount: queueTaskSpecs.length,
+      emittedDeltaCount: queueTaskSpecs.length
+    });
+    expect(appliedReceipt.repositoryCalls.every((call) => call.executed)).toBe(true);
+    expect(appliedRepository.runs()).toHaveLength(queueTaskSpecs.length);
+    expect(appliedRepository.tasks()).toHaveLength(queueTaskSpecs.length);
+    expect(appliedRepository.tasks().map((task) => task.id)).toEqual(expect.arrayContaining([
+      "dryrun_interactive_live_search_tier_100_apt29_safe_public_sources",
+      "dryrun_public_channel_probe_tier_1000_apt42_public_channel",
+      "dryrun_restricted_darknet_metadata_sweep_tier_4000_lockbit_approved_dark_metadata"
     ]));
     expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
       expect.objectContaining({
