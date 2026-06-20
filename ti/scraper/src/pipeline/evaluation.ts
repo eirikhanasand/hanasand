@@ -644,6 +644,109 @@ export interface ProgramBdQualityEvaluationPackDto {
 	        objectKeysExposed: false;
 	      };
 	    };
+	    falsePositiveSuppressionGate: {
+	      schemaVersion: "ti.program_bz_paid_row_false_positive_suppression_gate.v1";
+	      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo" | "Apify OUTPUT">;
+	      dryRun: true;
+	      willMutateSources: false;
+	      willStartCollection: false;
+	      fixtures: Array<{
+	        id: string;
+	        actor: string;
+	        family: "apt" | "ransomware" | "unknown";
+	        scenario: "alias_collision" | "common_victim_name" | "unrelated_actor_co_mention" | "stale_repost_as_current" | "single_source_requires_caveat" | "metadata_only_without_public_support" | "true_positive_preserved" | "unknown_search_suppressed" | "contradicted_claim";
+	        currentPaidRowDecision: "chargeable" | "caveated" | "held" | "suppressed" | "searching";
+	        correctedDecision: "chargeable" | "caveated" | "held" | "suppressed" | "searching";
+	        reasonCode: "alias_collision" | "ambiguous_victim_name" | "unrelated_actor_co_mention" | "stale_repost_as_current" | "single_source_without_caveat" | "metadata_only_without_public_support" | "true_positive_sellable" | "unknown_query_searching" | "contradicted_claim";
+	        buyerVisibleEffect: string;
+	        repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        nextRepairAction: string;
+	        currentBuyerTrust: number;
+	        correctedBuyerTrust: number;
+	        preventsBilling: boolean;
+	        noLeak: true;
+	      }>;
+	      lift: {
+	        falsePositivesSuppressed: number;
+	        contradictedRowsHeld: number;
+	        staleRepostsBlocked: number;
+	        singleSourceRowsCaveated: number;
+	        truePositivesPreserved: number;
+	        sellableRowsProtected: number;
+	        buyerTrustDelta: number;
+	        rowsPreventedFromBilling: number;
+	      };
+	      ownerHandoffs: Array<{
+	        owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        fixtureCount: number;
+	        blockerFocus: string;
+	        expectedEffect: string;
+	      }>;
+	      noLeakProof: {
+	        rawEvidenceExposed: false;
+	        unsafeUrlsExposed: false;
+	        restrictedPayloadsExposed: false;
+	        objectKeysExposed: false;
+	        privateMaterialExposed: false;
+	        accountMaterialExposed: false;
+	        actorInteractionContentExposed: false;
+	      };
+	    };
+	    paidRowAudit100: {
+	      schemaVersion: "ti.program_ch_paid_row_audit_100.v1";
+	      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo" | "Apify OUTPUT">;
+	      dryRun: true;
+	      willMutateSources: false;
+	      willStartCollection: false;
+	      targetSellableRows: 100;
+	      fixtures: Array<{
+	        id: string;
+	        actor: string;
+	        family: "apt" | "ransomware";
+	        rowClass: "sellable" | "useful_caveated" | "needs_public_support" | "stale_or_duplicate" | "wrong_actor_or_alias_collision" | "restricted_only" | "not_payworthy";
+	        currentDecision: "sellable" | "included_with_caveat" | "coverage_gap_only" | "hold" | "suppress";
+	        countsTowardProductionSellableRows: boolean;
+	        repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_10";
+	        repairAction: string;
+	        releaseGateEffect: "count_sellable" | "preserve_but_exclude_floor" | "repair_one_step" | "suppress_or_replace";
+	        blockerCodes: Array<"graph_only_projection" | "synthetic_row" | "stale_or_duplicate" | "restricted_only" | "caveat_only" | "wrong_actor_or_alias_collision" | "missing_public_support" | "not_payworthy">;
+	        expectedSellableLiftAfterRepair: number;
+	        rowsPreventedFromBilling: number;
+	        buyerVisibleFinding: string;
+	        noLeak: true;
+	      }>;
+	      metrics: {
+	        currentSellableRows: number;
+	        protectedSellableRows: number;
+	        usefulCaveatedRowsExcluded: number;
+	        suppressedFalsePositives: number;
+	        rowsOneRepairAway: number;
+	        expectedSellableLiftAfterParserSourceRepairs: number;
+	        rowsPreventedFromBilling: number;
+	        productionSellableFloorGap: number;
+	      };
+	      classificationCounts: Record<"sellable" | "useful_caveated" | "needs_public_support" | "stale_or_duplicate" | "wrong_actor_or_alias_collision" | "restricted_only" | "not_payworthy", number>;
+	      exclusionProof: Array<{
+	        class: "graph_only_projection" | "synthetic_row" | "stale_or_duplicate" | "restricted_only" | "caveat_only";
+	        countsAsSellable: false;
+	        reason: string;
+	      }>;
+	      ownerHandoffs: Array<{
+	        owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_10";
+	        rowCount: number;
+	        expectedSellableRowsUnlocked: number;
+	        action: string;
+	      }>;
+	      noLeakProof: {
+	        rawEvidenceExposed: false;
+	        unsafeUrlsExposed: false;
+	        restrictedPayloadsExposed: false;
+	        objectKeysExposed: false;
+	        privateMaterialExposed: false;
+	        accountMaterialExposed: false;
+	        actorInteractionContentExposed: false;
+	      };
+	    };
 	    releaseDecision: "promote" | "partial" | "hold";
     apifyDatasetFields: string[];
     remediationActions: string[];
@@ -1138,6 +1241,201 @@ function programBvSpecificityFixture(
   return { id, actor, family, currentDecision, targetDecision, missingFields, requiredEvidenceFamily, blockerCodesRemoved, expectedBuyerVisibleLift, proofNeeded, whyWorthPayingFor, repairAction, currentBuyerValue, targetBuyerValue, noLeak: true };
 }
 
+function buildProgramBzFalsePositiveSuppressionGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"] {
+  const fixtures: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"] = [
+    programBzFalsePositiveFixture("bz_apt29_cozy_alias_collision", "APT29", "apt", "alias_collision", "chargeable", "suppressed", "alias_collision", "Suppresses a Cozy/Cozy Bear brand collision until actor-resolution proof exists.", "agent_07", "Require accepted alias ledger match plus source-family proof before paid output.", 0.31, 0.74, true),
+    programBzFalsePositiveFixture("bz_apt28_fancy_bear_sports_noise", "APT28", "apt", "alias_collision", "caveated", "suppressed", "alias_collision", "Prevents sports or media mentions of Fancy Bear from becoming CTI rows.", "agent_07", "Tighten alias classifier to require CTI context and actor evidence.", 0.34, 0.72, true),
+    programBzFalsePositiveFixture("bz_apt42_charming_kitten_alias_only", "APT42", "apt", "alias_collision", "chargeable", "suppressed", "alias_collision", "Blocks alias-only Charming Kitten matches without phishing or target context.", "agent_07", "Keep alias-only rows suppressed until parser extracts actor, target, and TTP spans.", 0.29, 0.76, true),
+    programBzFalsePositiveFixture("bz_turla_snake_tool_alias_collision", "Turla", "apt", "alias_collision", "caveated", "suppressed", "alias_collision", "Suppresses Snake references that may be tooling, campaign, or non-CTI text.", "agent_08", "Require graph relationship type and parser-confirmed Turla context.", 0.37, 0.7, true),
+    programBzFalsePositiveFixture("bz_lockbit_blackcat_family_mismatch", "LockBit", "ransomware", "alias_collision", "chargeable", "suppressed", "alias_collision", "Prevents ransomware-family mixups from billing as the wrong crew.", "agent_07", "Require family-specific victim/provenance hashes before chargeable ransomware rows.", 0.28, 0.78, true),
+    programBzFalsePositiveFixture("bz_common_victim_delta", "Scattered Spider", "apt", "common_victim_name", "chargeable", "held", "ambiguous_victim_name", "Holds a common-name victim until sector/country/legal entity disambiguation is present.", "agent_03", "Extract legal entity, sector, and country from public evidence spans.", 0.33, 0.71, true),
+    programBzFalsePositiveFixture("bz_common_victim_sunrise", "Akira", "ransomware", "common_victim_name", "caveated", "held", "ambiguous_victim_name", "Stops a common-name victim lead from being sold as a confirmed breach.", "agent_05", "Keep metadata-only victim hints held until public corroboration resolves identity.", 0.36, 0.69, true),
+    programBzFalsePositiveFixture("bz_common_victim_omega", "Clop", "ransomware", "common_victim_name", "chargeable", "held", "ambiguous_victim_name", "Prevents broad company-name matches from inflating confirmed Clop victim rows.", "agent_03", "Add exact victim identity and incident/campaign linkage extraction.", 0.35, 0.73, true),
+    programBzFalsePositiveFixture("bz_unrelated_actor_apt29_turla_article", "APT29", "apt", "unrelated_actor_co_mention", "chargeable", "suppressed", "unrelated_actor_co_mention", "Suppresses rows where APT29 is only background in a Turla story.", "agent_03", "Parser must identify primary actor instead of every co-mentioned actor.", 0.3, 0.79, true),
+    programBzFalsePositiveFixture("bz_unrelated_actor_volt_typhoon_context", "Volt Typhoon", "apt", "unrelated_actor_co_mention", "caveated", "suppressed", "unrelated_actor_co_mention", "Blocks generic China-nexus co-mentions from becoming Volt Typhoon rows.", "agent_03", "Require primary-actor span and target/TTP evidence for Volt Typhoon.", 0.32, 0.77, true),
+    programBzFalsePositiveFixture("bz_unrelated_actor_ransomware_roundup", "Black Basta", "ransomware", "unrelated_actor_co_mention", "caveated", "suppressed", "unrelated_actor_co_mention", "Stops roundup mentions from billing as a fresh Black Basta finding.", "agent_03", "Split roundup extraction into primary actor rows only.", 0.29, 0.75, true),
+    programBzFalsePositiveFixture("bz_stale_repost_sandworm", "Sandworm", "apt", "stale_repost_as_current", "chargeable", "held", "stale_repost_as_current", "Holds old campaign reposts that were presented as current activity.", "agent_04", "Replace repost-only support with current public-source capture or stale caveat.", 0.27, 0.74, true),
+    programBzFalsePositiveFixture("bz_stale_repost_lazarus", "Lazarus Group", "apt", "stale_repost_as_current", "caveated", "held", "stale_repost_as_current", "Keeps old crypto-targeting writeups from implying current Lazarus activity.", "agent_04", "Add last-seen freshness proof and suppress latest wording if stale.", 0.38, 0.71, true),
+    programBzFalsePositiveFixture("bz_stale_repost_play", "Play", "ransomware", "stale_repost_as_current", "chargeable", "suppressed", "stale_repost_as_current", "Blocks stale ransomware victim reposts from becoming paid fresh rows.", "agent_04", "Require current victim/source freshness before chargeable dataset rows.", 0.26, 0.76, true),
+    programBzFalsePositiveFixture("bz_single_source_apt42_phishing", "APT42", "apt", "single_source_requires_caveat", "chargeable", "caveated", "single_source_without_caveat", "Downgrades a useful phishing lead to caveated until another source family corroborates it.", "agent_04", "Add public-channel or advisory corroboration before restoring chargeable state.", 0.44, 0.68, false),
+    programBzFalsePositiveFixture("bz_single_source_lockbit_victim", "LockBit", "ransomware", "single_source_requires_caveat", "chargeable", "caveated", "single_source_without_caveat", "Keeps a single-source victim row sellable only as a caveated monitoring lead.", "agent_05", "Attach public corroboration state and metadata-only caveat before billing guidance.", 0.46, 0.69, false),
+    programBzFalsePositiveFixture("bz_single_source_qilin_dataset", "Qilin", "ransomware", "single_source_requires_caveat", "chargeable", "caveated", "single_source_without_caveat", "Adds a buyer-visible single-source caveat instead of overclaiming confirmation.", "agent_05", "Find public support or preserve metadata-only caveat.", 0.45, 0.67, false),
+    programBzFalsePositiveFixture("bz_metadata_only_ransomhub", "RansomHub", "ransomware", "metadata_only_without_public_support", "chargeable", "held", "metadata_only_without_public_support", "Holds metadata-only victim intelligence out of paid confirmation.", "agent_05", "Seek clear-web corroboration and keep restricted context metadata-only.", 0.25, 0.77, true),
+    programBzFalsePositiveFixture("bz_metadata_only_akira", "Akira", "ransomware", "metadata_only_without_public_support", "caveated", "held", "metadata_only_without_public_support", "Prevents unsafe or unsupported metadata-only leads from being billed.", "agent_05", "Attach safe public support or keep the row held.", 0.34, 0.72, true),
+    programBzFalsePositiveFixture("bz_metadata_only_unknown_ransomware", "Unknown Actor Query", "unknown", "metadata_only_without_public_support", "caveated", "suppressed", "metadata_only_without_public_support", "Suppresses metadata-only rows that cannot resolve to a known actor or public claim.", "agent_05", "Return searching/suppressed state until public actor attribution exists.", 0.24, 0.78, true),
+    programBzFalsePositiveFixture("bz_contradicted_apt42_victim", "APT42", "apt", "contradicted_claim", "chargeable", "held", "contradicted_claim", "Holds a victim claim where source and graph ledger disagree.", "agent_08", "Resolve contradiction ledger before any chargeable victim output.", 0.22, 0.8, true),
+    programBzFalsePositiveFixture("bz_contradicted_clop_cve", "Clop", "ransomware", "contradicted_claim", "chargeable", "held", "contradicted_claim", "Stops a CVE/campaign attribution row when campaign evidence conflicts.", "agent_08", "Require accepted graph relationship and source-family corroboration.", 0.28, 0.76, true),
+    programBzFalsePositiveFixture("bz_unknown_random_actor", "Random Actor", "unknown", "unknown_search_suppressed", "chargeable", "searching", "unknown_query_searching", "Prevents default actor fallback and shows an honest searching state.", "agent_07", "Keep made-up/random actor queries in searching or suppressed state.", 0.2, 0.81, true),
+    programBzFalsePositiveFixture("bz_unknown_made_up_group", "Made Up Actor", "unknown", "unknown_search_suppressed", "caveated", "searching", "unknown_query_searching", "Removes invented CTI context from unknown actor searches.", "agent_07", "Block seeded/default actor substitution for unknown queries.", 0.18, 0.8, true),
+    programBzFalsePositiveFixture("bz_true_positive_apt29_cloud", "APT29", "apt", "true_positive_preserved", "chargeable", "chargeable", "true_positive_sellable", "Preserves corroborated APT29 cloud/TTP rows as sellable.", "agent_10", "Measure release economics without suppressing high-confidence rows.", 0.79, 0.84, false),
+    programBzFalsePositiveFixture("bz_true_positive_volt_typhoon_lotl", "Volt Typhoon", "apt", "true_positive_preserved", "chargeable", "chargeable", "true_positive_sellable", "Preserves source-backed LOTL infrastructure rows.", "agent_10", "Protect high-value rows while noisy co-mentions are suppressed.", 0.78, 0.83, false),
+    programBzFalsePositiveFixture("bz_true_positive_turla_tooling", "Turla", "apt", "true_positive_preserved", "chargeable", "chargeable", "true_positive_sellable", "Keeps corroborated Turla tooling rows sellable.", "agent_10", "Confirm that false-positive suppression does not lower useful sellable inventory.", 0.76, 0.82, false),
+    programBzFalsePositiveFixture("bz_true_positive_clop_campaign", "Clop", "ransomware", "true_positive_preserved", "chargeable", "chargeable", "true_positive_sellable", "Keeps public Clop campaign/CVE rows billable when evidence agrees.", "agent_09", "Track conversion lift for rows preserved by the trust gate.", 0.81, 0.86, false),
+    programBzFalsePositiveFixture("bz_true_positive_lockbit_victim", "LockBit", "ransomware", "true_positive_preserved", "caveated", "caveated", "true_positive_sellable", "Preserves caveated LockBit victim leads with explicit uncertainty.", "agent_09", "Track buyer use of caveated-but-safe victim rows.", 0.7, 0.75, false),
+    programBzFalsePositiveFixture("bz_true_positive_scattered_spider", "Scattered Spider", "apt", "true_positive_preserved", "chargeable", "chargeable", "true_positive_sellable", "Keeps current social-engineering rows sellable when actor and sector evidence match.", "agent_10", "Protect high-confidence paid rows through release gating.", 0.77, 0.83, false),
+    programBzFalsePositiveFixture("bz_true_positive_akira_caveated", "Akira", "ransomware", "true_positive_preserved", "caveated", "caveated", "true_positive_sellable", "Preserves useful caveated Akira leads without overclaiming confirmation.", "agent_09", "Measure caveated-row conversion separately from chargeable confirmations.", 0.68, 0.73, false),
+    programBzFalsePositiveFixture("bz_true_positive_apt28_advisory", "APT28", "apt", "true_positive_preserved", "chargeable", "chargeable", "true_positive_sellable", "Keeps advisory-backed APT28 sector/country rows billable.", "agent_10", "Ensure suppression thresholds do not reject multi-source advisory rows.", 0.8, 0.85, false)
+  ];
+  const trustDelta = fixtures.reduce((sum, row) => sum + row.correctedBuyerTrust - row.currentBuyerTrust, 0) / fixtures.length;
+  const ownerCount = (owner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["ownerHandoffs"][number]["owner"]) => fixtures.filter((row) => row.repairOwner === owner).length;
+  return {
+    schemaVersion: "ti.program_bz_paid_row_false_positive_suppression_gate.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    fixtures,
+    lift: {
+      falsePositivesSuppressed: fixtures.filter((row) => row.correctedDecision === "suppressed" || row.correctedDecision === "searching").length,
+      contradictedRowsHeld: fixtures.filter((row) => row.reasonCode === "contradicted_claim" && row.correctedDecision === "held").length,
+      staleRepostsBlocked: fixtures.filter((row) => row.reasonCode === "stale_repost_as_current" && (row.correctedDecision === "held" || row.correctedDecision === "suppressed")).length,
+      singleSourceRowsCaveated: fixtures.filter((row) => row.reasonCode === "single_source_without_caveat" && row.correctedDecision === "caveated").length,
+      truePositivesPreserved: fixtures.filter((row) => row.scenario === "true_positive_preserved" && (row.correctedDecision === "chargeable" || row.correctedDecision === "caveated")).length,
+      sellableRowsProtected: fixtures.filter((row) => row.scenario === "true_positive_preserved").length,
+      buyerTrustDelta: programBdRound(trustDelta),
+      rowsPreventedFromBilling: fixtures.filter((row) => row.preventsBilling).length
+    },
+    ownerHandoffs: [
+      { owner: "agent_03", fixtureCount: ownerCount("agent_03"), blockerFocus: "primary actor, victim identity, and roundup parsing", expectedEffect: "Suppress co-mentions and ambiguous victims before they reach paid rows." },
+      { owner: "agent_04", fixtureCount: ownerCount("agent_04"), blockerFocus: "stale repost and single-source corroboration", expectedEffect: "Replace old/latest claims or downgrade them with buyer-visible caveats." },
+      { owner: "agent_05", fixtureCount: ownerCount("agent_05"), blockerFocus: "metadata-only victim support", expectedEffect: "Keep restricted metadata as held or caveated leads until public support exists." },
+      { owner: "agent_07", fixtureCount: ownerCount("agent_07"), blockerFocus: "alias collisions and unknown-query suppression", expectedEffect: "Prevent wrong-actor and invented rows from billing." },
+      { owner: "agent_08", fixtureCount: ownerCount("agent_08"), blockerFocus: "contradicted claim and relationship ledger review", expectedEffect: "Hold claims where evidence and graph relationships disagree." },
+      { owner: "agent_09", fixtureCount: ownerCount("agent_09"), blockerFocus: "conversion impact for preserved/caveated rows", expectedEffect: "Measure buyer trust and conversion without leaking unsafe details." },
+      { owner: "agent_10", fixtureCount: ownerCount("agent_10"), blockerFocus: "release economics and protected sellable rows", expectedEffect: "Keep high-confidence rows billable while noisy rows are removed." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
+    }
+  };
+}
+
+function programBzFalsePositiveFixture(
+  id: string,
+  actor: string,
+  family: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number]["family"],
+  scenario: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number]["scenario"],
+  currentPaidRowDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number]["currentPaidRowDecision"],
+  correctedDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number]["correctedDecision"],
+  reasonCode: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number]["reasonCode"],
+  buyerVisibleEffect: string,
+  repairOwner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number]["repairOwner"],
+  nextRepairAction: string,
+  currentBuyerTrust: number,
+  correctedBuyerTrust: number,
+  preventsBilling: boolean
+): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["falsePositiveSuppressionGate"]["fixtures"][number] {
+  return { id, actor, family, scenario, currentPaidRowDecision, correctedDecision, reasonCode, buyerVisibleEffect, repairOwner, nextRepairAction, currentBuyerTrust, correctedBuyerTrust, preventsBilling, noLeak: true };
+}
+
+function buildProgramChPaidRowAudit100(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"] {
+  const fixtures: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"] = [
+    programChAuditFixture("ch_sellable_apt29", "APT29", "apt", "sellable", "sellable", true, "agent_10", "Protect as a real sellable row because actor, TTP, freshness, and source-family support are present.", "count_sellable", [], 0, 0, "APT29 cloud credential-access monitoring row with public corroboration."),
+    programChAuditFixture("ch_sellable_apt28", "APT28", "apt", "sellable", "sellable", true, "agent_10", "Protect as sellable while continuing release-floor measurement.", "count_sellable", [], 0, 0, "APT28 advisory-backed sector/country row."),
+    programChAuditFixture("ch_sellable_volt", "Volt Typhoon", "apt", "sellable", "sellable", true, "agent_10", "Protect as sellable because public advisory and vendor families agree.", "count_sellable", [], 0, 0, "Volt Typhoon critical-infrastructure LOTL row."),
+    programChAuditFixture("ch_sellable_clop", "Clop", "ransomware", "sellable", "sellable", true, "agent_10", "Protect campaign/CVE rows when public source families agree.", "count_sellable", [], 0, 0, "Clop exploitation campaign row with public evidence."),
+    programChAuditFixture("ch_sellable_scattered", "Scattered Spider", "apt", "sellable", "sellable", true, "agent_10", "Protect current social-engineering row with actor and sector specificity.", "count_sellable", [], 0, 0, "Scattered Spider current social-engineering row."),
+    programChAuditFixture("ch_caveated_turla", "Turla", "apt", "useful_caveated", "included_with_caveat", false, "agent_08", "Preserve as useful but exclude from production floor until tool/campaign relationship is corroborated.", "preserve_but_exclude_floor", ["caveat_only"], 1, 0, "Turla tooling lead with explicit relationship caveat."),
+    programChAuditFixture("ch_caveated_lockbit", "LockBit", "ransomware", "useful_caveated", "included_with_caveat", false, "agent_05", "Keep safe victim-monitoring caveat until public support resolves confirmation.", "preserve_but_exclude_floor", ["caveat_only"], 1, 0, "LockBit victim lead useful for monitoring but not production sellable."),
+    programChAuditFixture("ch_caveated_akira", "Akira", "ransomware", "useful_caveated", "included_with_caveat", false, "agent_05", "Preserve caveated row and require public corroboration before floor credit.", "preserve_but_exclude_floor", ["caveat_only"], 1, 0, "Akira victim/sector lead with uncertainty preserved."),
+    programChAuditFixture("ch_needs_public_apt42", "APT42", "apt", "needs_public_support", "hold", false, "agent_04", "Add second public source family and phishing target spans before promotion.", "repair_one_step", ["missing_public_support"], 4, 4, "APT42 phishing lead awaiting public-channel/advisory support."),
+    programChAuditFixture("ch_needs_public_lazarus", "Lazarus Group", "apt", "needs_public_support", "coverage_gap_only", false, "agent_03", "Extract sector, country, impact, and corroborating source ids.", "repair_one_step", ["missing_public_support"], 4, 4, "Lazarus cryptocurrency targeting lead one parser/source repair away."),
+    programChAuditFixture("ch_needs_public_black_basta", "Black Basta", "ransomware", "needs_public_support", "hold", false, "agent_05", "Find safe public support for metadata-only victim hints.", "repair_one_step", ["missing_public_support"], 3, 3, "Black Basta victim/sector lead requiring clear-web support."),
+    programChAuditFixture("ch_needs_public_ransomhub", "RansomHub", "ransomware", "needs_public_support", "hold", false, "agent_05", "Keep metadata-only hints held until public corroboration exists.", "repair_one_step", ["missing_public_support"], 3, 3, "RansomHub service-sector victim lead requiring public support."),
+    programChAuditFixture("ch_stale_sandworm", "Sandworm", "apt", "stale_or_duplicate", "suppress", false, "agent_07", "Replace stale repost or suppress latest-activity wording.", "suppress_or_replace", ["stale_or_duplicate"], 0, 3, "Sandworm old campaign repost blocked from billing."),
+    programChAuditFixture("ch_stale_play", "Play", "ransomware", "stale_or_duplicate", "suppress", false, "agent_07", "Deduplicate stale victim repost before any paid row appears.", "suppress_or_replace", ["stale_or_duplicate"], 0, 3, "Play stale victim repost blocked."),
+    programChAuditFixture("ch_alias_apt42", "APT42", "apt", "wrong_actor_or_alias_collision", "suppress", false, "agent_07", "Require accepted alias ledger plus CTI context before paid output.", "suppress_or_replace", ["wrong_actor_or_alias_collision"], 0, 3, "Charming Kitten alias-only row suppressed."),
+    programChAuditFixture("ch_alias_turla_snake", "Turla", "apt", "wrong_actor_or_alias_collision", "hold", false, "agent_08", "Resolve Snake tool/campaign/actor relationship before release.", "suppress_or_replace", ["wrong_actor_or_alias_collision", "graph_only_projection"], 0, 2, "Turla/Snake relationship ambiguity held."),
+    programChAuditFixture("ch_restricted_akira", "Akira", "ransomware", "restricted_only", "hold", false, "agent_05", "Store restricted lead as metadata-only and seek public support.", "repair_one_step", ["restricted_only"], 2, 4, "Akira restricted-only victim metadata held."),
+    programChAuditFixture("ch_restricted_qilin", "Qilin", "ransomware", "restricted_only", "hold", false, "agent_05", "Do not count restricted-only metadata until safe public evidence exists.", "repair_one_step", ["restricted_only"], 2, 4, "Qilin restricted metadata row held."),
+    programChAuditFixture("ch_not_payworthy_generic", "APT29", "apt", "not_payworthy", "suppress", false, "agent_03", "Suppress generic actor summary lacking buyer action.", "suppress_or_replace", ["not_payworthy", "synthetic_row"], 0, 2, "Generic APT29 summary blocked from paid output."),
+    programChAuditFixture("ch_not_payworthy_graph_only", "Black Basta", "ransomware", "not_payworthy", "coverage_gap_only", false, "agent_08", "Graph-only projection cannot count until backed by capture evidence.", "suppress_or_replace", ["graph_only_projection", "not_payworthy"], 0, 2, "Black Basta graph-only projection excluded."),
+    programChAuditFixture("ch_not_payworthy_synthetic", "Clop", "ransomware", "not_payworthy", "suppress", false, "agent_07", "Synthetic proof row remains excluded from production sellable counts.", "suppress_or_replace", ["synthetic_row", "not_payworthy"], 0, 2, "Synthetic Clop proof row excluded.")
+  ];
+  const countClass = (rowClass: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["rowClass"]) => fixtures.filter((row) => row.rowClass === rowClass).length;
+  const ownerRows = (owner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["ownerHandoffs"][number]["owner"]) => fixtures.filter((row) => row.repairOwner === owner);
+  const expectedSellableLiftAfterParserSourceRepairs = fixtures
+    .filter((row) => row.rowClass === "needs_public_support" || row.rowClass === "restricted_only" || row.rowClass === "useful_caveated")
+    .reduce((sum, row) => sum + row.expectedSellableLiftAfterRepair, 0);
+  const protectedSellableRows = fixtures.filter((row) => row.countsTowardProductionSellableRows).length;
+  return {
+    schemaVersion: "ti.program_ch_paid_row_audit_100.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    targetSellableRows: 100,
+    fixtures,
+    metrics: {
+      currentSellableRows: protectedSellableRows,
+      protectedSellableRows,
+      usefulCaveatedRowsExcluded: countClass("useful_caveated"),
+      suppressedFalsePositives: countClass("wrong_actor_or_alias_collision") + countClass("stale_or_duplicate") + countClass("not_payworthy"),
+      rowsOneRepairAway: countClass("needs_public_support") + countClass("restricted_only") + countClass("useful_caveated"),
+      expectedSellableLiftAfterParserSourceRepairs,
+      rowsPreventedFromBilling: fixtures.reduce((sum, row) => sum + row.rowsPreventedFromBilling, 0),
+      productionSellableFloorGap: Math.max(0, 100 - protectedSellableRows)
+    },
+    classificationCounts: {
+      sellable: countClass("sellable"),
+      useful_caveated: countClass("useful_caveated"),
+      needs_public_support: countClass("needs_public_support"),
+      stale_or_duplicate: countClass("stale_or_duplicate"),
+      wrong_actor_or_alias_collision: countClass("wrong_actor_or_alias_collision"),
+      restricted_only: countClass("restricted_only"),
+      not_payworthy: countClass("not_payworthy")
+    },
+    exclusionProof: [
+      { class: "graph_only_projection", countsAsSellable: false, reason: "Graph pivots are planning context until backed by fresh capture evidence and accepted relationship provenance." },
+      { class: "synthetic_row", countsAsSellable: false, reason: "Fixture/proof rows can test shape and safety only; they never count as production sellable evidence." },
+      { class: "stale_or_duplicate", countsAsSellable: false, reason: "Old or duplicate reports cannot be sold as fresh monitoring output." },
+      { class: "restricted_only", countsAsSellable: false, reason: "Restricted metadata needs safe public corroboration before any production paid-row credit." },
+      { class: "caveat_only", countsAsSellable: false, reason: "Useful caveated rows can help analysts but remain outside the 100-row production sellable floor." }
+    ],
+    ownerHandoffs: [
+      { owner: "agent_03", rowCount: ownerRows("agent_03").length, expectedSellableRowsUnlocked: ownerRows("agent_03").reduce((sum, row) => sum + row.expectedSellableLiftAfterRepair, 0), action: "Repair parser fields for victim, sector, country, TTP, impact, and primary-actor identity." },
+      { owner: "agent_04", rowCount: ownerRows("agent_04").length, expectedSellableRowsUnlocked: ownerRows("agent_04").reduce((sum, row) => sum + row.expectedSellableLiftAfterRepair, 0), action: "Add safe public source-family corroboration for one-repair-away rows." },
+      { owner: "agent_05", rowCount: ownerRows("agent_05").length, expectedSellableRowsUnlocked: ownerRows("agent_05").reduce((sum, row) => sum + row.expectedSellableLiftAfterRepair, 0), action: "Keep restricted metadata metadata-only and attach public-support work items." },
+      { owner: "agent_07", rowCount: ownerRows("agent_07").length, expectedSellableRowsUnlocked: 0, action: "Suppress stale, duplicate, alias-collided, synthetic, and non-payworthy rows before billing." },
+      { owner: "agent_08", rowCount: ownerRows("agent_08").length, expectedSellableRowsUnlocked: 0, action: "Resolve graph-only and relationship ambiguity before release gates can count rows." },
+      { owner: "agent_10", rowCount: ownerRows("agent_10").length, expectedSellableRowsUnlocked: 0, action: "Keep paid traffic held until 100 true sellable rows, not projections or caveats, exist." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
+    }
+  };
+}
+
+function programChAuditFixture(
+  id: string,
+  actor: string,
+  family: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["family"],
+  rowClass: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["rowClass"],
+  currentDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["currentDecision"],
+  countsTowardProductionSellableRows: boolean,
+  repairOwner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["repairOwner"],
+  repairAction: string,
+  releaseGateEffect: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["releaseGateEffect"],
+  blockerCodes: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number]["blockerCodes"],
+  expectedSellableLiftAfterRepair: number,
+  rowsPreventedFromBilling: number,
+  buyerVisibleFinding: string
+): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["paidRowAudit100"]["fixtures"][number] {
+  return { id, actor, family, rowClass, currentDecision, countsTowardProductionSellableRows, repairOwner, repairAction, releaseGateEffect, blockerCodes, expectedSellableLiftAfterRepair, rowsPreventedFromBilling, buyerVisibleFinding, noLeak: true };
+}
+
 function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
   const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
     programBdLiveBaseline({
@@ -1190,6 +1488,8 @@ function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["
 	    liveFreshnessQualityGate: buildProgramBrLiveFreshnessQualityGate(),
 	    freshnessRepairLoop: buildProgramBsFreshnessRepairLoop(),
 	    entitySpecificityLift: buildProgramBvEntitySpecificityLift(),
+	    falsePositiveSuppressionGate: buildProgramBzFalsePositiveSuppressionGate(),
+	    paidRowAudit100: buildProgramChPaidRowAudit100(),
 	    releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
     apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
     remediationActions: [

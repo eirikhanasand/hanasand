@@ -2124,6 +2124,54 @@ describe("pipeline", () => {
     expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures.flatMap((row) => row.blockerCodesRemoved)).toEqual(expect.arrayContaining(["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"]));
     expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures.every((row) => row.proofNeeded.length > 0 && row.expectedBuyerVisibleLift.length > 0 && row.whyWorthPayingFor.length > 0 && row.repairAction.length > 0 && row.noLeak)).toBe(true);
     expect(pack.paidRowQualityGate.entitySpecificityLift.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate).toMatchObject({
+      schemaVersion: "ti.program_bz_paid_row_false_positive_suppression_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      lift: {
+        falsePositivesSuppressed: 12,
+        contradictedRowsHeld: 2,
+        staleRepostsBlocked: 3,
+        singleSourceRowsCaveated: 3,
+        truePositivesPreserved: 8,
+        sellableRowsProtected: 8,
+        rowsPreventedFromBilling: 21
+      },
+      noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false }
+    });
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate.fixtures.length).toBeGreaterThanOrEqual(25);
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate.fixtures.map((row) => row.scenario)).toEqual(expect.arrayContaining(["alias_collision", "common_victim_name", "unrelated_actor_co_mention", "stale_repost_as_current", "single_source_requires_caveat", "metadata_only_without_public_support", "contradicted_claim", "unknown_search_suppressed", "true_positive_preserved"]));
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate.fixtures.map((row) => row.reasonCode)).toEqual(expect.arrayContaining(["alias_collision", "ambiguous_victim_name", "unrelated_actor_co_mention", "stale_repost_as_current", "single_source_without_caveat", "metadata_only_without_public_support", "contradicted_claim", "unknown_query_searching", "true_positive_sellable"]));
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate.fixtures.every((row) => row.buyerVisibleEffect.length > 0 && row.nextRepairAction.length > 0 && row.noLeak)).toBe(true);
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate.lift.buyerTrustDelta).toBeGreaterThan(0.2);
+    expect(pack.paidRowQualityGate.falsePositiveSuppressionGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(pack.paidRowQualityGate.paidRowAudit100).toMatchObject({
+      schemaVersion: "ti.program_ch_paid_row_audit_100.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      targetSellableRows: 100,
+      metrics: {
+        currentSellableRows: 5,
+        protectedSellableRows: 5,
+        usefulCaveatedRowsExcluded: 3,
+        suppressedFalsePositives: 7,
+        rowsOneRepairAway: 9,
+        expectedSellableLiftAfterParserSourceRepairs: 21,
+        rowsPreventedFromBilling: 39,
+        productionSellableFloorGap: 95
+      }
+    });
+    expect(pack.paidRowQualityGate.paidRowAudit100.fixtures.map((row) => row.rowClass)).toEqual(expect.arrayContaining(["sellable", "useful_caveated", "needs_public_support", "stale_or_duplicate", "wrong_actor_or_alias_collision", "restricted_only", "not_payworthy"]));
+    expect(pack.paidRowQualityGate.paidRowAudit100.fixtures.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"]));
+    expect(pack.paidRowQualityGate.paidRowAudit100.fixtures.filter((row) => row.rowClass !== "sellable").every((row) => row.repairAction.length > 0 && row.repairOwner && !row.countsTowardProductionSellableRows && row.noLeak)).toBe(true);
+    expect(pack.paidRowQualityGate.paidRowAudit100.exclusionProof.every((row) => row.countsAsSellable === false && row.reason.length > 0)).toBe(true);
+    expect(pack.paidRowQualityGate.paidRowAudit100.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["graph_only_projection", "synthetic_row", "stale_or_duplicate", "restricted_only", "caveat_only"]));
+    expect(pack.paidRowQualityGate.paidRowAudit100.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
+    expect(pack.paidRowQualityGate.paidRowAudit100.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

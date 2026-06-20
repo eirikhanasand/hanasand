@@ -65,6 +65,7 @@ import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
 import { buildAnalystLoopPersistenceReadinessPacket } from "../storage/analystLoopPostgres.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
+import { tiSourceAtlasRepairActivationPacketInputsToPostgresRows, type SourceAtlasActivationPacketAuditRow } from "../storage/sourceRegistryPostgres.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
 import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourceMarketplaceApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, buildTiSourceAtlasApiResponse, buildTiSourceAtlasExportManifestApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
 import type {
@@ -5256,6 +5257,10 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
   cursor: number;
   limit: number;
 }) {
+  const atlasAudit = buildSourceAtlasActivationAuditReadModel({
+    tenantId: input.tenantId,
+    limit: Math.min(input.limit, 25)
+  });
   const allPackets = store.listAnalystSourceActivationPackets()
     .filter((packet) => !input.tenantId || packet.tenantId === input.tenantId)
     .filter((packet) => !input.execution || packet.execution === input.execution)
@@ -5286,21 +5291,109 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     },
     runStatusClarity: {
       activationPackets: allPackets.length,
+      sourceAtlasAuditRows: atlasAudit.summary.auditRows,
       approvalRequired: allPackets.filter((packet) => packet.execution === "approval_required").length,
       dryRunOnly: allPackets.filter((packet) => packet.execution === "dry_run_only").length,
       blocked: allPackets.filter((packet) => packet.execution === "blocked").length,
       approvedDryRunPackets: allPackets.filter((packet) => packet.approvedAt).length,
-      meaningfulWorkCount: allPackets.filter((packet) => packet.execution !== "blocked" || !packet.approvedAt).length,
+      meaningfulWorkCount: allPackets.filter((packet) => packet.execution !== "blocked" || !packet.approvedAt).length + atlasAudit.summary.auditRows,
       byExecution
     },
     packets,
+    sourceAtlasAuditSummary: atlasAudit.summary,
+    sourceAtlasAuditPackets: atlasAudit.packets,
     guarantees: [
       "activation packets are operator/legal approval metadata, not source mutations",
+      "source-atlas audit packets are persisted-row review context and are not executable approval packets",
       "approving a packet records dry-run approval context only",
       "restricted sources are not silently restored, crawled, or fetched by this route",
       "raw leak downloads, credential material, private access, CAPTCHA/auth bypass, and threat-actor interaction remain blocked"
     ]
   };
+}
+
+function buildSourceAtlasActivationAuditReadModel(input: { tenantId?: string; limit: number }) {
+  const atlas = buildTiSourceAtlasApiResponse({ tenantId: input.tenantId, recordLimit: 4000 });
+  const packetInputs = atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.sourceActivationPacketInputs;
+  const rows = tiSourceAtlasRepairActivationPacketInputsToPostgresRows(packetInputs, {
+    tenantId: input.tenantId,
+    generatedAt: atlas.generatedAt
+  });
+  const byAction = countBy(rows, (row) => row.action);
+  const byBlocker = countBy(rows, (row) => row.blocker);
+  return {
+    summary: {
+      schemaVersion: "ti.source_atlas_activation_packet_audit_read_model.v1",
+      sourceTable: "source_atlas_activation_packet_audit",
+      sourceRoute: "/v1/sources/atlas",
+      sourceField: "sourceLadder.paidSourceTierPlan.payworthyRepairQueue.sourceActivationPacketInputs",
+      auditRows: rows.length,
+      tenantId: input.tenantId,
+      generatedAt: atlas.generatedAt,
+      approvalMode: "operator_legal_required",
+      expectedPayworthyLift: rows.reduce((sum, row) => sum + row.expected_payworthy_lift, 0),
+      expectedFreshRowsPerDay: round1(rows.reduce((sum, row) => sum + row.expected_fresh_rows_per_day, 0)),
+      expectedRowLift: round1(rows.reduce((sum, row) => sum + row.expected_row_lift, 0)),
+      byAction,
+      byBlocker,
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      sourceActivationApplied: false,
+      executableApprovalPacketsCreated: false
+    },
+    packets: rows.slice(0, input.limit).map(safeSourceAtlasActivationAuditPacketDto)
+  };
+}
+
+function safeSourceAtlasActivationAuditPacketDto(row: SourceAtlasActivationPacketAuditRow) {
+  return {
+    packetId: row.packet_id,
+    tenantId: row.tenant_id,
+    priority: row.priority,
+    approvalMode: row.approval_mode,
+    action: row.action,
+    repairDecision: row.repair_decision,
+    blocker: row.blocker,
+    atlasSourceIds: row.atlas_source_ids,
+    replacementCandidateIds: row.replacement_candidate_ids,
+    sourceFamilies: row.source_families,
+    expectedPayworthyLift: row.expected_payworthy_lift,
+    expectedFreshRowsPerDay: row.expected_fresh_rows_per_day,
+    expectedRowLift: row.expected_row_lift,
+    buyerVisibleReason: row.buyer_visible_reason,
+    prerequisites: row.prerequisites,
+    routeHints: row.route_hints,
+    forbiddenActions: row.forbidden_actions,
+    persistence: {
+      table: "source_atlas_activation_packet_audit",
+      generatedAt: row.generated_at,
+      replayRole: "operator/legal source repair input only"
+    },
+    deliveryBoundary: {
+      dryRunOnly: row.dry_run,
+      willMutateSource: row.will_mutate,
+      willStartCrawling: row.will_start_crawling,
+      rawUrlExposed: row.raw_url_exposed,
+      rawPayloadExposed: row.raw_payload_exposed,
+      privateAuthCaptchaRequired: row.private_auth_captcha_required,
+      crawlStarted: row.crawl_started,
+      sourceActivationApplied: row.source_activation_applied,
+      executableApprovalPacket: false
+    }
+  };
+}
+
+function countBy<T>(items: T[], keyFor: (item: T) => string): Record<string, number> {
+  return items.reduce<Record<string, number>>((counts, item) => {
+    const key = keyFor(item);
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 type AnalystSourceActivationPacketActionResult =
@@ -7818,7 +7911,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "paidRowAudit100", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },

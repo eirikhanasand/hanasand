@@ -733,6 +733,48 @@ const falsePositiveOwners = (falsePositiveSuppressionGate.ownerHandoffs as Array
 for (const owner of ["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
   if (!falsePositiveOwners.includes(owner)) throw new Error(`Program BZ false-positive gate must include ${owner} handoff`);
 }
+const paidRowAudit100 = outputRecord.paidRowAudit100 as Record<string, unknown> | undefined;
+if (
+  !paidRowAudit100
+  || paidRowAudit100.schemaVersion !== "ti.apify_paid_row_audit_100.v1"
+  || paidRowAudit100.dryRun !== true
+  || paidRowAudit100.willMutateSources !== false
+  || paidRowAudit100.willStartCollection !== false
+  || paidRowAudit100.targetSellableRows !== 100
+  || !Array.isArray(paidRowAudit100.classifications)
+  || paidRowAudit100.classifications.length < 15
+  || !paidRowAudit100.metrics
+  || !Array.isArray(paidRowAudit100.exclusionProof)
+) {
+  throw new Error("OUTPUT record must expose Program CH paid-row audit to 100 rows");
+}
+const paidRowAuditClasses = (paidRowAudit100.classifications as Array<Record<string, unknown>>).map((row) => row.rowClass);
+for (const rowClass of ["sellable", "useful_caveated", "needs_public_support", "stale_or_duplicate", "wrong_actor_or_alias_collision", "restricted_only", "not_payworthy"]) {
+  if (!paidRowAuditClasses.includes(rowClass)) throw new Error(`Program CH audit must include ${rowClass}`);
+}
+if (!(paidRowAudit100.classifications as Array<Record<string, unknown>>).every((row) =>
+  typeof row.repairAction === "string"
+  && row.noLeak === true
+  && (row.rowClass === "sellable" || row.countsTowardProductionSellableRows === false)
+)) {
+  throw new Error("Program CH audit rows must include repair action, no-leak proof, and floor exclusion for non-sellable rows");
+}
+const paidRowAuditMetrics = paidRowAudit100.metrics as Record<string, unknown>;
+if (
+  Number(paidRowAuditMetrics.currentSellableRows) !== 5
+  || Number(paidRowAuditMetrics.protectedSellableRows) !== 5
+  || Number(paidRowAuditMetrics.suppressedFalsePositives) < 7
+  || Number(paidRowAuditMetrics.rowsOneRepairAway) < 9
+  || Number(paidRowAuditMetrics.expectedSellableLiftAfterParserSourceRepairs) < 20
+  || Number(paidRowAuditMetrics.rowsPreventedFromBilling) < 30
+  || Number(paidRowAuditMetrics.productionSellableFloorGap) < 90
+) {
+  throw new Error("Program CH audit metrics must keep the 100-row production floor honest");
+}
+const paidRowAuditExclusions = (paidRowAudit100.exclusionProof as Array<Record<string, unknown>>).map((row) => row.class);
+for (const excludedClass of ["graph_only_projection", "synthetic_row", "stale_or_duplicate", "restricted_only", "caveat_only"]) {
+  if (!paidRowAuditExclusions.includes(excludedClass)) throw new Error(`Program CH audit must exclude ${excludedClass}`);
+}
 const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
 if (
   !revenueConversionChecklist

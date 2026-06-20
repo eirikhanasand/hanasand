@@ -407,9 +407,9 @@ describe("ops controls", () => {
       productionSellableRowFloor: 100,
       usefulCaveatedRows: 32,
       rowsBlockedFromBilling: 82,
-      oneRepairAwayRows: 103,
-      projectedSellableRowsFromAcceptedRepairs: 103,
-      projectedSellableRowsAfterAcceptedRepairs: 119,
+      oneRepairAwayRows: 125,
+      projectedSellableRowsFromAcceptedRepairs: 125,
+      projectedSellableRowsAfterAcceptedRepairs: 141,
       costPerUsefulRowUsd: 0,
       topBlocker: "sellable_rows_below_100",
       revenueTruth: {
@@ -423,6 +423,11 @@ describe("ops controls", () => {
     expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "parserToSellableRepairPacket.candidates")).toMatchObject({
       owner: "agent_03",
       projectedSellableRows: 87,
+      countsTowardProjectedFloor: true
+    });
+    expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "parserRealSellableLift.promotedRows")).toMatchObject({
+      owner: "agent_03",
+      projectedSellableRows: 22,
       countsTowardProjectedFloor: true
     });
     expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "hundredSellableRowGraphPivotPlan")).toMatchObject({
@@ -732,6 +737,54 @@ describe("ops controls", () => {
       restrictedMaterialExposed: false,
       productionSellableClaimed: false
     });
+    expect(dashboard.parserRealSellableLift).toMatchObject({
+      schemaVersion: "ti.program_cj_parser_real_sellable_lift.v1",
+      owner: "agent_03",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"]),
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: false,
+      willMutateSources: false,
+      willStartCollection: false,
+      productionSellableClaimed: false,
+      repairedRowCount: 15,
+      promotedSellableRows: 22,
+      movedToUsefulCaveatedRows: 11,
+      staleRowsSuppressed: 2,
+      aliasOrUnrelatedRowsSuppressed: 2,
+      rowsStillOneRepairAway: 54,
+      parserFieldsRequired: expect.arrayContaining(["actor", "victim", "sector", "country", "dataset_or_impact", "ttp_tool", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"])
+    });
+    expect(dashboard.parserRealSellableLift.repairedRows.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"
+    ]));
+    expect(dashboard.parserRealSellableLift.repairedRows.every((row) =>
+      row.provenanceHash.length > 0 &&
+      row.replayRef.startsWith("replay:") &&
+      row.nextBuyerSearch.length > 0 &&
+      row.sourceFamilySupport.length > 0 &&
+      row.graphPivots.length >= 5 &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.rejectionRows.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "stale_report",
+      "alias_collision",
+      "unrelated_actor_co_mention",
+      "generic_marketing_page",
+      "unsafe_source_request"
+    ]));
+    expect(dashboard.parserRealSellableLift.rejectionRows.every((row) => row.countsTowardSellableLift === false && row.noLeak)).toBe(true);
+    expect(dashboard.parserRealSellableLift.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
+    expect(dashboard.parserRealSellableLift.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      objectKeysExposed: false,
+      credentialsExposed: false,
+      payloadsRequested: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      productionSellableClaimed: false
+    });
     expect(dashboard.qualityConversionGate).toMatchObject({
       schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
@@ -824,6 +877,36 @@ describe("ops controls", () => {
     expect(dashboard.falsePositiveSuppressionGate.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Random Actor", "Made Up Actor", "Unknown Actor Query"]));
     expect(dashboard.falsePositiveSuppressionGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.falsePositiveSuppressionGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
+    expect(dashboard.paidRowAudit100).toMatchObject({
+      schemaVersion: "ti.program_ch_paid_row_audit_100.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      targetSellableRows: 100,
+      currentSellableRows: 5,
+      protectedSellableRows: 5,
+      usefulCaveatedRowsExcluded: 3,
+      suppressedFalsePositives: 7,
+      rowsOneRepairAway: 9,
+      expectedSellableLiftAfterParserSourceRepairs: 21,
+      rowsPreventedFromBilling: 39,
+      productionSellableFloorGap: 95
+    });
+    expect(dashboard.paidRowAudit100.classificationCounts).toMatchObject({
+      sellable: 5,
+      useful_caveated: 3,
+      needs_public_support: 4,
+      stale_or_duplicate: 2,
+      wrong_actor_or_alias_collision: 2,
+      restricted_only: 2,
+      not_payworthy: 3
+    });
+    expect(dashboard.paidRowAudit100.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"]));
+    expect(dashboard.paidRowAudit100.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["graph_only_projection", "synthetic_row", "stale_or_duplicate", "restricted_only", "caveat_only"]));
+    expect(dashboard.paidRowAudit100.exclusionProof.every((row) => row.countsAsSellable === false && row.reason.length > 0)).toBe(true);
+    expect(dashboard.paidRowAudit100.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
+    expect(dashboard.paidRowAudit100.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.darkMetadataLiveValueExpansion).toMatchObject({
       schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),

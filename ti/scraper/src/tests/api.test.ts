@@ -363,9 +363,9 @@ describe("api v1", () => {
       productionSellableRowFloor: 100,
       usefulCaveatedRows: 32,
       rowsBlockedFromBilling: 82,
-      oneRepairAwayRows: 103,
-      projectedSellableRowsFromAcceptedRepairs: 103,
-      projectedSellableRowsAfterAcceptedRepairs: 119,
+      oneRepairAwayRows: 125,
+      projectedSellableRowsFromAcceptedRepairs: 125,
+      projectedSellableRowsAfterAcceptedRepairs: 141,
       topBlocker: "sellable_rows_below_100",
       revenueTruth: {
         paidTrafficAllowed: false,
@@ -376,6 +376,7 @@ describe("api v1", () => {
       },
       acceptedRepairBuckets: expect.arrayContaining([
         expect.objectContaining({ source: "parserToSellableRepairPacket.candidates", projectedSellableRows: 87, countsTowardProjectedFloor: true }),
+        expect.objectContaining({ source: "parserRealSellableLift.promotedRows", projectedSellableRows: 22, countsTowardProjectedFloor: true }),
         expect.objectContaining({ source: "hundredSellableRowGraphPivotPlan", countsTowardProjectedFloor: false }),
         expect.objectContaining({ source: "darkMetadataPublicHandoff100", projectedSellableRows: 0, countsTowardProjectedFloor: false })
       ]) as unknown as Array<{ owner: string; source: string; projectedSellableRows: number; countsTowardProjectedFloor: boolean }>,
@@ -10591,10 +10592,16 @@ describe("api v1", () => {
       dryRun: true,
       createdAt: "2026-05-24T10:05:00.000Z"
     });
-    const sourceActivationPackets = await body(await handleApiRequest(api("/v1/analyst/source-activation-packets"), {
+    const sourceActivationPackets = (await body(await handleApiRequest(api("/v1/analyst/source-activation-packets"), {
       store,
       frontier: new FocusedFrontier()
-    }));
+    }))) as {
+      contract: Record<string, unknown>;
+      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; meaningfulWorkCount: number };
+      sourceAtlasAuditSummary: { auditRows: number };
+      sourceAtlasAuditPackets: unknown[];
+      packets: unknown[];
+    };
     expect(sourceActivationPackets).toMatchObject({
       contract: {
         endpoint: "/v1/analyst/source-activation-packets",
@@ -10605,10 +10612,54 @@ describe("api v1", () => {
       },
       runStatusClarity: {
         activationPackets: 1,
-        approvalRequired: 1,
-        meaningfulWorkCount: 1
+        approvalRequired: 1
       }
     });
+    expect(sourceActivationPackets.runStatusClarity.sourceAtlasAuditRows).toBeGreaterThan(0);
+    expect(sourceActivationPackets.runStatusClarity.meaningfulWorkCount).toBeGreaterThan(1);
+    expect(sourceActivationPackets.sourceAtlasAuditSummary).toMatchObject({
+      sourceTable: "source_atlas_activation_packet_audit",
+      sourceRoute: "/v1/sources/atlas",
+      approvalMode: "operator_legal_required",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      sourceActivationApplied: false,
+      executableApprovalPacketsCreated: false
+    });
+    expect(sourceActivationPackets.sourceAtlasAuditSummary.auditRows).toBe(sourceActivationPackets.runStatusClarity.sourceAtlasAuditRows);
+    const atlasAuditPacket = (sourceActivationPackets.sourceAtlasAuditPackets as Array<{
+      packetId: string;
+      approvalMode: string;
+      expectedPayworthyLift: number;
+      prerequisites: string[];
+      forbiddenActions: string[];
+      deliveryBoundary: {
+        dryRunOnly: boolean;
+        willMutateSource: boolean;
+        willStartCrawling: boolean;
+        rawUrlExposed: boolean;
+        rawPayloadExposed: boolean;
+        sourceActivationApplied: boolean;
+        executableApprovalPacket: boolean;
+      };
+    }>)[0];
+    expect(atlasAuditPacket).toMatchObject({
+      approvalMode: "operator_legal_required",
+      deliveryBoundary: {
+        dryRunOnly: true,
+        willMutateSource: false,
+        willStartCrawling: false,
+        rawUrlExposed: false,
+        rawPayloadExposed: false,
+        sourceActivationApplied: false,
+        executableApprovalPacket: false
+      }
+    });
+    expect(atlasAuditPacket.packetId).toStartWith("ti_source_atlas_repair_activation_packet_");
+    expect(atlasAuditPacket.expectedPayworthyLift).toBeGreaterThan(0);
+    expect(atlasAuditPacket.prerequisites).toEqual(expect.arrayContaining(["operator_approval"]));
+    expect(atlasAuditPacket.forbiddenActions).toEqual(expect.arrayContaining(["auto_activate", "start_crawl", "download_payload"]));
     const activationPacket = (sourceActivationPackets.packets as Array<{
       id: string;
       execution: string;
