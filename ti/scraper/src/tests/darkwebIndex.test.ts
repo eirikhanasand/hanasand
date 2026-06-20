@@ -218,6 +218,77 @@ describe("darkweb metadata index contracts", () => {
       suppressedRows: 24,
       projectedContributionToward100SellableRows: 0
     });
+    expect(status.publicSupportWorklist40).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_public_support_worklist",
+      candidateSource: "publicIntelligenceHandoff100",
+      topCandidateTarget: 40,
+      topCandidateCount: 40,
+      publicSupportReadyCount: 2,
+      stillRestrictedOnlyCount: 11,
+      projectedCaveatedRows: 0,
+      projectedSellableRowsAfterPublicSupport: 2,
+      contributionToward100SellableRows: 2,
+      averageBuyerValueScore: 0.65,
+      costPerUsefulRowEffect: {
+        basis: "planning_estimate_no_spend",
+        currentUsefulRows: 2,
+        projectedUsefulRows: 4,
+        usefulRowDelta: 2,
+        estimatedAnalystMinutes: 24,
+        costPerUsefulRowTrend: "improves_if_public_support_found"
+      },
+      safety: {
+        metadataOnly: true,
+        willFetchNetwork: false,
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      }
+    });
+    expect(status.publicSupportWorklist40.staleDuplicateUnsafeLowValueRejections).toEqual({
+      stale: 21,
+      duplicate: 5,
+      unsafe: 0,
+      lowValue: 1
+    });
+    expect(status.publicSupportWorklist40.rows).toHaveLength(40);
+    expect(status.publicSupportWorklist40.rows[0]).toMatchObject({
+      rank: 1,
+      publicSourceFamilyNeeded: "ransomware_tracker_or_public_dataset",
+      expectedOutcome: "projected_sellable_after_public_support",
+      noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials"
+    });
+    expect(status.publicSupportWorklist40.rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.parserFieldsNeeded.join(",") === "actor,victim,dataset,sector_country,claimed_date,source_family" &&
+      row.publicSupportTarget.length > 0 &&
+      row.whyBuyerWouldPayIfCorroborated.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
+    )).toBe(true);
+    expect(status.publicSupportWorklist40.rows.filter((row) => row.expectedOutcome === "projected_sellable_after_public_support").every((row) =>
+      row.publicSupportState !== "restricted_only" &&
+      row.actorHints.length > 0 &&
+      (row.victimHints.length > 0 || row.datasetHints.length > 0)
+    )).toBe(true);
+    expect(status.publicSupportWorklist40.handoffs.agent04PublicSourceTargets.length).toBeGreaterThan(0);
+    expect(status.publicSupportWorklist40.handoffs.agent03ParserFields).toEqual(expect.arrayContaining([
+      expect.stringContaining("actor:"),
+      expect.stringContaining("claimed_date:")
+    ]));
+    expect(status.publicSupportWorklist40.handoffs.agent08GraphPivots.length).toBeGreaterThan(0);
+    expect(status.publicSupportWorklist40.handoffs.agent10RevenueGate).toMatchObject({
+      targetSellableRows: 100,
+      projectedSellableRowLift: 2,
+      projectedCaveatedRows: 0,
+      contributionToward100SellableRows: 2,
+      usefulRowDelta: 2,
+      costPerUsefulRowEffect: "improves_if_public_support_found"
+    });
     expect(contract.storageHandoff).toMatchObject({
       schemaVersion: "ti.darkweb_index_storage_handoff.v1",
       tables: expect.arrayContaining(["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs"]),
@@ -820,6 +891,14 @@ describe("darkweb metadata index contracts", () => {
       sourceCountInflationBlocked: true,
       requireNoLeakProof: true
     });
+    expect(contract.publicSupportWorklist40).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1",
+      candidateSource: "publicIntelligenceHandoff100",
+      topCandidateTarget: 40,
+      routeFields: ["status.publicSupportWorklist40", "darkwebIndex.productHandoff.publicSupportWorklist40"],
+      sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
+      requireNoLeakProof: true
+    });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
     expect(status.sourceIngestReadiness.sources.every((source) =>
       source.sourceHash.length > 0 &&
@@ -949,6 +1028,29 @@ describe("darkweb metadata index contracts", () => {
       tier.buyerSearchProof.usefulQueryCount >= 20 &&
       tier.buyerSearchProof.sampleRows.length === 12 &&
       tier.advancementDecision === "hold_for_value_density"
+    )).toBe(true);
+    expect(firstPage.productHandoff.publicSupportWorklist40).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1",
+      mode: "metadata_only_public_support_worklist",
+      topCandidateCount: 40,
+      publicSupportReadyCount: 2,
+      stillRestrictedOnlyCount: 11,
+      projectedCaveatedRows: 0,
+      projectedSellableRowsAfterPublicSupport: 2,
+      contributionToward100SellableRows: 2,
+      handoffs: {
+        agent10RevenueGate: {
+          targetSellableRows: 100,
+          projectedSellableRowLift: 2,
+          contributionToward100SellableRows: 2
+        }
+      }
+    });
+    expect(firstPage.productHandoff.publicSupportWorklist40.rows).toHaveLength(40);
+    expect(firstPage.productHandoff.publicSupportWorklist40.rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.publicSourceFamilyNeeded.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
     )).toBe(true);
     expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
       row.recordId.length > 0 &&
