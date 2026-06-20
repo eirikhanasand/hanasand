@@ -115,11 +115,16 @@ const apifyStoreReadiness = isRecord(record.apifyStoreReadiness) ? record.apifyS
 const apifyStoreActor = isRecord(apifyStoreReadiness.actor) ? apifyStoreReadiness.actor : {};
 const apifyStoreReadinessPacket = isRecord(apifyStoreReadiness.storeReadiness) ? apifyStoreReadiness.storeReadiness : {};
 const apifyListingFields = isRecord(apifyStoreReadinessPacket.listingFields) ? apifyStoreReadinessPacket.listingFields : {};
+const apifyLatestBuild = isRecord(apifyStoreReadinessPacket.latestBuild) ? apifyStoreReadinessPacket.latestBuild : {};
+const apifyLatestProofRun = isRecord(apifyStoreReadinessPacket.latestProofRun) ? apifyStoreReadinessPacket.latestProofRun : {};
+const apifyDailyRunBaseline = isRecord(apifyStoreReadinessPacket.dailyRunBaseline) ? apifyStoreReadinessPacket.dailyRunBaseline : {};
 const apifyDefaultInput = isRecord(apifyStoreReadiness.defaultSampleInput) ? apifyStoreReadiness.defaultSampleInput : {};
 const apifyProofDtos = Array.isArray(apifyStoreReadiness.publicProofDtos) ? apifyStoreReadiness.publicProofDtos.filter(isRecord) : [];
 const apifyProofQueries = apifyProofDtos.map((proof) => String(proof.query ?? ""));
 const apifyCompatibility = isRecord(apifyStoreReadiness.frontendApiCompatibility) ? apifyStoreReadiness.frontendApiCompatibility : {};
 const apifyCompatibilityStates = Array.isArray(apifyCompatibility.states) ? apifyCompatibility.states.filter(isRecord).map((state) => String(state.state ?? "")) : [];
+const apifyPricingHooks = isRecord(apifyStoreReadiness.pricingHooks) ? apifyStoreReadiness.pricingHooks : {};
+const apifyConversionTracking = isRecord(apifyStoreReadiness.conversionTracking) ? apifyStoreReadiness.conversionTracking : {};
 const apifyGuardrails = isRecord(apifyStoreReadiness.marketplaceGuardrails) ? apifyStoreReadiness.marketplaceGuardrails : {};
 const darkwebIndexFrontendContract = isRecord(record.darkwebIndexFrontendContract) ? record.darkwebIndexFrontendContract : {};
 const darkwebFrontendApiRoutes = isRecord(darkwebIndexFrontendContract.apiRoutes) ? darkwebIndexFrontendContract.apiRoutes : {};
@@ -288,8 +293,23 @@ const checks = [
   isRecord(semantics.apifyStoreReadiness) && semantics.apifyStoreReadiness.schemaVersion === "ti.apify_store_readiness.v1",
   apifyStoreReadiness.status === "buyer_ready_with_external_payout_blocker",
   apifyStoreActor.name === "public-threat-actor-monitor",
+  apifyStoreActor.publishedBuildVersion === "0.6.3",
   apifyStoreActor.outputContract === "safe_metadata_only.v1",
   stringArray(apifyStoreActor.categories).join(",") === "SECURITY,MONITORING",
+  apifyLatestBuild.buildVersion === "0.6.3",
+  apifyLatestProofRun.runId === "dQzvWhNM2OHrBWVfo",
+  apifyLatestProofRun.datasetId === "aP1dqnK7uEezn5jJv",
+  apifyLatestProofRun.rowCount === 15,
+  apifyDailyRunBaseline.runId === "rh6D0UInDD6x7GuuD",
+  apifyDailyRunBaseline.datasetId === "dYbGGA37MRq7pU47O",
+  apifyDailyRunBaseline.defaultQueryCount === 20,
+  apifyDailyRunBaseline.noLeakFailures === 0,
+  apifyPricingHooks.effectiveDate === "2026-07-04",
+  apifyPricingHooks.rowPriceUsdPerThousand === 3,
+  apifyPricingHooks.actorStartPriceUsd === 0.00005,
+  apifyPricingHooks.apifyMarginPercent === 20,
+  apifyConversionTracking.currentStorePageViews === null,
+  stringArray(apifyConversionTracking.metricsToTrack).includes("conversionRate"),
   stringArray(apifyDefaultInput.queries).length === 20,
   apifyDefaultInput.maxRowsPerQuery === 25,
   apifyDefaultInput.includeDatasets === false,
@@ -654,6 +674,10 @@ console.log(JSON.stringify({
     schemaVersion: String(apifyStoreReadiness.schemaVersion ?? ""),
     status: String(apifyStoreReadiness.status ?? ""),
     actorName: String(apifyStoreActor.name ?? ""),
+    publishedBuildVersion: String(apifyStoreActor.publishedBuildVersion ?? ""),
+    latestProofRunId: String(apifyLatestProofRun.runId ?? ""),
+    latestProofDatasetId: String(apifyLatestProofRun.datasetId ?? ""),
+    pricingEffectiveDate: String(apifyPricingHooks.effectiveDate ?? ""),
     defaultQueryCount: stringArray(apifyDefaultInput.queries).length,
     proofQueries: apifyProofQueries,
     compatibilityStates: apifyCompatibilityStates,

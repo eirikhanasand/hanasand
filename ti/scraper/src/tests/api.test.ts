@@ -1400,13 +1400,22 @@ describe("api v1", () => {
     const apifyStoreReadiness = contract.apifyStoreReadiness as {
       schemaVersion: string;
       status: string;
-      actor: { name: string; version: string; categories: string[]; outputContract: string };
-      storeReadiness: { listingFields: Record<string, string>; knownBlockers: string[]; readinessDecision: string; latestProofRun: { runId: string; datasetId: string } };
+      actor: { name: string; version: string; publishedBuildVersion: string; categories: string[]; outputContract: string };
+      storeReadiness: {
+        listingFields: Record<string, string>;
+        knownBlockers: string[];
+        readinessDecision: string;
+        latestBuild: { buildVersion: string };
+        latestProofRun: { runId: string; datasetId: string; rowCount: number; runtimeSeconds: number; usageUsd: number; projectedGrossRowRevenueUsdAfterPricing: number };
+        dailyRunBaseline: { runId: string; datasetId: string; defaultQueryCount: number; rowCount: number; noLeakFailures: number; thinRowCount: number; singleSourceRowCount: number; knownQualityGaps: string[] };
+      };
       defaultSampleInput: { queries: string[]; maxRowsPerQuery: number; includeActivity: boolean; includeTargets: boolean; includeTtps: boolean; includeSources: boolean; includeDatasets: boolean; includeCoverageGaps: boolean };
       sampleOutputDtos: Array<{ query: string; rowType: string; rawContentIncluded: boolean; safety: { metadataOnly: boolean; credentialsIncluded: boolean; stolenFilesIncluded: boolean; privateContentIncluded: boolean; actorInteraction: boolean } }>;
-      publicProofDtos: Array<{ schemaVersion: string; runId: string; buildVersion: string; datasetId: string; query: string; rowCount: number; freshness: string; sourceFamilies: string[]; safetyContract: string; noLeakProof: Record<string, unknown> }>;
+      publicProofDtos: Array<{ schemaVersion: string; runId: string; sourceRunId: string; sourceDatasetId: string; buildVersion: string; datasetId: string; query: string; rowCount: number; freshness: string; sourceFamilies: string[]; safetyContract: string; noLeakProof: Record<string, unknown> }>;
       frontendApiCompatibility: { states: Array<{ state: string; copy: string; refreshAfterSeconds: number; preservePriorAnswer: boolean }>; stableFields: string[]; unknownActorCopy: string; emptyDeltaRule: string };
-      pricingHooks: { model: string; unitEvent: string; payoutStatus: string; revenueTelemetryHandoff: string };
+      pricingHooks: { model: string; unitEvent: string; actorStartEvent: string; effectiveDate: string; rowPriceUsdPerThousand: number; actorStartPriceUsd: number; platformUsageIncludedForUsers: boolean; apifyMarginPercent: number; payoutStatus: string; revenueTelemetryHandoff: string };
+      conversionTracking: { currentStorePageViews: null | number; currentUniqueUsers: null | number; currentTrialRuns: null | number; currentPaidRuns: null | number; currentConversionRate: null | number; metricsToTrack: string[]; handoffRoute: string };
+      sampleOutputSummaries: Array<{ query: string; runId: string; datasetId: string; summary: string; rowSafety: string }>;
       marketplaceGuardrails: { noPlaceholderDefaults: boolean; noHelloWorldSampleInput: boolean; noGenericCategories: boolean; noAiFlavoredCopy: boolean; safeOutputOnly: boolean; bannedListingTerms: string[] };
       safetyContract: { outputContract: string; rawContentIncluded: boolean; metadataOnly: boolean; forbiddenFields: string[] };
       proofCommands: string[];
@@ -2689,7 +2698,8 @@ describe("api v1", () => {
     });
     expect(apifyStoreReadiness.actor).toMatchObject({
       name: "public-threat-actor-monitor",
-      version: "0.6",
+      version: "0.6.3",
+      publishedBuildVersion: "0.6.3",
       outputContract: "safe_metadata_only.v1"
     });
     expect(apifyStoreReadiness.actor.categories).toEqual(["SECURITY", "MONITORING"]);
@@ -2734,7 +2744,33 @@ describe("api v1", () => {
     });
     expect(apifyStoreReadiness.storeReadiness.knownBlockers).toEqual(expect.arrayContaining([
       "apify_beneficiary_and_payout_method_not_stored_in_repo",
-      "public_apify_build_id_and_dataset_id_must_be_refreshed_after_publish"
+      "apify_beneficiary_and_payout_withdrawal_readiness_requires_external_billing_verification"
+    ]));
+    expect(apifyStoreReadiness.storeReadiness.readinessDecision).toBe("buyer_ready_after_external_payout_verification");
+    expect(apifyStoreReadiness.storeReadiness.latestBuild).toMatchObject({
+      buildVersion: "0.6.3"
+    });
+    expect(apifyStoreReadiness.storeReadiness.latestProofRun).toMatchObject({
+      runId: "dQzvWhNM2OHrBWVfo",
+      datasetId: "aP1dqnK7uEezn5jJv",
+      rowCount: 15,
+      runtimeSeconds: 3.1,
+      usageUsd: 0.00075,
+      projectedGrossRowRevenueUsdAfterPricing: 0.045
+    });
+    expect(apifyStoreReadiness.storeReadiness.dailyRunBaseline).toMatchObject({
+      runId: "rh6D0UInDD6x7GuuD",
+      datasetId: "dYbGGA37MRq7pU47O",
+      defaultQueryCount: 20,
+      rowCount: 98,
+      noLeakFailures: 0,
+      thinRowCount: 80,
+      singleSourceRowCount: 69
+    });
+    expect(apifyStoreReadiness.storeReadiness.dailyRunBaseline.knownQualityGaps).toEqual(expect.arrayContaining([
+      "stale_apt29_rows",
+      "apt28_rows_without_public_evidence",
+      "apt42_missing_public_channel_coverage"
     ]));
     expect(apifyStoreReadiness.publicProofDtos.map((proof) => proof.query)).toEqual(expect.arrayContaining([
       "APT29",
@@ -2745,6 +2781,9 @@ describe("api v1", () => {
     for (const proof of apifyStoreReadiness.publicProofDtos) {
       expect(proof.schemaVersion).toBe("ti.public_proof_dto.v1");
       expect(proof.runId).toMatch(/^apify_sample_run_/);
+      expect(proof.sourceRunId).toBe("dQzvWhNM2OHrBWVfo");
+      expect(proof.sourceDatasetId).toBe("aP1dqnK7uEezn5jJv");
+      expect(proof.buildVersion).toBe("0.6.3");
       expect(proof.datasetId).toMatch(/^apify_sample_dataset_/);
       expect(proof.rowCount).toBeGreaterThan(0);
       expect(proof.safetyContract).toBe("safe_metadata_only.v1");
@@ -2772,8 +2811,37 @@ describe("api v1", () => {
     expect(apifyStoreReadiness.pricingHooks).toMatchObject({
       model: "pay_per_dataset_row",
       unitEvent: "apify-default-dataset-item",
+      actorStartEvent: "apify-actor-start",
+      effectiveDate: "2026-07-04",
+      rowPriceUsdPerThousand: 3,
+      actorStartPriceUsd: 0.00005,
+      platformUsageIncludedForUsers: true,
+      apifyMarginPercent: 20,
       payoutStatus: "not_available_without_external_apify_account_verification"
     });
+    expect(apifyStoreReadiness.conversionTracking).toMatchObject({
+      currentStorePageViews: null,
+      currentUniqueUsers: null,
+      currentTrialRuns: null,
+      currentPaidRuns: null,
+      currentConversionRate: null,
+      handoffRoute: "/v1/ops/product-slo.apifyLaunchExperiment"
+    });
+    expect(apifyStoreReadiness.conversionTracking.metricsToTrack).toEqual(expect.arrayContaining([
+      "storePageViews",
+      "uniqueUsers",
+      "trialRuns",
+      "paidRuns",
+      "conversionRate",
+      "usefulRowRate",
+      "freshRowRate",
+      "costPerUsefulRow"
+    ]));
+    expect(apifyStoreReadiness.sampleOutputSummaries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ query: "APT29", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", rowSafety: "metadata_only" }),
+      expect.objectContaining({ query: "APT42", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", rowSafety: "metadata_only" }),
+      expect.objectContaining({ query: "LockBit", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", rowSafety: "metadata_only" })
+    ]));
     expect(apifyStoreReadiness.marketplaceGuardrails).toMatchObject({
       noPlaceholderDefaults: true,
       noHelloWorldSampleInput: true,

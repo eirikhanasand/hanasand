@@ -8428,6 +8428,10 @@ function buildEnterpriseApiContractIndex() {
     schemaVersion: apifyStoreReadiness.schemaVersion,
     status: apifyStoreReadiness.status,
     actorName: apifyStoreReadiness.actor.name,
+    publishedBuildVersion: apifyStoreReadiness.actor.publishedBuildVersion,
+    latestProofRunId: apifyStoreReadiness.storeReadiness.latestProofRun.runId,
+    latestProofDatasetId: apifyStoreReadiness.storeReadiness.latestProofRun.datasetId,
+    pricingEffectiveDate: apifyStoreReadiness.pricingHooks.effectiveDate,
     defaultQueries: apifyStoreReadiness.defaultSampleInput.queries,
     sampleQueries: apifyStoreReadiness.publicProofDtos.map((proof) => proof.query),
     compatibilityStates: apifyStoreReadiness.frontendApiCompatibility.states.map((state) => state.state),
@@ -9987,7 +9991,8 @@ function buildApifyStoreReadinessContract(input: {
     actor: {
       name: "public-threat-actor-monitor",
       title: "Public Threat Actor & Ransomware Activity Monitor",
-      version: "0.6",
+      version: "0.6.3",
+      publishedBuildVersion: "0.6.3",
       buildTag: "latest",
       actorRoot: "apify/public-threat-actor-monitor",
       defaultApiBase: "https://api.hanasand.com/api/ti/search",
@@ -10011,12 +10016,34 @@ function buildApifyStoreReadinessContract(input: {
       },
       knownBlockers: [
         "apify_beneficiary_and_payout_method_not_stored_in_repo",
-        "public_apify_build_id_and_dataset_id_must_be_refreshed_after_publish",
+        "apify_beneficiary_and_payout_withdrawal_readiness_requires_external_billing_verification",
         "remote_public_proof_requires_network_approval_when_run_outside_deployed_host"
       ],
-      readinessDecision: "submit_after_external_payout_and_live_proof_refresh",
-      latestBuild: { source: "Apify console", buildTag: "latest", buildId: null },
-      latestProofRun: { source: "local_and_public_commands", runId: "proof_pending_after_publish", datasetId: "dataset_pending_after_publish" },
+      readinessDecision: "buyer_ready_after_external_payout_verification",
+      latestBuild: { source: "Apify Store", buildTag: "latest", buildVersion: "0.6.3", actorId: "eirikhanasand/public-threat-actor-monitor" },
+      latestProofRun: {
+        source: "Apify run",
+        runId: "dQzvWhNM2OHrBWVfo",
+        datasetId: "aP1dqnK7uEezn5jJv",
+        querySet: ["APT29", "APT42", "LockBit"],
+        rowCount: 15,
+        runtimeSeconds: 3.1,
+        usageUsd: 0.00075,
+        projectedGrossRowRevenueUsdAfterPricing: 0.045
+      },
+      dailyRunBaseline: {
+        source: "Apify run",
+        runId: "rh6D0UInDD6x7GuuD",
+        datasetId: "dYbGGA37MRq7pU47O",
+        defaultQueryCount: 20,
+        rowCount: 98,
+        runtimeSeconds: 10,
+        usageUsd: 0.0023,
+        noLeakFailures: 0,
+        thinRowCount: 80,
+        singleSourceRowCount: 69,
+        knownQualityGaps: ["stale_apt29_rows", "apt28_rows_without_public_evidence", "apt42_missing_public_channel_coverage"]
+      },
       publicationFiles: ["README.md", "CHANGELOG.md", ".actor/actor.json", ".actor/INPUT_SCHEMA.json", ".actor/DATASET_SCHEMA.json", ".actor/OUTPUT_SCHEMA.json", "LAUNCH_CHECKLIST.md"]
     },
     defaultSampleInput,
@@ -10042,10 +10069,30 @@ function buildApifyStoreReadinessContract(input: {
       model: "pay_per_dataset_row",
       unitEvent: "apify-default-dataset-item",
       actorStartEvent: "apify-actor-start",
-      rowPriceUsdPerThousand: { free: 3, bronze: 2.7, silver: 2.4, gold: 2.1 },
+      effectiveDate: "2026-07-04",
+      rowPriceUsdPerThousand: 3,
+      actorStartPriceUsd: 0.00005,
+      platformUsageIncludedForUsers: true,
+      apifyMarginPercent: 20,
       payoutStatus: "not_available_without_external_apify_account_verification",
       revenueTelemetryHandoff: "/v1/ops/product-slo.apifyLaunchExperiment"
     },
+    conversionTracking: {
+      source: "Apify Store analytics and /v1/ops/product-slo",
+      currentStorePageViews: null,
+      currentUniqueUsers: null,
+      currentTrialRuns: null,
+      currentPaidRuns: null,
+      currentConversionRate: null,
+      metricsToTrack: ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "repeatUsers", "conversionRate", "usefulRowRate", "freshRowRate", "noLeakFailures", "costPerUsefulRow"],
+      handoffRoute: "/v1/ops/product-slo.apifyLaunchExperiment",
+      notes: "Real buyer metrics stay null until Apify analytics are copied from the account; do not store billing identifiers or secrets in this repository."
+    },
+    sampleOutputSummaries: [
+      { query: "APT29", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", summary: "Safe public rows exist, but stale-row quality remains a buyer-visible gap to reduce before scaling paid traffic.", rowSafety: "metadata_only" },
+      { query: "APT42", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", summary: "Safe rows are present; public-channel coverage is still thinner than the desired marketplace baseline.", rowSafety: "metadata_only" },
+      { query: "LockBit", runId: "dQzvWhNM2OHrBWVfo", datasetId: "aP1dqnK7uEezn5jJv", summary: "Ransomware activity rows demonstrate current safe metadata output without raw leak material.", rowSafety: "metadata_only" }
+    ],
     marketplaceGuardrails: {
       noPlaceholderDefaults: true,
       noHelloWorldSampleInput: true,
@@ -10093,7 +10140,9 @@ function apifyPublicProofDto(
   return {
     schemaVersion: "ti.public_proof_dto.v1",
     runId: `apify_sample_run_${slug}`,
-    buildVersion: "0.6",
+    sourceRunId: "dQzvWhNM2OHrBWVfo",
+    sourceDatasetId: "aP1dqnK7uEezn5jJv",
+    buildVersion: "0.6.3",
     datasetId: `apify_sample_dataset_${slug}`,
     query,
     queryClass,
@@ -10586,7 +10635,7 @@ function enterpriseApiSurfaceContract(
           },
           ApifyStoreReadiness: {
             type: "object",
-            required: ["schemaVersion", "status", "actor", "storeReadiness", "defaultSampleInput", "publicProofDtos", "frontendApiCompatibility", "marketplaceGuardrails", "proofCommands", "noLeakProof"],
+            required: ["schemaVersion", "status", "actor", "storeReadiness", "defaultSampleInput", "publicProofDtos", "frontendApiCompatibility", "pricingHooks", "conversionTracking", "sampleOutputSummaries", "marketplaceGuardrails", "proofCommands", "noLeakProof"],
             properties: {
               schemaVersion: { type: "string" },
               status: { type: "string" },
@@ -10597,6 +10646,8 @@ function enterpriseApiSurfaceContract(
               publicProofDtos: { type: "array", items: { $ref: "#/components/schemas/PublicProofDto" } },
               frontendApiCompatibility: { type: "object" },
               pricingHooks: { type: "object" },
+              conversionTracking: { type: "object" },
+              sampleOutputSummaries: { type: "array", items: { type: "object" } },
               marketplaceGuardrails: { type: "object" },
               proofCommands: { type: "array", items: { type: "string" } },
               noLeakProof: { type: "object" }
