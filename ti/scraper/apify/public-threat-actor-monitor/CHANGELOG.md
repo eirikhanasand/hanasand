@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 - 2026-06-20
+
+- Clustered strongly overlapping public reports into incident claim rows.
+- Added claim type, optional victim/sector/country/impact fields, reporting windows, publisher counts, and corroborating or contradicting source IDs.
+- Kept every underlying source row available for provenance and review.
+
 ## 0.3.0 - 2026-06-20
 
 - Disabled service coverage rows by default so normal runs only return intelligence and evidence.

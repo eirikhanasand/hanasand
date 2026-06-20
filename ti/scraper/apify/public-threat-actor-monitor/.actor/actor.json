@@ -3,7 +3,7 @@
   "name": "public-threat-actor-monitor",
   "title": "Public Threat Actor & Ransomware Activity Monitor",
   "description": "Tracks public threat actor and ransomware activity and returns metadata rows for recent claims, reporting, targeting, TTPs, confidence, and provenance. Raw leaked data is excluded.",
-  "version": "0.3",
+  "version": "0.4",
   "buildTag": "latest",
   "dockerfile": "../Dockerfile",
   "input": "./INPUT_SCHEMA.json",

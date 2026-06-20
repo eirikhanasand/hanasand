@@ -1,7 +1,7 @@
 {
   "actorOutputSchemaVersion": 1,
   "title": "Threat intelligence output",
-  "description": "Normalized actor profiles, activity, targeting, TTP, source, and dataset coverage rows.",
+  "description": "Normalized actor profiles, clustered incident claims, activity, targeting, TTP, source, and dataset coverage rows.",
   "properties": {
     "dataset": {
       "type": "string",

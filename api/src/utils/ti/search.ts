@@ -89,6 +89,16 @@ export interface TiActivity {
     confidence: number
     sourceIds: string[]
     url?: string
+    claimType?: 'campaign' | 'victim_claim' | 'malware_activity' | 'vulnerability_exploitation' | 'infrastructure_activity' | 'general_activity'
+    victimName?: string
+    affectedSectors?: string[]
+    countries?: string[]
+    impact?: string
+    firstReportedAt?: string
+    lastReportedAt?: string
+    publisherCount?: number
+    corroboratingSourceIds?: string[]
+    contradictingSourceIds?: string[]
 }
 
 export interface TiTarget {
@@ -314,6 +324,9 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
 }
 
 function publicResultStateFor(query: string, seeded: TiSearchResponse, analystLoop: TiAnalystLoop): TiResultState {
+    if (seeded.recentActivity.length > 0 && (analystLoop.resultState === 'queued' || analystLoop.resultState === 'searching')) {
+        return 'partial'
+    }
     if (analystLoop.resultState !== 'ready') return analystLoop.resultState
     if (seeded.recentActivity.length > 0) return 'partial'
     if (knownActorProfile(query)) return 'partial'
@@ -328,15 +341,8 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
     const matches = filterLiveMatchesForQuery(query, await searchClearWeb(query), Boolean(known))
     if (matches.length) {
         const generatedAt = new Date().toISOString()
-        const activityMatches = matches.filter(match => match.kind === 'news' && match.publishedAt).slice(0, 6)
-        const activity = activityMatches.map((match, index) => ({
-            date: match.publishedAt!.slice(0, 10),
-            title: match.title,
-            detail: match.snippet || `Live public result for ${query}: ${match.url}`,
-            confidence: Math.max(0.4, 0.68 - index * 0.04),
-            sourceIds: [match.id],
-            url: safeTiLink(match.url)
-        }))
+        const activityMatches = matches.filter(match => match.kind === 'news' && match.publishedAt)
+        const activity = clusterLiveNews(query, activityMatches).slice(0, 6)
         return {
             query,
             generatedAt,
@@ -345,7 +351,7 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             refreshAfterSeconds: 3,
             summary: summarizeLiveResult(query, matches, known),
             confidence: known ? 0.62 : 0.48,
-            lastSeen: activityMatches[0]?.publishedAt ?? generatedAt,
+            lastSeen: activity[0]?.lastReportedAt ?? activityMatches[0]?.publishedAt ?? generatedAt,
             aliases: known?.aliases ?? [],
             recentActivity: activity,
             targets: mergeTargets(inferLiveTargets(query, matches), known?.targets ?? []),
@@ -1048,6 +1054,166 @@ interface LiveSearchMatch {
     publishedAt?: string
     publisher?: string
     kind: 'news' | 'web' | 'background'
+}
+
+interface LiveClaimCluster {
+    matches: LiveSearchMatch[]
+    tokens: Set<string>
+}
+
+const CLAIM_CLUSTER_STOP_WORDS = new Set([
+    'about', 'after', 'against', 'attack', 'attacks', 'campaign', 'claims', 'cyber', 'from',
+    'group', 'hacker', 'hackers', 'linked', 'malware', 'new', 'report', 'reports', 'says',
+    'threat', 'using', 'with'
+])
+
+export function clusterLiveNews(query: string, matches: LiveSearchMatch[]): TiActivity[] {
+    const sorted = matches
+        .filter(match => match.kind === 'news' && match.publishedAt)
+        .sort((left, right) => Date.parse(right.publishedAt ?? '') - Date.parse(left.publishedAt ?? ''))
+    const queryTokens = new Set(normalizeLiveSearchText(query).split(/\s+/).filter(Boolean))
+    const clusters: LiveClaimCluster[] = []
+
+    for (const match of sorted) {
+        const tokens = claimTokens(match.title, queryTokens)
+        const timestamp = Date.parse(match.publishedAt ?? '')
+        const cluster = clusters.find((candidate) => {
+            const candidateTimestamp = Date.parse(candidate.matches[0]?.publishedAt ?? '')
+            const withinThreeDays = Math.abs(timestamp - candidateTimestamp) <= 3 * 24 * 60 * 60 * 1000
+            return withinThreeDays && tokenSimilarity(tokens, candidate.tokens) >= 0.5
+        })
+        if (cluster) {
+            cluster.matches.push(match)
+            for (const token of tokens) cluster.tokens.add(token)
+        } else {
+            clusters.push({ matches: [match], tokens })
+        }
+    }
+
+    return clusters
+        .map((cluster, index) => claimClusterToActivity(query, cluster.matches, index))
+        .sort((left, right) => Date.parse(right.lastReportedAt ?? right.date) - Date.parse(left.lastReportedAt ?? left.date))
+}
+
+function claimClusterToActivity(query: string, matches: LiveSearchMatch[], index: number): TiActivity {
+    const ordered = [...matches].sort((left, right) => Date.parse(left.publishedAt ?? '') - Date.parse(right.publishedAt ?? ''))
+    const first = ordered[0]!
+    const latest = ordered.at(-1)!
+    const publishers = uniqueStrings(matches.map(match => match.publisher).filter((value): value is string => Boolean(value)))
+    const sourceIds = uniqueStrings(matches.map(match => match.id))
+    const combinedText = matches.map(match => `${match.title} ${match.snippet}`).join(' ')
+    const victimName = inferVictimName(query, matches)
+    const sectors = inferLiveTargets(query, matches).map(target => target.sector)
+
+    return {
+        date: latest.publishedAt!.slice(0, 10),
+        title: stripPublisherSuffix(latest.title, latest.publisher),
+        detail: claimClusterDetail(latest, publishers),
+        confidence: Math.min(0.86, Math.max(0.4, 0.64 - index * 0.04 + Math.min(0.18, (publishers.length - 1) * 0.06))),
+        sourceIds,
+        url: safeTiLink(latest.url),
+        claimType: inferClaimType(combinedText),
+        victimName,
+        affectedSectors: sectors.length ? sectors : undefined,
+        countries: inferCountries(combinedText),
+        impact: inferImpact(combinedText),
+        firstReportedAt: first.publishedAt,
+        lastReportedAt: latest.publishedAt,
+        publisherCount: publishers.length,
+        corroboratingSourceIds: sourceIds.length > 1 ? sourceIds : [],
+        contradictingSourceIds: []
+    }
+}
+
+function claimTokens(title: string, queryTokens: Set<string>): Set<string> {
+    const normalized = normalizeLiveSearchText(stripPublisherSuffix(title))
+    return new Set(normalized
+        .split(/\s+/)
+        .filter(token => token.length >= 4 && !queryTokens.has(token) && !CLAIM_CLUSTER_STOP_WORDS.has(token)))
+}
+
+function tokenSimilarity(left: Set<string>, right: Set<string>): number {
+    if (left.size < 2 || right.size < 2) return 0
+    let intersection = 0
+    for (const token of left) {
+        if (right.has(token)) intersection += 1
+    }
+    return intersection / Math.min(left.size, right.size)
+}
+
+function stripPublisherSuffix(title: string, publisher?: string): string {
+    if (publisher) {
+        const suffix = new RegExp(`\\s+-\\s+${escapeRegExp(publisher)}$`, 'i')
+        return title.replace(suffix, '').trim()
+    }
+    return title.replace(/\s+-\s+[^-]{2,60}$/, '').trim()
+}
+
+function claimClusterDetail(latest: LiveSearchMatch, publishers: string[]): string {
+    const title = normalizeLiveSearchText(stripPublisherSuffix(latest.title, latest.publisher))
+    const candidateSnippet = truncateSentence(latest.snippet, 240)
+    const normalizedSnippet = normalizeLiveSearchText(candidateSnippet)
+    const snippet = normalizedSnippet === title || normalizedSnippet.startsWith(`${title} `) ? '' : candidateSnippet
+    const coverage = publishers.length > 1
+        ? `Reported by ${publishers.length} publishers: ${publishers.slice(0, 4).join(', ')}.`
+        : publishers[0] ? `Reported by ${publishers[0]}.` : 'Reported by one public source.'
+    return snippet ? `${snippet} ${coverage}` : coverage
+}
+
+function inferClaimType(text: string): TiActivity['claimType'] {
+    const normalized = text.toLowerCase()
+    if (/\b(?:victim|breach|leak site|data leak|extortion)\b/.test(normalized)) return 'victim_claim'
+    if (/\b(?:cve-\d{4}-\d+|zero-day|vulnerabilit|exploit)\b/.test(normalized)) return 'vulnerability_exploitation'
+    if (/\b(?:botnet|command and control|c2|infrastructure|server|router)\b/.test(normalized)) return 'infrastructure_activity'
+    if (/\b(?:malware|backdoor|trojan|ransomware|implant)\b/.test(normalized)) return 'malware_activity'
+    if (/\b(?:operation|campaign|espionage|targeting)\b/.test(normalized)) return 'campaign'
+    return 'general_activity'
+}
+
+function inferVictimName(query: string, matches: LiveSearchMatch[]): string | undefined {
+    for (const match of matches) {
+        const title = stripPublisherSuffix(match.title, match.publisher)
+        const patterns = [
+            /\b(?:targets?|targeted|hits?|hit|breaches?|breached|attacks?|attacked)\s+([A-Z][A-Za-z0-9&.' -]{2,60}?)(?:\s+(?:with|using|in|after|through|via)\b|[:,]|$)/,
+            /\b([A-Z][A-Za-z0-9&.' -]{2,60}?)\s+(?:breach|attack|incident|hack)\b/
+        ]
+        for (const pattern of patterns) {
+            const candidate = title.match(pattern)?.[1]?.trim()
+            if (candidate && normalizeLiveSearchText(candidate) !== normalizeLiveSearchText(query)) return candidate
+        }
+    }
+    return undefined
+}
+
+function inferCountries(text: string): string[] | undefined {
+    const countries: Array<[RegExp, string]> = [
+        [/\b(?:united states|u\.s\.|american)\b/i, 'United States'],
+        [/\b(?:united kingdom|u\.k\.|british)\b/i, 'United Kingdom'],
+        [/\b(?:ukraine|ukrainian)\b/i, 'Ukraine'],
+        [/\b(?:germany|german)\b/i, 'Germany'],
+        [/\b(?:france|french)\b/i, 'France'],
+        [/\b(?:japan|japanese)\b/i, 'Japan'],
+        [/\b(?:south korea|korean)\b/i, 'South Korea']
+    ]
+    const matches = countries.filter(([pattern]) => pattern.test(text)).map(([, country]) => country)
+    return matches.length ? matches : undefined
+}
+
+function inferImpact(text: string): string | undefined {
+    const normalized = text.toLowerCase()
+    if (/\b(?:data theft|stolen data|exfiltrat|data leak)\b/.test(normalized)) return 'Reported data theft or disclosure'
+    if (/\b(?:ransomware|encrypt|extortion)\b/.test(normalized)) return 'Reported ransomware or extortion impact'
+    if (/\b(?:account takeover|credential theft|stolen credentials)\b/.test(normalized)) return 'Reported credential or account compromise'
+    if (/\b(?:disruption|outage|offline)\b/.test(normalized)) return 'Reported service disruption'
+    return undefined
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function uniqueStrings(values: string[]): string[] {
+    return [...new Set(values.map(value => value.trim()).filter(Boolean))]
 }
 
 async function searchClearWeb(query: string): Promise<LiveSearchMatch[]> {

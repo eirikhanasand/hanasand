@@ -15,7 +15,16 @@
       "detail": "Public reporting links this actor cluster to social-engineering and credential-collection activity.",
       "confidence": 0.62,
       "sourceIds": ["fixture:public-report"],
-      "url": "https://example.com/public-report"
+      "url": "https://example.com/public-report",
+      "claimType": "campaign",
+      "affectedSectors": ["Government, policy, and diplomacy"],
+      "countries": ["United States"],
+      "impact": "Reported credential or account compromise",
+      "firstReportedAt": "2026-06-20T01:00:00.000Z",
+      "lastReportedAt": "2026-06-20T02:00:00.000Z",
+      "publisherCount": 1,
+      "corroboratingSourceIds": [],
+      "contradictingSourceIds": []
     }
   ],
   "targets": [

@@ -5,6 +5,9 @@ Track public reporting and metadata about threat actors, ransomware groups, malw
 The Actor monitors a 20-group default watchlist and returns machine-readable rows for:
 
 - recent public activity,
+- clustered incident claims with first/last reporting times,
+- publisher counts and corroborating source IDs,
+- optional victim, affected-sector, country, and impact extraction,
 - likely targets,
 - observed TTPs,
 - source provenance and optional coverage metadata,
@@ -36,7 +39,15 @@ It does not return stolen data, credential values, private messages, payloads, r
   "rowType": "activity",
   "actor": "APT29",
   "title": "APT29 targets cloud accounts",
-  "summary": "A dated public report describing an APT29 campaign.",
+  "summary": "A dated public report describing an APT29 campaign. Reported by 2 publishers: Security Vendor A, Security Vendor B.",
+  "claimType": "campaign",
+  "affectedSectors": ["Technology and cloud services"],
+  "impact": "Reported credential or account compromise",
+  "publisherCount": 2,
+  "firstReportedAt": "2026-06-19T14:00:00.000Z",
+  "lastReportedAt": "2026-06-20T08:30:00.000Z",
+  "corroboratingSourceIds": ["source:a", "source:b"],
+  "contradictingSourceIds": [],
   "sourceType": "clear_web",
   "confidence": 0.64,
   "collectionMode": "live_search",
@@ -44,7 +55,7 @@ It does not return stolen data, credential values, private messages, payloads, r
   "sourceFamilyCount": 2,
   "activityCount": 3,
   "freshnessStatus": "current",
-  "evidenceGrade": "single_source",
+  "evidenceGrade": "corroborated",
   "isActionable": true,
   "hasDarknetMetadata": false,
   "hasPublicChannelCoverage": false,
@@ -69,7 +80,7 @@ The Actor emits public metadata and summaries only. These fields are excluded:
 
 ## Using the results
 
-Each run writes one normalized dataset. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `evidenceGrade` to distinguish corroborated findings from single-source claims, and retain `provenanceHash` when merging repeated runs.
+Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish corroborated findings from single-source claims, and retain `provenanceHash` when merging repeated runs.
 
 The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Coverage metadata is disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows.
 

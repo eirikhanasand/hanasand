@@ -12,7 +12,17 @@
       "sourceType": { "type": "string" },
       "sourceName": { "type": "string" },
       "sourceUrl": { "type": "string" },
+      "claimType": { "type": "string", "enum": ["campaign", "victim_claim", "malware_activity", "vulnerability_exploitation", "infrastructure_activity", "general_activity"] },
+      "victimName": { "type": "string" },
       "claimedDate": { "type": "string" },
+      "affectedSectors": { "type": "array", "items": { "type": "string" } },
+      "countries": { "type": "array", "items": { "type": "string" } },
+      "impact": { "type": "string" },
+      "firstReportedAt": { "type": "string", "format": "date-time" },
+      "lastReportedAt": { "type": "string", "format": "date-time" },
+      "publisherCount": { "type": "integer", "minimum": 0 },
+      "corroboratingSourceIds": { "type": "array", "items": { "type": "string" } },
+      "contradictingSourceIds": { "type": "array", "items": { "type": "string" } },
       "sector": { "type": "string" },
       "regions": { "type": "array", "items": { "type": "string" } },
       "ttp": { "type": "string" },
@@ -41,7 +51,7 @@
     "overview": {
       "title": "Actor intelligence",
       "transformation": {
-        "fields": ["actor", "rowType", "title", "summary", "freshnessStatus", "evidenceGrade", "isActionable", "sourceType", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+        "fields": ["actor", "rowType", "title", "summary", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "evidenceGrade", "isActionable", "sourceType", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
       },
       "display": {
         "component": "table",
@@ -50,6 +60,10 @@
           "rowType": { "label": "Type", "format": "text" },
           "title": { "label": "Finding", "format": "text" },
           "summary": { "label": "Summary", "format": "text" },
+          "claimType": { "label": "Claim type", "format": "text" },
+          "victimName": { "label": "Victim", "format": "text" },
+          "impact": { "label": "Impact", "format": "text" },
+          "publisherCount": { "label": "Publishers", "format": "number" },
           "freshnessStatus": { "label": "Freshness", "format": "text" },
           "evidenceGrade": { "label": "Evidence", "format": "text" },
           "isActionable": { "label": "Actionable", "format": "boolean" },

@@ -41,5 +41,12 @@ if (output.some((row) => row.rowType === "source" && row.sourceType === "system"
 if (output.some((row) => Array.isArray(row.warningCodes) && row.warningCodes.includes("darknet_metadata_only"))) {
   throw new Error("Coverage capability alone must not produce a darknet evidence warning");
 }
+const activity = output.find((row) => row.rowType === "activity");
+if (activity?.claimType !== "campaign" || activity?.publisherCount !== 1) {
+  throw new Error("Activity rows must preserve claim classification and publisher count");
+}
+if (activity?.firstReportedAt !== "2026-06-20T01:00:00.000Z" || activity?.lastReportedAt !== "2026-06-20T02:00:00.000Z") {
+  throw new Error("Activity rows must preserve the public reporting window");
+}
 
 console.log(`Smoke passed with ${output.length} safe metadata rows.`);

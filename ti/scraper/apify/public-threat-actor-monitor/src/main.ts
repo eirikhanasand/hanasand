@@ -27,6 +27,16 @@ interface TiSearchResponse {
     confidence: number;
     sourceIds: string[];
     url?: string;
+    claimType?: "campaign" | "victim_claim" | "malware_activity" | "vulnerability_exploitation" | "infrastructure_activity" | "general_activity";
+    victimName?: string;
+    affectedSectors?: string[];
+    countries?: string[];
+    impact?: string;
+    firstReportedAt?: string;
+    lastReportedAt?: string;
+    publisherCount?: number;
+    corroboratingSourceIds?: string[];
+    contradictingSourceIds?: string[];
   }>;
   targets: Array<{
     sector: string;
@@ -68,7 +78,16 @@ interface MarketplaceRow {
   sourceName?: string;
   sourceUrl?: string;
   victimName?: string;
+  claimType?: string;
   claimedDate?: string;
+  affectedSectors?: string[];
+  countries?: string[];
+  impact?: string;
+  firstReportedAt?: string;
+  lastReportedAt?: string;
+  publisherCount?: number;
+  corroboratingSourceIds?: string[];
+  contradictingSourceIds?: string[];
   sector?: string;
   country?: string;
   regions?: string[];
@@ -239,7 +258,17 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         sourceType: sourceType(source?.type),
         sourceName: source?.name,
         sourceUrl: safePublicUrl(item.url ?? source?.url),
+        claimType: item.claimType,
+        victimName: item.victimName,
         claimedDate: item.date,
+        affectedSectors: item.affectedSectors,
+        countries: item.countries,
+        impact: item.impact,
+        firstReportedAt: safeIso(item.firstReportedAt ?? "") ?? undefined,
+        lastReportedAt: safeIso(item.lastReportedAt ?? "") ?? undefined,
+        publisherCount: item.publisherCount ?? evidenceCount,
+        corroboratingSourceIds: item.corroboratingSourceIds ?? [],
+        contradictingSourceIds: item.contradictingSourceIds ?? [],
         confidence: clampNumber(item.confidence, 0, 1),
         ...qualityFields(response, item.date, item.confidence, evidenceCount),
         provenanceHash: stableHash([response.query, item.title, item.detail, item.date, item.sourceIds.join(",")].join("|"))
