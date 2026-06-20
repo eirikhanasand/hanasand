@@ -13,6 +13,13 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 23:52 CEST
+
+- Extended `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness` from executable states into concrete run-reuse execution branches.
+- Source-gap closures now carry idempotency keys, task fingerprints, active-run lookup order, active-run/no-active-run behavior, visible state after decision, and batch-level reuse summaries for interactive freshness, public-channel gap fill, and approved metadata review.
+- Green: `bun run check` and `bun test src/tests/schedulerProduction.test.ts`.
+- Next: continue into worker drain execution and source sweep task materialization without touching other agents' active Apify/Product SLO files.
+
 ## Progress - 2026-06-20 20:52 CEST
 
 - Added `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness` so source-gap closures now expose executable queue readiness, not only desired closure actions.

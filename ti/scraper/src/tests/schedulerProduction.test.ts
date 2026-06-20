@@ -1620,9 +1620,14 @@ describe("scheduler production readiness", () => {
       expect.objectContaining({
         query: "APT29",
         missingSourceFamily: "safe_public_sources",
+        idempotencyKey: "daily-source-gap:public:APT29:safe_public_sources:daily_actor",
+        taskFingerprint: "interactive_live_search:tier_100:APT29:safe_public_sources",
         readinessState: "ready_to_enqueue",
         enqueueBatch: "interactive_commercial_refresh",
         workerPartition: "interactive_actor_search",
+        onActiveRun: "reattach_and_poll_existing_run",
+        onNoActiveRun: "keep_paid_ready_suppressed",
+        visibleStateAfterDecision: "searching",
         cursorCheckpoint: "answer_delta",
         nextOperatorAction: "suppress_paid_ready"
       }),
@@ -1633,6 +1638,9 @@ describe("scheduler production readiness", () => {
         readinessState: "ready_to_enqueue",
         enqueueBatch: "public_channel_gap_fill",
         workerPartition: "public_channel_window",
+        onActiveRun: "reattach_and_poll_existing_run",
+        onNoActiveRun: "enqueue_idempotent_source_sweep",
+        visibleStateAfterDecision: "partial",
         cursorCheckpoint: "source_gap_delta",
         nextOperatorAction: "attach_or_enqueue"
       }),
@@ -1642,8 +1650,33 @@ describe("scheduler production readiness", () => {
         readinessState: "ready_for_metadata_review",
         enqueueBatch: "tier_4000_metadata_sweep",
         workerPartition: "restricted_metadata_approval",
+        onActiveRun: "reattach_and_poll_existing_run",
+        onNoActiveRun: "enqueue_metadata_review_hold",
+        visibleStateAfterDecision: "metadata_review",
         cursorCheckpoint: "metadata_review_delta",
         nextOperatorAction: "review_metadata_summary"
+      })
+    ]));
+    expect(daily.sourceGapExecutionReadiness.sourceSweepBatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        enqueueBatch: "interactive_commercial_refresh",
+        idempotencyScope: "tenant_query_source_family_daily",
+        leaseMode: "exclusive_per_reuse_key",
+        nextPollSeconds: 3,
+        promotesToVisibleState: "searching"
+      }),
+      expect.objectContaining({
+        enqueueBatch: "public_channel_gap_fill",
+        reuseKeys: expect.arrayContaining(["public:APT42:public_channel:daily_actor"]),
+        drainBehavior: "finish_or_checkpoint_before_shutdown",
+        nextPollSeconds: 15,
+        promotesToVisibleState: "partial"
+      }),
+      expect.objectContaining({
+        enqueueBatch: "tier_4000_metadata_sweep",
+        reuseKeys: expect.arrayContaining(["public:LockBit:approved_dark_metadata:daily_actor"]),
+        nextPollSeconds: 60,
+        promotesToVisibleState: "metadata_review"
       })
     ]));
     expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));

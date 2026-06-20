@@ -2051,16 +2051,25 @@ export function buildSchedulerDailyActorRunPlan(input: {
     }
   };
   const readinessByClosure: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["readinessByClosure"] = sourceGapClosurePlan.gapClosures.map((closure) => {
+    const executionIdentity = {
+      idempotencyKey: `daily-source-gap:${closure.reuseKey}`,
+      taskFingerprint: `${closure.workClass}:${closure.sourceTier}:${closure.query}:${closure.missingSourceFamily}`,
+      activeRunLookup: ["tenant_query_source_family", "daily_actor_reuse_key", "latest_cursor_checkpoint"] satisfies SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["readinessByClosure"][number]["activeRunLookup"]
+    };
     if (closure.missingSourceFamily === "approved_dark_metadata") {
       return {
         query: closure.query,
         missingSourceFamily: closure.missingSourceFamily,
         reuseKey: closure.reuseKey,
+        ...executionIdentity,
         queueAction: closure.queueAction,
         readinessState: "ready_for_metadata_review",
         executableNow: true,
         enqueueBatch: "tier_4000_metadata_sweep",
         workerPartition: "restricted_metadata_approval",
+        onActiveRun: "reattach_and_poll_existing_run",
+        onNoActiveRun: "enqueue_metadata_review_hold",
+        visibleStateAfterDecision: "metadata_review",
         drainPriority: 5,
         maxLeaseSeconds: 600,
         heartbeatSeconds: 60,
@@ -2074,11 +2083,15 @@ export function buildSchedulerDailyActorRunPlan(input: {
         query: closure.query,
         missingSourceFamily: closure.missingSourceFamily,
         reuseKey: closure.reuseKey,
+        ...executionIdentity,
         queueAction: closure.queueAction,
         readinessState: "ready_to_enqueue",
         executableNow: true,
         enqueueBatch: "public_channel_gap_fill",
         workerPartition: "public_channel_window",
+        onActiveRun: "reattach_and_poll_existing_run",
+        onNoActiveRun: "enqueue_idempotent_source_sweep",
+        visibleStateAfterDecision: "partial",
         drainPriority: 3,
         maxLeaseSeconds: 180,
         heartbeatSeconds: 15,
@@ -2091,11 +2104,15 @@ export function buildSchedulerDailyActorRunPlan(input: {
       query: closure.query,
       missingSourceFamily: closure.missingSourceFamily,
       reuseKey: closure.reuseKey,
+      ...executionIdentity,
       queueAction: closure.queueAction,
       readinessState: closure.queueAction === "reuse_active_run" ? "reattach_existing_run" : "ready_to_enqueue",
       executableNow: true,
       enqueueBatch: "interactive_commercial_refresh",
       workerPartition: "interactive_actor_search",
+      onActiveRun: "reattach_and_poll_existing_run",
+      onNoActiveRun: closure.queueAction === "suppress_ready_until_gap_closes" ? "keep_paid_ready_suppressed" : "enqueue_idempotent_source_sweep",
+      visibleStateAfterDecision: "searching",
       drainPriority: 2,
       maxLeaseSeconds: 120,
       heartbeatSeconds: 15,
@@ -2130,7 +2147,39 @@ export function buildSchedulerDailyActorRunPlan(input: {
       heartbeatExpiryRecovery: "requeue_with_last_checkpoint",
       backgroundSweepYield: true
     },
-    readinessByClosure
+    readinessByClosure,
+    sourceSweepBatches: [
+      {
+        enqueueBatch: "interactive_commercial_refresh",
+        queryCount: readinessByClosure.filter((closure) => closure.enqueueBatch === "interactive_commercial_refresh").length,
+        reuseKeys: readinessByClosure.filter((closure) => closure.enqueueBatch === "interactive_commercial_refresh").map((closure) => closure.reuseKey),
+        idempotencyScope: "tenant_query_source_family_daily",
+        leaseMode: "exclusive_per_reuse_key",
+        drainBehavior: "finish_or_checkpoint_before_shutdown",
+        nextPollSeconds: 3,
+        promotesToVisibleState: "searching"
+      },
+      {
+        enqueueBatch: "public_channel_gap_fill",
+        queryCount: readinessByClosure.filter((closure) => closure.enqueueBatch === "public_channel_gap_fill").length,
+        reuseKeys: readinessByClosure.filter((closure) => closure.enqueueBatch === "public_channel_gap_fill").map((closure) => closure.reuseKey),
+        idempotencyScope: "tenant_query_source_family_daily",
+        leaseMode: "exclusive_per_reuse_key",
+        drainBehavior: "finish_or_checkpoint_before_shutdown",
+        nextPollSeconds: 15,
+        promotesToVisibleState: "partial"
+      },
+      {
+        enqueueBatch: "tier_4000_metadata_sweep",
+        queryCount: readinessByClosure.filter((closure) => closure.enqueueBatch === "tier_4000_metadata_sweep").length,
+        reuseKeys: readinessByClosure.filter((closure) => closure.enqueueBatch === "tier_4000_metadata_sweep").map((closure) => closure.reuseKey),
+        idempotencyScope: "tenant_query_source_family_daily",
+        leaseMode: "exclusive_per_reuse_key",
+        drainBehavior: "finish_or_checkpoint_before_shutdown",
+        nextPollSeconds: 60,
+        promotesToVisibleState: "metadata_review"
+      }
+    ]
   };
   const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {
     enqueueWindow: "source_sweeps_before_actor_run",

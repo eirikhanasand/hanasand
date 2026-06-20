@@ -1408,17 +1408,33 @@ export interface SchedulerDailyActorRunPlanDto {
       query: string;
       missingSourceFamily: "safe_public_sources" | "public_channel" | "approved_dark_metadata";
       reuseKey: string;
+      idempotencyKey: string;
+      taskFingerprint: string;
       queueAction: "reuse_active_run" | "enqueue_gap_probe" | "metadata_review_hold" | "suppress_ready_until_gap_closes";
       readinessState: "reattach_existing_run" | "ready_to_enqueue" | "ready_for_metadata_review" | "blocked_until_source_activation";
       executableNow: boolean;
       enqueueBatch: "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep";
       workerPartition: "interactive_actor_search" | "public_channel_window" | "restricted_metadata_approval" | "background_source_sweep";
+      activeRunLookup: Array<"tenant_query_source_family" | "daily_actor_reuse_key" | "latest_cursor_checkpoint">;
+      onActiveRun: "reattach_and_poll_existing_run";
+      onNoActiveRun: "enqueue_idempotent_source_sweep" | "enqueue_metadata_review_hold" | "keep_paid_ready_suppressed";
+      visibleStateAfterDecision: "searching" | "partial" | "metadata_review";
       drainPriority: number;
       maxLeaseSeconds: number;
       heartbeatSeconds: number;
       cursorCheckpoint: "answer_delta" | "source_gap_delta" | "metadata_review_delta";
       blockingReasons: string[];
       nextOperatorAction: "attach_or_enqueue" | "activate_source_candidate" | "review_metadata_summary" | "suppress_paid_ready";
+    }>;
+    sourceSweepBatches: Array<{
+      enqueueBatch: "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_4000_metadata_sweep";
+      queryCount: number;
+      reuseKeys: string[];
+      idempotencyScope: "tenant_query_source_family_daily";
+      leaseMode: "exclusive_per_reuse_key";
+      drainBehavior: "finish_or_checkpoint_before_shutdown";
+      nextPollSeconds: 3 | 15 | 60;
+      promotesToVisibleState: "searching" | "partial" | "metadata_review";
     }>;
   };
   routeContracts: {
