@@ -13,6 +13,14 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 20:44 CEST
+
+- Added `scheduler.dailyActorRunPlan.sourceGapClosurePlan` so the daily Actor plan now shows per-query source-gap closures, not just batch ordering: `APT29` stale public-source refresh, `APT42` public-channel probe, and ransomware approved-metadata review.
+- Each closure now exposes reuse key, queue action, work class, source tier, retry/backoff, deadline, fairness group, visible UI state, worker limits, and paid-row effect so the UI can explain queue/freshness work instead of a static searching label.
+- Updated `/v1/contracts`, scheduler tests, and operations docs for the new closure surface while preserving duplicate-run reuse, stale-only suppression, metadata-only caveats, and no-leak promotion rules.
+- Helped validate concurrent darkweb/evidence/quality changes already in the tree; green: `bun run check`, focused scheduler/API/storage/darkweb/pipeline tests, route inventory, contract index, API regression, and full `bun test` (527 pass).
+- Next: continue from this plan into concrete source sweep run-reuse behavior and worker drain/readiness so these closures can become executable queue actions rather than only route-visible scheduling state.
+
 ## Progress - 2026-06-20 19:19 CEST
 
 - Added `scheduler.dailyActorRunPlan.executionQueuePlan` so the daily Actor plan now states which work is enqueued first and why: commercial actor refreshes, public-channel gap fill, tier-100/tier-1000 public source sweeps, tier-4000 approved metadata review, then dataset emission.
