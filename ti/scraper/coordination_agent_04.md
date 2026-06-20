@@ -26,8 +26,9 @@ When coherent, update this file, commit, push, and continue into the next source
 - Continued Program BG high-value source replacement for the 4,000 -> 10,000 source ladder.
 - Added `paidSourceTierPlan.payworthyRepairQueue` with dry-run queues for `duplicate_suppressed`, `legal_review_not_current`, and `not_ready_for_dry_run`, including repair/replace/retire decisions, exact unblock actions, safe source hashes, buyer-visible row lift, legal/robots evidence, replacement candidate ids, and no-leak boundaries.
 - Added `paidSourceTierPlan.highValueReplacementBatch` for low source value, low freshness, low evidence yield, and low public-answer-impact blockers, with expected fresh rows/day, evidence yield, actor/ransomware coverage, parser readiness, legal/robots state, source-family/actor plans, buyer-visible row effect, and projected payworthy-source lift.
+- Added `paidSourceTierPlan.highValueReplacementBatch.activationRunbook` with day-1 canary, day-3 parser/legal clearance, and held replacement actions derived from replacement rows, including source ids, source families, actors, blockers addressed, expected fresh/actor/ransomware rows/day, expected payworthy lift, parser/legal/scheduler work, buyer-visible row effect, measurement work, and Agent 01/02/03/07/09/10 handoffs.
 - Preserved dry-run/no-crawl/no-activation/no-private/no-auth/no-CAPTCHA/no-payload/no-actor-interaction boundaries.
-- Verification is green: `bun run check`, focused source/ops/API tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` with 527 passing tests.
+- Verification is green: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 527 passing tests.
 - Continue next with additional high-value public source replacement batches that raise the source payworthy rate toward 72% and then prove useful/fresh Actor row lift.
 
 - Completed Program BL source acquisition to 1,000 for `/v1/sources/atlas`.
