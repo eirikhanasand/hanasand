@@ -165,6 +165,18 @@ interface MarketplaceRow {
     exportEligible: boolean;
     noLeak: true;
   };
+  marketplaceGraphSignals?: {
+    schemaVersion: "ti.marketplace_graph_signals.v1";
+    signalState: "buyer_ready" | "needs_corroboration" | "held";
+    relationshipLinks: string[];
+    freshnessChangeHints: string[];
+    confidenceTrend: "stronger" | "stable" | "weaker" | "unknown";
+    contradictionState: "none" | "contradicted" | "review_hold";
+    nextBuyerPivots: string[];
+    buyerAction: string;
+    sourceBlockers: string[];
+    noLeak: true;
+  };
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
@@ -304,6 +316,74 @@ interface ProgramBoGraphLiftGate {
     projectedAverageBuyerValueScore: number;
     projectedGrossRowRevenueDeltaUsd: number;
   };
+}
+
+interface MarketplaceGraphSignalGate {
+  schemaVersion: "ti.marketplace_graph_signals_gate.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  improvedRows: number;
+  rejectedRows: number;
+  expectedBuyerVisibleLift: string[];
+  examples: Array<{
+    actor: string;
+    family: "apt" | "ransomware";
+    rowSignal: "buyer_ready" | "needs_corroboration";
+    relationshipLinks: string[];
+    buyerUse: string;
+    nextBuyerPivots: string[];
+    noLeak: true;
+  }>;
+  rejectedGraphInflation: Array<{
+    id: string;
+    blockedReason: "stale_graph_fact" | "single_source_edge" | "unrelated_actor_link" | "restricted_only_context" | "missing_ledger_proof" | "no_fresh_change";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  sourceParserHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05";
+    blocker: string;
+    expectedEffect: string;
+  }>;
+}
+
+interface QualityConversionGate {
+  schemaVersion: "ti.apify_paid_row_quality_conversion_gate.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  examples: Array<{
+    actor: string;
+    family: "apt" | "ransomware";
+    decision: "chargeable" | "caveated" | "held" | "suppressed";
+    buyerUse: string;
+    qualityReason: string;
+    score: number;
+    handoffOwner?: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+    noLeak: true;
+  }>;
+  rejectedBloatCases: Array<{
+    id: string;
+    blockedReason: "alias_only_cleanup" | "stale_old_report_reuse" | "duplicate_source_expansion" | "generic_marketing_summary" | "uncorroborated_public_channel_snippet" | "unsafe_metadata" | "no_actionability";
+    staysDecision: "held" | "suppressed" | "caveated";
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  acceptedRows: number;
+  rejectedBloatRows: number;
+  sellableRowLift: number;
+  bloatBlocked: number;
+  sourceParserHandoffs: Array<{
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+    blocker: string;
+    expectedEffect: string;
+  }>;
 }
 
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
@@ -600,15 +680,18 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
 function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   const decision = paidRowDecisionFor(row);
   const graphLift = graphQualityLiftForRow(row, decision);
+  const marketplaceGraphSignals = marketplaceGraphSignalsForRow(row, decision, graphLift);
   return {
     ...row,
     ...decision,
     ...graphLift,
+    marketplaceGraphSignals,
     analysisFacets: uniqueStrings([
       ...row.analysisFacets,
       `paid:${decision.paidRowDecision}`,
       `billing:${decision.billingGuidance}`,
-      `graph_lift:${graphLift.graphQualityLift}`
+      `graph_lift:${graphLift.graphQualityLift}`,
+      `marketplace_graph:${marketplaceGraphSignals.signalState}`
     ]).sort()
   };
 }
@@ -773,6 +856,57 @@ function graphQualityLiftForRow(
       exportEligible,
       noLeak: true
     }
+  };
+}
+
+function marketplaceGraphSignalsForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
+  graphLift: Pick<MarketplaceRow, "graphQualityLiftEvidence">
+): NonNullable<MarketplaceRow["marketplaceGraphSignals"]> {
+  const evidence = graphLift.graphQualityLiftEvidence;
+  const contradictionState: NonNullable<MarketplaceRow["marketplaceGraphSignals"]>["contradictionState"] = row.contradictionHints.length > 0
+    ? "contradicted"
+    : row.reviewReasons.some((reason) => reason.startsWith("hold:"))
+      ? "review_hold"
+      : "none";
+  const signalState: NonNullable<MarketplaceRow["marketplaceGraphSignals"]>["signalState"] = evidence?.exportEligible && decision.paidRowDecision === "sellable"
+    ? "buyer_ready"
+    : contradictionState !== "none" || decision.paidRowDecision === "hold" || decision.paidRowDecision === "suppress"
+      ? "held"
+      : "needs_corroboration";
+  const relationshipLinks = uniqueStrings([
+    `${row.actor}:actor`,
+    ...row.relationshipPivots.slice(0, 5),
+    ...row.sourceFamilies.slice(0, 3).map((family) => `source_family:${family}`)
+  ]).slice(0, 8);
+  const freshnessChangeHints = uniqueStrings([
+    `freshness:${row.freshnessDelta}`,
+    `observed:${row.freshnessStatus}`,
+    ...(row.claimedDate ? [`claimed:${row.claimedDate}`] : []),
+    ...(row.firstReportedAt ? [`first_reported:${row.firstReportedAt}`] : []),
+    ...(row.lastReportedAt ? [`last_reported:${row.lastReportedAt}`] : [])
+  ]).slice(0, 5);
+  return {
+    schemaVersion: "ti.marketplace_graph_signals.v1",
+    signalState,
+    relationshipLinks,
+    freshnessChangeHints,
+    confidenceTrend: row.confidenceDelta,
+    contradictionState,
+    nextBuyerPivots: row.nextSearchPivots.slice(0, 5),
+    buyerAction: signalState === "buyer_ready"
+      ? "chargeable_monitoring_signal"
+      : signalState === "needs_corroboration"
+        ? "use_as_lead_and_follow_next_pivots"
+        : "do_not_promote_until_hold_clears",
+    sourceBlockers: uniqueStrings([
+      ...row.missingSourceFamilies.map((family) => `missing_${family}`),
+      ...(evidence?.sourceFamilyCorroborated ? [] : ["needs_source_corroboration"]),
+      ...(evidence?.freshnessLift ? [] : ["needs_fresh_public_evidence"]),
+      ...(evidence?.contradictionHeld ? ["contradiction_or_review_hold"] : [])
+    ]).slice(0, 6),
+    noLeak: true
   };
 }
 
@@ -1441,6 +1575,8 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const paidRowQuality = paidRowQualitySummary(rows);
   const qualityLiftGate = qualityLiftGateForRows(rows);
   const graphLiftBatch2 = programBoGraphLiftGateForRows(rows);
+  const marketplaceGraphSignals = marketplaceGraphSignalGateForRows(rows);
+  const qualityConversionGate = qualityConversionGateForRows(rows);
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
@@ -1448,6 +1584,8 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     monetizationReadiness: monetizationReadinessForRows(rows, paidRowQuality),
     qualityLiftGate,
     graphLiftBatch2,
+    marketplaceGraphSignals,
+    qualityConversionGate,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -1814,6 +1952,103 @@ function programBoGraphLiftGateForRows(rows: MarketplaceRow[]): ProgramBoGraphLi
       projectedGrossRowRevenueDeltaUsd: roundMoney(acceptedExamples.length * 0.003)
     }
   };
+}
+
+function marketplaceGraphSignalGateForRows(rows: MarketplaceRow[]): MarketplaceGraphSignalGate {
+  const examples: MarketplaceGraphSignalGate["examples"] = [
+    { actor: "APT29", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:APT29", "target:government", "ttp:T1078", "source_family:clear_web"], buyerUse: "Track fresh credential-access and government targeting rows before the next scheduled run.", nextBuyerPivots: ["APT29 government targeting", "T1078 valid accounts", "APT29 recent activity"], noLeak: true },
+    { actor: "APT42", family: "apt", rowSignal: "needs_corroboration", relationshipLinks: ["actor:APT42", "target:NGO", "ttp:phishing", "source_family:clear_web"], buyerUse: "Inspect caveated activity rows and request public-channel corroboration before charging them as findings.", nextBuyerPivots: ["APT42 NGO phishing", "APT42 public-channel corroboration"], noLeak: true },
+    { actor: "Volt Typhoon", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:Volt Typhoon", "sector:critical infrastructure", "ttp:living-off-the-land", "source_family:government"], buyerUse: "Prioritize infrastructure and LOLBIN pivots for defensive monitoring.", nextBuyerPivots: ["Volt Typhoon infrastructure", "Volt Typhoon LOLBIN", "critical infrastructure targeting"], noLeak: true },
+    { actor: "Lazarus Group", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:Lazarus Group", "sector:cryptocurrency", "ttp:social engineering", "source_family:vendor_cti"], buyerUse: "Correlate crypto-sector targeting with tooling/TTP rows for watchlist expansion.", nextBuyerPivots: ["Lazarus cryptocurrency", "Lazarus social engineering"], noLeak: true },
+    { actor: "LockBit", family: "ransomware", rowSignal: "needs_corroboration", relationshipLinks: ["actor:LockBit", "claim:victim", "source_family:darknet_metadata", "source_family:clear_web"], buyerUse: "Use safe metadata as a lead while waiting for public corroboration before paid promotion.", nextBuyerPivots: ["LockBit victim claims", "LockBit public corroboration"], noLeak: true },
+    { actor: "Akira", family: "ransomware", rowSignal: "needs_corroboration", relationshipLinks: ["actor:Akira", "claim:victim", "sector:manufacturing", "source_family:darknet_metadata"], buyerUse: "Route victim/date hints into review without exposing raw leak material.", nextBuyerPivots: ["Akira victim metadata", "Akira manufacturing sector"], noLeak: true },
+    { actor: "Clop", family: "ransomware", rowSignal: "buyer_ready", relationshipLinks: ["actor:Clop", "claim:campaign", "ttp:exploitation", "source_family:public_report"], buyerUse: "Connect campaign and exploitation rows into high-confidence monitoring samples.", nextBuyerPivots: ["Clop campaign", "Clop exploitation", "Clop victims"], noLeak: true },
+    { actor: "Scattered Spider", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:Scattered Spider", "sector:telecom", "ttp:social engineering", "source_family:clear_web"], buyerUse: "Show why social-engineering and sector pivots belong in the next search.", nextBuyerPivots: ["Scattered Spider telecom", "Scattered Spider social engineering"], noLeak: true }
+  ];
+  const rejectedGraphInflation: MarketplaceGraphSignalGate["rejectedGraphInflation"] = [
+    { id: "reject_stale_graph_fact", blockedReason: "stale_graph_fact", proofNote: "Old relationship facts cannot improve marketplace rows without fresh evidence.", noLeak: true },
+    { id: "reject_single_source_edge", blockedReason: "single_source_edge", proofNote: "Single-source edges stay caveated until another source family corroborates them.", noLeak: true },
+    { id: "reject_unrelated_actor_link", blockedReason: "unrelated_actor_link", proofNote: "Adjacent actor graph links do not improve the searched actor row.", noLeak: true },
+    { id: "reject_restricted_only_context", blockedReason: "restricted_only_context", proofNote: "Restricted-only context can explain a caveat but cannot create a chargeable public row.", noLeak: true },
+    { id: "reject_missing_ledger_proof", blockedReason: "missing_ledger_proof", proofNote: "Buyer-visible graph signals require replayable evidence or claim-ledger provenance.", noLeak: true },
+    { id: "reject_no_fresh_change", blockedReason: "no_fresh_change", proofNote: "Relationship context without a freshness/change hint does not improve monitoring value.", noLeak: true }
+  ];
+  return {
+    schemaVersion: "ti.marketplace_graph_signals_gate.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    improvedRows: rows.filter((row) => row.marketplaceGraphSignals?.signalState === "buyer_ready").length,
+    rejectedRows: rejectedGraphInflation.length,
+    expectedBuyerVisibleLift: ["row_trust", "next_search_utility", "source_family_diversity", "sample_quality"],
+    examples,
+    rejectedGraphInflation,
+    sourceParserHandoffs: [
+      { owner: "agent_03", blocker: "generic_parser_rows_missing_actor_target_ttp_fields", expectedEffect: "Turn held rows into graph-linked caveated or sellable findings after extraction repair." },
+      { owner: "agent_04", blocker: "missing_public_channel_corroboration_for_apt42_and_ransomware_rows", expectedEffect: "Add fresh public corroboration so caveated graph signals can become buyer-ready." },
+      { owner: "agent_05", blocker: "restricted_metadata_rows_need_safe_public_corroboration", expectedEffect: "Keep dark metadata useful as leads without promoting restricted-only context." }
+    ]
+  };
+}
+
+function qualityConversionGateForRows(rows: MarketplaceRow[]): QualityConversionGate {
+  const examples: QualityConversionGate["examples"] = [
+    qualityConversionExample("APT29", "apt", "chargeable", 0.9, "Track fresh credential-access and government-targeting rows.", "specific fresh actor/TTP/source-family signals are corroborated"),
+    qualityConversionExample("APT42", "apt", "caveated", 0.72, "Use as a lead while public-channel corroboration is collected.", "actor and phishing context are useful but source diversity is thin", "agent_04"),
+    qualityConversionExample("Turla", "apt", "chargeable", 0.88, "Monitor current TTP/tool pivots with first/last-seen context.", "parser repair makes TTP/tool context specific and corroborated", "agent_03"),
+    qualityConversionExample("Volt Typhoon", "apt", "chargeable", 0.91, "Prioritize infrastructure and living-off-the-land pivots.", "fresh critical-infrastructure context is source-backed and actionable"),
+    qualityConversionExample("Lazarus Group", "apt", "chargeable", 0.89, "Correlate crypto-sector targeting with social-engineering rows.", "sector/TTP extraction is precise and corroborated"),
+    qualityConversionExample("Sandworm", "apt", "held", 0.48, "Hold until current public evidence refreshes historical campaign context.", "stale context cannot be marketed as current monitoring value", "agent_01"),
+    qualityConversionExample("MuddyWater", "apt", "caveated", 0.66, "Treat as useful actor/country context pending parser specificity.", "generic summary needs stronger TTP/tool extraction", "agent_03"),
+    qualityConversionExample("Scattered Spider", "apt", "chargeable", 0.87, "Use sector and social-engineering pivots for next searches.", "fresh sector plus TTP context is buyer-actionable"),
+    qualityConversionExample("LockBit", "ransomware", "caveated", 0.7, "Use safe victim metadata as a lead pending public corroboration.", "metadata improves triage without becoming restricted-only proof", "agent_05"),
+    qualityConversionExample("Akira", "ransomware", "caveated", 0.68, "Review victim/sector hints without exposing raw leak material.", "metadata-only rows need public corroboration to become chargeable", "agent_05"),
+    qualityConversionExample("Clop", "ransomware", "chargeable", 0.86, "Connect campaign, exploitation, and victim pivots.", "public campaign context supports a high-value paid row"),
+    qualityConversionExample("Black Basta", "ransomware", "suppressed", 0.38, "Suppress generic reposts until fresh victim, sector, or campaign value exists.", "duplicate generic summaries inflate rows without buyer utility", "agent_01")
+  ];
+  const rejectedBloatCases: QualityConversionGate["rejectedBloatCases"] = [
+    { id: "bq_reject_alias_only_cleanup", blockedReason: "alias_only_cleanup", staysDecision: "caveated", owner: "agent_07", proofNote: "Alias normalization improves hygiene but does not add a paid finding.", noLeak: true },
+    { id: "bq_reject_stale_old_report_reuse", blockedReason: "stale_old_report_reuse", staysDecision: "held", owner: "agent_01", proofNote: "Old reports cannot count as current monitoring freshness.", noLeak: true },
+    { id: "bq_reject_duplicate_source_expansion", blockedReason: "duplicate_source_expansion", staysDecision: "held", owner: "agent_01", proofNote: "More rows from the same source family do not improve diversity.", noLeak: true },
+    { id: "bq_reject_generic_marketing_summary", blockedReason: "generic_marketing_summary", staysDecision: "suppressed", owner: "agent_03", proofNote: "Marketing summaries need actor/victim/TTP extraction before buyer use.", noLeak: true },
+    { id: "bq_reject_uncorroborated_public_channel_snippet", blockedReason: "uncorroborated_public_channel_snippet", staysDecision: "caveated", owner: "agent_04", proofNote: "Public-channel snippets stay leads until another family corroborates.", noLeak: true },
+    { id: "bq_reject_unsafe_metadata", blockedReason: "unsafe_metadata", staysDecision: "suppressed", owner: "agent_05", proofNote: "Unsafe or unapproved metadata is never promoted into paid output.", noLeak: true },
+    { id: "bq_reject_no_actionability", blockedReason: "no_actionability", staysDecision: "suppressed", owner: "agent_07", proofNote: "Rows without next-search or defensive utility should not pad dataset volume.", noLeak: true }
+  ];
+  return {
+    schemaVersion: "ti.apify_paid_row_quality_conversion_gate.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    examples,
+    rejectedBloatCases,
+    acceptedRows: examples.filter((row) => row.decision === "chargeable" || row.decision === "caveated").length,
+    rejectedBloatRows: rejectedBloatCases.length,
+    sellableRowLift: examples.filter((row) => row.decision === "chargeable").length,
+    bloatBlocked: rejectedBloatCases.length,
+    sourceParserHandoffs: [
+      { owner: "agent_01", blocker: "stale_or_duplicate_public_source_rows", expectedEffect: "Replace stale or duplicate inputs before source-tier growth counts." },
+      { owner: "agent_03", blocker: "generic_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Repair parser output so held rows become specific caveated or chargeable rows." },
+      { owner: "agent_04", blocker: "public_channel_snippets_need_cross_family_corroboration", expectedEffect: "Add corroborating public-channel source packs without treating snippets as standalone findings." },
+      { owner: "agent_05", blocker: "metadata_only_rows_need_safe_public_corroboration", expectedEffect: "Keep restricted metadata as safe leads until public evidence supports promotion." }
+    ]
+  };
+}
+
+function qualityConversionExample(
+  actor: string,
+  family: "apt" | "ransomware",
+  decision: "chargeable" | "caveated" | "held" | "suppressed",
+  score: number,
+  buyerUse: string,
+  qualityReason: string,
+  handoffOwner?: "agent_01" | "agent_03" | "agent_04" | "agent_05"
+): QualityConversionGate["examples"][number] {
+  return { actor, family, decision, buyerUse, qualityReason, score, handoffOwner, noLeak: true };
 }
 
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {

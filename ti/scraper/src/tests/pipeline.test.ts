@@ -2022,6 +2022,36 @@ describe("pipeline", () => {
     )).toBe(true);
     expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate)).toBe(true);
     expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
+    expect(pack.paidRowQualityGate.qualityConversionGate).toMatchObject({
+      schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      acceptedRows: 10,
+      rejectedBloatRows: 7,
+      sellableRowLift: 6,
+      bloatBlocked: 7
+    });
+    expect(pack.paidRowQualityGate.qualityConversionGate.routeVisibleOn).toEqual(expect.arrayContaining([
+      "/v1/quality/evaluate",
+      "/v1/intel/search",
+      "/v1/contracts",
+      "/v1/ops/product-slo"
+    ]));
+    expect(pack.paidRowQualityGate.qualityConversionGate.examples.length).toBeGreaterThanOrEqual(12);
+    expect(pack.paidRowQualityGate.qualityConversionGate.examples.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT42", "Turla", "Volt Typhoon", "LockBit", "Akira", "Clop", "Black Basta"]));
+    expect(pack.paidRowQualityGate.qualityConversionGate.rejectedBloatCases.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "alias_only_cleanup",
+      "stale_old_report_reuse",
+      "duplicate_source_expansion",
+      "generic_marketing_summary",
+      "uncorroborated_public_channel_snippet",
+      "unsafe_metadata",
+      "no_actionability"
+    ]));
+    expect(pack.paidRowQualityGate.qualityConversionGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

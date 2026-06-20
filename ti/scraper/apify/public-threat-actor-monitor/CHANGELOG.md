@@ -9,6 +9,7 @@
 - Added dry-run `OUTPUT.qualityLiftGate` with accepted/rejected before-after repair examples, sellable/fresh/useful row lift metrics, cost-per-useful-row delta, projected row revenue delta, and owner handoffs so repair work only counts when buyer-visible paid output improves.
 - Added per-row `graphQualityLift` and `graphQualityLiftEvidence` so sellable/caveated/held rows expose relationship readiness, corroboration, contradiction holds, freshness lift, export-review eligibility, and no-leak state.
 - Added Program BO `OUTPUT.graphLiftBatch2` against live proof `OThlfd0uzSCNnedAO` / dataset `LSen2fYtwFTtOr7vK`, including one accepted graph-backed sellable lift and explicit graph-only rejection cases for stale, single-source, contradicted, restricted-only, missing-ledger, and unrelated-actor context.
+- Added Program BP per-row `marketplaceGraphSignals` plus run-level `OUTPUT.marketplaceGraphSignals` with eight safe APT/ransomware examples, next buyer pivots, row actions, and graph-inflation rejection cases for stale, single-source, unrelated, restricted-only, missing-ledger, and no-fresh-change context.
 
 ## 0.6.3 - 2026-06-20
 

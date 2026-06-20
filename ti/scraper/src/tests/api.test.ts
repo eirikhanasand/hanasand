@@ -317,6 +317,73 @@ describe("api v1", () => {
     });
     expect((response.buyerVisibleQualityLiftGate as { acceptedExamples: Array<{ owner: string; afterDecision: string }> }).acceptedExamples.some((row) => row.owner === "agent_03" && row.afterDecision === "sellable")).toBe(true);
     expect((response.buyerVisibleQualityLiftGate as { ownerHandoffs: Array<{ owner: string; accepted: number }> }).ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
+    expect((response.marketplaceGraphSignals as {
+      schemaVersion: string;
+      baselineRunId: string;
+      baselineDatasetId: string;
+      routeVisibleOn: string[];
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      improvedRows: number;
+      rejectedRows: number;
+      examples: Array<{ actor: string; family: string; rowSignal: string; noLeak: boolean }>;
+      rejectedGraphInflation: Array<{ blockedReason: string; noLeak: boolean }>;
+      sourceParserHandoffs: Array<{ owner: string }>;
+    })).toMatchObject({
+      schemaVersion: "ti.marketplace_graph_signals_gate.v1",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"]) as unknown as string[],
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      improvedRows: 8,
+      rejectedRows: 6
+    });
+    const graphSignalExamples = (response.marketplaceGraphSignals as { examples: Array<{ actor: string; family: string; rowSignal: string; noLeak: boolean }> }).examples;
+    expect(graphSignalExamples).toHaveLength(8);
+    expect(graphSignalExamples.some((row) => row.actor === "APT42" && row.rowSignal === "needs_corroboration" && row.noLeak === true)).toBe(true);
+    expect(graphSignalExamples.some((row) => row.family === "ransomware" && row.noLeak === true)).toBe(true);
+    const graphSignalRejections = (response.marketplaceGraphSignals as { rejectedGraphInflation: Array<{ blockedReason: string; noLeak: boolean }> }).rejectedGraphInflation;
+    expect(graphSignalRejections.map((row) => row.blockedReason)).toEqual(expect.arrayContaining(["stale_graph_fact", "single_source_edge", "restricted_only_context", "missing_ledger_proof", "no_fresh_change"]));
+    expect(graphSignalRejections.every((row) => row.noLeak)).toBe(true);
+    expect((response.marketplaceGraphSignals as { sourceParserHandoffs: Array<{ owner: string }> }).sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05"]));
+    expect((response.qualityConversionGate as {
+      schemaVersion: string;
+      routeVisibleOn: string[];
+      baselineRunId: string;
+      baselineDatasetId: string;
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      exampleCount: number;
+      chargeableExampleCount: number;
+      caveatedExampleCount: number;
+      heldOrSuppressedExampleCount: number;
+      rejectedBloatRows: number;
+      sellableRowLift: number;
+      bloatBlocked: number;
+      rejectedBloatReasons: string[];
+      sourceParserHandoffs: Array<{ owner: string }>;
+    })).toMatchObject({
+      schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      exampleCount: 12,
+      chargeableExampleCount: 6,
+      caveatedExampleCount: 4,
+      heldOrSuppressedExampleCount: 2,
+      rejectedBloatRows: 7,
+      sellableRowLift: 6,
+      bloatBlocked: 7,
+      rejectedBloatReasons: expect.arrayContaining(["alias_only_cleanup", "stale_old_report_reuse", "duplicate_source_expansion", "generic_marketing_summary", "uncorroborated_public_channel_snippet", "unsafe_metadata", "no_actionability"]) as unknown as string[]
+    });
+    expect((response.qualityConversionGate as { sourceParserHandoffs: Array<{ owner: string }> }).sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect((response.deploymentProof as { actorBuildId: string }).actorBuildId).toBe("build_live");
     expect((response.resourceGuardrails as { scraperTargetRamGb: number }).scraperTargetRamGb).toBe(96);
 
@@ -1492,6 +1559,15 @@ describe("api v1", () => {
       frontendApiCompatibility: { states: Array<{ state: string; copy: string; refreshAfterSeconds: number; preservePriorAnswer: boolean }>; stableFields: string[]; unknownActorCopy: string; emptyDeltaRule: string };
       pricingHooks: { model: string; unitEvent: string; actorStartEvent: string; effectiveDate: string; rowPriceUsdPerThousand: number; actorStartPriceUsd: number; platformUsageIncludedForUsers: boolean; apifyMarginPercent: number; payoutStatus: string; revenueTelemetryHandoff: string };
       conversionTracking: { currentStorePageViews: null | number; currentUniqueUsers: null | number; currentTrialRuns: null | number; currentPaidRuns: null | number; currentConversionRate: null | number; metricsToTrack: string[]; handoffRoute: string };
+      buyerFacingConversionProof: {
+        schemaVersion: string;
+        routeVisibleOn: string[];
+        readyProof: { runId: string; datasetId: string; rowCount: number; sellableRows: number; averageBuyerValueScore: number; monetizationDecision: string };
+        buyerReadableExamples: Array<{ rowClass: string; decision: string; requiredVisibleFields: string[] }>;
+        qualityLiftHandoff: { productSloField: string; contractField: string; graphLiftField: string; dryRun: boolean; willMutateSources: boolean; willStartCollection: boolean };
+        conversionReadinessSummary: { minimumSellableRowRate: number; currentSellableRowRate: number; minimumAverageBuyerValueScore: number; currentAverageBuyerValueScore: number; nextAction: string };
+        noLeakGuarantee: string;
+      };
       sampleOutputSummaries: Array<{ query: string; runId: string; datasetId: string; summary: string; rowSafety: string }>;
       marketplaceGuardrails: { noPlaceholderDefaults: boolean; noHelloWorldSampleInput: boolean; noGenericCategories: boolean; noAiFlavoredCopy: boolean; safeOutputOnly: boolean; bannedListingTerms: string[] };
       safetyContract: { outputContract: string; rawContentIncluded: boolean; metadataOnly: boolean; forbiddenFields: string[] };
@@ -2914,6 +2990,34 @@ describe("api v1", () => {
       "freshRowRate",
       "costPerUsefulRow"
     ]));
+    expect(apifyStoreReadiness.buyerFacingConversionProof).toMatchObject({
+      schemaVersion: "ti.apify_buyer_facing_conversion_proof.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "/v1/quality/evaluate"]),
+      readyProof: {
+        runId: "OThlfd0uzSCNnedAO",
+        datasetId: "LSen2fYtwFTtOr7vK",
+        rowCount: 10,
+        sellableRows: 4,
+        averageBuyerValueScore: 0.577,
+        monetizationDecision: "ready_for_paid_traffic"
+      },
+      qualityLiftHandoff: {
+        productSloField: "buyerVisibleQualityLiftGate",
+        graphLiftField: "OUTPUT.graphLiftBatch2",
+        dryRun: true,
+        willMutateSources: false,
+        willStartCollection: false
+      },
+      conversionReadinessSummary: {
+        minimumSellableRowRate: 0.25,
+        currentSellableRowRate: 0.4,
+        minimumAverageBuyerValueScore: 0.55,
+        currentAverageBuyerValueScore: 0.577
+      }
+    });
+    expect(apifyStoreReadiness.buyerFacingConversionProof.buyerReadableExamples.map((row) => row.decision)).toEqual(expect.arrayContaining(["sellable", "included_with_caveat", "hold"]));
+    expect(apifyStoreReadiness.buyerFacingConversionProof.buyerReadableExamples.every((row) => row.requiredVisibleFields.length > 0)).toBe(true);
+    expect(apifyStoreReadiness.buyerFacingConversionProof.noLeakGuarantee).toContain("does not expose raw evidence bodies");
     expect(apifyStoreReadiness.sampleOutputSummaries).toEqual(expect.arrayContaining([
       expect.objectContaining({ query: "APT42", runId: "iMQGeezZ8bx7WtlhQ", datasetId: "5PLmkE30luBA5Lbgc", rowSafety: "metadata_only" })
     ]));
@@ -10303,6 +10407,17 @@ describe("api v1", () => {
             };
             rejectedExamples: Array<{ rejectionReason: string }>;
           };
+          qualityConversionGate: {
+            schemaVersion: string;
+            routeVisibleOn: string[];
+            acceptedRows: number;
+            rejectedBloatRows: number;
+            sellableRowLift: number;
+            bloatBlocked: number;
+            examples: Array<{ actor: string; decision: string }>;
+            rejectedBloatCases: Array<{ blockedReason: string }>;
+            sourceParserHandoffs: Array<{ owner: string }>;
+          };
         };
         watchlistFixtures: Array<{
           actor: string;
@@ -10788,6 +10903,37 @@ describe("api v1", () => {
       "unsafe_or_unapproved_source",
       "cost_exceeds_value"
     ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.qualityConversionGate).toMatchObject({
+      schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo"]),
+      acceptedRows: 10,
+      rejectedBloatRows: 7,
+      sellableRowLift: 6,
+      bloatBlocked: 7
+    });
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.qualityConversionGate.examples.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT42",
+      "Turla",
+      "Volt Typhoon",
+      "Lazarus Group",
+      "Sandworm",
+      "Scattered Spider",
+      "LockBit",
+      "Akira",
+      "Clop",
+      "Black Basta"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.qualityConversionGate.rejectedBloatCases.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "alias_only_cleanup",
+      "stale_old_report_reuse",
+      "duplicate_source_expansion",
+      "generic_marketing_summary",
+      "uncorroborated_public_channel_snippet",
+      "unsafe_metadata",
+      "no_actionability"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.qualityConversionGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT42",

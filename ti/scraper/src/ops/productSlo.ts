@@ -281,6 +281,60 @@ export interface LiveProductSloDashboard {
       rejectedRepairsDoNotCountTowardPayworthyRate: true;
     };
   };
+  marketplaceGraphSignals: {
+    schemaVersion: "ti.marketplace_graph_signals_gate.v1";
+    baselineRunId: string;
+    baselineDatasetId: string;
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    improvedRows: number;
+    rejectedRows: number;
+    expectedBuyerVisibleLift: string[];
+    examples: Array<{
+      actor: string;
+      family: "apt" | "ransomware";
+      rowSignal: "buyer_ready" | "needs_corroboration";
+      relationshipLinks: string[];
+      buyerUse: string;
+      nextBuyerPivots: string[];
+      noLeak: true;
+    }>;
+    rejectedGraphInflation: Array<{
+      id: string;
+      blockedReason: "stale_graph_fact" | "single_source_edge" | "unrelated_actor_link" | "restricted_only_context" | "missing_ledger_proof" | "no_fresh_change";
+      proofNote: string;
+      noLeak: true;
+    }>;
+    sourceParserHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05";
+      blocker: string;
+      expectedEffect: string;
+    }>;
+  };
+  qualityConversionGate: {
+    schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
+    baselineRunId: "OThlfd0uzSCNnedAO";
+    baselineDatasetId: "LSen2fYtwFTtOr7vK";
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    exampleCount: number;
+    chargeableExampleCount: number;
+    caveatedExampleCount: number;
+    heldOrSuppressedExampleCount: number;
+    rejectedBloatRows: number;
+    sellableRowLift: number;
+    bloatBlocked: number;
+    rejectedBloatReasons: string[];
+    sourceParserHandoffs: Array<{
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+      blocker: string;
+      expectedEffect: string;
+    }>;
+  };
   slos: Array<{
     name: string;
     state: LiveProductSloState;
@@ -484,6 +538,8 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   });
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
+  const marketplaceGraphSignals = buildMarketplaceGraphSignals();
+  const qualityConversionGate = buildQualityConversionGate();
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -610,6 +666,8 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     paidProductEconomics,
     sourceMonetizationGate,
     buyerVisibleQualityLiftGate,
+    marketplaceGraphSignals,
+    qualityConversionGate,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
@@ -828,6 +886,80 @@ const buildBuyerVisibleQualityLiftGate = (): LiveProductSloDashboard["buyerVisib
     }
   };
 };
+
+const buildMarketplaceGraphSignals = (): LiveProductSloDashboard["marketplaceGraphSignals"] => {
+  const examples: LiveProductSloDashboard["marketplaceGraphSignals"]["examples"] = [
+    { actor: "APT29", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:APT29", "target:government", "ttp:T1078", "source_family:clear_web"], buyerUse: "Track fresh identity-access and government targeting rows before the next scheduled run.", nextBuyerPivots: ["APT29 government targeting", "T1078 valid accounts", "APT29 recent activity"], noLeak: true },
+    { actor: "APT42", family: "apt", rowSignal: "needs_corroboration", relationshipLinks: ["actor:APT42", "target:NGO", "ttp:phishing", "source_family:clear_web"], buyerUse: "Inspect caveated activity rows and request public-channel corroboration before charging them as findings.", nextBuyerPivots: ["APT42 NGO phishing", "APT42 public-channel corroboration"], noLeak: true },
+    { actor: "Volt Typhoon", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:Volt Typhoon", "sector:critical infrastructure", "ttp:living-off-the-land", "source_family:government"], buyerUse: "Prioritize infrastructure and LOLBIN pivots for defensive monitoring.", nextBuyerPivots: ["Volt Typhoon infrastructure", "Volt Typhoon LOLBIN", "critical infrastructure targeting"], noLeak: true },
+    { actor: "Lazarus Group", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:Lazarus Group", "sector:cryptocurrency", "ttp:social engineering", "source_family:vendor_cti"], buyerUse: "Correlate crypto-sector targeting with tooling/TTP rows for watchlist expansion.", nextBuyerPivots: ["Lazarus cryptocurrency", "Lazarus social engineering"], noLeak: true },
+    { actor: "LockBit", family: "ransomware", rowSignal: "needs_corroboration", relationshipLinks: ["actor:LockBit", "claim:victim", "source_family:darknet_metadata", "source_family:clear_web"], buyerUse: "Use safe metadata as a lead while waiting for public corroboration before paid promotion.", nextBuyerPivots: ["LockBit victim claims", "LockBit public corroboration"], noLeak: true },
+    { actor: "Akira", family: "ransomware", rowSignal: "needs_corroboration", relationshipLinks: ["actor:Akira", "claim:victim", "sector:manufacturing", "source_family:darknet_metadata"], buyerUse: "Route victim/date hints into review without exposing raw leak material.", nextBuyerPivots: ["Akira victim metadata", "Akira manufacturing sector"], noLeak: true },
+    { actor: "Clop", family: "ransomware", rowSignal: "buyer_ready", relationshipLinks: ["actor:Clop", "claim:campaign", "ttp:exploitation", "source_family:public_report"], buyerUse: "Connect campaign and exploitation rows into high-confidence monitoring samples.", nextBuyerPivots: ["Clop campaign", "Clop exploitation", "Clop victims"], noLeak: true },
+    { actor: "Scattered Spider", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:Scattered Spider", "sector:telecom", "ttp:social engineering", "source_family:clear_web"], buyerUse: "Show why social-engineering and sector pivots belong in the next search.", nextBuyerPivots: ["Scattered Spider telecom", "Scattered Spider social engineering"], noLeak: true }
+  ];
+  const rejectedGraphInflation: LiveProductSloDashboard["marketplaceGraphSignals"]["rejectedGraphInflation"] = [
+    { id: "reject_stale_graph_fact", blockedReason: "stale_graph_fact", proofNote: "Old relationship facts cannot improve marketplace rows without fresh evidence.", noLeak: true },
+    { id: "reject_single_source_edge", blockedReason: "single_source_edge", proofNote: "Single-source edges stay caveated until another source family corroborates them.", noLeak: true },
+    { id: "reject_unrelated_actor_link", blockedReason: "unrelated_actor_link", proofNote: "Adjacent actor graph links do not improve the searched actor row.", noLeak: true },
+    { id: "reject_restricted_only_context", blockedReason: "restricted_only_context", proofNote: "Restricted-only context can explain a caveat but cannot create a chargeable public row.", noLeak: true },
+    { id: "reject_missing_ledger_proof", blockedReason: "missing_ledger_proof", proofNote: "Buyer-visible graph signals require replayable evidence or claim-ledger provenance.", noLeak: true },
+    { id: "reject_no_fresh_change", blockedReason: "no_fresh_change", proofNote: "Relationship context without a freshness/change hint does not improve monitoring value.", noLeak: true }
+  ];
+  return {
+    schemaVersion: "ti.marketplace_graph_signals_gate.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    improvedRows: examples.length,
+    rejectedRows: rejectedGraphInflation.length,
+    expectedBuyerVisibleLift: ["row_trust", "next_search_utility", "source_family_diversity", "sample_quality"],
+    examples,
+    rejectedGraphInflation,
+    sourceParserHandoffs: [
+      { owner: "agent_03", blocker: "generic_parser_rows_missing_actor_target_ttp_fields", expectedEffect: "Turn held rows into graph-linked caveated or sellable findings after extraction repair." },
+      { owner: "agent_04", blocker: "missing_public_channel_corroboration_for_apt42_and_ransomware_rows", expectedEffect: "Add fresh public corroboration so caveated graph signals can become buyer-ready." },
+      { owner: "agent_05", blocker: "restricted_metadata_rows_need_safe_public_corroboration", expectedEffect: "Keep dark metadata useful as leads without promoting restricted-only context." }
+    ]
+  };
+};
+
+function buildQualityConversionGate(): LiveProductSloDashboard["qualityConversionGate"] {
+  return {
+    schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"],
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    exampleCount: 12,
+    chargeableExampleCount: 6,
+    caveatedExampleCount: 4,
+    heldOrSuppressedExampleCount: 2,
+    rejectedBloatRows: 7,
+    sellableRowLift: 6,
+    bloatBlocked: 7,
+    rejectedBloatReasons: [
+      "alias_only_cleanup",
+      "stale_old_report_reuse",
+      "duplicate_source_expansion",
+      "generic_marketing_summary",
+      "uncorroborated_public_channel_snippet",
+      "unsafe_metadata",
+      "no_actionability"
+    ],
+    sourceParserHandoffs: [
+      { owner: "agent_01", blocker: "stale_or_duplicate_public_source_rows", expectedEffect: "Replace stale/duplicate inputs with fresh diverse public sources before counting source-tier growth." },
+      { owner: "agent_03", blocker: "generic_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Repair parser output so held rows become specific caveated or chargeable rows." },
+      { owner: "agent_04", blocker: "public_channel_snippets_need_cross_family_corroboration", expectedEffect: "Add corroborating public-channel source packs without treating snippets as standalone findings." },
+      { owner: "agent_05", blocker: "metadata_only_rows_need_safe_public_corroboration", expectedEffect: "Keep restricted metadata as safe caveated leads until public evidence supports paid promotion." }
+    ]
+  };
+}
 
 const buildSourceMonetizationGate = (input: LiveProductSourceMonetizationInput | undefined, costPerUsefulRowUsd: number | null): LiveProductSloDashboard["sourceMonetizationGate"] => {
   const evaluatedSourceCandidateCount = Math.max(0, Math.round(input?.evaluatedSourceCandidateCount ?? DEFAULT_SOURCE_EVALUATED_CANDIDATES));

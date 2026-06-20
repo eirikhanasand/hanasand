@@ -7811,7 +7811,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "buyerVisibleQualityLiftGate", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "qualityConversionGate", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -10112,6 +10112,57 @@ function buildApifyStoreReadinessContract(input: {
       handoffRoute: "/v1/ops/product-slo.apifyLaunchExperiment",
       notes: "Real buyer metrics stay null until Apify analytics are copied from the account; do not store billing identifiers or secrets in this repository."
     },
+    buyerFacingConversionProof: {
+      schemaVersion: "ti.apify_buyer_facing_conversion_proof.v1",
+      routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "/v1/quality/evaluate"],
+      readyProof: {
+        runId: "OThlfd0uzSCNnedAO",
+        datasetId: "LSen2fYtwFTtOr7vK",
+        query: "APT42",
+        rowCount: 10,
+        sellableRows: 4,
+        includedWithCaveatRows: 2,
+        heldRows: 4,
+        averageBuyerValueScore: 0.577,
+        monetizationDecision: "ready_for_paid_traffic"
+      },
+      buyerReadableExamples: [
+        {
+          rowClass: "profile",
+          decision: "sellable",
+          buyerUse: "Start with this actor profile when buyers need a current, corroborated public summary with source-family context and provenance hashes.",
+          requiredVisibleFields: ["paidRowDecision", "buyerValueScore", "sourceFamilies", "provenanceHash", "graphQualityLiftEvidence"]
+        },
+        {
+          rowClass: "activity",
+          decision: "included_with_caveat",
+          buyerUse: "Use as a lead when activity is useful but still needs stronger corroboration before charging as a finding.",
+          requiredVisibleFields: ["paidRowReasonCodes", "buyerCaveat", "reviewReasons", "sourceCoverageGaps", "nextSearchPivots"]
+        },
+        {
+          rowClass: "held_or_stale",
+          decision: "hold",
+          buyerUse: "Do not charge or promote stale, contradicted, unrelated, restricted-only, or missing-ledger rows.",
+          requiredVisibleFields: ["paidRowReasonCodes", "reviewReasons", "graphQualityLiftReasonCodes", "billingGuidance"]
+        }
+      ],
+      qualityLiftHandoff: {
+        productSloField: "buyerVisibleQualityLiftGate",
+        contractField: "semantics.qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.buyerVisibleQualityLiftGate",
+        graphLiftField: "OUTPUT.graphLiftBatch2",
+        dryRun: true,
+        willMutateSources: false,
+        willStartCollection: false
+      },
+      conversionReadinessSummary: {
+        minimumSellableRowRate: 0.25,
+        currentSellableRowRate: 0.4,
+        minimumAverageBuyerValueScore: 0.55,
+        currentAverageBuyerValueScore: 0.577,
+        nextAction: "Use Apify analytics and /v1/ops/product-slo together: store conversion stays unknown until external analytics are copied, while row quality is proven by the latest ready run."
+      },
+      noLeakGuarantee: "Buyer-facing proof exposes row decisions, counts, source families, hashes, caveats, and quality gates only; it does not expose raw evidence bodies, unsafe URLs, credentials, private content, object keys, payloads, or actor interaction."
+    },
     sampleOutputSummaries: [
       { query: "APT42", runId: "iMQGeezZ8bx7WtlhQ", datasetId: "5PLmkE30luBA5Lbgc", summary: "Published build 0.6.4 emits safe metadata rows with paid-row decisions, caveated leads, and held stale rows visible in the dataset.", rowSafety: "metadata_only" }
     ],
@@ -10678,7 +10729,7 @@ function enterpriseApiSurfaceContract(
           },
           ApifyStoreReadiness: {
             type: "object",
-            required: ["schemaVersion", "status", "actor", "storeReadiness", "defaultSampleInput", "publicProofDtos", "frontendApiCompatibility", "pricingHooks", "conversionTracking", "sampleOutputSummaries", "marketplaceGuardrails", "proofCommands", "noLeakProof"],
+            required: ["schemaVersion", "status", "actor", "storeReadiness", "defaultSampleInput", "publicProofDtos", "frontendApiCompatibility", "pricingHooks", "conversionTracking", "buyerFacingConversionProof", "sampleOutputSummaries", "marketplaceGuardrails", "proofCommands", "noLeakProof"],
             properties: {
               schemaVersion: { type: "string" },
               status: { type: "string" },
@@ -10690,6 +10741,7 @@ function enterpriseApiSurfaceContract(
               frontendApiCompatibility: { type: "object" },
               pricingHooks: { type: "object" },
               conversionTracking: { type: "object" },
+              buyerFacingConversionProof: { type: "object" },
               sampleOutputSummaries: { type: "array", items: { type: "object" } },
               marketplaceGuardrails: { type: "object" },
               proofCommands: { type: "array", items: { type: "string" } },

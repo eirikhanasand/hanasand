@@ -387,6 +387,30 @@ describe("ops controls", () => {
     expect(dashboard.buyerVisibleQualityLiftGate.acceptedExamples.some((row) => row.owner === "agent_03" && row.afterDecision === "sellable")).toBe(true);
     expect(dashboard.buyerVisibleQualityLiftGate.rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate)).toBe(true);
     expect(dashboard.buyerVisibleQualityLiftGate.ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
+    expect(dashboard.marketplaceGraphSignals).toMatchObject({
+      schemaVersion: "ti.marketplace_graph_signals_gate.v1",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      improvedRows: 8,
+      rejectedRows: 6,
+      expectedBuyerVisibleLift: expect.arrayContaining(["row_trust", "next_search_utility", "sample_quality"])
+    });
+    expect(dashboard.marketplaceGraphSignals.examples).toHaveLength(8);
+    expect(dashboard.marketplaceGraphSignals.examples.some((row) => row.actor === "APT42" && row.rowSignal === "needs_corroboration")).toBe(true);
+    expect(dashboard.marketplaceGraphSignals.examples.some((row) => row.family === "ransomware" && row.noLeak === true)).toBe(true);
+    expect(dashboard.marketplaceGraphSignals.rejectedGraphInflation.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "stale_graph_fact",
+      "single_source_edge",
+      "unrelated_actor_link",
+      "restricted_only_context",
+      "missing_ledger_proof",
+      "no_fresh_change"
+    ]));
+    expect(dashboard.marketplaceGraphSignals.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05"]));
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);

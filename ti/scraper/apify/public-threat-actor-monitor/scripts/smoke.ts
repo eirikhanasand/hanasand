@@ -175,6 +175,58 @@ for (const row of graphLiftBatch2.rejectedGraphOnlyPromotions as Array<Record<st
     throw new Error("Rejected Program BO graph-only promotions must remain held or caveated with no-leak proof");
   }
 }
+const marketplaceGraphSignals = outputRecord.marketplaceGraphSignals as Record<string, unknown> | undefined;
+if (
+  !marketplaceGraphSignals
+  || marketplaceGraphSignals.schemaVersion !== "ti.marketplace_graph_signals_gate.v1"
+  || marketplaceGraphSignals.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || marketplaceGraphSignals.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || marketplaceGraphSignals.dryRun !== true
+  || marketplaceGraphSignals.willMutateSources !== false
+  || marketplaceGraphSignals.willStartCollection !== false
+  || !Array.isArray(marketplaceGraphSignals.examples)
+  || marketplaceGraphSignals.examples.length < 8
+  || !Array.isArray(marketplaceGraphSignals.rejectedGraphInflation)
+  || marketplaceGraphSignals.rejectedGraphInflation.length < 6
+  || !Array.isArray(marketplaceGraphSignals.sourceParserHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BP marketplace graph signal gate");
+}
+const graphSignalActors = (marketplaceGraphSignals.examples as Array<Record<string, unknown>>).map((row) => row.actor);
+for (const actor of ["APT29", "APT42", "Volt Typhoon", "Lazarus Group", "LockBit", "Akira", "Clop", "Scattered Spider"]) {
+  if (!graphSignalActors.includes(actor)) throw new Error(`Marketplace graph signal examples must cover ${actor}`);
+}
+const graphSignalRejectedReasons = (marketplaceGraphSignals.rejectedGraphInflation as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_graph_fact", "single_source_edge", "unrelated_actor_link", "restricted_only_context", "missing_ledger_proof", "no_fresh_change"]) {
+  if (!graphSignalRejectedReasons.includes(requiredReason)) throw new Error(`Marketplace graph signals must reject ${requiredReason}`);
+}
+const qualityConversionGate = outputRecord.qualityConversionGate as Record<string, unknown> | undefined;
+if (
+  !qualityConversionGate
+  || qualityConversionGate.schemaVersion !== "ti.apify_paid_row_quality_conversion_gate.v1"
+  || qualityConversionGate.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || qualityConversionGate.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || qualityConversionGate.dryRun !== true
+  || qualityConversionGate.willMutateSources !== false
+  || qualityConversionGate.willStartCollection !== false
+  || !Array.isArray(qualityConversionGate.examples)
+  || qualityConversionGate.examples.length < 12
+  || !Array.isArray(qualityConversionGate.rejectedBloatCases)
+  || qualityConversionGate.rejectedBloatCases.length < 7
+  || Number(qualityConversionGate.sellableRowLift) < 6
+  || Number(qualityConversionGate.bloatBlocked) < 7
+  || !Array.isArray(qualityConversionGate.sourceParserHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BQ paid-row quality conversion gate");
+}
+const qualityConversionActors = (qualityConversionGate.examples as Array<Record<string, unknown>>).map((row) => row.actor);
+for (const requiredActor of ["APT29", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]) {
+  if (!qualityConversionActors.includes(requiredActor)) throw new Error(`Program BQ conversion gate must include ${requiredActor}`);
+}
+const rejectedBloatReasons = (qualityConversionGate.rejectedBloatCases as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["alias_only_cleanup", "stale_old_report_reuse", "duplicate_source_expansion", "generic_marketing_summary", "uncorroborated_public_channel_snippet", "unsafe_metadata", "no_actionability"]) {
+  if (!rejectedBloatReasons.includes(requiredReason)) throw new Error(`Program BQ conversion gate must reject ${requiredReason}`);
+}
 if (
   paidRowQuality.sellable === 0
   && (
@@ -186,6 +238,18 @@ if (
 }
 for (const row of output) {
   if (row.rawContentIncluded !== false) throw new Error("rawContentIncluded must be false");
+  const marketplaceSignals = row.marketplaceGraphSignals as Record<string, unknown> | undefined;
+  if (
+    !marketplaceSignals
+    || marketplaceSignals.schemaVersion !== "ti.marketplace_graph_signals.v1"
+    || marketplaceSignals.noLeak !== true
+    || !["buyer_ready", "needs_corroboration", "held"].includes(String(marketplaceSignals.signalState))
+    || !Array.isArray(marketplaceSignals.relationshipLinks)
+    || !Array.isArray(marketplaceSignals.nextBuyerPivots)
+    || typeof marketplaceSignals.buyerAction !== "string"
+  ) {
+    throw new Error("Every marketplace row must expose safe marketplace graph signals");
+  }
   const safety = row.safety as Record<string, unknown> | undefined;
   if (
     !safety
@@ -247,6 +311,30 @@ for (const row of output) {
     || graphQualityLiftEvidence.noLeak !== true
   ) {
     throw new Error("Every row must expose graph quality-lift evidence and no-leak export eligibility");
+  }
+  const marketplaceGraphSignals = row.marketplaceGraphSignals as Record<string, unknown> | undefined;
+  if (
+    !marketplaceGraphSignals
+    || marketplaceGraphSignals.schemaVersion !== "ti.marketplace_graph_signals.v1"
+    || !["buyer_ready", "needs_corroboration", "held"].includes(String(marketplaceGraphSignals.signalState))
+    || !Array.isArray(marketplaceGraphSignals.relationshipLinks)
+    || marketplaceGraphSignals.relationshipLinks.length === 0
+    || !Array.isArray(marketplaceGraphSignals.freshnessChangeHints)
+    || marketplaceGraphSignals.freshnessChangeHints.length === 0
+    || !["stronger", "stable", "weaker", "unknown"].includes(String(marketplaceGraphSignals.confidenceTrend))
+    || !["none", "contradicted", "review_hold"].includes(String(marketplaceGraphSignals.contradictionState))
+    || !Array.isArray(marketplaceGraphSignals.nextBuyerPivots)
+    || typeof marketplaceGraphSignals.buyerAction !== "string"
+    || !Array.isArray(marketplaceGraphSignals.sourceBlockers)
+    || marketplaceGraphSignals.noLeak !== true
+  ) {
+    throw new Error("Every row must expose buyer-visible marketplace graph signals");
+  }
+  if (row.paidRowDecision === "sellable" && marketplaceGraphSignals.signalState !== "buyer_ready") {
+    throw new Error("Sellable rows must expose buyer-ready marketplace graph signals");
+  }
+  if (row.paidRowDecision === "coverage_gap_only" && !marketplaceGraphSignals.sourceBlockers.includes("missing_public_channel")) {
+    throw new Error("Coverage-gap rows must expose missing public-channel source blockers");
   }
   if (row.nextPollSeconds !== 3 || row.retryAfterSeconds !== 3 || row.duplicateRunReuse !== true) {
     throw new Error("Every row must expose scheduler polling and duplicate-run reuse state");

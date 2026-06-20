@@ -474,6 +474,51 @@ export interface ProgramBdQualityEvaluationPackDto {
         rejectedRepairsDoNotCountTowardPayworthyRate: true;
       };
     };
+    qualityConversionGate: {
+      schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1";
+      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo">;
+      baselineRunId: "OThlfd0uzSCNnedAO";
+      baselineDatasetId: "LSen2fYtwFTtOr7vK";
+      dryRun: true;
+      willMutateSources: false;
+      willStartCollection: false;
+      examples: Array<{
+        actor: string;
+        family: "apt" | "ransomware";
+        decision: "chargeable" | "caveated" | "held" | "suppressed";
+        buyerVisibleScores: {
+          actorSpecificity: number;
+          victimExtraction: number;
+          sectorCountry: number;
+          ttpTool: number;
+          freshness: number;
+          sourceFamilyDiversity: number;
+          corroboration: number;
+          contradictionState: number;
+          provenance: number;
+          nextSearchUtility: number;
+        };
+        buyerUse: string;
+        qualityReason: string;
+        sourceParserHandoff?: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+      }>;
+      rejectedBloatCases: Array<{
+        id: string;
+        blockedReason: "alias_only_cleanup" | "stale_old_report_reuse" | "duplicate_source_expansion" | "generic_marketing_summary" | "uncorroborated_public_channel_snippet" | "unsafe_metadata" | "no_actionability";
+        staysDecision: "held" | "suppressed" | "caveated";
+        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+        proofNote: string;
+      }>;
+      acceptedRows: number;
+      rejectedBloatRows: number;
+      sellableRowLift: number;
+      bloatBlocked: number;
+      sourceParserHandoffs: Array<{
+        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+        blocker: string;
+        expectedEffect: string;
+      }>;
+    };
     releaseDecision: "promote" | "partial" | "hold";
     apifyDatasetFields: string[];
     remediationActions: string[];
@@ -803,6 +848,7 @@ function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["
     metricThresholds,
     sourceTierGates: [100, 1000, 4000, 10000, 20000, 60000].map((tier) => paidSourceTierGate(tier as 100 | 1000 | 4000 | 10000 | 20000 | 60000)),
     buyerVisibleQualityLiftGate: buildProgramBgBuyerVisibleQualityLiftGate(),
+    qualityConversionGate: buildProgramBqQualityConversionGate(),
     releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
     apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
     remediationActions: [
@@ -907,6 +953,84 @@ function buildProgramBgBuyerVisibleQualityLiftGate(): ProgramBdQualityEvaluation
       acceptedRequiresSafePublicOrMetadataOnlySource: true,
       rejectedRepairsDoNotCountTowardPayworthyRate: true
     }
+  };
+}
+
+function buildProgramBqQualityConversionGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["qualityConversionGate"] {
+  const examples: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["qualityConversionGate"]["examples"] = [
+    qualityConversionExample("APT29", "apt", "chargeable", "Fresh actor/TTP/source-family signals support a paid daily monitoring row.", "specific fresh credential-access and government-targeting context is corroborated", undefined, [1, 0, 1, 1, 1, 1, 1, 1, 1, 1]),
+    qualityConversionExample("APT42", "apt", "caveated", "Useful lead, but public-channel corroboration is still needed before full paid promotion.", "actor and phishing context are useful but source-family diversity remains thin", "agent_04", [1, 0, 1, 1, 1, 0.5, 0.5, 1, 1, 1]),
+    qualityConversionExample("Turla", "apt", "chargeable", "TTP/tool and first/last-seen fields make the row suitable for paid monitoring.", "parser repair turns TTP/tool context into a specific corroborated finding", "agent_03", [1, 0, 1, 1, 1, 1, 1, 1, 1, 1]),
+    qualityConversionExample("Volt Typhoon", "apt", "chargeable", "Infrastructure and LOLBIN pivots give buyers concrete next searches.", "fresh critical-infrastructure targeting is source-backed and actionable", undefined, [1, 0, 1, 1, 1, 1, 1, 1, 1, 1]),
+    qualityConversionExample("Lazarus Group", "apt", "chargeable", "Crypto-sector targeting and social-engineering pivots are specific enough to charge.", "sector/TTP extraction is precise and corroborated", undefined, [1, 0, 1, 1, 1, 1, 1, 1, 1, 1]),
+    qualityConversionExample("Sandworm", "apt", "held", "Hold until current public evidence refreshes stale historical context.", "old campaign context cannot be marketed as current monitoring value", "agent_01", [1, 0, 1, 1, 0, 0.5, 0.5, 1, 1, 0.5]),
+    qualityConversionExample("MuddyWater", "apt", "caveated", "Useful actor and country context, but needs parser specificity before charging.", "summary is not specific enough on TTP/tool extraction", "agent_03", [1, 0, 1, 0.5, 1, 0.5, 0.5, 1, 1, 0.5]),
+    qualityConversionExample("Scattered Spider", "apt", "chargeable", "Social-engineering and sector pivots make the row buyer-actionable.", "sector plus TTP and fresh source support clear next pivots", undefined, [1, 0, 1, 1, 1, 1, 1, 1, 1, 1]),
+    qualityConversionExample("LockBit", "ransomware", "caveated", "Victim metadata is useful as a lead but needs public corroboration.", "safe metadata improves triage without becoming restricted-only paid proof", "agent_05", [1, 1, 1, 0.5, 1, 0.5, 0.5, 1, 1, 1]),
+    qualityConversionExample("Akira", "ransomware", "caveated", "Victim/sector hints are useful but should remain caveated until public confirmation.", "metadata-only rows need public corroboration to become chargeable", "agent_05", [1, 1, 1, 0.5, 1, 0.5, 0.5, 1, 1, 1]),
+    qualityConversionExample("Clop", "ransomware", "chargeable", "Campaign/exploitation/victim pivots are specific enough for paid monitoring.", "public report and campaign context support a high-value row", undefined, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+    qualityConversionExample("Black Basta", "ransomware", "suppressed", "Suppress generic reposts until they add fresh victim, sector, or campaign value.", "duplicate generic summaries would inflate rows without buyer utility", "agent_01", [1, 0, 0.5, 0, 0, 0, 0, 1, 1, 0])
+  ];
+  const rejectedBloatCases: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["qualityConversionGate"]["rejectedBloatCases"] = [
+    { id: "bq_reject_alias_only_cleanup", blockedReason: "alias_only_cleanup", staysDecision: "caveated", owner: "agent_07", proofNote: "Alias normalization improves hygiene but does not add a buyer-visible paid finding." },
+    { id: "bq_reject_stale_old_report_reuse", blockedReason: "stale_old_report_reuse", staysDecision: "held", owner: "agent_01", proofNote: "Old reports cannot be counted as current monitoring freshness." },
+    { id: "bq_reject_duplicate_source_expansion", blockedReason: "duplicate_source_expansion", staysDecision: "held", owner: "agent_01", proofNote: "More URLs from the same source family do not improve source diversity." },
+    { id: "bq_reject_generic_marketing_summary", blockedReason: "generic_marketing_summary", staysDecision: "suppressed", owner: "agent_03", proofNote: "Generic vendor or marketing language needs actor/victim/TTP extraction before it is useful." },
+    { id: "bq_reject_uncorroborated_public_channel_snippet", blockedReason: "uncorroborated_public_channel_snippet", staysDecision: "caveated", owner: "agent_04", proofNote: "Public-channel snippets remain leads until another source family corroborates them." },
+    { id: "bq_reject_unsafe_metadata", blockedReason: "unsafe_metadata", staysDecision: "suppressed", owner: "agent_05", proofNote: "Unsafe or unapproved metadata is never promoted into paid output." },
+    { id: "bq_reject_no_actionability", blockedReason: "no_actionability", staysDecision: "suppressed", owner: "agent_07", proofNote: "Rows without next-search or defensive utility should not pad dataset volume." }
+  ];
+  return {
+    schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo"],
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    examples,
+    rejectedBloatCases,
+    acceptedRows: examples.filter((row) => row.decision === "chargeable" || row.decision === "caveated").length,
+    rejectedBloatRows: rejectedBloatCases.length,
+    sellableRowLift: examples.filter((row) => row.decision === "chargeable").length,
+    bloatBlocked: rejectedBloatCases.length,
+    sourceParserHandoffs: [
+      { owner: "agent_01", blocker: "stale_or_duplicate_public_source_rows", expectedEffect: "Replace stale/duplicate inputs with fresh diverse public sources before counting source-tier growth." },
+      { owner: "agent_03", blocker: "generic_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Repair parser output so held rows become specific caveated or chargeable rows." },
+      { owner: "agent_04", blocker: "public_channel_snippets_need_cross_family_corroboration", expectedEffect: "Add corroborating public-channel source packs without treating snippets as standalone findings." },
+      { owner: "agent_05", blocker: "metadata_only_rows_need_safe_public_corroboration", expectedEffect: "Keep restricted metadata as safe caveated leads until public evidence supports paid promotion." }
+    ]
+  };
+}
+
+function qualityConversionExample(
+  actor: string,
+  family: "apt" | "ransomware",
+  decision: "chargeable" | "caveated" | "held" | "suppressed",
+  buyerUse: string,
+  qualityReason: string,
+  sourceParserHandoff: "agent_01" | "agent_03" | "agent_04" | "agent_05" | undefined,
+  scores: [number, number, number, number, number, number, number, number, number, number]
+): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["qualityConversionGate"]["examples"][number] {
+  return {
+    actor,
+    family,
+    decision,
+    buyerVisibleScores: {
+      actorSpecificity: scores[0],
+      victimExtraction: scores[1],
+      sectorCountry: scores[2],
+      ttpTool: scores[3],
+      freshness: scores[4],
+      sourceFamilyDiversity: scores[5],
+      corroboration: scores[6],
+      contradictionState: scores[7],
+      provenance: scores[8],
+      nextSearchUtility: scores[9]
+    },
+    buyerUse,
+    qualityReason,
+    sourceParserHandoff
   };
 }
 
