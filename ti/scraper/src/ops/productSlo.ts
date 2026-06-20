@@ -275,12 +275,28 @@ export interface LiveProductSloDashboard {
     baselineDatasetId: "LSen2fYtwFTtOr7vK";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "coordination_agent_10.md">;
     gates: Array<{
-      id: "daily_20_default_groups" | "sources_100" | "sources_1000" | "dark_metadata_4000" | "records_10000" | "records_20000" | "records_60000";
+      id: "buyable_rows_100" | "buyable_rows_1000" | "buyable_rows_4000" | "buyable_rows_10000" | "buyable_rows_20000" | "buyable_rows_60000";
       label: string;
       state: "pass" | "hold";
+      targetBuyableRows: number;
+      observedBuyableRows: number | null;
       buyerValueThreshold: number;
       observedBuyerValue: number | null;
-      requiredMetric: string;
+      requirements: {
+        usefulRowRateAtLeast: number;
+        freshRowRateAtLeast: number;
+        corroborationOrSourceFamilyDiversityAtLeast: number;
+        staleDuplicateGenericRejectionRequired: true;
+        costPerUsefulRowUsdAtMost: number;
+        noLeakProofRequired: true;
+      };
+      observed: {
+        usefulRowRate: number | null;
+        freshRowRate: number | null;
+        sourceFamilyDiversity: number | null;
+        staleDuplicateGenericRejection: "pass" | "unknown";
+        costPerUsefulRowUsd: number | null;
+      };
       currentEvidence: string;
       blockerCodes: string[];
       noLeakRequired: true;
@@ -294,10 +310,11 @@ export interface LiveProductSloDashboard {
     baselineDatasetId: "LSen2fYtwFTtOr7vK";
     blockers: Array<{
       priority: number;
-      blocker: "stale_apt29_evidence" | "thin_apt42_public_channel_coverage" | "source_family_diversity" | "held_caveated_row_count" | "dark_metadata_usefulness" | "apify_store_conversion" | "payout_readiness_gaps";
-      owner: "Agent 01" | "Agent 03" | "Agent 04" | "Agent 05" | "Agent 07" | "Agent 09" | "Agent 10";
+      blocker: "sellable_rows_below_100" | "stale_apt29_evidence" | "thin_apt42_public_channel_coverage" | "source_family_diversity" | "held_caveated_row_count" | "dark_metadata_usefulness" | "apify_store_conversion" | "payout_readiness_gaps";
+      owner: "Agent 01" | "Agent 03" | "Agent 04" | "Agent 05" | "Agent 07" | "Agent 08" | "Agent 09" | "Agent 10";
       buyerMetricTarget: string;
       releaseImpact: string;
+      nextActions: string[];
     }>;
   };
   buyerVisibleQualityLiftGate: {
@@ -1010,9 +1027,14 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const darkMetadataPublicHandoff100 = buildDarkMetadataPublicHandoff100();
   const nonMonetizingWorkDetector = buildNonMonetizingWorkDetector();
   const scaleStepGates = buildScaleStepGates({
+    sellableRows: monetizationReadiness.sellableRows,
+    usefulForBuyerRows: monetizationReadiness.usefulForBuyerRows,
+    usefulRowRate,
+    freshRowRate,
     averageBuyerValueScore: monetizationReadiness.averageBuyerValueScore,
     sourcePayworthyRate: sourceMonetizationGate.payworthyRate,
-    darkMetadataAverageBuyerValueScore: darkMetadataLiveValueExpansion.tiers[1]?.averageBuyerValueScore ?? null
+    darkMetadataAverageBuyerValueScore: darkMetadataLiveValueExpansion.tiers[1]?.averageBuyerValueScore ?? null,
+    costPerUsefulRowUsd
   });
   const revenueBlockerBoard = buildRevenueBlockerBoard();
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
@@ -1414,88 +1436,153 @@ function buildNonMonetizingWorkDetector(): LiveProductSloDashboard["nonMonetizin
 }
 
 function buildScaleStepGates(input: {
+  sellableRows: number | null;
+  usefulForBuyerRows: number | null;
+  usefulRowRate: number | null;
+  freshRowRate: number | null;
   averageBuyerValueScore: number | null;
   sourcePayworthyRate: number | null;
   darkMetadataAverageBuyerValueScore: number | null;
+  costPerUsefulRowUsd: number | null;
 }): LiveProductSloDashboard["scaleStepGates"] {
+  const sourceFamilyDiversity = input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.72 ? 2 : null;
+  const staleDuplicateGenericRejection: "pass" | "unknown" =
+    input.freshRowRate !== null && input.freshRowRate >= 0.55 ? "pass" : "unknown";
+  const makeGate = (gate: {
+    id: LiveProductSloDashboard["scaleStepGates"]["gates"][number]["id"];
+    label: string;
+    targetBuyableRows: number;
+    observedBuyableRows: number | null;
+    buyerValueThreshold: number;
+    observedBuyerValue: number | null;
+    usefulRowRateAtLeast: number;
+    freshRowRateAtLeast: number;
+    sourceFamilyDiversityAtLeast: number;
+    costPerUsefulRowUsdAtMost: number;
+    currentEvidence: string;
+    extraBlockers?: string[];
+  }): LiveProductSloDashboard["scaleStepGates"]["gates"][number] => {
+    const blockers = [
+      gate.observedBuyableRows === null || gate.observedBuyableRows < gate.targetBuyableRows ? `${gate.id}_row_count_below_target` : null,
+      gate.observedBuyerValue === null || gate.observedBuyerValue < gate.buyerValueThreshold ? `${gate.id}_buyer_value_below_threshold` : null,
+      input.usefulRowRate === null || input.usefulRowRate < gate.usefulRowRateAtLeast ? `${gate.id}_useful_row_rate_below_threshold` : null,
+      input.freshRowRate === null || input.freshRowRate < gate.freshRowRateAtLeast ? `${gate.id}_fresh_row_rate_below_threshold` : null,
+      sourceFamilyDiversity === null || sourceFamilyDiversity < gate.sourceFamilyDiversityAtLeast ? `${gate.id}_source_family_diversity_unproven` : null,
+      staleDuplicateGenericRejection !== "pass" ? `${gate.id}_stale_duplicate_generic_rejection_unproven` : null,
+      input.costPerUsefulRowUsd === null || input.costPerUsefulRowUsd > gate.costPerUsefulRowUsdAtMost ? `${gate.id}_cost_per_useful_row_unproven_or_too_high` : null,
+      ...(gate.extraBlockers ?? [])
+    ].filter((blocker): blocker is string => Boolean(blocker));
+    return {
+      id: gate.id,
+      label: gate.label,
+      state: blockers.length === 0 ? "pass" : "hold",
+      targetBuyableRows: gate.targetBuyableRows,
+      observedBuyableRows: gate.observedBuyableRows,
+      buyerValueThreshold: gate.buyerValueThreshold,
+      observedBuyerValue: gate.observedBuyerValue,
+      requirements: {
+        usefulRowRateAtLeast: gate.usefulRowRateAtLeast,
+        freshRowRateAtLeast: gate.freshRowRateAtLeast,
+        corroborationOrSourceFamilyDiversityAtLeast: gate.sourceFamilyDiversityAtLeast,
+        staleDuplicateGenericRejectionRequired: true,
+        costPerUsefulRowUsdAtMost: gate.costPerUsefulRowUsdAtMost,
+        noLeakProofRequired: true
+      },
+      observed: {
+        usefulRowRate: input.usefulRowRate,
+        freshRowRate: input.freshRowRate,
+        sourceFamilyDiversity,
+        staleDuplicateGenericRejection,
+        costPerUsefulRowUsd: input.costPerUsefulRowUsd
+      },
+      currentEvidence: gate.currentEvidence,
+      blockerCodes: blockers,
+      noLeakRequired: true
+    };
+  };
   const gates: LiveProductSloDashboard["scaleStepGates"]["gates"] = [
-    {
-      id: "daily_20_default_groups",
-      label: "20 default groups daily",
+    makeGate({
+      id: "buyable_rows_100",
+      label: "100 sellable Actor rows",
+      targetBuyableRows: 100,
+      observedBuyableRows: input.sellableRows,
       buyerValueThreshold: 0.55,
       observedBuyerValue: input.averageBuyerValueScore,
-      requiredMetric: "averageBuyerValueScore >= 0.55 and sellable row rate >= 0.25 on the default watchlist",
-      currentEvidence: `${PROGRAM_BH_BASELINE_RUN_ID} / ${PROGRAM_BH_BASELINE_DATASET_ID}: 10 APT42 rows, 4 sellable, 2 caveated, average buyer value 0.577`,
-      blockerCodes: input.averageBuyerValueScore !== null && input.averageBuyerValueScore >= 0.55 ? [] : ["average_buyer_value_below_daily_watchlist_floor"],
-      state: input.averageBuyerValueScore !== null && input.averageBuyerValueScore >= 0.55 ? "pass" : "hold",
-      noLeakRequired: true
-    },
-    {
-      id: "sources_100",
-      label: "100 sources",
-      buyerValueThreshold: 0.66,
-      observedBuyerValue: input.sourcePayworthyRate,
-      requiredMetric: "source payworthy rate >= 0.66 before first source expansion claim",
-      currentEvidence: "sourceMonetizationGate evaluates source value, parser, legal, freshness, evidence yield, dedupe, and downstream answer impact",
-      blockerCodes: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.66 ? [] : ["source_payworthy_rate_below_100_source_floor"],
-      state: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.66 ? "pass" : "hold",
-      noLeakRequired: true
-    },
-    {
-      id: "sources_1000",
-      label: "1,000 sources",
-      buyerValueThreshold: 0.7,
-      observedBuyerValue: input.sourcePayworthyRate,
-      requiredMetric: "source payworthy rate >= 0.70 plus parser/legal/dedupe certification",
-      currentEvidence: "1,000-source promotion is held until value density improves beyond the 4,000-candidate baseline",
-      blockerCodes: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.7 ? [] : ["source_payworthy_rate_below_1000_source_floor"],
-      state: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.7 ? "pass" : "hold",
-      noLeakRequired: true
-    },
-    {
-      id: "dark_metadata_4000",
-      label: "4,000 dark metadata records",
+      usefulRowRateAtLeast: 0.4,
+      freshRowRateAtLeast: 0.55,
+      sourceFamilyDiversityAtLeast: 2,
+      costPerUsefulRowUsdAtMost: 0.01,
+      currentEvidence: `${PROGRAM_BH_BASELINE_RUN_ID} / ${PROGRAM_BH_BASELINE_DATASET_ID}: shape/safety proof only; 10 APT42 rows, 4 sellable, 2 caveated, average buyer value 0.577`
+    }),
+    makeGate({
+      id: "buyable_rows_1000",
+      label: "1,000 buyable safe rows",
+      targetBuyableRows: 1000,
+      observedBuyableRows: input.usefulForBuyerRows,
+      buyerValueThreshold: 0.62,
+      observedBuyerValue: input.averageBuyerValueScore,
+      usefulRowRateAtLeast: 0.45,
+      freshRowRateAtLeast: 0.58,
+      sourceFamilyDiversityAtLeast: 2,
+      costPerUsefulRowUsdAtMost: 0.01,
+      currentEvidence: "held until 100 sellable Actor rows pass and 1,000 useful safe rows are measured"
+    }),
+    makeGate({
+      id: "buyable_rows_4000",
+      label: "4,000 buyable safe metadata rows",
+      targetBuyableRows: 4000,
+      observedBuyableRows: null,
       buyerValueThreshold: 0.68,
       observedBuyerValue: input.darkMetadataAverageBuyerValueScore,
-      requiredMetric: "metadata average buyer value >= 0.68 with stale <= 0.28 and blocked/review <= 0.18",
+      usefulRowRateAtLeast: 0.5,
+      freshRowRateAtLeast: 0.6,
+      sourceFamilyDiversityAtLeast: 3,
+      costPerUsefulRowUsdAtMost: 0.01,
       currentEvidence: "darkMetadataLiveValueExpansion currently observes 0.41 average buyer value and holds count growth",
-      blockerCodes: input.darkMetadataAverageBuyerValueScore !== null && input.darkMetadataAverageBuyerValueScore >= 0.68 ? [] : ["dark_metadata_value_density_below_paid_threshold"],
-      state: input.darkMetadataAverageBuyerValueScore !== null && input.darkMetadataAverageBuyerValueScore >= 0.68 ? "pass" : "hold",
-      noLeakRequired: true
-    },
-    {
-      id: "records_10000",
-      label: "10,000 records",
+      extraBlockers: ["dark_metadata_value_density_below_paid_threshold"]
+    }),
+    makeGate({
+      id: "buyable_rows_10000",
+      label: "10,000 buyable safe rows",
+      targetBuyableRows: 10000,
+      observedBuyableRows: null,
       buyerValueThreshold: 0.7,
       observedBuyerValue: null,
-      requiredMetric: "sampled useful-row rate and average buyer value prove 10k adds useful paid output",
+      usefulRowRateAtLeast: 0.52,
+      freshRowRateAtLeast: 0.62,
+      sourceFamilyDiversityAtLeast: 4,
+      costPerUsefulRowUsdAtMost: 0.01,
       currentEvidence: "held until real evaluated records prove buyer value instead of row-count padding",
-      blockerCodes: ["10k_records_not_evaluated_for_buyer_value"],
-      state: "hold",
-      noLeakRequired: true
-    },
-    {
-      id: "records_20000",
-      label: "20,000 records",
+      extraBlockers: ["10k_records_not_evaluated_for_buyer_value"]
+    }),
+    makeGate({
+      id: "buyable_rows_20000",
+      label: "20,000 buyable safe rows",
+      targetBuyableRows: 20000,
+      observedBuyableRows: null,
       buyerValueThreshold: 0.72,
       observedBuyerValue: null,
-      requiredMetric: "20k promotion requires conversion or repeat-use lift plus buyer value >= 0.72",
+      usefulRowRateAtLeast: 0.55,
+      freshRowRateAtLeast: 0.65,
+      sourceFamilyDiversityAtLeast: 4,
+      costPerUsefulRowUsdAtMost: 0.009,
       currentEvidence: "held until 10k gate passes and marketplace conversion data exists",
-      blockerCodes: ["20k_records_waiting_on_10k_gate_and_conversion"],
-      state: "hold",
-      noLeakRequired: true
-    },
-    {
-      id: "records_60000",
-      label: "60,000 records",
+      extraBlockers: ["20k_records_waiting_on_10k_gate_and_conversion"]
+    }),
+    makeGate({
+      id: "buyable_rows_60000",
+      label: "60,000 buyable safe rows",
+      targetBuyableRows: 60000,
+      observedBuyableRows: null,
       buyerValueThreshold: 0.75,
       observedBuyerValue: null,
-      requiredMetric: "60k scale requires sustained buyer value >= 0.75 and cost/useful row <= $0.01",
+      usefulRowRateAtLeast: 0.58,
+      freshRowRateAtLeast: 0.68,
+      sourceFamilyDiversityAtLeast: 5,
+      costPerUsefulRowUsdAtMost: 0.008,
       currentEvidence: "held until useful-row economics and conversion are proven at smaller tiers",
-      blockerCodes: ["60k_records_waiting_on_cost_and_conversion_proof"],
-      state: "hold",
-      noLeakRequired: true
-    }
+      extraBlockers: ["60k_records_waiting_on_cost_and_conversion_proof"]
+    })
   ];
   const nextAllowedStep = gates.find((gate) => gate.state === "pass")?.id ?? null;
   return {
@@ -1515,13 +1602,78 @@ function buildRevenueBlockerBoard(): LiveProductSloDashboard["revenueBlockerBoar
     baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
     baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
     blockers: [
-      { priority: 1, blocker: "stale_apt29_evidence", owner: "Agent 01", buyerMetricTarget: "freshRowRate >= 0.55 and stale latest-activity holds decrease", releaseImpact: "blocks daily APT monitor credibility" },
-      { priority: 2, blocker: "thin_apt42_public_channel_coverage", owner: "Agent 04", buyerMetricTarget: "APT42 caveated or sellable rows gain cross-family corroboration", releaseImpact: "keeps APT42 rows from looking single-source" },
-      { priority: 3, blocker: "source_family_diversity", owner: "Agent 03", buyerMetricTarget: "sourceFamilyDiversity >= 2 for promoted findings", releaseImpact: "prevents parser/source padding from counting as paid value" },
-      { priority: 4, blocker: "held_caveated_row_count", owner: "Agent 07", buyerMetricTarget: "held rows shrink or carry explicit repair actions; caveated rows stay useful", releaseImpact: "improves buyer scanability and charge guidance" },
-      { priority: 5, blocker: "dark_metadata_usefulness", owner: "Agent 05", buyerMetricTarget: "metadata average buyer value >= 0.68 before 4,000-record growth", releaseImpact: "prevents restricted metadata count inflation" },
-      { priority: 6, blocker: "apify_store_conversion", owner: "Agent 09", buyerMetricTarget: "store views, runs, users, trial-to-paid, refunds, and repeat use copied from Apify", releaseImpact: "keeps conversion claims real" },
-      { priority: 7, blocker: "payout_readiness_gaps", owner: "Agent 10", buyerMetricTarget: "beneficiary, payout method, and withdrawal readiness externally verified", releaseImpact: "blocks paid traffic until revenue can be collected" }
+      {
+        priority: 1,
+        blocker: "sellable_rows_below_100",
+        owner: "Agent 10",
+        buyerMetricTarget: "production paid traffic requires >=100 sellable rows, >=25% sellable row rate, buyer value >=0.55, and cost/useful row <= $0.01",
+        releaseImpact: "shape/safety proof cannot be treated as production monetization completion",
+        nextActions: [
+          "Agent 01: prioritize source activation packets that add fresh high-value public sources for APT29/APT42/ransomware rows",
+          "Agent 03: extract victim/sector/country/TTP/tool/date fields so generic rows become sellable or useful caveated rows",
+          "Agent 04: add public-channel/source-family corroboration for APT42 and ransomware rows without counting single-source snippets as sellable",
+          "Agent 05: keep dark metadata metadata-only and promote it only when safe public corroboration makes rows useful",
+          "Agent 07: suppress stale, duplicate, generic, alias-only, contradicted, and unrelated rows before the ladder counts them",
+          "Agent 08: add buyer-useful graph search packs/pivots that increase sellable row actionability without STIX/TAXII-only bloat",
+          "Agent 09: keep API/Apify contracts honest by reporting shape_safety_proof until the 100-row production floor passes"
+        ]
+      },
+      {
+        priority: 2,
+        blocker: "stale_apt29_evidence",
+        owner: "Agent 01",
+        buyerMetricTarget: "freshRowRate >= 0.55 and stale latest-activity holds decrease",
+        releaseImpact: "blocks daily APT monitor credibility",
+        nextActions: ["replace stale APT29 source rows with fresh public corroboration before they count toward sellable rows"]
+      },
+      {
+        priority: 3,
+        blocker: "thin_apt42_public_channel_coverage",
+        owner: "Agent 04",
+        buyerMetricTarget: "APT42 caveated or sellable rows gain cross-family corroboration",
+        releaseImpact: "keeps APT42 rows from looking single-source",
+        nextActions: ["add safe public-channel corroboration and keep unsupported snippets caveated or held"]
+      },
+      {
+        priority: 4,
+        blocker: "source_family_diversity",
+        owner: "Agent 03",
+        buyerMetricTarget: "sourceFamilyDiversity >= 2 for promoted findings",
+        releaseImpact: "prevents parser/source padding from counting as paid value",
+        nextActions: ["emit source-family fields and row-specific extraction evidence for promoted findings"]
+      },
+      {
+        priority: 5,
+        blocker: "held_caveated_row_count",
+        owner: "Agent 07",
+        buyerMetricTarget: "held rows shrink or carry explicit repair actions; caveated rows stay useful",
+        releaseImpact: "improves buyer scanability and charge guidance",
+        nextActions: ["separate sellable, useful caveated, held, suppressed, stale, duplicate, and generic rows before ladder counting"]
+      },
+      {
+        priority: 6,
+        blocker: "dark_metadata_usefulness",
+        owner: "Agent 05",
+        buyerMetricTarget: "metadata average buyer value >= 0.68 before 4,000-record growth",
+        releaseImpact: "prevents restricted metadata count inflation",
+        nextActions: ["prove metadata-only rows have safe public corroboration, useful buyer pivots, and no-leak serialization"]
+      },
+      {
+        priority: 7,
+        blocker: "apify_store_conversion",
+        owner: "Agent 09",
+        buyerMetricTarget: "store views, runs, users, trial-to-paid, refunds, and repeat use copied from Apify",
+        releaseImpact: "keeps conversion claims real",
+        nextActions: ["surface unknown Apify analytics as unknown and keep proof-sized runs labeled shape/safety proof"]
+      },
+      {
+        priority: 8,
+        blocker: "payout_readiness_gaps",
+        owner: "Agent 10",
+        buyerMetricTarget: "beneficiary, payout method, and withdrawal readiness externally verified",
+        releaseImpact: "blocks paid traffic until revenue can be collected",
+        nextActions: ["verify Apify billing state externally before any revenue-complete claim"]
+      }
     ]
   };
 }

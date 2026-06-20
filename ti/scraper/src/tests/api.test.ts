@@ -346,40 +346,53 @@ describe("api v1", () => {
       schemaVersion: string;
       baselineRunId: string;
       baselineDatasetId: string;
-      gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
-      nextAllowedStep: string;
+      gates: Array<{ id: string; state: string; targetBuyableRows: number; observedBuyableRows: number | null; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
+      nextAllowedStep: string | null;
       heldStepCount: number;
     })).toMatchObject({
       schemaVersion: "ti.product_scale_step_gates.v1",
       baselineRunId: "OThlfd0uzSCNnedAO",
       baselineDatasetId: "LSen2fYtwFTtOr7vK",
-      nextAllowedStep: "daily_20_default_groups",
+      nextAllowedStep: null,
       heldStepCount: 6
     });
     expect((response.scaleStepGates as {
       gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
     }).gates.map((gate) => gate.id)).toEqual([
-      "daily_20_default_groups",
-      "sources_100",
-      "sources_1000",
-      "dark_metadata_4000",
-      "records_10000",
-      "records_20000",
-      "records_60000"
+      "buyable_rows_100",
+      "buyable_rows_1000",
+      "buyable_rows_4000",
+      "buyable_rows_10000",
+      "buyable_rows_20000",
+      "buyable_rows_60000"
     ]);
     expect((response.scaleStepGates as {
       gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
     }).gates.every((gate) => gate.noLeakRequired)).toBe(true);
     expect((response.scaleStepGates as {
-      gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null }>;
-    }).gates.find((gate) => gate.id === "daily_20_default_groups")).toMatchObject({ state: "pass", buyerValueThreshold: 0.55, observedBuyerValue: 0.6 });
+      gates: Array<{ id: string; state: string; targetBuyableRows: number; observedBuyableRows: number | null; buyerValueThreshold: number; observedBuyerValue: number | null; requirements: { usefulRowRateAtLeast: number; freshRowRateAtLeast: number; corroborationOrSourceFamilyDiversityAtLeast: number; costPerUsefulRowUsdAtMost: number }; blockerCodes: string[] }>;
+    }).gates.find((gate) => gate.id === "buyable_rows_100")).toMatchObject({
+      state: "hold",
+      targetBuyableRows: 100,
+      observedBuyableRows: 16,
+      buyerValueThreshold: 0.55,
+      observedBuyerValue: 0.6,
+      requirements: {
+        usefulRowRateAtLeast: 0.4,
+        freshRowRateAtLeast: 0.55,
+        corroborationOrSourceFamilyDiversityAtLeast: 2,
+        costPerUsefulRowUsdAtMost: 0.01
+      },
+      blockerCodes: expect.arrayContaining(["buyable_rows_100_row_count_below_target", "buyable_rows_100_source_family_diversity_unproven"]) as unknown as string[]
+    });
     expect((response.revenueBlockerBoard as {
       schemaVersion: string;
-      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string }>;
+      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string; nextActions: string[] }>;
     })).toMatchObject({ schemaVersion: "ti.revenue_blocker_board.v1" });
     expect((response.revenueBlockerBoard as {
-      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string }>;
+      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string; nextActions: string[] }>;
     }).blockers.map((item) => item.blocker)).toEqual([
+      "sellable_rows_below_100",
       "stale_apt29_evidence",
       "thin_apt42_public_channel_coverage",
       "source_family_diversity",
@@ -388,6 +401,21 @@ describe("api v1", () => {
       "apify_store_conversion",
       "payout_readiness_gaps"
     ]);
+    expect((response.revenueBlockerBoard as {
+      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string; nextActions: string[] }>;
+    }).blockers[0]).toMatchObject({
+      blocker: "sellable_rows_below_100",
+      buyerMetricTarget: expect.stringContaining(">=100 sellable rows"),
+      nextActions: expect.arrayContaining([
+        expect.stringContaining("Agent 01:"),
+        expect.stringContaining("Agent 03:"),
+        expect.stringContaining("Agent 04:"),
+        expect.stringContaining("Agent 05:"),
+        expect.stringContaining("Agent 07:"),
+        expect.stringContaining("Agent 08:"),
+        expect.stringContaining("Agent 09:")
+      ]) as unknown as string[]
+    });
     expect((response.darkMetadataLiveValueExpansion as {
       schemaVersion: string;
       routeVisibleOn: string[];

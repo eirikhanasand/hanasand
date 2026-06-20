@@ -405,20 +405,38 @@ describe("ops controls", () => {
       baselineRunId: "OThlfd0uzSCNnedAO",
       baselineDatasetId: "LSen2fYtwFTtOr7vK",
       heldStepCount: 6,
-      nextAllowedStep: "daily_20_default_groups"
+      nextAllowedStep: null
     });
     expect(dashboard.scaleStepGates.gates.map((gate) => gate.id)).toEqual([
-      "daily_20_default_groups",
-      "sources_100",
-      "sources_1000",
-      "dark_metadata_4000",
-      "records_10000",
-      "records_20000",
-      "records_60000"
+      "buyable_rows_100",
+      "buyable_rows_1000",
+      "buyable_rows_4000",
+      "buyable_rows_10000",
+      "buyable_rows_20000",
+      "buyable_rows_60000"
     ]);
-    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "daily_20_default_groups")).toMatchObject({ state: "pass", buyerValueThreshold: 0.55, observedBuyerValue: 0.6 });
-    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "dark_metadata_4000")).toMatchObject({ state: "hold", buyerValueThreshold: 0.68, observedBuyerValue: 0.41 });
+    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "buyable_rows_100")).toMatchObject({
+      state: "hold",
+      targetBuyableRows: 100,
+      observedBuyableRows: 16,
+      buyerValueThreshold: 0.55,
+      observedBuyerValue: 0.6,
+      requirements: {
+        usefulRowRateAtLeast: 0.4,
+        freshRowRateAtLeast: 0.55,
+        corroborationOrSourceFamilyDiversityAtLeast: 2,
+        staleDuplicateGenericRejectionRequired: true,
+        costPerUsefulRowUsdAtMost: 0.01,
+        noLeakProofRequired: true
+      }
+    });
+    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "buyable_rows_100")?.blockerCodes).toEqual(expect.arrayContaining([
+      "buyable_rows_100_row_count_below_target",
+      "buyable_rows_100_source_family_diversity_unproven"
+    ]));
+    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "buyable_rows_4000")).toMatchObject({ state: "hold", targetBuyableRows: 4000, buyerValueThreshold: 0.68, observedBuyerValue: 0.41 });
     expect(dashboard.revenueBlockerBoard.blockers.map((item) => item.blocker)).toEqual([
+      "sellable_rows_below_100",
       "stale_apt29_evidence",
       "thin_apt42_public_channel_coverage",
       "source_family_diversity",
@@ -427,6 +445,19 @@ describe("ops controls", () => {
       "apify_store_conversion",
       "payout_readiness_gaps"
     ]);
+    expect(dashboard.revenueBlockerBoard.blockers[0]).toMatchObject({
+      blocker: "sellable_rows_below_100",
+      buyerMetricTarget: expect.stringContaining(">=100 sellable rows")
+    });
+    expect(dashboard.revenueBlockerBoard.blockers[0].nextActions).toEqual(expect.arrayContaining([
+      expect.stringContaining("Agent 01:"),
+      expect.stringContaining("Agent 03:"),
+      expect.stringContaining("Agent 04:"),
+      expect.stringContaining("Agent 05:"),
+      expect.stringContaining("Agent 07:"),
+      expect.stringContaining("Agent 08:"),
+      expect.stringContaining("Agent 09:")
+    ]));
     expect(dashboard.buyerVisibleQualityLiftGate).toMatchObject({
       schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1",
       baselineRunId: "iMQGeezZ8bx7WtlhQ",
@@ -720,7 +751,7 @@ describe("ops controls", () => {
     expect(dashboard.dailySnapshot.metrics.averageBuyerValueScore).toBe(0.6);
     expect(dashboard.dailySnapshot.monetizationReadiness.status).toBe("blocked_for_paid_traffic");
     expect(dashboard.dailySnapshot.nonMonetizingWorkDetector.proofFixture).toMatchObject({ nonMonetizingExampleCount: 4, monetizingExampleCount: 1 });
-    expect(dashboard.dailySnapshot.scaleStepGates).toMatchObject({ passCount: 1, holdCount: 6, nextAllowedStep: "daily_20_default_groups" });
+    expect(dashboard.dailySnapshot.scaleStepGates).toMatchObject({ passCount: 0, holdCount: 6, nextAllowedStep: null });
     expect(dashboard.apifyLaunchExperiment.grossPpeRevenueUsd).toBeNull();
     expect(dashboard.apifyLaunchExperiment.uniqueUsers).toBe(1);
     expect(dashboard.apifyLaunchExperiment.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, suppress: 0, buyerUseful: 48 });
