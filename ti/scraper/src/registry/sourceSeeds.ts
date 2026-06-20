@@ -980,23 +980,153 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
 
 function tiSourceAtlasAcquisitionCatalog(record: TiSourceAtlasRecord, order: number): { name: string; domain: string; actors: string[] } {
   const fallbackActors = tiSourceAtlasRecordActorCoverage(record, order - 1);
-  const byFamily: Partial<Record<TiSourceAtlasFamily, { name: string; domain: string; actors: string[] }>> = {
-    vendor_threat_blog: { name: "Microsoft Threat Intelligence Blog", domain: "microsoft.com", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
-    ransomware_tracker: { name: "Ransomware.live Victim Tracker", domain: "ransomware.live", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
-    cve_advisory: { name: "CISA Known Exploited Vulnerabilities", domain: "cisa.gov", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
-    cert_government: { name: "CISA Cybersecurity Advisories", domain: "cisa.gov", actors: ["APT29", "APT28", "Volt Typhoon", "LockBit"] },
-    malware_researcher: { name: "Cisco Talos Intelligence Blog", domain: "talosintelligence.com", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] },
-    exploit_intelligence: { name: "GreyNoise Research Blog", domain: "greynoise.io", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
-    github_security_advisory: { name: "GitHub Security Advisories", domain: "github.com", actors: ["APT29", "APT28", "LockBit", "Akira"] },
-    package_advisory: { name: "OSV Vulnerability Database", domain: "osv.dev", actors: ["APT29", "APT28", "Lazarus", "Volt Typhoon"] },
-    regional_cyber_agency: { name: "JPCERT Coordination Center Alerts", domain: "jpcert.or.jp", actors: ["Lazarus", "APT29", "Volt Typhoon", "Akira"] },
-    ics_ot: { name: "CISA ICS Advisories", domain: "cisa.gov", actors: ["Volt Typhoon", "APT28", "APT29", "Sandworm"] },
-    cloud_saas_security: { name: "Google Cloud Threat Intelligence Blog", domain: "cloud.google.com", actors: ["APT29", "APT42", "Volt Typhoon", "Scattered Spider"] },
-    phishing_brand_abuse: { name: "Netcraft Cybercrime Disruption Blog", domain: "netcraft.com", actors: ["APT42", "APT28", "FIN7", "Scattered Spider"] },
-    public_channel_descriptor: { name: "Telegram Public Channel Descriptor Review Queue", domain: "telegram.org", actors: ["APT42", "LockBit", "Akira", "Scattered Spider"] },
-    public_dataset: { name: "MITRE ATT&CK Group Updates", domain: "attack.mitre.org", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] }
+  const byFamily: Partial<Record<TiSourceAtlasFamily, Array<{ name: string; domain: string; actors: string[] }>>> = {
+    vendor_threat_blog: [
+      { name: "Microsoft Threat Intelligence Blog", domain: "microsoft.com", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+      { name: "Google Cloud Threat Intelligence Blog", domain: "cloud.google.com", actors: ["APT29", "APT42", "Scattered Spider", "Lazarus"] },
+      { name: "Palo Alto Unit 42 Threat Research", domain: "unit42.paloaltonetworks.com", actors: ["APT28", "APT42", "Volt Typhoon", "LockBit"] },
+      { name: "ESET WeLiveSecurity Research", domain: "welivesecurity.com", actors: ["Sandworm", "APT28", "Lazarus", "APT29"] },
+      { name: "CrowdStrike Intelligence Blog", domain: "crowdstrike.com", actors: ["APT29", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "Secureworks Counter Threat Unit", domain: "secureworks.com", actors: ["APT29", "APT28", "LockBit", "Akira"] },
+      { name: "WithSecure Labs Research", domain: "labs.withsecure.com", actors: ["APT29", "APT28", "Lazarus", "Sandworm"] },
+      { name: "Cisco Talos Intelligence Blog", domain: "talosintelligence.com", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] }
+    ],
+    ransomware_tracker: [
+      { name: "Ransomware.live Victim Tracker", domain: "ransomware.live", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+      { name: "CISA StopRansomware Advisories", domain: "cisa.gov", actors: ["LockBit", "Akira", "FIN7", "Scattered Spider"] },
+      { name: "The DFIR Report Ransomware Cases", domain: "thedfirreport.com", actors: ["LockBit", "Akira", "FIN7", "Scattered Spider"] },
+      { name: "Sophos Ransomware Research", domain: "sophos.com", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+      { name: "NCC Group Monthly Threat Pulse", domain: "nccgroup.com", actors: ["LockBit", "Akira", "FIN7", "Scattered Spider"] },
+      { name: "Comparitech Ransomware Tracker", domain: "comparitech.com", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+      { name: "Coveware Quarterly Ransomware Reports", domain: "coveware.com", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+      { name: "Orange Cyberdefense Ransomware Research", domain: "orangecyberdefense.com", actors: ["LockBit", "Akira", "FIN7", "Scattered Spider"] }
+    ],
+    cve_advisory: [
+      { name: "CISA Known Exploited Vulnerabilities", domain: "cisa.gov", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+      { name: "NVD CVE Data Feed", domain: "nvd.nist.gov", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
+      { name: "MITRE CVE Records", domain: "cve.org", actors: ["APT28", "APT29", "Lazarus", "Sandworm"] },
+      { name: "VulnCheck KEV Catalog", domain: "vulncheck.com", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
+      { name: "OpenCVE Vulnerability Feed", domain: "opencve.io", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+      { name: "CERT/CC Vulnerability Notes", domain: "kb.cert.org", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+      { name: "Red Hat CVE Database", domain: "access.redhat.com", actors: ["APT29", "APT28", "Lazarus", "LockBit"] },
+      { name: "Ubuntu CVE Tracker", domain: "ubuntu.com", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] }
+    ],
+    cert_government: [
+      { name: "CISA Cybersecurity Advisories", domain: "cisa.gov", actors: ["APT29", "APT28", "Volt Typhoon", "LockBit"] },
+      { name: "NCSC UK Advisories", domain: "ncsc.gov.uk", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] },
+      { name: "Australian Cyber Security Centre Advisories", domain: "cyber.gov.au", actors: ["APT29", "APT28", "Volt Typhoon", "Akira"] },
+      { name: "CERT-EU Security Advisories", domain: "cert.europa.eu", actors: ["APT29", "APT28", "Sandworm", "LockBit"] },
+      { name: "JPCERT Coordination Center Alerts", domain: "jpcert.or.jp", actors: ["Lazarus", "APT29", "Volt Typhoon", "Akira"] },
+      { name: "CERT-FR Alerts", domain: "cert.ssi.gouv.fr", actors: ["APT28", "APT29", "Sandworm", "LockBit"] },
+      { name: "BSI Germany Cybersecurity Warnings", domain: "bsi.bund.de", actors: ["APT28", "APT29", "LockBit", "Akira"] },
+      { name: "NCSC-NL Advisories", domain: "ncsc.nl", actors: ["APT29", "APT28", "LockBit", "Akira"] }
+    ],
+    malware_researcher: [
+      { name: "Cisco Talos Intelligence Blog", domain: "talosintelligence.com", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] },
+      { name: "Malwarebytes Labs Research", domain: "malwarebytes.com", actors: ["Lazarus", "FIN7", "LockBit", "Akira"] },
+      { name: "Proofpoint Threat Insight", domain: "proofpoint.com", actors: ["APT29", "APT28", "APT42", "FIN7"] },
+      { name: "Sekoia Threat Research", domain: "blog.sekoia.io", actors: ["APT28", "APT29", "Sandworm", "LockBit"] },
+      { name: "Trellix Advanced Research Center", domain: "trellix.com", actors: ["APT29", "APT28", "Lazarus", "FIN7"] },
+      { name: "SentinelOne SentinelLabs", domain: "sentinelone.com", actors: ["Lazarus", "APT28", "Sandworm", "Akira"] },
+      { name: "Elastic Security Labs", domain: "elastic.co", actors: ["APT29", "APT28", "Lazarus", "Scattered Spider"] },
+      { name: "AhnLab ASEC Blog", domain: "asec.ahnlab.com", actors: ["Lazarus", "APT29", "APT28", "FIN7"] }
+    ],
+    exploit_intelligence: [
+      { name: "GreyNoise Research Blog", domain: "greynoise.io", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
+      { name: "Shadowserver Reports", domain: "shadowserver.org", actors: ["Volt Typhoon", "APT28", "APT29", "Lazarus"] },
+      { name: "SANS Internet Storm Center", domain: "isc.sans.edu", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
+      { name: "Rapid7 Vulnerability Research", domain: "rapid7.com", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+      { name: "Horizon3 Attack Team Research", domain: "horizon3.ai", actors: ["APT28", "APT29", "Volt Typhoon", "Akira"] },
+      { name: "Assetnote Research", domain: "assetnote.io", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
+      { name: "ProjectDiscovery Research", domain: "projectdiscovery.io", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+      { name: "LeakIX Public Exposure Reports", domain: "leakix.net", actors: ["Volt Typhoon", "APT28", "LockBit", "Akira"] }
+    ],
+    github_security_advisory: [
+      { name: "GitHub Security Advisories", domain: "github.com", actors: ["APT29", "APT28", "LockBit", "Akira"] },
+      { name: "GitHub Advisory Database", domain: "github.com", actors: ["APT29", "APT28", "Lazarus", "Volt Typhoon"] },
+      { name: "GitHub Security Lab", domain: "securitylab.github.com", actors: ["APT29", "APT28", "Lazarus", "Sandworm"] },
+      { name: "GitHub Blog Security", domain: "github.blog", actors: ["APT29", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "GitLab Security Advisories", domain: "gitlab.com", actors: ["APT29", "APT28", "Volt Typhoon", "LockBit"] },
+      { name: "OpenSSF Vulnerability Disclosures", domain: "openssf.org", actors: ["Lazarus", "APT29", "APT28", "Scattered Spider"] },
+      { name: "Chainguard Security Advisories", domain: "chainguard.dev", actors: ["Lazarus", "APT29", "APT28", "Scattered Spider"] },
+      { name: "Snyk Vulnerability Database", domain: "security.snyk.io", actors: ["APT29", "APT28", "Lazarus", "FIN7"] }
+    ],
+    package_advisory: [
+      { name: "OSV Vulnerability Database", domain: "osv.dev", actors: ["APT29", "APT28", "Lazarus", "Volt Typhoon"] },
+      { name: "npm Security Advisories", domain: "npmjs.com", actors: ["APT29", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "PyPI Security Advisories", domain: "pypi.org", actors: ["APT29", "APT28", "Lazarus", "Scattered Spider"] },
+      { name: "RubySec Advisory Database", domain: "rubysec.com", actors: ["APT29", "APT28", "Lazarus", "FIN7"] },
+      { name: "FriendsOfPHP Security Advisories", domain: "github.com", actors: ["APT29", "APT28", "FIN7", "LockBit"] },
+      { name: "RustSec Advisory Database", domain: "rustsec.org", actors: ["APT29", "APT28", "Lazarus", "Scattered Spider"] },
+      { name: "Go Vulnerability Database", domain: "pkg.go.dev", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+      { name: "Debian Security Tracker", domain: "security-tracker.debian.org", actors: ["APT29", "APT28", "Lazarus", "LockBit"] }
+    ],
+    public_dataset: [
+      { name: "MITRE ATT&CK Group Updates", domain: "attack.mitre.org", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+      { name: "Malpedia Actor and Malware Corpus", domain: "malpedia.caad.fkie.fraunhofer.de", actors: ["APT29", "APT28", "Lazarus", "Sandworm"] },
+      { name: "MalwareBazaar Public Malware Feed", domain: "bazaar.abuse.ch", actors: ["Lazarus", "FIN7", "LockBit", "Akira"] },
+      { name: "URLhaus Public Malware URL Feed", domain: "urlhaus.abuse.ch", actors: ["Lazarus", "FIN7", "LockBit", "Akira"] },
+      { name: "AlienVault OTX Public Pulses", domain: "otx.alienvault.com", actors: ["APT29", "APT28", "APT42", "Lazarus"] },
+      { name: "ThreatFox IOC Database", domain: "threatfox.abuse.ch", actors: ["APT29", "APT28", "Lazarus", "LockBit"] },
+      { name: "AbuseIPDB Public Reports", domain: "abuseipdb.com", actors: ["Volt Typhoon", "APT28", "LockBit", "Akira"] },
+      { name: "CIRCL OSINT Feeds", domain: "circl.lu", actors: ["APT29", "APT28", "Lazarus", "Sandworm"] }
+    ],
+    regional_cyber_agency: [
+      { name: "JPCERT Coordination Center Alerts", domain: "jpcert.or.jp", actors: ["Lazarus", "APT29", "Volt Typhoon", "Akira"] },
+      { name: "CERT-UA Alerts", domain: "cert.gov.ua", actors: ["Sandworm", "APT28", "APT29", "LockBit"] },
+      { name: "CERT Polska Warnings", domain: "cert.pl", actors: ["APT28", "APT29", "Sandworm", "LockBit"] },
+      { name: "CERT-SE Security Advisories", domain: "cert.se", actors: ["APT29", "APT28", "LockBit", "Akira"] },
+      { name: "CERT NZ Advisories", domain: "cert.govt.nz", actors: ["APT29", "APT28", "Volt Typhoon", "Akira"] },
+      { name: "SingCERT Alerts", domain: "csa.gov.sg", actors: ["Volt Typhoon", "Lazarus", "APT29", "APT28"] },
+      { name: "KISA KrCERT Security Notices", domain: "krcert.or.kr", actors: ["Lazarus", "APT29", "APT28", "FIN7"] },
+      { name: "CERT.br Security Advisories", domain: "cert.br", actors: ["APT29", "APT28", "LockBit", "Akira"] }
+    ],
+    ics_ot: [
+      { name: "CISA ICS Advisories", domain: "cisa.gov", actors: ["Volt Typhoon", "APT28", "APT29", "Sandworm"] },
+      { name: "Dragos Threat Intelligence Blog", domain: "dragos.com", actors: ["Sandworm", "Volt Typhoon", "APT28", "Lazarus"] },
+      { name: "Claroty Team82 Research", domain: "claroty.com", actors: ["Volt Typhoon", "APT28", "Sandworm", "Lazarus"] },
+      { name: "Nozomi Networks Labs", domain: "nozominetworks.com", actors: ["Volt Typhoon", "Sandworm", "APT28", "Lazarus"] },
+      { name: "OTORIO Research Blog", domain: "otorio.com", actors: ["Volt Typhoon", "Sandworm", "APT28", "Lazarus"] },
+      { name: "SecurityWeek ICS Security", domain: "securityweek.com", actors: ["Volt Typhoon", "Sandworm", "APT28", "Lazarus"] },
+      { name: "Schneider Electric Security Notifications", domain: "se.com", actors: ["Volt Typhoon", "Sandworm", "APT28", "LockBit"] },
+      { name: "Siemens ProductCERT Advisories", domain: "cert-portal.siemens.com", actors: ["Volt Typhoon", "Sandworm", "APT28", "LockBit"] }
+    ],
+    cloud_saas_security: [
+      { name: "Google Cloud Threat Intelligence Blog", domain: "cloud.google.com", actors: ["APT29", "APT42", "Volt Typhoon", "Scattered Spider"] },
+      { name: "Microsoft Security Blog", domain: "microsoft.com", actors: ["APT29", "APT28", "APT42", "Scattered Spider"] },
+      { name: "AWS Security Bulletins", domain: "aws.amazon.com", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+      { name: "Wiz Research", domain: "wiz.io", actors: ["APT29", "APT28", "Scattered Spider", "Lazarus"] },
+      { name: "Lacework Labs", domain: "lacework.com", actors: ["APT29", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "Orca Security Research", domain: "orca.security", actors: ["APT29", "APT28", "Scattered Spider", "Lazarus"] },
+      { name: "Okta Security Advisories", domain: "okta.com", actors: ["Scattered Spider", "APT29", "APT42", "FIN7"] },
+      { name: "Cloudflare Radar Security Insights", domain: "radar.cloudflare.com", actors: ["APT29", "APT28", "Volt Typhoon", "Scattered Spider"] }
+    ],
+    phishing_brand_abuse: [
+      { name: "Netcraft Cybercrime Disruption Blog", domain: "netcraft.com", actors: ["APT42", "APT28", "FIN7", "Scattered Spider"] },
+      { name: "APWG Phishing Activity Trends", domain: "apwg.org", actors: ["APT42", "APT28", "FIN7", "Scattered Spider"] },
+      { name: "PhishTank Public Feed", domain: "phishtank.org", actors: ["APT42", "FIN7", "Scattered Spider", "Akira"] },
+      { name: "OpenPhish Public Feed", domain: "openphish.com", actors: ["APT42", "FIN7", "Scattered Spider", "Akira"] },
+      { name: "Cofense Intelligence Blog", domain: "cofense.com", actors: ["APT42", "APT28", "FIN7", "Scattered Spider"] },
+      { name: "Cloudflare Radar Phishing Reports", domain: "radar.cloudflare.com", actors: ["APT42", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "Google Safe Browsing Transparency Report", domain: "transparencyreport.google.com", actors: ["APT42", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "Microsoft Digital Defense Phishing Reports", domain: "microsoft.com", actors: ["APT42", "APT28", "FIN7", "Scattered Spider"] }
+    ],
+    public_channel_descriptor: [
+      { name: "Telegram Public Channel Descriptor Review Queue", domain: "telegram.org", actors: ["APT42", "LockBit", "Akira", "Scattered Spider"] },
+      { name: "Telegram Public Cybersecurity Channel References", domain: "telegram.org", actors: ["APT42", "APT28", "LockBit", "Akira"] },
+      { name: "Telegram Public Ransomware Channel Descriptors", domain: "telegram.org", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+      { name: "Mastodon Public Security Hashtag Feed", domain: "mastodon.social", actors: ["APT42", "APT28", "LockBit", "Akira"] },
+      { name: "Bluesky Public Security Feed Descriptors", domain: "bsky.app", actors: ["APT42", "APT28", "Scattered Spider", "FIN7"] },
+      { name: "Reddit Public NetSec Descriptor Queue", domain: "reddit.com", actors: ["APT42", "APT28", "LockBit", "Akira"] },
+      { name: "RSSHub Public Channel Descriptor Queue", domain: "rsshub.app", actors: ["APT42", "APT28", "LockBit", "Akira"] },
+      { name: "Public CTI Social Channel Descriptor", domain: "publicsuffix.org", actors: ["APT42", "APT28", "LockBit", "Akira"] }
+    ]
   };
-  return byFamily[record.family] ?? {
+  const familyCatalog = byFamily[record.family];
+  if (familyCatalog && familyCatalog.length > 0) {
+    return familyCatalog[(order - 1) % familyCatalog.length]!;
+  }
+  return {
     name: record.sourceName,
     domain: record.domain,
     actors: fallbackActors.length > 0 ? fallbackActors : record.queryClassCoverage.includes("cve") ? ["APT29"] : ["APT28"]
