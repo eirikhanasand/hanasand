@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 - 2026-06-20
+
+- Added `reviewReasons` to every dataset row so analysts can see why a finding is actionable, single-source, partial, stale, contradicted, metadata-only, or held.
+- Added coverage-gap rows plus source-family, collection-priority, and recommended collection action fields for thin or stale evidence.
+- Added scheduler polling, retry/backoff, duplicate-run reuse, deferred workload, badge, and source-coverage gap fields to every dataset row.
+- Aligned fixture smoke coverage with scheduler polling, duplicate-run reuse, source coverage gaps, and safe-metadata-only quality fields.
+
 ## 0.4.0 - 2026-06-20
 
 - Clustered strongly overlapping public reports into incident claim rows.

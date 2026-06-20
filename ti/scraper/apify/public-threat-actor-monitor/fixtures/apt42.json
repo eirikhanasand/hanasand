@@ -73,5 +73,36 @@
       "url": "https://example.com/public-report"
     }
   ],
+  "scheduler": {
+    "nextPollSeconds": 3,
+    "attachedToActiveRun": true,
+    "queuedTaskCount": 1,
+    "backpressureState": "serving_partial",
+    "runtimeSla": {
+      "state": "watch",
+      "apiPollingImpact": "normal",
+      "publicAnswerImpact": "partial_until_more_sources"
+    },
+    "interactiveSearchFreshness": {
+      "queueDecision": {
+        "decision": "reuse_active_run",
+        "nextPollSeconds": 3,
+        "retryAfterSeconds": 3,
+        "duplicateRunReuse": "required_before_enqueue",
+        "attachedToActiveRun": true,
+        "deferredBackgroundWorkloads": ["scheduled_source_sweep"]
+      },
+      "uiSignals": {
+        "badges": ["source_freshness", "active_run_reuse", "background_deferred"]
+      }
+    }
+  },
+  "sourceCoverage": {
+    "coverageState": "thin",
+    "gaps": ["missing_public_channel_evidence"],
+    "slo": {
+      "status": "watch"
+    }
+  },
   "notes": ["Instant actor context is ready while live discovery continues."]
 }

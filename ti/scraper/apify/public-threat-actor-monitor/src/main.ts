@@ -7,6 +7,7 @@ interface ActorInput {
   includeTtps?: boolean;
   includeSources?: boolean;
   includeDatasets?: boolean;
+  includeCoverageGaps?: boolean;
 }
 
 interface TiSearchResponse {
@@ -65,12 +66,16 @@ interface TiSearchResponse {
     provenance: string;
     url?: string;
   }>;
+  scheduler?: Record<string, unknown>;
+  sourceCoverage?: Record<string, unknown>;
   notes: string[];
 }
 
+type EvidenceSourceFamily = Exclude<MarketplaceRow["sourceType"], "system">;
+
 interface MarketplaceRow {
   query: string;
-  rowType: "profile" | "activity" | "target" | "ttp" | "source" | "dataset";
+  rowType: "profile" | "activity" | "target" | "ttp" | "source" | "dataset" | "coverage_gap";
   actor: string;
   title: string;
   summary: string;
@@ -104,10 +109,30 @@ interface MarketplaceRow {
   collectionMode: string;
   sourceCount: number;
   sourceFamilyCount: number;
+  sourceFamilies: string[];
+  missingSourceFamilies: string[];
+  coverageStatus: "sufficient" | "thin" | "stale" | "no_evidence";
+  collectionPriority: "none" | "low" | "medium" | "high";
+  recommendedCollectionAction: "none" | "monitor_public_channels" | "add_public_channel_sources" | "add_clear_web_sources" | "increase_polling" | "review_contradictions";
+  coverageGapCodes: string[];
   activityCount: number;
   freshnessStatus: "current" | "recent" | "stale" | "unknown";
+  schedulerState: string;
+  schedulerDecision: string;
+  nextPollSeconds: number;
+  retryAfterSeconds: number;
+  duplicateRunReuse: boolean;
+  attachedToActiveRun: boolean;
+  queuedTaskCount: number;
+  deferredBackgroundWorkloads: string[];
+  schedulerBadges: string[];
+  sourceCoverageState: string;
+  sourceCoverageGapCount: number;
+  sourceCoverageGaps: string[];
+  pollingHint: string;
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
+  reviewReasons: string[];
   hasDarknetMetadata: boolean;
   hasPublicChannelCoverage: boolean;
   confidence: number;
@@ -174,6 +199,7 @@ function normalizeInput(input: ActorInput): NormalizedInput {
     includeTtps: input.includeTtps ?? true,
     includeSources: input.includeSources ?? true,
     includeDatasets: input.includeDatasets ?? false,
+    includeCoverageGaps: input.includeCoverageGaps ?? true,
     apiBaseUrl: (process.env.TI_PUBLIC_API_BASE ?? DEFAULT_API_BASE).replace(/\/$/, "")
   };
 }
@@ -345,6 +371,10 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
     }
   }
 
+  if (input.includeCoverageGaps) {
+    rows.push(...coverageGapRows(response, generatedAt, lastSeen));
+  }
+
   return rows;
 }
 
@@ -356,6 +386,7 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
     response.confidence,
     evidenceCount
   );
+  const scheduler = schedulerFields(response);
   return {
     query: response.query,
     rowType: "profile",
@@ -368,10 +399,18 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
     collectionMode: response.mode,
     sourceCount: evidenceCount,
     sourceFamilyCount: quality.sourceFamilyCount,
+    sourceFamilies: quality.sourceFamilies,
+    missingSourceFamilies: quality.missingSourceFamilies,
+    coverageStatus: quality.coverageStatus,
+    collectionPriority: quality.collectionPriority,
+    recommendedCollectionAction: quality.recommendedCollectionAction,
+    coverageGapCodes: quality.coverageGapCodes,
     activityCount: response.recentActivity.length,
     freshnessStatus: quality.freshnessStatus,
+    ...scheduler,
     evidenceGrade: quality.evidenceGrade,
     isActionable: quality.isActionable,
+    reviewReasons: quality.reviewReasons,
     hasDarknetMetadata: quality.hasDarknetMetadata,
     hasPublicChannelCoverage: quality.hasPublicChannelCoverage,
     firstSeen: generatedAt,
@@ -393,7 +432,7 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
 }
 
 function qualityFields(response: TiSearchResponse, observedAt: string, confidence: number, evidenceCount: number) {
-  const sourceFamilies = new Set(response.sources.map((source) => sourceType(source.type)).filter((type) => type !== "system"));
+  const sourceFamilies = new Set(response.sources.map((source) => sourceType(source.type)).filter(isEvidenceSourceFamily));
   const freshnessStatus = freshnessFor(observedAt);
   const normalizedConfidence = clampNumber(confidence, 0, 1);
   const evidenceGrade = evidenceCount >= 2
@@ -401,17 +440,255 @@ function qualityFields(response: TiSearchResponse, observedAt: string, confidenc
     : evidenceCount === 1
       ? "single_source"
       : "unverified";
+  const missingSourceFamilies = expectedSourceFamilies(response).filter((family) => !sourceFamilies.has(family));
+  const coverageStatus = coverageStatusFor(freshnessStatus, evidenceCount, sourceFamilies.size);
+  const coverageGapCodes = coverageGapCodesFor(response, freshnessStatus, evidenceCount, sourceFamilies, missingSourceFamilies);
+  const recommendedCollectionAction = recommendedCollectionActionFor(coverageGapCodes);
 
   return {
     sourceFamilyCount: sourceFamilies.size,
+    sourceFamilies: [...sourceFamilies].sort(),
+    missingSourceFamilies,
+    coverageStatus,
+    collectionPriority: collectionPriorityFor(coverageStatus, coverageGapCodes),
+    recommendedCollectionAction,
+    coverageGapCodes,
     freshnessStatus,
     evidenceGrade: evidenceGrade as MarketplaceRow["evidenceGrade"],
     isActionable: normalizedConfidence >= 0.6
       && evidenceCount > 0
       && (freshnessStatus === "current" || freshnessStatus === "recent"),
+    reviewReasons: reviewReasonsFor(response, freshnessStatus, normalizedConfidence, evidenceCount),
     hasDarknetMetadata: response.sources.some((source) => sourceType(source.type) === "darknet_metadata"),
     hasPublicChannelCoverage: response.sources.some((source) => sourceType(source.type) === "public_channel")
   };
+}
+
+function coverageGapRows(response: TiSearchResponse, generatedAt: string, lastSeen: string): MarketplaceRow[] {
+  const quality = qualityFields(response, lastSeen, response.confidence, response.sources.filter((source) => sourceType(source.type) !== "system").length);
+  if (quality.coverageGapCodes.length === 0) return [];
+
+  return quality.coverageGapCodes.map((code) => ({
+    ...baseRow(response, generatedAt, lastSeen),
+    rowType: "coverage_gap",
+    title: coverageGapTitle(code),
+    summary: coverageGapSummary(response, code, quality),
+    sourceType: "system",
+    confidence: clampNumber(response.confidence, 0, 1),
+    provenanceHash: stableHash([response.query, code, quality.sourceFamilies.join(","), quality.missingSourceFamilies.join(",")].join("|"))
+  }));
+}
+
+function expectedSourceFamilies(response: TiSearchResponse): EvidenceSourceFamily[] {
+  const query = response.query.toLowerCase();
+  const needsPublicChannel = /(lockbit|akira|clop|black basta|play|ransomhub|alphv|hunters|scattered spider|apt42|charming kitten|telegram|ransom)/i.test(query)
+    || response.recentActivity.some((activity) => activity.claimType === "victim_claim");
+  return needsPublicChannel ? ["clear_web", "public_channel"] : ["clear_web"];
+}
+
+function coverageStatusFor(
+  freshnessStatus: MarketplaceRow["freshnessStatus"],
+  evidenceCount: number,
+  sourceFamilyCount: number
+): MarketplaceRow["coverageStatus"] {
+  if (evidenceCount === 0) return "no_evidence";
+  if (freshnessStatus === "stale" || freshnessStatus === "unknown") return "stale";
+  if (sourceFamilyCount < 2) return "thin";
+  return "sufficient";
+}
+
+function coverageGapCodesFor(
+  response: TiSearchResponse,
+  freshnessStatus: MarketplaceRow["freshnessStatus"],
+  evidenceCount: number,
+  sourceFamilies: Set<EvidenceSourceFamily>,
+  missingSourceFamilies: string[]
+): string[] {
+  const codes = new Set<string>();
+  if (evidenceCount === 0) codes.add("no_public_evidence");
+  if (freshnessStatus === "stale" || freshnessStatus === "unknown") codes.add("stale_or_missing_timestamp");
+  if (missingSourceFamilies.includes("clear_web")) codes.add("missing_clear_web_evidence");
+  if (missingSourceFamilies.includes("public_channel")) codes.add("missing_public_channel_evidence");
+  if (sourceFamilies.size === 1 && evidenceCount > 0) codes.add("single_source_family");
+  if (response.recentActivity.some((activity) => (activity.contradictingSourceIds?.length ?? 0) > 0)) codes.add("contradicting_public_reports");
+  return [...codes].sort();
+}
+
+function isEvidenceSourceFamily(value: MarketplaceRow["sourceType"]): value is EvidenceSourceFamily {
+  return value !== "system";
+}
+
+function recommendedCollectionActionFor(codes: string[]): MarketplaceRow["recommendedCollectionAction"] {
+  if (codes.includes("contradicting_public_reports")) return "review_contradictions";
+  if (codes.includes("missing_public_channel_evidence")) return "add_public_channel_sources";
+  if (codes.includes("missing_clear_web_evidence") || codes.includes("no_public_evidence")) return "add_clear_web_sources";
+  if (codes.includes("stale_or_missing_timestamp")) return "increase_polling";
+  if (codes.includes("single_source_family")) return "monitor_public_channels";
+  return "none";
+}
+
+function collectionPriorityFor(
+  coverageStatus: MarketplaceRow["coverageStatus"],
+  codes: string[]
+): MarketplaceRow["collectionPriority"] {
+  if (coverageStatus === "no_evidence" || codes.includes("contradicting_public_reports")) return "high";
+  if (coverageStatus === "stale" || codes.includes("missing_public_channel_evidence")) return "medium";
+  if (coverageStatus === "thin" || codes.includes("single_source_family")) return "low";
+  return "none";
+}
+
+function coverageGapTitle(code: string): string {
+  switch (code) {
+    case "no_public_evidence": return "No public evidence returned";
+    case "stale_or_missing_timestamp": return "Freshness is stale or unknown";
+    case "missing_clear_web_evidence": return "Clear-web evidence missing";
+    case "missing_public_channel_evidence": return "Public-channel coverage missing";
+    case "single_source_family": return "Only one source family supports this result";
+    case "contradicting_public_reports": return "Contradicting public reports need review";
+    default: return "Coverage gap";
+  }
+}
+
+function coverageGapSummary(response: TiSearchResponse, code: string, quality: ReturnType<typeof qualityFields>): string {
+  const families = quality.sourceFamilies.length ? quality.sourceFamilies.join(", ") : "none";
+  const missing = quality.missingSourceFamilies.length ? quality.missingSourceFamilies.join(", ") : "none";
+  return `${coverageGapTitle(code)} for ${response.query}. Current families: ${families}. Missing families: ${missing}. Recommended action: ${quality.recommendedCollectionAction}.`;
+}
+
+function schedulerFields(response: TiSearchResponse): Pick<MarketplaceRow,
+  | "schedulerState"
+  | "schedulerDecision"
+  | "nextPollSeconds"
+  | "retryAfterSeconds"
+  | "duplicateRunReuse"
+  | "attachedToActiveRun"
+  | "queuedTaskCount"
+  | "deferredBackgroundWorkloads"
+  | "schedulerBadges"
+  | "sourceCoverageState"
+  | "sourceCoverageGapCount"
+  | "sourceCoverageGaps"
+  | "pollingHint"
+> {
+  const evidenceCount = response.sources.filter((source) => isEvidenceSourceFamily(sourceType(source.type))).length;
+  const quality = qualityFields(response, evidenceCount > 0 || response.recentActivity.length > 0 ? response.lastSeen : "", response.confidence, evidenceCount);
+  const scheduler = record(response.scheduler);
+  const interactive = record(scheduler?.interactiveSearchFreshness);
+  const queueDecision = record(interactive?.queueDecision);
+  const uiSignals = record(interactive?.uiSignals);
+  const runtimeSla = record(scheduler?.runtimeSla);
+  const sourceCoverage = record(response.sourceCoverage);
+  const sourceSlo = record(sourceCoverage?.slo);
+  const sourceCoverageGaps = uniqueStrings([
+    ...quality.coverageGapCodes,
+    ...stringArray(sourceCoverage?.gaps),
+    ...stringArray(sourceCoverage?.coverageGaps)
+  ]).slice(0, 12);
+  const nextPollSeconds = clampInt(
+    numberFromUnknown(queueDecision?.nextPollSeconds ?? scheduler?.nextPollSeconds ?? response.refreshAfterSeconds),
+    1,
+    3600,
+    response.status === "ready" ? 900 : 3
+  );
+  const fallbackState = response.status === "ready"
+    ? "complete"
+    : response.status === "partial"
+      ? "polling"
+      : response.status === "queued"
+        ? "queued"
+        : response.status ?? "unknown";
+  const fallbackDecision = quality.coverageGapCodes.includes("contradicting_public_reports")
+    ? "hold_for_review"
+    : response.status === "partial"
+      ? "reuse_active_run"
+      : response.status === "queued"
+        ? "retry_after"
+        : quality.coverageGapCodes.length > 0
+          ? "expand_source_coverage"
+          : "complete";
+  const schedulerState = safeString(runtimeSla?.state ?? scheduler?.backpressureState ?? fallbackState);
+  const schedulerDecision = safeString(queueDecision?.decision ?? scheduler?.backpressureState ?? fallbackDecision);
+  const attachedToActiveRun = boolFromUnknown(queueDecision?.attachedToActiveRun ?? scheduler?.attachedToActiveRun)
+    || response.status === "partial"
+    || response.status === "queued";
+  const retryAfterSeconds = clampInt(
+    numberFromUnknown(queueDecision?.retryAfterSeconds ?? scheduler?.retryAfterSeconds),
+    response.status === "ready" ? 0 : 3,
+    86_400,
+    response.status === "queued" || response.status === "partial" ? Math.max(3, nextPollSeconds) : 0
+  );
+  const deferredBackgroundWorkloads = uniqueStrings([
+    ...stringArray(queueDecision?.deferredBackgroundWorkloads),
+    ...deferredWorkloadsFor(response, quality.coverageGapCodes)
+  ]).slice(0, 12);
+  const schedulerBadges = uniqueStrings([
+    ...stringArray(uiSignals?.badges),
+    ...schedulerBadgesFor(response, quality.coverageStatus)
+  ]).slice(0, 12);
+
+  return {
+    schedulerState,
+    schedulerDecision,
+    nextPollSeconds,
+    retryAfterSeconds,
+    duplicateRunReuse: attachedToActiveRun || queueDecision?.duplicateRunReuse === "required_before_enqueue",
+    attachedToActiveRun,
+    queuedTaskCount: clampInt(numberFromUnknown(scheduler?.queuedTaskCount), 0, 1_000_000, response.status === "queued" ? 1 : 0),
+    deferredBackgroundWorkloads,
+    schedulerBadges,
+    sourceCoverageState: safeString(sourceCoverage?.coverageState ?? sourceSlo?.status ?? quality.coverageStatus),
+    sourceCoverageGapCount: sourceCoverageGaps.length,
+    sourceCoverageGaps,
+    pollingHint: pollingHintFor(response, sourceCoverageGaps, nextPollSeconds)
+  };
+}
+
+function deferredWorkloadsFor(response: TiSearchResponse, coverageGapCodes: string[]): string[] {
+  const workloads = new Set<string>();
+  if (response.status === "partial" || response.status === "queued") workloads.add("poll_run_status");
+  if (coverageGapCodes.includes("missing_public_channel_evidence")) workloads.add("public_channel_source_gap");
+  if (coverageGapCodes.includes("missing_clear_web_evidence") || coverageGapCodes.includes("no_public_evidence")) workloads.add("clear_web_source_gap");
+  if (coverageGapCodes.includes("stale_or_missing_timestamp")) workloads.add("freshness_polling");
+  if (coverageGapCodes.includes("contradicting_public_reports")) workloads.add("analyst_contradiction_review");
+  return [...workloads].sort();
+}
+
+function schedulerBadgesFor(response: TiSearchResponse, coverageStatus: MarketplaceRow["coverageStatus"]): string[] {
+  const badges = new Set<string>(["safe_metadata_only", `coverage:${coverageStatus}`]);
+  if (response.status) badges.add(`status:${response.status}`);
+  if (response.refreshAfterSeconds && response.refreshAfterSeconds <= 5) badges.add("fast_poll");
+  if (response.status === "partial" || response.status === "queued") badges.add("active_run_reuse");
+  return [...badges].sort();
+}
+
+function pollingHintFor(response: TiSearchResponse, coverageGapCodes: string[], nextPollSeconds: number): string {
+  if (coverageGapCodes.length > 0) return "source_gap_review";
+  if (response.status === "queued" || response.status === "partial") return `poll_after_${nextPollSeconds}s`;
+  if (coverageGapCodes.includes("missing_public_channel_evidence")) return "schedule_public_channel_source_review";
+  if (coverageGapCodes.includes("stale_or_missing_timestamp")) return "increase_public_source_polling";
+  return "no_poll_needed";
+}
+
+function reviewReasonsFor(
+  response: TiSearchResponse,
+  freshnessStatus: MarketplaceRow["freshnessStatus"],
+  confidence: number,
+  evidenceCount: number
+): string[] {
+  const reasons = new Set<string>();
+  if (response.status && response.status !== "ready") reasons.add(`status:${response.status}`);
+  if (freshnessStatus === "current" || freshnessStatus === "recent") reasons.add(`freshness:${freshnessStatus}`);
+  if (freshnessStatus === "stale" || freshnessStatus === "unknown") reasons.add(`hold:${freshnessStatus}_evidence`);
+  if (evidenceCount >= 2) reasons.add("evidence:corroborated");
+  if (evidenceCount === 1) reasons.add("review:single_source");
+  if (evidenceCount === 0) reasons.add("hold:no_public_evidence");
+  if (confidence < 0.35) reasons.add("hold:low_confidence");
+  if (confidence >= 0.6 && evidenceCount > 0 && freshnessStatus !== "stale" && freshnessStatus !== "unknown") reasons.add("actionable:monitor_or_triage");
+  if (response.sources.some((source) => sourceType(source.type) === "darknet_metadata")) reasons.add("caveat:darknet_metadata_only");
+  if (response.sources.some((source) => sourceType(source.type) === "public_channel")) reasons.add("caveat:public_channel_requires_corroboration");
+  if (response.recentActivity.some((item) => (item.contradictingSourceIds?.length ?? 0) > 0)) reasons.add("hold:contradictory_reporting");
+  if (response.notes.some((note) => note.toLowerCase().includes("review"))) reasons.add("review:analyst_review_required");
+  return [...reasons].slice(0, 12);
 }
 
 function freshnessFor(value: string): MarketplaceRow["freshnessStatus"] {
@@ -534,6 +811,26 @@ function clampInt(value: number | undefined, min: number, max: number, fallback:
 function clampNumber(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, value));
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function numberFromUnknown(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function boolFromUnknown(value: unknown): boolean {
+  return value === true;
+}
+
+function safeString(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 120) : "unknown";
 }
 
 function safeIso(value: string): string | undefined {

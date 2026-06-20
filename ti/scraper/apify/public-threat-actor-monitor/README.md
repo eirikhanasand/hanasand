@@ -13,6 +13,8 @@ The Actor monitors a 20-group default watchlist and returns machine-readable row
 - source provenance and optional coverage metadata,
 - confidence and corroboration grade,
 - freshness and actionability flags,
+- scheduler polling, duplicate-run reuse, retry/backoff, and source-coverage gap state,
+- review reasons for stale, single-source, partial, contradicted, metadata-only, or actionable rows,
 - first/last-seen timestamps.
 
 It does not return stolen data, credential values, private messages, payloads, raw leak contents, or protected/private forum material.
@@ -55,8 +57,16 @@ It does not return stolen data, credential values, private messages, payloads, r
   "sourceFamilyCount": 2,
   "activityCount": 3,
   "freshnessStatus": "current",
+  "schedulerDecision": "reuse_active_run",
+  "pollingHint": "source_gap_review",
+  "nextPollSeconds": 3,
+  "retryAfterSeconds": 3,
+  "duplicateRunReuse": true,
+  "sourceCoverageState": "thin",
+  "sourceCoverageGaps": ["missing_public_channel_evidence"],
   "evidenceGrade": "corroborated",
   "isActionable": true,
+  "reviewReasons": ["freshness:current", "evidence:corroborated", "actionable:monitor_or_triage"],
   "hasDarknetMetadata": false,
   "hasPublicChannelCoverage": false,
   "firstSeen": "2026-06-20T02:29:22.559Z",
@@ -80,7 +90,7 @@ The Actor emits public metadata and summaries only. These fields are excluded:
 
 ## Using the results
 
-Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish corroborated findings from single-source claims, and retain `provenanceHash` when merging repeated runs.
+Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `reviewReasons`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
 
 The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Coverage metadata is disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows.
 

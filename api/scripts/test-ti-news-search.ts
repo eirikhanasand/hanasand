@@ -1,4 +1,4 @@
-import { clusterLiveNews, parseGoogleNewsRss } from '../src/utils/ti/search.ts'
+import { buildActorSearchExpression, clusterLiveNews, parseGoogleNewsRss } from '../src/utils/ti/search.ts'
 
 const xml = `<?xml version="1.0"?>
 <rss><channel><item>
@@ -68,6 +68,26 @@ if (!corroborated.detail.includes('Reported by 2 publishers: Vendor A, Vendor B.
 }
 if (corroborated.detail.startsWith(corroborated.title)) {
     throw new Error('Claim cluster detail must not repeat the headline')
+}
+
+const legalActivity = clusterLiveNews('Scattered Spider', [
+    {
+        id: 'source:d',
+        title: 'Scottish man pleads guilty to attack spree that created Scattered Spider notoriety - Vendor D',
+        url: 'https://example.com/d',
+        snippet: 'Court reporting about a defendant, not a victim organization.',
+        publishedAt: '2026-06-20T08:00:00.000Z',
+        publisher: 'Vendor D',
+        kind: 'news'
+    }
+])
+if (legalActivity.some(activity => activity.victimName)) {
+    throw new Error('Legal-proceeding headlines must not be promoted as victim names')
+}
+
+const aliasQuery = buildActorSearchExpression('Scattered Spider', ['UNC3944', 'Octo Tempest', '0ktapus', 'extra alias'])
+if (aliasQuery !== '"Scattered Spider" OR "UNC3944" OR "Octo Tempest" OR "0ktapus"') {
+    throw new Error(`Unexpected alias-aware search query: ${aliasQuery}`)
 }
 
 console.log('TI news feed parsing passed')

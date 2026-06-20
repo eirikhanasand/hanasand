@@ -53,6 +53,12 @@
       "type": "boolean",
       "description": "Add service coverage rows. Leave disabled when you only need actor intelligence and evidence.",
       "default": false
+    },
+    "includeCoverageGaps": {
+      "title": "Include coverage gaps",
+      "type": "boolean",
+      "description": "Add rows that explain thin, stale, or missing source coverage and the recommended collection action.",
+      "default": true
     }
   },
   "required": []

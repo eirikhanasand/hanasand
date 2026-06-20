@@ -338,7 +338,7 @@ function publicResultStateFor(query: string, seeded: TiSearchResponse, analystLo
 
 async function liveSearch(query: string): Promise<TiSearchResponse> {
     const known = knownActorProfile(query)
-    const matches = filterLiveMatchesForQuery(query, await searchClearWeb(query), Boolean(known))
+    const matches = filterLiveMatchesForQuery(query, await searchClearWeb(query, known?.aliases ?? []), Boolean(known))
     if (matches.length) {
         const generatedAt = new Date().toISOString()
         const activityMatches = matches.filter(match => match.kind === 'news' && match.publishedAt)
@@ -1009,7 +1009,112 @@ function knownActorProfile(query: string): KnownActorContext | null {
             ]
         }
     }
-    return null
+    return baselineKnownActorProfile(normalized)
+}
+
+interface BaselineActorProfile {
+    names: string[]
+    summary: string
+    aliases: string[]
+}
+
+const BASELINE_ACTOR_PROFILES: BaselineActorProfile[] = [
+    {
+        names: ['apt28', 'fancy bear', 'sofacy', 'forest blizzard'],
+        summary: 'APT28 is a Russia-linked espionage actor associated with government, defense, political, media, and security-sector targeting, including phishing, credential access, malware deployment, and intelligence collection.',
+        aliases: ['Fancy Bear', 'Sofacy', 'Forest Blizzard']
+    },
+    {
+        names: ['lazarus group', 'lazarus', 'hidden cobra'],
+        summary: 'Lazarus Group is a North Korea-linked actor associated with espionage, disruptive operations, software supply-chain activity, cryptocurrency theft, and financially motivated intrusions.',
+        aliases: ['Hidden Cobra', 'Diamond Sleet']
+    },
+    {
+        names: ['volt typhoon', 'vanguard panda', 'bronze silhouette'],
+        summary: 'Volt Typhoon is a China-linked espionage actor associated with critical-infrastructure access, compromised edge devices, living-off-the-land techniques, credential access, and long-term persistence.',
+        aliases: ['Vanguard Panda', 'Bronze Silhouette']
+    },
+    {
+        names: ['salt typhoon'],
+        summary: 'Salt Typhoon is a China-linked espionage actor publicly associated with telecommunications and network-provider compromises, intelligence collection, and persistent access to communications infrastructure.',
+        aliases: []
+    },
+    {
+        names: ['turla', 'snake', 'venomous bear', 'waterbug'],
+        summary: 'Turla is a Russia-linked espionage actor associated with government and diplomatic targeting, custom malware, compromised infrastructure, command-and-control operations, and long-duration intelligence collection.',
+        aliases: ['Snake', 'Venomous Bear', 'Waterbug']
+    },
+    {
+        names: ['sandworm', 'voodoo bear', 'seashell blizzard'],
+        summary: 'Sandworm is a Russia-linked actor associated with disruptive and destructive operations, critical-infrastructure targeting, wiper malware, and military or geopolitical campaigns.',
+        aliases: ['Voodoo Bear', 'Seashell Blizzard']
+    },
+    {
+        names: ['kimsuky', 'velvet chollima', 'emerald sleet'],
+        summary: 'Kimsuky is a North Korea-linked espionage actor associated with phishing, credential collection, malware delivery, and targeting of government, policy, research, and defense communities.',
+        aliases: ['Velvet Chollima', 'Emerald Sleet']
+    },
+    {
+        names: ['muddywater', 'muddy water', 'seedworm', 'static kitten'],
+        summary: 'MuddyWater is an Iran-linked espionage actor associated with government and telecommunications targeting, phishing, remote-access tooling, credential theft, and regional intelligence collection.',
+        aliases: ['Seedworm', 'Static Kitten', 'Mango Sandstorm']
+    },
+    {
+        names: ['scattered spider', 'unc3944', 'octo tempest'],
+        summary: 'Scattered Spider is a financially motivated intrusion cluster associated with social engineering, identity compromise, SIM swapping, help-desk abuse, cloud access, data theft, and extortion.',
+        aliases: ['UNC3944', 'Octo Tempest', '0ktapus']
+    },
+    {
+        names: ['lockbit', 'lockbit 3.0', 'lockbitsupp'],
+        summary: 'LockBit is a ransomware and extortion operation associated with affiliate-driven intrusions, data theft, encryption, leak-site victim claims, and attacks across many sectors and regions.',
+        aliases: ['LockBit 3.0', 'LockBitSupp']
+    },
+    {
+        names: ['clop', 'cl0p'],
+        summary: 'Clop is a financially motivated extortion operation associated with ransomware, large-scale data theft, exploitation of file-transfer products, and public victim claims.',
+        aliases: ['Cl0p']
+    },
+    {
+        names: ['akira', 'akira ransomware'],
+        summary: 'Akira is a ransomware and extortion operation associated with network intrusion, data theft, encryption, leak-site victim claims, and attacks across enterprise environments.',
+        aliases: []
+    },
+    {
+        names: ['black basta'],
+        summary: 'Black Basta is a ransomware and extortion operation associated with enterprise intrusions, data theft, encryption, affiliate activity, and public victim claims.',
+        aliases: []
+    },
+    {
+        names: ['play', 'play ransomware'],
+        summary: 'Play is a ransomware and extortion operation associated with enterprise compromise, data theft, encryption, exploitation of exposed services, and public victim claims.',
+        aliases: ['PlayCrypt']
+    },
+    {
+        names: ['ransomhub'],
+        summary: 'RansomHub is a ransomware and data-extortion operation associated with affiliate-driven intrusions, data theft, encryption, and public victim claims.',
+        aliases: []
+    },
+    {
+        names: ['alphv', 'blackcat', 'black cat'],
+        summary: 'ALPHV, also known as BlackCat, is a ransomware and extortion operation associated with affiliate intrusions, data theft, encryption, leak-site claims, and attacks against large organizations.',
+        aliases: ['BlackCat', 'Black Cat']
+    },
+    {
+        names: ['hunters international'],
+        summary: 'Hunters International is a data-extortion and ransomware operation associated with enterprise intrusions, data theft, encryption, and public victim claims.',
+        aliases: []
+    }
+]
+
+function baselineKnownActorProfile(normalized: string): KnownActorContext | null {
+    const profile = BASELINE_ACTOR_PROFILES.find(item => item.names.some(name => normalized === name || normalized.includes(name)))
+    if (!profile) return null
+    return {
+        summary: profile.summary,
+        aliases: profile.aliases,
+        targets: [],
+        ttps: []
+    }
 }
 
 function summarizeLiveResult(query: string, matches: LiveSearchMatch[], known: KnownActorContext | null) {
@@ -1173,16 +1278,29 @@ function inferClaimType(text: string): TiActivity['claimType'] {
 function inferVictimName(query: string, matches: LiveSearchMatch[]): string | undefined {
     for (const match of matches) {
         const title = stripPublisherSuffix(match.title, match.publisher)
+        if (isLegalProceedingHeadline(title)) continue
         const patterns = [
             /\b(?:targets?|targeted|hits?|hit|breaches?|breached|attacks?|attacked)\s+([A-Z][A-Za-z0-9&.' -]{2,60}?)(?:\s+(?:with|using|in|after|through|via)\b|[:,]|$)/,
             /\b([A-Z][A-Za-z0-9&.' -]{2,60}?)\s+(?:breach|attack|incident|hack)\b/
         ]
         for (const pattern of patterns) {
             const candidate = title.match(pattern)?.[1]?.trim()
-            if (candidate && normalizeLiveSearchText(candidate) !== normalizeLiveSearchText(query)) return candidate
+            if (candidate && isLikelyVictimName(candidate, query)) return candidate
         }
     }
     return undefined
+}
+
+function isLegalProceedingHeadline(title: string): boolean {
+    return /\b(?:arrest(?:ed)?|charged?|charges?|indict(?:ed|ment)|pleads?\s+guilty|sentenced?|suspect|defendant|co-?conspirator|feds?|justice department|court|prosecutors?)\b/i.test(title)
+}
+
+function isLikelyVictimName(candidate: string, query: string): boolean {
+    const normalizedCandidate = normalizeLiveSearchText(candidate)
+    if (!normalizedCandidate || normalizedCandidate === normalizeLiveSearchText(query)) return false
+    if (/\b(?:man|woman|teen|hacker|suspect|defendant|member|conspirator|co conspirator|person|individual|group|crew|gang|actor)\b/.test(normalizedCandidate)) return false
+    if (/\b(?:pleads?|guilty|charged?|arrested|sentenced|indicted|uncovers?|links?)\b/.test(normalizedCandidate)) return false
+    return true
 }
 
 function inferCountries(text: string): string[] | undefined {
@@ -1216,10 +1334,10 @@ function uniqueStrings(values: string[]): string[] {
     return [...new Set(values.map(value => value.trim()).filter(Boolean))]
 }
 
-async function searchClearWeb(query: string): Promise<LiveSearchMatch[]> {
+async function searchClearWeb(query: string, aliases: string[] = []): Promise<LiveSearchMatch[]> {
     const [news, duckDuckGo, wikipedia] = await Promise.all([
-        searchGoogleNewsRss(query),
-        searchDuckDuckGoHtml(query),
+        searchGoogleNewsRss(query, aliases),
+        searchDuckDuckGoHtml(query, aliases),
         searchWikipedia(query)
     ])
     const merged: LiveSearchMatch[] = []
@@ -1268,12 +1386,12 @@ function normalizeLiveSearchText(value: string): string {
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-async function searchDuckDuckGoHtml(query: string): Promise<LiveSearchMatch[]> {
+async function searchDuckDuckGoHtml(query: string, aliases: string[] = []): Promise<LiveSearchMatch[]> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 4500)
     try {
         const search = new URL('https://html.duckduckgo.com/html/')
-        search.searchParams.set('q', `${query} threat actor cyber`)
+        search.searchParams.set('q', `${buildActorSearchExpression(query, aliases)} threat actor cyber`)
         const response = await fetch(search, {
             headers: {
                 accept: 'text/html,application/xhtml+xml',
@@ -1291,12 +1409,12 @@ async function searchDuckDuckGoHtml(query: string): Promise<LiveSearchMatch[]> {
     }
 }
 
-async function searchGoogleNewsRss(query: string): Promise<LiveSearchMatch[]> {
+async function searchGoogleNewsRss(query: string, aliases: string[] = []): Promise<LiveSearchMatch[]> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)
     try {
         const search = new URL('https://news.google.com/rss/search')
-        search.searchParams.set('q', `"${query}" (cyber OR malware OR ransomware OR espionage)`)
+        search.searchParams.set('q', `${buildActorSearchExpression(query, aliases)} (cyber OR malware OR ransomware OR espionage)`)
         search.searchParams.set('hl', 'en-US')
         search.searchParams.set('gl', 'US')
         search.searchParams.set('ceid', 'US:en')
@@ -1314,6 +1432,11 @@ async function searchGoogleNewsRss(query: string): Promise<LiveSearchMatch[]> {
     } finally {
         clearTimeout(timeout)
     }
+}
+
+export function buildActorSearchExpression(query: string, aliases: string[] = []): string {
+    const terms = uniqueStrings([query, ...aliases]).slice(0, 4)
+    return terms.map(term => `"${term.replace(/"/g, '')}"`).join(' OR ')
 }
 
 export function parseGoogleNewsRss(xml: string): LiveSearchMatch[] {
